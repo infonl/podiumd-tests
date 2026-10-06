@@ -6,8 +6,13 @@ Ported from podiumd-minikube (_beheerder_token).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from http import HTTPStatus
+from typing import TYPE_CHECKING
 
-import requests
+from podiumd_tests.responses import describe
+
+if TYPE_CHECKING:
+    import requests
 
 
 class TokenError(Exception):
@@ -31,8 +36,8 @@ def password_grant(session: requests.Session, keycloak_url: str, realm: str, log
     if login.client_secret:
         data["client_secret"] = login.client_secret
     response = session.post(f"{keycloak_url}/realms/{realm}/protocol/openid-connect/token", data=data)
-    if response.status_code != requests.codes.ok:
-        msg = f"token request for {login.username!r} in realm {realm!r} failed: HTTP {response.status_code}"
+    if response.status_code != HTTPStatus.OK:
+        msg = f"token request for {login.username!r} in realm {realm!r} failed: {describe(response)}"
         raise TokenError(msg)
     token: object = response.json().get("access_token")
     if not isinstance(token, str):

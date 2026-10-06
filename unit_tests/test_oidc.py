@@ -2,7 +2,6 @@
 
 import pytest
 
-from podiumd_tests.oidc import LoginPageError
 from podiumd_tests.oidc import keycloak_login_realm
 
 KEYCLOAK = "https://keycloak.example.test"
@@ -17,12 +16,13 @@ def test_login_form_gives_the_realm(response_factory):
 @pytest.mark.parametrize(
     ("status", "url", "body", "message"),
     [
-        (502, AUTH_URL, FORM, "HTTP 502"),
+        (502, AUTH_URL, FORM, "HTTP 502, expected 200"),
         (200, "https://zac.example.test/", FORM, "not on Keycloak"),
         (200, f"{KEYCLOAK}/admin/master/console/", FORM, "not an OIDC auth endpoint"),
         (200, AUTH_URL, b"<p>We are sorry...</p>", "no login form"),
     ],
 )
 def test_anything_else_is_an_error(response_factory, status, url, body, message):
-    with pytest.raises(LoginPageError, match=message):
+    # LoginPageError, or UnexpectedStatusError for the status: both are AssertionErrors.
+    with pytest.raises(AssertionError, match=message):
         keycloak_login_realm(response_factory(status=status, body=body, url=url), KEYCLOAK)

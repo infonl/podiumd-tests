@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import re
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
+
+from podiumd_tests.responses import expect_status
+from podiumd_tests.responses import url_host
 
 if TYPE_CHECKING:
     import requests
@@ -20,11 +24,9 @@ class LoginPageError(AssertionError):
 
 def keycloak_login_realm(response: requests.Response, keycloak_url: str) -> str:
     """The realm of the Keycloak login form that a redirect chain ended on; LoginPageError otherwise."""
-    if response.status_code != 200:  # HTTP OK
-        msg = f"{response.url}: HTTP {response.status_code}"
-        raise LoginPageError(msg)
+    expect_status(response, HTTPStatus.OK)
     final = urlsplit(response.url)
-    if final.hostname != urlsplit(keycloak_url).hostname:
+    if url_host(response.url) != url_host(keycloak_url):
         msg = f"ended on {response.url}, not on Keycloak {keycloak_url}"
         raise LoginPageError(msg)
     match = AUTH_PATH.match(final.path)

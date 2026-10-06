@@ -7,16 +7,18 @@ its authentication is wired, without needing any credentials.
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
+
+from podiumd_tests.responses import REFUSED
+from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
     import requests
 
 pytestmark = pytest.mark.smoke
-
-REFUSED = {401, 403}
 
 HEALTH = [
     ("kiss", "/healthz"),
@@ -43,8 +45,7 @@ ANONYMOUS = [
 )
 def test_health_endpoint(http: requests.Session, urls: dict[str, str], component: str, path: str) -> None:
     """The component's own health endpoint reports healthy."""
-    response = http.get(urls[component] + path)
-    assert response.status_code == 200, f"{response.url}: HTTP {response.status_code}"
+    expect_status(http.get(urls[component] + path), HTTPStatus.OK)
 
 
 @pytest.mark.parametrize(
@@ -63,4 +64,4 @@ def test_anonymous_call_is_refused(
     """
     body = ({"FunctionalRoleNames": ["ptest"]} if component == "pabc" else {}) if method == "POST" else None
     response = http.request(method, urls[component] + path, json=body, headers=headers, allow_redirects=False)
-    assert response.status_code in REFUSED, f"{method} {response.url}: HTTP {response.status_code}"
+    expect_status(response, *REFUSED)

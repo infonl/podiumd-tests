@@ -16,6 +16,8 @@ import requests
 
 from requests.adapters import HTTPAdapter
 
+from podiumd_tests.responses import url_host
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
@@ -84,7 +86,7 @@ def make_session(urls: Mapping[str, str], ingress_ip: str | None = None) -> requ
     session = TimeoutSession()
     session.headers["User-Agent"] = "podiumd-tests"
     if ingress_ip:
-        hosts = {urlsplit(u).hostname or "" for u in urls.values()}
+        hosts = {url_host(u) for u in urls.values()}
         adapter = HostHeaderAdapter(hosts, ingress_ip)
         session.mount("http://", adapter)
         session.mount("https://", adapter)

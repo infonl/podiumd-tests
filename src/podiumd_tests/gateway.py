@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import re
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
 if TYPE_CHECKING:
     import requests
-
-NOT_FOUND = 404
 
 
 def is_no_route(response: requests.Response) -> bool:
@@ -18,7 +17,7 @@ def is_no_route(response: requests.Response) -> bool:
 
     A 404 from the upstream itself (e.g. an unknown KVK number) is not "no route".
     """
-    if response.status_code != NOT_FOUND:
+    if response.status_code != HTTPStatus.NOT_FOUND:
         return False
     try:
         body: object = response.json()

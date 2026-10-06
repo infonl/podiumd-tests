@@ -9,6 +9,7 @@ from podiumd_tests.grafana import Grafana
 from podiumd_tests.grafana import GrafanaError
 from podiumd_tests.grafana import down_targets
 from podiumd_tests.grafana import target_count
+from podiumd_tests.responses import UnexpectedStatusError
 
 DATASOURCES = [
     {"name": "Prometheus", "type": "prometheus", "uid": "prom-1"},
@@ -76,7 +77,7 @@ def test_proxy_errors(serve):
     grafana = grafana_with(serve({"/api/datasources": (200, DATASOURCES)}))
     with pytest.raises(GrafanaError, match="no tempo datasource"):
         grafana.proxy("tempo", "/api/search")
-    with pytest.raises(GrafanaError, match="HTTP 404"):
+    with pytest.raises(UnexpectedStatusError, match="HTTP 404, expected 200"):
         grafana.proxy("prometheus", "/api/v1/targets")
 
 

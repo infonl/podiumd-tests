@@ -7,11 +7,16 @@ ingresses differ in 301/302/303, so the status of a redirect is not asserted.
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
 
 from podiumd_tests.components import COMPONENTS
+from podiumd_tests.responses import describe
+from podiumd_tests.responses import expect_status
+from podiumd_tests.responses import get_root
+from podiumd_tests.responses import is_server_error
 
 if TYPE_CHECKING:
     import requests
@@ -43,14 +48,13 @@ def test_root_answers(http: requests.Session, urls: dict[str, str], component: s
 
     Client errors are fine: the root of an API (Open Formulieren 403, ITA 401) need not be a page.
     """
-    response = http.get(urls[component] + "/", timeout=MAX_SECONDS)
-    assert response.status_code < 500, f"{response.url}: HTTP {response.status_code}"
+    response = get_root(http, urls[component], MAX_SECONDS)
+    assert not is_server_error(response), describe(response)
     assert response.elapsed.total_seconds() < MAX_SECONDS
 
 
 @pytest.mark.parametrize("component", _per_component(DJANGO_ADMIN))
 def test_django_admin_login_page(http: requests.Session, urls: dict[str, str], component: str) -> None:
     """The admin login page renders (MK/PI admin login reachable, 00h, 00l, 81)."""
-    response = http.get(urls[component] + "/admin/login/")
-    assert response.status_code == 200, f"{response.url}: HTTP {response.status_code}"
+    response = expect_status(http.get(urls[component] + "/admin/login/"), HTTPStatus.OK)
     assert "login" in response.url

@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import re
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
 
 from podiumd_tests.oidc import keycloak_login_realm
+from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
     import requests
@@ -25,8 +27,9 @@ pytestmark = pytest.mark.smoke
 @pytest.mark.requires("keycloak")
 def test_keycloak_discovery(http: requests.Session, urls: dict[str, str]) -> None:
     """The master realm publishes its OIDC configuration."""
-    response = http.get(urls["keycloak"] + "/realms/master/.well-known/openid-configuration")
-    assert response.status_code == 200
+    response = expect_status(
+        http.get(urls["keycloak"] + "/realms/master/.well-known/openid-configuration"), HTTPStatus.OK
+    )
     assert str(response.json()["issuer"]).endswith("/realms/master")
 
 
@@ -34,15 +37,13 @@ def test_keycloak_discovery(http: requests.Session, urls: dict[str, str]) -> Non
 def test_zac_redirects_to_keycloak(http: requests.Session, urls: dict[str, str]) -> None:
     """An anonymous visit to ZAC ends on the Keycloak login form, and that realm is published."""
     realm = keycloak_login_realm(http.get(urls["zac"] + "/"), urls["keycloak"])
-    discovery = http.get(f"{urls['keycloak']}/realms/{realm}/.well-known/openid-configuration")
-    assert discovery.status_code == 200
+    expect_status(http.get(f"{urls['keycloak']}/realms/{realm}/.well-known/openid-configuration"), HTTPStatus.OK)
 
 
 @pytest.mark.requires("openinwoner")
 def test_portaal_login_page_offers_digid_and_eherkenning(http: requests.Session, urls: dict[str, str]) -> None:
     """The Open Inwoner login page has the theme and both login options (82, 05a, 99)."""
-    response = http.get(urls["openinwoner"] + "/accounts/login/")
-    assert response.status_code == 200, f"{response.url}: HTTP {response.status_code}"
+    response = expect_status(http.get(urls["openinwoner"] + "/accounts/login/"), HTTPStatus.OK)
     html = response.text
     assert "openinwoner-theme" in html
     assert "/digid-oidc/authenticate/" in html, "no DigiD login link"

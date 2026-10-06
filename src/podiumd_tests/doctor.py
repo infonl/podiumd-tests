@@ -15,13 +15,15 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from typing import Literal
-from urllib.parse import urlsplit
 
 import requests
 
 from podiumd_tests.credentials import SecretError
 from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import context_names
+from podiumd_tests.responses import get_root
+from podiumd_tests.responses import is_server_error
+from podiumd_tests.responses import url_host
 from podiumd_tests.workloads import unready_workloads
 
 if TYPE_CHECKING:
@@ -133,14 +135,14 @@ def resolve_hosts(
 def _url_check(session: requests.Session, component: str, url: str) -> Check:
     name = f"url {component}"
     try:
-        response = session.get(url + "/", allow_redirects=False, timeout=HTTP_TIMEOUT)
+        response = get_root(session, url, HTTP_TIMEOUT)
     except requests.exceptions.SSLError as exc:
         return Check(name, "fail", f"{url}: TLS error: {exc}")
     except requests.exceptions.ConnectTimeout:
         return Check(name, "fail", f"{url}: no connection within {HTTP_TIMEOUT[0]}s", DOWN_HINT)
     except requests.exceptions.RequestException as exc:
         return Check(name, "fail", f"{url}: {type(exc).__name__}")
-    status: Status = "fail" if response.status_code >= 500 else "ok"
+    status: Status = "fail" if is_server_error(response) else "ok"
     return Check(name, status, f"{url}: HTTP {response.status_code}")
 
 
@@ -153,11 +155,11 @@ def _urls(env: Environment, resolve: Resolver) -> list[Check]:
     # In host-header mode the requests go to the ingress IP; the hosts need not resolve.
     dns_errors: dict[str, str] = {}
     if env.profile.access.mode == "direct":
-        dns_errors = resolve_hosts((urlsplit(u).hostname or "" for _, u in urls), resolve)
+        dns_errors = resolve_hosts((url_host(u) for _, u in urls), resolve)
     checks: dict[str, Check] = {}
     reachable: list[tuple[str, str]] = []
     for component, url in urls:
-        error = dns_errors.get(urlsplit(url).hostname or "", "")
+        error = dns_errors.get(url_host(url), "")
         if error:
             checks[component] = Check(f"url {component}", "fail", f"{url}: {error}", DOWN_HINT)
         else:

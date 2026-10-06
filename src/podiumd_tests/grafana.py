@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
+
+from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -49,10 +52,7 @@ class Grafana:
         if uid is None:
             msg = f"no {kind} datasource"
             raise GrafanaError(msg)
-        response = self.get(f"/api/datasources/proxy/uid/{uid}{path}", params)
-        if response.status_code != 200:
-            msg = f"{kind}{path}: HTTP {response.status_code}"
-            raise GrafanaError(msg)
+        response = expect_status(self.get(f"/api/datasources/proxy/uid/{uid}{path}", params), HTTPStatus.OK)
         return cast("Json", response.json())
 
 

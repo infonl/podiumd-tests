@@ -6,11 +6,13 @@ frankgateway URL and these tests skip.
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
 
 from podiumd_tests.gateway import is_no_route
+from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
     import requests
@@ -34,6 +36,6 @@ def test_outway_routes_to_upstream(http: requests.Session, urls: dict[str, str],
     """
     response = http.get(urls["frankgateway"] + path, headers={"Accept": "application/json"})
     assert not is_no_route(response), f"no route for {path}"
-    assert response.status_code != 503, f"{path}: upstream unavailable"
+    assert response.status_code != HTTPStatus.SERVICE_UNAVAILABLE, f"{path}: upstream unavailable"
     if path == ROUTES["brp"]:
-        assert response.status_code == 405, f"{path}: HTTP {response.status_code}"
+        expect_status(response, HTTPStatus.METHOD_NOT_ALLOWED)

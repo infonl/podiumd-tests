@@ -7,11 +7,14 @@ profile: settings.zgw_client_id and secret zgw_client_secret.
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
 
 from podiumd_tests.auth.zgw_jwt import zgw_jwt
+from podiumd_tests.responses import REFUSED
+from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
     import requests
@@ -43,7 +46,7 @@ def test_jwt_is_accepted(
 ) -> None:
     """A token signed with the client's secret reads a paginated list."""
     response = _get(http, urls["openzaak"] + path, zgw_jwt(client_id, credentials.get("zgw_client_secret")))
-    assert response.status_code == 200, f"{response.url}: HTTP {response.status_code}"
+    expect_status(response, HTTPStatus.OK)
     body = response.json()
     assert isinstance(body["results"], list)
     assert isinstance(body["count"], int)
@@ -52,4 +55,4 @@ def test_jwt_is_accepted(
 def test_jwt_with_wrong_secret_is_refused(http: requests.Session, urls: dict[str, str], client_id: str) -> None:
     """A token with a wrong signature is refused."""
     response = _get(http, urls["openzaak"] + "/catalogi/api/v1/catalogussen", zgw_jwt(client_id, "ptest-wrong-secret"))
-    assert response.status_code in {401, 403}, f"HTTP {response.status_code}"
+    expect_status(response, *REFUSED)

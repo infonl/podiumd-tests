@@ -10,6 +10,7 @@ grafana_username and grafana_password in the profile.
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
@@ -19,6 +20,8 @@ from podiumd_tests.grafana import Grafana
 from podiumd_tests.grafana import down_targets
 from podiumd_tests.grafana import grafana_auth
 from podiumd_tests.grafana import target_count
+from podiumd_tests.responses import REFUSED
+from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
     import requests
@@ -35,9 +38,9 @@ def fixture_grafana(http: requests.Session, urls: dict[str, str], credentials: S
     auth = grafana_auth(credentials)
     grafana = Grafana(http, urls["grafana"], auth)
     response = grafana.load_datasources()
-    if response.status_code in {401, 403} and auth is None:
+    if response.status_code in REFUSED and auth is None:
         pytest.skip("Grafana needs a login: add secrets grafana_username and grafana_password to the profile")
-    assert response.status_code == 200, f"/api/datasources: HTTP {response.status_code}"
+    expect_status(response, HTTPStatus.OK)
     return grafana
 
 
