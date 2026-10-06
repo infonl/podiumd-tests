@@ -21,6 +21,7 @@ from podiumd_tests.process import Runner
 from podiumd_tests.process import run_process
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from collections.abc import Sequence
 
 DEFAULT_TIMEOUT = 30
@@ -116,7 +117,7 @@ def django_value(output: str) -> str:
     raise ValueError(msg)
 
 
-def metadata_name(item: dict[str, object]) -> str:
+def metadata_name(item: Mapping[str, object]) -> str:
     """metadata.name of a Kubernetes object, or an empty string."""
     metadata = item.get("metadata")
     if isinstance(metadata, dict):
