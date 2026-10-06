@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.components import COMPONENTS
+from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_root
@@ -38,11 +39,7 @@ DJANGO_ADMIN = (
 )
 
 
-def _per_component(names: tuple[str, ...] | list[str]) -> list[object]:
-    return [pytest.param(n, id=n, marks=pytest.mark.requires(n)) for n in names]
-
-
-@pytest.mark.parametrize("component", _per_component(sorted(COMPONENTS)))
+@pytest.mark.parametrize("component", [requiring(c, c) for c in sorted(COMPONENTS)])
 def test_root_answers(http: requests.Session, urls: dict[str, str], component: str) -> None:
     """The root of each component answers without a server error, within 5 s (81).
 
@@ -53,7 +50,7 @@ def test_root_answers(http: requests.Session, urls: dict[str, str], component: s
     assert response.elapsed.total_seconds() < MAX_SECONDS
 
 
-@pytest.mark.parametrize("component", _per_component(DJANGO_ADMIN))
+@pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_ADMIN])
 def test_django_admin_login_page(http: requests.Session, urls: dict[str, str], component: str) -> None:
     """The admin login page renders (MK/PI admin login reachable, 00h, 00l, 81)."""
     response = expect_status(http.get(urls[component] + "/admin/login/"), HTTPStatus.OK)

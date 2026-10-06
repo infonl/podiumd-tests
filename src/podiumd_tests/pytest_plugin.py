@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 
     import requests
 
+    from _pytest.mark.structures import ParameterSet  # pytest.param's type; pytest has no public name for it
+
     from podiumd_tests.capabilities import Capabilities
     from podiumd_tests.credentials import SecretResolver
     from podiumd_tests.kube import Kube
@@ -116,3 +118,11 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
         reason = _environment(item.config).capabilities.skip_reason(*needed)
         if reason:
             pytest.skip(reason)
+
+
+def requiring(component: str, *values: object, test_id: str | None = None) -> ParameterSet:
+    """A pytest.param with these values that skips unless the environment has the component.
+
+    For tests parametrized per component, e.g. [requiring(c, c) for c in COMPONENTS].
+    """
+    return pytest.param(*values, id=test_id or component, marks=pytest.mark.requires(component))

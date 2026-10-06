@@ -1,5 +1,7 @@
 """Unit tests for the pytest plugin, run in a nested pytest session (pytester)."""
 
+from podiumd_tests.pytest_plugin import requiring
+
 pytest_plugins = ["pytester"]
 
 INNER_CONFTEST = """
@@ -62,3 +64,10 @@ def test_requires_skips_before_module_fixtures_run(pytester):
     result.assert_outcomes(passed=1, skipped=2)
     result.stdout.fnmatch_lines(["*requires: zac (no URL in profile)*", "*requires: cluster (kube API of context ctx*"])
     result.stdout.no_fnmatch_line("*module fixture ran*")
+
+
+def test_requiring_builds_a_param_that_requires_its_component():
+    param = requiring("kiss", "kiss", "/healthz", test_id="kiss/healthz")
+    assert param.values == ("kiss", "/healthz")
+    assert param.id == "kiss/healthz"
+    assert [(m.name, m.args) for m in param.marks] == [("requires", ("kiss",))]

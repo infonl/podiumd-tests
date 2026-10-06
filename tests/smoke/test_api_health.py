@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 
@@ -40,9 +41,7 @@ ANONYMOUS = [
 ]
 
 
-@pytest.mark.parametrize(
-    ("component", "path"), [pytest.param(c, p, id=f"{c}{p}", marks=pytest.mark.requires(c)) for c, p in HEALTH]
-)
+@pytest.mark.parametrize(("component", "path"), [requiring(c, c, p, test_id=f"{c}{p}") for c, p in HEALTH])
 def test_health_endpoint(http: requests.Session, urls: dict[str, str], component: str, path: str) -> None:
     """The component's own health endpoint reports healthy."""
     expect_status(http.get(urls[component] + path), HTTPStatus.OK)
@@ -50,10 +49,7 @@ def test_health_endpoint(http: requests.Session, urls: dict[str, str], component
 
 @pytest.mark.parametrize(
     ("component", "method", "path", "headers"),
-    [
-        pytest.param(c, m, p, h, id=f"{c}{p}{'-wrong-key' if h else ''}", marks=pytest.mark.requires(c))
-        for c, m, p, h in ANONYMOUS
-    ],
+    [requiring(c, c, m, p, h, test_id=f"{c}{p}{'-wrong-key' if h else ''}") for c, m, p, h in ANONYMOUS],
 )
 def test_anonymous_call_is_refused(
     http: requests.Session, urls: dict[str, str], component: str, method: str, path: str, headers: dict[str, str]
