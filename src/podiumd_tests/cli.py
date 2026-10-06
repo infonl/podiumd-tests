@@ -189,10 +189,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         info.counts, failures = parse_junit(junit.read_text(encoding="utf-8"))
     write_run(sink, directory, info, failures, env.redactor)
     print(f"results: {sink.location(directory)}")
-    no_tests_collected = 5
-    if info.exit_code in {EXIT_OK, no_tests_collected}:
+    if info.exit_code in {pytest.ExitCode.OK, pytest.ExitCode.NO_TESTS_COLLECTED}:
         return EXIT_OK
-    return EXIT_TESTS_FAILED if info.exit_code == EXIT_TESTS_FAILED else EXIT_CONFIG
+    return EXIT_TESTS_FAILED if info.exit_code == pytest.ExitCode.TESTS_FAILED else EXIT_CONFIG
 
 
 def build_parser() -> argparse.ArgumentParser:
