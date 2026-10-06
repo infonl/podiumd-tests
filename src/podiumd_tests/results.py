@@ -64,6 +64,11 @@ def new_run_id() -> str:
     return secrets.token_hex(3)
 
 
+def run_tag(run_id: str) -> str:
+    """Tag carried by every resource a run creates (PLAN.md R9); sweep finds leftovers by it."""
+    return f"ptest-{run_id}"
+
+
 def run_dir(started: datetime, env: str, tier: str, run_id: str) -> str:
     """Relative run directory; `_` separates fields because env names contain `-`."""
     utc = started.astimezone(UTC)

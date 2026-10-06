@@ -12,6 +12,7 @@ from podiumd_tests.results import LocalDirSink
 from podiumd_tests.results import RunInfo
 from podiumd_tests.results import parse_junit
 from podiumd_tests.results import run_dir
+from podiumd_tests.results import run_tag
 from podiumd_tests.results import write_run
 
 JUNIT = """<?xml version="1.0" encoding="utf-8"?>
@@ -65,3 +66,7 @@ def test_write_run_redacts_secrets(tmp_path):
     assert "super-secret-token" not in run_json + summary
     assert json.loads(run_json)["counts"]["failed"] == 1
     assert "| 1 | 1 | 1 | 1 | 1 | 5 |" in summary
+
+
+def test_run_tag_marks_resources_of_a_run():
+    assert run_tag("a1b2c3") == "ptest-a1b2c3"

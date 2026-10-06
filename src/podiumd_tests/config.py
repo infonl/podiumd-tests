@@ -19,6 +19,8 @@ from podiumd_tests.components import COMPONENTS
 from podiumd_tests.tiers import TIERS
 
 ESTATES = ("minikube", "podiumd-infra", "externals")
+# The repository: src/podiumd_tests/ is two levels below it.
+REPO_ROOT = Path(__file__).resolve().parents[2]
 # Secret sources that read the cluster; without kube access they cannot resolve.
 CLUSTER_SECRET_SOURCES = ("k8s_secret", "pod_env", "zgw_jwt_secret")
 SECRET_SOURCES = (*CLUSTER_SECRET_SOURCES, "keyvault", "dev_default")
@@ -93,7 +95,7 @@ class Profile:  # pylint: disable=too-many-instance-attributes  # mirrors the YA
 
 def default_envs_dir() -> Path:
     """envs/ in the repository root (the parent of src/)."""
-    return Path(__file__).resolve().parents[2] / "envs"
+    return REPO_ROOT / "envs"
 
 
 def list_profiles(envs_dir: Path) -> dict[str, Path]:

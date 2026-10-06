@@ -12,10 +12,10 @@ from typing import cast
 
 import pytest
 
+from podiumd_tests import results
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
-from podiumd_tests.results import new_run_id
 from podiumd_tests.seed.registry import ResourceRegistry
 
 if TYPE_CHECKING:
@@ -92,7 +92,7 @@ def fixture_http(podiumd_env: Environment) -> Iterator[requests.Session]:
 @pytest.fixture(scope="session", name="run_tag")
 def fixture_run_tag(request: pytest.FixtureRequest) -> str:
     """Tag carried by every created resource (PLAN.md R9)."""
-    return str(request.config.getoption("--podiumd-run-tag") or f"ptest-{new_run_id()}")
+    return str(request.config.getoption("--podiumd-run-tag") or results.run_tag(results.new_run_id()))
 
 
 @pytest.fixture(name="registry")

@@ -20,6 +20,7 @@ import yaml
 from podiumd_tests import doctor
 from podiumd_tests.components import component_for_host
 from podiumd_tests.config import ESTATES
+from podiumd_tests.config import REPO_ROOT
 from podiumd_tests.config import Profile
 from podiumd_tests.config import ProfileError
 from podiumd_tests.config import default_envs_dir
@@ -37,6 +38,7 @@ from podiumd_tests.results import new_run_id
 from podiumd_tests.results import now_iso
 from podiumd_tests.results import parse_junit
 from podiumd_tests.results import run_dir
+from podiumd_tests.results import run_tag
 from podiumd_tests.results import suite_commit
 from podiumd_tests.results import write_run
 from podiumd_tests.tiers import TIERS
@@ -45,8 +47,6 @@ EXIT_OK = 0
 EXIT_TESTS_FAILED = 1
 EXIT_CONFIG = 2
 EXIT_NOT_ALLOWED = 3
-
-REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _load(args: argparse.Namespace) -> Profile:
@@ -139,7 +139,7 @@ def _pytest_selection(
     tier = TIERS[tier_name]
     paths = [str(REPO_ROOT / p) for p in tier.paths if (REPO_ROOT / p).is_dir()]
     selection = [*paths, "-m", tier.marker_expression, f"--podiumd-env={profile.name}", f"--junitxml={junit}"]
-    selection.append(f"--podiumd-run-tag=ptest-{run_id}")
+    selection.append(f"--podiumd-run-tag={run_tag(run_id)}")
     if args.keep_data:
         selection.append("--keep-data")
     return [*selection, *args.pytest_args]
