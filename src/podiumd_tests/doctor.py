@@ -61,22 +61,21 @@ def _tools(env: Environment, which: Callable[[str], str | None]) -> list[Check]:
 
 
 def _cluster(env: Environment) -> list[Check]:
+    # In direct mode the URLs work without the cluster: no access only skips the cluster tests.
+    no_access: Status = "fail" if env.profile.access.mode == "host-header" else "warn"
     context = env.profile.kube.context
     try:
         known = context_names(env.kube.runner)
     except KubeError as exc:
         return [Check("kube context", "fail", str(exc))]
     if context not in known:
-        return [
-            Check(
-                "kube context", "fail", f"{context} not in kubeconfig", "e.g. az aks get-credentials / minikube start"
-            )
-        ]
+        hint = "e.g. az aks get-credentials / minikube start; without it cluster tests skip"
+        return [Check("kube context", no_access, f"{context} not in kubeconfig", hint)]
     checks = [Check("kube context", "ok", context)]
     try:
         env.kube.api_reachable()
     except KubeError as exc:
-        checks.append(Check("kube API", "fail", str(exc), "cluster stopped or deleted? (scheduled shutdown)"))
+        checks.append(Check("kube API", no_access, str(exc), "cluster stopped or deleted? (scheduled shutdown)"))
         return checks
     checks.append(Check("kube API", "ok", "readyz"))
     for namespace in env.namespaces:
@@ -215,14 +214,15 @@ def run_checks(
         return [*checks, Check("cluster", "skip", "kubectl missing")]
     cluster = _cluster(env)
     checks += cluster
-    cluster_ok = all(c.status != "fail" for c in cluster)
+    cluster_ok = all(c.status == "ok" for c in cluster if c.name in {"kube context", "kube API"})
     checks += (
         _urls(env, resolve)
         if cluster_ok or env.profile.access.mode == "direct"
         else [Check("urls", "skip", "no cluster")]
     )
     checks += _secrets(env, cluster_ok=cluster_ok)
-    checks.append(_capabilities(env) if cluster_ok else Check("capabilities", "skip", "no cluster"))
+    # Without cluster access the capabilities come from the profile alone (and "cluster" is absent).
+    checks.append(_capabilities(env))
     return [Check(c.name, c.status, env.redactor.redact(c.detail), c.hint) for c in checks]
 
 

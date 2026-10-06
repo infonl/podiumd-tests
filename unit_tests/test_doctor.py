@@ -15,14 +15,24 @@ def statuses(checks):
     return {c.name: c.status for c in checks}
 
 
-def test_missing_context_fails_and_skips_cluster_secrets(profile_factory, fake_runner, monkeypatch):
+def test_missing_context_fails_in_host_header_mode(profile_factory, fake_runner):
     fake_runner.answers["config get-contexts"] = (0, "other\n")
-    profile = profile_factory(urls={}, secrets={"pw": {"k8s_secret": {"name": "s", "key": "k"}}})
+    access = {"mode": "host-header", "ingress_service": {"namespace": "traefik", "name": "traefik"}}
+    profile = profile_factory(urls={}, access=access, secrets={"pw": {"k8s_secret": {"name": "s", "key": "k"}}})
     checks = doctor.run_checks(Environment(profile, fake_runner, environ={}), which=which_all)
     result = statuses(checks)
     assert result["kube context"] == "fail"
     assert result["secret pw"] == "skip"
     assert doctor.failed(checks)
+
+
+def test_missing_context_only_warns_in_direct_mode(profile_factory, fake_runner):
+    fake_runner.answers["config get-contexts"] = (0, "other\n")
+    checks = doctor.run_checks(Environment(profile_factory(urls={}), fake_runner, environ={}), which=which_all)
+    result = statuses(checks)
+    assert result["kube context"] == "warn"
+    assert result["capabilities"] == "ok"
+    assert not doctor.failed(checks)
 
 
 def test_missing_kubectl_stops_early(profile_factory, fake_runner):
