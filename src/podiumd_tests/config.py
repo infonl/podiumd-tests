@@ -16,10 +16,12 @@ from typing import cast
 import yaml
 
 from podiumd_tests.components import COMPONENTS
+from podiumd_tests.tiers import TIERS
 
 ESTATES = ("minikube", "podiumd-infra", "externals")
-TIER_NAMES = ("smoke", "core", "full", "perf", "chaos")
-SECRET_SOURCES = ("k8s_secret", "pod_env", "zgw_jwt_secret", "keyvault", "dev_default")
+# Secret sources that read the cluster; without kube access they cannot resolve.
+CLUSTER_SECRET_SOURCES = ("k8s_secret", "pod_env", "zgw_jwt_secret")
+SECRET_SOURCES = (*CLUSTER_SECRET_SOURCES, "keyvault", "dev_default")
 
 AccessMode = Literal["direct", "host-header"]
 
@@ -64,6 +66,11 @@ class SecretSpec:
     name: str
     source: str
     options: dict[str, str] = field(default_factory=dict[str, str])
+
+    @property
+    def needs_cluster(self) -> bool:
+        """True when resolving it reads the cluster."""
+        return self.source in CLUSTER_SECRET_SOURCES
 
 
 @dataclass(frozen=True)
@@ -203,7 +210,7 @@ def parse_profile(raw: object, *, name: str, path: Path | None = None) -> Profil
         msg = f"{where}: allowed_tiers must be a non-empty list"
         raise ProfileError(msg)
     tiers = tuple(str(t) for t in cast("list[object]", tiers_raw))
-    unknown = [t for t in tiers if t not in TIER_NAMES]
+    unknown = [t for t in tiers if t not in TIERS]
     if unknown:
         msg = f"{where}.allowed_tiers: unknown tier(s) {', '.join(unknown)}"
         raise ProfileError(msg)

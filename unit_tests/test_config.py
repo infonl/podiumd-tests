@@ -18,6 +18,7 @@ def test_parses_a_valid_profile(profile_factory):
     assert profile.settings == {"zgw_client_id": "open-formulieren"}
     assert profile.urls["openzaak"] == "https://openzaak.example.test"
     assert profile.secrets["token"].options == {"name": "s", "key": "k"}
+    assert profile.secrets["token"].needs_cluster
     assert profile.access.mode == "host-header"
     assert profile.access.ingress_service is not None
     assert profile.access.ingress_service.name == "traefik"
@@ -76,3 +77,11 @@ def test_every_committed_profile_loads(name):
     if profile.estate == "externals":
         # Not decided yet which ExternalsPodiumD environments run more than smoke (PLAN.md §12).
         assert profile.allowed_tiers == ("smoke",)
+
+
+def test_only_cluster_sources_need_the_cluster(profile_factory):
+    profile = profile_factory(
+        keyvault="kv", secrets={"a": {"keyvault": {"secret": "x"}}, "b": {"pod_env": {"deployment": "d", "var": "V"}}}
+    )
+    assert not profile.secrets["a"].needs_cluster
+    assert profile.secrets["b"].needs_cluster

@@ -171,13 +171,10 @@ def _urls(env: Environment, resolve: Resolver) -> list[Check]:
     return [checks[component] for component, _ in urls]
 
 
-CLUSTER_SOURCES = {"k8s_secret", "pod_env", "zgw_jwt_secret"}
-
-
 def _secrets(env: Environment, *, cluster_ok: bool) -> list[Check]:
     checks: list[Check] = []
     for name in env.credentials.names:
-        if not cluster_ok and env.profile.secrets[name].source in CLUSTER_SOURCES:
+        if not cluster_ok and env.profile.secrets[name].needs_cluster:
             checks.append(Check(f"secret {name}", "skip", "no cluster"))
             continue
         try:
