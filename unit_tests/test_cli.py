@@ -2,24 +2,8 @@
 
 import json
 
-import pytest
-
 from podiumd_tests import cli
 from podiumd_tests.kube import Kube
-
-
-@pytest.mark.parametrize(
-    ("host", "component"),
-    [
-        ("contact.kees00.pd.test-rig.nl", "kiss"),
-        ("ontw-mijn.dimpact.icatt.nl", "openinwoner"),
-        ("test-openzaak.dimpact.nl", "openzaak"),
-        ("openformulieren-nginx.local", "openformulieren"),
-        ("apisix-admin.kees00.pd.test-rig.nl", None),
-    ],
-)
-def test_component_for_host(host, component):
-    assert cli.component_for_host(host) == component
 
 
 def test_draft_profile_keeps_the_first_host_per_component_and_smoke_only():

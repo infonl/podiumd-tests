@@ -18,7 +18,7 @@ import pytest
 import yaml
 
 from podiumd_tests import doctor
-from podiumd_tests.components import component_for_host_label
+from podiumd_tests.components import component_for_host
 from podiumd_tests.config import ESTATES
 from podiumd_tests.config import Profile
 from podiumd_tests.config import ProfileError
@@ -68,15 +68,6 @@ def cmd_env_show(args: argparse.Namespace) -> int:
     for component, url in sorted(profile.urls.items()):
         print(f"  {component:20} {url}")
     return EXIT_OK
-
-
-def component_for_host(host: str) -> str | None:
-    """Component of a hostname: <app>.<env>.<domain>, <stage>-<app>.<domain> or <app>.local."""
-    label = host.split(".", 1)[0]
-    found = component_for_host_label(label)
-    if found is None and "-" in label:
-        found = component_for_host_label(label.split("-", 1)[1])
-    return found
 
 
 def ingress_hosts(kube: Kube) -> list[str]:

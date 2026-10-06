@@ -42,12 +42,20 @@ COMPONENTS: dict[str, Component] = {
 }
 
 
-def component_for_host_label(label: str) -> str | None:
-    """Map the app part of a hostname (e.g. "contact") to its canonical component name."""
+def _component_for_label(label: str) -> str | None:
     for name, component in COMPONENTS.items():
         if label in component.host_aliases:
             return name
     return None
+
+
+def component_for_host(host: str) -> str | None:
+    """Component of a hostname: <app>.<env>.<domain>, <stage>-<app>.<domain> or <app>.local."""
+    label = host.split(".", 1)[0]
+    found = _component_for_label(label)
+    if found is None and "-" in label:
+        found = _component_for_label(label.split("-", 1)[1])
+    return found
 
 
 def deployed_components(deployment_names: list[str]) -> set[str]:
