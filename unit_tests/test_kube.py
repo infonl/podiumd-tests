@@ -7,6 +7,7 @@ import pytest
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import context_names
+from podiumd_tests.kube import django_value
 
 
 def test_every_command_has_context_and_namespace(fake_runner):
@@ -48,3 +49,13 @@ def test_invalid_json_is_reported(fake_runner):
 def test_context_names(fake_runner):
     fake_runner.answers["config get-contexts"] = (0, "minikube\npodiumd-kees00-aks\n")
     assert context_names(fake_runner) == ["minikube", "podiumd-kees00-aks"]
+
+
+def test_django_value_picks_the_marked_line_from_django_chatter():
+    output = "118 objects imported automatically (use -v 2 for details).\n\nPTEST_VALUE=s3cret=with=equals\n"
+    assert django_value(output) == "s3cret=with=equals"
+
+
+def test_django_value_without_marker_is_an_error():
+    with pytest.raises(ValueError, match="no PTEST_VALUE= line"):
+        django_value("118 objects imported automatically\nTraceback ...\n")
