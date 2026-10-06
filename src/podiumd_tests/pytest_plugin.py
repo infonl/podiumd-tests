@@ -37,14 +37,24 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     group.addoption("--keep-data", action="store_true", help="skip cleanup of created resources")
 
 
+ENVIRONMENT_KEY = pytest.StashKey[Environment]()
+
+
+def _environment(config: pytest.Config) -> Environment:
+    """The environment under test, from --podiumd-env; built once per run."""
+    if ENVIRONMENT_KEY not in config.stash:
+        name: str | None = config.getoption("--podiumd-env")
+        if not name:
+            pytest.exit("no environment: use `podiumd-tests run --env <name>` or pass --podiumd-env", returncode=2)
+        profile = load_profile(name, Path(str(config.getoption("--podiumd-envs-dir"))))
+        config.stash[ENVIRONMENT_KEY] = Environment(profile)
+    return config.stash[ENVIRONMENT_KEY]
+
+
 @pytest.fixture(scope="session", name="podiumd_env")
 def fixture_podiumd_env(request: pytest.FixtureRequest) -> Environment:
     """The environment under test, from --podiumd-env."""
-    name: str | None = request.config.getoption("--podiumd-env")
-    if not name:
-        pytest.exit("no environment: use `podiumd-tests run --env <name>` or pass --podiumd-env", returncode=2)
-    profile = load_profile(name, Path(str(request.config.getoption("--podiumd-envs-dir"))))
-    return Environment(profile)
+    return _environment(request.config)
 
 
 @pytest.fixture(scope="session", name="kube")
@@ -95,13 +105,14 @@ def fixture_registry(request: pytest.FixtureRequest, run_tag: str) -> Iterator[R
         print(f"--keep-data: left behind {', '.join(kept)}")
 
 
-@pytest.fixture(autouse=True, name="_requires")
-def fixture_requires(request: pytest.FixtureRequest) -> None:
-    """Skip tests whose @pytest.mark.requires(...) capabilities are absent."""
-    node = cast("pytest.Item", request.node)
-    needed = [str(c) for m in node.iter_markers("requires") for c in cast("tuple[object, ...]", m.args)]
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    """Skip tests whose @pytest.mark.requires(...) capabilities are absent.
+
+    A hook rather than an autouse fixture: it runs before any fixture, also
+    before module- or session-scoped ones that would need the capability.
+    """
+    needed = [str(c) for m in item.iter_markers("requires") for c in cast("tuple[object, ...]", m.args)]
     if needed:
-        capabilities: Capabilities = request.getfixturevalue("caps")
-        reason = capabilities.skip_reason(*needed)
+        reason = _environment(item.config).capabilities.skip_reason(*needed)
         if reason:
             pytest.skip(reason)
