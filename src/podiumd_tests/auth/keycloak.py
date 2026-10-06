@@ -1,0 +1,41 @@
+"""Keycloak tokens through the OIDC token endpoint.
+
+Ported from podiumd-minikube (_beheerder_token).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import requests
+
+
+class TokenError(Exception):
+    """Keycloak did not return an access token."""
+
+
+@dataclass(frozen=True)
+class PasswordLogin:
+    """A user login through one Keycloak client."""
+
+    client_id: str
+    username: str
+    password: str
+    client_secret: str | None = None
+
+
+def password_grant(session: requests.Session, keycloak_url: str, realm: str, login: PasswordLogin) -> str:
+    """Access token for a user, through the resource-owner password grant."""
+    data = {"grant_type": "password", "client_id": login.client_id, "scope": "openid"}
+    data |= {"username": login.username, "password": login.password}
+    if login.client_secret:
+        data["client_secret"] = login.client_secret
+    response = session.post(f"{keycloak_url}/realms/{realm}/protocol/openid-connect/token", data=data)
+    if response.status_code != requests.codes.ok:
+        msg = f"token request for {login.username!r} in realm {realm!r} failed: HTTP {response.status_code}"
+        raise TokenError(msg)
+    token: object = response.json().get("access_token")
+    if not isinstance(token, str):
+        msg = f"token response for {login.username!r} has no access_token"
+        raise TokenError(msg)
+    return token

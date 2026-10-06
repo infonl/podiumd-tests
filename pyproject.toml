@@ -1,0 +1,235 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "podiumd-tests"
+version = "0.1.0"
+description = "Smoke, component, integration and perf tests for PodiumD environments"
+requires-python = ">=3.12"
+# Every dependency needs a reason (PLAN.md R22).
+dependencies = [
+    "pytest",            # test runner for every tier
+    "pytest-playwright", # UI tests; already used by podiumd-minikube and podiumd-infra
+    "pytest-xdist",      # parallel component/integration runs (R10)
+    "requests",          # HTTP; already used by podiumd-minikube and podiumd-infra
+    "PyYAML",            # environment profiles, known_issues.yaml, perf.yaml
+    "locust",            # perf tier, replaces k6 (PLAN.md §6)
+]
+
+[project.optional-dependencies]
+# Same list as podiumd charts/podiumd/bin/requirements.txt; unpinned, as there.
+dev = [
+    "ruff",
+    "pymarkdownlnt",
+    "pylint",
+    "vulture",
+    "isort",
+    "pytest",
+    "bandit",
+    "basedpyright",
+    "jscpd",
+    "types-requests",    # type stubs for basedpyright strict
+    "types-PyYAML",      # type stubs for basedpyright strict
+]
+
+[project.scripts]
+podiumd-tests = "podiumd_tests.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+podiumd_tests = ["py.typed"]
+
+[tool.pytest.ini_options]
+# A bare `pytest` runs the offline unit tests only; environment tests run
+# through `podiumd-tests run`, which passes the paths explicitly.
+testpaths = ["unit_tests"]
+addopts = "-ra"
+markers = [
+    "smoke: read-only check that a component is up and wired",
+    "component: behaviour of one component, with its own seed and cleanup",
+    "integration: chain across components, with its own seed and cleanup",
+    "perf: response-time thresholds (Locust)",
+    "core: key user flow (tier core)",
+    "ui: needs a browser",
+    "cluster: needs kubectl exec access",
+    "destructive: changes shared state; opt-in only (tier chaos)",
+    "slow: takes more than a minute",
+    "requires(*capabilities): skip unless the environment has these capabilities",
+    "tc(*ids): draaiboek test case ids",
+]
+
+# Tool settings below are copied from podiumd charts/podiumd/bin/pyproject.toml.
+# Deviations are marked "podiumd-tests:".
+
+[tool.ruff]
+# Shared with [tool.ruff.format] and pylint max-line-length.
+line-length = 120
+indent-width = 4
+force-exclude = true
+
+[tool.ruff.lint]
+select = [
+    "A",     # flake8-builtins
+    "AIR",
+    # "ANN", # flake8-annotations
+    "ARG",
+    "ASYNC",
+    "B",    # flake8-bugbear
+    "BLE",
+    "C4",   # flake8-comprehensions
+    "C90",  # maccabe
+    "COM",  # flake8-commas
+    #"D",    # pydocstyle
+    "DJ",
+    "DTZ",
+    "E",    # pycodestyle
+    "EM",
+    "ERA",  # flake8-eradicate
+    "EXE",  # flake8-executable
+    "F",    # Pyflakes
+    "FA",   # flake8-future-annotations
+    "FBT",  # flake8-boolean-trap
+    "FLY",  # pyflint
+    "FURB", # refurb
+    "G",    # flake8-logging-format
+    "I",    # isort
+    "ICN",  # flake8-import-conventions
+    "ISC",  # flake8-implicit-str-concat
+    "INP",
+    "INT",
+    "LOG",  # flake8-logging
+    "N",    # pep8-naming
+    "NPY",
+    "PD",
+    "PERF", # perflint
+    "PGH",
+    "PIE",  # flake8-pie
+    "PT",   # flake8-pytest-style
+    "PTH",  # flake8-use-pathlib
+    "PYI",
+    "Q",    # flake8-quotes
+    "RET",  # flake8-return
+    "RSE",  # flake8-raise
+    "RUF",  # ruff
+    "S",    # flake8-bandit
+    "SIM",  # flake8-simplify
+    "SLF",  # flake8-self
+    "SLOT", # flake8-slots
+    "T10",
+    "T20",
+    "TCH",
+    "TID",
+    "TRY",  # tryceratops
+    "UP",   # pyupgrade
+    "W",    # pycodestyle
+    "YTT",  # flake8-2020
+]
+ignore = [
+    "COM812", # Conflicts when used with the formatter
+    "ISC001", # Rule may cause conflicts when used with the formatter, disable is recommended by ruff
+    "T201", # 'print' statement found, sometimes these are deliberate
+    "EXE001", # shebang permission mismatch between host and Docker container
+    "E501", # line-too-long: pylint's job now (C0301), avoid flagging the same line twice
+    "ERA001", # commented-out-code: current hits are prose that resembles code
+]
+# Allow fix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.isort]
+# Mirror [tool.isort] below so ruff and isort agree on import layout.
+force-single-line = true
+lines-between-types = 1
+
+[tool.ruff.lint.flake8-bandit]
+check-typed-exception = true  # Enable additional checks for try-except-pass
+
+[tool.ruff.lint.per-file-ignores]
+# tests/: pytest asserts, fixture/mock params (ARG), private-helper access
+# (SLF001), no __init__.py (INP001), composite asserts (PT018), unused
+# unpacked vars (RUF059), fixed-argv `git` calls (S603/S607), fake tokens
+# (S106). bandit does not scan tests/ either.
+# podiumd-tests: the same rules apply to unit_tests/.
+"tests/**" = ["S101", "ARG001", "ARG005", "SLF001", "INP001", "PT018", "RUF059", "S603", "S607", "S106"]
+"unit_tests/**" = ["S101", "ARG001", "ARG005", "SLF001", "INP001", "PT018", "RUF059", "S603", "S607", "S106"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+# pylint covers checks ruff lacks; overlapping rules are owned by one tool.
+# tests/-only disables live in run_python_checks (TESTS_PYLINT_DISABLE):
+# pylint has no per-directory config.
+
+[tool.pylint.basic]
+# Allow hyphens for the kebab-case script names (e.g. "verify-podiumd").
+module-rgx = "^(([a-z_][a-z0-9_-]*)|(__.*__))$"
+
+[tool.pylint.format]
+# Matches [tool.ruff] line-length.
+max-line-length = 120
+
+[tool.isort]
+# Compatible with 'ruff format'; mirrored by [tool.ruff.lint.isort]. The two
+# attach comments between imports differently: fence such blocks with
+# "# isort: off" / "# isort: on".
+line_length = 120
+multi_line_output = 3
+lines_between_types = 1
+use_parentheses = true
+include_trailing_comma = true
+force_single_line = true
+default_section = "THIRDPARTY"
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
+
+# vulture runs on src/ only (see run_python_checks). False positives:
+#   - pytest_* hooks and @pytest.fixture functions: called by pytest.
+#   - wait_until, tagged, zgw_jwt, password_grant: library API for tests/ (and unit_tests/)..
+[tool.vulture]
+ignore_names = ["pytest_*", "wait_until", "tagged", "zgw_jwt", "password_grant"]
+ignore_decorators = ["@pytest.fixture"]
+
+[tool.bandit]
+skips = [
+    # covered by ruff:
+    "B108",
+    "B110",  # S110 in ruff
+    "B501",
+]
+
+[tool.basedpyright]
+exclude = [
+    "**/__pycache__",
+    ".venv",
+]
+typeCheckingMode = "strict"
+reportUnusedImport = false  # done by ruff F401
+reportUntypedBaseClass = false # dony by ruff N801
+
+# tests/: fakes, parametrize args and monkeypatch lambdas are unannotated
+# and scripts load as ModuleType, so Unknown types remain.
+# podiumd-tests: the same relaxations apply to unit_tests/.
+[[tool.basedpyright.executionEnvironments]]
+root = "tests"
+reportMissingParameterType = false
+reportUnknownLambdaType = false
+reportUnknownArgumentType = false
+reportUnknownParameterType = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+
+[[tool.basedpyright.executionEnvironments]]
+root = "unit_tests"
+reportMissingParameterType = false
+reportUnknownLambdaType = false
+reportUnknownArgumentType = false
+reportUnknownParameterType = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false

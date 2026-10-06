@@ -1,0 +1,31 @@
+# podiumd-minikube (infonl/podiumd-minikube): *.local hosts through the Traefik
+# LoadBalancer IP (`minikube tunnel`), so no /etc/hosts edits are needed.
+estate: minikube
+allowed_tiers: [smoke, core, full, perf, chaos]
+kube:
+  context: minikube
+  namespace: podiumd-minikube
+access:
+  mode: host-header
+  ingress_service:
+    namespace: traefik
+    name: traefik
+urls:
+  zac: http://zac.local
+  keycloak: http://keycloak.local
+  openzaak: http://openzaak.local
+  openklant: http://openklant.local
+  pabc: http://pabc.local
+  objecten: http://objecten.local
+  objecttypen: http://objecttypen.local
+  opennotificaties: http://opennotificaties.local
+  openarchiefbeheer: http://openarchiefbeheer-ui.local
+  openformulieren: http://openformulieren-nginx.local
+  grafana: http://grafana.local
+  mailpit: http://mailpit.local
+secrets:
+  # Well-known dev defaults of podiumd-minikube; the only place literals are allowed (PLAN.md R8).
+  keycloak_admin_username:
+    dev_default: admin
+  keycloak_admin_password:
+    dev_default: admin

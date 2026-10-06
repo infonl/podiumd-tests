@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+#
+# Runs the code quality checks, fastest first, stopping at the first failure.
+# Adapted from dimpact-samenwerking/helm-charts charts/podiumd/bin/run_python_checks
+# (same tools, same settings) for this repo's src/ layout. See PLAN.md §8a.
+set -euo pipefail
+
+usage() {
+    cat <<'EOF'
+Usage: run_python_checks [-h|--help]
+
+Runs ruff check, shellcheck, ruff format --check, jscpd, pymarkdown,
+vulture, bandit, pylint, basedpyright and pytest (unit_tests/ only),
+fastest first. Stops at the first failure.
+EOF
+}
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+fi
+
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
+# Use the project venv when present.
+if [[ -x .venv/bin/python3 ]]; then
+    PATH="$PWD/.venv/bin:$PATH"
+fi
+
+SRC=src/podiumd_tests
+TEST_DIRS=(tests unit_tests)
+
+# Arrays keep each file name one argument (SC2046). set -e misses failures
+# inside <(...), so `wait "$!"` checks each one (SC2312).
+mapfile -t test_files < <(find "${TEST_DIRS[@]}" -name '*.py')
+wait "$!"
+# Shell scripts: sh/bash/dash/ksh shebang, or *.sh.
+mapfile -t shell_scripts < <(
+    find . -path ./.venv -prune -o -path ./.git -prune -o -path ./results -prune -o -path '*/__pycache__' -prune \
+        -o -type f -print0 |
+        xargs -0 awk 'FNR == 1 && (/^#!.*[\/ ](ba|da|k)?sh([ \t]|$)/ || FILENAME ~ /\.sh$/) {print FILENAME} {nextfile}' |
+        sort
+)
+wait "$!"
+mapfile -t markdown_files < <(find . -path ./.venv -prune -o -path ./.git -prune -o -name '*.md' -print | sort)
+wait "$!"
+
+echo "=== ruff check ==="
+ruff check .
+
+echo "=== shellcheck (${#shell_scripts[@]} shell script(s)) ==="
+if ((${#shell_scripts[@]})); then
+    shellcheck "${shell_scripts[@]}"
+fi
+
+echo "=== ruff format --check ==="
+ruff format --check .
+
+# Weak mode and low thresholds also catch short copies with renamed
+# identifiers. Import lines and typed parameter lines (same-shaped
+# signatures) are not duplication.
+echo "=== jscpd (duplicate code) ==="
+jscpd --exit-code 1 --format python --mode weak --min-lines 4 --min-tokens 35 --reporters console \
+    --ignore '**/__pycache__/**' \
+    --ignore-pattern 'from .* import .*,import .*, +[a-z_]+: [^=\n]+\x2c\n' \
+    src
+
+# Same rules as podiumd's verify-podiumd markdown check
+# (quality_gates.markdown_disabled_rules default and MARKDOWN_PLUGIN_SETTINGS).
+echo "=== pymarkdown (${#markdown_files[@]} file(s)) ==="
+pymarkdown -d md013,md014 -s 'plugins.md024.siblings_only=$!True' scan "${markdown_files[@]}"
+
+# vulture does not link TypedDict fields to string-key reads (row["app"]),
+# so all TypedDict fields go into a generated whitelist.
+typeddict_whitelist=$(mktemp --suffix=.py)
+trap 'rm -f "$typeddict_whitelist"' EXIT
+python3 - "$SRC" > "$typeddict_whitelist" <<'PY'
+import ast
+import pathlib
+import sys
+
+classes = []
+for arg in sys.argv[1:]:
+    path = pathlib.Path(arg)
+    for f in [path] if path.is_file() else sorted(path.rglob("*.py")):
+        classes += [n for n in ast.walk(ast.parse(f.read_text(encoding="utf-8"))) if isinstance(n, ast.ClassDef)]
+typeddicts = {"TypedDict"}
+while True:
+    found = {c.name for c in classes if any(isinstance(b, ast.Name) and b.id in typeddicts for b in c.bases)}
+    if found <= typeddicts:
+        break
+    typeddicts |= found
+for c in classes:
+    if c.name in typeddicts:
+        for st in c.body:
+            if isinstance(st, ast.AnnAssign) and isinstance(st.target, ast.Name):
+                print(st.target.id)
+PY
+
+echo "=== vulture (dead code) ==="
+vulture "$SRC" "$typeddict_whitelist"
+
+# Test directories excluded: every assert would flag B101.
+echo "=== bandit (security) ==="
+bandit -c pyproject.toml -r "$SRC" -q
+
+# Test directories get TESTS_PYLINT_DISABLE on top (pylint has no per-directory config).
+# False positives under tests/:
+TESTS_PYLINT_DISABLE=missing-function-docstring,wrong-import-position,unused-argument,protected-access
+TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,unused-variable,redefined-outer-name,duplicate-code
+# Not enforced for tests:
+TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,import-outside-toplevel,consider-using-from-import
+TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,use-implicit-booleaness-not-comparison,too-many-positional-arguments
+TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,too-many-arguments,too-many-locals,import-error,superfluous-parens
+TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,too-many-lines,subprocess-run-check,missing-class-docstring
+TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,useless-return,unnecessary-lambda,too-few-public-methods
+TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,line-too-long,comparison-of-constants
+echo "=== pylint (src) ==="
+pylint "$SRC"
+
+echo "=== pylint (tests) ==="
+if ((${#test_files[@]})); then
+    pylint --disable="$TESTS_PYLINT_DISABLE" "${test_files[@]}"
+fi
+
+echo "=== basedpyright (type checking) ==="
+basedpyright "$SRC" "${TEST_DIRS[@]}"
+
+echo "=== pytest (unit_tests) ==="
+python3 -m pytest -q unit_tests
+
+echo "=== all checks passed ==="

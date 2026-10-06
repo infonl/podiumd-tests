@@ -1,0 +1,257 @@
+# Migration triage
+
+One row per source test file. Decision: **port** (carry over), **merge** (fold into another or a parametrized test),
+**drop** (dead, Hetzner/KIND leftover, duplicate), **replace** (by a CLI command), or **todo** (not triaged yet).
+See PLAN.md §10. Generated 2026-10-05 from the source repositories; edit the Decision and Notes columns by hand.
+
+Sources:
+
+- TA: `icatt-menselijk-digitaal/podiumd-testautomation/podiumd-4.9.0/test-automation/tests`
+- MK: `infonl/podiumd-minikube/tests`
+- PI: `icatt-menselijk-digitaal/podiumd-infra/tests`
+- EX: `scctwente/ExternalsPodiumD/smoke-tests/tests/smoke`
+
+## TA
+
+| Test | Target | Phase | Decision | Notes |
+|---|---|---|---|---|
+| `debug/debug-portaal-mijn-zaken-cache.spec.ts` | — | — | drop | |
+| `debug/esuite-form-selectors.spec.ts` | — | — | drop | |
+| `debug/esuite-route-discovery.spec.ts` | — | — | drop | |
+| `interaction/02-zaak-creatie.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/03-document-koppeling.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/09-ok2-klantcontact.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/10-cross-component-zaak-portaal.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/105-portaal-profiel-edit.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/107-portaal-zoeken.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/108-portaal-vraag-stellen-inwoner.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/111-portaal-documenten-uploaden.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/140-inwoner-vraag-over-zaak.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/141-bedrijf-eherkenning-mijn-zaken.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/142-oab-vernietigingslijst.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/145-contact-lookup-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/148-ita-doorsturen-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/162-portaal-document-upload-e2e.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/164-portaal-vraag-stellen-vanuit-zaak.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/168-oab-archivist-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/180-ita-contactmoment-afsluiten.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/181-keten-ita-contactmoment-portaal-beantwoord.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/182-keten-contactformulier-mijn-vragen.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/20-klacht-journey-e2e.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/21-portaal-mijn-zaken-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/31-document-portaal-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/32-of-submission-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/35-ok2-partij-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/74-ita-claim-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/76-of-submission-end-to-end.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/78-ita-add-klantcontact.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `maintenance/cleanup-test-zaken.spec.ts` | `podiumd-tests sweep` (CLI, not a test) | 2 | replace | |
+| `perf/api-perf.js` | perf (Locust) | 6 | todo | |
+| `perf/fg-compare.js` | perf (Locust) | 6 | todo | |
+| `perf/lib.js` | perf (Locust) | 6 | todo | |
+| `regression/07-brp-persoon-zoeken.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/08-kvk-bedrijf-zoeken.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/100-kiss-frontend-basis.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/106-portaal-notificatievoorkeur.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/108-probe-contactform.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/109-portaal-vraag-stellen-bedrijf.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/11-of-brp-prefill.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/110-portaal-anoniem-en-mobile.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/112-ita-toewijzen-actor-types.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/114-portaal-multi-user-digid.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/115-omc-notifynl-mock-keten.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/116-omc-mail-keten-e2e.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/117-portaal-contactmomenten-paginatie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/118-portaal-vestigingsnaam-bedrijf.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/119-infra-quick-wins.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/12-kiss-bff-kcc-flow.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/120-of-payment-infrastructure.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/121-continuiteit-graceful-degradation.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/122-gemachtigde-flow.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/123-portaal-clamav-eicar-rejectie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/124-cluster-pod-recovery-multi.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/125-kvk-postcode-huisnummer-zoek.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/13-va-filter-cross-component.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/14-audit-trail.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/143-oab-vernietigingsflow.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/143-portaal-document-download.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/144-continuiteit-component-stop.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/146-portaal-uitbreiding.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/147-kiss-contentbronnen.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/149-ok2-crud-uitbreiding.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/15-status-transitions.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/150-of-prefill-foutpaden.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/151-pdok-externe-service.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/152-of-retention-en-pdf.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/153-of-features-direct.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/154-omc-cosign-direct.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/156-esuite-ui-navigatie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/157-contact-haalcentraal-validatie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/158-of-eherkenning-vestiging.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/159-of-zaak-keten.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/16-bedrijf-aanvraag-kvk.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/160-portaal-deactivated-on-pseudo-blokkade.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/161-portaal-low-prio-coverage.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/163-portaal-menu-kop-consistency.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/165-portaal-notif-save.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/166-oab-medebeoordelaar.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/167-fb-zaaktype-crud-api.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/169-oab-process-review-flow.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/17-document-va-handhaving.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/170-oab-destruction-execute.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/171-oab-short-procedure.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/172-architectuur-wcag-axe.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/173-fb-zaaktype-versie-isolatie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/174-oab-config-persist-filter.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/175-continuiteit-alertmanager-fber.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/176-formulier-update-keten.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/177-pen-admin-niet-publiek.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/178-blacklist-upload.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/179-portaal-profiel-naar-openklant.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/18-klantcontact-zaak-koppeling.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/183-of-digid-zaak-rol.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/184-ita-doorsturen-mutatie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/185-of-betaalstatus-zaak.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/19-notificaties-e2e.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/190-kiss-contentbronnen-gevuld.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/191-ita-poller-split.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/193-frankgateway-zac-openzaak-e2e.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/22-negative-auth.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/23-va-escalatie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/24-zaakeigenschappen.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/25-abonnement-filter.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/26-multi-subscriber.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/27-status-event-keten.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/28-gerelateerde-zaken.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/29-besluit-op-zaak.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/30-rol-event.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/33-zaak-update-event.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/34-zio-events.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/36-zaakobject-koppeling.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/37-ok2-partij-events.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/38-concurrency-uniqueness.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/39-zaak-lifecycle-close.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/40-brp-zoek-criteria.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/41-multi-rollen-zaak.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/42-notif-retry.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/43-pagineren-filtering.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/44-validation-edge-cases.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/45-internetaak-event.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/46-rol-delete-event.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/47-kvk-edge-cases.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/48-audit-trail-acties.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/49-document-download.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/50-zaak-zoeken.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/51-document-crud-edges.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/52-zaak-geometrie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/53-on-kanaal-validation.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/54-ok2-conversation-tree.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/55-multi-zaaktype.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/56-zaak-rel-batch.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/57-kvk-prefill.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/58-ok2-expand.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/59-zaak-relatie-keten.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/60-seed-data-health.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/61-mobile-mijn-zaken.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/62-vergetelheid-categorieen.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/63-klacht-bezwaar-keten.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/64-document-lifecycle.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/65-oi-cache-webhook.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/67-pabc-functional-roles.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/68-pabc-decision.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/69-pabc-domains-entity-types.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/70-pabc-groups-lookup.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/71-pabc-zac-integration-coherence.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/73-ita-assigned-list.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/75-ita-forward-flow.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/75-of-zaaktype-matching.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/76-ita-close-with-klantcontact.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/77-ita-afdelingen-groepen.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/79-of-form-cosign-config.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/80-brp-kvk-prefill-foutpaden.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/80-omc-listen-event.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/81-omc-confirm-callback.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/82-omc-zaak-e2e.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/83-portaal-anonieme-pagina-bereikbaarheid.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/84-portaal-ingelogd-sessie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/85-ok2-bedrijf-partij.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/86-ok2-klantcontact-bedrijf.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/87-ok2-klantcontact-zoeken.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/88-pdok-locatieserver.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/89-cluster-pod-recovery.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/90-fb-oz-catalogi-integriteit.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/91-fb-keycloak-realm-snapshot.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/95-portaal-filtering.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/96-portaal-profiel-navigatie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `smoke/00-environment-preflight.spec.ts` | smoke | 1 | todo | |
+| `smoke/01-zgw-auth.spec.ts` | smoke | 1 | todo | |
+| `smoke/04-portaal-homepage.spec.ts` | smoke | 1 | todo | |
+| `smoke/05-portaal-digid-login.spec.ts` | smoke | 1 | todo | |
+| `smoke/06-kiss-bff-healthz.spec.ts` | smoke | 1 | todo | |
+| `smoke/113-kiss-kcc-login-flow.spec.ts` | smoke | 1 | todo | |
+| `smoke/155-esuite-smoke-login.spec.ts` | smoke | 1 | todo | |
+| `smoke/192-frankgateway-health.spec.ts` | smoke | 1 | todo | |
+| `smoke/66-pabc-health.spec.ts` | smoke | 1 | todo | |
+| `smoke/72-ita-health-kanalen.spec.ts` | smoke | 1 | todo | |
+| `smoke/79-omc-health.spec.ts` | smoke | 1 | todo | |
+| `smoke/81-continuiteit-pings.spec.ts` | smoke | 1 | todo | |
+| `smoke/82-portaal-login-config.spec.ts` | smoke | 1 | todo | |
+| `smoke/92-fb-cross-component-sso.spec.ts` | smoke | 1 | todo | |
+| `smoke/99-portaal-eherkenning-login.spec.ts` | smoke | 1 | todo | |
+
+## MK
+
+| Test | Target | Phase | Decision | Notes |
+|---|---|---|---|---|
+| `test_browser.py` | smoke, marker `ui` | 1/5 | todo |  |
+| `test_database.py` | component, marker `cluster` | 3 | todo |  |
+| `test_django_admin_login.py` | component, marker `cluster` | 3 | todo |  |
+| `test_login_flow.py` | smoke (ZAC OIDC login) | 1 | todo |  |
+| `test_mailpit.py` | integration | 4 | todo |  |
+| `test_metrics.py` | smoke | 1 | todo |  |
+| `test_monitoring_logging.py` | smoke | 1 | todo |  |
+| `test_pabc_migrations_guard.py` | component, marker `destructive` | 3 | todo |  |
+| `test_pkce.py` | component (keycloak) | 3 | todo |  |
+| `test_pods.py` | smoke | 1 | todo |  |
+| `test_productaanvraag_flow.py` | integration, marker `core` | 4 | todo |  |
+| `test_reachability.py` | smoke | 1 | todo |  |
+| `test_zgw_service_reachability.py` | integration, marker `cluster` | 4 | todo |  |
+
+## PI
+
+| Test | Target | Phase | Decision | Notes |
+|---|---|---|---|---|
+| `test_4_8_5_upgrade.py` | component (deployment hygiene) + known_issues | 3 | todo |  |
+| `test_browser.py` | smoke, marker `ui` | 1/5 | merge | same test in MK and PI: merge into one environment-neutral test |
+| `test_database.py` | component, marker `cluster` | 3 | merge | same test in MK and PI: merge into one environment-neutral test |
+| `test_django_admin_login.py` | component, marker `cluster` | 3 | merge | same test in MK and PI: merge into one environment-neutral test |
+| `test_login_flow.py` | smoke (ZAC OIDC login) | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
+| `test_mailpit.py` | integration | 4 | merge | same test in MK and PI: merge into one environment-neutral test |
+| `test_metrics.py` | smoke | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
+| `test_monitoring_logging.py` | smoke | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
+| `test_pabc_migrations_guard.py` | component, marker `destructive` | 3 | merge | same test in MK and PI: merge into one environment-neutral test |
+| `test_pkce.py` | component (keycloak) | 3 | merge | same test in MK and PI: merge into one environment-neutral test |
+| `test_pods.py` | smoke | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
+| `test_productaanvraag_flow.py` | integration, marker `core` | 4 | merge | same test in MK and PI: merge into one environment-neutral test |
+| `test_reachability.py` | smoke | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
+| `test_zac_zaakafhandelparameters.py` | component (zac) | 3 | todo |  |
+| `test_zgw_service_reachability.py` | integration, marker `cluster` | 4 | merge | same test in MK and PI: merge into one environment-neutral test |
+
+## EX
+
+| Test | Target | Phase | Decision | Notes |
+|---|---|---|---|---|
+| `00-environment-preflight.spec.ts` | smoke | 1 | merge | same spec number as TA `smoke/`; port once, environment-neutral |
+| `01-zgw-auth.spec.ts` | smoke | 1 | merge | same spec number as TA `smoke/`; port once, environment-neutral |
+| `04-portaal-homepage.spec.ts` | smoke | 1 | merge | same spec number as TA `smoke/`; port once, environment-neutral |
+| `05-portaal-digid-login.spec.ts` | smoke | 1 | merge | same spec number as TA `smoke/`; port once, environment-neutral |
+| `06-kiss-bff-healthz.spec.ts` | smoke | 1 | merge | same spec number as TA `smoke/`; port once, environment-neutral |
+| `113-kiss-kcc-login-flow.spec.ts` | smoke | 1 | merge | same spec number as TA `smoke/`; port once, environment-neutral |
+| `155-esuite-smoke-login.spec.ts` | smoke | 1 | merge | same spec number as TA `smoke/`; port once, environment-neutral |
+| `66-pabc-health.spec.ts` | smoke | 1 | merge | same spec number as TA `smoke/`; port once, environment-neutral |
+| `72-ita-health-kanalen.spec.ts` | smoke | 1 | merge | same spec number as TA `smoke/`; port once, environment-neutral |
+| `79-omc-health.spec.ts` | smoke | 1 | merge | same spec number as TA `smoke/`; port once, environment-neutral |
+| `81-continuiteit-pings.spec.ts` | smoke | 1 | merge | same spec number as TA `smoke/`; port once, environment-neutral |
+| `82-portaal-login-config.spec.ts` | smoke | 1 | merge | same spec number as TA `smoke/`; port once, environment-neutral |
+| `92-fb-cross-component-sso.spec.ts` | smoke | 1 | merge | same spec number as TA `smoke/`; port once, environment-neutral |
+| `99-portaal-eherkenning-login.spec.ts` | smoke | 1 | merge | same spec number as TA `smoke/`; port once, environment-neutral |
