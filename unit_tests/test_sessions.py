@@ -29,6 +29,15 @@ def test_host_header_mode_rewrites_profile_hosts(monkeypatch):
     assert sent == [("http://10.0.0.5/rest/health?x=1", "zac.local", DEFAULT_TIMEOUT)]
 
 
+def test_host_header_mode_restores_the_url_for_redirects_and_asserts(monkeypatch):
+    capture_sends(monkeypatch)
+    session = make_session({"zac": "http://zac.local"}, ingress_ip="10.0.0.5")
+    response = session.get("http://zac.local/login")
+    assert response.url == "http://zac.local/login"
+    assert response.request.url == "http://zac.local/login"
+    assert "Host" not in response.request.headers
+
+
 def test_host_header_mode_leaves_other_hosts_alone(monkeypatch):
     sent = capture_sends(monkeypatch)
     session = make_session({"zac": "http://zac.local"}, ingress_ip="10.0.0.5")

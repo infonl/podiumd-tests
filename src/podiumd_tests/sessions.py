@@ -40,13 +40,26 @@ class HostHeaderAdapter(HTTPAdapter):
         cert: bytes | str | tuple[bytes | str, bytes | str] | None = None,
         proxies: Mapping[str, str] | None = None,
     ) -> requests.Response:
-        """Rewrite profile hosts to the ingress IP, then send."""
-        parts = urlsplit(request.url or "")
-        if parts.hostname in self._hosts:
-            request.headers["Host"] = parts.netloc
-            netloc = self._ip if parts.port is None else f"{self._ip}:{parts.port}"
-            request.url = urlunsplit(parts._replace(netloc=netloc))
-        return super().send(request, stream=stream, timeout=timeout, verify=verify, cert=cert, proxies=proxies)
+        """Rewrite profile hosts to the ingress IP, send, and restore the URL.
+
+        Restoring matters: requests resolves relative redirects against
+        response.url, and tests assert on the final URL.
+        """
+        original = request.url or ""
+        parts = urlsplit(original)
+        if parts.hostname not in self._hosts:
+            return super().send(request, stream=stream, timeout=timeout, verify=verify, cert=cert, proxies=proxies)
+        request.headers["Host"] = parts.netloc
+        netloc = self._ip if parts.port is None else f"{self._ip}:{parts.port}"
+        request.url = urlunsplit(parts._replace(netloc=netloc))
+        try:
+            response = super().send(request, stream=stream, timeout=timeout, verify=verify, cert=cert, proxies=proxies)
+        finally:
+            # Redirects copy this request; a stale Host header must not follow them to another host.
+            request.url = original
+            del request.headers["Host"]
+        response.url = original
+        return response
 
 
 class TimeoutSession(requests.Session):
