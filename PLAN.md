@@ -376,7 +376,7 @@ The output is a checklist in the terminal, plus `doctor.json` for pipelines. Exi
 
 ## 10. Migration phases
 
-Status 2026-10-06: phase 0 is built, and `doctor` is green on minikube. kees00 is shut down; `doctor` reports that within about 6 s. Phase 1 is built: tier `smoke` runs in under 10 s on minikube and on ontw-dimp (HTTP only: no cluster access from here, so the cluster tests skip). Browser logins and checks that need seeded data or test identities are deferred to phases 2, 3 and 5; see `MIGRATION.md`.
+Status 2026-10-06: phase 0 is built, and `doctor` is green on minikube. kees00 is shut down; `doctor` reports that within about 6 s. Phase 1 is built: tier `smoke` runs in under 10 s on minikube and on ontw-dimp (HTTP only: no cluster access from here, so the cluster tests skip). Browser logins and checks that need seeded data or test identities are deferred to phases 2, 3 and 5; see `MIGRATION.md`. Phase 2a (A1, test-only bootstrap) is built: `bootstrap`/`unbootstrap` with an Open Zaak client and test catalogus, an Open Notificaties client, Open Klant and Objecttypen tokens and five Keycloak test users; a minikube round trip leaves nothing behind, and smoke-only profiles are refused. Next: phase 2b (A2 platform wiring); `sweep` follows with the factories of phase 3, and Objecten tokens with phase 4.
 
 | Phase | Deliverable | Sources | Done when |
 |---|---|---|---|
