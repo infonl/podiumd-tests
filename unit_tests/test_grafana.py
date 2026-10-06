@@ -3,9 +3,11 @@
 import pytest
 import requests
 
+from podiumd_tests.credentials import env_var_name
 from podiumd_tests.grafana import Grafana
 from podiumd_tests.grafana import GrafanaError
 from podiumd_tests.grafana import down_targets
+from podiumd_tests.grafana import grafana_auth
 from podiumd_tests.grafana import target_count
 from podiumd_tests.responses import UnexpectedStatusError
 
@@ -77,3 +79,11 @@ def test_down_targets():
     assert down_targets(body) == ["tempo http://tempo:3200/metrics: connection refused"]
     assert down_targets({"data": {}}) == []
     assert target_count({}) == 0
+
+
+def test_grafana_auth_needs_both_secrets(env_factory):
+    assert grafana_auth(env_factory().credentials) is None
+    only_user = {env_var_name("grafana_username"): "viewer"}
+    assert grafana_auth(env_factory(environ=only_user).credentials) is None
+    both = {**only_user, env_var_name("grafana_password"): "pw-1234"}
+    assert grafana_auth(env_factory(environ=both).credentials) == ("viewer", "pw-1234")
