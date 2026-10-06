@@ -96,6 +96,8 @@ class Sent:
 def fake_http(monkeypatch, response_factory):
     """Replace the network under requests. install({path: (status, json)}) returns the list of Sent requests.
 
+    A key "METHOD path" answers only that method; a plain path answers any method.
+
     Unknown paths answer 404. The real adapters (e.g. host-header mode) still run.
     """
     sent = []
@@ -103,7 +105,9 @@ def fake_http(monkeypatch, response_factory):
     def install(answers=None):
         def fake_send(_adapter, request, **kwargs):
             sent.append(Sent(request.method, request.url, dict(request.headers), kwargs.get("timeout")))
-            status, json_body = (answers or {}).get(request.path_url.split("?")[0], (404, {"detail": "not found"}))
+            path = request.path_url.split("?")[0]
+            table = answers or {}
+            status, json_body = table.get(f"{request.method} {path}", table.get(path, (404, {"detail": "not found"})))
             response = response_factory(status=status, json_body=json_body, url=request.url)
             response.request = request
             return response

@@ -34,3 +34,5 @@ secrets:
     zgw_jwt_secret: {deployment: openzaak, client_id: open-formulieren}
 settings:
   zgw_client_id: open-formulieren
+  # podiumd-minikube imports the ZAC realm only; the QA estates use realm podiumd (the default).
+  keycloak_realm: zaakafhandelcomponent

@@ -9,6 +9,7 @@ Credentials a step creates go to the CredentialStore Secret only.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from dataclasses import field
 from typing import TYPE_CHECKING
 from typing import Literal
 from typing import Protocol
@@ -32,6 +33,8 @@ class Context:
 
     env: Environment
     store: CredentialStore
+    # What a step wants the user to know, e.g. roles the realm lacks; shown in the step's outcome.
+    notes: list[str] = field(default_factory=list[str])
 
 
 class Step(Protocol):
@@ -92,10 +95,11 @@ def bootstrap(env: Environment, steps: Sequence[Step], *, rotate: bool = False) 
     def apply(ctx: Context, step: Step) -> Outcome:
         if not rotate and step.is_present(ctx):
             return Outcome(step.name, "present")
+        ctx.notes.clear()
         values = step.apply(ctx)
         if values:
             ctx.store.write(values)
-        return Outcome(step.name, "created", ", ".join(sorted(values)))
+        return Outcome(step.name, "created", "; ".join([", ".join(sorted(values)), *ctx.notes]))
 
     return _each(env, steps, apply)
 

@@ -15,7 +15,10 @@ from podiumd_tests.bootstrap import refusal
 from podiumd_tests.bootstrap import unbootstrap
 from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.bootstrap.steps import ZGW_STORE_KEY
+from podiumd_tests.bootstrap.steps import KeycloakUser
+from podiumd_tests.bootstrap.steps import keycloak_password_key
 from podiumd_tests.credential_store import CredentialStore
+from podiumd_tests.credentials import env_var_name
 from podiumd_tests.kube import Kube
 
 
@@ -47,12 +50,12 @@ def stored(values):
     return json.dumps({"kind": "Secret", "data": data})
 
 
-def cluster_env(env_factory, fake_runner, profile_factory, **profile):
+def cluster_env(env_factory, fake_runner, profile_factory, environ=None, **profile):
     fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "openzaak"}}]}))
     fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (0, "")
     fake_runner.answers["apply -f -"] = (0, "secret/podiumd-tests-credentials configured")
     fake_runner.answers["delete secret podiumd-tests-credentials"] = (0, "")
-    return env_factory(profile_factory(**profile))
+    return env_factory(profile_factory(**profile), environ)
 
 
 def test_smoke_only_profiles_are_refused(profile_factory):
@@ -161,3 +164,57 @@ def test_steps_run_in_the_components_deployment(env_factory, fake_runner, profil
     env = cluster_env(env_factory, fake_runner, profile_factory)
     fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "notificaties"}}]}))
     assert env.deployment_for("opennotificaties") == "notificaties"
+
+
+KC = "https://kc.example.test"
+REALM = "/admin/realms/podiumd"
+
+
+def keycloak_answers(*, user_exists, has_group):
+    return {
+        "POST /realms/master/protocol/openid-connect/token": (200, {"access_token": "admin-token"}),
+        f"GET {REALM}/users": (200, [{"id": "u1"}] if user_exists else []),
+        f"DELETE {REALM}/users/u1": (204, None),
+        f"POST {REALM}/users": (201, None),
+        f"GET {REALM}/roles": (200, [{"id": "r1", "name": "Behandelaar"}, {"id": "r2", "name": "other"}]),
+        f"POST {REALM}/users/u1/role-mappings/realm": (204, None),
+        f"GET {REALM}/clients": (200, [{"id": "c1"}]),
+        f"GET {REALM}/clients/c1/roles": (200, [{"name": "administrator"}]),
+        f"POST {REALM}/users/u1/role-mappings/clients/c1": (204, None),
+        f"GET {REALM}/groups": (200, [{"id": "g1", "name": "beheerders"}] if has_group else []),
+        f"PUT {REALM}/users/u1/groups/g1": (204, None),
+    }
+
+
+def keycloak_ctx(env_factory, fake_runner, profile_factory):
+    admin = {env_var_name("keycloak_admin_username"): "admin", env_var_name("keycloak_admin_password"): "pw"}
+    env = cluster_env(env_factory, fake_runner, profile_factory, admin, urls={"keycloak": KC})
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "keycloak"}}]}))
+    return Context(env, CredentialStore(env.kube))
+
+
+def test_keycloak_user_gets_existing_roles_and_reports_missing_ones(
+    env_factory, fake_runner, profile_factory, fake_http
+):
+    ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
+    sent = fake_http(keycloak_answers(user_exists=True, has_group=False))
+    user = KeycloakUser(
+        "admin",
+        realm_roles=("Behandelaar", "Coordinator"),
+        client_roles=(("pabc", "administrator"),),
+        groups=("beheerders",),
+    )
+    values = user.apply(ctx)
+    password = values[keycloak_password_key("admin")]
+    assert len(password) == 40
+    calls = [(r.method, r.url.removeprefix(KC).split("?")[0]) for r in sent]
+    assert ("DELETE", f"{REALM}/users/u1") in calls  # a stale user is replaced
+    assert ("POST", f"{REALM}/users/u1/role-mappings/clients/c1") in calls
+    assert ctx.notes == ["not in realm: Coordinator, group beheerders"]
+
+
+def test_keycloak_user_remove_deletes_only_an_existing_user(env_factory, fake_runner, profile_factory, fake_http):
+    ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
+    sent = fake_http(keycloak_answers(user_exists=False, has_group=True))
+    assert KeycloakUser("kcc").remove(ctx) == (keycloak_password_key("kcc"),)
+    assert all(r.method != "DELETE" for r in sent)
