@@ -189,11 +189,13 @@ force_single_line = true
 default_section = "THIRDPARTY"
 sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 
-# vulture runs on src/ only (see run_python_checks). False positives:
-#   - pytest_* hooks and @pytest.fixture functions: called by pytest.
-#   - wait_until, tagged, zgw_jwt, password_grant: library API for tests/ (and unit_tests/)..
+# podiumd-tests: vulture runs on src/ plus tests/ (see run_python_checks), so library
+# code that only environment tests use is not dead. unit_tests/ is left out on purpose:
+# code used only by its own unit test is still dead. False positives:
+#   - pytest_* hooks, test_* functions, pytestmark and @pytest.fixture functions: used by pytest.
+#   - wait_until, tagged, zgw_jwt, password_grant: library API for tests of later phases.
 [tool.vulture]
-ignore_names = ["pytest_*", "wait_until", "tagged", "zgw_jwt", "password_grant"]
+ignore_names = ["pytest_*", "test_*", "pytestmark", "wait_until", "tagged", "zgw_jwt", "password_grant"]
 ignore_decorators = ["@pytest.fixture"]
 
 [tool.bandit]

@@ -98,7 +98,7 @@ for c in classes:
 PY
 
 echo "=== vulture (dead code) ==="
-vulture "$SRC" "$typeddict_whitelist"
+vulture "$SRC" tests "$typeddict_whitelist"
 
 # Test directories excluded: every assert would flag B101.
 echo "=== bandit (security) ==="
