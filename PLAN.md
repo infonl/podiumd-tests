@@ -112,19 +112,23 @@ Destructive and chaos tests (TA R89, R124, R144) are their own opt-in tier `chao
 
 Everything lives in this repo (R5). There are two layers, because some resources cannot be created through an API.
 
-**A. Environment bootstrap: `podiumd-tests bootstrap --env X`.** Idempotent, run once per environment, reversible.
+**A. Environment bootstrap: `podiumd-tests bootstrap --env X`.** Idempotent, run once per environment, reversible. Refused for smoke-only profiles (R20).
 
-- Creates test-only credentials and wiring, all named `ptest-*`:
-  - OZ/ON Applicaties and JWT secrets for the test client;
-  - OK2 and Objecten tokens;
-  - ON kanalen, if missing;
-  - Keycloak test users, roles and the DigiD/eHerkenning mock IdP;
-  - the OF registration backend;
-  - OI CMS pages.
-- Uses public or admin APIs where they exist. Otherwise `kubectl exec manage.py shell` runs Python snippets kept in `src/podiumd_tests/bootstrap/snippets/`. These are versioned here, with compat branches for model changes such as the OI `OIDCProvider` migration.
-- Deploys the test infra from `infra/` (a small Helm chart): webhook-receiver, notifynl-mock and Mailpit when the environment has none. Optional pieces: the Alertmanager route.
-- `podiumd-tests unbootstrap` removes everything named `ptest-*`.
-- A session fixture `bootstrap_ok` checks the state with cheap GETs. If the state is missing, it fails fast with "run `podiumd-tests bootstrap --env X`". `--auto-bootstrap` applies it instead.
+Decided 2026-10-06, after mapping which source tests need which configuration (`docs/research/platform-wiring.md`): about half of the TA specs need platform wiring that a normal PodiumD deployment does not have, so bootstrap applies it, in two layers.
+
+- **A1. Test-only objects**, all named `ptest-bootstrap-*`, always applied:
+  - OZ: an Applicatie and JWT secret for the suite's ZGW client, a test catalogus, and autorisaties limited to that catalogus (`CatalogusAutorisatie`), not `heeft_alle_autorisaties` (§11a);
+  - ON: an Applicatie and JWT secret for the suite;
+  - OK2, Objecten and Objecttypen tokens;
+  - Keycloak test users (KCC medewerker, admin, inwoners, bedrijf) with roles the realm already has.
+- **A2. Platform wiring**, the configuration TA's `seed-omgeving.sh` applies (W1–W12 in the research note), applied only when the profile sets `bootstrap.wiring: true`. Default: on for minikube and podiumd-infra, off for ExternalsPodiumD until the environment owner agrees. Without it, the tests that need it skip with a reason, and `doctor` reports what is missing. Order by the number of tests that need it: W1 (DigiD/eHerkenning through Keycloak), W5/W6/W8 (OI CMS pages, OK2 link, contact flow), W9/W10 (OF forms and registration), W3 (ON kanalen), then W7, W11, W12.
+- **Rules:**
+  - Before a step changes an existing object, it stores the old state in the Secret `podiumd-tests-credentials`; `unbootstrap` restores it. Objects a step created are deleted. Built-ins (such as OI's own `oidc-digid` client) are never deleted.
+  - Bootstrap never changes the secrets of the platform's own clients (`open-formulieren`, `open-inwoner`, `zac`, …). Tests use `ptest-bootstrap-*` clients; the restricted Open Formulieren autorisaties of the VA tests go to a separate `ptest-bootstrap-of` client.
+  - Credentials it creates live only in the Secret `podiumd-tests-credentials`, written over stdin; `SecretResolver` reads it as its last source.
+- Uses public or admin APIs where they exist. Otherwise `kubectl exec manage.py shell` runs Python snippets kept in `src/podiumd_tests/bootstrap/snippets/`, with compat branches for model changes such as the OI `OIDCProvider` migration.
+- The test infra from `infra/` (webhook-receiver, notifynl-mock, Mailpit) comes with phase 4, where the integration tests need it.
+- A session fixture `bootstrap_ok` checks the state. If it is missing, it fails fast with "run `podiumd-tests bootstrap --env X`". `--auto-bootstrap` applies it instead.
 - This replaces TA `seed-omgeving.sh`, ExternalsPodiumD `seed-identities.sh` and the MK deploy-time Jobs, as far as the tests depend on them.
 
 **B. Test data: per test or per module, through API factories.**
