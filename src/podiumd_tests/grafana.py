@@ -6,11 +6,12 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
+from podiumd_tests.json_data import JsonObject
+from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     import requests
 
     from podiumd_tests.credentials import SecretResolver
@@ -63,18 +64,19 @@ def grafana_auth(credentials: SecretResolver) -> tuple[str, str] | None:
     return (username, password) if username and password else None
 
 
-def down_targets(targets_response: Mapping[str, object]) -> list[str]:
+def _active_targets(targets_response: JsonObject) -> list[JsonObject]:
+    return entries(section(targets_response, "data").get("activeTargets"))
+
+
+def down_targets(targets_response: JsonObject) -> list[str]:
     """Prometheus scrape targets that are not up, as "job url: error", from a /api/v1/targets body."""
-    data = cast("Json", targets_response.get("data") or {})
-    targets = cast("list[Json]", data.get("activeTargets") or [])
     return [
-        f"{cast('Json', t.get('labels') or {}).get('job')} {t.get('scrapeUrl')}: {t.get('lastError')}"
-        for t in targets
+        f"{section(t, 'labels').get('job')} {t.get('scrapeUrl')}: {t.get('lastError')}"
+        for t in _active_targets(targets_response)
         if t.get("health") != "up"
     ]
 
 
-def target_count(targets_response: Mapping[str, object]) -> int:
+def target_count(targets_response: JsonObject) -> int:
     """Number of active scrape targets in a /api/v1/targets body."""
-    data = cast("Json", targets_response.get("data") or {})
-    return len(cast("list[Json]", data.get("activeTargets") or []))
+    return len(_active_targets(targets_response))

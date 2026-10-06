@@ -13,6 +13,7 @@ import json
 from typing import TYPE_CHECKING
 from typing import cast
 
+from podiumd_tests.json_data import section
 from podiumd_tests.process import ProcessError
 from podiumd_tests.process import Runner
 from podiumd_tests.process import run_checked
@@ -90,10 +91,10 @@ class Kube:
 
     def secret_value(self, name: str, key: str) -> str:
         """Decoded value of one key of a Kubernetes secret."""
-        data = self.get_json("secret", name).get("data")
-        if not isinstance(data, dict) or key not in data:
+        data = section(self.get_json("secret", name), "data")
+        if key not in data:
             raise KubeError(self.command("get", "secret", name), f"no key {key!r}")
-        return base64.b64decode(str(cast("dict[str, object]", data)[key])).decode()
+        return base64.b64decode(str(data[key])).decode()
 
 
 def django_value(output: str) -> str:
@@ -107,10 +108,7 @@ def django_value(output: str) -> str:
 
 def metadata_name(item: Mapping[str, object]) -> str:
     """metadata.name of a Kubernetes object, or an empty string."""
-    metadata = item.get("metadata")
-    if isinstance(metadata, dict):
-        return str(cast("dict[str, object]", metadata).get("name", ""))
-    return ""
+    return str(section(item, "metadata").get("name", ""))
 
 
 def context_names(runner: Runner = run_process) -> list[str]:

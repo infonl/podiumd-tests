@@ -9,37 +9,26 @@ and only the latest Job of each CronJob counts, as older runs are history.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from typing import cast
 
+from podiumd_tests.json_data import JsonObject
+from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
 from podiumd_tests.kube import metadata_name
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
     from collections.abc import Sequence
 
-type Item = Mapping[str, object]
+type Item = JsonObject
 
 GOOD_POD_PHASES = frozenset({"Running", "Succeeded"})
 
 
-def _section(item: Item, key: str) -> Item:
-    value = item.get(key)
-    return cast("Item", value) if isinstance(value, dict) else {}
-
-
-def _entries(value: object) -> list[Item]:
-    """The objects in a JSON list; anything else gives an empty list."""
-    if not isinstance(value, list):
-        return []
-    return [cast("Item", e) for e in cast("list[object]", value) if isinstance(e, dict)]
-
-
 def _owner_kinds(item: Item) -> set[str]:
-    return {str(o.get("kind")) for o in _entries(_section(item, "metadata").get("ownerReferences"))}
+    return {str(o.get("kind")) for o in entries(section(item, "metadata").get("ownerReferences"))}
 
 
 def _owner_name(item: Item, kind: str) -> str | None:
-    owners = _entries(_section(item, "metadata").get("ownerReferences"))
+    owners = entries(section(item, "metadata").get("ownerReferences"))
     return next((str(o.get("name")) for o in owners if o.get("kind") == kind), None)
 
 
@@ -51,9 +40,9 @@ def unready_workloads(items: Sequence[Item]) -> list[str]:
     """Deployments and StatefulSets with fewer ready replicas than wanted, as "name ready/wanted"."""
     found: list[str] = []
     for item in items:
-        replicas = _section(item, "spec").get("replicas", 1)
+        replicas = section(item, "spec").get("replicas", 1)
         wanted = replicas if isinstance(replicas, int) else 1
-        ready = _int(_section(item, "status").get("readyReplicas"))
+        ready = _int(section(item, "status").get("readyReplicas"))
         if ready < wanted:
             found.append(f"{item.get('kind', '?')}/{metadata_name(item)} {ready}/{wanted}")
     return found
@@ -66,9 +55,9 @@ def unhealthy_pods(pods: Sequence[Item]) -> list[str]:
     """
     found: list[str] = []
     for pod in pods:
-        if "Job" in _owner_kinds(pod) or _section(pod, "metadata").get("deletionTimestamp"):
+        if "Job" in _owner_kinds(pod) or section(pod, "metadata").get("deletionTimestamp"):
             continue
-        status = _section(pod, "status")
+        status = section(pod, "status")
         phase = str(status.get("phase", "Unknown"))
         name = metadata_name(pod)
         if phase not in GOOD_POD_PHASES:
@@ -76,13 +65,13 @@ def unhealthy_pods(pods: Sequence[Item]) -> list[str]:
             continue
         if phase == "Succeeded":
             continue
-        containers = _entries(status.get("containerStatuses"))
+        containers = entries(status.get("containerStatuses"))
         found.extend(f"{name}/{c.get('name', '?')}: not ready" for c in containers if not c.get("ready"))
     return found
 
 
 def _job_failed(job: Item) -> bool:
-    conditions = _entries(_section(job, "status").get("conditions"))
+    conditions = entries(section(job, "status").get("conditions"))
     return any(c.get("type") == "Failed" and c.get("status") == "True" for c in conditions)
 
 
@@ -95,8 +84,8 @@ def failed_jobs(jobs: Sequence[Item]) -> list[str]:
         if cronjob is None:
             standalone.append(job)
             continue
-        created = str(_section(job, "metadata").get("creationTimestamp", ""))
+        created = str(section(job, "metadata").get("creationTimestamp", ""))
         current = latest.get(cronjob)
-        if current is None or created > str(_section(current, "metadata").get("creationTimestamp", "")):
+        if current is None or created > str(section(current, "metadata").get("creationTimestamp", "")):
             latest[cronjob] = job
     return sorted(metadata_name(j) for j in [*standalone, *latest.values()] if _job_failed(j))

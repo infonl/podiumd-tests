@@ -1,8 +1,11 @@
 """Unit tests for the podiumd-tests command."""
 
+import json
+
 import pytest
 
 from podiumd_tests import cli
+from podiumd_tests.kube import Kube
 
 
 @pytest.mark.parametrize(
@@ -45,3 +48,18 @@ def test_profile_errors_exit_with_config_code(tmp_path, capsys):
 def test_env_list(capsys):
     assert cli.main(["env", "list"]) == cli.EXIT_OK
     assert "minikube" in capsys.readouterr().out
+
+
+def test_ingress_hosts_from_ingress_rules_and_httproute_hostnames(fake_runner):
+    ingresses = {"items": [{"spec": {"rules": [{"host": "zac.example.test"}, {"http": {}}]}}, {"spec": None}]}
+    routes = {"items": [{"spec": {"hostnames": ["mijn.example.test", "zac.example.test"]}}]}
+    fake_runner.answers["get ingresses"] = (0, json.dumps(ingresses))
+    fake_runner.answers["get httproutes"] = (0, json.dumps(routes))
+    assert cli.ingress_hosts(Kube("ctx", "ns", fake_runner)) == ["mijn.example.test", "zac.example.test"]
+
+
+def test_ingress_hosts_skip_a_missing_gateway_api(fake_runner, capsys):
+    fake_runner.answers["get ingresses"] = (0, json.dumps({"items": [{"spec": {"rules": [{"host": "zac.local"}]}}]}))
+    fake_runner.answers["get httproutes"] = (1, 'error: the server doesn\'t have a resource type "httproutes"')
+    assert cli.ingress_hosts(Kube("ctx", "ns", fake_runner)) == ["zac.local"]
+    assert "skipping httproutes" in capsys.readouterr().err

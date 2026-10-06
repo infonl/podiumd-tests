@@ -13,7 +13,6 @@ import sys
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import cast
 
 import pytest
 import yaml
@@ -27,6 +26,9 @@ from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import list_profiles
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
+from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
+from podiumd_tests.json_data import strings
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
 from podiumd_tests.results import LocalDirSink
@@ -77,22 +79,19 @@ def component_for_host(host: str) -> str | None:
     return found
 
 
-def _ingress_hosts(kube: Kube) -> list[str]:
+def ingress_hosts(kube: Kube) -> list[str]:
+    """Hosts of all Ingresses and HTTPRoutes in the cluster; a missing kind (no Gateway API) is skipped."""
     hosts: list[str] = []
-    for kind, path in (("ingresses", ("spec", "rules")), ("httproutes", ("spec", "hostnames"))):
+    for kind in ("ingresses", "httproutes"):
         try:
             items = kube.items(kind, all_namespaces=True)
         except KubeError as exc:
             print(f"skipping {kind}: {exc}", file=sys.stderr)  # e.g. no Gateway API on this cluster
             continue
         for item in items:
-            spec = cast("dict[str, object]", item.get(path[0]) or {})
-            entries = cast("list[object]", spec.get(path[1]) or [])
-            for entry in entries:
-                # Ingress rules are objects with a host; HTTPRoute hostnames are plain strings.
-                host = cast("dict[str, object]", entry).get("host") if isinstance(entry, dict) else entry
-                if isinstance(host, str):
-                    hosts.append(host)
+            spec = section(item, "spec")
+            # Ingress rules are objects with a host; HTTPRoute hostnames are plain strings.
+            hosts += strings([r.get("host") for r in entries(spec.get("rules"))]) + strings(spec.get("hostnames"))
     return sorted(set(hosts))
 
 
@@ -121,7 +120,7 @@ def cmd_env_init(args: argparse.Namespace) -> int:
     if target.exists() and not args.force:
         print(f"{target} exists; use --force to overwrite", file=sys.stderr)
         return EXIT_CONFIG
-    hosts = _ingress_hosts(Kube(args.context, args.namespace))
+    hosts = ingress_hosts(Kube(args.context, args.namespace))
     draft = draft_profile(args.estate, args.context, args.namespace, hosts, args.scheme)
     header = "# Draft from `podiumd-tests env init`; review urls, add secrets and allowed_tiers.\n"
     target.parent.mkdir(parents=True, exist_ok=True)
