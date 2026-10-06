@@ -183,38 +183,38 @@ Sources:
 | `regression/91-fb-keycloak-realm-snapshot.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/95-portaal-filtering.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/96-portaal-profiel-navigatie.spec.ts` | component or integration | 3/4/5 | todo | |
-| `smoke/00-environment-preflight.spec.ts` | smoke | 1 | todo | |
-| `smoke/01-zgw-auth.spec.ts` | smoke | 1 | todo | |
-| `smoke/04-portaal-homepage.spec.ts` | smoke | 1 | todo | |
-| `smoke/05-portaal-digid-login.spec.ts` | smoke | 1 | todo | |
-| `smoke/06-kiss-bff-healthz.spec.ts` | smoke | 1 | todo | |
-| `smoke/113-kiss-kcc-login-flow.spec.ts` | smoke | 1 | todo | |
-| `smoke/155-esuite-smoke-login.spec.ts` | smoke | 1 | todo | |
-| `smoke/192-frankgateway-health.spec.ts` | smoke | 1 | todo | |
-| `smoke/66-pabc-health.spec.ts` | smoke | 1 | todo | |
-| `smoke/72-ita-health-kanalen.spec.ts` | smoke | 1 | todo | |
-| `smoke/79-omc-health.spec.ts` | smoke | 1 | todo | |
-| `smoke/81-continuiteit-pings.spec.ts` | smoke | 1 | todo | |
-| `smoke/82-portaal-login-config.spec.ts` | smoke | 1 | todo | |
-| `smoke/92-fb-cross-component-sso.spec.ts` | smoke | 1 | todo | |
-| `smoke/99-portaal-eherkenning-login.spec.ts` | smoke | 1 | todo | |
+| `smoke/00-environment-preflight.spec.ts` | smoke | 1 | port | 00c/00d/00h/00i/00j/00k/00l → `test_reachability.py`, `test_api_health.py`; 00f → `test_cluster.py` (all workloads ready). Phase 3: 00e (ZAC schemas, psql) and 00g (OZ Applicatie scopes for Open Inwoner). 00i form slug needs bootstrap data (phase 2). |
+| `smoke/01-zgw-auth.spec.ts` | smoke | 1 | port | `test_zgw_auth.py`: token accepted, wrong secret refused. Phase 2: the catalogus domein and test zaaktype checks need seeded data. |
+| `smoke/04-portaal-homepage.spec.ts` | smoke | 1 | port | HTTP part → `test_reachability.py` (root and admin login of `openinwoner`). Phase 5: the rendered-page checks need a browser. |
+| `smoke/05-portaal-digid-login.spec.ts` | smoke | 1 | port | 5a and the first leg of 5b → `test_oidc.py`. Phase 5: the login itself needs a DigiD test identity (phase 2) and a browser. |
+| `smoke/06-kiss-bff-healthz.spec.ts` | smoke | 1 | port | `/healthz` and `/api/healthcheck` → `test_api_health.py`. The rendered-page check moves to phase 5. |
+| `smoke/113-kiss-kcc-login-flow.spec.ts` | smoke | 1 | port | Phase 5 (`ui`): needs a KCC test identity from bootstrap (phase 2). |
+| `smoke/155-esuite-smoke-login.spec.ts` | smoke | 1 | port | Phase 5 (`ui`): eSuite is outside PodiumD; needs a `esuite` URL and credentials in the profile. |
+| `smoke/192-frankgateway-health.spec.ts` | smoke | 1 | port | `test_frankgateway.py`; skips unless the profile has a `frankgateway` (outway) URL. Not in EX. |
+| `smoke/66-pabc-health.spec.ts` | smoke | 1 | port | API-key checks → `test_api_health.py`. Phase 5: app version behind the OIDC cookie login. |
+| `smoke/72-ita-health-kanalen.spec.ts` | smoke | 1 | port | Anonymous check → `test_api_health.py`. Phase 5: logged-in `/api/kanalen` needs a KCC identity and a browser. |
+| `smoke/79-omc-health.spec.ts` | smoke | 1 | port | Anonymous check → `test_api_health.py`. Phase 3: `/Events/Version` with an OMC JWT (needs OMC secret settings). |
+| `smoke/81-continuiteit-pings.spec.ts` | smoke | 1 | merge | Into `test_reachability.py` (root of every component under 5 s, admin login pages) and `test_api_health.py`. |
+| `smoke/82-portaal-login-config.spec.ts` | smoke | 1 | port | `test_oidc.py`: theme, DigiD links, 'Log in met DigiD', redirect to Keycloak. The exact count of 2 DigiD links (mobile and desktop) is not asserted: it is layout, not wiring. |
+| `smoke/92-fb-cross-component-sso.spec.ts` | smoke | 1 | port | Phase 5 (`ui`): needs an admin identity from bootstrap instead of the hardcoded `testadmin` password. |
+| `smoke/99-portaal-eherkenning-login.spec.ts` | smoke | 1 | port | Test 1 and the first leg of test 2 → `test_oidc.py`. Phase 5: login with an eHerkenning identity, and the KVK check in the Django shell. |
 
 ## MK
 
 | Test | Target | Phase | Decision | Notes |
 |---|---|---|---|---|
-| `test_browser.py` | smoke, marker `ui` | 1/5 | todo |  |
+| `test_browser.py` | smoke, marker `ui` | 1/5 | port | Phase 5 (`ui`). |
 | `test_database.py` | component, marker `cluster` | 3 | todo |  |
 | `test_django_admin_login.py` | component, marker `cluster` | 3 | todo |  |
-| `test_login_flow.py` | smoke (ZAC OIDC login) | 1 | todo |  |
+| `test_login_flow.py` | smoke (ZAC OIDC login) | 1 | port | First leg (ZAC redirects to the Keycloak login form) → `test_oidc.py`. The login itself needs a test identity: phase 5. |
 | `test_mailpit.py` | integration | 4 | todo |  |
-| `test_metrics.py` | smoke | 1 | todo |  |
-| `test_monitoring_logging.py` | smoke | 1 | todo |  |
+| `test_metrics.py` | smoke | 1 | merge | With `test_monitoring_logging.py` into `test_metrics.py`; datasources found by type, not by name. |
+| `test_monitoring_logging.py` | smoke | 1 | merge | Into `test_metrics.py`; the Loki check runs where a Loki datasource exists. |
 | `test_pabc_migrations_guard.py` | component, marker `destructive` | 3 | todo |  |
 | `test_pkce.py` | component (keycloak) | 3 | todo |  |
-| `test_pods.py` | smoke | 1 | todo |  |
+| `test_pods.py` | smoke | 1 | port | `test_cluster.py`: pods judged by owner (Job, CronJob) instead of per-estate prefix lists; core pod list dropped (every Deployment and StatefulSet must be ready). |
 | `test_productaanvraag_flow.py` | integration, marker `core` | 4 | todo |  |
-| `test_reachability.py` | smoke | 1 | todo |  |
+| `test_reachability.py` | smoke | 1 | port | `test_reachability.py`: redirects followed (R14), status < 500 per component plus admin login pages; no per-host expected codes. |
 | `test_zgw_service_reachability.py` | integration, marker `cluster` | 4 | todo |  |
 
 ## PI

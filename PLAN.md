@@ -372,7 +372,7 @@ The output is a checklist in the terminal, plus `doctor.json` for pipelines. Exi
 
 ## 10. Migration phases
 
-Status 2026-10-05: phase 0 is built and `run_python_checks` passes. `doctor` could not go green yet, because minikube is not running and the kees00 cluster does not resolve. It reports both correctly as unreachable.
+Status 2026-10-06: phase 0 is built, and `doctor` is green on minikube. kees00 is shut down; `doctor` reports that within about 6 s. Phase 1 is built: tier `smoke` runs in under 10 s on minikube and on ontw-dimp (HTTP only: no cluster access from here, so the cluster tests skip). Browser logins and checks that need seeded data or test identities are deferred to phases 2, 3 and 5; see `MIGRATION.md`.
 
 | Phase | Deliverable | Sources | Done when |
 |---|---|---|---|
