@@ -5,84 +5,66 @@ import json
 
 import pytest
 
-from podiumd_tests.config import parse_profile
 from podiumd_tests.credentials import Redactor
 from podiumd_tests.credentials import SecretError
-from podiumd_tests.credentials import SecretResolver
 from podiumd_tests.credentials import env_var_name
-from podiumd_tests.kube import Kube
 
 
-def resolver(profile, runner, environ=None):
-    return SecretResolver(profile, Kube("ctx", "podiumd", runner), Redactor(), runner, environ or {})
-
-
-def test_env_var_wins_over_the_profile(profile_factory, fake_runner):
+def test_env_var_wins_over_the_profile(profile_factory, fake_runner, env_factory):
     profile = profile_factory(secrets={"ok2-token": {"k8s_secret": {"name": "s", "key": "k"}}})
-    creds = resolver(profile, fake_runner, {"PODIUMD_TESTS_SECRET_OK2_TOKEN": "from-env"})
+    creds = env_factory(profile, {"PODIUMD_TESTS_SECRET_OK2_TOKEN": "from-env"}).credentials
     assert creds.get("ok2-token") == "from-env"
     assert fake_runner.calls == []
 
 
-def test_k8s_secret_is_decoded(profile_factory, fake_runner):
+def test_k8s_secret_is_decoded(profile_factory, fake_runner, env_factory):
     encoded = base64.b64encode(b"s3cret-value").decode()
     fake_runner.answers["get secret kc -o json"] = (0, json.dumps({"data": {"password": encoded}}))
     profile = profile_factory(secrets={"pw": {"k8s_secret": {"name": "kc", "key": "password"}}})
-    assert resolver(profile, fake_runner).get("pw") == "s3cret-value"
+    assert env_factory(profile).credentials.get("pw") == "s3cret-value"
 
 
-def test_keyvault_uses_the_profile_vault(profile_factory, fake_runner):
+def test_keyvault_uses_the_profile_vault(profile_factory, fake_runner, env_factory):
     fake_runner.answers["az keyvault secret show --vault-name my-kv --name user-pw"] = (0, "kv-value\n")
     profile = profile_factory(keyvault="my-kv", secrets={"pw": {"keyvault": {"secret": "user-pw"}}})
-    assert resolver(profile, fake_runner).get("pw") == "kv-value"
+    assert env_factory(profile).credentials.get("pw") == "kv-value"
 
 
-def test_zgw_jwt_secret_runs_a_django_snippet(profile_factory, fake_runner):
+def test_zgw_jwt_secret_runs_a_django_snippet(profile_factory, fake_runner, env_factory):
     fake_runner.answers["exec deploy/openzaak -- python /app/src/manage.py shell -c"] = (
         0,
         "118 objects imported automatically (use -v 2 for details).\n\nPTEST_VALUE=jwt-secret\n",
     )
     profile = profile_factory(secrets={"oz": {"zgw_jwt_secret": {"deployment": "openzaak", "client_id": "zac"}}})
-    assert resolver(profile, fake_runner).get("oz") == "jwt-secret"
+    assert env_factory(profile).credentials.get("oz") == "jwt-secret"
     assert "identifier='zac'" in fake_runner.calls[0][-1]
 
 
-def test_failures_name_the_secret_and_source(profile_factory, fake_runner):
+def test_failures_name_the_secret_and_source(profile_factory, env_factory):
     profile = profile_factory(secrets={"pw": {"pod_env": {"deployment": "pabc", "var": "API_KEY__0"}}})
     with pytest.raises(SecretError, match=r"secret 'pw' \(pod_env\)"):
-        resolver(profile, fake_runner).get("pw")
+        env_factory(profile).credentials.get("pw")
 
 
-def test_unknown_secret_mentions_the_env_var(profile_factory, fake_runner):
+def test_unknown_secret_mentions_the_env_var(env_factory):
     with pytest.raises(SecretError, match="PODIUMD_TESTS_SECRET_MISSING"):
-        resolver(profile_factory(), fake_runner).get("missing")
+        env_factory().credentials.get("missing")
 
 
-def test_resolved_values_are_redacted(profile_factory, fake_runner):
-    redactor = Redactor()
-    environ = {env_var_name("token"): "abcd-1234"}
-    creds = SecretResolver(profile_factory(), Kube("ctx", "podiumd", fake_runner), redactor, fake_runner, environ)
-    creds.get("token")
-    assert redactor.redact("Bearer abcd-1234 sent") == "Bearer *** sent"
+def test_resolved_values_are_redacted(env_factory):
+    env = env_factory(environ={env_var_name("token"): "abcd-1234"})
+    env.credentials.get("token")
+    assert env.redactor.redact("Bearer abcd-1234 sent") == "Bearer *** sent"
 
 
-def test_dev_defaults_are_not_redacted_but_overrides_are(fake_runner):
-    profile = parse_profile(
-        {
-            "estate": "minikube",
-            "allowed_tiers": ["smoke"],
-            "kube": {"context": "minikube", "namespace": "podiumd"},
-            "urls": {},
-            "secrets": {"user": {"dev_default": "admin"}, "pw": {"dev_default": "admin"}},
-        },
-        name="mk",
+def test_dev_defaults_are_not_redacted_but_overrides_are(profile_factory, env_factory):
+    profile = profile_factory(
+        estate="minikube", secrets={"user": {"dev_default": "admin"}, "pw": {"dev_default": "admin"}}
     )
-    redactor = Redactor()
-    environ = {env_var_name("pw"): "s3cret-override"}
-    creds = SecretResolver(profile, Kube("minikube", "podiumd", fake_runner), redactor, fake_runner, environ)
-    assert creds.get("user") == "admin"
-    assert creds.get("pw") == "s3cret-override"
-    assert redactor.redact("keycloak-admin s3cret-override") == "keycloak-admin ***"
+    env = env_factory(profile, {env_var_name("pw"): "s3cret-override"})
+    assert env.credentials.get("user") == "admin"
+    assert env.credentials.get("pw") == "s3cret-override"
+    assert env.redactor.redact("keycloak-admin s3cret-override") == "keycloak-admin ***"
 
 
 def test_redactor_ignores_very_short_values():
@@ -91,20 +73,19 @@ def test_redactor_ignores_very_short_values():
     assert redactor.redact("abc") == "abc"
 
 
-def test_keyvault_without_az_names_the_secret(profile_factory):
+def test_keyvault_without_az_names_the_secret(profile_factory, env_factory):
     def runner(args, _timeout):
         raise FileNotFoundError(args[0])
 
     profile = profile_factory(keyvault="my-kv", secrets={"pw": {"keyvault": {"secret": "user-pw"}}})
     with pytest.raises(SecretError, match=r"secret 'pw' \(keyvault\): az keyvault .*: az not found on PATH"):
-        resolver(profile, runner).get("pw")
+        env_factory(profile, runner=runner).credentials.get("pw")
 
 
-def test_optional_secrets_come_from_profile_or_env_var(profile_factory, fake_runner):
+def test_optional_secrets_come_from_profile_or_env_var(profile_factory, env_factory):
     environ = {env_var_name("grafana_password"): "from-env"}
-    creds = resolver(
-        profile_factory(secrets={"grafana_username": {"k8s_secret": {"name": "s", "key": "k"}}}), fake_runner, environ
-    )
+    profile = profile_factory(secrets={"grafana_username": {"k8s_secret": {"name": "s", "key": "k"}}})
+    creds = env_factory(profile, environ).credentials
     assert creds.configured("grafana_username")
     assert creds.configured("grafana_password")
     assert creds.optional("grafana_password") == "from-env"

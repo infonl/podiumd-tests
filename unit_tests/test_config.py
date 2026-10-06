@@ -6,7 +6,6 @@ from podiumd_tests.config import ProfileError
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import list_profiles
 from podiumd_tests.config import load_profile
-from podiumd_tests.config import parse_profile
 
 
 def test_parses_a_valid_profile(profile_factory):
@@ -44,15 +43,9 @@ def test_rejects_invalid_profiles(profile_factory, override, message):
         profile_factory(**override)
 
 
-def test_dev_default_is_allowed_for_minikube():
-    raw = {
-        "estate": "minikube",
-        "allowed_tiers": ["smoke"],
-        "kube": {"context": "minikube", "namespace": "podiumd-minikube"},
-        "urls": {},
-        "secrets": {"pw": {"dev_default": "admin"}},
-    }
-    assert parse_profile(raw, name="minikube").secrets["pw"].options == {"value": "admin"}
+def test_dev_default_is_allowed_for_minikube(profile_factory):
+    profile = profile_factory(estate="minikube", secrets={"pw": {"dev_default": "admin"}})
+    assert profile.secrets["pw"].options == {"value": "admin"}
 
 
 def test_duplicate_profile_names_are_an_error(tmp_path):
