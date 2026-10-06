@@ -127,7 +127,7 @@ class SecretResolver:
             case "k8s_secret":
                 return self._kube.secret_value(opts["name"], opts["key"])
             case "pod_env":
-                return self._kube.run("exec", f"deploy/{opts['deployment']}", "--", "printenv", opts["var"])
+                return self._kube.exec(opts["deployment"], "printenv", opts["var"])
             case "zgw_jwt_secret":
                 code = _JWT_LOOKUP_SNIPPET.format(identifier=opts["client_id"])
                 return django_value(self._kube.exec_django_shell(opts["deployment"], code))

@@ -81,13 +81,17 @@ class Kube:
         """Raise KubeError unless the API server answers /readyz."""
         self.run("get", "--raw", "/readyz", f"--request-timeout={timeout}s", timeout=timeout + 5)
 
+    def exec(self, deployment: str, *argv: str, timeout: int = DEFAULT_TIMEOUT) -> str:
+        """Run a command in the first pod of a deployment; return its stdout."""
+        return self.run("exec", f"deploy/{deployment}", "--", *argv, timeout=timeout)
+
     def exec_django_shell(self, deployment: str, code: str, timeout: int = 60) -> str:
         """Run Python code in `manage.py shell` of a Django deployment; return its stdout.
 
         The stdout also holds Django's own chatter ("118 objects imported
         automatically"); use django_value() to pick out one printed value.
         """
-        return self.run("exec", f"deploy/{deployment}", "--", "python", MANAGE_PY, "shell", "-c", code, timeout=timeout)
+        return self.exec(deployment, "python", MANAGE_PY, "shell", "-c", code, timeout=timeout)
 
     def secret_value(self, name: str, key: str) -> str:
         """Decoded value of one key of a Kubernetes secret."""
