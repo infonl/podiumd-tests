@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.auth.zgw_jwt import zgw_headers
 from podiumd_tests.auth.zgw_jwt import zgw_jwt
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
@@ -24,8 +25,6 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.smoke, pytest.mark.requires("openzaak")]
 
-ZGW_HEADERS = {"Accept-Crs": "EPSG:4326", "Content-Crs": "EPSG:4326", "Accept": "application/json"}
-
 
 @pytest.fixture(name="client_id")
 def fixture_client_id(podiumd_env: Environment, credentials: SecretResolver) -> str:
@@ -37,7 +36,7 @@ def fixture_client_id(podiumd_env: Environment, credentials: SecretResolver) -> 
 
 
 def _get(http: requests.Session, url: str, token: str) -> requests.Response:
-    return http.get(url, headers={**ZGW_HEADERS, "Authorization": f"Bearer {token}"})
+    return http.get(url, headers=zgw_headers(token))
 
 
 @pytest.mark.parametrize("path", ["/catalogi/api/v1/catalogussen", "/catalogi/api/v1/zaaktypen"])

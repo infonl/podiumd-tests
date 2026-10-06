@@ -17,6 +17,15 @@ def _b64url(raw: bytes) -> bytes:
     return base64.urlsafe_b64encode(raw).rstrip(b"=")
 
 
+# Every ZGW API request carries these; the CRS headers are mandatory for the geo-aware APIs.
+ZGW_HEADERS = {"Accept-Crs": "EPSG:4326", "Content-Crs": "EPSG:4326", "Accept": "application/json"}
+
+
+def zgw_headers(token: str) -> dict[str, str]:
+    """Request headers for a ZGW API call with a token from zgw_jwt()."""
+    return {**ZGW_HEADERS, "Authorization": f"Bearer {token}"}
+
+
 def zgw_jwt(client_id: str, secret: str, *, issued_at: int | None = None) -> str:
     """HS256 ZGW token for a client id, signed with its shared secret."""
     header = {"typ": "JWT", "alg": "HS256", "client_identifier": client_id}

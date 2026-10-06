@@ -15,6 +15,16 @@ if TYPE_CHECKING:
     import requests
 
 
+def realm_url(keycloak_url: str, realm: str, path: str = "") -> str:
+    """URL of a realm, or of a path below it such as "/protocol/openid-connect/token"."""
+    return f"{keycloak_url}/realms/{realm}{path}"
+
+
+def discovery_url(keycloak_url: str, realm: str) -> str:
+    """URL of a realm's OIDC discovery document."""
+    return realm_url(keycloak_url, realm, "/.well-known/openid-configuration")
+
+
 class TokenError(Exception):
     """Keycloak did not return an access token."""
 
@@ -35,7 +45,7 @@ def password_grant(session: requests.Session, keycloak_url: str, realm: str, log
     data |= {"username": login.username, "password": login.password}
     if login.client_secret:
         data["client_secret"] = login.client_secret
-    response = session.post(f"{keycloak_url}/realms/{realm}/protocol/openid-connect/token", data=data)
+    response = session.post(realm_url(keycloak_url, realm, "/protocol/openid-connect/token"), data=data)
     if response.status_code != HTTPStatus.OK:
         msg = f"token request for {login.username!r} in realm {realm!r} failed: {describe(response)}"
         raise TokenError(msg)

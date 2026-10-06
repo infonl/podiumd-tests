@@ -7,6 +7,9 @@ import json
 
 import pytest
 
+from podiumd_tests.auth.keycloak import discovery_url
+from podiumd_tests.auth.keycloak import realm_url
+from podiumd_tests.auth.zgw_jwt import zgw_headers
 from podiumd_tests.auth.zgw_jwt import zgw_jwt
 from podiumd_tests.seed.registry import CleanupError
 from podiumd_tests.seed.registry import ResourceRegistry
@@ -61,3 +64,18 @@ def test_keep_data_skips_cleanup():
     registry.add("zaak ZAAK-1", lambda: pytest.fail("must not delete"))
     assert registry.cleanup() == ["zaak ZAAK-1"]
     assert registry.tagged("catalogus") == "ptest-abc123-catalogus"
+
+
+def test_zgw_headers_carry_the_token_and_crs():
+    headers = zgw_headers("tok")
+    assert headers["Authorization"] == "Bearer tok"
+    assert headers["Accept-Crs"] == headers["Content-Crs"] == "EPSG:4326"
+
+
+def test_realm_urls():
+    assert realm_url("https://kc.test", "podiumd", "/protocol/openid-connect/token") == (
+        "https://kc.test/realms/podiumd/protocol/openid-connect/token"
+    )
+    assert (
+        discovery_url("https://kc.test", "master") == "https://kc.test/realms/master/.well-known/openid-configuration"
+    )

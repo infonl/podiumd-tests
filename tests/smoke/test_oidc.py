@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.auth.keycloak import discovery_url
+from podiumd_tests.auth.keycloak import realm_url
 from podiumd_tests.oidc import keycloak_login_realm
 from podiumd_tests.responses import expect_status
 
@@ -27,17 +29,15 @@ pytestmark = pytest.mark.smoke
 @pytest.mark.requires("keycloak")
 def test_keycloak_discovery(http: requests.Session, urls: dict[str, str]) -> None:
     """The master realm publishes its OIDC configuration."""
-    response = expect_status(
-        http.get(urls["keycloak"] + "/realms/master/.well-known/openid-configuration"), HTTPStatus.OK
-    )
-    assert str(response.json()["issuer"]).endswith("/realms/master")
+    response = expect_status(http.get(discovery_url(urls["keycloak"], "master")), HTTPStatus.OK)
+    assert str(response.json()["issuer"]).endswith(realm_url("", "master"))
 
 
 @pytest.mark.requires("zac", "keycloak")
 def test_zac_redirects_to_keycloak(http: requests.Session, urls: dict[str, str]) -> None:
     """An anonymous visit to ZAC ends on the Keycloak login form, and that realm is published."""
     realm = keycloak_login_realm(http.get(urls["zac"] + "/"), urls["keycloak"])
-    expect_status(http.get(f"{urls['keycloak']}/realms/{realm}/.well-known/openid-configuration"), HTTPStatus.OK)
+    expect_status(http.get(discovery_url(urls["keycloak"], realm)), HTTPStatus.OK)
 
 
 @pytest.mark.requires("openinwoner")
