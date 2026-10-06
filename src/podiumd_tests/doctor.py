@@ -7,11 +7,16 @@ depends on failed). Any fail means exit code 2.
 from __future__ import annotations
 
 import shutil
+import socket
+import threading
+import time
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from typing import Literal
 from typing import cast
+from urllib.parse import urlsplit
 
 import requests
 
@@ -22,10 +27,16 @@ from podiumd_tests.kube import metadata_name
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from collections.abc import Iterable
 
     from podiumd_tests.environment import Environment
 
+    Resolver = Callable[[str], object]
+
 Status = Literal["ok", "warn", "fail", "skip"]
+DNS_TIMEOUT = 5.0
+HTTP_TIMEOUT = (5, 10)  # connect, read
+DOWN_HINT = "environment down or DNS removed? (scheduled shutdown)"
 SYMBOLS: dict[Status, str] = {"ok": "✔", "warn": "!", "fail": "✘", "skip": "-"}
 
 
@@ -94,24 +105,77 @@ def _deployments(env: Environment, namespace: str) -> Check:
     return Check(f"deployments {namespace}", "ok", f"{len(items)} ready")
 
 
-def _urls(env: Environment) -> list[Check]:
+def _getaddrinfo(host: str) -> None:
+    socket.getaddrinfo(host, None)
+
+
+def resolve_hosts(
+    hosts: Iterable[str], resolve: Resolver = _getaddrinfo, timeout: float = DNS_TIMEOUT
+) -> dict[str, str]:
+    """Look up all hosts in parallel; the error per host, "" when it resolved.
+
+    The system resolver has no timeout of its own and can take 10-20 s per
+    unknown host. Daemon threads let doctor stop waiting at the deadline,
+    and do not keep the process alive afterwards.
+    """
+    results: dict[str, str] = {}
+
+    def lookup(host: str) -> None:
+        try:
+            resolve(host)
+        except OSError as exc:
+            results[host] = f"DNS lookup failed: {exc}"
+        else:
+            results[host] = ""
+
+    unique = set(hosts)
+    threads = [threading.Thread(target=lookup, args=(host,), daemon=True) for host in unique]
+    for thread in threads:
+        thread.start()
+    deadline = time.monotonic() + timeout
+    for thread in threads:
+        thread.join(max(0.0, deadline - time.monotonic()))
+    done = dict(results)
+    return {host: done.get(host, f"DNS lookup gave no answer within {timeout:g}s") for host in unique}
+
+
+def _url_check(session: requests.Session, component: str, url: str) -> Check:
+    name = f"url {component}"
+    try:
+        response = session.get(url + "/", allow_redirects=False, timeout=HTTP_TIMEOUT)
+    except requests.exceptions.SSLError as exc:
+        return Check(name, "fail", f"{url}: TLS error: {exc}")
+    except requests.exceptions.ConnectTimeout:
+        return Check(name, "fail", f"{url}: no connection within {HTTP_TIMEOUT[0]}s", DOWN_HINT)
+    except requests.exceptions.RequestException as exc:
+        return Check(name, "fail", f"{url}: {type(exc).__name__}")
+    status: Status = "fail" if response.status_code >= 500 else "ok"
+    return Check(name, status, f"{url}: HTTP {response.status_code}")
+
+
+def _urls(env: Environment, resolve: Resolver) -> list[Check]:
     try:
         session = env.session()
     except KubeError as exc:
         return [Check("ingress IP", "fail", str(exc))]
-    checks: list[Check] = []
-    for component, url in sorted(env.profile.urls.items()):
-        name = f"url {component}"
-        try:
-            response = session.get(url + "/", allow_redirects=False, timeout=10)
-        except requests.exceptions.SSLError as exc:
-            checks.append(Check(name, "fail", f"{url}: TLS error: {exc}"))
-        except requests.exceptions.RequestException as exc:
-            checks.append(Check(name, "fail", f"{url}: {type(exc).__name__}"))
+    urls = sorted(env.profile.urls.items())
+    # In host-header mode the requests go to the ingress IP; the hosts need not resolve.
+    dns_errors: dict[str, str] = {}
+    if env.profile.access.mode == "direct":
+        dns_errors = resolve_hosts((urlsplit(u).hostname or "" for _, u in urls), resolve)
+    checks: dict[str, Check] = {}
+    reachable: list[tuple[str, str]] = []
+    for component, url in urls:
+        error = dns_errors.get(urlsplit(url).hostname or "", "")
+        if error:
+            checks[component] = Check(f"url {component}", "fail", f"{url}: {error}", DOWN_HINT)
         else:
-            status: Status = "fail" if response.status_code >= 500 else "ok"
-            checks.append(Check(name, status, f"{url}: HTTP {response.status_code}"))
-    return checks
+            reachable.append((component, url))
+    if reachable:
+        with ThreadPoolExecutor(max_workers=min(len(reachable), 16)) as pool:
+            futures = {c: pool.submit(_url_check, session, c, u) for c, u in reachable}
+            checks.update({c: f.result() for c, f in futures.items()})
+    return [checks[component] for component, _ in urls]
 
 
 CLUSTER_SOURCES = {"k8s_secret", "pod_env", "zgw_jwt_secret"}
@@ -141,7 +205,9 @@ def _capabilities(env: Environment) -> Check:
     return Check("capabilities", "ok", detail)
 
 
-def run_checks(env: Environment, which: Callable[[str], str | None] = shutil.which) -> list[Check]:
+def run_checks(
+    env: Environment, which: Callable[[str], str | None] = shutil.which, resolve: Resolver = _getaddrinfo
+) -> list[Check]:
     """Run all preflight checks; dependent checks are skipped after a failure."""
     checks = [Check("profile", "ok", str(env.profile.path or env.profile.name))]
     checks += _tools(env, which)
@@ -150,7 +216,11 @@ def run_checks(env: Environment, which: Callable[[str], str | None] = shutil.whi
     cluster = _cluster(env)
     checks += cluster
     cluster_ok = all(c.status != "fail" for c in cluster)
-    checks += _urls(env) if cluster_ok or env.profile.access.mode == "direct" else [Check("urls", "skip", "no cluster")]
+    checks += (
+        _urls(env, resolve)
+        if cluster_ok or env.profile.access.mode == "direct"
+        else [Check("urls", "skip", "no cluster")]
+    )
     checks += _secrets(env, cluster_ok=cluster_ok)
     checks.append(_capabilities(env) if cluster_ok else Check("capabilities", "skip", "no cluster"))
     return [Check(c.name, c.status, env.redactor.redact(c.detail), c.hint) for c in checks]

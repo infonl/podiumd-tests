@@ -1,5 +1,8 @@
 """Unit tests for the preflight checks."""
 
+import socket
+import time
+
 from podiumd_tests import doctor
 from podiumd_tests.environment import Environment
 
@@ -55,3 +58,32 @@ def test_format_shows_hints_for_failures_only():
     )
     assert "hint: cluster stopped?" in text
     assert "unused hint" not in text
+
+
+def test_resolve_hosts_stops_waiting_at_the_deadline():
+    def resolve(host):
+        if host == "slow.test":
+            time.sleep(2)
+        elif host == "unknown.test":
+            raise socket.gaierror(-2, "Name or service not known")
+
+    start = time.monotonic()
+    result = doctor.resolve_hosts(["ok.test", "unknown.test", "slow.test"], resolve, timeout=0.2)
+    assert time.monotonic() - start < 1
+    assert result["ok.test"] == ""
+    assert "Name or service not known" in result["unknown.test"]
+    assert "no answer within 0.2s" in result["slow.test"]
+
+
+def test_unresolvable_hosts_fail_without_http(profile_factory, fake_runner):
+    fake_runner.answers["config get-contexts"] = (0, "other\n")
+
+    def resolve(_host):
+        raise socket.gaierror(-2, "Name or service not known")
+
+    profile = profile_factory(access={"mode": "direct"})
+    checks = doctor.run_checks(Environment(profile, fake_runner, environ={}), which=which_all, resolve=resolve)
+    result = statuses(checks)
+    assert result["url openzaak"] == "fail"
+    assert result["url keycloak-admin"] == "fail"
+    assert all("DNS lookup failed" in c.detail for c in checks if c.name.startswith("url ")), checks
