@@ -5,10 +5,21 @@ from __future__ import annotations
 import shlex
 import subprocess  # nosec B404
 
-from collections.abc import Callable
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
+from typing import Protocol
 
-Runner = Callable[[Sequence[str], int], subprocess.CompletedProcess[str]]
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+
+class Runner(Protocol):  # pylint: disable=too-few-public-methods  # a callable protocol has one method
+    """Starts a process; unit tests pass a fake one."""
+
+    def __call__(
+        self, args: Sequence[str], timeout: int, stdin: str | None = None, /
+    ) -> subprocess.CompletedProcess[str]:
+        """Run args; stdin, when given, is the process's standard input (keeps secrets out of argv)."""
+        ...
 
 
 class ProcessError(Exception):
@@ -21,17 +32,19 @@ class ProcessError(Exception):
         super().__init__(f"{self.command}: {lines[-1] if lines else 'failed'}")
 
 
-def run_process(args: Sequence[str], timeout: int) -> subprocess.CompletedProcess[str]:
+def run_process(args: Sequence[str], timeout: int, stdin: str | None = None) -> subprocess.CompletedProcess[str]:
     """Run a fixed argv, never through a shell; the caller checks the return code."""
-    return subprocess.run(list(args), capture_output=True, text=True, timeout=timeout, check=False)  # nosec B603  # noqa: S603
+    return subprocess.run(  # nosec B603  # noqa: S603
+        list(args), input=stdin, capture_output=True, text=True, timeout=timeout, check=False
+    )
 
 
 def run_checked[E: ProcessError](
-    runner: Runner, command: Sequence[str], timeout: int, error: type[E] = ProcessError
+    runner: Runner, command: Sequence[str], timeout: int, error: type[E] = ProcessError, stdin: str | None = None
 ) -> str:
     """stdout of a command; `error` when it is missing, times out or exits non-zero."""
     try:
-        result = runner(command, timeout)
+        result = runner(command, timeout, stdin)
     except FileNotFoundError as exc:
         raise error(command, f"{command[0]} not found on PATH") from exc
     except subprocess.TimeoutExpired as exc:

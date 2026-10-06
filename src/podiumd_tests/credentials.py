@@ -10,6 +10,8 @@ import os
 
 from typing import TYPE_CHECKING
 
+from podiumd_tests.credential_store import STORE_NAME
+from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import django_value
@@ -77,6 +79,7 @@ class SecretResolver:
         self._runner = runner
         self._environ = dict(os.environ) if environ is None else environ
         self._cache: dict[str, str] = {}
+        self._stored: dict[str, str] | None = None
 
     @property
     def names(self) -> list[str]:
@@ -94,8 +97,17 @@ class SecretResolver:
         return self._cache[name]
 
     def configured(self, name: str) -> bool:
-        """True when the secret has a source: in the profile, or its env var is set."""
-        return name in self._profile.secrets or bool(self._environ.get(env_var_name(name)))
+        """True when the secret has a source: in the profile, its env var, or the bootstrap credentials."""
+        return name in self._profile.secrets or bool(self._environ.get(env_var_name(name))) or name in self._bootstrap()
+
+    def _bootstrap(self) -> dict[str, str]:
+        """The bootstrap credentials Secret, read once; empty without cluster access."""
+        if self._stored is None:
+            try:
+                self._stored = CredentialStore(self._kube).read()
+            except KubeError:
+                self._stored = {}
+        return self._stored
 
     def optional(self, name: str) -> str | None:
         """Value of a secret that an environment may lack; None when it has no source."""
@@ -111,7 +123,12 @@ class SecretResolver:
             return override
         spec = self._profile.secrets.get(name)
         if spec is None:
-            msg = f"secret {name!r}: not in profile {self._profile.name} and {env_var_name(name)} not set"
+            if name in self._bootstrap():
+                return self._bootstrap()[name]
+            msg = (
+                f"secret {name!r}: not in profile {self._profile.name}, {env_var_name(name)} not set,"
+                f" and not in {STORE_NAME} (run `podiumd-tests bootstrap`)"
+            )
             raise SecretError(msg)
         try:
             return self._from_source(spec).strip()

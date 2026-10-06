@@ -48,26 +48,50 @@ class Kube:
         return ["kubectl", "--context", self.context, "--namespace", ns, *args]
 
     def run(
-        self, *args: str, namespace: str | None = None, all_namespaces: bool = False, timeout: int = DEFAULT_TIMEOUT
+        self,
+        *args: str,
+        namespace: str | None = None,
+        all_namespaces: bool = False,
+        timeout: int = DEFAULT_TIMEOUT,
+        stdin: str | None = None,
     ) -> str:
         """Run kubectl and return stdout; KubeError on failure."""
         command = self.command(*args, namespace=namespace, all_namespaces=all_namespaces)
-        return run_checked(self.runner, command, timeout, KubeError)
+        return run_checked(self.runner, command, timeout, KubeError, stdin)
+
+    def apply(self, manifest: dict[str, object]) -> str:
+        """`kubectl apply` a manifest given on stdin, so its values never appear in argv or errors."""
+        return self.run("apply", "-f", "-", stdin=json.dumps(manifest))
+
+    def delete(self, kind: str, name: str) -> str:
+        """Delete an object; no error when it does not exist."""
+        return self.run("delete", kind, name, "--ignore-not-found")
 
     def get_json(self, *args: str, namespace: str | None = None, all_namespaces: bool = False) -> dict[str, object]:
         """`kubectl get ... -o json` as a dict."""
         args = ("get", *args, "-o", "json")
+        found = self._get_object(args, namespace, all_namespaces=all_namespaces)
+        if found is None:
+            raise KubeError(self.command(*args, namespace=namespace, all_namespaces=all_namespaces), "empty output")
+        return found
+
+    def get_optional(self, kind: str, name: str) -> dict[str, object] | None:
+        """One object as a dict, or None when it does not exist."""
+        return self._get_object(("get", kind, name, "--ignore-not-found", "-o", "json"), None)
+
+    def _get_object(
+        self, args: tuple[str, ...], namespace: str | None, *, all_namespaces: bool = False
+    ) -> dict[str, object] | None:
         out = self.run(*args, namespace=namespace, all_namespaces=all_namespaces)
+        if not out.strip():
+            return None
+        command = self.command(*args, namespace=namespace, all_namespaces=all_namespaces)
         try:
             data: object = json.loads(out)
         except json.JSONDecodeError as exc:
-            raise KubeError(
-                self.command(*args, namespace=namespace, all_namespaces=all_namespaces), f"invalid JSON: {exc}"
-            ) from exc
+            raise KubeError(command, f"invalid JSON: {exc}") from exc
         if not isinstance(data, dict):
-            raise KubeError(
-                self.command(*args, namespace=namespace, all_namespaces=all_namespaces), "expected a JSON object"
-            )
+            raise KubeError(command, "expected a JSON object")
         return cast("dict[str, object]", data)
 
     def items(
@@ -95,10 +119,15 @@ class Kube:
 
     def secret_value(self, name: str, key: str) -> str:
         """Decoded value of one key of a Kubernetes secret."""
-        data = section(self.get_json("secret", name), "data")
+        data = decode_secret_data(section(self.get_json("secret", name), "data"))
         if key not in data:
             raise KubeError(self.command("get", "secret", name), f"no key {key!r}")
-        return base64.b64decode(str(data[key])).decode()
+        return data[key]
+
+
+def decode_secret_data(data: Mapping[str, object]) -> dict[str, str]:
+    """The base64 `data` of a Secret, decoded."""
+    return {k: base64.b64decode(str(v)).decode() for k, v in data.items()}
 
 
 def django_value(output: str) -> str:

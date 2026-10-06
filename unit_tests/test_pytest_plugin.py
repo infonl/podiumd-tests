@@ -14,7 +14,7 @@ from podiumd_tests.pytest_plugin import ENVIRONMENT_KEY
 pytest_plugins = ["podiumd_tests.pytest_plugin"]
 
 
-def no_cluster(args, _timeout):
+def no_cluster(args, _timeout, _stdin=None):
     return subprocess.CompletedProcess(list(args), 1, "", "no cluster")
 
 

@@ -193,9 +193,10 @@ sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 # code that only environment tests use is not dead. unit_tests/ is left out on purpose:
 # code used only by its own unit test is still dead. False positives:
 #   - pytest_* hooks, test_* functions, pytestmark and @pytest.fixture functions: used by pytest.
+#   - __call__ of a callable Protocol (process.Runner): called through the protocol.
 #   - wait_until, tagged, password_grant: library API for tests of later phases.
 [tool.vulture]
-ignore_names = ["pytest_*", "test_*", "pytestmark", "wait_until", "tagged", "password_grant"]
+ignore_names = ["pytest_*", "test_*", "pytestmark", "__call__", "wait_until", "tagged", "password_grant"]
 ignore_decorators = ["@pytest.fixture"]
 
 [tool.bandit]

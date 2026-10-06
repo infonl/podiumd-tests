@@ -34,7 +34,7 @@ def test_errors_keep_the_command_and_the_last_stderr_line(fake_runner):
 
 
 def test_missing_kubectl_is_reported():
-    def runner(args, timeout):
+    def runner(args, timeout, _stdin=None):
         raise FileNotFoundError(args[0])
 
     with pytest.raises(KubeError, match="kubectl not found on PATH"):
@@ -63,7 +63,7 @@ def test_django_value_without_marker_is_an_error():
 
 
 def test_context_names_timeout_is_a_kube_error():
-    def runner(args, timeout):
+    def runner(args, timeout, _stdin=None):
         raise subprocess.TimeoutExpired(args, timeout)
 
     with pytest.raises(KubeError, match="timed out after 30s"):
@@ -75,3 +75,10 @@ def test_invalid_json_error_shows_the_command_that_ran(fake_runner):
     with pytest.raises(KubeError) as info:
         Kube("ctx", "ns", fake_runner).get_json("pods", namespace="other")
     assert info.value.command == "kubectl --context ctx --namespace other get pods -o json"
+
+
+def test_apply_sends_the_manifest_on_stdin(fake_runner):
+    fake_runner.answers["apply -f -"] = (0, "secret/x configured")
+    Kube("ctx", "ns", fake_runner).apply({"kind": "Secret", "stringData": {"k": "s3cret"}})
+    assert "s3cret" not in " ".join(fake_runner.calls[0])
+    assert '"s3cret"' in fake_runner.stdins[0]

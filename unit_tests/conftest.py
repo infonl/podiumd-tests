@@ -21,9 +21,13 @@ class FakeRunner:
     def __init__(self, answers=None):
         self.answers = answers or {}
         self.calls = []
+        self.stdins = []
 
-    def __call__(self, args: Sequence[str], _timeout: int) -> subprocess.CompletedProcess[str]:
+    def __call__(
+        self, args: Sequence[str], _timeout: int, stdin: str | None = None
+    ) -> subprocess.CompletedProcess[str]:
         self.calls.append(list(args))
+        self.stdins.append(stdin)
         line = " ".join(args)
         for fragment, (code, out) in self.answers.items():
             if fragment in line:

@@ -18,6 +18,12 @@ import pytest
 import yaml
 
 from podiumd_tests import doctor
+from podiumd_tests.bootstrap import bootstrap
+from podiumd_tests.bootstrap import format_outcomes
+from podiumd_tests.bootstrap import refusal
+from podiumd_tests.bootstrap import unbootstrap
+from podiumd_tests.bootstrap.steps import STEPS
+from podiumd_tests.capabilities import CLUSTER
 from podiumd_tests.components import component_for_host
 from podiumd_tests.config import ESTATES
 from podiumd_tests.config import REPO_ROOT
@@ -155,6 +161,41 @@ def _preflight_ok(env: Environment, args: argparse.Namespace) -> bool:
     return True
 
 
+def _bootstrap_env(args: argparse.Namespace) -> Environment | int:
+    """The environment for bootstrap and unbootstrap, or the exit code that stops them."""
+    profile = _load(args)
+    env = Environment(profile)
+    if not _preflight_ok(env, args):
+        return EXIT_CONFIG
+    reason = env.capabilities.skip_reason(CLUSTER)
+    if reason:
+        print(f"bootstrap needs kubectl access to {profile.name}: {reason}", file=sys.stderr)
+        return EXIT_CONFIG
+    return env
+
+
+def cmd_bootstrap(args: argparse.Namespace) -> int:
+    """Create the test-only credentials and wiring (PLAN.md §4 A)."""
+    reason = refusal(_load(args))
+    if reason:
+        print(f"refused: {reason}", file=sys.stderr)
+        return EXIT_NOT_ALLOWED
+    env = _bootstrap_env(args)
+    if isinstance(env, int):
+        return env
+    print(format_outcomes(bootstrap(env, STEPS, rotate=args.rotate)))
+    return EXIT_OK
+
+
+def cmd_unbootstrap(args: argparse.Namespace) -> int:
+    """Remove everything bootstrap created."""
+    env = _bootstrap_env(args)
+    if isinstance(env, int):
+        return env
+    print(format_outcomes(unbootstrap(env, STEPS)))
+    return EXIT_OK
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     """Run a tier against an environment and record the results."""
     profile = _load(args)
@@ -218,6 +259,17 @@ def build_parser() -> argparse.ArgumentParser:
     doc.add_argument("--env", required=True)
     doc.add_argument("--json", help="also write the checks to this JSON file")
     doc.set_defaults(func=cmd_doctor)
+
+    boot = commands.add_parser("bootstrap", help="create test-only credentials and wiring (ptest-bootstrap-*)")
+    boot.add_argument("--env", required=True)
+    boot.add_argument("--rotate", action="store_true", help="recreate every step, with new credentials")
+    boot.add_argument("--skip-doctor", action="store_true")
+    boot.set_defaults(func=cmd_bootstrap)
+
+    unboot = commands.add_parser("unbootstrap", help="remove everything bootstrap created")
+    unboot.add_argument("--env", required=True)
+    unboot.add_argument("--skip-doctor", action="store_true")
+    unboot.set_defaults(func=cmd_unbootstrap)
 
     run = commands.add_parser("run", help="run a tier against an environment")
     run.add_argument("--env", required=True)

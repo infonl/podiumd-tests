@@ -13,6 +13,10 @@ from typing import cast
 import pytest
 
 from podiumd_tests import results
+from podiumd_tests.bootstrap import bootstrap
+from podiumd_tests.bootstrap import check
+from podiumd_tests.bootstrap import refusal
+from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
@@ -37,6 +41,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     group.addoption("--podiumd-envs-dir", default=str(default_envs_dir()))
     group.addoption("--podiumd-run-tag", help="tag for created resources (default: ptest-<random>)")
     group.addoption("--keep-data", action="store_true", help="skip cleanup of created resources")
+    group.addoption("--auto-bootstrap", action="store_true", help="apply missing bootstrap steps instead of failing")
 
 
 ENVIRONMENT_KEY = pytest.StashKey[Environment]()
@@ -95,6 +100,21 @@ def fixture_http(podiumd_env: Environment) -> Iterator[requests.Session]:
 def fixture_run_tag(request: pytest.FixtureRequest) -> str:
     """Tag carried by every created resource (PLAN.md R9)."""
     return str(request.config.getoption("--podiumd-run-tag") or results.run_tag(results.new_run_id()))
+
+
+@pytest.fixture(scope="session", name="bootstrap_ok")
+def fixture_bootstrap_ok(request: pytest.FixtureRequest, podiumd_env: Environment) -> None:
+    """Fail fast when bootstrap is missing; with --auto-bootstrap, apply it (PLAN.md §4 A)."""
+    missing = [o.step for o in check(podiumd_env, STEPS) if o.action == "missing"]
+    if not missing:
+        return
+    name = podiumd_env.profile.name
+    if not request.config.getoption("--auto-bootstrap"):
+        pytest.fail(f"bootstrap missing on {name} ({', '.join(missing)}): run `podiumd-tests bootstrap --env {name}`")
+    reason = refusal(podiumd_env.profile)
+    if reason:
+        pytest.fail(f"--auto-bootstrap refused: {reason}")
+    bootstrap(podiumd_env, STEPS)
 
 
 @pytest.fixture(name="registry")
