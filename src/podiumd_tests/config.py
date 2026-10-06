@@ -79,6 +79,8 @@ class Profile:  # pylint: disable=too-many-instance-attributes  # mirrors the YA
     access: Access = Access()
     keyvault: str | None = None
     chart_version: str | None = None
+    # Values that differ per environment but are no secret, e.g. zgw_client_id.
+    settings: dict[str, str] = field(default_factory=dict[str, str])
     path: Path | None = None
 
 
@@ -219,5 +221,6 @@ def parse_profile(raw: object, *, name: str, path: Path | None = None) -> Profil
         access=_parse_access(data.get("access"), f"{where}.access"),
         keyvault=_optional_text(data, "keyvault", where),
         chart_version=_optional_text(data, "chart_version", where),
+        settings={str(k): str(v) for k, v in _mapping(data.get("settings") or {}, f"{where}.settings").items()},
         path=path,
     )

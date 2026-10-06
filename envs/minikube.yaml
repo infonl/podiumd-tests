@@ -29,3 +29,8 @@ secrets:
     dev_default: admin
   keycloak_admin_password:
     dev_default: admin
+  # Read from Open Zaak in the cluster (read-only smoke; bootstrap brings ptest-* clients later, PLAN.md §11a).
+  zgw_client_secret:
+    zgw_jwt_secret: {deployment: openzaak, client_id: open-formulieren}
+settings:
+  zgw_client_id: open-formulieren
