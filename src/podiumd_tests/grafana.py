@@ -10,6 +10,8 @@ if TYPE_CHECKING:
 
     import requests
 
+    from podiumd_tests.credentials import SecretResolver
+
 type Json = dict[str, object]
 
 
@@ -52,6 +54,13 @@ class Grafana:
             msg = f"{kind}{path}: HTTP {response.status_code}"
             raise GrafanaError(msg)
         return cast("Json", response.json())
+
+
+def grafana_auth(credentials: SecretResolver) -> tuple[str, str] | None:
+    """Basic auth from the secrets grafana_username and grafana_password; None for anonymous access."""
+    username = credentials.optional("grafana_username")
+    password = credentials.optional("grafana_password")
+    return (username, password) if username and password else None
 
 
 def down_targets(targets_response: Mapping[str, object]) -> list[str]:

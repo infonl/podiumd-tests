@@ -17,24 +17,22 @@ import pytest
 
 from podiumd_tests.grafana import Grafana
 from podiumd_tests.grafana import down_targets
+from podiumd_tests.grafana import grafana_auth
 from podiumd_tests.grafana import target_count
 
 if TYPE_CHECKING:
     import requests
 
+    from podiumd_tests.credentials import SecretResolver
     from podiumd_tests.environment import Environment
 
 pytestmark = [pytest.mark.smoke, pytest.mark.requires("grafana")]
 
 
 @pytest.fixture(scope="module", name="grafana")
-def fixture_grafana(http: requests.Session, urls: dict[str, str], podiumd_env: Environment) -> Grafana:
+def fixture_grafana(http: requests.Session, urls: dict[str, str], credentials: SecretResolver) -> Grafana:
     """Grafana with its datasources loaded; skip when Grafana needs a login the profile does not provide."""
-    secrets = podiumd_env.profile.secrets
-    auth = None
-    if "grafana_username" in secrets and "grafana_password" in secrets:
-        credentials = podiumd_env.credentials
-        auth = (credentials.get("grafana_username"), credentials.get("grafana_password"))
+    auth = grafana_auth(credentials)
     grafana = Grafana(http, urls["grafana"], auth)
     response = grafana.load_datasources()
     if response.status_code in {401, 403} and auth is None:

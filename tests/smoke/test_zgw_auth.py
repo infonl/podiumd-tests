@@ -25,11 +25,11 @@ ZGW_HEADERS = {"Accept-Crs": "EPSG:4326", "Content-Crs": "EPSG:4326", "Accept": 
 
 
 @pytest.fixture(name="client_id")
-def fixture_client_id(podiumd_env: Environment) -> str:
-    """ZGW client id of the profile; skip when the profile has none."""
+def fixture_client_id(podiumd_env: Environment, credentials: SecretResolver) -> str:
+    """ZGW client id of the profile; skip when the environment has no ZGW client."""
     client_id = podiumd_env.profile.settings.get("zgw_client_id")
-    if not client_id or "zgw_client_secret" not in podiumd_env.profile.secrets:
-        pytest.skip("profile has no settings.zgw_client_id and secret zgw_client_secret")
+    if not client_id or not credentials.configured("zgw_client_secret"):
+        pytest.skip("no settings.zgw_client_id, or no secret zgw_client_secret (profile or env var)")
     return client_id
 
 

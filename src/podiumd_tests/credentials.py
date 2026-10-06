@@ -93,6 +93,14 @@ class SecretResolver:
             self._cache[name] = value
         return self._cache[name]
 
+    def configured(self, name: str) -> bool:
+        """True when the secret has a source: in the profile, or its env var is set."""
+        return name in self._profile.secrets or bool(self._environ.get(env_var_name(name)))
+
+    def optional(self, name: str) -> str | None:
+        """Value of a secret that an environment may lack; None when it has no source."""
+        return self.get(name) if self.configured(name) else None
+
     def _is_dev_default(self, name: str) -> bool:
         spec = self._profile.secrets.get(name)
         return spec is not None and spec.source == "dev_default" and not self._environ.get(env_var_name(name))

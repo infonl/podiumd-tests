@@ -98,3 +98,15 @@ def test_keyvault_without_az_names_the_secret(profile_factory):
     profile = profile_factory(keyvault="my-kv", secrets={"pw": {"keyvault": {"secret": "user-pw"}}})
     with pytest.raises(SecretError, match=r"secret 'pw' \(keyvault\): az keyvault .*: az not found on PATH"):
         resolver(profile, runner).get("pw")
+
+
+def test_optional_secrets_come_from_profile_or_env_var(profile_factory, fake_runner):
+    environ = {env_var_name("grafana_password"): "from-env"}
+    creds = resolver(
+        profile_factory(secrets={"grafana_username": {"k8s_secret": {"name": "s", "key": "k"}}}), fake_runner, environ
+    )
+    assert creds.configured("grafana_username")
+    assert creds.configured("grafana_password")
+    assert creds.optional("grafana_password") == "from-env"
+    assert not creds.configured("zgw_client_secret")
+    assert creds.optional("zgw_client_secret") is None
