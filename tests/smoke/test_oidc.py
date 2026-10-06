@@ -11,27 +11,15 @@ from __future__ import annotations
 import re
 
 from typing import TYPE_CHECKING
-from urllib.parse import urlsplit
 
 import pytest
+
+from podiumd_tests.oidc import keycloak_login_realm
 
 if TYPE_CHECKING:
     import requests
 
 pytestmark = pytest.mark.smoke
-
-AUTH_PATH = re.compile(r"^/realms/(?P<realm>[^/]+)/protocol/openid-connect/auth$")
-
-
-def assert_keycloak_login_page(response: requests.Response, urls: dict[str, str]) -> str:
-    """The response is Keycloak's login form; return the realm."""
-    assert response.status_code == 200, f"{response.url}: HTTP {response.status_code}"
-    final = urlsplit(response.url)
-    assert final.hostname == urlsplit(urls["keycloak"]).hostname, f"ended on {response.url}, not on Keycloak"
-    match = AUTH_PATH.match(final.path)
-    assert match, f"not an OIDC auth endpoint: {response.url}"
-    assert 'name="username"' in response.text or 'id="username"' in response.text, "no login form"
-    return match["realm"]
 
 
 @pytest.mark.requires("keycloak")
@@ -45,7 +33,7 @@ def test_keycloak_discovery(http: requests.Session, urls: dict[str, str]) -> Non
 @pytest.mark.requires("zac", "keycloak")
 def test_zac_redirects_to_keycloak(http: requests.Session, urls: dict[str, str]) -> None:
     """An anonymous visit to ZAC ends on the Keycloak login form, and that realm is published."""
-    realm = assert_keycloak_login_page(http.get(urls["zac"] + "/"), urls)
+    realm = keycloak_login_realm(http.get(urls["zac"] + "/"), urls["keycloak"])
     discovery = http.get(f"{urls['keycloak']}/realms/{realm}/.well-known/openid-configuration")
     assert discovery.status_code == 200
 
@@ -66,4 +54,4 @@ def test_portaal_login_page_offers_digid_and_eherkenning(http: requests.Session,
 @pytest.mark.parametrize("method", ["digid", "eherkenning"])
 def test_portaal_login_redirects_to_keycloak(http: requests.Session, urls: dict[str, str], method: str) -> None:
     """Starting a DigiD or eHerkenning login ends on the Keycloak login form (82 test 4, 05b and 99 first leg)."""
-    assert_keycloak_login_page(http.get(f"{urls['openinwoner']}/{method}-oidc/authenticate/?next=/"), urls)
+    keycloak_login_realm(http.get(f"{urls['openinwoner']}/{method}-oidc/authenticate/?next=/"), urls["keycloak"])

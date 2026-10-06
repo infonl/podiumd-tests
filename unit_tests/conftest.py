@@ -1,10 +1,12 @@
 """Offline fakes for the unit tests: no cluster, no network."""
 
+import json
 import subprocess
 
 from collections.abc import Sequence
 
 import pytest
+import requests
 
 from podiumd_tests.config import parse_profile
 
@@ -45,3 +47,18 @@ def make_profile(**overrides):
 @pytest.fixture
 def profile_factory():
     return make_profile
+
+
+def make_response(status=200, body=b"", url="https://app.example.test/", json_body=None):
+    response = requests.Response()
+    response.status_code = status
+    response.url = url
+    response._content = json.dumps(json_body).encode() if json_body is not None else body
+    response.encoding = "utf-8"
+    return response
+
+
+@pytest.fixture
+def response_factory():
+    """Builds requests.Response objects without any network."""
+    return make_response
