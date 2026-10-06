@@ -86,9 +86,15 @@ class SecretResolver:
         """Value of a secret; SecretError if it cannot be resolved."""
         if name not in self._cache:
             value = self._resolve(name)
-            self._redactor.add(value)
+            # Published dev defaults such as "admin" are no secret; masking them garbles ordinary text.
+            if not self._is_dev_default(name):
+                self._redactor.add(value)
             self._cache[name] = value
         return self._cache[name]
+
+    def _is_dev_default(self, name: str) -> bool:
+        spec = self._profile.secrets.get(name)
+        return spec is not None and spec.source == "dev_default" and not self._environ.get(env_var_name(name))
 
     def _resolve(self, name: str) -> str:
         override = self._environ.get(env_var_name(name))

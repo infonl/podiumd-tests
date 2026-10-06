@@ -5,6 +5,7 @@ import json
 
 import pytest
 
+from podiumd_tests.config import parse_profile
 from podiumd_tests.credentials import Redactor
 from podiumd_tests.credentials import SecretError
 from podiumd_tests.credentials import SecretResolver
@@ -60,6 +61,25 @@ def test_resolved_values_are_redacted(profile_factory, fake_runner):
     creds = SecretResolver(profile_factory(), Kube("ctx", "podiumd", fake_runner), redactor, fake_runner, environ)
     creds.get("token")
     assert redactor.redact("Bearer abcd-1234 sent") == "Bearer *** sent"
+
+
+def test_dev_defaults_are_not_redacted_but_overrides_are(fake_runner):
+    profile = parse_profile(
+        {
+            "estate": "minikube",
+            "allowed_tiers": ["smoke"],
+            "kube": {"context": "minikube", "namespace": "podiumd"},
+            "urls": {},
+            "secrets": {"user": {"dev_default": "admin"}, "pw": {"dev_default": "admin"}},
+        },
+        name="mk",
+    )
+    redactor = Redactor()
+    environ = {env_var_name("pw"): "s3cret-override"}
+    creds = SecretResolver(profile, Kube("minikube", "podiumd", fake_runner), redactor, fake_runner, environ)
+    assert creds.get("user") == "admin"
+    assert creds.get("pw") == "s3cret-override"
+    assert redactor.redact("keycloak-admin s3cret-override") == "keycloak-admin ***"
 
 
 def test_redactor_ignores_very_short_values():
