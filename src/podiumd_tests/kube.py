@@ -24,6 +24,9 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 DEFAULT_TIMEOUT = 30
+# All Maykin images (Open Zaak, Open Klant, Objecten, Open Inwoner, ...) have their Django project here.
+MANAGE_PY = "/app/src/manage.py"
+DJANGO_VALUE_MARKER = "PTEST_VALUE="
 
 
 class KubeError(Exception):
@@ -89,10 +92,12 @@ class Kube:
         self.run("get", "--raw", "/readyz", f"--request-timeout={timeout}s", timeout=timeout + 5)
 
     def exec_django_shell(self, deployment: str, code: str, timeout: int = 60) -> str:
-        """Run Python code in `manage.py shell` of a Django deployment; return its stdout."""
-        return self.run(
-            "exec", f"deploy/{deployment}", "--", "python", "manage.py", "shell", "-c", code, timeout=timeout
-        )
+        """Run Python code in `manage.py shell` of a Django deployment; return its stdout.
+
+        The stdout also holds Django's own chatter ("118 objects imported
+        automatically"); use django_value() to pick out one printed value.
+        """
+        return self.run("exec", f"deploy/{deployment}", "--", "python", MANAGE_PY, "shell", "-c", code, timeout=timeout)
 
     def secret_value(self, name: str, key: str) -> str:
         """Decoded value of one key of a Kubernetes secret."""
@@ -100,6 +105,15 @@ class Kube:
         if not isinstance(data, dict) or key not in data:
             raise KubeError(self.command("get", "secret", name), f"no key {key!r}")
         return base64.b64decode(str(cast("dict[str, object]", data)[key])).decode()
+
+
+def django_value(output: str) -> str:
+    """The value a Django shell snippet printed as print("PTEST_VALUE=" + value)."""
+    for line in output.splitlines():
+        if line.startswith(DJANGO_VALUE_MARKER):
+            return line.removeprefix(DJANGO_VALUE_MARKER)
+    msg = f"no {DJANGO_VALUE_MARKER} line in Django shell output"
+    raise ValueError(msg)
 
 
 def metadata_name(item: dict[str, object]) -> str:

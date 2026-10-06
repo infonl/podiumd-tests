@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
+from podiumd_tests.kube import django_value
 from podiumd_tests.process import Runner
 from podiumd_tests.process import run_process
 
@@ -28,7 +29,8 @@ REDACTED = "***"
 # Prints the shared secret of one JWTSecret row. The client id is inserted as a Python
 # string literal (repr), so it cannot inject code.
 _JWT_LOOKUP_SNIPPET = (
-    "from vng_api_common.models import JWTSecret\nprint(JWTSecret.objects.get(identifier={identifier!r}).secret)"
+    "from vng_api_common.models import JWTSecret\n"
+    "print('PTEST_VALUE=' + JWTSecret.objects.get(identifier={identifier!r}).secret)"
 )
 
 
@@ -106,7 +108,7 @@ class SecretResolver:
             raise SecretError(msg)
         try:
             return self._from_source(spec).strip()
-        except KubeError as exc:
+        except (KubeError, ValueError) as exc:
             msg = f"secret {name!r} ({spec.source}): {exc}"
             raise SecretError(msg) from exc
 
@@ -121,7 +123,7 @@ class SecretResolver:
                 return self._kube.run("exec", f"deploy/{opts['deployment']}", "--", "printenv", opts["var"])
             case "zgw_jwt_secret":
                 code = _JWT_LOOKUP_SNIPPET.format(identifier=opts["client_id"])
-                return self._kube.exec_django_shell(opts["deployment"], code)
+                return django_value(self._kube.exec_django_shell(opts["deployment"], code))
             case "keyvault":
                 return self._from_keyvault(spec)
             case _:
