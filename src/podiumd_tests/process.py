@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shlex
 import subprocess  # nosec B404
 
@@ -22,13 +23,17 @@ class Runner(Protocol):  # pylint: disable=too-few-public-methods  # a callable 
         ...
 
 
+KUBECTL_EXEC_EXIT = re.compile(r"^command terminated with exit code \d+$")
+
+
 class ProcessError(Exception):
     """An external command failed. The message holds the command line, so it can be pasted and rerun."""
 
     def __init__(self, command: Sequence[str], detail: str) -> None:
         self.command = shlex.join(command)
-        # kubectl repeats client-side noise (E1005 memcache...) before the real error; keep the last line.
-        lines = [line for line in detail.strip().splitlines() if line.strip()]
+        # kubectl repeats client-side noise (E1005 memcache...) before the real error, and kubectl exec
+        # ends with its own exit-code line after the program's error; keep the last real line.
+        lines = [line for line in detail.strip().splitlines() if line.strip() and not KUBECTL_EXEC_EXIT.match(line)]
         super().__init__(f"{self.command}: {lines[-1] if lines else 'failed'}")
 
 

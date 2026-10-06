@@ -38,6 +38,7 @@ from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
+from podiumd_tests.process import ProcessError
 from podiumd_tests.results import LocalDirSink
 from podiumd_tests.results import RunInfo
 from podiumd_tests.results import new_run_id
@@ -291,6 +292,9 @@ def main(argv: list[str] | None = None) -> int:
         return int(args.func(args))
     except ProfileError as exc:
         print(f"profile error: {exc}", file=sys.stderr)
+        return EXIT_CONFIG
+    except ProcessError as exc:
+        print(f"error: {exc}", file=sys.stderr)
         return EXIT_CONFIG
 
 

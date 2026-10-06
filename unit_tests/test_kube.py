@@ -82,3 +82,12 @@ def test_apply_sends_the_manifest_on_stdin(fake_runner):
     Kube("ctx", "ns", fake_runner).apply({"kind": "Secret", "stringData": {"k": "s3cret"}})
     assert "s3cret" not in " ".join(fake_runner.calls[0])
     assert '"s3cret"' in fake_runner.stdins[0]
+
+
+def test_exec_errors_show_the_programs_error_not_the_exit_code_line(fake_runner):
+    fake_runner.answers["exec -i deploy/openzaak"] = (
+        1,
+        "Traceback (most recent call last):\n  ...\ndjango.core.exceptions.FieldError: bad lookup\ncommand terminated with exit code 1\n",
+    )
+    with pytest.raises(KubeError, match=r"FieldError: bad lookup$"):
+        Kube("ctx", "ns", fake_runner).exec_django_shell("openzaak", "print(1)")
