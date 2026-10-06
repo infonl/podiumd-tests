@@ -168,6 +168,10 @@ line-ending = "auto"
 # tests/-only disables live in run_python_checks (TESTS_PYLINT_DISABLE):
 # pylint has no per-directory config.
 
+[tool.pylint.main]
+# podiumd-tests: Django snippets import models that exist only in the component images.
+ignore = ["snippets"]
+
 [tool.pylint.basic]
 # Allow hyphens for the kebab-case script names (e.g. "verify-podiumd").
 module-rgx = "^(([a-z_][a-z0-9_-]*)|(__.*__))$"
@@ -196,6 +200,8 @@ sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 #   - __call__ of a callable Protocol (process.Runner): called through the protocol.
 #   - wait_until, tagged, password_grant: library API for tests of later phases.
 [tool.vulture]
+# Django snippets: run() is called inside the component, not from here.
+exclude = ["*/snippets/[a-z]*.py"]
 ignore_names = ["pytest_*", "test_*", "pytestmark", "__call__", "wait_until", "tagged", "password_grant"]
 ignore_decorators = ["@pytest.fixture"]
 
@@ -211,6 +217,8 @@ skips = [
 exclude = [
     "**/__pycache__",
     ".venv",
+    # podiumd-tests: Django snippets import models that exist only in the component images.
+    "src/podiumd_tests/snippets/*.py",
 ]
 typeCheckingMode = "strict"
 reportUnusedImport = false  # done by ruff F401

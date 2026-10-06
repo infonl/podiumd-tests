@@ -112,10 +112,13 @@ class Kube:
     def exec_django_shell(self, deployment: str, code: str, timeout: int = 60) -> str:
         """Run Python code in `manage.py shell` of a Django deployment; return its stdout.
 
+        The code goes over stdin, so nothing in it appears in argv or errors.
         The stdout also holds Django's own chatter ("118 objects imported
         automatically"); use django_value() to pick out one printed value.
         """
-        return self.exec(deployment, "python", MANAGE_PY, "shell", "-c", code, timeout=timeout)
+        return self.run(
+            "exec", "-i", f"deploy/{deployment}", "--", "python", MANAGE_PY, "shell", stdin=code, timeout=timeout
+        )
 
     def secret_value(self, name: str, key: str) -> str:
         """Decoded value of one key of a Kubernetes secret."""

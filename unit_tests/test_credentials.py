@@ -30,14 +30,15 @@ def test_keyvault_uses_the_profile_vault(profile_factory, fake_runner, env_facto
     assert env_factory(profile).credentials.get("pw") == "kv-value"
 
 
-def test_zgw_jwt_secret_runs_a_django_snippet(profile_factory, fake_runner, env_factory):
-    fake_runner.answers["exec deploy/openzaak -- python /app/src/manage.py shell -c"] = (
+def test_zgw_jwt_secret_runs_a_django_snippet_over_stdin(profile_factory, fake_runner, env_factory):
+    fake_runner.answers["exec -i deploy/openzaak -- python /app/src/manage.py shell"] = (
         0,
-        "118 objects imported automatically (use -v 2 for details).\n\nPTEST_VALUE=jwt-secret\n",
+        '118 objects imported automatically (use -v 2 for details).\n\nPTEST_VALUE="jwt-secret"\n',
     )
     profile = profile_factory(secrets={"oz": {"zgw_jwt_secret": {"deployment": "openzaak", "client_id": "zac"}}})
     assert env_factory(profile).credentials.get("oz") == "jwt-secret"
-    assert "identifier='zac'" in fake_runner.calls[0][-1]
+    assert "zac" not in " ".join(fake_runner.calls[-1])
+    assert '"client_id": "zac"' in fake_runner.stdins[-1]
 
 
 def test_failures_name_the_secret_and_source(profile_factory, env_factory):
