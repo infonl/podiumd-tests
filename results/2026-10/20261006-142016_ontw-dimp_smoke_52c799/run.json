@@ -1,0 +1,41 @@
+{
+  "run_id": "52c799",
+  "env": "ontw-dimp",
+  "tier": "smoke",
+  "started": "2026-10-06T14:20:16+00:00",
+  "finished": "2026-10-06T14:20:18+00:00",
+  "exit_code": 0,
+  "selection": [
+    "-ra",
+    "/home/kvv/development/werk/infonl-dimpact/infonl/podiumd-tests/tests/smoke",
+    "-m",
+    "not destructive",
+    "--podiumd-env=ontw-dimp",
+    "--junitxml=/home/kvv/development/werk/infonl-dimpact/infonl/podiumd-tests/results/2026-10/20261006-142016_ontw-dimp_smoke_52c799/junit.xml",
+    "--podiumd-run-tag=ptest-52c799",
+    "-q",
+    "-rs"
+  ],
+  "suite_commit": "d0cc8d8",
+  "chart_version": null,
+  "capabilities": [
+    "ita",
+    "keycloak",
+    "keycloak-admin",
+    "kiss",
+    "openarchiefbeheer",
+    "openformulieren",
+    "openinwoner",
+    "openklant",
+    "openzaak",
+    "pabc"
+  ],
+  "counts": {
+    "passed": 27,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 32,
+    "xfailed": 0,
+    "total": 59
+  }
+}
