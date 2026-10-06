@@ -26,11 +26,8 @@ def run(params):
 
     if action == "status":
         catalogus = catalogi.first()
-        return {
-            "applicatie": applicaties.exists(),
-            "secret": JWTSecret.objects.filter(identifier=client_id).exists(),
-            "catalogus": str(catalogus.uuid) if catalogus else None,
-        }
+        present = applicaties.exists() and JWTSecret.objects.filter(identifier=client_id).exists()
+        return {"present": bool(present and catalogus), "catalogus": str(catalogus.uuid) if catalogus else None}
 
     if action == "remove":
         # zaaktype is a "foreign key or URL" field; _zaaktype is its local foreign key.
@@ -62,4 +59,4 @@ def run(params):
                 max_vertrouwelijkheidaanduiding="zeer_geheim",
             )
     JWTSecret.objects.update_or_create(identifier=client_id, defaults={"secret": params["secret"]})
-    return {"catalogus": str(catalogus.uuid)}
+    return {"present": True, "catalogus": str(catalogus.uuid)}

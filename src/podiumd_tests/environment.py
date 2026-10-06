@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from podiumd_tests.capabilities import Capabilities
 from podiumd_tests.capabilities import detect
+from podiumd_tests.components import COMPONENTS
 from podiumd_tests.credentials import Redactor
 from podiumd_tests.credentials import SecretResolver
 from podiumd_tests.kube import Kube
@@ -72,15 +73,24 @@ class Environment:
         """The long-running workloads: Deployments and StatefulSets."""
         return [item for kind in WORKLOAD_KINDS for item in self.items(kind, namespaces)]
 
+    @cached_property
     def deployment_names(self) -> list[str]:
-        """Names of all deployments in the environment's namespaces."""
+        """Names of all deployments in the environment's namespaces; read once."""
         return [metadata_name(d) for d in self.items("deployments")]
+
+    def deployment_for(self, component: str) -> str:
+        """The main deployment of a component, e.g. "notificaties" for opennotificaties on some estates."""
+        for prefix in COMPONENTS[component].deployment_prefixes:
+            if prefix in self.deployment_names:
+                return prefix
+        msg = f"no deployment for {component} (looked for {', '.join(COMPONENTS[component].deployment_prefixes)})"
+        raise KubeError(self.kube.command("get", "deployments"), msg)
 
     @cached_property
     def capabilities(self) -> Capabilities:
         """Capabilities detected from profile and cluster; profile only when the cluster is unreachable."""
         try:
-            names: list[str] | None = self.deployment_names()
+            names: list[str] | None = self.deployment_names
         except KubeError:
             names = None
         return detect(self.profile, names)
