@@ -1,5 +1,6 @@
 """Unit tests for the bootstrap framework and the credential store."""
 
+import ast
 import base64
 import json
 
@@ -7,10 +8,13 @@ from dataclasses import dataclass
 from dataclasses import field
 
 from podiumd_tests import cli
+from podiumd_tests.bootstrap import Context
 from podiumd_tests.bootstrap import bootstrap
 from podiumd_tests.bootstrap import check
 from podiumd_tests.bootstrap import refusal
 from podiumd_tests.bootstrap import unbootstrap
+from podiumd_tests.bootstrap.openzaak import ZGW_STORE_KEY
+from podiumd_tests.bootstrap.openzaak import OpenZaakClient
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.kube import Kube
 
@@ -123,3 +127,33 @@ def test_cli_refuses_bootstrap_on_smoke_only_profiles(tmp_path, capsys):
     )
     assert cli.main(["--envs-dir", str(tmp_path), "bootstrap", "--env", "gemeente"]) == cli.EXIT_NOT_ALLOWED
     assert "smoke-only" in capsys.readouterr().err
+
+
+def snippet_params(code):
+    """The params a snippet call was sent with: the string constant passed to _json.loads."""
+    calls = [
+        n for n in ast.walk(ast.parse(code)) if isinstance(n, ast.Call) and getattr(n.func, "attr", None) == "loads"
+    ]
+    return json.loads(ast.literal_eval(calls[0].args[0]))
+
+
+def snippet_answer(value):
+    return (0, f"Django chatter\nPTEST_VALUE={json.dumps(value)}\n")
+
+
+def test_openzaak_client_step(env_factory, fake_runner, profile_factory):
+    env = cluster_env(env_factory, fake_runner, profile_factory)
+    ctx = Context(env, CredentialStore(env.kube))
+    step = OpenZaakClient()
+    fake_runner.answers["exec -i deploy/openzaak"] = snippet_answer(
+        {"applicatie": True, "secret": True, "catalogus": "u"}
+    )
+    assert not step.is_present(ctx)  # the secret is not in the credentials Secret yet
+    fake_runner.answers["exec -i deploy/openzaak"] = snippet_answer({"catalogus": "u"})
+    values = step.apply(ctx)
+    assert set(values) == {ZGW_STORE_KEY}
+    sent = snippet_params(fake_runner.stdins[-1])
+    assert sent["secret"] == values[ZGW_STORE_KEY]
+    assert sent["domein"] == "PTEST"
+    assert values[ZGW_STORE_KEY] not in " ".join(" ".join(c) for c in fake_runner.calls)
+    assert step.remove(ctx) == (ZGW_STORE_KEY,)
