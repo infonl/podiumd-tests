@@ -89,3 +89,12 @@ def test_redactor_ignores_very_short_values():
     redactor = Redactor()
     redactor.add("ab")
     assert redactor.redact("abc") == "abc"
+
+
+def test_keyvault_without_az_names_the_secret(profile_factory):
+    def runner(args, _timeout):
+        raise FileNotFoundError(args[0])
+
+    profile = profile_factory(keyvault="my-kv", secrets={"pw": {"keyvault": {"secret": "user-pw"}}})
+    with pytest.raises(SecretError, match=r"secret 'pw' \(keyvault\): az keyvault .*: az not found on PATH"):
+        resolver(profile, runner).get("pw")

@@ -17,10 +17,11 @@ from dataclasses import dataclass
 from dataclasses import field
 from datetime import UTC
 from datetime import datetime
-from subprocess import TimeoutExpired  # nosec B404
 from typing import TYPE_CHECKING
 from typing import Protocol
 
+from podiumd_tests.process import ProcessError
+from podiumd_tests.process import run_checked
 from podiumd_tests.process import run_process
 
 if TYPE_CHECKING:
@@ -109,10 +110,11 @@ class RunInfo:  # pylint: disable=too-many-instance-attributes  # mirrors run.js
 def suite_commit(repo: Path) -> str:
     """Short git commit of this repository, or 'unknown'."""
     try:
-        result = run_process(["git", "-C", str(repo), "rev-parse", "--short", "HEAD"], 10)
-    except (FileNotFoundError, TimeoutExpired):
+        return (
+            run_checked(run_process, ["git", "-C", str(repo), "rev-parse", "--short", "HEAD"], 10).strip() or "unknown"
+        )
+    except ProcessError:
         return "unknown"
-    return result.stdout.strip() or "unknown"
 
 
 def parse_junit(xml_text: str) -> tuple[Counts, list[Failure]]:

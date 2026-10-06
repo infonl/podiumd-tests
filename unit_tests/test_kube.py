@@ -1,6 +1,7 @@
 """Unit tests for the kubectl wrapper."""
 
 import json
+import subprocess
 
 import pytest
 
@@ -59,3 +60,18 @@ def test_django_value_picks_the_marked_line_from_django_chatter():
 def test_django_value_without_marker_is_an_error():
     with pytest.raises(ValueError, match="no PTEST_VALUE= line"):
         django_value("118 objects imported automatically\nTraceback ...\n")
+
+
+def test_context_names_timeout_is_a_kube_error():
+    def runner(args, timeout):
+        raise subprocess.TimeoutExpired(args, timeout)
+
+    with pytest.raises(KubeError, match="timed out after 30s"):
+        context_names(runner)
+
+
+def test_invalid_json_error_shows_the_command_that_ran(fake_runner):
+    fake_runner.answers["get pods"] = (0, "not json")
+    with pytest.raises(KubeError) as info:
+        Kube("ctx", "ns", fake_runner).get_json("pods", namespace="other")
+    assert info.value.command == "kubectl --context ctx --namespace other get pods -o json"

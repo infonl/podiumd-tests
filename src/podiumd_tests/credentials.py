@@ -8,15 +8,14 @@ from __future__ import annotations
 
 import os
 
-# Only for subprocess.TimeoutExpired; processes are started in process.py.
-import subprocess  # nosec B404
-
 from typing import TYPE_CHECKING
 
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import django_value
+from podiumd_tests.process import ProcessError
 from podiumd_tests.process import Runner
+from podiumd_tests.process import run_checked
 from podiumd_tests.process import run_process
 
 if TYPE_CHECKING:
@@ -138,11 +137,7 @@ class SecretResolver:
         command = ["az", "keyvault", "secret", "show", "--vault-name", vault, "--name", spec.options["secret"]]
         command += ["--query", "value", "--output", "tsv"]
         try:
-            result = self._runner(command, 60)
-        except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
-            msg = f"secret {spec.name!r}: az failed: {exc}"
+            return run_checked(self._runner, command, 60)
+        except ProcessError as exc:
+            msg = f"secret {spec.name!r} (keyvault): {exc}"
             raise SecretError(msg) from exc
-        if result.returncode != 0:
-            msg = f"secret {spec.name!r}: az keyvault secret show failed: {result.stderr.strip()}"
-            raise SecretError(msg)
-        return result.stdout
