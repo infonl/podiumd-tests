@@ -15,7 +15,6 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from typing import Literal
-from typing import cast
 from urllib.parse import urlsplit
 
 import requests
@@ -23,7 +22,7 @@ import requests
 from podiumd_tests.credentials import SecretError
 from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import context_names
-from podiumd_tests.kube import metadata_name
+from podiumd_tests.workloads import unready_workloads
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -90,15 +89,8 @@ def _cluster(env: Environment) -> list[Check]:
 
 
 def _deployments(env: Environment, namespace: str) -> Check:
-    not_ready: list[str] = []
     items = env.kube.items("deployments", namespace=namespace)
-    for item in items:
-        status = cast("dict[str, object]", item.get("status") or {})
-        spec = cast("dict[str, object]", item.get("spec") or {})
-        wanted = int(str(spec.get("replicas", 1)))
-        ready = int(str(status.get("readyReplicas", 0)))
-        if ready < wanted:
-            not_ready.append(f"{metadata_name(item)} {ready}/{wanted}")
+    not_ready = unready_workloads(items)
     if not_ready:
         return Check(f"deployments {namespace}", "warn", "not ready: " + ", ".join(not_ready))
     return Check(f"deployments {namespace}", "ok", f"{len(items)} ready")
