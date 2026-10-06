@@ -1,5 +1,6 @@
 """Unit tests for the preflight checks."""
 
+import json
 import socket
 import time
 
@@ -9,6 +10,10 @@ from podiumd_tests.environment import Environment
 
 def which_all(tool):
     return f"/usr/bin/{tool}"
+
+
+def workload(kind, name, wanted, ready):
+    return {"kind": kind, "metadata": {"name": name}, "spec": {"replicas": wanted}, "status": {"readyReplicas": ready}}
 
 
 def statuses(checks):
@@ -46,16 +51,15 @@ def test_healthy_cluster_without_urls(profile_factory, fake_runner):
             "config get-contexts": (0, "ctx\n"),
             "get --raw /readyz": (0, "ok"),
             "get namespace podiumd": (0, "namespace/podiumd"),
-            "get deployments": (
-                0,
-                '{"items": [{"metadata": {"name": "openzaak"}, "spec": {"replicas": 2}, "status": {"readyReplicas": 1}}]}',
-            ),
+            "get deployments": (0, json.dumps({"items": [workload("Deployment", "openzaak", 1, 1)]})),
+            "get statefulsets": (0, json.dumps({"items": [workload("StatefulSet", "redis", 2, 1)]})),
         }
     )
     checks = doctor.run_checks(Environment(profile_factory(urls={}), fake_runner, environ={}), which=which_all)
     result = statuses(checks)
     assert result["kube API"] == "ok"
-    assert result["deployments podiumd"] == "warn"
+    assert result["workloads podiumd"] == "warn"
+    assert "StatefulSet/redis 1/2" in next(c.detail for c in checks if c.name == "workloads podiumd")
     assert not doctor.failed(checks)
 
 

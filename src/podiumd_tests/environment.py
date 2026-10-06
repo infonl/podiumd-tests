@@ -17,9 +17,14 @@ from podiumd_tests.process import run_process
 from podiumd_tests.sessions import make_session
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     import requests
 
     from podiumd_tests.config import Profile
+
+
+WORKLOAD_KINDS = ("deployments", "statefulsets")
 
 
 class Environment:
@@ -56,12 +61,20 @@ class Environment:
         """HTTP session for the profile URLs."""
         return make_session(self.profile.urls, self.ingress_ip())
 
+    def items(self, kind: str, namespaces: Sequence[str] | None = None) -> list[dict[str, object]]:
+        """Objects of one kind in the given namespaces, by default all of the environment's namespaces."""
+        found: list[dict[str, object]] = []
+        for namespace in self.namespaces if namespaces is None else namespaces:
+            found += self.kube.items(kind, namespace=namespace)
+        return found
+
+    def workloads(self, namespaces: Sequence[str] | None = None) -> list[dict[str, object]]:
+        """The long-running workloads: Deployments and StatefulSets."""
+        return [item for kind in WORKLOAD_KINDS for item in self.items(kind, namespaces)]
+
     def deployment_names(self) -> list[str]:
         """Names of all deployments in the environment's namespaces."""
-        names: list[str] = []
-        for namespace in self.namespaces:
-            names += [metadata_name(d) for d in self.kube.items("deployments", namespace=namespace)]
-        return names
+        return [metadata_name(d) for d in self.items("deployments")]
 
     @cached_property
     def capabilities(self) -> Capabilities:

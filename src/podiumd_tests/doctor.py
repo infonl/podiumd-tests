@@ -84,16 +84,16 @@ def _cluster(env: Environment) -> list[Check]:
             checks.append(Check(f"namespace {namespace}", "fail", str(exc)))
             continue
         checks.append(Check(f"namespace {namespace}", "ok"))
-        checks.append(_deployments(env, namespace))
+        checks.append(_workloads(env, namespace))
     return checks
 
 
-def _deployments(env: Environment, namespace: str) -> Check:
-    items = env.kube.items("deployments", namespace=namespace)
+def _workloads(env: Environment, namespace: str) -> Check:
+    items = env.workloads([namespace])
     not_ready = unready_workloads(items)
     if not_ready:
-        return Check(f"deployments {namespace}", "warn", "not ready: " + ", ".join(not_ready))
-    return Check(f"deployments {namespace}", "ok", f"{len(items)} ready")
+        return Check(f"workloads {namespace}", "warn", "not ready: " + ", ".join(not_ready))
+    return Check(f"workloads {namespace}", "ok", f"{len(items)} ready")
 
 
 def _getaddrinfo(host: str) -> None:
