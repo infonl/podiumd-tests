@@ -198,11 +198,11 @@ sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 # code used only by its own unit test is still dead. False positives:
 #   - pytest_* hooks, test_* functions, pytestmark and @pytest.fixture functions: used by pytest.
 #   - __call__ of a callable Protocol (process.Runner): called through the protocol.
-#   - wait_until, tagged, password_grant: library API without a caller in tests/.
+#   - wait_until, tagged: library API without a caller in tests/.
 [tool.vulture]
 # Django snippets: run() is called inside the component, not from here.
 exclude = ["*/snippets/[a-z]*.py"]
-ignore_names = ["pytest_*", "test_*", "pytestmark", "__call__", "wait_until", "tagged", "password_grant"]
+ignore_names = ["pytest_*", "test_*", "pytestmark", "__call__", "wait_until", "tagged"]
 ignore_decorators = ["@pytest.fixture"]
 
 [tool.bandit]
