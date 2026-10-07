@@ -42,6 +42,15 @@ def manifests() -> list[dict[str, object]]:
     return docs
 
 
+def _entry(line: str) -> JsonObject | None:
+    """One recorded request; None for a line cut short by a failed or ongoing write."""
+    try:
+        found: object = json.loads(line)
+    except ValueError:
+        return None
+    return cast("JsonObject", found) if isinstance(found, dict) else None
+
+
 @dataclass(frozen=True)
 class Callback:
     """One test's callback path on the receiver."""
@@ -62,8 +71,7 @@ class Callback:
     def received(self) -> list[JsonObject]:
         """Everything the receiver got on this path, oldest first."""
         out = self.env.kube.exec(NAME, "sh", "-c", f"cat {RECEIVED_FILE} 2>/dev/null || true")
-        entries = [cast("JsonObject", json.loads(line)) for line in out.splitlines() if line.strip()]
-        return [e for e in entries if e.get("path") == self.path]
+        return [e for e in map(_entry, out.splitlines()) if e is not None and e.get("path") == self.path]
 
     def wait_for(self, match: Callable[[JsonObject], bool], *, timeout: float, description: str) -> JsonObject:
         """The first received entry that matches; WaitTimeoutError when none arrives in time."""

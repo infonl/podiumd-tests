@@ -13,7 +13,9 @@ import time
 from http.server import BaseHTTPRequestHandler
 from http.server import ThreadingHTTPServer
 from pathlib import Path
+from threading import Lock
 
+WRITE_LOCK = Lock()
 RECEIVED = Path(os.environ.get("RECEIVED_FILE", "/data/received.jsonl"))
 
 
@@ -33,8 +35,15 @@ class Handler(BaseHTTPRequestHandler):
             "authorization": self.headers.get("Authorization"),
             "body": parsed,
         }
-        with RECEIVED.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(entry) + "\n")
+        try:
+            # One write per request under a lock: parallel requests never interleave lines.
+            with WRITE_LOCK, RECEIVED.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(entry) + "\n")
+        except OSError:
+            # Not recorded (e.g. a full disk): say so instead of dropping the connection.
+            self.send_response(507)
+            self.end_headers()
+            return
         self.send_response(204 if entry["authorization"] else 403)
         self.end_headers()
 

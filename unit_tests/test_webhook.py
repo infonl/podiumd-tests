@@ -64,3 +64,9 @@ def test_remove_deletes_service_first(env_factory, fake_runner):
     assert WebhookReceiver().remove(ctx_for(env_factory())) == ()
     deleted = [call[call.index("delete") + 1] for call in fake_runner.calls]
     assert deleted == ["service", "deployment", "configmap"]
+
+
+def test_callback_skips_a_line_cut_short(env_factory, fake_runner):
+    good = {"path": "/run1/abc", "body": {}}
+    fake_runner.answers[f"exec deploy/{NAME}"] = (0, json.dumps(good) + '\n{"path": "/run1/abc", "bo')
+    assert Callback(env_factory(), "/run1/abc").received() == [good]
