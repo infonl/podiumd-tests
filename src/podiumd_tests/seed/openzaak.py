@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import base64
+import secrets
+
+from dataclasses import dataclass
 from datetime import UTC
 from datetime import datetime
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 from podiumd_tests.bootstrap.steps import TEST_CATALOGUS_RSIN
+from podiumd_tests.json_data import strings
 
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
@@ -29,6 +35,20 @@ def _create(openzaak: ApiClient, registry: ResourceRegistry, path: str, body: di
     return created
 
 
+def delete_zaak(openzaak: ApiClient, url: str) -> None:
+    """DELETE a zaak.
+
+    Open Zaak 1.29.3 answers 500 on deleting a zaak with a resultaat although it deletes it
+    (the ETag of the deleted resultaat is recalculated; test_closed_zaak_delete_answers_204
+    tracks it). A 500 counts as deleted only when the zaak is gone.
+    """
+    response = openzaak.request(
+        "DELETE", url, HTTPStatus.NO_CONTENT, HTTPStatus.NOT_FOUND, HTTPStatus.INTERNAL_SERVER_ERROR
+    )
+    if response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:
+        openzaak.request("GET", url, HTTPStatus.NOT_FOUND)
+
+
 def make_zaak(openzaak: ApiClient, registry: ResourceRegistry, zaaktype: str, **fields: object) -> JsonObject:
     """A zaak of a zaaktype whose omschrijving carries the run tag; fields override the defaults."""
     body: dict[str, object] = {
@@ -40,4 +60,153 @@ def make_zaak(openzaak: ApiClient, registry: ResourceRegistry, zaaktype: str, **
         "vertrouwelijkheidaanduiding": "openbaar",
         **fields,
     }
-    return _create(openzaak, registry, f"{ZAKEN}/zaken", body)
+    zaak = openzaak.post(f"{ZAKEN}/zaken", body)
+    url = str(zaak["url"])
+    registry.add(f"zaak {url}", lambda: delete_zaak(openzaak, url))
+    return zaak
+
+
+DOCUMENTEN = "documenten/api/v1"
+BESLUITEN = "besluiten/api/v1"
+
+
+@dataclass(frozen=True)
+class ZaaktypeParts:
+    """The types configured on a zaaktype, looked up once."""
+
+    zaaktype: str
+    statustypen: list[JsonObject]  # by volgnummer; the last is the eindstatus
+    roltypen: dict[str, str]  # omschrijvingGeneriek -> url
+    informatieobjecttype: str
+    eigenschappen: dict[str, str]  # naam -> url
+    besluittype: str
+    resultaattypen: list[str]
+
+
+def zaaktype_parts(openzaak: ApiClient, zaaktype: JsonObject) -> ZaaktypeParts:
+    """Look up the statustypen, roltypen, informatieobjecttype, eigenschappen, besluittype and resultaattypen."""
+    url = str(zaaktype["url"])
+    statustypen = sorted(
+        openzaak.list(f"{CATALOGI}/statustypen", {"zaaktype": url}), key=lambda s: int(str(s["volgnummer"]))
+    )
+    roltypen = {
+        str(r["omschrijvingGeneriek"]): str(r["url"]) for r in openzaak.list(f"{CATALOGI}/roltypen", {"zaaktype": url})
+    }
+    eigenschappen = {
+        str(e["naam"]): str(e["url"]) for e in openzaak.list(f"{CATALOGI}/eigenschappen", {"zaaktype": url})
+    }
+    besluittypen = openzaak.list(f"{CATALOGI}/besluittypen", {"zaaktypen": url})
+    resultaattypen = [str(r["url"]) for r in openzaak.list(f"{CATALOGI}/resultaattypen", {"zaaktype": url})]
+    iots = strings(zaaktype.get("informatieobjecttypen"))
+    return ZaaktypeParts(
+        url, statustypen, roltypen, iots[0], eigenschappen, str(besluittypen[0]["url"]), resultaattypen
+    )
+
+
+def make_status(openzaak: ApiClient, zaak: JsonObject, statustype: str, toelichting: str = "") -> JsonObject:
+    """A status of a zaak; deleted with the zaak."""
+    body = {
+        "zaak": zaak["url"],
+        "statustype": statustype,
+        "datumStatusGezet": datetime.now(tz=UTC).isoformat(),
+        "statustoelichting": toelichting,
+    }
+    return openzaak.post(f"{ZAKEN}/statussen", body)
+
+
+def make_rol(
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    zaak: JsonObject,
+    roltype: str,
+    betrokkene_type: str = "natuurlijk_persoon",
+    **identificatie: object,
+) -> JsonObject:
+    """A rol on a zaak; identificatie is the betrokkeneIdentificatie (e.g. inpBsn=...)."""
+    body: dict[str, object] = {
+        "zaak": zaak["url"],
+        "betrokkeneType": betrokkene_type,
+        "roltype": roltype,
+        "roltoelichting": registry.tagged("rol"),
+        "betrokkeneIdentificatie": identificatie,
+    }
+    return _create(openzaak, registry, f"{ZAKEN}/rollen", body)
+
+
+def make_document(
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    informatieobjecttype: str,
+    inhoud: str = "podiumd-tests",
+    **fields: object,
+) -> JsonObject:
+    """An enkelvoudig informatieobject with text inhoud whose titel carries the run tag."""
+    body: dict[str, object] = {
+        "bronorganisatie": TEST_CATALOGUS_RSIN,
+        "creatiedatum": today(),
+        "titel": registry.tagged("document"),
+        "auteur": "podiumd-tests",
+        "taal": "dut",
+        "bestandsnaam": "ptest.txt",
+        "formaat": "text/plain",
+        "informatieobjecttype": informatieobjecttype,
+        "inhoud": base64.b64encode(inhoud.encode()).decode(),
+        "bestandsomvang": len(inhoud.encode()),
+        "indicatieGebruiksrecht": False,
+        "vertrouwelijkheidaanduiding": "openbaar",
+        **fields,
+    }
+    return _create(openzaak, registry, f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", body)
+
+
+def link_document(
+    openzaak: ApiClient, registry: ResourceRegistry, zaak: JsonObject, document: JsonObject
+) -> JsonObject:
+    """A zaakinformatieobject linking a document to a zaak."""
+    body = {"zaak": zaak["url"], "informatieobject": document["url"], "titel": registry.tagged("koppeling")}
+    return _create(openzaak, registry, f"{ZAKEN}/zaakinformatieobjecten", body)
+
+
+def make_besluit(openzaak: ApiClient, registry: ResourceRegistry, besluittype: str, **fields: object) -> JsonObject:
+    """A besluit of a besluittype whose toelichting carries the run tag."""
+    body: dict[str, object] = {
+        "verantwoordelijkeOrganisatie": TEST_CATALOGUS_RSIN,
+        "besluittype": besluittype,
+        "datum": today(),
+        "ingangsdatum": today(),
+        "toelichting": registry.tagged("besluit"),
+        **fields,
+    }
+    return _create(openzaak, registry, f"{BESLUITEN}/besluiten", body)
+
+
+def make_concept_zaaktype(
+    openzaak: ApiClient, registry: ResourceRegistry, catalogus: str, **fields: object
+) -> JsonObject:
+    """A concept zaaktype in a catalogus; concepts can be deleted, published zaaktypen cannot."""
+    body: dict[str, object] = {
+        "identificatie": registry.tagged(f"zaaktype-{secrets.token_hex(3)}"),
+        "omschrijving": "podiumd-tests concept",
+        "vertrouwelijkheidaanduiding": "openbaar",
+        "doel": "podiumd-tests",
+        "aanleiding": "podiumd-tests",
+        "indicatieInternOfExtern": "extern",
+        "handelingInitiator": "Indienen",
+        "onderwerp": "Test",
+        "handelingBehandelaar": "Behandelen",
+        "doorlooptijd": "P30D",
+        "opschortingEnAanhoudingMogelijk": False,
+        "verlengingMogelijk": False,
+        "publicatieIndicatie": False,
+        "productenOfDiensten": [],
+        "referentieproces": {"naam": "podiumd-tests"},
+        "verantwoordelijke": TEST_CATALOGUS_RSIN,
+        "beginGeldigheid": today(),
+        "versiedatum": today(),
+        "catalogus": catalogus,
+        "besluittypen": [],
+        "deelzaaktypen": [],
+        "gerelateerdeZaaktypen": [],
+        **fields,
+    }
+    return _create(openzaak, registry, f"{CATALOGI}/zaaktypen", body)

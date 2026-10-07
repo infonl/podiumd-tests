@@ -36,10 +36,13 @@ class ApiClient:
         """Absolute URL of a path below the API root; absolute URLs pass unchanged."""
         return path if path.startswith(("http://", "https://")) else f"{self.base_url}/{path.lstrip('/')}"
 
+    def headers(self) -> dict[str, str]:
+        """The headers for the next request."""
+        return self._headers() if callable(self._headers) else self._headers
+
     def request(self, method: str, path: str, *expected: int, **kwargs: object) -> requests.Response:
         """Send a request; UnexpectedStatusError unless its status is one of expected."""
-        headers = self._headers() if callable(self._headers) else self._headers
-        response = self.http.request(method, self.url(path), headers=headers, **kwargs)  # pyright: ignore[reportArgumentType]
+        response = self.http.request(method, self.url(path), headers=self.headers(), **kwargs)  # pyright: ignore[reportArgumentType]
         return expect_status(response, *expected)
 
     def get(self, path: str, params: dict[str, str] | None = None) -> JsonObject:

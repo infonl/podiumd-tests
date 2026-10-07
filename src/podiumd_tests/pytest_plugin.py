@@ -22,12 +22,18 @@ from podiumd_tests.bootstrap.steps import OPENKLANT_STORE_KEY
 from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.bootstrap.steps import TEST_ZAAKTYPE
 from podiumd_tests.bootstrap.steps import ZGW_CLIENT_ID
+from podiumd_tests.bootstrap.steps import ZGW_NOAUTH_CLIENT_ID
+from podiumd_tests.bootstrap.steps import ZGW_NOAUTH_STORE_KEY
+from podiumd_tests.bootstrap.steps import ZGW_OPENBAAR_CLIENT_ID
+from podiumd_tests.bootstrap.steps import ZGW_OPENBAAR_STORE_KEY
 from podiumd_tests.bootstrap.steps import ZGW_STORE_KEY
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
 from podiumd_tests.seed.openzaak import CATALOGI
+from podiumd_tests.seed.openzaak import ZaaktypeParts
+from podiumd_tests.seed.openzaak import zaaktype_parts
 from podiumd_tests.seed.registry import ResourceRegistry
 
 if TYPE_CHECKING:
@@ -152,15 +158,41 @@ def fixture_openklant(podiumd_env: Environment, need_bootstrap: Callable[..., No
     return ApiClient(podiumd_env.session(cookies=False), url, {"Authorization": f"Token {token}"})
 
 
+def _zgw_client(
+    podiumd_env: Environment, need_bootstrap: Callable[..., None], step: str, client_id: str, key: str
+) -> ApiClient:
+    need_bootstrap(step)
+    secret = podiumd_env.credentials.get(key)
+    session = podiumd_env.session(cookies=False)
+    return ApiClient(session, podiumd_env.profile.urls["openzaak"], lambda: zgw_headers(zgw_jwt(client_id, secret)))
+
+
 @pytest.fixture(scope="session", name="openzaak")
 def fixture_openzaak(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Open Zaak's ZGW APIs as the suite's own client, with a fresh token per request."""
+    return _zgw_client(podiumd_env, need_bootstrap, "openzaak-client", ZGW_CLIENT_ID, ZGW_STORE_KEY)
+
+
+@pytest.fixture(scope="session", name="zgw_secret")
+def fixture_zgw_secret(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> str:
+    """The secret of the suite's own ZGW client, for tests that build their own tokens."""
     need_bootstrap("openzaak-client")
-    secret = podiumd_env.credentials.get(ZGW_STORE_KEY)
-    return ApiClient(
-        podiumd_env.session(cookies=False),
-        podiumd_env.profile.urls["openzaak"],
-        lambda: zgw_headers(zgw_jwt(ZGW_CLIENT_ID, secret)),
+    return podiumd_env.credentials.get(ZGW_STORE_KEY)
+
+
+@pytest.fixture(scope="session", name="openzaak_openbaar")
+def fixture_openzaak_openbaar(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
+    """Open Zaak as a client that sees vertrouwelijkheid openbaar at most and cannot delete."""
+    return _zgw_client(
+        podiumd_env, need_bootstrap, "openzaak-client-openbaar", ZGW_OPENBAAR_CLIENT_ID, ZGW_OPENBAAR_STORE_KEY
+    )
+
+
+@pytest.fixture(scope="session", name="openzaak_noauth")
+def fixture_openzaak_noauth(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
+    """Open Zaak as a known client without any autorisatie."""
+    return _zgw_client(
+        podiumd_env, need_bootstrap, "openzaak-client-noauth", ZGW_NOAUTH_CLIENT_ID, ZGW_NOAUTH_STORE_KEY
     )
 
 
@@ -170,6 +202,12 @@ def fixture_test_zaaktype(openzaak: ApiClient, need_bootstrap: Callable[..., Non
     need_bootstrap("openzaak-zaaktype")
     found = openzaak.list(f"{CATALOGI}/zaaktypen", {"identificatie": TEST_ZAAKTYPE})
     return found[0]
+
+
+@pytest.fixture(scope="session", name="parts")
+def fixture_parts(openzaak: ApiClient, test_zaaktype: JsonObject) -> ZaaktypeParts:
+    """The statustypen, roltypen and other types of the test zaaktype."""
+    return zaaktype_parts(openzaak, test_zaaktype)
 
 
 @pytest.fixture(name="registry")
