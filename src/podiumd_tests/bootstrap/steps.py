@@ -70,7 +70,7 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
 
     def _run(self, ctx: Context, action: str, **extra: object) -> dict[str, object]:
         deployment = ctx.env.deployment_for(self.requires[0])
-        runtime = self.context_params(ctx) if self.context_params and action != "status" else {}
+        runtime = self.context_params(ctx) if self.context_params else {}
         params = {**self.params, **runtime, "action": action, **extra}
         return cast("dict[str, object]", run_snippet(ctx.env.kube, deployment, self.snippet, params))
 
@@ -188,7 +188,7 @@ def openformulieren_params(ctx: Context) -> dict[str, object]:
     env = ctx.env
     default = f"http://{env.deployment_for('openzaak')}.{env.profile.kube.namespace}"
     return {
-        "secret": ctx.store.read()[ZGW_STORE_KEY],
+        "secret": ctx.store.read().get(ZGW_STORE_KEY, ""),  # empty only before openzaak-client ran
         "openzaak_url": env.profile.settings.get("openzaak_internal_url", default),
     }
 
@@ -234,6 +234,18 @@ STEPS: tuple[Step, ...] = (
         },
     ),
     # Platform wiring (PLAN.md §4 A2).
+    SnippetStep(
+        "openzaak-of-autorisatie",
+        ("openzaak", "openformulieren"),
+        "catalogus_autorisatie",
+        "ptest_bootstrap_of_autorisatie_record",
+        {"domein": TEST_CATALOGUS_DOMEIN, "rsin": TEST_CATALOGUS_RSIN},
+        record=True,
+        wiring=True,
+        context_params=lambda ctx: {
+            "client_id": ctx.env.profile.settings.get("openformulieren_zgw_client_id", "open-formulieren")
+        },
+    ),
     SnippetStep(
         "openformulieren-form",
         ("openformulieren", "openzaak"),
