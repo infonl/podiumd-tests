@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from typing import cast
 
 from podiumd_tests.auth.keycloak import PasswordLogin
+from podiumd_tests.auth.keycloak import admin_realm_url
 from podiumd_tests.auth.keycloak import password_grant
 from podiumd_tests.responses import expect_status
 
@@ -26,7 +27,7 @@ class KeycloakAdmin:
 
     def __init__(self, http: requests.Session, url: str, realm: str, admin: tuple[str, str]) -> None:
         self.http = http
-        self.base = f"{url}/admin/realms/{realm}"
+        self.base = admin_realm_url(url, realm)
         token = password_grant(http, url, "master", PasswordLogin("admin-cli", *admin))
         self.headers = {"Authorization": f"Bearer {token}"}
 

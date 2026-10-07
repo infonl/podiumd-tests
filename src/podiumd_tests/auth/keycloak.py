@@ -17,6 +17,11 @@ def realm_url(keycloak_url: str, realm: str, path: str = "") -> str:
     return f"{keycloak_url}/realms/{realm}{path}"
 
 
+def admin_realm_url(keycloak_url: str, realm: str) -> str:
+    """URL of a realm in the Keycloak admin REST API."""
+    return f"{keycloak_url}/admin/realms/{realm}"
+
+
 def discovery_url(keycloak_url: str, realm: str) -> str:
     """URL of a realm's OIDC discovery document."""
     return realm_url(keycloak_url, realm, "/.well-known/openid-configuration")
