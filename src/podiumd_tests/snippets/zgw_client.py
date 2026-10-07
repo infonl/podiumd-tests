@@ -6,7 +6,7 @@ Open Zaak optionally catalogus, rights limited to the test catalogus (PLAN.md §
 {domein, rsin, owns (creates the catalogus; on remove deletes it with all its zaken),
 components ({component: [scope prefix, ...]}), exclude (scope words left out), max_va}; and
 optionally zaaktypen, Zaken API rights on every version of zaaktypen the environment owns:
-{identificaties, scopes, max_va}.
+{identificaties, scopes, max_va, base_url (Open Zaak's URL as the client calls it)}.
 """
 
 
@@ -48,17 +48,17 @@ def run(params):
 
 def _zaaktype_autorisaties(applicatie, zaaktypen_params):
     from openzaak.components.catalogi.models import ZaakType
-    from openzaak.utils import build_absolute_url
     from vng_api_common.authorizations.models import Autorisatie
 
     wanted = zaaktypen_params["identificaties"]
     found = ZaakType.objects.filter(identificatie__in=wanted, concept=False)
     for zaaktype in found:
-        # Open Zaak resolves a local zaaktype URL by its path; the host must be in ALLOWED_HOSTS.
+        # Open Zaak compares this URL with the zaaktype URL it builds from the request's own
+        # scheme and host, so it must be the URL the client calls Open Zaak on.
         Autorisatie.objects.create(
             applicatie=applicatie,
             component="zrc",
-            zaaktype=build_absolute_url(zaaktype.get_absolute_api_url()),
+            zaaktype=zaaktypen_params["base_url"].rstrip("/") + zaaktype.get_absolute_api_url(),
             scopes=zaaktypen_params["scopes"],
             max_vertrouwelijkheidaanduiding=zaaktypen_params["max_va"],
         )

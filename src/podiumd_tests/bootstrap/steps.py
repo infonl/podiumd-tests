@@ -347,6 +347,7 @@ def productaanvraag_zaaktypen(ctx: Context) -> dict[str, object]:
             "identificaties": [zaaktype],
             "scopes": ["zaken.lezen", "zaken.verwijderen"],
             "max_va": "zeer_geheim",
+            "base_url": ctx.env.profile.urls["openzaak"],
         }
     }
 

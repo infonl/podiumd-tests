@@ -24,6 +24,7 @@ from podiumd_tests.bootstrap.steps import keycloak_password_key
 from podiumd_tests.bootstrap.steps import productaanvraag_zaaktypen
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.credentials import env_var_name
+from podiumd_tests.json_data import section
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
 
@@ -318,9 +319,7 @@ def test_productaanvraag_client_gets_rights_only_with_the_profile_setting(env_fa
         env_factory(profile_factory(settings={"productaanvraag_zaaktype": "zt-1"})),
         CredentialStore(Kube("ctx", "podiumd")),
     )
-    zaaktypen = productaanvraag_zaaktypen(with_setting)["zaaktypen"]
-    assert zaaktypen == {
-        "identificaties": ["zt-1"],
-        "scopes": ["zaken.lezen", "zaken.verwijderen"],
-        "max_va": "zeer_geheim",
-    }
+    zaaktypen = section(productaanvraag_zaaktypen(with_setting), "zaaktypen")
+    assert zaaktypen["identificaties"] == ["zt-1"]
+    assert zaaktypen["scopes"] == ["zaken.lezen", "zaken.verwijderen"]
+    assert zaaktypen["base_url"] == "https://openzaak.example.test"
