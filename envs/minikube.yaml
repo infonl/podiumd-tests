@@ -1,5 +1,5 @@
-# podiumd-minikube (infonl/podiumd-minikube): *.local hosts through the Traefik
-# LoadBalancer IP (`minikube tunnel`), so no /etc/hosts edits are needed.
+# podiumd-minikube (infonl/podiumd-minikube): *.local hosts through the NGINX Gateway Fabric
+# LoadBalancer IP (`minikube tunnel`), as ExternalsPodiumD's edge; no /etc/hosts edits needed.
 estate: minikube
 allowed_tiers: [smoke, core, full, perf, chaos]
 kube:
@@ -8,8 +8,8 @@ kube:
 access:
   mode: host-header
   ingress_service:
-    namespace: traefik
-    name: traefik
+    namespace: ingress-basic
+    name: public-gateway-nginx
   # podiumd-minikube's local CA plus the system CAs, as its pods trust them.
   ca_bundle:
     configmap: podiumd-ca
