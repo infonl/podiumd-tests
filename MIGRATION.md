@@ -34,7 +34,7 @@ Sources:
 | `interaction/162-portaal-document-upload-e2e.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/164-portaal-vraag-stellen-vanuit-zaak.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/168-oab-archivist-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
-| `interaction/180-ita-contactmoment-afsluiten.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/ita/test_internetaken.py`; closing via an Open Klant PATCH is not ITA and is dropped. |
+| `interaction/180-ita-contactmoment-afsluiten.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/ita/test_ita_internetaken.py`; closing via an Open Klant PATCH is not ITA and is dropped. |
 | `interaction/181-keten-ita-contactmoment-portaal-beantwoord.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/182-keten-contactformulier-mijn-vragen.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/20-klacht-journey-e2e.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
@@ -42,7 +42,7 @@ Sources:
 | `interaction/31-document-portaal-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/32-of-submission-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/35-ok2-partij-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openklant/` test_partijen.py: persoon with BSN and e-mail. |
-| `interaction/74-ita-claim-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/ita/test_internetaken.py`, with a numeric nummer. |
+| `interaction/74-ita-claim-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/ita/test_ita_internetaken.py`, with a numeric nummer. |
 | `interaction/76-of-submission-end-to-end.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/integration/test_formulier_zaak.py`: submission through the SDK API, zaak and PDF in Open Zaak. |
 | `interaction/78-ita-add-klantcontact.spec.ts` | component or integration, marker `core` | 3/4/5 | drop | Superseded by 180 (outdated body). |
 | `maintenance/cleanup-test-zaken.spec.ts` | `podiumd-tests sweep` (CLI, not a test) | 2 | replace | |
@@ -110,7 +110,7 @@ Sources:
 | `regression/179-portaal-profiel-naar-openklant.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/18-klantcontact-zaak-koppeling.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_klantcontact_zaak.py`. |
 | `regression/183-of-digid-zaak-rol.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/184-ita-doorsturen-mutatie.spec.ts` | component or integration | 3/4/5 | port | `tests/component/ita/test_internetaken.py`; ITA wants `{"afdeling"|"groep": identificatie}`, TA's actorType body gets 400. |
+| `regression/184-ita-doorsturen-mutatie.spec.ts` | component or integration | 3/4/5 | port | `tests/component/ita/test_ita_internetaken.py`; ITA wants `{"afdeling"|"groep": identificatie}`, TA's actorType body gets 400. |
 | `regression/185-of-betaalstatus-zaak.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/19-notificaties-e2e.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_zaak_notificaties.py`, with the webhook receiver of `infra/`. |
 | `regression/190-kiss-contentbronnen-gevuld.spec.ts` | component or integration | 3/4/5 | todo | |
@@ -162,11 +162,11 @@ Sources:
 | `regression/69-pabc-domains-entity-types.spec.ts` | component or integration | 3/4/5 | port | `tests/component/pabc/test_management.py`. |
 | `regression/70-pabc-groups-lookup.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/71-pabc-zac-integration-coherence.spec.ts` | component or integration | 3/4/5 | port | `tests/component/pabc/test_management.py`. |
-| `regression/73-ita-assigned-list.spec.ts` | component or integration | 3/4/5 | merge | Into the claim test of `tests/component/ita/test_internetaken.py`. |
+| `regression/73-ita-assigned-list.spec.ts` | component or integration | 3/4/5 | merge | Into the claim test of `tests/component/ita/test_ita_internetaken.py`. |
 | `regression/75-ita-forward-flow.spec.ts` | component or integration | 3/4/5 | drop | Superseded by 184. |
 | `regression/75-of-zaaktype-matching.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/76-ita-close-with-klantcontact.spec.ts` | component or integration | 3/4/5 | drop | The route does not exist (405); covered by 180. |
-| `regression/77-ita-afdelingen-groepen.spec.ts` | component or integration | 3/4/5 | port | `tests/component/ita/test_internetaken.py`. |
+| `regression/77-ita-afdelingen-groepen.spec.ts` | component or integration | 3/4/5 | port | `tests/component/ita/test_ita_internetaken.py`. |
 | `regression/79-of-form-cosign-config.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/80-brp-kvk-prefill-foutpaden.spec.ts` | component or integration | 3/4/5 | port | BRP parts → `test_brp.py`, basisprofiel → `test_kvk.py`; the KvK key and name searches need the KvK test set. |
 | `regression/80-omc-listen-event.spec.ts` | component or integration | 3/4/5 | todo | |

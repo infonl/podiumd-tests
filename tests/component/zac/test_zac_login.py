@@ -34,5 +34,5 @@ def test_login_shows_the_dashboard(
     keycloak_login(page, ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
     expect(page).to_have_url(re.compile(re.escape(urls["zac"])))
     # The navigation only renders once the SPA has loaded the user's rights.
-    expect(page.get_by_role("button", name="Dashboard")).to_be_visible()
-    expect(page.get_by_role("button", name="Menu voor zaken")).to_be_visible()
+    expect(page.get_by_role("button", name="Dashboard", exact=True)).to_be_visible()
+    expect(page.get_by_role("button", name="Menu voor zaken", exact=True)).to_be_visible()
