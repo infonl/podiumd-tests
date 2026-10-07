@@ -52,6 +52,8 @@ def _remove_catalogus(catalogus_params):
 
 
 def _catalogus_autorisaties(applicatie, catalogus_params):
+    import importlib
+
     from openzaak.components.autorisaties.models import CatalogusAutorisatie
     from openzaak.components.catalogi.models import Catalogus
     from vng_api_common.scopes import SCOPE_REGISTRY
@@ -64,7 +66,11 @@ def _catalogus_autorisaties(applicatie, catalogus_params):
         )
     else:
         catalogus = _catalogi(catalogus_params).get()
-    labels = {scope.label for scope in SCOPE_REGISTRY}
+    # Open Zaak registers an API's scopes when its scopes module is imported; a shell imports none.
+    for component in ("zaken", "documenten", "besluiten", "catalogi", "autorisaties"):
+        importlib.import_module(f"openzaak.components.{component}.api.scopes")
+    # Atomic scopes only: a scope with children is a combination such as "zaken.aanmaken | zaken.bijwerken".
+    labels = {scope.label for scope in SCOPE_REGISTRY if not getattr(scope, "children", None)}
     excluded = catalogus_params["exclude"]
     for component, prefixes in catalogus_params["components"].items():
         scopes = sorted(
