@@ -11,7 +11,7 @@ from datetime import datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
-from podiumd_tests.bootstrap.steps import TEST_CATALOGUS_RSIN
+from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.json_data import strings
 
 if TYPE_CHECKING:

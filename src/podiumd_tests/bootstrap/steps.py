@@ -13,8 +13,33 @@ from typing import cast
 
 from podiumd_tests.auth.keycloak_admin import for_environment
 from podiumd_tests.auth.keycloak_admin import user_email
+from podiumd_tests.bootstrap.names import CATALOGI_SCOPES
+from podiumd_tests.bootstrap.names import ITA_OBJECTTYPES
+from podiumd_tests.bootstrap.names import KANALEN
+from podiumd_tests.bootstrap.names import NRC_CLIENT_ID
+from podiumd_tests.bootstrap.names import NRC_STORE_KEY
+from podiumd_tests.bootstrap.names import OBJECTEN_STORE_KEY
+from podiumd_tests.bootstrap.names import OPENKLANT_STORE_KEY
+from podiumd_tests.bootstrap.names import PREFIX
+from podiumd_tests.bootstrap.names import PRODUCTAANVRAAG_OBJECTTYPE
+from podiumd_tests.bootstrap.names import TEST_BESLUITTYPE
+from podiumd_tests.bootstrap.names import TEST_CATALOGUS_DOMEIN
+from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
+from podiumd_tests.bootstrap.names import TEST_FORM
+from podiumd_tests.bootstrap.names import TEST_IOT
+from podiumd_tests.bootstrap.names import TEST_ZAAKTYPE
+from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
+from podiumd_tests.bootstrap.names import ZGW_COMPONENTS
+from podiumd_tests.bootstrap.names import ZGW_NOAUTH_CLIENT_ID
+from podiumd_tests.bootstrap.names import ZGW_NOAUTH_STORE_KEY
+from podiumd_tests.bootstrap.names import ZGW_OPENBAAR_CLIENT_ID
+from podiumd_tests.bootstrap.names import ZGW_OPENBAAR_STORE_KEY
+from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_CLIENT_ID
+from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_STORE_KEY
+from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.oidc_mock import KeycloakOidcMock
 from podiumd_tests.bootstrap.oidc_mock import oidc_params
+from podiumd_tests.bootstrap.omc import OmcAbonnement
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
@@ -27,48 +52,6 @@ if TYPE_CHECKING:
 
     from podiumd_tests.bootstrap import Context
     from podiumd_tests.bootstrap import Step
-
-PREFIX = "ptest-bootstrap"
-# The suite's own ZGW client in Open Zaak, and its test catalogus: the client may only touch
-# zaken, documenten and besluiten of zaaktypen in that catalogus (PLAN.md §11a).
-ZGW_CLIENT_ID = "ptest-bootstrap-zgw"
-ZGW_STORE_KEY = "ptest_bootstrap_zgw_secret"
-ZGW_OPENBAAR_CLIENT_ID = "ptest-bootstrap-zgw-openbaar"
-ZGW_OPENBAAR_STORE_KEY = "ptest_bootstrap_zgw_openbaar_secret"
-ZGW_NOAUTH_CLIENT_ID = "ptest-bootstrap-zgw-noauth"
-ZGW_NOAUTH_STORE_KEY = "ptest_bootstrap_zgw_noauth_secret"
-# Scope prefixes per component on the test catalogus, and the Catalogi API scopes.
-ZGW_COMPONENTS: dict[str, tuple[str, ...]] = {
-    "zrc": ("zaken.", "audittrails."),
-    "drc": ("documenten.", "audittrails."),
-    "brc": ("besluiten.", "audittrails."),
-}
-CATALOGI_SCOPES = ("catalogi.lezen", "catalogi.schrijven")
-TEST_CATALOGUS_DOMEIN = "PTEST"
-TEST_CATALOGUS_RSIN = "000000000"
-# The suite's client in Open Notificaties: publishes and subscribes.
-NRC_CLIENT_ID = "ptest-bootstrap-nrc"
-NRC_STORE_KEY = "ptest_bootstrap_nrc_secret"
-# Test zaaktype and informatieobjecttype in the test catalogus (TA TEST-FORMULIER), and the
-# Open Formulieren test form that registers zaken on it (TA poc-klacht-test).
-TEST_ZAAKTYPE = "ptest-bootstrap-klacht"
-TEST_IOT = "ptest-bootstrap-bijlage"
-TEST_BESLUITTYPE = "ptest-bootstrap-besluit"
-TEST_FORM = "ptest-bootstrap-klacht"
-# Open Notificaties kanalen the ported tests subscribe on, with the filters of ExternalsPodiumD
-# and podiumd-infra.
-KANALEN = {"zaken": ["bronorganisatie", "zaaktype", "vertrouwelijkheidaanduiding"]}
-# API tokens (TokenAuth identifier = store key).
-# The productaanvraag chain (Objecten → Open Notificaties → ZAC → Open Zaak) runs on the
-# environment's own wiring: profile settings productaanvraag_type and productaanvraag_zaaktype.
-PRODUCTAANVRAAG_OBJECTTYPE = "Productaanvraag-Dimpact"
-ZGW_PRODUCTAANVRAAG_CLIENT_ID = "ptest-bootstrap-zgw-productaanvraag"
-ZGW_PRODUCTAANVRAAG_STORE_KEY = "ptest_bootstrap_zgw_productaanvraag_secret"
-OBJECTEN_STORE_KEY = "ptest_bootstrap_objecten_token"
-# ITA forwards internetaken to Afdeling and Groep objects and logs each action in an Activiteitenlog
-# object; tests create the first two and clean up all three.
-ITA_OBJECTTYPES = ("Afdeling", "Groep", "Activiteitenlog")
-OPENKLANT_STORE_KEY = "ptest_bootstrap_openklant_token"
 
 
 @dataclass(frozen=True)
@@ -419,6 +402,7 @@ STEPS: tuple[Step, ...] = (
         },
     ),
     # Platform wiring (PLAN.md §4 A2).
+    OmcAbonnement(),
     SnippetStep(
         "openzaak-of-autorisatie",
         ("openzaak", "openformulieren"),

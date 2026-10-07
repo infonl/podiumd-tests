@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.bootstrap.steps import TEST_CATALOGUS_RSIN
+from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.json_data import section
 from podiumd_tests.seed.opennotificaties import make_abonnement
 from podiumd_tests.seed.openzaak import make_zaak

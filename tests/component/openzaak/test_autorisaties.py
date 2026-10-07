@@ -14,7 +14,7 @@ import pytest
 
 from podiumd_tests.auth.zgw_jwt import zgw_headers
 from podiumd_tests.auth.zgw_jwt import zgw_jwt
-from podiumd_tests.bootstrap.steps import ZGW_CLIENT_ID
+from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.seed.openklant import random_bsn
 from podiumd_tests.seed.openzaak import DOCUMENTEN

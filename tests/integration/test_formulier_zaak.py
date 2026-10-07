@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.bootstrap.steps import TEST_FORM
+from podiumd_tests.bootstrap.names import TEST_FORM
 from podiumd_tests.openformulieren import submit
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak

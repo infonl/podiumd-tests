@@ -14,11 +14,11 @@ from podiumd_tests.bootstrap import check
 from podiumd_tests.bootstrap import failed
 from podiumd_tests.bootstrap import refusal
 from podiumd_tests.bootstrap import unbootstrap
+from podiumd_tests.bootstrap.names import OPENKLANT_STORE_KEY
+from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.oidc_mock import KEYCLOAK_STORE_KEY
 from podiumd_tests.bootstrap.oidc_mock import KeycloakOidcMock
-from podiumd_tests.bootstrap.steps import OPENKLANT_STORE_KEY
 from podiumd_tests.bootstrap.steps import STEPS
-from podiumd_tests.bootstrap.steps import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.steps import KeycloakUser
 from podiumd_tests.bootstrap.steps import OpenKlantActor
 from podiumd_tests.bootstrap.steps import SnippetStep

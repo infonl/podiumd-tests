@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.bootstrap.steps import KANALEN
+from podiumd_tests.bootstrap.names import KANALEN
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import strings
 from podiumd_tests.seed.opennotificaties import CALLBACK_AUTH

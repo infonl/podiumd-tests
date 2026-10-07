@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.bootstrap.steps import PRODUCTAANVRAAG_OBJECTTYPE
+from podiumd_tests.bootstrap.names import PRODUCTAANVRAAG_OBJECTTYPE
 from podiumd_tests.seed.objecten import make_productaanvraag
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openzaak import ZAKEN

@@ -16,12 +16,12 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from podiumd_tests.bootstrap import check
+from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
+from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
+from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_CLIENT_ID
+from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_STORE_KEY
+from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.steps import STEPS
-from podiumd_tests.bootstrap.steps import TEST_CATALOGUS_RSIN
-from podiumd_tests.bootstrap.steps import ZGW_CLIENT_ID
-from podiumd_tests.bootstrap.steps import ZGW_PRODUCTAANVRAAG_CLIENT_ID
-from podiumd_tests.bootstrap.steps import ZGW_PRODUCTAANVRAAG_STORE_KEY
-from podiumd_tests.bootstrap.steps import ZGW_STORE_KEY
 from podiumd_tests.clients.platform import mailpit_client
 from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.clients.platform import openklant_client

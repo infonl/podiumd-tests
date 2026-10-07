@@ -9,10 +9,10 @@ from typing import TYPE_CHECKING
 
 from podiumd_tests.auth.zgw_jwt import zgw_headers
 from podiumd_tests.auth.zgw_jwt import zgw_jwt
-from podiumd_tests.bootstrap.steps import NRC_CLIENT_ID
-from podiumd_tests.bootstrap.steps import NRC_STORE_KEY
-from podiumd_tests.bootstrap.steps import OBJECTEN_STORE_KEY
-from podiumd_tests.bootstrap.steps import OPENKLANT_STORE_KEY
+from podiumd_tests.bootstrap.names import NRC_CLIENT_ID
+from podiumd_tests.bootstrap.names import NRC_STORE_KEY
+from podiumd_tests.bootstrap.names import OBJECTEN_STORE_KEY
+from podiumd_tests.bootstrap.names import OPENKLANT_STORE_KEY
 from podiumd_tests.clients.api import ApiClient
 
 if TYPE_CHECKING:
