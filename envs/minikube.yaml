@@ -15,18 +15,18 @@ access:
     configmap: podiumd-ca
     key: ca-bundle.pem
 urls:
-  zac: http://zac.local
-  keycloak: http://keycloak.local
-  openzaak: http://openzaak.local
-  openklant: http://openklant.local
-  pabc: http://pabc.local
-  objecten: http://objecten.local
-  objecttypen: http://objecttypen.local
-  opennotificaties: http://opennotificaties.local
-  openarchiefbeheer: http://openarchiefbeheer-ui.local
-  openformulieren: http://openformulieren-nginx.local
-  grafana: http://grafana.local
-  mailpit: http://mailpit.local
+  zac: https://zac.local
+  keycloak: https://keycloak.local
+  openzaak: https://openzaak.local
+  openklant: https://openklant.local
+  pabc: https://pabc.local
+  objecten: https://objecten.local
+  objecttypen: https://objecttypen.local
+  opennotificaties: https://opennotificaties.local
+  openarchiefbeheer: https://openarchiefbeheer-ui.local
+  openformulieren: https://openformulieren-nginx.local
+  grafana: https://grafana.local
+  mailpit: https://mailpit.local
 secrets:
   # Well-known dev defaults of podiumd-minikube; the only place literals are allowed (PLAN.md R8).
   keycloak_admin_username:

@@ -23,11 +23,13 @@ def run(params):
         present = applicaties.exists() and secrets.exists()
         if catalogus_params and not _catalogi(catalogus_params).exists():
             present = False
-        if (
-            params.get("zaaktypen")
-            and not Autorisatie.objects.filter(applicatie__in=applicaties, component="zrc").exists()
-        ):
-            present = False
+        zaaktypen_params = params.get("zaaktypen")
+        if zaaktypen_params:
+            # A right on another Open Zaak URL (e.g. http before the switch to https) is stale.
+            prefix = zaaktypen_params["base_url"].rstrip("/") + "/"
+            mine = Autorisatie.objects.filter(applicatie__in=applicaties, component="zrc")
+            if not mine.filter(zaaktype__startswith=prefix).exists():
+                present = False
         return {"present": bool(present)}
     if params["action"] == "remove":
         removed = applicaties.delete()[0] + secrets.delete()[0]

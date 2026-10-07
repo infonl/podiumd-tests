@@ -271,12 +271,15 @@ def keycloak_password_key(key: str) -> str:
 
 
 def openformulieren_params(ctx: Context) -> dict[str, object]:
-    """The ZGW client secret, and Open Zaak's URL as Open Formulieren reaches it in the cluster."""
+    """The ZGW client secret, and Open Zaak's URL as Open Formulieren calls it.
+
+    Default: the profile URL, which is also the URL Open Zaak puts in its own resources; a
+    different api_root would not match the zaaktype URLs Open Zaak returns.
+    """
     env = ctx.env
-    default = f"http://{env.deployment_for('openzaak')}.{env.profile.kube.namespace}"
     return {
         "secret": ctx.store.read().get(ZGW_STORE_KEY, ""),  # empty only before openzaak-client ran
-        "openzaak_url": env.profile.settings.get("openzaak_internal_url", default),
+        "openzaak_url": env.profile.settings.get("openzaak_internal_url", env.profile.urls["openzaak"]),
     }
 
 
@@ -295,9 +298,9 @@ def django_password_key(component: str, key: str) -> str:
 
 
 def notifications_params(ctx: Context) -> dict[str, object]:
-    """The Open Notificaties client secret, and Open Notificaties' URL as other apps reach it in the cluster."""
+    """The Open Notificaties client secret, and its URL as other apps call it (default: the profile URL)."""
     env = ctx.env
-    default = f"http://{env.deployment_for('opennotificaties')}.{env.profile.kube.namespace}/api/v1/"
+    default = env.profile.urls["opennotificaties"] + "/api/v1/"
     return {
         "secret": ctx.store.read().get(NRC_STORE_KEY, ""),  # empty only before opennotificaties-client ran
         "notificaties_url": env.profile.settings.get("opennotificaties_internal_url", default),

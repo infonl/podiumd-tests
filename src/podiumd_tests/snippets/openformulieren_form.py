@@ -17,6 +17,7 @@ def run(params):
     from openforms.forms.models import FormStep
     from openforms.forms.models import FormVariable
     from openforms.registrations.contrib.zgw_apis.models import ZGWApiGroupConfig
+    from openforms.submissions.models import Submission
     from zgw_consumers.models import Service
 
     prefix = params["prefix"]
@@ -26,9 +27,13 @@ def run(params):
     services = Service.objects.filter(slug__startswith=f"{prefix}-")
 
     if params["action"] == "status":
-        present = groups.exists() and forms.filter(active=True, registration_backends__key="zgw").exists()
+        # A group on another Open Zaak URL (e.g. http before the switch to https) is stale.
+        current = groups.filter(zrc_service__api_root__startswith=params["openzaak_url"])
+        present = current.exists() and forms.filter(active=True, registration_backends__key="zgw").exists()
         return {"present": present}
 
+    # Submissions protect their form; those of the test form are test data.
+    Submission.objects.filter(form__in=forms).delete()
     forms.delete()
     FormDefinition.objects.filter(slug=f"{slug}-step").delete()
     groups.delete()
