@@ -14,6 +14,7 @@ from podiumd_tests.seed.openklant import random_bsn
 from podiumd_tests.seed.openklant import random_kvk_nummer
 from podiumd_tests.seed.openzaak import BSN_FILTER
 from podiumd_tests.seed.openzaak import ZAKEN
+from podiumd_tests.seed.openzaak import close_zaak
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
 from podiumd_tests.seed.openzaak import make_zaak
@@ -49,13 +50,7 @@ def test_zaak_closes_with_resultaat_and_eindstatus(
     """With a resultaat and the eindstatus the zaak gets an einddatum and an archiefnominatie (TA reg-39, extended)."""
     if not parts.resultaattypen:
         pytest.skip("test zaaktype has no resultaattype (Selectielijst API was unreachable at bootstrap)")
-    zaak = make_zaak(openzaak, registry, parts.zaaktype)
-    openzaak.post(
-        f"{ZAKEN}/resultaten",
-        {"zaak": zaak["url"], "resultaattype": parts.resultaattypen[0], "toelichting": "afgehandeld"},
-    )
-    make_status(openzaak, zaak, str(parts.statustypen[-1]["url"]), "Afgehandeld")
-    closed = openzaak.get(str(zaak["url"]))
+    closed = close_zaak(openzaak, make_zaak(openzaak, registry, parts.zaaktype), parts)
     assert closed["einddatum"]
     assert closed["archiefnominatie"] == "vernietigen"
     assert closed["archiefactiedatum"]

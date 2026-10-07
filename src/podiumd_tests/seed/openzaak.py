@@ -103,15 +103,30 @@ def zaaktype_parts(openzaak: ApiClient, zaaktype: JsonObject) -> ZaaktypeParts:
     )
 
 
-def make_status(openzaak: ApiClient, zaak: JsonObject, statustype: str, toelichting: str = "") -> JsonObject:
-    """A status of a zaak; deleted with the zaak."""
+def make_status(
+    openzaak: ApiClient, zaak: JsonObject, statustype: str, toelichting: str = "", gezet: datetime | None = None
+) -> JsonObject:
+    """A status of a zaak, set now or at gezet; deleted with the zaak."""
     body = {
         "zaak": zaak["url"],
         "statustype": statustype,
-        "datumStatusGezet": datetime.now(tz=UTC).isoformat(),
+        "datumStatusGezet": (gezet or datetime.now(tz=UTC)).isoformat(),
         "statustoelichting": toelichting,
     }
     return openzaak.post(f"{ZAKEN}/statussen", body)
+
+
+def close_zaak(
+    openzaak: ApiClient, zaak: JsonObject, parts: ZaaktypeParts, gezet: datetime | None = None
+) -> JsonObject:
+    """Close a zaak with the zaaktype's first resultaattype and its eindstatus (at gezet); the closed zaak.
+
+    Open Zaak then sets einddatum, archiefnominatie and archiefactiedatum from the resultaattype.
+    """
+    body = {"zaak": zaak["url"], "resultaattype": parts.resultaattypen[0], "toelichting": "afgehandeld"}
+    openzaak.post(f"{ZAKEN}/resultaten", body)
+    make_status(openzaak, zaak, str(parts.statustypen[-1]["url"]), "Afgehandeld", gezet)
+    return openzaak.get(str(zaak["url"]))
 
 
 # The _zoek and list filter for the BSN of a natuurlijk-persoon rol.

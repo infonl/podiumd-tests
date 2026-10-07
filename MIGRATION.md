@@ -28,12 +28,12 @@ Sources:
 | `interaction/111-portaal-documenten-uploaden.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/140-inwoner-vraag-over-zaak.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/141-bedrijf-eherkenning-mijn-zaken.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
-| `interaction/142-oab-vernietigingslijst.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/142-oab-vernietigingslijst.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openarchiefbeheer/test_vernietigingslijst.py`; the list holds only the test's own zaak, never select_all. |
 | `interaction/145-contact-lookup-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | `tests/component/openklant/`: betrokkenen of a partij, internetaak by klantcontact. |
 | `interaction/148-ita-doorsturen-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | Its afdelingen/groepen reads are in 77 and 184. |
 | `interaction/162-portaal-document-upload-e2e.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/164-portaal-vraag-stellen-vanuit-zaak.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
-| `interaction/168-oab-archivist-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/168-oab-archivist-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | port | Archivist accept → ready_to_delete in `test_vernietigingslijst.py`; review-responses that change archiefactiedatum: todo. |
 | `interaction/180-ita-contactmoment-afsluiten.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/ita/test_ita_internetaken.py`; closing via an Open Klant PATCH is not ITA and is dropped. |
 | `interaction/181-keten-ita-contactmoment-portaal-beantwoord.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/182-keten-contactformulier-mijn-vragen.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
@@ -73,7 +73,7 @@ Sources:
 | `regression/125-kvk-postcode-huisnummer-zoek.spec.ts` | component or integration | 3/4/5 | todo | Needs the KvK test set; minikube's KvK is WireMock with fixed mappings. |
 | `regression/13-va-filter-cross-component.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py, with client ptest-bootstrap-zgw-openbaar. |
 | `regression/14-audit-trail.spec.ts` | component or integration | 3/4/5 | todo | Open Zaak audittrails need heeft_alle_autorisaties (xfail in test_documenten.py); decide on a client with full rights. |
-| `regression/143-oab-vernietigingsflow.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/143-oab-vernietigingsflow.spec.ts` | component or integration | 3/4/5 | port | `test_vernietigingslijst.py`, through the API (make_final works without 2FA here); UI steps: todo. |
 | `regression/143-portaal-document-download.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/144-continuiteit-component-stop.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/146-portaal-uitbreiding.spec.ts` | component or integration | 3/4/5 | todo | |
@@ -94,12 +94,12 @@ Sources:
 | `regression/161-portaal-low-prio-coverage.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/163-portaal-menu-kop-consistency.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/165-portaal-notif-save.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/166-oab-medebeoordelaar.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/166-oab-medebeoordelaar.spec.ts` | component or integration | 3/4/5 | port | `test_vernietigingslijst.py`. |
 | `regression/167-fb-zaaktype-crud-api.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_catalogi.py: concept zaaktype CRUD and versions. |
-| `regression/169-oab-process-review-flow.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/169-oab-process-review-flow.spec.ts` | component or integration | 3/4/5 | port | Rejection and the refused make_final in `test_vernietigingslijst.py`; review-responses: todo. |
 | `regression/17-document-va-handhaving.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py. |
-| `regression/170-oab-destruction-execute.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/171-oab-short-procedure.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/170-oab-destruction-execute.spec.ts` | component or integration | 3/4/5 | todo | queue_destruction schedules the deletion of zaken in Open Zaak; needs a destructive-marked test. |
+| `regression/171-oab-short-procedure.spec.ts` | component or integration | 3/4/5 | todo | Changes the global ArchiveConfig; needs a serial, destructive-marked test. |
 | `regression/172-architectuur-wcag-axe.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/173-fb-zaaktype-versie-isolatie.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_catalogi.py test_zaaktype_versions. |
 | `regression/174-oab-config-persist-filter.spec.ts` | component or integration | 3/4/5 | todo | |

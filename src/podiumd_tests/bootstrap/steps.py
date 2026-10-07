@@ -264,6 +264,20 @@ def openformulieren_params(ctx: Context) -> dict[str, object]:
     }
 
 
+def django_user_step(component: str, key: str, groups: tuple[str, ...]) -> SnippetStep:
+    """A local Django user ptest-bootstrap-<key> in a component, with groups and a random password."""
+    username = f"{PREFIX}-{key}"
+    params: dict[str, object] = {"username": username, "email": user_email(username), "groups": list(groups)}
+    return SnippetStep(
+        f"{component}-user-{key}", (component,), "django_user", django_password_key(component, key), params
+    )
+
+
+def django_password_key(component: str, key: str) -> str:
+    """Key of a Django test user's password in the credentials Secret."""
+    return f"{PREFIX.replace('-', '_')}_{component}_{key}_password"
+
+
 def openzaak_client_step(  # pylint: disable=too-many-arguments  # mirrors the snippet's parameters
     name: str,
     client_id: str,
@@ -312,6 +326,13 @@ def productaanvraag_zaaktypen(ctx: Context) -> dict[str, object]:
     }
 
 
+# Open Archiefbeheer test users per role (key -> OAB group).
+OAB_ROLES = {
+    "recordmanager": "Record Manager",
+    "reviewer": "Reviewer",
+    "coreviewer": "Co-reviewer",
+    "archivist": "Archivist",
+}
 # The klantcontactmedewerker of KISS and ITA (TA kcc-medewerker).
 KCC = KeycloakUser(
     "kcc",
@@ -443,6 +464,9 @@ STEPS: tuple[Step, ...] = (
     ),
     # Users for KISS and ITA (TA kcc-medewerker), for the admin UIs, PABC and ZAC (TA testadmin),
     # and for the DigiD and eHerkenning logins through Keycloak (TA testinwoner, testbedrijf).
+    # Open Archiefbeheer role users (TA seed-oab-users: recordmanager-test, reviewer-test, ...);
+    # OAB logs them in locally, as in podiumd-minikube.
+    *(django_user_step("openarchiefbeheer", key, (group,)) for key, group in OAB_ROLES.items()),
     KCC,
     KeycloakUser(
         "admin",
