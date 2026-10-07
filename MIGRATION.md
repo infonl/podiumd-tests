@@ -51,7 +51,7 @@ Sources:
 | `perf/lib.js` | perf (Locust) | 6 | todo | |
 | `regression/07-brp-persoon-zoeken.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/08-kvk-bedrijf-zoeken.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/100-kiss-frontend-basis.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/100-kiss-frontend-basis.spec.ts` | component or integration | 3/4/5 | port | `tests/component/kiss/test_anonymous.py`; the Vue shell check is phase 5. |
 | `regression/106-portaal-notificatievoorkeur.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/108-probe-contactform.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/109-portaal-vraag-stellen-bedrijf.spec.ts` | component or integration | 3/4/5 | todo | |
@@ -65,8 +65,8 @@ Sources:
 | `regression/118-portaal-vestigingsnaam-bedrijf.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/119-infra-quick-wins.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/12-kiss-bff-kcc-flow.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/120-of-payment-infrastructure.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/121-continuiteit-graceful-degradation.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/120-of-payment-infrastructure.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/platform/test_public_surface.py`. |
+| `regression/121-continuiteit-graceful-degradation.spec.ts` | component or integration | 3/4/5 | port | `tests/component/platform/test_public_surface.py`; BRP and KvK parts wait for their ingress (handoff 6). |
 | `regression/122-gemachtigde-flow.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py: indicatieMachtiging. |
 | `regression/123-portaal-clamav-eicar-rejectie.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/124-cluster-pod-recovery-multi.spec.ts` | component or integration | 3/4/5 | todo | |
@@ -77,11 +77,11 @@ Sources:
 | `regression/143-portaal-document-download.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/144-continuiteit-component-stop.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/146-portaal-uitbreiding.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/147-kiss-contentbronnen.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/147-kiss-contentbronnen.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/kiss/test_anonymous.py`. |
 | `regression/149-ok2-crud-uitbreiding.spec.ts` | component or integration | 3/4/5 | merge | `tests/component/openklant/`: klantcontact and digitaal adres patch/delete; CRUD-3 (identificator PUT) dropped: it passed on any outcome. |
 | `regression/15-status-transitions.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py: statussen in order. |
 | `regression/150-of-prefill-foutpaden.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/151-pdok-externe-service.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/151-pdok-externe-service.spec.ts` | component or integration | 3/4/5 | drop | Tests the public PDOK Locatieserver, not PodiumD. |
 | `regression/152-of-retention-en-pdf.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/153-of-features-direct.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/154-omc-cosign-direct.spec.ts` | component or integration | 3/4/5 | todo | |
@@ -105,7 +105,7 @@ Sources:
 | `regression/174-oab-config-persist-filter.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/175-continuiteit-alertmanager-fber.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/176-formulier-update-keten.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/177-pen-admin-niet-publiek.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/177-pen-admin-niet-publiek.spec.ts` | component or integration | 3/4/5 | port | `tests/component/platform/test_public_surface.py`. |
 | `regression/178-blacklist-upload.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/179-portaal-profiel-naar-openklant.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/18-klantcontact-zaak-koppeling.spec.ts` | component or integration | 3/4/5 | todo | Chain Open Klant → Open Zaak: phase 4. |
@@ -144,7 +144,7 @@ Sources:
 | `regression/50-zaak-zoeken.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_statussen_rollen.py test_zaak_found_by_initiator_bsn. |
 | `regression/51-document-crud-edges.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_documenten.py. |
 | `regression/52-zaak-geometrie.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_zaken.py. |
-| `regression/53-on-kanaal-validation.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/53-on-kanaal-validation.spec.ts` | component or integration | 3/4/5 | port | `tests/component/opennotificaties/`; abonnement validation waits for the webhook receiver (phase 4); unreachable callback gives 500 (xfail). |
 | `regression/54-ok2-conversation-tree.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openklant/` test_partijen.py test_betrokkenen_of_a_partij. |
 | `regression/55-multi-zaaktype.spec.ts` | component or integration | 3/4/5 | merge | With 43 into `tests/component/openzaak/` test_zaken.py. |
 | `regression/56-zaak-rel-batch.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py; its inpBsn__in filter does not exist (xfail: _zoek ignores unknown filters). |
@@ -157,11 +157,11 @@ Sources:
 | `regression/63-klacht-bezwaar-keten.spec.ts` | component or integration | 3/4/5 | todo | Chain: phase 4. |
 | `regression/64-document-lifecycle.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_documenten.py; its audittrail part is an xfail. |
 | `regression/65-oi-cache-webhook.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/67-pabc-functional-roles.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/68-pabc-decision.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/69-pabc-domains-entity-types.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/67-pabc-functional-roles.spec.ts` | component or integration | 3/4/5 | todo | PABC cookie session over HTTPS: phase 5. |
+| `regression/68-pabc-decision.spec.ts` | component or integration | 3/4/5 | port | 68b/68c → `tests/component/pabc/test_api_key.py`; 68a needs a PABC session: phase 5. |
+| `regression/69-pabc-domains-entity-types.spec.ts` | component or integration | 3/4/5 | todo | PABC cookie session over HTTPS: phase 5. |
 | `regression/70-pabc-groups-lookup.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/71-pabc-zac-integration-coherence.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/71-pabc-zac-integration-coherence.spec.ts` | component or integration | 3/4/5 | todo | PABC cookie session over HTTPS: phase 5. |
 | `regression/73-ita-assigned-list.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/75-ita-forward-flow.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/75-of-zaaktype-matching.spec.ts` | component or integration | 3/4/5 | todo | |
@@ -177,10 +177,10 @@ Sources:
 | `regression/85-ok2-bedrijf-partij.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openklant/` test_partijen.py: organisatie with KvK or RSIN. |
 | `regression/86-ok2-klantcontact-bedrijf.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openklant/`. |
 | `regression/87-ok2-klantcontact-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openklant/` test_klantcontacten.py. |
-| `regression/88-pdok-locatieserver.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/88-pdok-locatieserver.spec.ts` | component or integration | 3/4/5 | drop | Tests the public PDOK Locatieserver, not PodiumD. |
 | `regression/89-cluster-pod-recovery.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/90-fb-oz-catalogi-integriteit.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_catalogi.py. |
-| `regression/91-fb-keycloak-realm-snapshot.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/91-fb-keycloak-realm-snapshot.spec.ts` | component or integration | 3/4/5 | port | `tests/component/keycloak/test_realm.py`. |
 | `regression/95-portaal-filtering.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/96-portaal-profiel-navigatie.spec.ts` | component or integration | 3/4/5 | todo | |
 | `smoke/00-environment-preflight.spec.ts` | smoke | 1 | port | 00c/00d/00h/00i/00j/00k/00l → `test_reachability.py`, `test_api_health.py`; 00f → `test_cluster.py` (all workloads ready). Phase 3: 00e (ZAC schemas, psql) and 00g (OZ Applicatie scopes for Open Inwoner). 00i form slug needs bootstrap data (phase 2). |
@@ -204,14 +204,14 @@ Sources:
 | Test | Target | Phase | Decision | Notes |
 |---|---|---|---|---|
 | `test_browser.py` | smoke, marker `ui` | 1/5 | port | Phase 5 (`ui`). |
-| `test_database.py` | component, marker `cluster` | 3 | todo |  |
-| `test_django_admin_login.py` | component, marker `cluster` | 3 | todo |  |
+| `test_database.py` | component, marker `cluster` | 3 | port | `tests/component/platform/test_django_apps.py`, through each app's own Django connection. |
+| `test_django_admin_login.py` | component, marker `cluster` | 3 | port | `tests/component/platform/test_django_apps.py`; skips where admin login is SSO. |
 | `test_login_flow.py` | smoke (ZAC OIDC login) | 1 | port | First leg (ZAC redirects to the Keycloak login form) → `test_oidc.py`. The login itself needs a test identity: phase 5. |
 | `test_mailpit.py` | integration | 4 | todo |  |
 | `test_metrics.py` | smoke | 1 | merge | With `test_monitoring_logging.py` into `test_metrics.py`; datasources found by type, not by name. |
 | `test_monitoring_logging.py` | smoke | 1 | merge | Into `test_metrics.py`; the Loki check runs where a Loki datasource exists. |
-| `test_pabc_migrations_guard.py` | component, marker `destructive` | 3 | todo |  |
-| `test_pkce.py` | component (keycloak) | 3 | todo |  |
+| `test_pabc_migrations_guard.py` | component, marker `destructive` | 3 | drop | Tests a podiumd-minikube script, and changes the cluster. |
+| `test_pkce.py` | component (keycloak) | 3 | port | `tests/component/keycloak/test_pkce.py`; MK's login round trip and ZAC experiment not ported. |
 | `test_pods.py` | smoke | 1 | port | `test_cluster.py`: pods judged by owner (Job, CronJob) instead of per-estate prefix lists; core pod list dropped (every Deployment and StatefulSet must be ready). |
 | `test_productaanvraag_flow.py` | integration, marker `core` | 4 | todo |  |
 | `test_reachability.py` | smoke | 1 | port | `test_reachability.py`: redirects followed (R14), status < 500 per component plus admin login pages; no per-host expected codes. |
@@ -221,16 +221,16 @@ Sources:
 
 | Test | Target | Phase | Decision | Notes |
 |---|---|---|---|---|
-| `test_4_8_5_upgrade.py` | component (deployment hygiene) + known_issues | 3 | todo |  |
+| `test_4_8_5_upgrade.py` | component (deployment hygiene) + known_issues | 3 | drop | Pinned images of one environment's 4.8.5 upgrade. |
 | `test_browser.py` | smoke, marker `ui` | 1/5 | merge | same test in MK and PI: merge into one environment-neutral test |
-| `test_database.py` | component, marker `cluster` | 3 | merge | same test in MK and PI: merge into one environment-neutral test |
-| `test_django_admin_login.py` | component, marker `cluster` | 3 | merge | same test in MK and PI: merge into one environment-neutral test |
+| `test_database.py` | component, marker `cluster` | 3 | port | `tests/component/platform/test_django_apps.py`, through each app's own Django connection. |
+| `test_django_admin_login.py` | component, marker `cluster` | 3 | port | `tests/component/platform/test_django_apps.py`; skips where admin login is SSO. |
 | `test_login_flow.py` | smoke (ZAC OIDC login) | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
 | `test_mailpit.py` | integration | 4 | merge | same test in MK and PI: merge into one environment-neutral test |
 | `test_metrics.py` | smoke | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
 | `test_monitoring_logging.py` | smoke | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
-| `test_pabc_migrations_guard.py` | component, marker `destructive` | 3 | merge | same test in MK and PI: merge into one environment-neutral test |
-| `test_pkce.py` | component (keycloak) | 3 | merge | same test in MK and PI: merge into one environment-neutral test |
+| `test_pabc_migrations_guard.py` | component, marker `destructive` | 3 | drop | Tests a podiumd-minikube script, and changes the cluster. |
+| `test_pkce.py` | component (keycloak) | 3 | port | `tests/component/keycloak/test_pkce.py`; MK's login round trip and ZAC experiment not ported. |
 | `test_pods.py` | smoke | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
 | `test_productaanvraag_flow.py` | integration, marker `core` | 4 | merge | same test in MK and PI: merge into one environment-neutral test |
 | `test_reachability.py` | smoke | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
