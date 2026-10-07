@@ -282,6 +282,16 @@ def django_password_key(component: str, key: str) -> str:
     return f"{PREFIX.replace('-', '_')}_{component}_{key}_password"
 
 
+def notifications_params(ctx: Context) -> dict[str, object]:
+    """The Open Notificaties client secret, and Open Notificaties' URL as other apps reach it in the cluster."""
+    env = ctx.env
+    default = f"http://{env.deployment_for('opennotificaties')}.{env.profile.kube.namespace}/api/v1/"
+    return {
+        "secret": ctx.store.read().get(NRC_STORE_KEY, ""),  # empty only before opennotificaties-client ran
+        "notificaties_url": env.profile.settings.get("opennotificaties_internal_url", default),
+    }
+
+
 def token_step(component: str, module: str, store_key: str) -> SnippetStep:
     """A TokenAuth step; the token's identifier is its store key."""
     params: dict[str, object] = {"module": module, "identifier": store_key}
@@ -351,6 +361,16 @@ STEPS: tuple[Step, ...] = (
         },
         wiring=True,
         context_params=openformulieren_params,
+    ),
+    SnippetStep(
+        "openklant-notificaties",
+        ("openklant", "opennotificaties"),
+        "notifications_config",
+        "ptest_bootstrap_openklant_notificaties_record",
+        {"prefix": PREFIX, "client_id": NRC_CLIENT_ID},
+        record=True,
+        wiring=True,
+        context_params=notifications_params,
     ),
     SnippetStep(
         "opennotificaties-kanalen",
