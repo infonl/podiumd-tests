@@ -37,6 +37,8 @@ COMPONENTS: dict[str, Component] = {
     "openbeheer": Component(("openbeheer",), ("openbeheer",)),
     "referentielijsten": Component(("referentielijsten",), ("referentielijsten",)),
     "frankgateway": Component(("frankgateway",), ("frankgateway", "frank-gateway")),
+    # podiumd's nginx in front of BRP, KvK and BAG (Frank!Gateway replaces it in newer charts).
+    "api-proxy": Component(("api-proxy",), ("api-proxy",)),
     "grafana": Component(("grafana", "podiumd-logs"), ("grafana", "podiumd-grafana")),
     "mailpit": Component(("mailpit",), ("mailpit",)),
 }
