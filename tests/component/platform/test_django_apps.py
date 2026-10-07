@@ -14,6 +14,7 @@ import pytest
 
 from podiumd_tests.auth.django_admin import admin_login
 from podiumd_tests.auth.django_admin import is_logged_in
+from podiumd_tests.components import DJANGO_APPS
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.pytest_plugin import requiring
 
@@ -23,15 +24,6 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.component
 
-DJANGO_APPS = (
-    "openzaak",
-    "openklant",
-    "objecten",
-    "objecttypen",
-    "opennotificaties",
-    "openformulieren",
-    "openarchiefbeheer",
-)
 # Apps that store geometry; their database needs PostGIS.
 SPATIAL = frozenset({"openzaak", "objecten"})
 

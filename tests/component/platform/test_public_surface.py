@@ -16,6 +16,7 @@ import pytest
 
 from podiumd_tests.auth.keycloak import admin_realm_url
 from podiumd_tests.auth.keycloak_admin import realm_of
+from podiumd_tests.components import DJANGO_APPS
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import describe
@@ -32,16 +33,6 @@ pytestmark = pytest.mark.component
 
 NIL = "00000000-0000-0000-0000-000000000000"
 LOGIN = re.compile(r"login|auth|signin|oidc", re.IGNORECASE)
-DJANGO_APPS = (
-    "openzaak",
-    "openklant",
-    "openformulieren",
-    "openinwoner",
-    "openarchiefbeheer",
-    "objecten",
-    "objecttypen",
-    "opennotificaties",
-)
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])

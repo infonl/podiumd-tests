@@ -41,6 +41,18 @@ COMPONENTS: dict[str, Component] = {
     "mailpit": Component(("mailpit",), ("mailpit",)),
 }
 
+# Components that are Django apps: they have /admin/, `manage.py shell` and Django's mail settings.
+DJANGO_APPS = (
+    "openzaak",
+    "openklant",
+    "openformulieren",
+    "openinwoner",
+    "openarchiefbeheer",
+    "objecten",
+    "objecttypen",
+    "opennotificaties",
+)
+
 
 def _component_for_label(label: str) -> str | None:
     for name, component in COMPONENTS.items():
