@@ -11,6 +11,7 @@ import json
 import sys
 
 from dataclasses import asdict
+from datetime import UTC
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -52,6 +53,9 @@ from podiumd_tests.results import run_dir
 from podiumd_tests.results import run_tag
 from podiumd_tests.results import suite_commit
 from podiumd_tests.results import write_run
+from podiumd_tests.sweep import format_swept
+from podiumd_tests.sweep import parse_age
+from podiumd_tests.sweep import sweep
 from podiumd_tests.tiers import TIERS
 
 if TYPE_CHECKING:
@@ -215,6 +219,29 @@ def _apply_steps(
     return EXIT_CONFIG if failed(outcomes) else EXIT_OK
 
 
+def cmd_sweep(args: argparse.Namespace) -> int:
+    """Delete what test runs left behind: run-tagged objects older than --older-than."""
+    try:
+        cutoff = datetime.now(UTC) - parse_age(args.older_than)
+    except ValueError as exc:
+        print(f"--older-than: {exc}", file=sys.stderr)
+        return EXIT_CONFIG
+    reason = refusal(_load(args))
+    if reason:
+        print(f"refused: {reason}", file=sys.stderr)
+        return EXIT_NOT_ALLOWED
+    env = Environment(_load(args))
+    if not _preflight_ok(env, args):
+        return EXIT_CONFIG
+    if args.dry_run:
+        swept = sweep(env, cutoff, dry_run=True)
+    else:
+        with held(env.profile.settings.get("lock_file"), f"sweep {env.profile.name}"):
+            swept = sweep(env, cutoff, dry_run=False)
+    print(format_swept(swept))
+    return EXIT_CONFIG if any(s.action == "failed" for s in swept) else EXIT_OK
+
+
 def selected_steps(names: list[str] | None) -> tuple[Step, ...]:
     """All steps, or only the named ones; ProfileError for an unknown name."""
     if not names:
@@ -305,6 +332,15 @@ def build_parser() -> argparse.ArgumentParser:
     unboot.add_argument("--skip-doctor", action="store_true")
     unboot.add_argument("--step", action="append", help="only this step (repeatable; default: all)")
     unboot.set_defaults(func=cmd_unbootstrap)
+
+    swp = commands.add_parser("sweep", help="delete run-tagged objects that test runs left behind")
+    swp.add_argument("--env", required=True)
+    swp.add_argument(
+        "--older-than", default="24h", help="only runs that started before this age: 30m, 24h, 7d (default: 24h)"
+    )
+    swp.add_argument("--dry-run", action="store_true", help="list what would be deleted")
+    swp.add_argument("--skip-doctor", action="store_true")
+    swp.set_defaults(func=cmd_sweep)
 
     run = commands.add_parser("run", help="run a tier against an environment")
     run.add_argument("--env", required=True)
