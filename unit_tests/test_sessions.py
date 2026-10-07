@@ -9,6 +9,7 @@ from requests.cookies import MockRequest
 from requests.cookies import create_cookie
 
 from podiumd_tests.sessions import DEFAULT_TIMEOUT
+from podiumd_tests.sessions import HostHeaderAdapter
 from podiumd_tests.sessions import make_session
 
 if TYPE_CHECKING:
@@ -54,3 +55,15 @@ def test_a_session_without_cookies_accepts_none():
     cookie = create_cookie("sessionid", "abc", domain="ok.test")
     assert not make_session({"openklant": "http://ok.test"}, cookies=False).cookies.get_policy().set_ok(cookie, request)
     assert make_session({"openklant": "http://ok.test"}).cookies.get_policy().set_ok(cookie, request)
+
+
+def test_https_through_the_ingress_ip_verifies_the_profile_host():
+    adapter = HostHeaderAdapter({"zac.local"}, "10.0.0.5")
+    request = requests.Request("GET", "https://10.0.0.5/", headers={"Host": "zac.local"}).prepare()
+    host_params, pool_kwargs = adapter.build_connection_pool_key_attributes(request, verify=True)
+    assert host_params["host"] == "10.0.0.5"
+    assert (pool_kwargs.get("server_hostname"), pool_kwargs.get("assert_hostname")) == ("zac.local", "zac.local")
+
+
+def test_session_verifies_with_the_given_ca_bundle():
+    assert make_session({"zac": "https://zac.local"}, verify="ca.pem").verify == "ca.pem"

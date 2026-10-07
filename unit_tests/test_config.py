@@ -2,6 +2,7 @@
 
 import pytest
 
+from podiumd_tests.config import ConfigMapKey
 from podiumd_tests.config import ProfileError
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import list_profiles
@@ -88,3 +89,8 @@ def test_only_cluster_sources_need_the_cluster(profile_factory):
 def test_wiring_defaults_per_estate(profile_factory, estate, override, expected):
     bootstrap = {} if override is None else {"wiring": override}
     assert profile_factory(estate=estate, bootstrap=bootstrap).wiring is expected
+
+
+def test_access_reads_the_ca_bundle(profile_factory):
+    profile = profile_factory(access={"ca_bundle": {"configmap": "podiumd-ca", "key": "ca-bundle.pem"}})
+    assert profile.access.ca_bundle == ConfigMapKey("podiumd-ca", "ca-bundle.pem")

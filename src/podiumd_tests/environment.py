@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import tempfile
+
 from functools import cached_property
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from podiumd_tests.capabilities import Capabilities
@@ -10,6 +13,7 @@ from podiumd_tests.capabilities import detect
 from podiumd_tests.components import COMPONENTS
 from podiumd_tests.credentials import Redactor
 from podiumd_tests.credentials import SecretResolver
+from podiumd_tests.json_data import section
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import metadata_name
@@ -58,9 +62,22 @@ class Environment:
             )
         return ip
 
+    @cached_property
+    def ca_file(self) -> str | None:
+        """File with the profile's access.ca_bundle, fetched from the cluster once; None: the system's CAs."""
+        ref = self.profile.access.ca_bundle
+        if ref is None:
+            return None
+        bundle = str(section(self.kube.get_json("configmap", ref.configmap), "data").get(ref.key) or "")
+        if not bundle:
+            raise KubeError(self.kube.command("get", "configmap", ref.configmap), f"no key {ref.key}")
+        path = Path(tempfile.gettempdir()) / f"podiumd-tests-{self.profile.name}-ca.pem"
+        path.write_text(bundle, encoding="utf-8")
+        return str(path)
+
     def session(self, *, cookies: bool = True) -> requests.Session:
         """HTTP session for the profile URLs; cookies=False for token APIs."""
-        return make_session(self.profile.urls, self.ingress_ip(), cookies=cookies)
+        return make_session(self.profile.urls, self.ingress_ip(), cookies=cookies, verify=self.ca_file)
 
     def items(self, kind: str, namespaces: Sequence[str] | None = None) -> list[dict[str, object]]:
         """Objects of one kind in the given namespaces, by default all of the environment's namespaces."""

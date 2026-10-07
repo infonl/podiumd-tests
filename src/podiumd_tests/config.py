@@ -52,6 +52,14 @@ class ServiceRef:
 
 
 @dataclass(frozen=True)
+class ConfigMapKey:
+    """One key of a ConfigMap in the environment's namespace."""
+
+    configmap: str
+    key: str
+
+
+@dataclass(frozen=True)
 class Access:
     """How the console reaches the component URLs.
 
@@ -61,6 +69,8 @@ class Access:
 
     mode: AccessMode = "direct"
     ingress_service: ServiceRef | None = None
+    # CA bundle that verifies the environment's https URLs; None: the system's CAs.
+    ca_bundle: ConfigMapKey | None = None
 
 
 @dataclass(frozen=True)
@@ -183,9 +193,15 @@ def _parse_access(value: object, where: str) -> Access:
     if value is None:
         return Access()
     data = _mapping(value, where)
+    ca_bundle = None
+    if data.get("ca_bundle") is not None:
+        ca = _mapping(data["ca_bundle"], f"{where}.ca_bundle")
+        ca_bundle = ConfigMapKey(
+            _required_text(ca, "configmap", f"{where}.ca_bundle"), _required_text(ca, "key", f"{where}.ca_bundle")
+        )
     mode = _optional_text(data, "mode", where) or "direct"
     if mode == "direct":
-        return Access()
+        return Access(ca_bundle=ca_bundle)
     if mode != "host-header":
         msg = f"{where}.mode: expected direct or host-header"
         raise ProfileError(msg)
@@ -194,7 +210,7 @@ def _parse_access(value: object, where: str) -> Access:
         _required_text(service, "namespace", f"{where}.ingress_service"),
         _required_text(service, "name", f"{where}.ingress_service"),
     )
-    return Access("host-header", ref)
+    return Access("host-header", ref, ca_bundle)
 
 
 def _wiring(value: object, estate: str, where: str) -> bool:

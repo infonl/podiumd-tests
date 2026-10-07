@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from http.cookiejar import DefaultCookiePolicy
 from typing import TYPE_CHECKING
+from typing import cast
 from typing import override
 from urllib.parse import urlsplit
 from urllib.parse import urlunsplit
@@ -21,6 +22,9 @@ from podiumd_tests.responses import url_host
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from requests.adapters import _HostParams  # pyright: ignore[reportPrivateUsage]  # the stubs' own return types
+    from requests.adapters import _PoolKwargs  # pyright: ignore[reportPrivateUsage]
 
 DEFAULT_TIMEOUT = 15
 
@@ -64,6 +68,24 @@ class HostHeaderAdapter(HTTPAdapter):
         response.url = original
         return response
 
+    @override
+    def build_connection_pool_key_attributes(
+        self,
+        request: requests.PreparedRequest,
+        verify: bool | str,
+        cert: str | tuple[str, str] | None = None,
+    ) -> tuple[_HostParams, _PoolKwargs]:
+        """For https to the ingress IP: send the profile host as SNI and verify the certificate against it."""
+        host_params, pool_kwargs = super().build_connection_pool_key_attributes(request, verify, cert)
+        host = request.headers.get("Host")
+        if host and host_params["scheme"] == "https":
+            name = urlsplit(f"//{host}").hostname
+            # urllib3 pool keys the requests stubs leave out of _PoolKwargs.
+            extra = cast("dict[str, object]", pool_kwargs)
+            extra["server_hostname"] = name
+            extra["assert_hostname"] = name
+        return host_params, pool_kwargs
+
 
 class TimeoutSession(requests.Session):
     """A session with a default timeout, so no call can hang forever."""
@@ -82,14 +104,20 @@ class TimeoutSession(requests.Session):
         return super().request(method, url, *args, **kwargs)  # pyright: ignore[reportArgumentType]
 
 
-def make_session(urls: Mapping[str, str], ingress_ip: str | None = None, *, cookies: bool = True) -> requests.Session:
+def make_session(
+    urls: Mapping[str, str], ingress_ip: str | None = None, *, cookies: bool = True, verify: str | None = None
+) -> requests.Session:
     """A session for the profile URLs; with ingress_ip, profile hosts are reached through that IP.
+
+    verify: CA bundle file for https; None uses the system's CAs.
 
     cookies=False for token APIs: a Django session cookie picked up elsewhere (an admin
     login page) makes Open Klant fail token requests with HTTP 500.
     """
     session = TimeoutSession()
     session.headers["User-Agent"] = "podiumd-tests"
+    if verify:
+        session.verify = verify
     if not cookies:
         session.cookies.set_policy(DefaultCookiePolicy(allowed_domains=[]))
     if ingress_ip:

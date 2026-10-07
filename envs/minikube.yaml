@@ -10,6 +10,10 @@ access:
   ingress_service:
     namespace: traefik
     name: traefik
+  # podiumd-minikube's local CA plus the system CAs, as its pods trust them.
+  ca_bundle:
+    configmap: podiumd-ca
+    key: ca-bundle.pem
 urls:
   zac: http://zac.local
   keycloak: http://keycloak.local
