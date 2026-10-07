@@ -1,17 +1,22 @@
-"""Bootstrap step in Open Zaak: a published test zaaktype with an informatieobjecttype in the test catalogus.
+"""Bootstrap step in Open Zaak: a published test zaaktype in the test catalogus, with what the tests use.
 
+An informatieobjecttype, three statustypen (the last is the eindstatus), initiator, behandelaar
+and belanghebbende roltypen, eigenschap "kenteken", a published besluittype, and a
+resultaattype whose selectielijst klasse comes from Open Zaak's own Selectielijst API (left out,
+with a note, when that API cannot be reached).
 Actions: status, apply (recreates), remove (also the zaken of the zaaktype).
-Params: action, domein, rsin, identificatie, iot_omschrijving.
+Params: action, domein, rsin, identificatie, iot_omschrijving, besluittype.
 """
 
 STATUSTYPEN = ("Ingediend", "In behandeling", "Afgehandeld")
-ROLTYPEN = (("Initiator", "initiator"), ("Behandelaar", "behandelaar"))
+ROLTYPEN = (("Initiator", "initiator"), ("Behandelaar", "behandelaar"), ("Belanghebbende", "belanghebbende"))
 
 
 def run(params):
     import datetime
 
     from django.db import transaction
+    from openzaak.components.catalogi.models import BesluitType
     from openzaak.components.catalogi.models import Catalogus
     from openzaak.components.catalogi.models import InformatieObjectType
     from openzaak.components.catalogi.models import ZaakType
@@ -20,13 +25,16 @@ def run(params):
     catalogus = Catalogus.objects.filter(domein=params["domein"], rsin=params["rsin"]).first()
     zaaktypen = ZaakType.objects.filter(catalogus=catalogus, identificatie=params["identificatie"])
     iots = InformatieObjectType.objects.filter(catalogus=catalogus, omschrijving=params["iot_omschrijving"])
+    besluittypen = BesluitType.objects.filter(catalogus=catalogus, omschrijving=params["besluittype"])
 
     if params["action"] == "status":
-        return {"present": bool(catalogus and zaaktypen.filter(concept=False).exists() and iots.exists())}
+        present = zaaktypen.filter(concept=False).exists() and iots.exists() and besluittypen.exists()
+        return {"present": bool(catalogus and present)}
     # zaaktype is a "foreign key or URL" field; _zaaktype is its local foreign key.
     Zaak.objects.filter(_zaaktype__in=zaaktypen).delete()
     zaaktypen.delete()
     iots.delete()
+    besluittypen.delete()
     if params["action"] == "remove":
         return {"present": False}
 
@@ -37,7 +45,11 @@ def run(params):
 def _create(params, catalogus, today):
     import datetime
 
+    from openzaak.components.catalogi.models import BesluitType
+    from openzaak.components.catalogi.models import Eigenschap
+    from openzaak.components.catalogi.models import EigenschapSpecificatie
     from openzaak.components.catalogi.models import InformatieObjectType
+    from openzaak.components.catalogi.models import ResultaatType
     from openzaak.components.catalogi.models import RolType
     from openzaak.components.catalogi.models import StatusType
     from openzaak.components.catalogi.models import ZaakType
@@ -83,4 +95,46 @@ def _create(params, catalogus, today):
         )
     for omschrijving, generiek in ROLTYPEN:
         RolType.objects.create(zaaktype=zaaktype, omschrijving=omschrijving, omschrijving_generiek=generiek)
-    return {"present": True, "zaaktype": str(zaaktype.uuid), "informatieobjecttype": str(iot.uuid)}
+    specificatie = EigenschapSpecificatie.objects.create(formaat="tekst", lengte="20", kardinaliteit="1")
+    Eigenschap.objects.create(
+        zaaktype=zaaktype, eigenschapnaam="kenteken", definitie="Kenteken", specificatie_van_eigenschap=specificatie
+    )
+    besluittype = BesluitType.objects.create(
+        catalogus=catalogus,
+        omschrijving=params["besluittype"],
+        besluitcategorie="podiumd-tests",
+        reactietermijn=datetime.timedelta(days=14),
+        publicatie_indicatie=False,
+        datum_begin_geldigheid=today,
+        concept=False,
+    )
+    besluittype.zaaktypen.add(zaaktype)
+    return {"present": True, "notes": _resultaattype(zaaktype, ResultaatType)}
+
+
+def _resultaattype(zaaktype, resultaattype_model):
+    """Create a resultaattype from the first 2020 selectielijst procestype; notes when that is not possible."""
+    import datetime
+
+    from openzaak.selectielijst.models import ReferentieLijstConfig
+    from zgw_consumers.client import build_client
+
+    try:
+        with build_client(ReferentieLijstConfig.get_solo().service) as client:
+            proces = client.get("procestypen", params={"jaar": 2020}).json()[0]
+            resultaat = client.get("resultaten", params={"procesType": proces["url"]}).json()["results"][0]
+            omschrijving = client.get("resultaattypeomschrijvingen").json()[0]
+    except Exception as exc:  # noqa: BLE001  # any failure: no resultaattype, but the rest stays usable
+        return [f"no resultaattype: Selectielijst API unreachable ({type(exc).__name__})"]
+    zaaktype.selectielijst_procestype = proces["url"]
+    zaaktype.save()
+    resultaattype_model.objects.create(
+        zaaktype=zaaktype,
+        omschrijving="Afgehandeld",
+        resultaattypeomschrijving=omschrijving["url"],
+        selectielijstklasse=resultaat["url"],
+        archiefnominatie="vernietigen",
+        archiefactietermijn=datetime.timedelta(days=3650),
+        brondatum_archiefprocedure_afleidingswijze="afgehandeld",
+    )
+    return []

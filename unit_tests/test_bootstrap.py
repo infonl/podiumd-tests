@@ -161,7 +161,7 @@ def test_snippet_step_sends_its_secret_over_stdin_only(env_factory, fake_runner,
     sent = snippet_params(fake_runner.stdins[-1])
     assert sent["action"] == "apply"
     assert sent["secret"] == values[ZGW_STORE_KEY]
-    assert sent["domein"] == "PTEST"
+    assert sent["catalogus"]["domein"] == "PTEST"
     assert values[ZGW_STORE_KEY] not in " ".join(" ".join(c) for c in fake_runner.calls)
     assert step.remove(ctx) == (ZGW_STORE_KEY,)
 

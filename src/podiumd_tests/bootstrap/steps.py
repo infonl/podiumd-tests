@@ -30,6 +30,17 @@ PREFIX = "ptest-bootstrap"
 # zaken, documenten and besluiten of zaaktypen in that catalogus (PLAN.md §11a).
 ZGW_CLIENT_ID = "ptest-bootstrap-zgw"
 ZGW_STORE_KEY = "ptest_bootstrap_zgw_secret"
+ZGW_OPENBAAR_CLIENT_ID = "ptest-bootstrap-zgw-openbaar"
+ZGW_OPENBAAR_STORE_KEY = "ptest_bootstrap_zgw_openbaar_secret"
+ZGW_NOAUTH_CLIENT_ID = "ptest-bootstrap-zgw-noauth"
+ZGW_NOAUTH_STORE_KEY = "ptest_bootstrap_zgw_noauth_secret"
+# Scope prefixes per component on the test catalogus, and the Catalogi API scopes.
+ZGW_COMPONENTS: dict[str, tuple[str, ...]] = {
+    "zrc": ("zaken.", "audittrails."),
+    "drc": ("documenten.", "audittrails."),
+    "brc": ("besluiten.", "audittrails."),
+}
+CATALOGI_SCOPES = ("catalogi.lezen", "catalogi.schrijven")
 TEST_CATALOGUS_DOMEIN = "PTEST"
 TEST_CATALOGUS_RSIN = "000000000"
 # The suite's client in Open Notificaties: publishes and subscribes.
@@ -39,6 +50,7 @@ NRC_STORE_KEY = "ptest_bootstrap_nrc_secret"
 # Open Formulieren test form that registers zaken on it (TA poc-klacht-test).
 TEST_ZAAKTYPE = "ptest-bootstrap-klacht"
 TEST_IOT = "ptest-bootstrap-bijlage"
+TEST_BESLUITTYPE = "ptest-bootstrap-besluit"
 TEST_FORM = "ptest-bootstrap-klacht"
 # Open Notificaties kanalen the ported tests use (TA seed-notificaties.sh), with their filters.
 KANALEN = {
@@ -292,6 +304,33 @@ def notifications_params(ctx: Context) -> dict[str, object]:
     }
 
 
+def openzaak_client_step(  # pylint: disable=too-many-arguments  # mirrors the snippet's parameters
+    name: str,
+    client_id: str,
+    store_key: str,
+    *,
+    owns_catalogus: bool = False,
+    max_va: str = "zeer_geheim",
+    exclude: tuple[str, ...] = (),
+    components: dict[str, tuple[str, ...]] | None = None,
+    catalogi_scopes: tuple[str, ...] = CATALOGI_SCOPES,
+) -> SnippetStep:
+    """A ZGW client in Open Zaak with rights on the test catalogus only (PLAN.md §11a)."""
+    params: dict[str, object] = {
+        "client_id": client_id,
+        "scopes": {"ztc": list(catalogi_scopes)},
+        "catalogus": {
+            "domein": TEST_CATALOGUS_DOMEIN,
+            "rsin": TEST_CATALOGUS_RSIN,
+            "owns": owns_catalogus,
+            "max_va": max_va,
+            "exclude": list(exclude),
+            "components": {c: list(p) for c, p in (ZGW_COMPONENTS if components is None else components).items()},
+        },
+    }
+    return SnippetStep(name, ("openzaak",), "zgw_client", store_key, params)
+
+
 def token_step(component: str, module: str, store_key: str) -> SnippetStep:
     """A TokenAuth step; the token's identifier is its store key."""
     params: dict[str, object] = {"module": module, "identifier": store_key}
@@ -299,17 +338,18 @@ def token_step(component: str, module: str, store_key: str) -> SnippetStep:
 
 
 STEPS: tuple[Step, ...] = (
-    SnippetStep(
-        "openzaak-client",
-        ("openzaak",),
-        "openzaak_client",
-        ZGW_STORE_KEY,
-        {
-            "client_id": ZGW_CLIENT_ID,
-            "label": ZGW_CLIENT_ID,
-            "domein": TEST_CATALOGUS_DOMEIN,
-            "rsin": TEST_CATALOGUS_RSIN,
-        },
+    openzaak_client_step("openzaak-client", ZGW_CLIENT_ID, ZGW_STORE_KEY, owns_catalogus=True),
+    # TA's restricted Open Formulieren client: vertrouwelijkheid openbaar at most, no deletes.
+    openzaak_client_step(
+        "openzaak-client-openbaar",
+        ZGW_OPENBAAR_CLIENT_ID,
+        ZGW_OPENBAAR_STORE_KEY,
+        max_va="openbaar",
+        exclude=("verwijderen",),
+    ),
+    # A client without any autorisatie (TA reg-22d).
+    openzaak_client_step(
+        "openzaak-client-noauth", ZGW_NOAUTH_CLIENT_ID, ZGW_NOAUTH_STORE_KEY, components={}, catalogi_scopes=()
     ),
     SnippetStep(
         "opennotificaties-client",
@@ -330,6 +370,7 @@ STEPS: tuple[Step, ...] = (
             "rsin": TEST_CATALOGUS_RSIN,
             "identificatie": TEST_ZAAKTYPE,
             "iot_omschrijving": TEST_IOT,
+            "besluittype": TEST_BESLUITTYPE,
         },
     ),
     # Platform wiring (PLAN.md §4 A2).
