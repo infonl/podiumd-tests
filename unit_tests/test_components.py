@@ -24,3 +24,7 @@ def test_deployment_aliases():
 )
 def test_component_for_host(host, component):
     assert component_for_host(host) == component
+
+
+def test_kiss_deployed_under_its_chart_name_contact():
+    assert deployed_components(["contact-web", "ita-web"]) == {"kiss", "ita"}
