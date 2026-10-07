@@ -91,14 +91,20 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Create the objects: with a new random secret, or extending the stored record."""
         if self.store_key is None:
-            self._run(ctx, "apply")
+            self._apply(ctx)
             return {}
         if self.record:
-            result = self._run(ctx, "apply", record=self._stored_record(ctx))
+            result = self._apply(ctx, record=self._stored_record(ctx))
             return {self.store_key: json.dumps(result["record"], sort_keys=True)}
         secret = secrets.token_hex(20)  # 40 characters: the longest TokenAuth.token allows
-        self._run(ctx, "apply", secret=secret)
+        self._apply(ctx, secret=secret)
         return {self.store_key: secret}
+
+    def _apply(self, ctx: Context, **extra: object) -> dict[str, object]:
+        """Run apply; the snippet's "notes" go to the step's outcome."""
+        result = self._run(ctx, "apply", **extra)
+        ctx.notes.extend(str(n) for n in cast("list[object]", result.get("notes") or []))
+        return result
 
     def remove(self, ctx: Context, /) -> tuple[str, ...]:
         """Delete the objects, or undo what the stored record lists."""

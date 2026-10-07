@@ -294,3 +294,17 @@ def test_openklant_actor_recreates_the_users_actor(env_factory, fake_runner, pro
     ]
     assert sent[0].url.endswith("actoridentificatorObjectId=ptest-bootstrap-kcc%40example.invalid")
     assert sent[-1].headers["Authorization"] == "Token tok"
+
+
+def test_snippet_notes_reach_the_outcome(env_factory, fake_runner, profile_factory):
+    env = cluster_env(env_factory, fake_runner, profile_factory, urls={"openarchiefbeheer": "https://oab.example.test"})
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "openarchiefbeheer"}}]}))
+    fake_runner.answers["exec -i deploy/openarchiefbeheer"] = snippet_answer(
+        {"present": False, "notes": ["no group Reviewer"]}
+    )
+    step = SnippetStep(
+        "oab-user", ("openarchiefbeheer",), "django_user", "pw", {"username": "u", "email": "e", "groups": ["Reviewer"]}
+    )
+    outcome = bootstrap(env, [step])[0]
+    assert outcome.action == "created"
+    assert outcome.detail == "pw; no group Reviewer"

@@ -30,4 +30,5 @@ def run(params):
 
         reset(username=params["username"])  # clear login lockouts of an earlier user with this name
     found = {g.name for g in groups}
-    return {"present": True, "missing_groups": [g for g in params["groups"] if g not in found]}
+    missing = [g for g in params["groups"] if g not in found]
+    return {"present": True, "notes": [f"no group {g}" for g in missing]}
