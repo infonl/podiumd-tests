@@ -10,6 +10,8 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import requests
 
     from podiumd_tests.json_data import JsonObject
@@ -18,12 +20,17 @@ MAX_PAGES = 50
 
 
 class ApiClient:
-    """Calls to one API root with fixed headers; every call checks its status (UnexpectedStatusError)."""
+    """Calls to one API root; every call checks its status (UnexpectedStatusError).
 
-    def __init__(self, http: requests.Session, base_url: str, headers: dict[str, str]) -> None:
+    headers is a dict, or a function that returns them per request (e.g. a fresh ZGW token).
+    """
+
+    def __init__(
+        self, http: requests.Session, base_url: str, headers: dict[str, str] | Callable[[], dict[str, str]]
+    ) -> None:
         self.http = http
         self.base_url = base_url.rstrip("/")
-        self.headers = headers
+        self._headers = headers
 
     def url(self, path: str) -> str:
         """Absolute URL of a path below the API root; absolute URLs pass unchanged."""
@@ -31,7 +38,8 @@ class ApiClient:
 
     def request(self, method: str, path: str, *expected: int, **kwargs: object) -> requests.Response:
         """Send a request; UnexpectedStatusError unless its status is one of expected."""
-        response = self.http.request(method, self.url(path), headers=self.headers, **kwargs)  # pyright: ignore[reportArgumentType]
+        headers = self._headers() if callable(self._headers) else self._headers
+        response = self.http.request(method, self.url(path), headers=headers, **kwargs)  # pyright: ignore[reportArgumentType]
         return expect_status(response, *expected)
 
     def get(self, path: str, params: dict[str, str] | None = None) -> JsonObject:

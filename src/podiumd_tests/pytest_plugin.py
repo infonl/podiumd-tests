@@ -13,15 +13,21 @@ from typing import cast
 import pytest
 
 from podiumd_tests import results
+from podiumd_tests.auth.zgw_jwt import zgw_headers
+from podiumd_tests.auth.zgw_jwt import zgw_jwt
 from podiumd_tests.bootstrap import bootstrap
 from podiumd_tests.bootstrap import check
 from podiumd_tests.bootstrap import refusal
 from podiumd_tests.bootstrap.steps import OPENKLANT_STORE_KEY
 from podiumd_tests.bootstrap.steps import STEPS
+from podiumd_tests.bootstrap.steps import TEST_ZAAKTYPE
+from podiumd_tests.bootstrap.steps import ZGW_CLIENT_ID
+from podiumd_tests.bootstrap.steps import ZGW_STORE_KEY
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
+from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.registry import ResourceRegistry
 
 if TYPE_CHECKING:
@@ -34,6 +40,7 @@ if TYPE_CHECKING:
 
     from podiumd_tests.capabilities import Capabilities
     from podiumd_tests.credentials import SecretResolver
+    from podiumd_tests.json_data import JsonObject
     from podiumd_tests.kube import Kube
 
 
@@ -143,6 +150,26 @@ def fixture_openklant(podiumd_env: Environment, need_bootstrap: Callable[..., No
     token = podiumd_env.credentials.get(OPENKLANT_STORE_KEY)
     url = podiumd_env.profile.urls["openklant"] + "/klantinteracties/api/v1"
     return ApiClient(podiumd_env.session(cookies=False), url, {"Authorization": f"Token {token}"})
+
+
+@pytest.fixture(scope="session", name="openzaak")
+def fixture_openzaak(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
+    """Open Zaak's ZGW APIs as the suite's own client, with a fresh token per request."""
+    need_bootstrap("openzaak-client")
+    secret = podiumd_env.credentials.get(ZGW_STORE_KEY)
+    return ApiClient(
+        podiumd_env.session(cookies=False),
+        podiumd_env.profile.urls["openzaak"],
+        lambda: zgw_headers(zgw_jwt(ZGW_CLIENT_ID, secret)),
+    )
+
+
+@pytest.fixture(scope="session", name="test_zaaktype")
+def fixture_test_zaaktype(openzaak: ApiClient, need_bootstrap: Callable[..., None]) -> JsonObject:
+    """The published test zaaktype in the test catalogus (bootstrap step openzaak-zaaktype)."""
+    need_bootstrap("openzaak-zaaktype")
+    found = openzaak.list(f"{CATALOGI}/zaaktypen", {"identificatie": TEST_ZAAKTYPE})
+    return found[0]
 
 
 @pytest.fixture(name="registry")
