@@ -28,11 +28,11 @@ def realm_of(env: Environment) -> str:
     return env.profile.settings.get("keycloak_realm", "podiumd")
 
 
-def for_environment(env: Environment) -> KeycloakAdmin:
-    """Admin client for the environment's realm, through keycloak-admin when the profile has it."""
+def for_environment(env: Environment, realm: str | None = None) -> KeycloakAdmin:
+    """Admin client for a realm (default: the environment's), through keycloak-admin when the profile has it."""
     url = env.profile.urls.get("keycloak-admin") or env.profile.urls["keycloak"]
     admin = (env.credentials.get("keycloak_admin_username"), env.credentials.get("keycloak_admin_password"))
-    return KeycloakAdmin(env.session(cookies=False), url, realm_of(env), admin)
+    return KeycloakAdmin(env.session(cookies=False), url, realm or realm_of(env), admin)
 
 
 class KeycloakAdmin:
@@ -40,6 +40,7 @@ class KeycloakAdmin:
 
     def __init__(self, http: requests.Session, url: str, realm: str, admin: tuple[str, str]) -> None:
         self.http = http
+        self.realm = realm
         self.base = admin_realm_url(url, realm)
         token = password_grant(http, url, "master", PasswordLogin("admin-cli", *admin))
         self.headers = {"Authorization": f"Bearer {token}"}
@@ -50,6 +51,10 @@ class KeycloakAdmin:
     def _send(self, method: str, path: str, body: object, *expected: int) -> None:
         response = self.http.request(method, self.base + path, json=body, headers=self.headers)
         expect_status(response, *(expected or (HTTPStatus.NO_CONTENT,)))
+
+    def representation(self) -> JsonObject:
+        """The realm's own settings, e.g. smtpServer."""
+        return cast("JsonObject", self._get(""))
 
     def user_id(self, username: str) -> str | None:
         """Id of the user with exactly this username, or None."""

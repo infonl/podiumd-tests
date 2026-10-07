@@ -75,9 +75,9 @@ class Kube:
             raise KubeError(self.command(*args, namespace=namespace, all_namespaces=all_namespaces), "empty output")
         return found
 
-    def get_optional(self, kind: str, name: str) -> dict[str, object] | None:
+    def get_optional(self, kind: str, name: str, *, namespace: str | None = None) -> dict[str, object] | None:
         """One object as a dict, or None when it does not exist."""
-        return self._get_object(("get", kind, name, "--ignore-not-found", "-o", "json"), None)
+        return self._get_object(("get", kind, name, "--ignore-not-found", "-o", "json"), namespace)
 
     def _get_object(
         self, args: tuple[str, ...], namespace: str | None, *, all_namespaces: bool = False
