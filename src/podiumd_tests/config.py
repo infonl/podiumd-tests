@@ -21,6 +21,9 @@ from podiumd_tests.tiers import TIERS
 ESTATES = ("minikube", "podiumd-infra", "externals")
 # ExternalsPodiumD environments get wiring only when their owner agrees (bootstrap.wiring: true).
 WIRING_BY_ESTATE = {"minikube": True, "podiumd-infra": True, "externals": False}
+# Estates whose apps may send mail only to SMTP servers inside the cluster (a sink such as
+# Mailpit), never to a real one: minikube and QA must not mail real people.
+MAIL_STAYS_INTERNAL_BY_ESTATE = {"minikube": True, "podiumd-infra": True, "externals": False}
 # The repository: src/podiumd_tests/ is two levels below it.
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # Secret sources that read the cluster; without kube access they cannot resolve.
