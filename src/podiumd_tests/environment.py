@@ -72,7 +72,11 @@ class Environment:
         if not bundle:
             raise KubeError(self.kube.command("get", "configmap", ref.configmap), f"no key {ref.key}")
         path = Path(tempfile.gettempdir()) / f"podiumd-tests-{self.profile.name}-ca.pem"
-        path.write_text(bundle, encoding="utf-8")
+        # Parallel test workers share this file: write a private copy and rename it into place, so
+        # no worker ever reads a half-written bundle ("[X509] PEM lib").
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", dir=path.parent, delete=False) as handle:
+            handle.write(bundle)
+        Path(handle.name).replace(path)
         return str(path)
 
     def session(self, *, cookies: bool = True) -> requests.Session:

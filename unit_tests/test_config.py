@@ -1,5 +1,9 @@
 """Unit tests for environment profiles."""
 
+import json
+
+from pathlib import Path
+
 import pytest
 
 from podiumd_tests.config import ConfigMapKey
@@ -94,3 +98,11 @@ def test_wiring_defaults_per_estate(profile_factory, estate, override, expected)
 def test_access_reads_the_ca_bundle(profile_factory):
     profile = profile_factory(access={"ca_bundle": {"configmap": "podiumd-ca", "key": "ca-bundle.pem"}})
     assert profile.access.ca_bundle == ConfigMapKey("podiumd-ca", "ca-bundle.pem")
+
+
+def test_ca_bundle_is_written_whole(env_factory, fake_runner, profile_factory):
+    profile = profile_factory(access={"ca_bundle": {"configmap": "podiumd-ca", "key": "ca-bundle.pem"}})
+    fake_runner.answers["get configmap podiumd-ca"] = (0, json.dumps({"data": {"ca-bundle.pem": "PEM DATA"}}))
+    path = env_factory(profile).ca_file
+    assert path is not None
+    assert Path(path).read_text(encoding="utf-8") == "PEM DATA"
