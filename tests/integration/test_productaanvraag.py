@@ -8,13 +8,12 @@ for profile settings productaanvraag_type and productaanvraag_zaaktype.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from typing import cast
 
 import pytest
 
 from podiumd_tests.bootstrap.steps import PRODUCTAANVRAAG_OBJECTTYPE
-from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.seed.objecten import make_productaanvraag
+from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.openzaak import today
@@ -48,14 +47,7 @@ def fixture_productaanvraagtype(podiumd_env: Environment) -> str:
 @pytest.fixture(scope="module", name="objecttype")
 def fixture_objecttype(podiumd_env: Environment) -> str:
     """The productaanvraag objecttype's URL as Objecten knows it."""
-    deployment = podiumd_env.deployment_for("objecten")
-    found = cast(
-        "dict[str, str | None]",
-        run_snippet(podiumd_env.kube, deployment, "objecten_objecttype", {"name": PRODUCTAANVRAAG_OBJECTTYPE}),
-    )
-    if not found["url"]:
-        pytest.fail(f"Objecten has no objecttype {PRODUCTAANVRAAG_OBJECTTYPE}")
-    return str(found["url"])
+    return objecttype_url(podiumd_env, PRODUCTAANVRAAG_OBJECTTYPE)
 
 
 def test_productaanvraag_becomes_a_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
