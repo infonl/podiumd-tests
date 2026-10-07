@@ -43,7 +43,7 @@ Sources:
 | `interaction/32-of-submission-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/35-ok2-partij-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openklant/` test_partijen.py: persoon with BSN and e-mail. |
 | `interaction/74-ita-claim-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
-| `interaction/76-of-submission-end-to-end.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/76-of-submission-end-to-end.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/integration/test_formulier_zaak.py`: submission through the SDK API, zaak and PDF in Open Zaak. |
 | `interaction/78-ita-add-klantcontact.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `maintenance/cleanup-test-zaken.spec.ts` | `podiumd-tests sweep` (CLI, not a test) | 2 | replace | |
 | `perf/api-perf.js` | perf (Locust) | 6 | todo | |
