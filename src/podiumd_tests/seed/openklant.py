@@ -174,3 +174,19 @@ def make_internetaak(
         "status": "te_verwerken",
     }
     return _create(openklant, registry, "internetaken", body)
+
+
+def make_onderwerpobject(
+    openklant: ApiClient, registry: ResourceRegistry, klantcontact: JsonObject, zaak_uuid: str
+) -> JsonObject:
+    """Links a klantcontact to an Open Zaak zaak, the way KISS records "contact about this zaak"."""
+    body: dict[str, object] = {
+        "klantcontact": ref(klantcontact),
+        "onderwerpobjectidentificator": {
+            "objectId": zaak_uuid,
+            "codeObjecttype": "zaak",
+            "codeRegister": "openzaak",
+            "codeSoortObjectId": "zaak-uuid",
+        },
+    }
+    return _create(openklant, registry, "onderwerpobjecten", body)

@@ -12,6 +12,7 @@ import pytest
 
 from podiumd_tests.seed.openklant import random_bsn
 from podiumd_tests.seed.openklant import random_kvk_nummer
+from podiumd_tests.seed.openzaak import BSN_FILTER
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
@@ -24,8 +25,6 @@ if TYPE_CHECKING:
     from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("openzaak")]
-
-BSN_FILTER = "rol__betrokkeneIdentificatie__natuurlijkPersoon__inpBsn"
 
 
 def urls(objects: list[JsonObject]) -> set[str]:

@@ -114,6 +114,10 @@ def make_status(openzaak: ApiClient, zaak: JsonObject, statustype: str, toelicht
     return openzaak.post(f"{ZAKEN}/statussen", body)
 
 
+# The _zoek and list filter for the BSN of a natuurlijk-persoon rol.
+BSN_FILTER = "rol__betrokkeneIdentificatie__natuurlijkPersoon__inpBsn"
+
+
 def make_rol(
     openzaak: ApiClient,
     registry: ResourceRegistry,
