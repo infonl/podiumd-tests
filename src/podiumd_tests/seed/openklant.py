@@ -33,6 +33,15 @@ def random_kvk_nummer() -> str:
     return str(_rng.randint(10_000_000, 99_999_999))
 
 
+def random_nummer() -> str:
+    """A random 10-digit nummer for a partij, klantcontact or internetaak.
+
+    Open Klant 2.15 numbers new objects as highest + 1 without a lock: parallel creates
+    then collide on the unique nummer and get 500. An explicit nummer avoids that race.
+    """
+    return str(_rng.randint(1_000_000_000, 9_999_999_999))
+
+
 def _create(openklant: ApiClient, registry: ResourceRegistry, path: str, body: dict[str, object]) -> JsonObject:
     created = openklant.post(path, body)
     url = str(created["url"])
@@ -48,6 +57,7 @@ def ref(obj: JsonObject) -> dict[str, str]:
 def make_partij(openklant: ApiClient, registry: ResourceRegistry, **fields: object) -> JsonObject:
     """A persoon-partij named after the run tag; fields override the defaults."""
     body: dict[str, object] = {
+        "nummer": random_nummer(),
         "soortPartij": "persoon",
         "indicatieActief": True,
         "indicatieGeheimhouding": False,
@@ -106,6 +116,7 @@ def make_digitaal_adres(
 def make_klantcontact(openklant: ApiClient, registry: ResourceRegistry, **fields: object) -> JsonObject:
     """A klantcontact by phone whose onderwerp carries the run tag; fields override the defaults."""
     body: dict[str, object] = {
+        "nummer": random_nummer(),
         "kanaal": "telefoon",
         "onderwerp": registry.tagged("klantcontact"),
         "inhoud": "podiumd-tests",
@@ -155,7 +166,7 @@ def make_internetaak(
 ) -> JsonObject:
     """An internetaak to handle, raised by a klantcontact and assigned to actors."""
     body: dict[str, object] = {
-        "nummer": str(_rng.randint(1_000_000_000, 9_999_999_999)),
+        "nummer": random_nummer(),
         "gevraagdeHandeling": "Terugbellen",
         "aanleidinggevendKlantcontact": ref(klantcontact),
         "toegewezenAanActoren": [ref(a) for a in actoren],
