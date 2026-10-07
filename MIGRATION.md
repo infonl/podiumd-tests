@@ -22,9 +22,9 @@ Sources:
 | `interaction/03-document-koppeling.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openzaak/` test_documenten.py: document linked to zaak. |
 | `interaction/09-ok2-klantcontact.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openklant/` test_klantcontacten.py: roundtrip, actor link. |
 | `interaction/10-cross-component-zaak-portaal.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | Open Zaak part → `tests/component/openzaak/` test_statussen_rollen.py (zaak found by initiator BSN); Portaal part: phase 5. |
-| `interaction/105-portaal-profiel-edit.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
-| `interaction/107-portaal-zoeken.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
-| `interaction/108-portaal-vraag-stellen-inwoner.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/105-portaal-profiel-edit.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openinwoner/test_portaal_inwoner.py` (formsets in this OI). |
+| `interaction/107-portaal-zoeken.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openinwoner/test_portaal_anoniem.py` (anonymous; search needs no login). |
+| `interaction/108-portaal-vraag-stellen-inwoner.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | Into the heading test of `tests/component/openinwoner/test_portaal_inwoner.py`; asking a question needs W8. |
 | `interaction/111-portaal-documenten-uploaden.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/140-inwoner-vraag-over-zaak.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/141-bedrijf-eherkenning-mijn-zaken.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
@@ -52,16 +52,16 @@ Sources:
 | `regression/07-brp-persoon-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/basisregistraties/test_brp.py`, through the api-proxy. |
 | `regression/08-kvk-bedrijf-zoeken.spec.ts` | component or integration | 3/4/5 | todo | Needs the KvK test set (68750110); minikube's KvK is WireMock with fixed mappings. |
 | `regression/100-kiss-frontend-basis.spec.ts` | component or integration | 3/4/5 | port | `tests/component/kiss/test_anonymous.py`; the Vue shell check is phase 5. |
-| `regression/106-portaal-notificatievoorkeur.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/106-portaal-notificatievoorkeur.spec.ts` | component or integration | 3/4/5 | merge | With 165 into `tests/component/openinwoner/test_portaal_inwoner.py`. |
 | `regression/108-probe-contactform.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/109-portaal-vraag-stellen-bedrijf.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/11-of-brp-prefill.spec.ts` | component or integration | 3/4/5 | port | `test_brp.py`: V2 lookup and the V1 405; it never went through Open Formulieren. |
-| `regression/110-portaal-anoniem-en-mobile.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/110-portaal-anoniem-en-mobile.spec.ts` | component or integration | 3/4/5 | port | Contact part → `tests/component/openinwoner/test_portaal_anoniem.py`; mobile homepage: todo. |
 | `regression/112-ita-toewijzen-actor-types.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openklant/` test_internetaken.py (pure Open Klant, despite the name). |
-| `regression/114-portaal-multi-user-digid.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/114-portaal-multi-user-digid.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_inwoner.py`. |
 | `regression/115-omc-notifynl-mock-keten.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/116-omc-mail-keten-e2e.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/117-portaal-contactmomenten-paginatie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/117-portaal-contactmomenten-paginatie.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_inwoner.py`. |
 | `regression/118-portaal-vestigingsnaam-bedrijf.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/119-infra-quick-wins.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/12-kiss-bff-kcc-flow.spec.ts` | component or integration | 3/4/5 | port | `tests/component/kiss/test_kcc_session.py`; KISS does not delete klantcontacten (405). |
@@ -91,9 +91,9 @@ Sources:
 | `regression/159-of-zaak-keten.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/16-bedrijf-aanvraag-kvk.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py: rol of a company (generated KvK number). |
 | `regression/160-portaal-deactivated-on-pseudo-blokkade.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/161-portaal-low-prio-coverage.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/163-portaal-menu-kop-consistency.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/165-portaal-notif-save.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/161-portaal-low-prio-coverage.spec.ts` | component or integration | 3/4/5 | port | 161c/d → `tests/component/openinwoner/test_portaal_anoniem.py`; a/b/e/f read OI source files: dropped. |
+| `regression/163-portaal-menu-kop-consistency.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_inwoner.py`. |
+| `regression/165-portaal-notif-save.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_inwoner.py`. |
 | `regression/166-oab-medebeoordelaar.spec.ts` | component or integration | 3/4/5 | port | `test_vernietigingslijst.py`. |
 | `regression/167-fb-zaaktype-crud-api.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_catalogi.py: concept zaaktype CRUD and versions. |
 | `regression/169-oab-process-review-flow.spec.ts` | component or integration | 3/4/5 | port | Rejection and the refused make_final in `test_vernietigingslijst.py`; review-responses: todo. |
@@ -156,7 +156,7 @@ Sources:
 | `regression/62-vergetelheid-categorieen.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/63-klacht-bezwaar-keten.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_klacht_bezwaar.py`; the audit trail check is left out (needs `heeft_alle_autorisaties`, see 14/48). |
 | `regression/64-document-lifecycle.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_documenten.py; its audittrail part is an xfail. |
-| `regression/65-oi-cache-webhook.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/65-oi-cache-webhook.spec.ts` | component or integration | 3/4/5 | port | 65a/b → `tests/component/openinwoner/test_portaal_anoniem.py`; 65c/d: dropped (hardcoded kube context). |
 | `regression/67-pabc-functional-roles.spec.ts` | component or integration | 3/4/5 | port | `tests/component/pabc/test_management.py` (browser session). |
 | `regression/68-pabc-decision.spec.ts` | component or integration | 3/4/5 | port | 68b/68c → `tests/component/pabc/test_api_key.py`; 68a → `test_management.py`. |
 | `regression/69-pabc-domains-entity-types.spec.ts` | component or integration | 3/4/5 | port | `tests/component/pabc/test_management.py`. |
@@ -172,7 +172,7 @@ Sources:
 | `regression/80-omc-listen-event.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/81-omc-confirm-callback.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/82-omc-zaak-e2e.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/83-portaal-anonieme-pagina-bereikbaarheid.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/83-portaal-anonieme-pagina-bereikbaarheid.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_anoniem.py`. |
 | `regression/84-portaal-ingelogd-sessie.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/85-ok2-bedrijf-partij.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openklant/` test_partijen.py: organisatie with KvK or RSIN. |
 | `regression/86-ok2-klantcontact-bedrijf.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openklant/`. |
@@ -182,7 +182,7 @@ Sources:
 | `regression/90-fb-oz-catalogi-integriteit.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_catalogi.py. |
 | `regression/91-fb-keycloak-realm-snapshot.spec.ts` | component or integration | 3/4/5 | port | `tests/component/keycloak/test_realm.py`. |
 | `regression/95-portaal-filtering.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/96-portaal-profiel-navigatie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/96-portaal-profiel-navigatie.spec.ts` | component or integration | 3/4/5 | merge | Into the heading test of `tests/component/openinwoner/test_portaal_inwoner.py`. |
 | `smoke/00-environment-preflight.spec.ts` | smoke | 1 | port | 00c/00d/00h/00i/00j/00k/00l → `test_reachability.py`, `test_api_health.py`; 00f → `test_cluster.py` (all workloads ready). Phase 3: 00e (ZAC schemas, psql) and 00g (OZ Applicatie scopes for Open Inwoner). 00i form slug needs bootstrap data (phase 2). |
 | `smoke/01-zgw-auth.spec.ts` | smoke | 1 | port | `test_zgw_auth.py`: token accepted, wrong secret refused. Phase 2: the catalogus domein and test zaaktype checks need seeded data. |
 | `smoke/04-portaal-homepage.spec.ts` | smoke | 1 | port | HTTP part → `test_reachability.py` (root and admin login of `openinwoner`). Phase 5: the rendered-page checks need a browser. |
