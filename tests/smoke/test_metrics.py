@@ -1,11 +1,9 @@
-"""Are metrics and logs flowing? Through Grafana's datasource proxy.
+"""Are metrics and logs flowing? Checked through Grafana's datasource proxy.
 
-Merges MK/PI test_metrics.py and test_monitoring_logging.py. Those two differ
-in which datasources exist (Prometheus+Tempo vs Prometheus+Loki+Tempo) and in
-their names ("loki" vs "Loki"); here datasources are found by type, and the
-Loki check runs only where a Loki datasource exists.
-Grafana answers anonymously on minikube; elsewhere set the secrets
-grafana_username and grafana_password in the profile.
+Ported from MK/PI test_metrics.py and test_monitoring_logging.py. Datasource
+names differ per estate ("loki" vs "Loki"), so they are found by type; the Loki
+test skips where no Loki datasource exists. Grafana outside minikube needs the
+secrets grafana_username and grafana_password.
 """
 
 from __future__ import annotations

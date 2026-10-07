@@ -1,7 +1,4 @@
-"""Keycloak tokens through the OIDC token endpoint.
-
-Ported from podiumd-minikube (_beheerder_token).
-"""
+"""Keycloak tokens through the OIDC token endpoint. Ported from podiumd-minikube _beheerder_token."""
 
 from __future__ import annotations
 

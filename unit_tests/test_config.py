@@ -68,7 +68,7 @@ def test_every_committed_profile_loads(name):
     profile = load_profile(name, default_envs_dir())
     assert profile.urls
     if profile.estate == "externals":
-        # Not decided yet which ExternalsPodiumD environments run more than smoke (PLAN.md §12).
+        # ExternalsPodiumD environments stay smoke-only until PLAN.md §12 decides otherwise.
         assert profile.allowed_tiers == ("smoke",)
 
 

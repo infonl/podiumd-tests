@@ -28,8 +28,6 @@ ENV_PREFIX = "PODIUMD_TESTS_SECRET_"
 REDACTED = "***"
 
 
-# Prints the shared secret of one JWTSecret row. The client id is inserted as a Python
-# string literal (repr), so it cannot inject code.
 class SecretError(Exception):
     """A secret could not be resolved."""
 
@@ -92,11 +90,11 @@ class SecretResolver:
         return self._cache[name]
 
     def configured(self, name: str) -> bool:
-        """True when the secret has a source: in the profile, its env var, or the bootstrap credentials."""
+        """True when the secret has a source: the profile, its env var, or the credentials Secret."""
         return name in self._profile.secrets or bool(self._environ.get(env_var_name(name))) or name in self._bootstrap()
 
     def _bootstrap(self) -> dict[str, str]:
-        """The bootstrap credentials Secret, read once; empty without cluster access."""
+        """Contents of the credentials Secret, read once; empty without cluster access."""
         if self._stored is None:
             try:
                 self._stored = CredentialStore(self._kube).read()
@@ -122,7 +120,7 @@ class SecretResolver:
                 return self._bootstrap()[name]
             msg = (
                 f"secret {name!r}: not in profile {self._profile.name}, {env_var_name(name)} not set,"
-                f" and not in {STORE_NAME} (run `podiumd-tests bootstrap`)"
+                f" and not in {STORE_NAME}: run `podiumd-tests bootstrap --env {self._profile.name}`"
             )
             raise SecretError(msg)
         try:

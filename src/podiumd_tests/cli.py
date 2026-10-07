@@ -1,4 +1,4 @@
-"""The `podiumd-tests` command (PLAN.md §7a, §8b).
+"""Run PodiumD environment tests and manage their profiles and bootstrap.
 
 Exit codes: 0 pass, 1 test failures, 2 configuration or preflight error,
 3 tier not allowed for the environment.
@@ -78,13 +78,13 @@ def cmd_env_show(args: argparse.Namespace) -> int:
 
 
 def ingress_hosts(kube: Kube) -> list[str]:
-    """Hosts of all Ingresses and HTTPRoutes in the cluster; a missing kind (no Gateway API) is skipped."""
+    """Hosts of all Ingresses and HTTPRoutes in the cluster; a kind the cluster lacks (no Gateway API) is skipped."""
     hosts: list[str] = []
     for kind in ("ingresses", "httproutes"):
         try:
             items = kube.items(kind, all_namespaces=True)
         except KubeError as exc:
-            print(f"skipping {kind}: {exc}", file=sys.stderr)  # e.g. no Gateway API on this cluster
+            print(f"skipping {kind}: {exc}", file=sys.stderr)
             continue
         for item in items:
             spec = section(item, "spec")
@@ -94,7 +94,7 @@ def ingress_hosts(kube: Kube) -> list[str]:
 
 
 def draft_profile(estate: str, context: str, namespace: str, hosts: list[str], scheme: str) -> dict[str, object]:
-    """Draft profile contents from the hosts found in the cluster; smoke-only until reviewed."""
+    """Draft profile from the cluster's hosts; smoke-only until reviewed."""
     urls: dict[str, str] = {}
     for host in hosts:
         component = component_for_host(host)
@@ -239,21 +239,21 @@ def cmd_run(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     """The argument parser of `podiumd-tests`."""
     parser = argparse.ArgumentParser(prog="podiumd-tests", description=__doc__)
-    parser.add_argument("--envs-dir", default=str(default_envs_dir()), help="directory with environment profiles")
+    parser.add_argument("--envs-dir", default=str(default_envs_dir()), help="profile directory (default: envs/)")
     commands = parser.add_subparsers(dest="command", required=True)
 
     env = commands.add_parser("env", help="environment profiles").add_subparsers(dest="env_command", required=True)
     env.add_parser("list", help="list profiles").set_defaults(func=cmd_env_list)
     show = env.add_parser("show", help="show one profile")
-    show.add_argument("env")
+    show.add_argument("env", help="profile name")
     show.set_defaults(func=cmd_env_show)
     init = env.add_parser("init", help="draft a profile from the cluster's ingresses and HTTPRoutes")
-    init.add_argument("name")
+    init.add_argument("name", help="profile name")
     init.add_argument("--estate", choices=ESTATES, required=True)
-    init.add_argument("--context", required=True)
-    init.add_argument("--namespace", default="podiumd")
-    init.add_argument("--scheme", choices=("https", "http"), default="https")
-    init.add_argument("--force", action="store_true")
+    init.add_argument("--context", required=True, help="kube context")
+    init.add_argument("--namespace", default="podiumd", help="application namespace (default: podiumd)")
+    init.add_argument("--scheme", choices=("https", "http"), default="https", help="URL scheme (default: https)")
+    init.add_argument("--force", action="store_true", help="overwrite an existing profile")
     init.set_defaults(func=cmd_env_init)
 
     doc = commands.add_parser("doctor", help="preflight checks for an environment")
@@ -261,9 +261,9 @@ def build_parser() -> argparse.ArgumentParser:
     doc.add_argument("--json", help="also write the checks to this JSON file")
     doc.set_defaults(func=cmd_doctor)
 
-    boot = commands.add_parser("bootstrap", help="create test-only credentials and wiring (ptest-bootstrap-*)")
+    boot = commands.add_parser("bootstrap", help="create test-only credentials and wiring, named ptest-bootstrap-*")
     boot.add_argument("--env", required=True)
-    boot.add_argument("--rotate", action="store_true", help="recreate every step, with new credentials")
+    boot.add_argument("--rotate", action="store_true", help="recreate every step with new credentials")
     boot.add_argument("--skip-doctor", action="store_true")
     boot.set_defaults(func=cmd_bootstrap)
 
@@ -274,9 +274,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = commands.add_parser("run", help="run a tier against an environment")
     run.add_argument("--env", required=True)
-    run.add_argument("--tier", choices=sorted(TIERS), default="smoke")
-    run.add_argument("--results-dir", default=str(REPO_ROOT / "results"))
-    run.add_argument("--keep-data", action="store_true", help="skip cleanup, for debugging")
+    run.add_argument("--tier", choices=sorted(TIERS), default="smoke", help="tier to run (default: smoke)")
+    run.add_argument("--results-dir", default=str(REPO_ROOT / "results"), help="results directory (default: results/)")
+    run.add_argument("--keep-data", action="store_true", help="skip cleanup of created resources")
     run.add_argument("--skip-doctor", action="store_true")
     run.add_argument("pytest_args", nargs=argparse.REMAINDER, help="extra pytest arguments after --")
     run.set_defaults(func=cmd_run)

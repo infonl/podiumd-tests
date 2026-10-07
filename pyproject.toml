@@ -132,7 +132,7 @@ ignore = [
     "ISC001", # Rule may cause conflicts when used with the formatter, disable is recommended by ruff
     "T201", # 'print' statement found, sometimes these are deliberate
     "EXE001", # shebang permission mismatch between host and Docker container
-    "E501", # line-too-long: pylint's job now (C0301), avoid flagging the same line twice
+    "E501", # line-too-long: pylint owns it (C0301), avoid flagging the same line twice
     "ERA001", # commented-out-code: current hits are prose that resembles code
 ]
 # Allow fix for all enabled rules (when `--fix`) is provided.
@@ -198,7 +198,7 @@ sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 # code used only by its own unit test is still dead. False positives:
 #   - pytest_* hooks, test_* functions, pytestmark and @pytest.fixture functions: used by pytest.
 #   - __call__ of a callable Protocol (process.Runner): called through the protocol.
-#   - wait_until, tagged, password_grant: library API for tests of later phases.
+#   - wait_until, tagged, password_grant: library API without a caller in tests/.
 [tool.vulture]
 # Django snippets: run() is called inside the component, not from here.
 exclude = ["*/snippets/[a-z]*.py"]
@@ -222,7 +222,7 @@ exclude = [
 ]
 typeCheckingMode = "strict"
 reportUnusedImport = false  # done by ruff F401
-reportUntypedBaseClass = false # dony by ruff N801
+reportUntypedBaseClass = false # done by ruff N801
 
 # tests/: fakes, parametrize args and monkeypatch lambdas are unannotated
 # and scripts load as ModuleType, so Unknown types remain.

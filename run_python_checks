@@ -22,7 +22,6 @@ fi
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-# Use the project venv when present.
 if [[ -x .venv/bin/python3 ]]; then
     PATH="$PWD/.venv/bin:$PATH"
 fi

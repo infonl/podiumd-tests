@@ -38,7 +38,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     """Command-line options; `podiumd-tests run` passes them."""
     group = parser.getgroup("podiumd")
     group.addoption("--podiumd-env", help="environment profile name (envs/**/<name>.yaml)")
-    group.addoption("--podiumd-envs-dir", default=str(default_envs_dir()))
+    group.addoption("--podiumd-envs-dir", default=str(default_envs_dir()), help="profile directory (default: envs/)")
     group.addoption("--podiumd-run-tag", help="tag for created resources (default: ptest-<random>)")
     group.addoption("--keep-data", action="store_true", help="skip cleanup of created resources")
     group.addoption("--auto-bootstrap", action="store_true", help="apply missing bootstrap steps instead of failing")

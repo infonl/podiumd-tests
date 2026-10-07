@@ -3,7 +3,7 @@
 Each Step is idempotent and reversible. `bootstrap` applies the steps whose
 capabilities the environment has, `unbootstrap` removes them in reverse
 order, and `check` tells whether they are in place (fixture bootstrap_ok).
-Credentials a step creates go to the CredentialStore Secret only.
+Credentials a step creates go to the credentials Secret only.
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ def refusal(profile: Profile) -> str | None:
 
 
 def _each(env: Environment, steps: Sequence[Step], act: Callable[[Context, Step], Outcome]) -> list[Outcome]:
-    """act on every step the environment can take; the others are skipped with a reason."""
+    """Run act on every step the environment has the capabilities for; skip the others with a reason."""
     ctx = Context(env, CredentialStore(env.kube))
     outcomes: list[Outcome] = []
     for step in steps:

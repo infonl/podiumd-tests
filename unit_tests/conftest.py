@@ -96,9 +96,8 @@ class Sent:
 def fake_http(monkeypatch, response_factory):
     """Replace the network under requests. install({path: (status, json)}) returns the list of Sent requests.
 
-    A key "METHOD path" answers only that method; a plain path answers any method.
-
-    Unknown paths answer 404. The real adapters (e.g. host-header mode) still run.
+    A key "METHOD path" answers only that method; a plain path answers any method; unknown paths
+    answer 404. The real adapters (host-header mode) still run.
     """
     sent = []
 

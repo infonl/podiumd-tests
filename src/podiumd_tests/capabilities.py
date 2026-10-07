@@ -3,7 +3,7 @@
 A component is a capability when the profile has a URL for it and, when the
 cluster can be read, a deployment for it exists. "cluster" is a capability
 too: the kube API can be read from this console. Tests declare their needs
-with @pytest.mark.requires("oab", ...) and skip with a reason otherwise.
+with @pytest.mark.requires("openzaak", ...) and skip with a reason otherwise.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ class Capabilities:
 
 
 def detect(profile: Profile, deployment_names: list[str] | None) -> Capabilities:
-    """deployment_names=None means the cluster could not be read; then the profile alone decides."""
+    """Capabilities of an environment; with deployment_names=None (cluster unreadable) the profile alone decides."""
     configured = set(profile.urls)
     reasons = dict.fromkeys(COMPONENT_NAMES - configured, "no URL in profile")
     if deployment_names is None:

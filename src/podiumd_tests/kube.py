@@ -23,7 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 DEFAULT_TIMEOUT = 30
-# All Maykin images (Open Zaak, Open Klant, Objecten, Open Inwoner, ...) have their Django project here.
+# Django project path in every Maykin image (Open Zaak, Open Klant, Objecten, Open Inwoner).
 MANAGE_PY = "/app/src/manage.py"
 DJANGO_VALUE_MARKER = "PTEST_VALUE="
 

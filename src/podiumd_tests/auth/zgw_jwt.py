@@ -1,7 +1,7 @@
 """ZGW API tokens: HS256 JWTs signed with the client's shared secret.
 
-Ported from podiumd-minikube tests/test_productaanvraag_flow.py (_zgw_jwt);
-stdlib only, so no JWT library is needed (PLAN.md R22).
+Ported from podiumd-minikube tests/test_productaanvraag_flow.py (_zgw_jwt).
+Stdlib only: no JWT library dependency (PLAN.md R22).
 """
 
 from __future__ import annotations

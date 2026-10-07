@@ -1,7 +1,6 @@
 """Run results under results/<YYYY-MM>/<timestamp>_<env>_<tier>_<runid>/ (PLAN.md §7).
 
-All writing goes through a ResultsSink, so results can move to another
-repository or a static site later without touching the callers.
+All writing goes through a ResultsSink, so another storage needs no caller changes.
 """
 
 from __future__ import annotations
@@ -31,7 +30,7 @@ if TYPE_CHECKING:
 
 
 class ResultsSink(Protocol):
-    """Where run results are written; LocalDirSink for now, other sinks later."""
+    """Where run results are written."""
 
     def write_text(self, relative_path: str, content: str) -> None:
         """Write one text file at a path relative to the sink root."""

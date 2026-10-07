@@ -1,5 +1,5 @@
 # SSC Twente ExternalsPodiumD environment ontw-dimp (applications/gemeenten/dimp/ontw/).
-# Which tiers may run here is not decided yet: smoke only (PLAN.md R20).
+# Smoke only until the allowed tiers are decided (PLAN.md R20).
 estate: externals
 allowed_tiers: [smoke]
 kube:

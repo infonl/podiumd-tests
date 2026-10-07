@@ -88,13 +88,13 @@ class Profile:  # pylint: disable=too-many-instance-attributes  # mirrors the YA
     access: Access = Access()
     keyvault: str | None = None
     chart_version: str | None = None
-    # Values that differ per environment but are no secret, e.g. zgw_client_id.
+    # Non-secret per-environment values, e.g. zgw_client_id.
     settings: dict[str, str] = field(default_factory=dict[str, str])
     path: Path | None = None
 
 
 def default_envs_dir() -> Path:
-    """envs/ in the repository root (the parent of src/)."""
+    """envs/ in the repository root."""
     return REPO_ROOT / "envs"
 
 

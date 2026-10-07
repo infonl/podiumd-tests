@@ -54,7 +54,7 @@ class Environment:
         if not ip:
             raise KubeError(
                 self.kube.command("get", "svc", ref.name, namespace=ref.namespace),
-                "no external IP (minikube: is `minikube tunnel` running?)",
+                "no external IP: on minikube, run `minikube tunnel`",
             )
         return ip
 
@@ -79,7 +79,7 @@ class Environment:
         return [metadata_name(d) for d in self.items("deployments")]
 
     def deployment_for(self, component: str) -> str:
-        """The main deployment of a component, e.g. "notificaties" for opennotificaties on some estates."""
+        """The main deployment of a component, e.g. "notificaties" for opennotificaties on podiumd-infra."""
         for prefix in COMPONENTS[component].deployment_prefixes:
             if prefix in self.deployment_names:
                 return prefix

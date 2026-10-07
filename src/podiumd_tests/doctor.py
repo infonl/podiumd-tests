@@ -1,7 +1,7 @@
-"""Preflight: can a run against this environment work right now? (PLAN.md R17, §8b)
+"""Read-only preflight checks: can a run against this environment work? (PLAN.md R17, §8b)
 
-Read-only. Each check gives ok, warn, fail or skip (an earlier check it
-depends on failed). Any fail means exit code 2.
+Each check gives ok, warn, fail or skip (a check it depends on failed).
+Any fail means exit code 2.
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ def _cluster(env: Environment) -> list[Check]:
     except KubeError as exc:
         return [Check("kube context", "fail", str(exc))]
     if context not in known:
-        hint = "e.g. az aks get-credentials / minikube start; without it cluster tests skip"
+        hint = "add it with `az aks get-credentials` or `minikube start`; without it cluster tests skip"
         return [Check("kube context", no_access, f"{context} not in kubeconfig", hint)]
     checks = [Check("kube context", "ok", context)]
     try:
@@ -107,9 +107,8 @@ def resolve_hosts(
 ) -> dict[str, str]:
     """Look up all hosts in parallel; the error per host, "" when it resolved.
 
-    The system resolver has no timeout of its own and can take 10-20 s per
-    unknown host. Daemon threads let doctor stop waiting at the deadline,
-    and do not keep the process alive afterwards.
+    The system resolver has no timeout and can take 10-20 s per unknown host;
+    daemon threads let doctor stop at the deadline without keeping the process alive.
     """
     results: dict[str, str] = {}
 

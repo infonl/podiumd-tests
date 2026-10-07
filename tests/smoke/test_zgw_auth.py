@@ -1,8 +1,7 @@
 """Does Open Zaak accept a ZGW JWT? Ported from TA/EX smoke 01-zgw-auth.
 
-Read-only. The data checks of 01 (test catalogus domein, test zaaktype) move
-to phase 2, where bootstrap seeds that data. The client comes from the
-profile: settings.zgw_client_id and secret zgw_client_secret.
+Read-only. The data checks of 01 need a test zaaktype: phase 3 factories.
+The client is settings.zgw_client_id with secret zgw_client_secret.
 """
 
 from __future__ import annotations
@@ -31,7 +30,7 @@ def fixture_client_id(podiumd_env: Environment, credentials: SecretResolver) -> 
     """ZGW client id of the profile; skip when the environment has no ZGW client."""
     client_id = podiumd_env.profile.settings.get("zgw_client_id")
     if not client_id or not credentials.configured("zgw_client_secret"):
-        pytest.skip("no settings.zgw_client_id, or no secret zgw_client_secret (profile or env var)")
+        pytest.skip("no settings.zgw_client_id or no secret zgw_client_secret: add both to the profile")
     return client_id
 
 
