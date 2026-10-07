@@ -42,6 +42,15 @@ def fixture_ita(page: Page, podiumd_env: Environment, need_bootstrap: Callable[.
     return kcc_login(page, podiumd_env, "ita")
 
 
+# ITA posts its logboek object with Transfer-Encoding chunked; behind Traefik, Objecten's uWSGI
+# then sees an empty body and refuses it with 403, so the action fails (TA "47-ITA-logboek").
+LOGBOEK_CHUNKED = pytest.mark.xfail(
+    strict=True,
+    reason="ITA: the logboek POST to Objecten is sent chunked; through Traefik uWSGI gets an empty body and "
+    "answers 403, so claiming (500) and answering (409) fail; not yet reported upstream",
+)
+
+
 def get_list(ita: requests.Session, url: str) -> list[JsonObject]:
     """GET an ITA list; it must answer 200 with a JSON array."""
     response = expect_status(ita.get(url), HTTPStatus.OK)
@@ -55,6 +64,7 @@ def test_afdelingen_and_groepen_are_seeded_together(ita: requests.Session, urls:
     assert bool(afdelingen) == bool(groepen), f"{len(afdelingen)} afdelingen, {len(groepen)} groepen"
 
 
+@LOGBOEK_CHUNKED
 def test_claimed_internetaak_is_on_my_list(
     ita: requests.Session, urls: dict[str, str], openklant: ApiClient, registry: ResourceRegistry
 ) -> None:
@@ -67,6 +77,7 @@ def test_claimed_internetaak_is_on_my_list(
     assert taak["uuid"] in {str(t.get("uuid")) for t in mine}
 
 
+@LOGBOEK_CHUNKED
 def test_answering_an_internetaak_registers_a_klantcontact(
     ita: requests.Session, urls: dict[str, str], openklant: ApiClient, registry: ResourceRegistry
 ) -> None:
