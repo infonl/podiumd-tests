@@ -16,7 +16,6 @@ from playwright.sync_api import expect
 
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.openinwoner import portal_login
-from podiumd_tests.openinwoner import refuse_cookies
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -39,7 +38,6 @@ def fixture_portal(page: Page, podiumd_env: Environment, need_bootstrap: Callabl
     """The portal URL, with the page logged in as the inwoner through DigiD."""
     need_bootstrap(INWONER.name, "openinwoner-oidc-mock", "openinwoner-cms-pages")
     portal_login(page, podiumd_env, "digid", INWONER)
-    refuse_cookies(page)
     return podiumd_env.profile.urls["openinwoner"]
 
 

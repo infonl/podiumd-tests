@@ -17,7 +17,6 @@ from playwright.sync_api import expect
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.browser import browser_session
 from podiumd_tests.openinwoner import portal_login
-from podiumd_tests.openinwoner import refuse_cookies
 from podiumd_tests.seed.openzaak import link_document
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_rol
@@ -67,7 +66,6 @@ def test_inwoners_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,t
     need_bootstrap(INWONER.name, *WIRING)
     zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
     portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
-    refuse_cookies(page)
     expect(page.get_by_text(str(zaak["identificatie"])).first).to_be_visible()
 
 
@@ -79,11 +77,12 @@ def test_bedrijfs_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,t
     parts: ZaaktypeParts,
     need_bootstrap: Callable[..., None],
 ) -> None:
-    """A zaak with the company as initiator is listed after an eHerkenning login (TA int-141)."""
+    """A zaak of the company's vestiging is listed after an eHerkenning login (TA int-141)."""
     need_bootstrap(BEDRIJF.name, *WIRING)
-    zaak = zaak_of(openzaak, registry, parts, kvkNummer=BEDRIJF.attributes["kvk"][0])
+    # The login carries the vestiging, and Open Inwoner filters on it too.
+    vestiging = BEDRIJF.attributes["vestigingsnummer"][0]
+    zaak = zaak_of(openzaak, registry, parts, kvkNummer=BEDRIJF.attributes["kvk"][0], vestigingsNummer=vestiging)
     portal_login(page, podiumd_env, "eherkenning", BEDRIJF, "/mijn-zaken/")
-    refuse_cookies(page)
     expect(page.get_by_text(str(zaak["identificatie"])).first).to_be_visible()
 
 
@@ -102,7 +101,6 @@ def test_zaak_document_can_be_downloaded(  # pylint: disable=too-many-arguments,
     document = make_document(openzaak, registry, parts.informatieobjecttype, inhoud, status="definitief")
     link_document(openzaak, registry, zaak, document)
     portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
-    refuse_cookies(page)
     page.locator(f'a[href*="{zaak["uuid"]}"]').first.click()
     expect(page.get_by_text(str(document["titel"])).first).to_be_visible()
     href = page.locator(f'a[href*="{str(document["url"]).rsplit("/", 1)[-1]}"]').first.get_attribute("href")

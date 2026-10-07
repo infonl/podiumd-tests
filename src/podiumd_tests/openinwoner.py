@@ -16,16 +16,19 @@ if TYPE_CHECKING:
 
 
 def portal_login(page: Page, env: Environment, method: str, user: KeycloakUser, next_path: str = "/") -> None:
-    """Log the test identity in with "digid" or "eherkenning"; the page ends on the portal after the callback."""
+    """Log the test identity in with "digid" or "eherkenning"; the page ends on the portal, cookie banner closed."""
     portal = env.profile.urls["openinwoner"]
     page.goto(f"{portal}/{method}-oidc/authenticate/?next={next_path}")
     keycloak_login(page, user.username, env.credentials.get(user.store_key))
     page.wait_for_url(lambda url: url_host(url) == url_host(portal) and "-oidc/callback" not in url)
+    refuse_cookies(page)
     if "/register/necessary/" in page.url:
         # A first eHerkenning login makes a new account that still needs an e-mail address.
         page.locator('input[name="email"]').fill(user_email(user.username))
         page.get_by_role("button", name="Voltooi registratie").click()
         page.wait_for_url(lambda url: "/register/necessary/" not in url)
+        # Open Inwoner ignores `next` after the registration.
+        page.goto(portal + next_path)
 
 
 def refuse_cookies(page: Page) -> None:
