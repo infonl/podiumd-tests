@@ -53,12 +53,13 @@ TEST_ZAAKTYPE = "ptest-bootstrap-klacht"
 TEST_IOT = "ptest-bootstrap-bijlage"
 TEST_BESLUITTYPE = "ptest-bootstrap-besluit"
 TEST_FORM = "ptest-bootstrap-klacht"
-# Open Notificaties kanalen the ported tests use (TA seed-notificaties.sh), with their filters.
+# Open Notificaties kanalen the ported tests use, with the filters of ExternalsPodiumD and podiumd-infra
+# (statussen: TA seed-notificaties.sh only).
 KANALEN = {
     "zaken": ["bronorganisatie", "zaaktype", "vertrouwelijkheidaanduiding"],
     "statussen": ["bronorganisatie", "zaaktype", "vertrouwelijkheidaanduiding"],
     "documenten": ["bronorganisatie", "informatieobjecttype", "vertrouwelijkheidaanduiding"],
-    "partijen": ["nummer", "soort_partij"],
+    "partijen": ["nummer", "interne_notitie", "soort_partij"],
     "internetaken": ["nummer", "gevraagde_handeling", "toelichting", "status"],
 }
 # API tokens (TokenAuth identifier = store key).
