@@ -1,7 +1,18 @@
 """Unit tests for HTTP sessions in direct and host-header mode."""
 
+from typing import TYPE_CHECKING
+from typing import cast
+
+import requests
+
+from requests.cookies import MockRequest
+from requests.cookies import create_cookie
+
 from podiumd_tests.sessions import DEFAULT_TIMEOUT
 from podiumd_tests.sessions import make_session
+
+if TYPE_CHECKING:
+    import urllib.request
 
 
 def test_host_header_mode_rewrites_profile_hosts(fake_http):
@@ -33,3 +44,13 @@ def test_direct_mode_does_not_rewrite(fake_http):
     sent = fake_http()
     make_session({"openzaak": "https://openzaak.example.test"}).get("https://openzaak.example.test/")
     assert (sent[0].url, sent[0].headers.get("Host")) == ("https://openzaak.example.test/", None)
+
+
+def test_a_session_without_cookies_accepts_none():
+    # MockRequest is what requests itself hands to the cookie policy.
+    request = cast(
+        "urllib.request.Request", MockRequest(requests.Request("GET", "http://ok.test/admin/login/").prepare())
+    )
+    cookie = create_cookie("sessionid", "abc", domain="ok.test")
+    assert not make_session({"openklant": "http://ok.test"}, cookies=False).cookies.get_policy().set_ok(cookie, request)
+    assert make_session({"openklant": "http://ok.test"}).cookies.get_policy().set_ok(cookie, request)

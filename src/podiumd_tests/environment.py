@@ -58,9 +58,9 @@ class Environment:
             )
         return ip
 
-    def session(self) -> requests.Session:
-        """HTTP session for the profile URLs."""
-        return make_session(self.profile.urls, self.ingress_ip())
+    def session(self, *, cookies: bool = True) -> requests.Session:
+        """HTTP session for the profile URLs; cookies=False for token APIs."""
+        return make_session(self.profile.urls, self.ingress_ip(), cookies=cookies)
 
     def items(self, kind: str, namespaces: Sequence[str] | None = None) -> list[dict[str, object]]:
         """Objects of one kind in the given namespaces, by default all of the environment's namespaces."""

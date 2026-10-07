@@ -7,6 +7,7 @@ clients keep using the real URLs, e.g. http://zac.local/.
 
 from __future__ import annotations
 
+from http.cookiejar import DefaultCookiePolicy
 from typing import TYPE_CHECKING
 from typing import override
 from urllib.parse import urlsplit
@@ -81,10 +82,16 @@ class TimeoutSession(requests.Session):
         return super().request(method, url, *args, **kwargs)  # pyright: ignore[reportArgumentType]
 
 
-def make_session(urls: Mapping[str, str], ingress_ip: str | None = None) -> requests.Session:
-    """A session for the profile URLs; with ingress_ip, profile hosts are reached through that IP."""
+def make_session(urls: Mapping[str, str], ingress_ip: str | None = None, *, cookies: bool = True) -> requests.Session:
+    """A session for the profile URLs; with ingress_ip, profile hosts are reached through that IP.
+
+    cookies=False for token APIs: a Django session cookie picked up elsewhere (an admin
+    login page) makes Open Klant fail token requests with HTTP 500.
+    """
     session = TimeoutSession()
     session.headers["User-Agent"] = "podiumd-tests"
+    if not cookies:
+        session.cookies.set_policy(DefaultCookiePolicy(allowed_domains=[]))
     if ingress_ip:
         hosts = {url_host(u) for u in urls.values()}
         adapter = HostHeaderAdapter(hosts, ingress_ip)
