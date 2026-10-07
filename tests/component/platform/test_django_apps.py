@@ -44,6 +44,8 @@ def test_database(podiumd_env: Environment, component: str) -> None:
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
 def test_django_admin_login(podiumd_env: Environment, credentials: SecretResolver, component: str) -> None:
     """The app's superuser logs in to the admin (MK test_django_admin_login.py); environments with SSO only skip."""
+    if component in podiumd_env.profile.settings.get("django_admin_sso_only", "").split(","):
+        pytest.skip(f"{component}'s admin logs in through Keycloak only (settings.django_admin_sso_only)")
     username, password = credentials.optional("django_admin_username"), credentials.optional("django_admin_password")
     if not username or not password:
         pytest.skip("no secrets django_admin_username/password: admin login goes through SSO here")
