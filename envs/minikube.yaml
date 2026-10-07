@@ -25,6 +25,7 @@ urls:
   opennotificaties: https://opennotificaties.local
   openarchiefbeheer: https://openarchiefbeheer-ui.local
   openformulieren: https://openformulieren-nginx.local
+  openinwoner: https://openinwoner.local
   grafana: https://grafana.local
   mailpit: https://mailpit.local
 secrets:
