@@ -22,10 +22,10 @@ def submit(http: requests.Session, base_url: str, slug: str, data: dict[str, obj
     The status has `publicReference`: the identificatie of the zaak a ZGW registration created.
     """
     form_url = f"{base_url}/{slug}/"
-    # The form page sets the csrftoken cookie that every write must echo.
-    expect_status(http.get(form_url), HTTPStatus.OK)
-    headers = {"X-CSRFToken": http.cookies.get("csrftoken") or "", "Referer": form_url}
-    form = _json(http.get(f"{base_url}/api/v2/forms/{slug}"), HTTPStatus.OK)
+    form_response = expect_status(http.get(f"{base_url}/api/v2/forms/{slug}"), HTTPStatus.OK)
+    form = cast("JsonObject", form_response.json())
+    # Every write echoes the CSRF token that API responses carry in this header.
+    headers = {"X-CSRFToken": form_response.headers.get("X-CSRFToken", ""), "Referer": form_url}
     submission = _json(
         http.post(f"{base_url}/api/v2/submissions", json={"form": form["url"], "formUrl": form_url}, headers=headers),
         HTTPStatus.CREATED,

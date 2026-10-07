@@ -10,7 +10,6 @@ OF = "https://of.example.test"
 
 def answers(final_status):
     return {
-        "GET /klacht/": (200, {}),
         "GET /api/v2/forms/klacht": (200, {"url": f"{OF}/api/v2/forms/klacht"}),
         "POST /api/v2/submissions": (
             201,
@@ -30,14 +29,13 @@ def test_submit_walks_the_sdk_sequence_and_returns_the_done_status(fake_http):
     sent = fake_http(answers({"status": "done", "publicReference": "ZAAK-1"}))
     status = submit(requests.Session(), OF, "klacht", {"veld": "x"}, timeout=0)
     assert status["publicReference"] == "ZAAK-1"
-    assert [f"{s.method} {s.url.removeprefix(OF)}" for s in sent][:5] == [
-        "GET /klacht/",
+    assert [f"{s.method} {s.url.removeprefix(OF)}" for s in sent][:4] == [
         "GET /api/v2/forms/klacht",
         "POST /api/v2/submissions",
         "PUT /api/v2/submissions/s1/steps/1",
         "POST /api/v2/submissions/s1/_complete",
     ]
-    assert "X-CSRFToken" in sent[2].headers
+    assert "X-CSRFToken" in sent[1].headers
 
 
 def test_failed_registration_names_the_submission(fake_http):
