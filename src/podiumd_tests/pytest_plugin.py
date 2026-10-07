@@ -254,6 +254,12 @@ def fixture_registry(request: pytest.FixtureRequest, run_tag: str) -> Iterator[R
         print(f"--keep-data: left behind {', '.join(kept)}")
 
 
+@pytest.fixture(scope="session", name="mailpit")
+def fixture_mailpit(podiumd_env: Environment) -> ApiClient:
+    """The environment's Mailpit API."""
+    return ApiClient(podiumd_env.session(cookies=False), podiumd_env.profile.urls["mailpit"] + "/api/v1", {})
+
+
 @pytest.fixture(name="callback")
 def fixture_callback(run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> Callback:
     """A callback path of this test's own on the webhook receiver (infra/webhook-receiver)."""
