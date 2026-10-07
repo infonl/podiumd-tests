@@ -34,6 +34,11 @@ def test_zgw_jwt_is_a_valid_hs256_token():
     }
 
 
+def test_zgw_jwt_user_becomes_the_user_representation():
+    payload = zgw_jwt("zac", "secret", user="podiumd-tests ptest-abc123").split(".")[1]
+    assert json.loads(b64decode(payload))["user_representation"] == "podiumd-tests ptest-abc123"
+
+
 def test_registry_deletes_in_reverse_order():
     deleted = []
     registry = ResourceRegistry("ptest-abc123")

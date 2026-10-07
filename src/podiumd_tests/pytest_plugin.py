@@ -6,6 +6,7 @@ so tests that request them do not shadow a module-level function.
 
 from __future__ import annotations
 
+from contextvars import ContextVar
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import cast
@@ -158,19 +159,36 @@ def fixture_openklant(podiumd_env: Environment, need_bootstrap: Callable[..., No
     return ApiClient(podiumd_env.session(cookies=False), url, {"Authorization": f"Token {token}"})
 
 
-def _zgw_client(
-    podiumd_env: Environment, need_bootstrap: Callable[..., None], step: str, client_id: str, key: str
+# The test running now; Open Zaak writes it into its audittrail through X-Audit-Toelichting.
+_CURRENT_TEST: ContextVar[str] = ContextVar("current_test", default="")
+
+
+@pytest.fixture(autouse=True, name="_current_test")
+def fixture_current_test(request: pytest.FixtureRequest) -> Iterator[None]:
+    """Make the running test's node id available to the API clients."""
+    token = _CURRENT_TEST.set(cast("pytest.Item", request.node).nodeid)
+    yield
+    _CURRENT_TEST.reset(token)
+
+
+def _zgw_client(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixture plumbing
+    run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None], step: str, client_id: str, key: str
 ) -> ApiClient:
     need_bootstrap(step)
     secret = podiumd_env.credentials.get(key)
-    session = podiumd_env.session(cookies=False)
-    return ApiClient(session, podiumd_env.profile.urls["openzaak"], lambda: zgw_headers(zgw_jwt(client_id, secret)))
+
+    def headers() -> dict[str, str]:
+        # Each change in Open Zaak's audittrail then names the run and the test that made it.
+        token = zgw_jwt(client_id, secret, user=f"podiumd-tests {run_tag}")
+        return {**zgw_headers(token), "X-Audit-Toelichting": f"{run_tag} {_CURRENT_TEST.get()}"[:255]}
+
+    return ApiClient(podiumd_env.session(cookies=False), podiumd_env.profile.urls["openzaak"], headers)
 
 
 @pytest.fixture(scope="session", name="openzaak")
-def fixture_openzaak(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
+def fixture_openzaak(run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Open Zaak's ZGW APIs as the suite's own client, with a fresh token per request."""
-    return _zgw_client(podiumd_env, need_bootstrap, "openzaak-client", ZGW_CLIENT_ID, ZGW_STORE_KEY)
+    return _zgw_client(run_tag, podiumd_env, need_bootstrap, "openzaak-client", ZGW_CLIENT_ID, ZGW_STORE_KEY)
 
 
 @pytest.fixture(scope="session", name="zgw_secret")
@@ -181,18 +199,18 @@ def fixture_zgw_secret(podiumd_env: Environment, need_bootstrap: Callable[..., N
 
 
 @pytest.fixture(scope="session", name="openzaak_openbaar")
-def fixture_openzaak_openbaar(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
+def fixture_openzaak_openbaar(run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Open Zaak as a client that sees vertrouwelijkheid openbaar at most and cannot delete."""
     return _zgw_client(
-        podiumd_env, need_bootstrap, "openzaak-client-openbaar", ZGW_OPENBAAR_CLIENT_ID, ZGW_OPENBAAR_STORE_KEY
+        run_tag, podiumd_env, need_bootstrap, "openzaak-client-openbaar", ZGW_OPENBAAR_CLIENT_ID, ZGW_OPENBAAR_STORE_KEY
     )
 
 
 @pytest.fixture(scope="session", name="openzaak_noauth")
-def fixture_openzaak_noauth(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
+def fixture_openzaak_noauth(run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Open Zaak as a known client without any autorisatie."""
     return _zgw_client(
-        podiumd_env, need_bootstrap, "openzaak-client-noauth", ZGW_NOAUTH_CLIENT_ID, ZGW_NOAUTH_STORE_KEY
+        run_tag, podiumd_env, need_bootstrap, "openzaak-client-noauth", ZGW_NOAUTH_CLIENT_ID, ZGW_NOAUTH_STORE_KEY
     )
 
 

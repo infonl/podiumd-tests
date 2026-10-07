@@ -26,15 +26,18 @@ def zgw_headers(token: str) -> dict[str, str]:
     return {**ZGW_HEADERS, "Authorization": f"Bearer {token}"}
 
 
-def zgw_jwt(client_id: str, secret: str, *, issued_at: int | None = None) -> str:
-    """HS256 ZGW token for a client id, signed with its shared secret."""
+def zgw_jwt(client_id: str, secret: str, *, issued_at: int | None = None, user: str | None = None) -> str:
+    """HS256 ZGW token for a client id, signed with its shared secret.
+
+    user becomes the token's user_representation, which Open Zaak writes into its audittrail.
+    """
     header = {"typ": "JWT", "alg": "HS256", "client_identifier": client_id}
     payload = {
         "iss": client_id,
         "iat": int(time.time()) if issued_at is None else issued_at,
         "client_id": client_id,
         "user_id": client_id,
-        "user_representation": client_id,
+        "user_representation": user or client_id,
     }
     signing_input = _b64url(json.dumps(header).encode()) + b"." + _b64url(json.dumps(payload).encode())
     signature = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
