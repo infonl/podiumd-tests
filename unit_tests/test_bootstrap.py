@@ -238,7 +238,7 @@ def test_record_mode_hands_the_stored_record_to_apply_and_remove(env_factory, fa
         stored({"rec": json.dumps(earlier)}),
     )
     fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "opennotificaties"}}]}))
-    step = SnippetStep("kanalen", "opennotificaties", "kanalen", "rec", {"kanalen": {}}, record=True, wiring=True)
+    step = SnippetStep("kanalen", ("opennotificaties",), "kanalen", "rec", {"kanalen": {}}, record=True, wiring=True)
     ctx = Context(env, CredentialStore(env.kube))
     extended = {"created": ["partijen", "statussen"], "filters": {"zaken": ["zaaktype"]}}
     fake_runner.answers["exec -i deploy/opennotificaties"] = snippet_answer({"present": True, "record": extended})
