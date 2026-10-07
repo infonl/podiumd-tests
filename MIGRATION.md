@@ -157,11 +157,11 @@ Sources:
 | `regression/63-klacht-bezwaar-keten.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_klacht_bezwaar.py`; the audit trail check is left out (needs `heeft_alle_autorisaties`, see 14/48). |
 | `regression/64-document-lifecycle.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_documenten.py; its audittrail part is an xfail. |
 | `regression/65-oi-cache-webhook.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/67-pabc-functional-roles.spec.ts` | component or integration | 3/4/5 | todo | PABC cookie session over HTTPS: phase 5. |
-| `regression/68-pabc-decision.spec.ts` | component or integration | 3/4/5 | port | 68b/68c → `tests/component/pabc/test_api_key.py`; 68a needs a PABC session: phase 5. |
-| `regression/69-pabc-domains-entity-types.spec.ts` | component or integration | 3/4/5 | todo | PABC cookie session over HTTPS: phase 5. |
+| `regression/67-pabc-functional-roles.spec.ts` | component or integration | 3/4/5 | port | `tests/component/pabc/test_management.py` (browser session). |
+| `regression/68-pabc-decision.spec.ts` | component or integration | 3/4/5 | port | 68b/68c → `tests/component/pabc/test_api_key.py`; 68a → `test_management.py`. |
+| `regression/69-pabc-domains-entity-types.spec.ts` | component or integration | 3/4/5 | port | `tests/component/pabc/test_management.py`. |
 | `regression/70-pabc-groups-lookup.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/71-pabc-zac-integration-coherence.spec.ts` | component or integration | 3/4/5 | todo | PABC cookie session over HTTPS: phase 5. |
+| `regression/71-pabc-zac-integration-coherence.spec.ts` | component or integration | 3/4/5 | port | `tests/component/pabc/test_management.py`. |
 | `regression/73-ita-assigned-list.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/75-ita-forward-flow.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/75-of-zaaktype-matching.spec.ts` | component or integration | 3/4/5 | todo | |

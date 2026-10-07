@@ -273,6 +273,15 @@ def fixture_mailpit(podiumd_env: Environment) -> ApiClient:
     return mailpit_client(podiumd_env)
 
 
+@pytest.fixture(scope="session", name="pabc_api_key")
+def fixture_pabc_api_key(credentials: SecretResolver) -> str:
+    """PABC's API key (secret pabc_api_key); skips when the profile has none."""
+    key = credentials.optional("pabc_api_key")
+    if not key:
+        pytest.skip("no secret pabc_api_key in the profile")
+    return key
+
+
 @pytest.fixture(name="callback")
 def fixture_callback(run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> Callback:
     """A callback path of this test's own on the webhook receiver (infra/webhook-receiver)."""
