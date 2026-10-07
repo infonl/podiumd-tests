@@ -30,15 +30,10 @@ def decide(http: requests.Session, pabc_url: str, api_key: str, functional_roles
 def login(page: Page, pabc_url: str, username: str, password: str) -> APIRequestContext:
     """Log in to PABC through Keycloak; the page's request context then carries the session cookie.
 
-    PABC answers an anonymous API call with 401 and the Keycloak URL in Location (no redirect),
-    and that call sets the OIDC correlation cookies the callback checks.
+    The login must start with a page navigation to /api/challenge: PABC answers a fetch
+    with 401 and a Keycloak URL without `state`, and such a login never completes.
     """
-    challenge = page.request.get(pabc_url + "/api/v1/applications", max_redirects=0)
-    location = challenge.headers.get("location")
-    if challenge.status != 401 or not location:  # PABC's challenge status
-        msg = f"PABC answered {challenge.status} without a login Location to an anonymous API call"
-        raise AssertionError(msg)
-    page.goto(location)
+    page.goto(pabc_url + "/api/challenge")
     keycloak_login(page, username, password)
     page.wait_for_url(lambda url: url_host(url) == url_host(pabc_url))
     me = cast("JsonObject", page.request.get(pabc_url + "/api/me").json())
