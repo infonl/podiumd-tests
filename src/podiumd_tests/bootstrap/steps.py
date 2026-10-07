@@ -571,4 +571,15 @@ STEPS: tuple[Step, ...] = (
         record=True,
         wiring=True,
     ),
+    # Wiring W4: Open Inwoner shows zaken through an API group (TA seed-oi-bedrading.sh).
+    SnippetStep(
+        "openinwoner-zgw-group",
+        ("openinwoner", "openzaak"),
+        "oi_zgw_group",
+        "ptest_bootstrap_openinwoner_zgw_group_record",
+        {"name": f"{PREFIX}-openzaak"},
+        record=True,
+        wiring=True,
+        context_params=lambda ctx: {"zaken_url": ctx.env.profile.urls["openzaak"] + "/zaken/api/v1/"},
+    ),
 )
