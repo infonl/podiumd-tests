@@ -16,6 +16,11 @@ if TYPE_CHECKING:
     from podiumd_tests.json_data import JsonObject
 
 
+def user_email(username: str) -> str:
+    """The e-mail address create_user gives a user; Open Klant actors are matched on it."""
+    return f"{username}@example.invalid"
+
+
 class KeycloakAdmin:
     """Admin calls on one realm, with a token of an admin user in the master realm."""
 
@@ -42,7 +47,7 @@ class KeycloakAdmin:
         body = {
             "username": username,
             "enabled": True,
-            "email": f"{username}@example.invalid",
+            "email": user_email(username),
             "emailVerified": True,
             "firstName": "PodiumD",
             "lastName": username,

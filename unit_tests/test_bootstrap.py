@@ -14,9 +14,11 @@ from podiumd_tests.bootstrap import check
 from podiumd_tests.bootstrap import failed
 from podiumd_tests.bootstrap import refusal
 from podiumd_tests.bootstrap import unbootstrap
+from podiumd_tests.bootstrap.steps import OPENKLANT_STORE_KEY
 from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.bootstrap.steps import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.steps import KeycloakUser
+from podiumd_tests.bootstrap.steps import OpenKlantActor
 from podiumd_tests.bootstrap.steps import SnippetStep
 from podiumd_tests.bootstrap.steps import keycloak_password_key
 from podiumd_tests.credential_store import CredentialStore
@@ -263,3 +265,32 @@ def test_a_failing_step_does_not_stop_the_others(env_factory, fake_runner, profi
     assert [(o.step, o.action) for o in outcomes] == [("broken", "failed"), ("later", "removed")]
     assert "DisallowedHost" in outcomes[0].detail
     assert failed(outcomes)
+
+
+OK = "https://ok.example.test"
+ACTOREN = "/klantinteracties/api/v1/actoren"
+
+
+def test_openklant_actor_recreates_the_users_actor(env_factory, fake_runner, profile_factory, fake_http):
+    env = cluster_env(env_factory, fake_runner, profile_factory, urls={"openklant": OK})
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (
+        0,
+        stored({OPENKLANT_STORE_KEY: "tok"}),
+    )
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "openklant"}}]}))
+    sent = fake_http(
+        {
+            f"GET {ACTOREN}": (200, {"results": [{"uuid": "a1"}]}),
+            f"DELETE {ACTOREN}/a1": (204, None),
+            f"POST {ACTOREN}": (201, {"uuid": "a2"}),
+        }
+    )
+    step = OpenKlantActor("kcc")
+    assert step.apply(Context(env, CredentialStore(env.kube))) == {}
+    assert [(r.method, r.url.removeprefix(OK).split("?")[0]) for r in sent] == [
+        ("GET", ACTOREN),
+        ("DELETE", f"{ACTOREN}/a1"),
+        ("POST", ACTOREN),
+    ]
+    assert sent[0].url.endswith("actoridentificatorObjectId=ptest-bootstrap-kcc%40example.invalid")
+    assert sent[-1].headers["Authorization"] == "Token tok"

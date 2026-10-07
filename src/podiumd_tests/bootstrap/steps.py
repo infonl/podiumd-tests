@@ -7,14 +7,20 @@ import secrets
 
 from dataclasses import dataclass
 from dataclasses import field
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
 from podiumd_tests.auth.keycloak_admin import KeycloakAdmin
+from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.django_snippets import run_snippet
+from podiumd_tests.json_data import entries
+from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    import requests
 
     from podiumd_tests.bootstrap import Context
     from podiumd_tests.bootstrap import Step
@@ -178,6 +184,69 @@ class KeycloakUser:
         return (self.store_key,)
 
 
+@dataclass(frozen=True)
+class OpenKlantActor:
+    """Open Klant medewerker actor for a Keycloak test user, matched by e-mail (TA seed-ita-medewerker-actor).
+
+    ITA answers 409 ACTOR_RETRIEVAL_ERROR without it. Goes through the API with the suite's own token.
+    """
+
+    user: str
+    requires: tuple[str, ...] = ("openklant",)
+    wiring: bool = False
+
+    @property
+    def name(self) -> str:
+        """Step name."""
+        return f"openklant-actor-{self.user}"
+
+    @property
+    def email(self) -> str:
+        """The test user's e-mail, which ITA and KISS match the actor on."""
+        return user_email(f"{PREFIX}-{self.user}")
+
+    def _api(self, ctx: Context) -> tuple[requests.Session, str, dict[str, str]]:
+        url = ctx.env.profile.urls["openklant"] + "/klantinteracties/api/v1/actoren"
+        return ctx.env.session(), url, {"Authorization": f"Token {ctx.store.read()[OPENKLANT_STORE_KEY]}"}
+
+    def _uuids(self, ctx: Context) -> list[str]:
+        http, url, headers = self._api(ctx)
+        params = {"actoridentificatorObjectId": self.email}
+        response = expect_status(http.get(url, params=params, headers=headers), HTTPStatus.OK)
+        return [str(a["uuid"]) for a in entries(cast("dict[str, object]", response.json()).get("results"))]
+
+    def is_present(self, ctx: Context, /) -> bool:
+        """An actor with the user's e-mail exists."""
+        return OPENKLANT_STORE_KEY in ctx.store.read() and bool(self._uuids(ctx))
+
+    def apply(self, ctx: Context, /) -> dict[str, str]:
+        """Recreate the actor."""
+        self.remove(ctx)
+        http, url, headers = self._api(ctx)
+        body = {
+            "naam": f"{PREFIX}-{self.user}",
+            "soortActor": "medewerker",
+            "indicatieActief": True,
+            "actoridentificator": {
+                "objectId": self.email,
+                "codeObjecttype": "mdw",
+                "codeRegister": "msei",
+                "codeSoortObjectId": "email",
+            },
+        }
+        expect_status(http.post(url, json=body, headers=headers), HTTPStatus.CREATED)
+        return {}
+
+    def remove(self, ctx: Context, /) -> tuple[str, ...]:
+        """Delete the user's actors."""
+        if OPENKLANT_STORE_KEY not in ctx.store.read():
+            return ()
+        http, url, headers = self._api(ctx)
+        for uuid in self._uuids(ctx):
+            expect_status(http.delete(f"{url}/{uuid}", headers=headers), HTTPStatus.NO_CONTENT)
+        return ()
+
+
 def keycloak_password_key(key: str) -> str:
     """Key of a test user's password in the credentials Secret."""
     return f"{PREFIX.replace('-', '_')}_{key}_password"
@@ -285,6 +354,7 @@ STEPS: tuple[Step, ...] = (
         client_roles=(("pabc", "administrator"),),
         groups=("beheerders-elk-domein",),
     ),
+    OpenKlantActor("kcc"),
     KeycloakUser("inwoner", attributes={"bsn": ["999990019"]}),
     KeycloakUser("inwoner2", attributes={"bsn": ["999990038"]}),
     KeycloakUser("bedrijf", attributes={"kvk": ["68750110"], "vestigingsnummer": ["000038509564"]}),
