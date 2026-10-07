@@ -11,7 +11,8 @@ def run(params):
     from notifications_api_common.models import NotificationsConfig
     from zgw_consumers.models import Service
 
-    config = NotificationsConfig.get_solo()
+    # The database row, not get_solo(): its cache can hold a stale config from another pod.
+    config = NotificationsConfig.objects.first() or NotificationsConfig.get_solo()
     slug = f"{params['prefix']}-nrc"
     if params["action"] == "status":
         return {"present": config.notifications_api_service_id is not None}
@@ -21,6 +22,7 @@ def run(params):
         if record.get("linked") and config.notifications_api_service and config.notifications_api_service.slug == slug:
             config.notifications_api_service = None
             config.save()
+            NotificationsConfig.clear_cache()
         Service.objects.filter(slug=slug).delete()
         return {"present": False}
 
@@ -40,4 +42,5 @@ def run(params):
     )
     config.notifications_api_service = service
     config.save()
+    NotificationsConfig.clear_cache()
     return {"present": True, "record": {"linked": True}}
