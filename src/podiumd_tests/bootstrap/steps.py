@@ -326,6 +326,14 @@ def productaanvraag_zaaktypen(ctx: Context) -> dict[str, object]:
     }
 
 
+# The klantcontactmedewerker of KISS and ITA (TA kcc-medewerker).
+KCC = KeycloakUser(
+    "kcc",
+    realm_roles=("Klantcontactmedewerker",),
+    client_roles=(("kiss", "Klantcontactmedewerker"), ("ita", "ITA_Gebruiker")),
+    # ITA refuses a login without it ("Verwachtewaarde voor de samaccountname ontbreekt").
+    attributes={"samaccountname": [f"{PREFIX}-kcc"]},
+)
 # Test identities for DigiD and eHerkenning logins (TA testinwoner, testbedrijf):
 # the Keycloak attributes become the bsn and eHerkenning claims of the mock.
 IDENTITIES = (
@@ -443,11 +451,7 @@ STEPS: tuple[Step, ...] = (
     ),
     # Users for KISS and ITA (TA kcc-medewerker), for the admin UIs, PABC and ZAC (TA testadmin),
     # and for the DigiD and eHerkenning logins through Keycloak (TA testinwoner, testbedrijf).
-    KeycloakUser(
-        "kcc",
-        realm_roles=("Klantcontactmedewerker",),
-        client_roles=(("kiss", "Klantcontactmedewerker"), ("ita", "ITA_Gebruiker")),
-    ),
+    KCC,
     KeycloakUser(
         "admin",
         realm_roles=("Registreerders", "Behandelaar", "Coordinator", "Functioneel-beheerder", "beheerder_elk_domein"),

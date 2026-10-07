@@ -113,9 +113,9 @@ def make_digitaal_adres(
     return _create(openklant, registry, "digitaleadressen", body)
 
 
-def make_klantcontact(openklant: ApiClient, registry: ResourceRegistry, **fields: object) -> JsonObject:
+def klantcontact_body(registry: ResourceRegistry, **fields: object) -> dict[str, object]:
     """A klantcontact by phone whose onderwerp carries the run tag; fields override the defaults."""
-    body: dict[str, object] = {
+    return {
         "nummer": random_nummer(),
         "kanaal": "telefoon",
         "onderwerp": registry.tagged("klantcontact"),
@@ -126,7 +126,11 @@ def make_klantcontact(openklant: ApiClient, registry: ResourceRegistry, **fields
         "plaatsgevondenOp": datetime.now(tz=UTC).isoformat(),
         **fields,
     }
-    return _create(openklant, registry, "klantcontacten", body)
+
+
+def make_klantcontact(openklant: ApiClient, registry: ResourceRegistry, **fields: object) -> JsonObject:
+    """A klantcontact (klantcontact_body) in Open Klant."""
+    return _create(openklant, registry, "klantcontacten", klantcontact_body(registry, **fields))
 
 
 def make_betrokkene(
