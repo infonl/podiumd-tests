@@ -19,6 +19,8 @@ from podiumd_tests.auth.zgw_jwt import zgw_jwt
 from podiumd_tests.bootstrap import bootstrap
 from podiumd_tests.bootstrap import check
 from podiumd_tests.bootstrap import refusal
+from podiumd_tests.bootstrap.steps import NRC_CLIENT_ID
+from podiumd_tests.bootstrap.steps import NRC_STORE_KEY
 from podiumd_tests.bootstrap.steps import OPENKLANT_STORE_KEY
 from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.bootstrap.steps import TEST_ZAAKTYPE
@@ -133,7 +135,11 @@ def fixture_need_bootstrap(request: pytest.FixtureRequest, podiumd_env: Environm
         unknown = set(names) - {s.name for s in STEPS}
         if unknown:
             pytest.fail(f"unknown bootstrap steps: {', '.join(sorted(unknown))}")
-        missing = [s for s, o in zip(wanted, check(podiumd_env, wanted), strict=True) if o.action != "present"]
+        outcomes = check(podiumd_env, wanted)
+        skipped = [o for o in outcomes if o.action == "skipped"]
+        if skipped:  # e.g. wiring off for the profile, or the component is absent
+            pytest.skip("; ".join(f"bootstrap step {o.step}: {o.detail}" for o in skipped))
+        missing = [s for s, o in zip(wanted, outcomes, strict=True) if o.action != "present"]
         name = podiumd_env.profile.name
         if missing and not auto:
             steps = ", ".join(s.name for s in missing)
@@ -212,6 +218,15 @@ def fixture_openzaak_noauth(run_tag: str, podiumd_env: Environment, need_bootstr
     return _zgw_client(
         run_tag, podiumd_env, need_bootstrap, "openzaak-client-noauth", ZGW_NOAUTH_CLIENT_ID, ZGW_NOAUTH_STORE_KEY
     )
+
+
+@pytest.fixture(scope="session", name="opennotificaties")
+def fixture_opennotificaties(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
+    """Open Notificaties as the suite's own client ptest-bootstrap-nrc."""
+    need_bootstrap("opennotificaties-client")
+    secret = podiumd_env.credentials.get(NRC_STORE_KEY)
+    url = podiumd_env.profile.urls["opennotificaties"] + "/api/v1"
+    return ApiClient(podiumd_env.session(cookies=False), url, lambda: zgw_headers(zgw_jwt(NRC_CLIENT_ID, secret)))
 
 
 @pytest.fixture(scope="session", name="test_zaaktype")
