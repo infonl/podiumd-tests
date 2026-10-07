@@ -2,12 +2,47 @@
 
 from __future__ import annotations
 
+import random
+
+from datetime import UTC
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
+
+# BSNs of the BRP test set and KvK numbers of the KvK test set are shared by every team;
+# generated numbers keep tests independent of what others left behind.
+_rng = random.SystemRandom()
+
+
+def random_bsn() -> str:
+    """A random 9-digit number that passes the BSN eleven test (elfproef)."""
+    while True:
+        digits = [_rng.randint(0, 9) for _ in range(8)]
+        total = sum(d * w for d, w in zip(digits, range(9, 1, -1), strict=True))
+        last = total % 11
+        if last < 10 and digits[0] != 0:  # the check digit is weighted -1
+            return "".join(map(str, [*digits, last]))
+
+
+def random_kvk_nummer() -> str:
+    """A random 8-digit KvK number."""
+    return str(_rng.randint(10_000_000, 99_999_999))
+
+
+def _create(openklant: ApiClient, registry: ResourceRegistry, path: str, body: dict[str, object]) -> JsonObject:
+    created = openklant.post(path, body)
+    url = str(created["url"])
+    registry.add(f"{path} {url}", lambda: openklant.delete(url))
+    return created
+
+
+def ref(obj: JsonObject) -> dict[str, str]:
+    """The {"uuid": …} reference Open Klant uses between its objects."""
+    return {"uuid": str(obj["uuid"])}
 
 
 def make_partij(openklant: ApiClient, registry: ResourceRegistry, **fields: object) -> JsonObject:
@@ -24,7 +59,107 @@ def make_partij(openklant: ApiClient, registry: ResourceRegistry, **fields: obje
         "voorkeursRekeningnummer": None,
         **fields,
     }
-    partij = openklant.post("partijen", body)
-    url = str(partij["url"])
-    registry.add(f"partij {url}", lambda: openklant.delete(url))
-    return partij
+    return _create(openklant, registry, "partijen", body)
+
+
+def make_organisatie(openklant: ApiClient, registry: ResourceRegistry) -> JsonObject:
+    """An organisatie-partij named after the run tag."""
+    return make_partij(
+        openklant, registry, soortPartij="organisatie", partijIdentificatie={"naam": registry.tagged("bv")}
+    )
+
+
+def make_partij_identificator(
+    openklant: ApiClient, registry: ResourceRegistry, partij: JsonObject, kind: str, number: str
+) -> JsonObject:
+    """A BSN ("bsn"), KvK ("kvk_nummer") or RSIN ("rsin") identificator of a partij."""
+    objecttype = "natuurlijk_persoon" if kind == "bsn" else "niet_natuurlijk_persoon"
+    register = "brp" if kind == "bsn" else "hr"
+    body: dict[str, object] = {
+        "identificeerdePartij": ref(partij),
+        "anderePartijIdentificator": "",
+        "partijIdentificator": {
+            "codeObjecttype": objecttype,
+            "codeSoortObjectId": kind,
+            "objectId": number,
+            "codeRegister": register,
+        },
+    }
+    return _create(openklant, registry, "partij-identificatoren", body)
+
+
+def make_digitaal_adres(
+    openklant: ApiClient, registry: ResourceRegistry, partij: JsonObject | None, adres: str
+) -> JsonObject:
+    """An e-mail address, of a partij or (partij None) of no one."""
+    body: dict[str, object] = {
+        "verstrektDoorBetrokkene": None,
+        "verstrektDoorPartij": ref(partij) if partij else None,
+        "adres": adres,
+        "soortDigitaalAdres": "email",
+        "omschrijving": registry.tagged("adres"),
+        "isStandaardAdres": partij is not None,
+    }
+    return _create(openklant, registry, "digitaleadressen", body)
+
+
+def make_klantcontact(openklant: ApiClient, registry: ResourceRegistry, **fields: object) -> JsonObject:
+    """A klantcontact by phone whose onderwerp carries the run tag; fields override the defaults."""
+    body: dict[str, object] = {
+        "kanaal": "telefoon",
+        "onderwerp": registry.tagged("klantcontact"),
+        "inhoud": "podiumd-tests",
+        "indicatieContactGelukt": True,
+        "taal": "nld",
+        "vertrouwelijk": False,
+        "plaatsgevondenOp": datetime.now(tz=UTC).isoformat(),
+        **fields,
+    }
+    return _create(openklant, registry, "klantcontacten", body)
+
+
+def make_betrokkene(
+    openklant: ApiClient, registry: ResourceRegistry, klantcontact: JsonObject, partij: JsonObject | None
+) -> JsonObject:
+    """A klant betrokken at a klantcontact, for a partij or anonymous."""
+    body: dict[str, object] = {
+        "wasPartij": ref(partij) if partij else None,
+        "hadKlantcontact": ref(klantcontact),
+        "rol": "klant",
+        "initiator": True,
+        "organisatienaam": "",
+        "contactnaam": {"voorletters": "", "voornaam": "PodiumD", "voorvoegselAchternaam": "", "achternaam": "test"},
+    }
+    return _create(openklant, registry, "betrokkenen", body)
+
+
+def make_actor(openklant: ApiClient, registry: ResourceRegistry, soort: str = "medewerker") -> JsonObject:
+    """An actor of a kind (medewerker, organisatorische_eenheid, geautomatiseerde_actor) named after the run tag."""
+    name = registry.tagged(f"actor-{_rng.randint(0, 999_999)}")
+    body: dict[str, object] = {
+        "naam": name,
+        "soortActor": soort,
+        "indicatieActief": True,
+        "actoridentificator": {
+            "objectId": name,
+            "codeObjecttype": "act",
+            "codeRegister": "obj",
+            "codeSoortObjectId": "idf",
+        },
+    }
+    return _create(openklant, registry, "actoren", body)
+
+
+def make_internetaak(
+    openklant: ApiClient, registry: ResourceRegistry, klantcontact: JsonObject, actoren: list[JsonObject]
+) -> JsonObject:
+    """An internetaak to handle, raised by a klantcontact and assigned to actors."""
+    body: dict[str, object] = {
+        "nummer": str(_rng.randint(1_000_000_000, 9_999_999_999)),
+        "gevraagdeHandeling": "Terugbellen",
+        "aanleidinggevendKlantcontact": ref(klantcontact),
+        "toegewezenAanActoren": [ref(a) for a in actoren],
+        "toelichting": registry.tagged("internetaak"),
+        "status": "te_verwerken",
+    }
+    return _create(openklant, registry, "internetaken", body)
