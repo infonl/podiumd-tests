@@ -108,7 +108,7 @@ Sources:
 | `regression/177-pen-admin-niet-publiek.spec.ts` | component or integration | 3/4/5 | port | `tests/component/platform/test_public_surface.py`. |
 | `regression/178-blacklist-upload.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/179-portaal-profiel-naar-openklant.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/18-klantcontact-zaak-koppeling.spec.ts` | component or integration | 3/4/5 | todo | Chain Open Klant → Open Zaak: phase 4. |
+| `regression/18-klantcontact-zaak-koppeling.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_klantcontact_zaak.py`. |
 | `regression/183-of-digid-zaak-rol.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/184-ita-doorsturen-mutatie.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/185-of-betaalstatus-zaak.spec.ts` | component or integration | 3/4/5 | todo | |
@@ -154,7 +154,7 @@ Sources:
 | `regression/60-seed-data-health.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_catalogi.py, on the bootstrap zaaktype. |
 | `regression/61-mobile-mijn-zaken.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/62-vergetelheid-categorieen.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/63-klacht-bezwaar-keten.spec.ts` | component or integration | 3/4/5 | todo | Chain: phase 4. |
+| `regression/63-klacht-bezwaar-keten.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_klacht_bezwaar.py`; the audit trail check is left out (needs `heeft_alle_autorisaties`, see 14/48). |
 | `regression/64-document-lifecycle.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_documenten.py; its audittrail part is an xfail. |
 | `regression/65-oi-cache-webhook.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/67-pabc-functional-roles.spec.ts` | component or integration | 3/4/5 | todo | PABC cookie session over HTTPS: phase 5. |
