@@ -156,13 +156,15 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return EXIT_CONFIG if doctor.failed(checks) else EXIT_OK
 
 
-def _pytest_selection(
-    profile: Profile, tier_name: str, run_id: str, junit: Path, args: argparse.Namespace
-) -> list[str]:
+def pytest_selection(profile: Profile, tier_name: str, run_id: str, junit: Path, args: argparse.Namespace) -> list[str]:
+    """The pytest arguments of a run: the tier's paths and markers, the run tag and the results files."""
     tier = TIERS[tier_name]
     paths = [str(REPO_ROOT / p) for p in tier.paths if (REPO_ROOT / p).is_dir()]
     selection = [*paths, "-m", tier.marker_expression, f"--podiumd-env={profile.name}", f"--junitxml={junit}"]
     selection.append(f"--podiumd-run-tag={run_tag(run_id)}")
+    # A screenshot of each failed browser test in artifacts/<test-id>/. No Playwright traces:
+    # they record what a test types, test passwords included (R8).
+    selection += [f"--output={junit.parent / 'artifacts'}", "--screenshot=only-on-failure"]
     if args.keep_data:
         selection.append("--keep-data")
     return [*selection, *args.pytest_args]
@@ -279,7 +281,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     directory = run_dir(datetime.fromisoformat(info.started), profile.name, args.tier, info.run_id)
     junit = Path(sink.location(f"{directory}/junit.xml"))
     junit.parent.mkdir(parents=True, exist_ok=True)
-    info.selection = _pytest_selection(profile, args.tier, info.run_id, junit, args)
+    info.selection = pytest_selection(profile, args.tier, info.run_id, junit, args)
     # Smoke only reads; every other tier writes to the environment and takes the shared lock.
     lock_file = None if args.tier == "smoke" else profile.settings.get("lock_file")
     with held(lock_file, f"run {args.tier} {profile.name}"):

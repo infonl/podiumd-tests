@@ -1,5 +1,6 @@
 """Unit tests for the podiumd-tests command."""
 
+import argparse
 import json
 
 import pytest
@@ -73,3 +74,11 @@ def test_unknown_bootstrap_step_is_a_profile_error():
     with pytest.raises(ProfileError, match="unknown bootstrap steps: nope"):
         cli.selected_steps(["nope"])
     assert [s.name for s in cli.selected_steps(["openklant-token"])] == ["openklant-token"]
+
+
+def test_run_keeps_screenshots_of_failed_browser_tests_but_no_traces(tmp_path, profile_factory):
+    args = argparse.Namespace(keep_data=False, pytest_args=[])
+    selection = cli.pytest_selection(profile_factory(), "smoke", "2610071230a3f1", tmp_path / "junit.xml", args)
+    assert f"--output={tmp_path / 'artifacts'}" in selection
+    assert "--screenshot=only-on-failure" in selection
+    assert not any(a.startswith("--tracing") for a in selection)
