@@ -1,4 +1,4 @@
-"""ZGW API tokens: HS256 JWTs signed with the client's shared secret.
+"""HS256 JWTs, and ZGW API tokens signed with the client's shared secret.
 
 Ported from podiumd-minikube tests/test_productaanvraag_flow.py (_zgw_jwt).
 Stdlib only: no JWT library dependency (PLAN.md R22).
@@ -11,6 +11,11 @@ import hashlib
 import hmac
 import json
 import time
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 def _b64url(raw: bytes) -> bytes:
@@ -26,12 +31,19 @@ def zgw_headers(token: str) -> dict[str, str]:
     return {**ZGW_HEADERS, "Authorization": f"Bearer {token}"}
 
 
+def hs256_jwt(payload: Mapping[str, object], secret: str, header: Mapping[str, object] | None = None) -> str:
+    """An HS256-signed JWT with this payload; header adds to typ and alg."""
+    full_header = {"typ": "JWT", "alg": "HS256", **(header or {})}
+    signing_input = _b64url(json.dumps(full_header).encode()) + b"." + _b64url(json.dumps(payload).encode())
+    signature = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
+    return (signing_input + b"." + _b64url(signature)).decode()
+
+
 def zgw_jwt(client_id: str, secret: str, *, issued_at: int | None = None, user: str | None = None) -> str:
     """HS256 ZGW token for a client id, signed with its shared secret.
 
     user becomes the token's user_representation, which Open Zaak writes into its audittrail.
     """
-    header = {"typ": "JWT", "alg": "HS256", "client_identifier": client_id}
     payload = {
         "iss": client_id,
         "iat": int(time.time()) if issued_at is None else issued_at,
@@ -39,6 +51,4 @@ def zgw_jwt(client_id: str, secret: str, *, issued_at: int | None = None, user: 
         "user_id": client_id,
         "user_representation": user or client_id,
     }
-    signing_input = _b64url(json.dumps(header).encode()) + b"." + _b64url(json.dumps(payload).encode())
-    signature = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
-    return (signing_input + b"." + _b64url(signature)).decode()
+    return hs256_jwt(payload, secret, {"client_identifier": client_id})
