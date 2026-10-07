@@ -25,21 +25,21 @@ Sources:
 | `interaction/105-portaal-profiel-edit.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openinwoner/test_portaal_inwoner.py` (formsets in this OI). |
 | `interaction/107-portaal-zoeken.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openinwoner/test_portaal_anoniem.py` (anonymous; search needs no login). |
 | `interaction/108-portaal-vraag-stellen-inwoner.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | Into the heading test of `tests/component/openinwoner/test_portaal_inwoner.py`; asking a question needs W8. |
-| `interaction/111-portaal-documenten-uploaden.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/111-portaal-documenten-uploaden.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | Needs zaaktype import (zgw_import_data) and upload enabled per informatieobjecttype in OI. |
 | `interaction/140-inwoner-vraag-over-zaak.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
-| `interaction/141-bedrijf-eherkenning-mijn-zaken.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/141-bedrijf-eherkenning-mijn-zaken.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/integration/test_portaal_zaken.py`; the first eHerkenning login completes OI's registration (why TA landed elsewhere). |
 | `interaction/142-oab-vernietigingslijst.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openarchiefbeheer/test_vernietigingslijst.py`; the list holds only the test's own zaak, never select_all. |
 | `interaction/145-contact-lookup-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | `tests/component/openklant/`: betrokkenen of a partij, internetaak by klantcontact. |
 | `interaction/148-ita-doorsturen-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | Its afdelingen/groepen reads are in 77 and 184. |
-| `interaction/162-portaal-document-upload-e2e.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/162-portaal-document-upload-e2e.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | Same as 111. |
 | `interaction/164-portaal-vraag-stellen-vanuit-zaak.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/168-oab-archivist-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | port | Archivist accept → ready_to_delete in `test_vernietigingslijst.py`; review-responses that change archiefactiedatum: todo. |
 | `interaction/180-ita-contactmoment-afsluiten.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/ita/test_ita_internetaken.py`; closing via an Open Klant PATCH is not ITA and is dropped. |
 | `interaction/181-keten-ita-contactmoment-portaal-beantwoord.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/182-keten-contactformulier-mijn-vragen.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/20-klacht-journey-e2e.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
-| `interaction/21-portaal-mijn-zaken-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
-| `interaction/31-document-portaal-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/21-portaal-mijn-zaken-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/integration/test_portaal_zaken.py` (W4 group without zaken cache: no flush). |
+| `interaction/31-document-portaal-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | With 143 into `tests/integration/test_portaal_zaken.py`. |
 | `interaction/32-of-submission-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/35-ok2-partij-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openklant/` test_partijen.py: persoon with BSN and e-mail. |
 | `interaction/74-ita-claim-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/ita/test_ita_internetaken.py`, with a numeric nummer. |
@@ -74,7 +74,7 @@ Sources:
 | `regression/13-va-filter-cross-component.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py, with client ptest-bootstrap-zgw-openbaar. |
 | `regression/14-audit-trail.spec.ts` | component or integration | 3/4/5 | todo | Open Zaak audittrails need heeft_alle_autorisaties (xfail in test_documenten.py); decide on a client with full rights. |
 | `regression/143-oab-vernietigingsflow.spec.ts` | component or integration | 3/4/5 | port | `test_vernietigingslijst.py`, through the API (make_final works without 2FA here); UI steps: todo. |
-| `regression/143-portaal-document-download.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/143-portaal-document-download.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_portaal_zaken.py`. |
 | `regression/144-continuiteit-component-stop.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/146-portaal-uitbreiding.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/147-kiss-contentbronnen.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/kiss/test_anonymous.py`. |
@@ -181,7 +181,7 @@ Sources:
 | `regression/89-cluster-pod-recovery.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/90-fb-oz-catalogi-integriteit.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_catalogi.py. |
 | `regression/91-fb-keycloak-realm-snapshot.spec.ts` | component or integration | 3/4/5 | port | `tests/component/keycloak/test_realm.py`. |
-| `regression/95-portaal-filtering.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/95-portaal-filtering.spec.ts` | component or integration | 3/4/5 | merge | Test 1 → `test_portaal_inwoner.py`-style login, test 2 → `tests/integration/test_portaal_zaken.py`. |
 | `regression/96-portaal-profiel-navigatie.spec.ts` | component or integration | 3/4/5 | merge | Into the heading test of `tests/component/openinwoner/test_portaal_inwoner.py`. |
 | `smoke/00-environment-preflight.spec.ts` | smoke | 1 | port | 00c/00d/00h/00i/00j/00k/00l → `test_reachability.py`, `test_api_health.py`; 00f → `test_cluster.py` (all workloads ready). Phase 3: 00e (ZAC schemas, psql) and 00g (OZ Applicatie scopes for Open Inwoner). 00i form slug needs bootstrap data (phase 2). |
 | `smoke/01-zgw-auth.spec.ts` | smoke | 1 | port | `test_zgw_auth.py`: token accepted, wrong secret refused. Phase 2: the catalogus domein and test zaaktype checks need seeded data. |

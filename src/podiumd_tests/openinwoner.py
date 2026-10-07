@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.browser import keycloak_login
 from podiumd_tests.responses import url_host
 
@@ -20,6 +21,11 @@ def portal_login(page: Page, env: Environment, method: str, user: KeycloakUser, 
     page.goto(f"{portal}/{method}-oidc/authenticate/?next={next_path}")
     keycloak_login(page, user.username, env.credentials.get(user.store_key))
     page.wait_for_url(lambda url: url_host(url) == url_host(portal) and "-oidc/callback" not in url)
+    if "/register/necessary/" in page.url:
+        # A first eHerkenning login makes a new account that still needs an e-mail address.
+        page.locator('input[name="email"]').fill(user_email(user.username))
+        page.get_by_role("button", name="Voltooi registratie").click()
+        page.wait_for_url(lambda url: "/register/necessary/" not in url)
 
 
 def refuse_cookies(page: Page) -> None:
