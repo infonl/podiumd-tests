@@ -34,7 +34,7 @@ Sources:
 | `interaction/162-portaal-document-upload-e2e.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/164-portaal-vraag-stellen-vanuit-zaak.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/168-oab-archivist-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
-| `interaction/180-ita-contactmoment-afsluiten.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/180-ita-contactmoment-afsluiten.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/ita/test_internetaken.py`; closing via an Open Klant PATCH is not ITA and is dropped. |
 | `interaction/181-keten-ita-contactmoment-portaal-beantwoord.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/182-keten-contactformulier-mijn-vragen.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/20-klacht-journey-e2e.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
@@ -42,9 +42,9 @@ Sources:
 | `interaction/31-document-portaal-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/32-of-submission-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/35-ok2-partij-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openklant/` test_partijen.py: persoon with BSN and e-mail. |
-| `interaction/74-ita-claim-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/74-ita-claim-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/ita/test_internetaken.py`, with a numeric nummer. |
 | `interaction/76-of-submission-end-to-end.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/integration/test_formulier_zaak.py`: submission through the SDK API, zaak and PDF in Open Zaak. |
-| `interaction/78-ita-add-klantcontact.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/78-ita-add-klantcontact.spec.ts` | component or integration, marker `core` | 3/4/5 | drop | Superseded by 180 (outdated body). |
 | `maintenance/cleanup-test-zaken.spec.ts` | `podiumd-tests sweep` (CLI, not a test) | 2 | replace | |
 | `perf/api-perf.js` | perf (Locust) | 6 | todo | |
 | `perf/fg-compare.js` | perf (Locust) | 6 | todo | |
@@ -64,7 +64,7 @@ Sources:
 | `regression/117-portaal-contactmomenten-paginatie.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/118-portaal-vestigingsnaam-bedrijf.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/119-infra-quick-wins.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/12-kiss-bff-kcc-flow.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/12-kiss-bff-kcc-flow.spec.ts` | component or integration | 3/4/5 | port | `tests/component/kiss/test_kcc_session.py`; KISS does not delete klantcontacten (405). |
 | `regression/120-of-payment-infrastructure.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/platform/test_public_surface.py`. |
 | `regression/121-continuiteit-graceful-degradation.spec.ts` | component or integration | 3/4/5 | port | `tests/component/platform/test_public_surface.py`; BRP and KvK parts wait for their ingress (handoff 6). |
 | `regression/122-gemachtigde-flow.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py: indicatieMachtiging. |
@@ -162,11 +162,11 @@ Sources:
 | `regression/69-pabc-domains-entity-types.spec.ts` | component or integration | 3/4/5 | port | `tests/component/pabc/test_management.py`. |
 | `regression/70-pabc-groups-lookup.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/71-pabc-zac-integration-coherence.spec.ts` | component or integration | 3/4/5 | port | `tests/component/pabc/test_management.py`. |
-| `regression/73-ita-assigned-list.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/73-ita-assigned-list.spec.ts` | component or integration | 3/4/5 | merge | Into the claim test of `tests/component/ita/test_internetaken.py`. |
 | `regression/75-ita-forward-flow.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/75-of-zaaktype-matching.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/76-ita-close-with-klantcontact.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/77-ita-afdelingen-groepen.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/76-ita-close-with-klantcontact.spec.ts` | component or integration | 3/4/5 | drop | The route does not exist (405); covered by 180. |
+| `regression/77-ita-afdelingen-groepen.spec.ts` | component or integration | 3/4/5 | port | `tests/component/ita/test_internetaken.py`. |
 | `regression/79-of-form-cosign-config.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/80-brp-kvk-prefill-foutpaden.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/80-omc-listen-event.spec.ts` | component or integration | 3/4/5 | todo | |
@@ -188,7 +188,7 @@ Sources:
 | `smoke/04-portaal-homepage.spec.ts` | smoke | 1 | port | HTTP part → `test_reachability.py` (root and admin login of `openinwoner`). Phase 5: the rendered-page checks need a browser. |
 | `smoke/05-portaal-digid-login.spec.ts` | smoke | 1 | port | 5a and the first leg of 5b → `test_oidc.py`. Phase 5: the login itself needs a DigiD test identity (phase 2) and a browser. |
 | `smoke/06-kiss-bff-healthz.spec.ts` | smoke | 1 | port | `/healthz` and `/api/healthcheck` → `test_api_health.py`. The rendered-page check moves to phase 5. |
-| `smoke/113-kiss-kcc-login-flow.spec.ts` | smoke | 1 | port | Phase 5 (`ui`): needs a KCC test identity from bootstrap (phase 2). |
+| `smoke/113-kiss-kcc-login-flow.spec.ts` | smoke | 1 | port | `tests/component/kiss/test_kcc_session.py` (`ui`). |
 | `smoke/155-esuite-smoke-login.spec.ts` | smoke | 1 | port | Phase 5 (`ui`): eSuite is outside PodiumD; needs a `esuite` URL and credentials in the profile. |
 | `smoke/192-frankgateway-health.spec.ts` | smoke | 1 | port | `test_frankgateway.py`; skips unless the profile has a `frankgateway` (outway) URL. Not in EX. |
 | `smoke/66-pabc-health.spec.ts` | smoke | 1 | port | API-key checks → `test_api_health.py`. Phase 5: app version behind the OIDC cookie login. |
