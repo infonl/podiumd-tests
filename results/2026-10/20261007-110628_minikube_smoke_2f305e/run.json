@@ -1,0 +1,43 @@
+{
+  "run_id": "2f305e",
+  "env": "minikube",
+  "tier": "smoke",
+  "started": "2026-10-07T11:06:28+00:00",
+  "finished": "2026-10-07T11:06:32+00:00",
+  "exit_code": 0,
+  "selection": [
+    "-ra",
+    "/home/kvv/development/werk/infonl-dimpact/infonl/podiumd-tests/tests/smoke",
+    "-m",
+    "not destructive",
+    "--podiumd-env=minikube",
+    "--junitxml=/home/kvv/development/werk/infonl-dimpact/infonl/podiumd-tests/results/2026-10/20261007-110628_minikube_smoke_2f305e/junit.xml",
+    "--podiumd-run-tag=ptest-2f305e",
+    "-q"
+  ],
+  "suite_commit": "84b568a",
+  "chart_version": null,
+  "capabilities": [
+    "cluster",
+    "grafana",
+    "keycloak",
+    "mailpit",
+    "objecten",
+    "objecttypen",
+    "openarchiefbeheer",
+    "openformulieren",
+    "openklant",
+    "opennotificaties",
+    "openzaak",
+    "pabc",
+    "zac"
+  ],
+  "counts": {
+    "passed": 37,
+    "failed": 0,
+    "errors": 0,
+    "skipped": 22,
+    "xfailed": 0,
+    "total": 59
+  }
+}
