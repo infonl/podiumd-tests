@@ -19,6 +19,7 @@ import yaml
 
 from podiumd_tests import doctor
 from podiumd_tests.bootstrap import bootstrap
+from podiumd_tests.bootstrap import failed
 from podiumd_tests.bootstrap import format_outcomes
 from podiumd_tests.bootstrap import refusal
 from podiumd_tests.bootstrap import unbootstrap
@@ -184,8 +185,9 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
     env = _bootstrap_env(args)
     if isinstance(env, int):
         return env
-    print(format_outcomes(bootstrap(env, STEPS, rotate=args.rotate)))
-    return EXIT_OK
+    outcomes = bootstrap(env, STEPS, rotate=args.rotate)
+    print(format_outcomes(outcomes))
+    return EXIT_CONFIG if failed(outcomes) else EXIT_OK
 
 
 def cmd_unbootstrap(args: argparse.Namespace) -> int:
@@ -193,8 +195,9 @@ def cmd_unbootstrap(args: argparse.Namespace) -> int:
     env = _bootstrap_env(args)
     if isinstance(env, int):
         return env
-    print(format_outcomes(unbootstrap(env, STEPS)))
-    return EXIT_OK
+    outcomes = unbootstrap(env, STEPS)
+    print(format_outcomes(outcomes))
+    return EXIT_CONFIG if failed(outcomes) else EXIT_OK
 
 
 def cmd_run(args: argparse.Namespace) -> int:

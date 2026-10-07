@@ -11,6 +11,7 @@ from podiumd_tests import cli
 from podiumd_tests.bootstrap import Context
 from podiumd_tests.bootstrap import bootstrap
 from podiumd_tests.bootstrap import check
+from podiumd_tests.bootstrap import failed
 from podiumd_tests.bootstrap import refusal
 from podiumd_tests.bootstrap import unbootstrap
 from podiumd_tests.bootstrap.steps import STEPS
@@ -21,6 +22,7 @@ from podiumd_tests.bootstrap.steps import keycloak_password_key
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.credentials import env_var_name
 from podiumd_tests.kube import Kube
+from podiumd_tests.kube import KubeError
 
 
 @dataclass
@@ -247,3 +249,17 @@ def test_record_mode_hands_the_stored_record_to_apply_and_remove(env_factory, fa
     assert json.loads(values["rec"]) == extended
     step.remove(ctx)
     assert snippet_params(fake_runner.stdins[-1]) == {"kanalen": {}, "action": "remove", "record": earlier}
+
+
+def test_a_failing_step_does_not_stop_the_others(env_factory, fake_runner, profile_factory):
+    env = cluster_env(env_factory, fake_runner, profile_factory)
+
+    class Broken(FakeStep):
+        def remove(self, _ctx):
+            raise KubeError(["kubectl", "exec"], "DisallowedHost: example.com")
+
+    later = FakeStep("later", present=True)
+    outcomes = unbootstrap(env, [later, Broken("broken", present=True)])
+    assert [(o.step, o.action) for o in outcomes] == [("broken", "failed"), ("later", "removed")]
+    assert "DisallowedHost" in outcomes[0].detail
+    assert failed(outcomes)

@@ -14,8 +14,11 @@ from typing import TYPE_CHECKING
 from typing import Literal
 from typing import Protocol
 
+import requests
+
 from podiumd_tests.capabilities import CLUSTER
 from podiumd_tests.credential_store import CredentialStore
+from podiumd_tests.process import ProcessError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -24,7 +27,7 @@ if TYPE_CHECKING:
     from podiumd_tests.config import Profile
     from podiumd_tests.environment import Environment
 
-Action = Literal["created", "present", "removed", "absent", "skipped", "missing"]
+Action = Literal["created", "present", "removed", "absent", "skipped", "missing", "failed"]
 
 
 @dataclass(frozen=True)
@@ -92,8 +95,20 @@ def _each(env: Environment, steps: Sequence[Step], act: Callable[[Context, Step]
         reason = env.capabilities.skip_reason(CLUSTER, *step.requires)
         if step.wiring and not env.profile.wiring:
             reason = f"wiring is off for {env.profile.name} (profile bootstrap.wiring)"
-        outcomes.append(Outcome(step.name, "skipped", reason) if reason else act(ctx, step))
+        if reason:
+            outcomes.append(Outcome(step.name, "skipped", reason))
+            continue
+        try:
+            outcomes.append(act(ctx, step))
+        except (ProcessError, AssertionError, LookupError, ValueError, requests.RequestException) as exc:
+            # One broken step must not stop the others, least of all during unbootstrap.
+            outcomes.append(Outcome(step.name, "failed", str(exc)))
     return outcomes
+
+
+def failed(outcomes: Sequence[Outcome]) -> bool:
+    """True when any step failed."""
+    return any(o.action == "failed" for o in outcomes)
 
 
 def bootstrap(env: Environment, steps: Sequence[Step], *, rotate: bool = False) -> list[Outcome]:
