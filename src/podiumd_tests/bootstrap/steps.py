@@ -341,12 +341,44 @@ KCC = KeycloakUser(
     # ITA refuses a login without it ("Verwachtewaarde voor de samaccountname ontbreekt").
     attributes={"samaccountname": [f"{PREFIX}-kcc"]},
 )
-# Test identities for DigiD and eHerkenning logins (TA testinwoner, testbedrijf):
+# Test identities for DigiD and eHerkenning logins (TA testinwoner, testinwoner2, testbedrijf):
 # the Keycloak attributes become the bsn and eHerkenning claims of the mock.
 IDENTITIES = (
     KeycloakUser("inwoner", attributes={"bsn": ["999990019"]}),
+    KeycloakUser("inwoner2", attributes={"bsn": ["999990038"]}),
     KeycloakUser("bedrijf", attributes={"kvk": ["68750110"], "vestigingsnummer": ["000038509564"]}),
 )
+# Open Inwoner's portal pages; the contact form is a plugin on a page with its template.
+OI_PAGES = [
+    {"slug": "welkom", "title": "Welkom bij PodiumD", "template": "cms/fullwidth.html", "home": True},
+    {
+        "slug": "mijn-zaken",
+        "title": "Mijn zaken",
+        "template": "cms/fullwidth.html",
+        "apphook": "CasesApphook",
+        "namespace": "cases",
+    },
+    {
+        "slug": "mijn-profiel",
+        "title": "Mijn profiel",
+        "template": "cms/fullwidth.html",
+        "apphook": "ProfileApphook",
+        "namespace": "profile",
+    },
+    {
+        "slug": "berichten",
+        "title": "Berichten",
+        "template": "cms/fullwidth.html",
+        "apphook": "InboxApphook",
+        "namespace": "inbox",
+    },
+    {
+        "slug": "contactformulier",
+        "title": "Contactformulier",
+        "template": "cms/contactform/form_outer.html",
+        "plugin": {"slot": "contact_form", "type": "ContactFormPlugin"},
+    },
+]
 # Open Formulieren's DigiD level of assurance when the mock sends none.
 LOA_DEFAULT = "urn:oasis:names:tc:SAML:2.0:ac:classes:MobileTwoFactorContract"
 # Where Open Inwoner finds the eHerkenning claims (mappers in oidc_mock.SCOPES).
@@ -465,7 +497,7 @@ STEPS: tuple[Step, ...] = (
         wiring=True,
     ),
     # Users for KISS and ITA (TA kcc-medewerker), for the admin UIs, PABC and ZAC (TA testadmin),
-    # and for the DigiD and eHerkenning logins through Keycloak (TA testinwoner, testbedrijf).
+    # and for the DigiD and eHerkenning logins through Keycloak (TA testinwoner, testinwoner2, testbedrijf).
     # Open Archiefbeheer role users (TA seed-oab-users: recordmanager-test, reviewer-test, ...);
     # OAB logs them in locally, as in podiumd-minikube.
     *(django_user_step("openarchiefbeheer", key, (group,)) for key, group in OAB_ROLES.items()),
@@ -528,5 +560,15 @@ STEPS: tuple[Step, ...] = (
         record=True,
         wiring=True,
         context_params=oidc_params("openformulieren"),
+    ),
+    # Wiring W5: Open Inwoner's portal pages (TA seed-oi-cms-pages.sh).
+    SnippetStep(
+        "openinwoner-cms-pages",
+        ("openinwoner",),
+        "oi_cms_pages",
+        "ptest_bootstrap_openinwoner_cms_pages_record",
+        {"pages": OI_PAGES, "contact_email": "noreply@example.invalid"},
+        record=True,
+        wiring=True,
     ),
 )
