@@ -5,8 +5,10 @@ app calls it), client_id, secret (apply only), clients ({identifier: {provider, 
 and app extras: eherkenning_site (Open Inwoner SiteConfiguration.eherkenning_enabled), users
 (Open Inwoner accounts [{bsn|kvk, email, first, last}]), form (Open Formulieren form slug that
 gets the digid_oidc login), and record ({"clients": {identifier: old field values}, "providers":
-[created], "created": [client identifiers created], "eherkenning_enabled": old value, "users": [created pks], "form_backend": created}),
-which remove restores exactly.
+[created], "created": [client identifiers created], "eherkenning_enabled": old value, "accounts_before":
+[pks of accounts for the users that existed before], "form_backend": created}), which remove restores
+exactly. remove deletes every account for the users except those that existed before: also the
+ones Open Inwoner creates itself at a login.
 """
 
 ENDPOINTS = {
@@ -27,13 +29,17 @@ def run(params):
     record = params.get("record") or {}
     if params["action"] == "remove":
         _remove(record, clients)
+        if params.get("users") and "accounts_before" in record:
+            _accounts(params["users"]).exclude(pk__in=record["accounts_before"]).delete()
         return {"present": False}
-    for key, empty in (("clients", {}), ("created", []), ("providers", []), ("users", [])):
+    for key, empty in (("clients", {}), ("created", []), ("providers", [])):
         record.setdefault(key, empty)
     _clients(params, clients, record)
     if params.get("eherkenning_site"):
         _site(record)
-    record["users"] += _users(params.get("users") or [])
+    if params.get("users"):
+        record.setdefault("accounts_before", list(_accounts(params["users"]).values_list("pk", flat=True)))
+        _create_accounts(params["users"])
     if params.get("form") and _form_backend(params["form"]):
         record["form_backend"] = params["form"]
     return {"present": True, "record": record}
@@ -80,17 +86,25 @@ def _key(user):
     return {"bsn": user["bsn"]} if "bsn" in user else {"kvk": user["kvk"]}
 
 
-def _users(users):
-    if not users:
-        return []
+def _accounts(users):
+    """The Open Inwoner accounts with the users' bsn or kvk."""
+    from django.db.models import Q
+    from open_inwoner.accounts.models import User
+
+    query = Q(pk__in=[])
+    for user in users:
+        query |= Q(**_key(user))
+    return User.objects.filter(query)
+
+
+def _create_accounts(users):
     from open_inwoner.accounts.choices import LoginTypeChoices
     from open_inwoner.accounts.models import User
 
-    created = []
     for user in users:
         if User.objects.filter(**_key(user)).exists():
             continue
-        account = User.objects.create(
+        User.objects.create(
             **_key(user),
             email=user["email"],
             verified_email=user["email"],
@@ -99,8 +113,6 @@ def _users(users):
             login_type=LoginTypeChoices.digid if "bsn" in user else LoginTypeChoices.eherkenning,
             is_active=True,
         )
-        created.append(account.pk)
-    return created
 
 
 def _form_backend(slug):
@@ -152,10 +164,6 @@ def _remove(record, clients):
         from openforms.forms.models import FormAuthenticationBackend
 
         FormAuthenticationBackend.objects.filter(form__slug=record["form_backend"], backend="digid_oidc").delete()
-    if record.get("users"):
-        from open_inwoner.accounts.models import User
-
-        User.objects.filter(pk__in=record["users"]).delete()
     for identifier, client in clients.items():
         if identifier in record.get("created", []):
             client.delete()
