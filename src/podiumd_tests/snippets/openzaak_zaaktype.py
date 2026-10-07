@@ -11,12 +11,10 @@ ROLTYPEN = (("Initiator", "initiator"), ("Behandelaar", "behandelaar"))
 def run(params):
     import datetime
 
+    from django.db import transaction
     from openzaak.components.catalogi.models import Catalogus
     from openzaak.components.catalogi.models import InformatieObjectType
-    from openzaak.components.catalogi.models import RolType
-    from openzaak.components.catalogi.models import StatusType
     from openzaak.components.catalogi.models import ZaakType
-    from openzaak.components.catalogi.models import ZaakTypeInformatieObjectType
     from openzaak.components.zaken.models import Zaak
 
     catalogus = Catalogus.objects.filter(domein=params["domein"], rsin=params["rsin"]).first()
@@ -32,7 +30,19 @@ def run(params):
     if params["action"] == "remove":
         return {"present": False}
 
-    today = datetime.datetime.now(tz=datetime.UTC).date()
+    with transaction.atomic():  # all or nothing: a failure leaves no half zaaktype
+        return _create(params, catalogus, datetime.datetime.now(tz=datetime.UTC).date())
+
+
+def _create(params, catalogus, today):
+    import datetime
+
+    from openzaak.components.catalogi.models import InformatieObjectType
+    from openzaak.components.catalogi.models import RolType
+    from openzaak.components.catalogi.models import StatusType
+    from openzaak.components.catalogi.models import ZaakType
+    from openzaak.components.catalogi.models import ZaakTypeInformatieObjectType
+
     zaaktype = ZaakType.objects.create(
         catalogus=catalogus,
         identificatie=params["identificatie"],
