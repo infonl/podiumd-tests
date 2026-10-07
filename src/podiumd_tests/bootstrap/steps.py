@@ -262,6 +262,20 @@ def openformulieren_params(ctx: Context) -> dict[str, object]:
     }
 
 
+def django_user_step(component: str, key: str, groups: tuple[str, ...]) -> SnippetStep:
+    """A local Django user ptest-bootstrap-<key> in a component, with groups and a random password."""
+    username = f"{PREFIX}-{key}"
+    params: dict[str, object] = {"username": username, "email": user_email(username), "groups": list(groups)}
+    return SnippetStep(
+        f"{component}-user-{key}", (component,), "django_user", django_password_key(component, key), params
+    )
+
+
+def django_password_key(component: str, key: str) -> str:
+    """Key of a Django test user's password in the credentials Secret."""
+    return f"{PREFIX.replace('-', '_')}_{component}_{key}_password"
+
+
 def token_step(component: str, module: str, store_key: str) -> SnippetStep:
     """A TokenAuth step; the token's identifier is its store key."""
     params: dict[str, object] = {"module": module, "identifier": store_key}
@@ -341,6 +355,11 @@ STEPS: tuple[Step, ...] = (
         record=True,
         wiring=True,
     ),
+    # Open Archiefbeheer role users (TA seed-oab-users: recordmanager-test, reviewer-test, ...).
+    django_user_step("openarchiefbeheer", "recordmanager", ("Record Manager",)),
+    django_user_step("openarchiefbeheer", "reviewer", ("Reviewer",)),
+    django_user_step("openarchiefbeheer", "coreviewer", ("Co-reviewer",)),
+    django_user_step("openarchiefbeheer", "archivist", ("Archivist",)),
     # Users for KISS and ITA (TA kcc-medewerker), for the admin UIs, PABC and ZAC (TA testadmin),
     # and for the DigiD and eHerkenning logins through Keycloak (TA testinwoner, testinwoner2, testbedrijf).
     KeycloakUser(
