@@ -1,4 +1,7 @@
-"""Webhook receiver for podiumd-tests: every POST gets 204 and is appended to a JSON-lines file.
+"""Webhook receiver for podiumd-tests: every POST is appended to a JSON-lines file.
+
+A POST with an Authorization header gets 204; one without gets 403. Open Notificaties checks
+both when an abonnement is created: it refuses a callback that accepts requests without auth.
 
 Standard library only. Tests read RECEIVED with `kubectl exec ... cat`; GET /healthz answers 200.
 """
@@ -15,7 +18,7 @@ RECEIVED = Path(os.environ.get("RECEIVED_FILE", "/data/received.jsonl"))
 
 
 class Handler(BaseHTTPRequestHandler):
-    """POST: record and answer 204. GET /healthz: 200."""
+    """POST: record, then 204 with Authorization and 403 without. GET /healthz: 200."""
 
     def do_POST(self):  # http.server's method name
         length = int(self.headers.get("Content-Length") or 0)
@@ -32,7 +35,7 @@ class Handler(BaseHTTPRequestHandler):
         }
         with RECEIVED.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(entry) + "\n")
-        self.send_response(204)
+        self.send_response(204 if entry["authorization"] else 403)
         self.end_headers()
 
     def do_GET(self):  # http.server's method name

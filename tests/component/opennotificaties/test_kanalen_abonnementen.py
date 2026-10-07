@@ -38,8 +38,8 @@ def test_kanaal_name_is_unique(opennotificaties: ApiClient) -> None:
     opennotificaties.request("POST", "kanaal", 400, json={"naam": "zaken", "documentatieLink": "", "filters": []})
 
 
-# Open Notificaties first calls the callback; only with a callback that answers 204 does it
-# get to validating kanalen and filters.
+# Open Notificaties first calls the callback; only with a callback that refuses requests without
+# auth and answers 204 with it does it get to validating kanalen and filters.
 def test_abonnement_on_an_unknown_kanaal_is_refused(
     opennotificaties: ApiClient, registry: ResourceRegistry, callback: Callback
 ) -> None:
@@ -59,10 +59,9 @@ def test_abonnement_with_an_unknown_filter_is_refused(
 def test_abonnement_calls_its_callback_with_its_auth(
     opennotificaties: ApiClient, registry: ResourceRegistry, callback: Callback
 ) -> None:
-    """Creating an abonnement sends a test notification to the callback, with the abonnement's auth."""
+    """Creating an abonnement checks the callback: once without auth, once with the abonnement's auth."""
     make_abonnement(opennotificaties, registry, callback.url, "zaken", {})
-    first = callback.wait_for(lambda _entry: True, timeout=10, description="the callback check")
-    assert first["authorization"] == CALLBACK_AUTH
+    assert [entry["authorization"] for entry in callback.received()] == [None, CALLBACK_AUTH]
 
 
 @pytest.mark.xfail(

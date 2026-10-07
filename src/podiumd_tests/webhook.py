@@ -1,6 +1,6 @@
 """podiumd-tests' webhook receiver in the cluster (infra/webhook-receiver), and reading what it received.
 
-The receiver answers every POST with 204 and appends it to a JSON-lines file; tests read that
+The receiver records every POST in a JSON-lines file and answers 204 only when it carries auth; tests read that
 file through `kubectl exec`, so the receiver needs no ingress. Each test uses its own callback
 path, which keeps parallel tests apart.
 """
