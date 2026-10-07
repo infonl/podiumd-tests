@@ -62,9 +62,12 @@ class ApiClient:
         self.request("DELETE", path, HTTPStatus.NO_CONTENT, HTTPStatus.NOT_FOUND)
 
     def list(self, path: str, params: dict[str, str] | None = None) -> list[JsonObject]:
-        """All results of a paginated list (ZGW style: results and next)."""
+        """All results of a list: paginated (ZGW style: results and next) or a plain JSON array."""
+        body: object = self.request("GET", path, HTTPStatus.OK, params=params).json()
+        if not isinstance(body, dict):
+            return entries(body)
         found: list[JsonObject] = []
-        page: JsonObject = self.get(path, params)
+        page: JsonObject = cast("JsonObject", body)
         for _ in range(MAX_PAGES):
             found += entries(page.get("results"))
             following = page.get("next")

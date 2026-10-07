@@ -52,7 +52,7 @@ def test_document_linked_to_zaak(openzaak: ApiClient, registry: ResourceRegistry
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
     document = make_document(openzaak, registry, parts.informatieobjecttype)
     link_document(openzaak, registry, zaak, document)
-    linked = openzaak.request("GET", f"{ZAKEN}/zaakinformatieobjecten", 200, params={"zaak": str(zaak["url"])}).json()
+    linked = openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": str(zaak["url"])})
     assert [z["informatieobject"] for z in entries(linked)] == [document["url"]]
 
 

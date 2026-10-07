@@ -43,5 +43,5 @@ def test_zaakeigenschap(openzaak: ApiClient, registry: ResourceRegistry, parts: 
         url, {"zaak": zaak["url"], "eigenschap": parts.eigenschappen["kenteken"], "waarde": "12-AB-34"}
     )
     assert (created["naam"], created["waarde"]) == ("kenteken", "12-AB-34")
-    listed = openzaak.request("GET", url, 200).json()
+    listed = openzaak.list(url)
     assert [e["waarde"] for e in listed] == ["12-AB-34"]
