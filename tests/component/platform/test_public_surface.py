@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.auth.keycloak import admin_realm_url
+from podiumd_tests.auth.keycloak_admin import realm_of
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import describe
@@ -58,7 +59,7 @@ def test_keycloak_admin_api_is_not_public(
     http: requests.Session, urls: dict[str, str], podiumd_env: Environment
 ) -> None:
     """The Keycloak admin API refuses an anonymous request (TA reg-177)."""
-    realm = podiumd_env.profile.settings.get("keycloak_realm", "podiumd")
+    realm = realm_of(podiumd_env)
     response = http.get(admin_realm_url(urls.get("keycloak-admin") or urls["keycloak"], realm))
     assert response.status_code in REFUSED, describe(response)
 

@@ -8,6 +8,7 @@ import pytest
 
 from podiumd_tests.auth.keycloak import discovery_url
 from podiumd_tests.auth.keycloak import realm_url
+from podiumd_tests.auth.keycloak_admin import realm_of
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import url_host
 
@@ -22,7 +23,7 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("keycloak")]
 @pytest.fixture(name="realm")
 def fixture_realm(podiumd_env: Environment) -> str:
     """The realm the applications log in to (settings.keycloak_realm, default podiumd)."""
-    return podiumd_env.profile.settings.get("keycloak_realm", "podiumd")
+    return realm_of(podiumd_env)
 
 
 def test_discovery_document(http: requests.Session, urls: dict[str, str], realm: str) -> None:

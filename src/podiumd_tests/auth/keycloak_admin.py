@@ -14,12 +14,25 @@ from podiumd_tests.responses import expect_status
 if TYPE_CHECKING:
     import requests
 
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
 
 
 def user_email(username: str) -> str:
     """The e-mail address create_user gives a user; Open Klant actors are matched on it."""
     return f"{username}@example.invalid"
+
+
+def realm_of(env: Environment) -> str:
+    """The realm the applications log in to (settings.keycloak_realm, default podiumd)."""
+    return env.profile.settings.get("keycloak_realm", "podiumd")
+
+
+def for_environment(env: Environment) -> KeycloakAdmin:
+    """Admin client for the environment's realm, through keycloak-admin when the profile has it."""
+    url = env.profile.urls.get("keycloak-admin") or env.profile.urls["keycloak"]
+    admin = (env.credentials.get("keycloak_admin_username"), env.credentials.get("keycloak_admin_password"))
+    return KeycloakAdmin(env.session(cookies=False), url, realm_of(env), admin)
 
 
 class KeycloakAdmin:
@@ -77,12 +90,17 @@ class KeycloakAdmin:
         if roles:
             self._send("POST", f"/users/{user_id}/role-mappings/realm", roles)
 
+    def client(self, client_id: str) -> JsonObject | None:
+        """The client with this clientId, or None."""
+        clients = cast("list[JsonObject]", self._get("/clients", {"clientId": client_id}))
+        return clients[0] if clients else None
+
     def client_role(self, client_id: str, role: str) -> tuple[str, JsonObject] | None:
         """(client uuid, role) when the client and its role exist."""
-        clients = cast("list[JsonObject]", self._get("/clients", {"clientId": client_id}))
-        if not clients:
+        client = self.client(client_id)
+        if client is None:
             return None
-        uuid = str(clients[0]["id"])
+        uuid = str(client["id"])
         roles = cast("list[JsonObject]", self._get(f"/clients/{uuid}/roles"))
         found = next((r for r in roles if r.get("name") == role), None)
         return (uuid, found) if found else None

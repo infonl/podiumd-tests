@@ -11,7 +11,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
-from podiumd_tests.auth.keycloak_admin import KeycloakAdmin
+from podiumd_tests.auth.keycloak_admin import for_environment
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
@@ -128,8 +128,7 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
 class KeycloakUser:
     """Test user ptest-bootstrap-<key> with a random password, and the wanted roles the realm has.
 
-    The realm comes from settings.keycloak_realm (default podiumd); admin calls go to the
-    keycloak-admin URL when the profile has one, with secrets keycloak_admin_username/password.
+    Admin calls go through auth.keycloak_admin.for_environment.
     """
 
     key: str
@@ -155,20 +154,13 @@ class KeycloakUser:
         """Key of the password in the credentials Secret."""
         return keycloak_password_key(self.key)
 
-    def _admin(self, ctx: Context) -> KeycloakAdmin:
-        env = ctx.env
-        url = env.profile.urls.get("keycloak-admin") or env.profile.urls["keycloak"]
-        realm = env.profile.settings.get("keycloak_realm", "podiumd")
-        admin = (env.credentials.get("keycloak_admin_username"), env.credentials.get("keycloak_admin_password"))
-        return KeycloakAdmin(env.session(), url, realm, admin)
-
     def is_present(self, ctx: Context, /) -> bool:
         """The user exists, and its password is in the credentials Secret."""
-        return self._admin(ctx).user_id(self.username) is not None and self.store_key in ctx.store.read()
+        return for_environment(ctx.env).user_id(self.username) is not None and self.store_key in ctx.store.read()
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Recreate the user with a new password and the wanted roles and groups that exist."""
-        admin = self._admin(ctx)
+        admin = for_environment(ctx.env)
         old = admin.user_id(self.username)
         if old:
             admin.delete_user(old)
@@ -195,7 +187,7 @@ class KeycloakUser:
 
     def remove(self, ctx: Context, /) -> tuple[str, ...]:
         """Delete the user."""
-        admin = self._admin(ctx)
+        admin = for_environment(ctx.env)
         user = admin.user_id(self.username)
         if user:
             admin.delete_user(user)
