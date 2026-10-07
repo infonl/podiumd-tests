@@ -9,6 +9,8 @@ from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.seed.openzaak import today
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
@@ -28,7 +30,7 @@ def objecttype_url(env: Environment, name: str) -> str:
 
 
 def make_object(
-    objecten: ApiClient, registry: ResourceRegistry, objecttype: str, data: dict[str, object]
+    objecten: ApiClient, registry: ResourceRegistry, objecttype: str, data: Mapping[str, object]
 ) -> JsonObject:
     """An object of an objecttype (its URL as Objecten knows it), version 1, starting today."""
     body: dict[str, object] = {"type": objecttype, "record": {"typeVersion": 1, "data": data, "startAt": today()}}
@@ -49,3 +51,14 @@ def make_productaanvraag(
         "taal": "nld",
     }
     return make_object(objecten, registry, objecttype, data)
+
+
+def clean_up_logboek(objecten: ApiClient, registry: ResourceRegistry, logboek_type: str, internetaak: str) -> None:
+    """Delete, at cleanup, the logboek object ITA creates for an internetaak (uuid) at its first action."""
+
+    def delete() -> None:
+        query = {"type": logboek_type, "data_attr": f"heeftBetrekkingOp__objectId__exact__{internetaak}"}
+        for found in objecten.list("objects", query):
+            objecten.delete(str(found["url"]))
+
+    registry.add(f"ITA logboek of internetaak {internetaak}", delete)

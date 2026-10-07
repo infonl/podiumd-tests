@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from typing import TYPE_CHECKING
+from typing import cast
 
 import pytest
 
@@ -17,6 +18,9 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.objecten import clean_up_logboek
+from podiumd_tests.seed.objecten import make_object
+from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import klantcontact_body
 from podiumd_tests.seed.openklant import make_internetaak
 from podiumd_tests.seed.openklant import make_klantcontact
@@ -43,6 +47,22 @@ def fixture_ita(page: Page, podiumd_env: Environment, need_bootstrap: Callable[.
     return kcc_login(page, podiumd_env, "ita")
 
 
+@pytest.fixture(scope="module", name="logboek_type")
+def fixture_logboek_type(podiumd_env: Environment) -> str:
+    """The Activiteitenlog objecttype ITA logs its actions in."""
+    return objecttype_url(podiumd_env, "Activiteitenlog")
+
+
+@pytest.fixture(name="taak")
+def fixture_taak(
+    openklant: ApiClient, objecten: ApiClient, registry: ResourceRegistry, logboek_type: str
+) -> JsonObject:
+    """An unassigned internetaak raised by a klantcontact; ITA's logboek of it is cleaned up too."""
+    taak = make_internetaak(openklant, registry, make_klantcontact(openklant, registry), [])
+    clean_up_logboek(objecten, registry, logboek_type, str(taak["uuid"]))
+    return taak
+
+
 def get_list(ita: requests.Session, url: str) -> list[JsonObject]:
     """GET an ITA list; it must answer 200 with a JSON array."""
     response = expect_status(ita.get(url), HTTPStatus.OK)
@@ -57,10 +77,9 @@ def test_afdelingen_and_groepen_are_seeded_together(ita: requests.Session, urls:
 
 
 def test_claimed_internetaak_is_on_my_list(
-    ita: requests.Session, urls: dict[str, str], openklant: ApiClient, registry: ResourceRegistry
+    ita: requests.Session, urls: dict[str, str], openklant: ApiClient, taak: JsonObject
 ) -> None:
     """A claimed internetaak is assigned to the user's actor and on the user's list (TA int-74, reg-73)."""
-    taak = make_internetaak(openklant, registry, make_klantcontact(openklant, registry), [])
     claim = ita.post(f"{urls['ita']}/api/internetaken/{taak['uuid']}/aan-mij-toewijzen", json={})
     expect_status(claim, HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.NO_CONTENT)
     assert entries(openklant.get(f"internetaken/{taak['uuid']}")["toegewezenAanActoren"])
@@ -69,11 +88,10 @@ def test_claimed_internetaak_is_on_my_list(
 
 
 def test_answering_an_internetaak_registers_a_klantcontact(
-    ita: requests.Session, urls: dict[str, str], openklant: ApiClient, registry: ResourceRegistry
+    ita: requests.Session, urls: dict[str, str], openklant: ApiClient, registry: ResourceRegistry, taak: JsonObject
 ) -> None:
     """Answering an internetaak with a contact registers that klantcontact in Open Klant (TA int-180)."""
-    aanleiding = make_klantcontact(openklant, registry)
-    taak = make_internetaak(openklant, registry, aanleiding, [])
+    aanleiding = cast("JsonObject", taak["aanleidinggevendKlantcontact"])
     antwoord = klantcontact_body(registry, onderwerp=registry.tagged("ita-antwoord"), indicatieContactGelukt=False)
     body = {
         "interneTaakId": taak["uuid"],
@@ -86,3 +104,32 @@ def test_answering_an_internetaak_registers_a_klantcontact(
         registry.add(f"klantcontact {klantcontact['url']}", lambda url=str(klantcontact["url"]): openklant.delete(url))
     assert response.status_code in {HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.NO_CONTENT}, describe(response)
     assert [k["indicatieContactGelukt"] for k in found] == [False]
+
+
+@pytest.mark.parametrize("soort", ["Afdeling", "Groep"])
+def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    ita: requests.Session,
+    urls: dict[str, str],
+    podiumd_env: Environment,
+    openklant: ApiClient,
+    objecten: ApiClient,
+    registry: ResourceRegistry,
+    taak: JsonObject,
+    soort: str,
+) -> None:
+    """Forwarding to an afdeling or groep assigns the internetaak to its Open Klant actor (TA reg-184).
+
+    ITA creates that actor (objectId = the identificatie); TA's actorType/actorIdentifier body gets 400.
+    """
+    identificatie = registry.tagged(soort.lower())
+    data = {"naam": identificatie, "identificatie": identificatie, "email": f"{identificatie}@example.invalid"}
+    make_object(objecten, registry, objecttype_url(podiumd_env, soort), data)
+    actoren = {"actoridentificatorObjectId": identificatie}
+    registry.add(
+        f"actoren of {identificatie}",
+        lambda: [openklant.delete(str(a["url"])) for a in openklant.list("actoren", actoren)],
+    )
+    forward = ita.post(f"{urls['ita']}/api/internetaken/{taak['uuid']}/forward", json={soort.lower(): identificatie})
+    expect_status(forward, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    assigned = entries(openklant.get(f"internetaken/{taak['uuid']}")["toegewezenAanActoren"])
+    assert {str(a["uuid"]) for a in assigned} & {str(a["uuid"]) for a in openklant.list("actoren", actoren)}

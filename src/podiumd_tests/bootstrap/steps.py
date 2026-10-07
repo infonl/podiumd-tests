@@ -65,6 +65,9 @@ PRODUCTAANVRAAG_OBJECTTYPE = "Productaanvraag-Dimpact"
 ZGW_PRODUCTAANVRAAG_CLIENT_ID = "ptest-bootstrap-zgw-productaanvraag"
 ZGW_PRODUCTAANVRAAG_STORE_KEY = "ptest_bootstrap_zgw_productaanvraag_secret"
 OBJECTEN_STORE_KEY = "ptest_bootstrap_objecten_token"
+# ITA forwards internetaken to Afdeling and Groep objects and logs each action in an Activiteitenlog
+# object; tests create the first two and clean up all three.
+ITA_OBJECTTYPES = ("Afdeling", "Groep", "Activiteitenlog")
 OPENKLANT_STORE_KEY = "ptest_bootstrap_openklant_token"
 
 
@@ -387,7 +390,12 @@ STEPS: tuple[Step, ...] = (
         {"client_id": NRC_CLIENT_ID, "scopes": {"nrc": ["notificaties.consumeren", "notificaties.publiceren"]}},
     ),
     token_step("openklant", "openklant.components.token.models", OPENKLANT_STORE_KEY),
-    token_step("objecten", "objects.token.models", OBJECTEN_STORE_KEY, object_types=[PRODUCTAANVRAAG_OBJECTTYPE]),
+    token_step(
+        "objecten",
+        "objects.token.models",
+        OBJECTEN_STORE_KEY,
+        object_types=[PRODUCTAANVRAAG_OBJECTTYPE, *ITA_OBJECTTYPES],
+    ),
     # Only reads and deletes the zaken ZAC creates for the test's productaanvragen.
     SnippetStep(
         "openzaak-client-productaanvraag",

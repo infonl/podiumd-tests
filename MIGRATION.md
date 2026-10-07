@@ -30,7 +30,7 @@ Sources:
 | `interaction/141-bedrijf-eherkenning-mijn-zaken.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/142-oab-vernietigingslijst.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/145-contact-lookup-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | `tests/component/openklant/`: betrokkenen of a partij, internetaak by klantcontact. |
-| `interaction/148-ita-doorsturen-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/148-ita-doorsturen-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | Its afdelingen/groepen reads are in 77 and 184. |
 | `interaction/162-portaal-document-upload-e2e.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/164-portaal-vraag-stellen-vanuit-zaak.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/168-oab-archivist-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
@@ -110,7 +110,7 @@ Sources:
 | `regression/179-portaal-profiel-naar-openklant.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/18-klantcontact-zaak-koppeling.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_klantcontact_zaak.py`. |
 | `regression/183-of-digid-zaak-rol.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/184-ita-doorsturen-mutatie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/184-ita-doorsturen-mutatie.spec.ts` | component or integration | 3/4/5 | port | `tests/component/ita/test_internetaken.py`; ITA wants `{"afdeling"|"groep": identificatie}`, TA's actorType body gets 400. |
 | `regression/185-of-betaalstatus-zaak.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/19-notificaties-e2e.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_zaak_notificaties.py`, with the webhook receiver of `infra/`. |
 | `regression/190-kiss-contentbronnen-gevuld.spec.ts` | component or integration | 3/4/5 | todo | |
@@ -163,7 +163,7 @@ Sources:
 | `regression/70-pabc-groups-lookup.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/71-pabc-zac-integration-coherence.spec.ts` | component or integration | 3/4/5 | port | `tests/component/pabc/test_management.py`. |
 | `regression/73-ita-assigned-list.spec.ts` | component or integration | 3/4/5 | merge | Into the claim test of `tests/component/ita/test_internetaken.py`. |
-| `regression/75-ita-forward-flow.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/75-ita-forward-flow.spec.ts` | component or integration | 3/4/5 | drop | Superseded by 184. |
 | `regression/75-of-zaaktype-matching.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/76-ita-close-with-klantcontact.spec.ts` | component or integration | 3/4/5 | drop | The route does not exist (405); covered by 180. |
 | `regression/77-ita-afdelingen-groepen.spec.ts` | component or integration | 3/4/5 | port | `tests/component/ita/test_internetaken.py`. |
