@@ -5,16 +5,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from typing import cast
 
-from podiumd_tests.browser import keycloak_login
+from podiumd_tests.browser import challenge_login
 from podiumd_tests.json_data import entries
-from podiumd_tests.responses import url_host
 
 if TYPE_CHECKING:
     import requests
 
-    from playwright.sync_api import APIRequestContext
     from playwright.sync_api import Page
 
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
 
 DECISION = "/api/v1/application-roles-per-entity-type"
@@ -27,20 +26,15 @@ def decide(http: requests.Session, pabc_url: str, api_key: str, functional_roles
     )
 
 
-def login(page: Page, pabc_url: str, username: str, password: str) -> APIRequestContext:
-    """Log in to PABC through Keycloak; the page's request context then carries the session cookie.
-
-    The login must start with a page navigation to /api/challenge: PABC answers a fetch
-    with 401 and a Keycloak URL without `state`, and such a login never completes.
-    """
-    page.goto(pabc_url + "/api/challenge")
-    keycloak_login(page, username, password)
-    page.wait_for_url(lambda url: url_host(url) == url_host(pabc_url))
-    me = cast("JsonObject", page.request.get(pabc_url + "/api/me").json())
+def login(page: Page, env: Environment, username: str, password: str) -> requests.Session:
+    """Log in to PABC through Keycloak; AssertionError when PABC keeps no session."""
+    pabc_url = env.profile.urls["pabc"]
+    api = challenge_login(page, env, pabc_url, username, password)
+    me = cast("JsonObject", api.get(pabc_url + "/api/me").json())
     if not me.get("isLoggedIn"):
         msg = f"PABC login as {username} kept no session: /api/me says isLoggedIn false"
         raise AssertionError(msg)
-    return page.request
+    return api
 
 
 def listed(body: object) -> list[JsonObject]:

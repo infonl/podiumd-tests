@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 from podiumd_tests.responses import url_host
 
 if TYPE_CHECKING:
+    import requests
+
     from playwright.sync_api import Page
 
     from podiumd_tests.environment import Environment
@@ -36,3 +38,21 @@ def keycloak_login(page: Page, username: str, password: str) -> None:
     page.locator("#username").fill(username)
     page.locator("#password").fill(password)
     page.locator("#kc-login").click()
+
+
+def challenge_login(page: Page, env: Environment, app_url: str, username: str, password: str) -> requests.Session:
+    """Log in to an ASP.NET app with a /api/challenge route (PABC, KISS, ITA) through Keycloak.
+
+    The login must start as a page navigation: a fetch gets 401 and a Keycloak URL without
+    `state`, and such a login never completes. The returned HTTP session carries the browser's
+    cookies and reaches the profile hosts as Environment.session() does; Playwright's own
+    request context resolves names without the browser's host mapping.
+    """
+    page.goto(app_url + "/api/challenge?returnUrl=%2F")
+    keycloak_login(page, username, password)
+    page.wait_for_url(lambda url: url_host(url) == url_host(app_url) and "/signin-oidc" not in url)
+    http = env.session()
+    for cookie in page.context.cookies():
+        name, value, domain = str(cookie.get("name")), str(cookie.get("value")), cookie.get("domain") or ""
+        http.cookies.set(name, value, domain=domain)  # pyright: ignore[reportUnknownMemberType]  # untyped **kwargs in the stubs
+    return http
