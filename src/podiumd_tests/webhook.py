@@ -30,6 +30,8 @@ if TYPE_CHECKING:
 NAME = "ptest-bootstrap-webhook-receiver"
 INFRA = REPO_ROOT / "infra" / "webhook-receiver"
 RECEIVED_FILE = "/data/received.jsonl"
+# The receiver's Notify (NotifyNL) API: OMC's Notify base URL is the receiver's /notify.
+NOTIFY_EMAIL = "/notify/v2/notifications/email"
 ROLLOUT_TIMEOUT = 180
 
 
