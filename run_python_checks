@@ -67,7 +67,9 @@ jscpd --exit-code 1 --format python --mode weak --min-lines 4 --min-tokens 35 --
 # Same rules as podiumd's verify-podiumd markdown check
 # (quality_gates.markdown_disabled_rules default and MARKDOWN_PLUGIN_SETTINGS).
 echo "=== pymarkdown (${#markdown_files[@]} file(s)) ==="
-pymarkdown -d md013,md014 -s 'plugins.md024.siblings_only=$!True' scan "${markdown_files[@]}"
+# podiumd-tests: front-matter on, for the rule files in .claude/memory/.
+pymarkdown -d md013,md014 -s 'plugins.md024.siblings_only=$!True' -s 'extensions.front-matter.enabled=$!True' \
+    scan "${markdown_files[@]}"
 
 # vulture does not link TypedDict fields to string-key reads (row["app"]),
 # so all TypedDict fields go into a generated whitelist.
