@@ -18,10 +18,10 @@ Sources:
 | `debug/debug-portaal-mijn-zaken-cache.spec.ts` | — | — | drop | |
 | `debug/esuite-form-selectors.spec.ts` | — | — | drop | |
 | `debug/esuite-route-discovery.spec.ts` | — | — | drop | |
-| `interaction/02-zaak-creatie.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
-| `interaction/03-document-koppeling.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
-| `interaction/09-ok2-klantcontact.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
-| `interaction/10-cross-component-zaak-portaal.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/02-zaak-creatie.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openzaak/` test_zaken.py: lifecycle. |
+| `interaction/03-document-koppeling.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openzaak/` test_documenten.py: document linked to zaak. |
+| `interaction/09-ok2-klantcontact.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openklant/` test_klantcontacten.py: roundtrip, actor link. |
+| `interaction/10-cross-component-zaak-portaal.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | Open Zaak part → `tests/component/openzaak/` test_statussen_rollen.py (zaak found by initiator BSN); Portaal part: phase 5. |
 | `interaction/105-portaal-profiel-edit.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/107-portaal-zoeken.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/108-portaal-vraag-stellen-inwoner.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
@@ -29,7 +29,7 @@ Sources:
 | `interaction/140-inwoner-vraag-over-zaak.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/141-bedrijf-eherkenning-mijn-zaken.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/142-oab-vernietigingslijst.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
-| `interaction/145-contact-lookup-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/145-contact-lookup-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | `tests/component/openklant/`: betrokkenen of a partij, internetaak by klantcontact. |
 | `interaction/148-ita-doorsturen-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/162-portaal-document-upload-e2e.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/164-portaal-vraag-stellen-vanuit-zaak.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
@@ -41,7 +41,7 @@ Sources:
 | `interaction/21-portaal-mijn-zaken-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/31-document-portaal-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/32-of-submission-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
-| `interaction/35-ok2-partij-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/35-ok2-partij-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openklant/` test_partijen.py: persoon with BSN and e-mail. |
 | `interaction/74-ita-claim-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/76-of-submission-end-to-end.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/78-ita-add-klantcontact.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
@@ -57,7 +57,7 @@ Sources:
 | `regression/109-portaal-vraag-stellen-bedrijf.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/11-of-brp-prefill.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/110-portaal-anoniem-en-mobile.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/112-ita-toewijzen-actor-types.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/112-ita-toewijzen-actor-types.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openklant/` test_internetaken.py (pure Open Klant, despite the name). |
 | `regression/114-portaal-multi-user-digid.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/115-omc-notifynl-mock-keten.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/116-omc-mail-keten-e2e.spec.ts` | component or integration | 3/4/5 | todo | |
@@ -67,48 +67,48 @@ Sources:
 | `regression/12-kiss-bff-kcc-flow.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/120-of-payment-infrastructure.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/121-continuiteit-graceful-degradation.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/122-gemachtigde-flow.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/122-gemachtigde-flow.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py: indicatieMachtiging. |
 | `regression/123-portaal-clamav-eicar-rejectie.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/124-cluster-pod-recovery-multi.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/125-kvk-postcode-huisnummer-zoek.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/13-va-filter-cross-component.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/14-audit-trail.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/13-va-filter-cross-component.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py, with client ptest-bootstrap-zgw-openbaar. |
+| `regression/14-audit-trail.spec.ts` | component or integration | 3/4/5 | todo | Open Zaak audittrails need heeft_alle_autorisaties (xfail in test_documenten.py); decide on a client with full rights. |
 | `regression/143-oab-vernietigingsflow.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/143-portaal-document-download.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/144-continuiteit-component-stop.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/146-portaal-uitbreiding.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/147-kiss-contentbronnen.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/149-ok2-crud-uitbreiding.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/15-status-transitions.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/149-ok2-crud-uitbreiding.spec.ts` | component or integration | 3/4/5 | merge | `tests/component/openklant/`: klantcontact and digitaal adres patch/delete; CRUD-3 (identificator PUT) dropped: it passed on any outcome. |
+| `regression/15-status-transitions.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py: statussen in order. |
 | `regression/150-of-prefill-foutpaden.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/151-pdok-externe-service.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/152-of-retention-en-pdf.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/153-of-features-direct.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/154-omc-cosign-direct.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/156-esuite-ui-navigatie.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/157-contact-haalcentraal-validatie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/157-contact-haalcentraal-validatie.spec.ts` | component or integration | 3/4/5 | merge | KI-060 → `tests/component/openklant/` test_internetaken.py; KvK parts: phase 3, external services. |
 | `regression/158-of-eherkenning-vestiging.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/159-of-zaak-keten.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/16-bedrijf-aanvraag-kvk.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/16-bedrijf-aanvraag-kvk.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py: rol of a company (generated KvK number). |
 | `regression/160-portaal-deactivated-on-pseudo-blokkade.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/161-portaal-low-prio-coverage.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/163-portaal-menu-kop-consistency.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/165-portaal-notif-save.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/166-oab-medebeoordelaar.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/167-fb-zaaktype-crud-api.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/167-fb-zaaktype-crud-api.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_catalogi.py: concept zaaktype CRUD and versions. |
 | `regression/169-oab-process-review-flow.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/17-document-va-handhaving.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/17-document-va-handhaving.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py. |
 | `regression/170-oab-destruction-execute.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/171-oab-short-procedure.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/172-architectuur-wcag-axe.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/173-fb-zaaktype-versie-isolatie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/173-fb-zaaktype-versie-isolatie.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_catalogi.py test_zaaktype_versions. |
 | `regression/174-oab-config-persist-filter.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/175-continuiteit-alertmanager-fber.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/176-formulier-update-keten.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/177-pen-admin-niet-publiek.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/178-blacklist-upload.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/179-portaal-profiel-naar-openklant.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/18-klantcontact-zaak-koppeling.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/18-klantcontact-zaak-koppeling.spec.ts` | component or integration | 3/4/5 | todo | Chain Open Klant → Open Zaak: phase 4. |
 | `regression/183-of-digid-zaak-rol.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/184-ita-doorsturen-mutatie.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/185-of-betaalstatus-zaak.spec.ts` | component or integration | 3/4/5 | todo | |
@@ -116,46 +116,46 @@ Sources:
 | `regression/190-kiss-contentbronnen-gevuld.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/191-ita-poller-split.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/193-frankgateway-zac-openzaak-e2e.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/22-negative-auth.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/23-va-escalatie.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/24-zaakeigenschappen.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/22-negative-auth.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py, with client ptest-bootstrap-zgw-noauth. |
+| `regression/23-va-escalatie.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_autorisaties.py. |
+| `regression/24-zaakeigenschappen.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_besluiten_eigenschappen.py, on bootstrap eigenschap kenteken. |
 | `regression/25-abonnement-filter.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/26-multi-subscriber.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/27-status-event-keten.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/28-gerelateerde-zaken.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/29-besluit-op-zaak.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/28-gerelateerde-zaken.spec.ts` | component or integration | 3/4/5 | merge | With 59 into `tests/component/openzaak/` test_zaken.py test_relevante_andere_zaken. |
+| `regression/29-besluit-op-zaak.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_besluiten_eigenschappen.py, on the bootstrap besluittype. |
 | `regression/30-rol-event.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/33-zaak-update-event.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/34-zio-events.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/36-zaakobject-koppeling.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/36-zaakobject-koppeling.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_zaken.py. |
 | `regression/37-ok2-partij-events.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/38-concurrency-uniqueness.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/39-zaak-lifecycle-close.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/38-concurrency-uniqueness.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_zaken.py: unique identificatie under parallel creates. |
+| `regression/39-zaak-lifecycle-close.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py, extended with closing by resultaat and eindstatus. |
 | `regression/40-brp-zoek-criteria.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/41-multi-rollen-zaak.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/41-multi-rollen-zaak.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py. |
 | `regression/42-notif-retry.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/43-pagineren-filtering.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/44-validation-edge-cases.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/43-pagineren-filtering.spec.ts` | component or integration | 3/4/5 | merge | With 55 into `tests/component/openzaak/` test_zaken.py (ApiClient.list follows every page). |
+| `regression/44-validation-edge-cases.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_validatie.py, each invalid field named in invalidParams. |
 | `regression/45-internetaak-event.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/46-rol-delete-event.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/47-kvk-edge-cases.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/48-audit-trail-acties.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/49-document-download.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/50-zaak-zoeken.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/51-document-crud-edges.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/52-zaak-geometrie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/48-audit-trail-acties.spec.ts` | component or integration | 3/4/5 | todo | As 14: audittrails need heeft_alle_autorisaties. |
+| `regression/49-document-download.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_documenten.py test_document_versions_and_definitief. |
+| `regression/50-zaak-zoeken.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_statussen_rollen.py test_zaak_found_by_initiator_bsn. |
+| `regression/51-document-crud-edges.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_documenten.py. |
+| `regression/52-zaak-geometrie.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_zaken.py. |
 | `regression/53-on-kanaal-validation.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/54-ok2-conversation-tree.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/55-multi-zaaktype.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/56-zaak-rel-batch.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/54-ok2-conversation-tree.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openklant/` test_partijen.py test_betrokkenen_of_a_partij. |
+| `regression/55-multi-zaaktype.spec.ts` | component or integration | 3/4/5 | merge | With 43 into `tests/component/openzaak/` test_zaken.py. |
+| `regression/56-zaak-rel-batch.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py; its inpBsn__in filter does not exist (xfail: _zoek ignores unknown filters). |
 | `regression/57-kvk-prefill.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/58-ok2-expand.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/59-zaak-relatie-keten.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/60-seed-data-health.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/58-ok2-expand.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openklant/` test_partijen.py. |
+| `regression/59-zaak-relatie-keten.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_zaken.py test_relevante_andere_zaken. |
+| `regression/60-seed-data-health.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_catalogi.py, on the bootstrap zaaktype. |
 | `regression/61-mobile-mijn-zaken.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/62-vergetelheid-categorieen.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/63-klacht-bezwaar-keten.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/64-document-lifecycle.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/63-klacht-bezwaar-keten.spec.ts` | component or integration | 3/4/5 | todo | Chain: phase 4. |
+| `regression/64-document-lifecycle.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_documenten.py; its audittrail part is an xfail. |
 | `regression/65-oi-cache-webhook.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/67-pabc-functional-roles.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/68-pabc-decision.spec.ts` | component or integration | 3/4/5 | todo | |
@@ -174,12 +174,12 @@ Sources:
 | `regression/82-omc-zaak-e2e.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/83-portaal-anonieme-pagina-bereikbaarheid.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/84-portaal-ingelogd-sessie.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/85-ok2-bedrijf-partij.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/86-ok2-klantcontact-bedrijf.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/87-ok2-klantcontact-zoeken.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/85-ok2-bedrijf-partij.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openklant/` test_partijen.py: organisatie with KvK or RSIN. |
+| `regression/86-ok2-klantcontact-bedrijf.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openklant/`. |
+| `regression/87-ok2-klantcontact-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openklant/` test_klantcontacten.py. |
 | `regression/88-pdok-locatieserver.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/89-cluster-pod-recovery.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/90-fb-oz-catalogi-integriteit.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/90-fb-oz-catalogi-integriteit.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_catalogi.py. |
 | `regression/91-fb-keycloak-realm-snapshot.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/95-portaal-filtering.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/96-portaal-profiel-navigatie.spec.ts` | component or integration | 3/4/5 | todo | |
