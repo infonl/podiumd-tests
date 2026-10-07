@@ -31,7 +31,6 @@ urls:
   grafana: https://grafana.local
   mailpit: https://mailpit.local
   api-proxy: https://api-proxy.local
-  omc: https://omc.local
 secrets:
   # Well-known dev defaults of podiumd-minikube; the only place literals are allowed (PLAN.md R8).
   keycloak_admin_username:
@@ -46,9 +45,6 @@ secrets:
   # Read from Open Zaak in the cluster: the Open Formulieren client, for read-only smoke.
   pabc_api_key:
     pod_env: {deployment: pabc, var: API_KEY__0}
-  # OMC's token secret, to sign the auth of OMC's abonnement (bootstrap step omc-abonnement).
-  omc_jwt_secret:
-    pod_env: {deployment: omc, var: OMC_AUTH_JWT_SECRET}
   zgw_client_secret:
     zgw_jwt_secret: {deployment: openzaak, client_id: open-formulieren}
 settings:
