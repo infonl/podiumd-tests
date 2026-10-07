@@ -119,9 +119,10 @@ Decided 2026-10-06, after mapping which source tests need which configuration (`
 - **A1. Test-only objects**, all named `ptest-bootstrap-*`, always applied:
   - OZ: an Applicatie and JWT secret for the suite's ZGW client, a test catalogus, and autorisaties limited to that catalogus (`CatalogusAutorisatie`), not `heeft_alle_autorisaties` (§11a);
   - ON: an Applicatie and JWT secret for the suite;
-  - OK2, Objecten and Objecttypen tokens;
+  - OK2 and Objecten tokens;
   - Keycloak test users (KCC medewerker, admin, inwoners, bedrijf) with roles the realm already has.
 - **A2. Platform wiring**, the configuration TA's `seed-omgeving.sh` applies (W1–W12 in the research note), applied only when the profile sets `bootstrap.wiring: true`. Default: on for minikube and podiumd-infra, off for ExternalsPodiumD until the environment owner agrees. Without it, the tests that need it skip with a reason, and `doctor` reports what is missing. Order by the number of tests that need it: W1 (DigiD/eHerkenning through Keycloak), W5/W6/W8 (OI CMS pages, OK2 link, contact flow), W9/W10 (OF forms and registration), W3 (ON kanalen), then W7, W11, W12.
+- **Only what a test uses:** a step is added together with the first test that needs it, and removed when no test does (`.claude/memory/remove-unused.md`).
 - **Rules:**
   - Before a step changes an existing object, it stores the old state in the Secret `podiumd-tests-credentials`; `unbootstrap` restores it. Objects a step created are deleted. Built-ins (such as OI's own `oidc-digid` client) are never deleted.
   - Bootstrap never changes the secrets of the platform's own clients (`open-formulieren`, `open-inwoner`, `zac`, …). Tests use `ptest-bootstrap-*` clients; the restricted Open Formulieren autorisaties of the VA tests go to a separate `ptest-bootstrap-of` client.

@@ -1,13 +1,12 @@
-"""Wiring W1 in Open Inwoner or Open Formulieren: DigiD/eHerkenning login through Keycloak's mock.
+"""Wiring W1 in Open Inwoner: DigiD/eHerkenning login through Keycloak's mock.
 
 Actions: status, apply, remove. Params: action, endpoint (Keycloak's openid-connect base as the
 app calls it), client_id, secret (apply only), clients ({identifier: {provider, scopes, options}}),
 and app extras: eherkenning_site (Open Inwoner SiteConfiguration.eherkenning_enabled), identities
 (the test identities' numbers [{bsn} or {kvk}]), accounts (Open Inwoner accounts to prepare
-[{bsn, email, first, last}]), form (Open Formulieren form slug that
-gets the digid_oidc login), and record ({"clients": {identifier: old field values}, "providers":
+[{bsn, email, first, last}]), and record ({"clients": {identifier: old field values}, "providers":
 [created], "created": [client identifiers created], "eherkenning_enabled": old value, "accounts_before":
-[pks of the identities' accounts that existed before], "form_backend": created}), which remove restores
+[pks of the identities' accounts that existed before]}), which remove restores
 exactly. remove deletes every account of the identities except those that existed before: also
 the ones Open Inwoner creates itself at a login.
 """
@@ -41,8 +40,6 @@ def run(params):
     if params.get("identities"):
         record.setdefault("accounts_before", list(_accounts(params["identities"]).values_list("pk", flat=True)))
         _create_accounts(params.get("accounts") or [])
-    if params.get("form") and _form_backend(params["form"]):
-        record["form_backend"] = params["form"]
     return {"present": True, "record": record}
 
 
@@ -112,21 +109,6 @@ def _create_accounts(accounts):
         )
 
 
-def _form_backend(slug):
-    from openforms.forms.models import FormAuthenticationBackend
-
-    _, created = FormAuthenticationBackend.objects.get_or_create(
-        form__slug=slug, backend="digid_oidc", defaults={"form_id": _form_id(slug), "options": {}}
-    )
-    return created
-
-
-def _form_id(slug):
-    from openforms.forms.models import Form
-
-    return Form.objects.get(slug=slug).pk
-
-
 def _present(params, clients):
     from mozilla_django_oidc_db.models import OIDCProvider
 
@@ -147,20 +129,12 @@ def _present(params, clients):
 
         if not all(User.objects.filter(bsn=u["bsn"]).exists() for u in params["accounts"]):
             return False
-    if params.get("form"):
-        from openforms.forms.models import FormAuthenticationBackend
-
-        return FormAuthenticationBackend.objects.filter(form__slug=params["form"], backend="digid_oidc").exists()
     return True
 
 
 def _remove(record, clients):
     from mozilla_django_oidc_db.models import OIDCProvider
 
-    if record.get("form_backend"):
-        from openforms.forms.models import FormAuthenticationBackend
-
-        FormAuthenticationBackend.objects.filter(form__slug=record["form_backend"], backend="digid_oidc").delete()
     for identifier, client in clients.items():
         if identifier in record.get("created", []):
             client.delete()

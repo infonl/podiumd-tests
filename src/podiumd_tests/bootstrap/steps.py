@@ -55,15 +55,9 @@ TEST_ZAAKTYPE = "ptest-bootstrap-klacht"
 TEST_IOT = "ptest-bootstrap-bijlage"
 TEST_BESLUITTYPE = "ptest-bootstrap-besluit"
 TEST_FORM = "ptest-bootstrap-klacht"
-# Open Notificaties kanalen the ported tests use, with the filters of ExternalsPodiumD and podiumd-infra
-# (statussen: TA seed-notificaties.sh only).
-KANALEN = {
-    "zaken": ["bronorganisatie", "zaaktype", "vertrouwelijkheidaanduiding"],
-    "statussen": ["bronorganisatie", "zaaktype", "vertrouwelijkheidaanduiding"],
-    "documenten": ["bronorganisatie", "informatieobjecttype", "vertrouwelijkheidaanduiding"],
-    "partijen": ["nummer", "interne_notitie", "soort_partij"],
-    "internetaken": ["nummer", "gevraagde_handeling", "toelichting", "status"],
-}
+# Open Notificaties kanalen the ported tests subscribe on, with the filters of ExternalsPodiumD
+# and podiumd-infra.
+KANALEN = {"zaken": ["bronorganisatie", "zaaktype", "vertrouwelijkheidaanduiding"]}
 # API tokens (TokenAuth identifier = store key).
 # The productaanvraag chain (Objecten → Open Notificaties → ZAC → Open Zaak) runs on the
 # environment's own wiring: profile settings productaanvraag_type and productaanvraag_zaaktype.
@@ -72,7 +66,6 @@ ZGW_PRODUCTAANVRAAG_CLIENT_ID = "ptest-bootstrap-zgw-productaanvraag"
 ZGW_PRODUCTAANVRAAG_STORE_KEY = "ptest_bootstrap_zgw_productaanvraag_secret"
 OBJECTEN_STORE_KEY = "ptest_bootstrap_objecten_token"
 OPENKLANT_STORE_KEY = "ptest_bootstrap_openklant_token"
-OBJECTTYPEN_STORE_KEY = "ptest_bootstrap_objecttypen_token"
 
 
 @dataclass(frozen=True)
@@ -285,30 +278,6 @@ def openformulieren_params(ctx: Context) -> dict[str, object]:
     }
 
 
-def django_user_step(component: str, key: str, groups: tuple[str, ...]) -> SnippetStep:
-    """A local Django user ptest-bootstrap-<key> in a component, with groups and a random password."""
-    username = f"{PREFIX}-{key}"
-    params: dict[str, object] = {"username": username, "email": user_email(username), "groups": list(groups)}
-    return SnippetStep(
-        f"{component}-user-{key}", (component,), "django_user", django_password_key(component, key), params
-    )
-
-
-def django_password_key(component: str, key: str) -> str:
-    """Key of a Django test user's password in the credentials Secret."""
-    return f"{PREFIX.replace('-', '_')}_{component}_{key}_password"
-
-
-def notifications_params(ctx: Context) -> dict[str, object]:
-    """The Open Notificaties client secret, and its URL as other apps call it (default: the profile URL)."""
-    env = ctx.env
-    default = env.profile.urls["opennotificaties"] + "/api/v1/"
-    return {
-        "secret": ctx.store.read().get(NRC_STORE_KEY, ""),  # empty only before opennotificaties-client ran
-        "notificaties_url": env.profile.settings.get("opennotificaties_internal_url", default),
-    }
-
-
 def openzaak_client_step(  # pylint: disable=too-many-arguments  # mirrors the snippet's parameters
     name: str,
     client_id: str,
@@ -357,11 +326,10 @@ def productaanvraag_zaaktypen(ctx: Context) -> dict[str, object]:
     }
 
 
-# Test identities for DigiD and eHerkenning logins (TA testinwoner, testinwoner2, testbedrijf):
+# Test identities for DigiD and eHerkenning logins (TA testinwoner, testbedrijf):
 # the Keycloak attributes become the bsn and eHerkenning claims of the mock.
 IDENTITIES = (
     KeycloakUser("inwoner", attributes={"bsn": ["999990019"]}),
-    KeycloakUser("inwoner2", attributes={"bsn": ["999990038"]}),
     KeycloakUser("bedrijf", attributes={"kvk": ["68750110"], "vestigingsnummer": ["000038509564"]}),
 )
 # Where Open Inwoner finds the eHerkenning claims (mappers in oidc_mock.SCOPES).
@@ -370,7 +338,6 @@ EHERKENNING_CLAIMS = {
     "branch_number_claim_path": ["urn:etoegang:1.9:ServiceRestriction:Vestigingsnr"],
     "identifier_type_claim_path": ["namequalifier"],
 }
-LOA_DEFAULT = "urn:oasis:names:tc:SAML:2.0:ac:classes:MobileTwoFactorContract"
 
 
 def openinwoner_number(user: KeycloakUser) -> dict[str, str]:
@@ -412,7 +379,6 @@ STEPS: tuple[Step, ...] = (
         {"client_id": NRC_CLIENT_ID, "scopes": {"nrc": ["notificaties.consumeren", "notificaties.publiceren"]}},
     ),
     token_step("openklant", "openklant.components.token.models", OPENKLANT_STORE_KEY),
-    token_step("objecttypen", "objecttypes.token.models", OBJECTTYPEN_STORE_KEY),
     token_step("objecten", "objects.token.models", OBJECTEN_STORE_KEY, object_types=[PRODUCTAANVRAAG_OBJECTTYPE]),
     # Only reads and deletes the zaken ZAC creates for the test's productaanvragen.
     SnippetStep(
@@ -467,16 +433,6 @@ STEPS: tuple[Step, ...] = (
         context_params=openformulieren_params,
     ),
     SnippetStep(
-        "openklant-notificaties",
-        ("openklant", "opennotificaties"),
-        "notifications_config",
-        "ptest_bootstrap_openklant_notificaties_record",
-        {"prefix": PREFIX, "client_id": NRC_CLIENT_ID},
-        record=True,
-        wiring=True,
-        context_params=notifications_params,
-    ),
-    SnippetStep(
         "opennotificaties-kanalen",
         ("opennotificaties",),
         "kanalen",
@@ -485,13 +441,8 @@ STEPS: tuple[Step, ...] = (
         record=True,
         wiring=True,
     ),
-    # Open Archiefbeheer role users (TA seed-oab-users: recordmanager-test, reviewer-test, ...).
-    django_user_step("openarchiefbeheer", "recordmanager", ("Record Manager",)),
-    django_user_step("openarchiefbeheer", "reviewer", ("Reviewer",)),
-    django_user_step("openarchiefbeheer", "coreviewer", ("Co-reviewer",)),
-    django_user_step("openarchiefbeheer", "archivist", ("Archivist",)),
     # Users for KISS and ITA (TA kcc-medewerker), for the admin UIs, PABC and ZAC (TA testadmin),
-    # and for the DigiD and eHerkenning logins through Keycloak (TA testinwoner, testinwoner2, testbedrijf).
+    # and for the DigiD and eHerkenning logins through Keycloak (TA testinwoner, testbedrijf).
     KeycloakUser(
         "kcc",
         realm_roles=("Klantcontactmedewerker",),
@@ -532,28 +483,5 @@ STEPS: tuple[Step, ...] = (
         record=True,
         wiring=True,
         context_params=oidc_params("openinwoner"),
-    ),
-    # Open Formulieren registers a zaak with a valid initiator only for a DigiD login (TA spec 183).
-    SnippetStep(
-        "openformulieren-oidc-mock",
-        ("openformulieren", "keycloak"),
-        "oidc_mock",
-        "ptest_bootstrap_openformulieren_oidc_mock_record",
-        {
-            "clients": {
-                "oidc-digid": {
-                    "provider": f"{PREFIX}-digid",
-                    "scopes": ["openid", "bsn"],
-                    "options": {
-                        "identity_settings": {"bsn_claim_path": ["bsn"]},
-                        "loa_settings": {"claim_path": ["authsp_level"], "default": LOA_DEFAULT, "value_mapping": []},
-                    },
-                },
-            },
-            "form": TEST_FORM,
-        },
-        record=True,
-        wiring=True,
-        context_params=oidc_params("openformulieren"),
     ),
 )

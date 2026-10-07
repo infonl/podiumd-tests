@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.component, pytest.mark.ui, pytest.mark.core, pytest.mark.requires("openinwoner", "keycloak")]
 
-INWONER, _, BEDRIJF = IDENTITIES
+INWONER, BEDRIJF = IDENTITIES
 FAILED = re.compile(r"/(accounts/login|login/failure)/")
 
 
