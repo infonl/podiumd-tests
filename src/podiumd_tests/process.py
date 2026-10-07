@@ -24,6 +24,7 @@ class Runner(Protocol):  # pylint: disable=too-few-public-methods  # a callable 
 
 
 KUBECTL_EXEC_EXIT = re.compile(r"^command terminated with exit code \d+$")
+PYTHON_EXCEPTION = re.compile(r"^[A-Za-z_][\w.]*(Error|Exception|DoesNotExist|DisallowedHost)\b:?")
 
 
 class ProcessError(Exception):
@@ -34,7 +35,9 @@ class ProcessError(Exception):
         # kubectl repeats client-side noise (E1005 memcache...) before the real error, and kubectl exec
         # ends with its own exit-code line after the program's error; keep the last real line.
         lines = [line for line in detail.strip().splitlines() if line.strip() and not KUBECTL_EXEC_EXIT.match(line)]
-        super().__init__(f"{self.command}: {lines[-1] if lines else 'failed'}")
+        # A Python program may log warnings after its exception; the exception is the real error.
+        errors = [line for line in lines if PYTHON_EXCEPTION.match(line)]
+        super().__init__(f"{self.command}: {(errors or lines or ['failed'])[-1]}")
 
 
 def run_process(args: Sequence[str], timeout: int, stdin: str | None = None) -> subprocess.CompletedProcess[str]:

@@ -91,3 +91,15 @@ def test_exec_errors_show_the_programs_error_not_the_exit_code_line(fake_runner)
     )
     with pytest.raises(KubeError, match=r"FieldError: bad lookup$"):
         Kube("ctx", "ns", fake_runner).exec_django_shell("openzaak", "print(1)")
+
+
+def test_exec_errors_prefer_the_exception_over_later_log_lines(fake_runner):
+    stderr = [
+        "Traceback (most recent call last):",
+        "django.db.utils.IntegrityError: duplicate key",
+        '{"event": "serializer warning", "level": "warning"}',
+        "command terminated with exit code 1",
+    ]
+    fake_runner.answers["exec -i deploy/openzaak"] = (1, "\n".join(stderr))
+    with pytest.raises(KubeError, match=r"IntegrityError: duplicate key$"):
+        Kube("ctx", "ns", fake_runner).exec_django_shell("openzaak", "print(1)")
