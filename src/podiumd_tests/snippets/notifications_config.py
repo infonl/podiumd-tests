@@ -27,7 +27,9 @@ def run(params):
         return {"present": False}
 
     if config.notifications_api_service_id is not None and not record.get("linked"):
-        return {"present": True, "record": record}  # the environment owner's configuration stays
+        # The environment owner's configuration stays; nothing to undo later.
+        owner = config.notifications_api_service.slug
+        return {"present": True, "record": record, "notes": [f"uses the environment's own service {owner}"]}
     Service.objects.filter(slug=slug).delete()
     service = Service.objects.create(
         slug=slug,
