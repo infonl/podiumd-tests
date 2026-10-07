@@ -16,13 +16,16 @@ from podiumd_tests import results
 from podiumd_tests.bootstrap import bootstrap
 from podiumd_tests.bootstrap import check
 from podiumd_tests.bootstrap import refusal
+from podiumd_tests.bootstrap.steps import OPENKLANT_STORE_KEY
 from podiumd_tests.bootstrap.steps import STEPS
+from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
 from podiumd_tests.seed.registry import ResourceRegistry
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from collections.abc import Iterator
 
     import requests
@@ -102,19 +105,44 @@ def fixture_run_tag(request: pytest.FixtureRequest) -> str:
     return str(request.config.getoption("--podiumd-run-tag") or results.run_tag(results.new_run_id()))
 
 
-@pytest.fixture(scope="session", name="bootstrap_ok")
-def fixture_bootstrap_ok(request: pytest.FixtureRequest, podiumd_env: Environment) -> None:
-    """Fail fast when bootstrap is missing; with --auto-bootstrap, apply it (PLAN.md §4 A)."""
-    missing = [o.step for o in check(podiumd_env, STEPS) if o.action == "missing"]
-    if not missing:
-        return
-    name = podiumd_env.profile.name
-    if not request.config.getoption("--auto-bootstrap"):
-        pytest.fail(f"bootstrap missing on {name} ({', '.join(missing)}): run `podiumd-tests bootstrap --env {name}`")
-    reason = refusal(podiumd_env.profile)
-    if reason:
-        pytest.fail(f"--auto-bootstrap refused: {reason}")
-    bootstrap(podiumd_env, STEPS)
+@pytest.fixture(scope="session", name="need_bootstrap")
+def fixture_need_bootstrap(request: pytest.FixtureRequest, podiumd_env: Environment) -> Callable[..., None]:
+    """need(*step_names): fail fast when those bootstrap steps are missing (PLAN.md §4 A).
+
+    Each step is checked once per session. With --auto-bootstrap the missing ones are applied.
+    """
+    checked: set[str] = set()
+    auto = bool(request.config.getoption("--auto-bootstrap"))
+
+    def need(*names: str) -> None:
+        wanted = [s for s in STEPS if s.name in names and s.name not in checked]
+        unknown = set(names) - {s.name for s in STEPS}
+        if unknown:
+            pytest.fail(f"unknown bootstrap steps: {', '.join(sorted(unknown))}")
+        missing = [s for s, o in zip(wanted, check(podiumd_env, wanted), strict=True) if o.action != "present"]
+        name = podiumd_env.profile.name
+        if missing and not auto:
+            steps = ", ".join(s.name for s in missing)
+            pytest.fail(f"bootstrap missing on {name} ({steps}): run `podiumd-tests bootstrap --env {name}`")
+        if missing:
+            reason = refusal(podiumd_env.profile)
+            if reason:
+                pytest.fail(f"--auto-bootstrap refused: {reason}")
+            failed_steps = [o for o in bootstrap(podiumd_env, missing) if o.action != "created"]
+            if failed_steps:
+                pytest.fail("--auto-bootstrap: " + "; ".join(f"{o.step} {o.action}: {o.detail}" for o in failed_steps))
+        checked.update(s.name for s in wanted)
+
+    return need
+
+
+@pytest.fixture(scope="session", name="openklant")
+def fixture_openklant(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
+    """Open Klant klantinteracties API with the suite's own token (bootstrap step openklant-token)."""
+    need_bootstrap("openklant-token")
+    token = podiumd_env.credentials.get(OPENKLANT_STORE_KEY)
+    url = podiumd_env.profile.urls["openklant"] + "/klantinteracties/api/v1"
+    return ApiClient(podiumd_env.session(cookies=False), url, {"Authorization": f"Token {token}"})
 
 
 @pytest.fixture(name="registry")
