@@ -127,7 +127,7 @@ Decided 2026-10-06, after mapping which source tests need which configuration (`
   - Bootstrap never changes the secrets of the platform's own clients (`open-formulieren`, `open-inwoner`, `zac`, …). Tests use `ptest-bootstrap-*` clients; the restricted Open Formulieren autorisaties of the VA tests go to a separate `ptest-bootstrap-of` client.
   - Credentials it creates live only in the Secret `podiumd-tests-credentials`, written over stdin; `SecretResolver` reads it as its last source.
 - Uses public or admin APIs where they exist. Otherwise `kubectl exec manage.py shell` runs Python snippets kept in `src/podiumd_tests/bootstrap/snippets/`, with compat branches for model changes such as the OI `OIDCProvider` migration.
-- The test infra from `infra/` (webhook-receiver, notifynl-mock, Mailpit) comes with phase 4, where the integration tests need it.
+- The test infra from `infra/` (webhook-receiver, notifynl-mock, Mailpit) comes with phase 4, where the integration tests need it. Each piece is a directory of plain manifests that a bootstrap step (`infra-*`) applies with `kubectl apply` and labels `app.kubernetes.io/managed-by=podiumd-tests`; no Helm chart, so no `helm` is needed for it.
 - A session fixture `bootstrap_ok` checks the state. If it is missing, it fails fast with "run `podiumd-tests bootstrap --env X`". `--auto-bootstrap` applies it instead.
 - This replaces TA `seed-omgeving.sh`, ExternalsPodiumD `seed-identities.sh` and the MK deploy-time Jobs, as far as the tests depend on them.
 
@@ -265,7 +265,7 @@ podiumd-tests/
     podiumd-infra/<env>.yaml          # kees00, jim01, ...
     externals/<stage>-<g>.yaml        # ontw-icat, ontw-dimp, ...
   known_issues.yaml  perf.yaml
-  infra/chart/              # webhook-receiver, notifynl-mock, mailpit, alertmanager route
+  infra/<piece>/             # webhook-receiver, notifynl-mock, mailpit, alertmanager route: manifests per piece
   results/                  # one directory per run (§7)
   src/podiumd_tests/
     cli.py                  # console script `podiumd-tests`

@@ -112,7 +112,7 @@ Sources:
 | `regression/183-of-digid-zaak-rol.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/184-ita-doorsturen-mutatie.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/185-of-betaalstatus-zaak.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/19-notificaties-e2e.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/19-notificaties-e2e.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_zaak_notificaties.py`, with the webhook receiver of `infra/`. |
 | `regression/190-kiss-contentbronnen-gevuld.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/191-ita-poller-split.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/193-frankgateway-zac-openzaak-e2e.spec.ts` | component or integration | 3/4/5 | todo | |
@@ -144,7 +144,7 @@ Sources:
 | `regression/50-zaak-zoeken.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_statussen_rollen.py test_zaak_found_by_initiator_bsn. |
 | `regression/51-document-crud-edges.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_documenten.py. |
 | `regression/52-zaak-geometrie.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_zaken.py. |
-| `regression/53-on-kanaal-validation.spec.ts` | component or integration | 3/4/5 | port | `tests/component/opennotificaties/`; abonnement validation waits for the webhook receiver (phase 4); unreachable callback gives 500 (xfail). |
+| `regression/53-on-kanaal-validation.spec.ts` | component or integration | 3/4/5 | port | `tests/component/opennotificaties/`; abonnement validation uses the webhook receiver of `infra/`; unreachable callback gives 500 (xfail). |
 | `regression/54-ok2-conversation-tree.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openklant/` test_partijen.py test_betrokkenen_of_a_partij. |
 | `regression/55-multi-zaaktype.spec.ts` | component or integration | 3/4/5 | merge | With 43 into `tests/component/openzaak/` test_zaken.py. |
 | `regression/56-zaak-rel-batch.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py; its inpBsn__in filter does not exist (xfail: _zoek ignores unknown filters). |
