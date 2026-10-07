@@ -38,6 +38,7 @@ from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZaaktypeParts
 from podiumd_tests.seed.openzaak import zaaktype_parts
 from podiumd_tests.seed.registry import ResourceRegistry
+from podiumd_tests.webhook import Callback
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -251,6 +252,13 @@ def fixture_registry(request: pytest.FixtureRequest, run_tag: str) -> Iterator[R
     kept = reg.cleanup()
     if kept:
         print(f"--keep-data: left behind {', '.join(kept)}")
+
+
+@pytest.fixture(name="callback")
+def fixture_callback(run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> Callback:
+    """A callback path of this test's own on the webhook receiver (infra/webhook-receiver)."""
+    need_bootstrap("infra-webhook-receiver")
+    return Callback.new(podiumd_env, run_tag)
 
 
 def pytest_runtest_setup(item: pytest.Item) -> None:

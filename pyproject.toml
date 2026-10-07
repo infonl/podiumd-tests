@@ -157,6 +157,8 @@ check-typed-exception = true  # Enable additional checks for try-except-pass
 # podiumd-tests: the same rules apply to unit_tests/.
 "tests/**" = ["S101", "ARG001", "ARG005", "SLF001", "INP001", "PT018", "RUF059", "S603", "S607", "S106"]
 "unit_tests/**" = ["S101", "ARG001", "ARG005", "SLF001", "INP001", "PT018", "RUF059", "S603", "S607", "S106"]
+# infra/: scripts that run in the cluster from a ConfigMap, not a package (INP001).
+"infra/**" = ["INP001"]
 
 [tool.ruff.format]
 quote-style = "double"

@@ -153,7 +153,7 @@ def snippet_answer(value):
 def test_snippet_step_sends_its_secret_over_stdin_only(env_factory, fake_runner, profile_factory):
     env = cluster_env(env_factory, fake_runner, profile_factory)
     ctx = Context(env, CredentialStore(env.kube))
-    step = STEPS[0]
+    step = next(s for s in STEPS if s.name == "openzaak-client")
     fake_runner.answers["exec -i deploy/openzaak"] = snippet_answer({"present": True})
     assert not step.is_present(ctx)  # the secret is not in the credentials Secret yet
     values = step.apply(ctx)

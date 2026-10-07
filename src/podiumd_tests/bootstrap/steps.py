@@ -16,6 +16,7 @@ from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
+from podiumd_tests.webhook import WebhookReceiver
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -330,6 +331,8 @@ def token_step(component: str, module: str, store_key: str) -> SnippetStep:
 
 
 STEPS: tuple[Step, ...] = (
+    # podiumd-tests' own infra (infra/), for the integration chains (PLAN.md §4 phase 4).
+    WebhookReceiver(),
     openzaak_client_step("openzaak-client", ZGW_CLIENT_ID, ZGW_STORE_KEY, owns_catalogus=True),
     # TA's restricted Open Formulieren client: vertrouwelijkheid openbaar at most, no deletes.
     openzaak_client_step(
