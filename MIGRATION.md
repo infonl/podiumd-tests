@@ -207,13 +207,13 @@ Sources:
 | `test_database.py` | component, marker `cluster` | 3 | port | `tests/component/platform/test_django_apps.py`, through each app's own Django connection. |
 | `test_django_admin_login.py` | component, marker `cluster` | 3 | port | `tests/component/platform/test_django_apps.py`; skips where admin login is SSO. |
 | `test_login_flow.py` | smoke (ZAC OIDC login) | 1 | port | First leg (ZAC redirects to the Keycloak login form) → `test_oidc.py`. The login itself needs a test identity: phase 5. |
-| `test_mailpit.py` | integration | 4 | todo |  |
+| `test_mailpit.py` | integration | 4 | merge | `tests/integration/test_mail.py` (every Django app, not only Open Zaak); web UI check: phase 5. |
 | `test_metrics.py` | smoke | 1 | merge | With `test_monitoring_logging.py` into `test_metrics.py`; datasources found by type, not by name. |
 | `test_monitoring_logging.py` | smoke | 1 | merge | Into `test_metrics.py`; the Loki check runs where a Loki datasource exists. |
 | `test_pabc_migrations_guard.py` | component, marker `destructive` | 3 | drop | Tests a podiumd-minikube script, and changes the cluster. |
 | `test_pkce.py` | component (keycloak) | 3 | port | `tests/component/keycloak/test_pkce.py`; MK's login round trip and ZAC experiment not ported. |
 | `test_pods.py` | smoke | 1 | port | `test_cluster.py`: pods judged by owner (Job, CronJob) instead of per-estate prefix lists; core pod list dropped (every Deployment and StatefulSet must be ready). |
-| `test_productaanvraag_flow.py` | integration, marker `core` | 4 | todo |  |
+| `test_productaanvraag_flow.py` | integration, marker `core` | 4 | merge | `tests/integration/test_productaanvraag.py`; Job and kanaal checks are covered by `test_jobs_succeeded` and the kanalen tests. |
 | `test_reachability.py` | smoke | 1 | port | `test_reachability.py`: redirects followed (R14), status < 500 per component plus admin login pages; no per-host expected codes. |
 | `test_zgw_service_reachability.py` | integration, marker `cluster` | 4 | todo |  |
 
@@ -226,13 +226,13 @@ Sources:
 | `test_database.py` | component, marker `cluster` | 3 | port | `tests/component/platform/test_django_apps.py`, through each app's own Django connection. |
 | `test_django_admin_login.py` | component, marker `cluster` | 3 | port | `tests/component/platform/test_django_apps.py`; skips where admin login is SSO. |
 | `test_login_flow.py` | smoke (ZAC OIDC login) | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
-| `test_mailpit.py` | integration | 4 | merge | same test in MK and PI: merge into one environment-neutral test |
+| `test_mailpit.py` | integration | 4 | merge | `tests/integration/test_mail.py`; the PI-only skip is the `mailpit` capability. |
 | `test_metrics.py` | smoke | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
 | `test_monitoring_logging.py` | smoke | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
 | `test_pabc_migrations_guard.py` | component, marker `destructive` | 3 | drop | Tests a podiumd-minikube script, and changes the cluster. |
 | `test_pkce.py` | component (keycloak) | 3 | port | `tests/component/keycloak/test_pkce.py`; MK's login round trip and ZAC experiment not ported. |
 | `test_pods.py` | smoke | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
-| `test_productaanvraag_flow.py` | integration, marker `core` | 4 | merge | same test in MK and PI: merge into one environment-neutral test |
+| `test_productaanvraag_flow.py` | integration, marker `core` | 4 | merge | `tests/integration/test_productaanvraag.py`, with profile settings instead of hard-coded types; PI's ZAC parameter check goes to the ZAC component tests. |
 | `test_reachability.py` | smoke | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
 | `test_zac_zaakafhandelparameters.py` | component (zac) | 3 | todo |  |
 | `test_zgw_service_reachability.py` | integration, marker `cluster` | 4 | merge | same test in MK and PI: merge into one environment-neutral test |
