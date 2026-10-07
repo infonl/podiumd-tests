@@ -13,6 +13,8 @@ from typing import cast
 
 from podiumd_tests.auth.keycloak_admin import for_environment
 from podiumd_tests.auth.keycloak_admin import user_email
+from podiumd_tests.bootstrap.oidc_mock import KeycloakOidcMock
+from podiumd_tests.bootstrap.oidc_mock import oidc_params
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
@@ -355,6 +357,28 @@ def productaanvraag_zaaktypen(ctx: Context) -> dict[str, object]:
     }
 
 
+# Test identities for DigiD and eHerkenning logins (TA testinwoner, testinwoner2, testbedrijf):
+# the Keycloak attributes become the bsn and eHerkenning claims of the mock.
+IDENTITIES = (
+    KeycloakUser("inwoner", attributes={"bsn": ["999990019"]}),
+    KeycloakUser("inwoner2", attributes={"bsn": ["999990038"]}),
+    KeycloakUser("bedrijf", attributes={"kvk": ["68750110"], "vestigingsnummer": ["000038509564"]}),
+)
+# Where Open Inwoner finds the eHerkenning claims (mappers in oidc_mock.SCOPES).
+EHERKENNING_CLAIMS = {
+    "legal_subject_claim_path": ["urn:etoegang:core:LegalSubjectID"],
+    "branch_number_claim_path": ["urn:etoegang:1.9:ServiceRestriction:Vestigingsnr"],
+    "identifier_type_claim_path": ["namequalifier"],
+}
+LOA_DEFAULT = "urn:oasis:names:tc:SAML:2.0:ac:classes:MobileTwoFactorContract"
+
+
+def openinwoner_account(user: KeycloakUser) -> dict[str, str]:
+    """The Open Inwoner account a test identity logs in to: its bsn or kvk, e-mail and name."""
+    key = "bsn" if "bsn" in user.attributes else "kvk"
+    return {key: user.attributes[key][0], "email": user_email(user.username), "first": "PodiumD", "last": user.username}
+
+
 STEPS: tuple[Step, ...] = (
     # podiumd-tests' own infra (infra/), for the integration chains (PLAN.md §4 phase 4).
     WebhookReceiver(),
@@ -471,7 +495,55 @@ STEPS: tuple[Step, ...] = (
         groups=("beheerders-elk-domein",),
     ),
     OpenKlantActor("kcc"),
-    KeycloakUser("inwoner", attributes={"bsn": ["999990019"]}),
-    KeycloakUser("inwoner2", attributes={"bsn": ["999990038"]}),
-    KeycloakUser("bedrijf", attributes={"kvk": ["68750110"], "vestigingsnummer": ["000038509564"]}),
+    *IDENTITIES,
+    # Wiring W1: DigiD and eHerkenning through Keycloak's mock (TA seed-*-oidc-mock.sh, seed-of-digid-oidc.sh).
+    KeycloakOidcMock(),
+    SnippetStep(
+        "openinwoner-oidc-mock",
+        ("openinwoner", "keycloak"),
+        "oidc_mock",
+        "ptest_bootstrap_openinwoner_oidc_mock_record",
+        {
+            "clients": {
+                "oidc-digid": {
+                    "provider": f"{PREFIX}-digid",
+                    "scopes": ["openid", "bsn"],
+                    "options": {"identity_settings": {"bsn_claim_path": ["bsn"]}},
+                },
+                "oidc-eherkenning": {
+                    "provider": f"{PREFIX}-eherkenning",
+                    "scopes": ["openid", "eherkenning"],
+                    "options": {"identity_settings": EHERKENNING_CLAIMS},
+                },
+            },
+            "eherkenning_site": True,
+            "users": [openinwoner_account(u) for u in IDENTITIES],
+        },
+        record=True,
+        wiring=True,
+        context_params=oidc_params("openinwoner"),
+    ),
+    # Open Formulieren registers a zaak with a valid initiator only for a DigiD login (TA spec 183).
+    SnippetStep(
+        "openformulieren-oidc-mock",
+        ("openformulieren", "keycloak"),
+        "oidc_mock",
+        "ptest_bootstrap_openformulieren_oidc_mock_record",
+        {
+            "clients": {
+                "oidc-digid": {
+                    "provider": f"{PREFIX}-digid",
+                    "scopes": ["openid", "bsn"],
+                    "options": {
+                        "identity_settings": {"bsn_claim_path": ["bsn"]},
+                        "loa_settings": {"claim_path": ["authsp_level"], "default": LOA_DEFAULT, "value_mapping": []},
+                    },
+                },
+            },
+            "form": TEST_FORM,
+        },
+        record=True,
+        wiring=True,
+        context_params=oidc_params("openformulieren"),
+    ),
 )

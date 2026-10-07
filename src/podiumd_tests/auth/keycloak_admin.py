@@ -35,7 +35,7 @@ def for_environment(env: Environment, realm: str | None = None) -> KeycloakAdmin
     return KeycloakAdmin(env.session(cookies=False), url, realm or realm_of(env), admin)
 
 
-class KeycloakAdmin:
+class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method per Admin REST call
     """Admin calls on one realm, with a token of an admin user in the master realm."""
 
     def __init__(self, http: requests.Session, url: str, realm: str, admin: tuple[str, str]) -> None:
@@ -122,3 +122,48 @@ class KeycloakAdmin:
     def join_group(self, user_id: str, group_id: str) -> None:
         """Add a user to a group."""
         self._send("PUT", f"/users/{user_id}/groups/{group_id}", None)
+
+    def update_client(self, client: JsonObject) -> None:
+        """Replace a client's representation (from client())."""
+        self._send("PUT", f"/clients/{client['id']}", client)
+
+    def client_secret(self, client_uuid: str) -> str:
+        """A confidential client's secret."""
+        return str(cast("JsonObject", self._get(f"/clients/{client_uuid}/client-secret"))["value"])
+
+    def client_scopes(self) -> dict[str, str]:
+        """Client scope name -> id."""
+        return {str(s["name"]): str(s["id"]) for s in cast("list[JsonObject]", self._get("/client-scopes"))}
+
+    def create_client_scope(self, scope: JsonObject) -> str:
+        """Create a client scope; its id."""
+        self._send("POST", "/client-scopes", scope, HTTPStatus.CREATED)
+        return self.client_scopes()[str(scope["name"])]
+
+    def delete_client_scope(self, scope_id: str) -> None:
+        """Delete a client scope, with its mappers and client attachments."""
+        self._send("DELETE", f"/client-scopes/{scope_id}", None)
+
+    def scope_mappers(self, scope_id: str) -> dict[str, str]:
+        """Protocol mapper name -> id of a client scope."""
+        mappers = cast("list[JsonObject]", self._get(f"/client-scopes/{scope_id}/protocol-mappers/models"))
+        return {str(m["name"]): str(m["id"]) for m in mappers}
+
+    def add_scope_mapper(self, scope_id: str, mapper: JsonObject) -> None:
+        """Add a protocol mapper to a client scope."""
+        self._send("POST", f"/client-scopes/{scope_id}/protocol-mappers/models", mapper, HTTPStatus.CREATED)
+
+    def delete_scope_mapper(self, scope_id: str, mapper_id: str) -> None:
+        """Delete one protocol mapper of a client scope."""
+        self._send("DELETE", f"/client-scopes/{scope_id}/protocol-mappers/models/{mapper_id}", None)
+
+    def client_scope_names(self, client_uuid: str) -> set[str]:
+        """Names of the default and optional client scopes of a client."""
+        found: set[str] = set()
+        for kind in ("default-client-scopes", "optional-client-scopes"):
+            found |= {str(s["name"]) for s in cast("list[JsonObject]", self._get(f"/clients/{client_uuid}/{kind}"))}
+        return found
+
+    def set_optional_scope(self, client_uuid: str, scope_id: str, *, attached: bool) -> None:
+        """Attach a client scope to a client as optional, or detach it."""
+        self._send("PUT" if attached else "DELETE", f"/clients/{client_uuid}/optional-client-scopes/{scope_id}", None)

@@ -14,6 +14,8 @@ from podiumd_tests.bootstrap import check
 from podiumd_tests.bootstrap import failed
 from podiumd_tests.bootstrap import refusal
 from podiumd_tests.bootstrap import unbootstrap
+from podiumd_tests.bootstrap.oidc_mock import KEYCLOAK_STORE_KEY
+from podiumd_tests.bootstrap.oidc_mock import KeycloakOidcMock
 from podiumd_tests.bootstrap.steps import OPENKLANT_STORE_KEY
 from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.bootstrap.steps import ZGW_STORE_KEY
@@ -323,3 +325,64 @@ def test_productaanvraag_client_gets_rights_only_with_the_profile_setting(env_fa
     assert zaaktypen["identificaties"] == ["zt-1"]
     assert zaaktypen["scopes"] == ["zaken.lezen", "zaken.verwijderen"]
     assert zaaktypen["base_url"] == "https://openzaak.example.test"
+
+
+OI = "https://oi.example.test"
+
+
+def oidc_mock_answers(eherkenning_mappers):
+    return {
+        "POST /realms/master/protocol/openid-connect/token": (200, {"access_token": "admin-token"}),
+        f"GET {REALM}/client-scopes": (200, [{"id": "s-bsn", "name": "bsn"}, {"id": "s-eh", "name": "eherkenning"}]),
+        f"GET {REALM}/client-scopes/s-bsn/protocol-mappers/models": (200, [{"id": "m0", "name": "bsn-claim"}]),
+        f"GET {REALM}/client-scopes/s-eh/protocol-mappers/models": (200, eherkenning_mappers),
+        f"POST {REALM}/client-scopes/s-eh/protocol-mappers/models": (201, None),
+        f"DELETE {REALM}/client-scopes/s-eh/protocol-mappers/models/m2": (204, None),
+        f"GET {REALM}/clients": (200, [{"id": "c1", "clientId": "openinwoner", "redirectUris": ["https://x/*"]}]),
+        f"GET {REALM}/clients/c1/default-client-scopes": (200, []),
+        f"GET {REALM}/clients/c1/optional-client-scopes": (200, []),
+        f"PUT {REALM}/clients/c1/optional-client-scopes/s-bsn": (204, None),
+        f"PUT {REALM}/clients/c1/optional-client-scopes/s-eh": (204, None),
+        f"DELETE {REALM}/clients/c1/optional-client-scopes/s-bsn": (204, None),
+        f"DELETE {REALM}/clients/c1/optional-client-scopes/s-eh": (204, None),
+        f"PUT {REALM}/clients/c1": (204, None),
+    }
+
+
+def oidc_mock_ctx(env_factory, fake_runner, profile_factory):
+    admin = {env_var_name("keycloak_admin_username"): "admin", env_var_name("keycloak_admin_password"): "pw"}
+    env = cluster_env(env_factory, fake_runner, profile_factory, admin, urls={"keycloak": KC, "openinwoner": OI})
+    deployments = [{"metadata": {"name": "keycloak"}}, {"metadata": {"name": "openinwoner"}}]
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": deployments}))
+    return Context(env, CredentialStore(env.kube))
+
+
+def test_oidc_mock_records_only_what_it_adds(env_factory, fake_runner, profile_factory, fake_http):
+    ctx = oidc_mock_ctx(env_factory, fake_runner, profile_factory)
+    sent = fake_http(oidc_mock_answers([{"id": "m1", "name": "kvk-claim"}]))
+    record = json.loads(KeycloakOidcMock().apply(ctx)[KEYCLOAK_STORE_KEY])
+    assert record == {
+        "scopes": [],
+        "mappers": {"eherkenning": ["vestigingsnr-claim", "namequalifier-claim"]},
+        "attached": {"openinwoner": ["bsn", "eherkenning"]},
+        "redirects": {"openinwoner": f"{OI}/*"},
+    }
+    assert sum(r.method == "POST" and "protocol-mappers" in r.url for r in sent) == 2
+
+
+def test_oidc_mock_remove_undoes_the_record(env_factory, fake_runner, profile_factory, fake_http):
+    ctx = oidc_mock_ctx(env_factory, fake_runner, profile_factory)
+    record = {
+        "mappers": {"eherkenning": ["vestigingsnr-claim"]},
+        "attached": {"openinwoner": ["bsn"]},
+        "redirects": {"openinwoner": "https://x/*"},
+    }
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (
+        0,
+        stored({KEYCLOAK_STORE_KEY: json.dumps(record)}),
+    )
+    sent = fake_http(oidc_mock_answers([{"id": "m2", "name": "vestigingsnr-claim"}]))
+    assert KeycloakOidcMock().remove(ctx) == (KEYCLOAK_STORE_KEY,)
+    deletes = sorted(r.url.removeprefix(KC + REALM) for r in sent if r.method == "DELETE")
+    assert deletes == ["/client-scopes/s-eh/protocol-mappers/models/m2", "/clients/c1/optional-client-scopes/s-bsn"]
+    assert any(r.method == "PUT" and r.url.endswith("/clients/c1") for r in sent)
