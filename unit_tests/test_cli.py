@@ -2,8 +2,13 @@
 
 import json
 
+import pytest
+
 from podiumd_tests import cli
+from podiumd_tests.config import ProfileError
 from podiumd_tests.kube import Kube
+from podiumd_tests.lock import LockBusyError
+from podiumd_tests.lock import held
 
 
 def test_draft_profile_keeps_the_first_host_per_component_and_smoke_only():
@@ -47,3 +52,24 @@ def test_ingress_hosts_skip_a_missing_gateway_api(fake_runner, capsys):
     fake_runner.answers["get httproutes"] = (1, 'error: the server doesn\'t have a resource type "httproutes"')
     assert cli.ingress_hosts(Kube("ctx", "ns", fake_runner)) == ["zac.local"]
     assert "skipping httproutes" in capsys.readouterr().err
+
+
+def test_lock_is_taken_and_released(tmp_path):
+    lock = tmp_path / "lock"
+    with held(str(lock), "bootstrap env"):
+        assert lock.read_text(encoding="utf-8").startswith("podiumd-tests bootstrap env ")
+    assert not lock.exists()
+
+
+def test_a_held_lock_refuses_and_names_its_holder(tmp_path):
+    lock = tmp_path / "lock"
+    lock.write_text("podiumd-minikube deploy 2026-10-07T10:00:00\n", encoding="utf-8")
+    with pytest.raises(LockBusyError, match="held by: podiumd-minikube deploy"), held(str(lock), "bootstrap"):
+        pass
+    assert lock.exists()
+
+
+def test_unknown_bootstrap_step_is_a_profile_error():
+    with pytest.raises(ProfileError, match="unknown bootstrap steps: nope"):
+        cli.selected_steps(["nope"])
+    assert [s.name for s in cli.selected_steps(["openklant-token"])] == ["openklant-token"]

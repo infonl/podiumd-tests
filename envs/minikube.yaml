@@ -43,3 +43,5 @@ settings:
   zgw_client_id: open-formulieren
   # podiumd-minikube imports the ZAC realm only; the QA estates use realm podiumd (the default).
   keycloak_realm: zaakafhandelcomponent
+  # Shared with the podiumd-minikube agent; bootstrap and writing runs take it.
+  lock_file: /home/kvv/development/werk/infonl-dimpact/infonl/.minikube-lock

@@ -1,7 +1,7 @@
 """Run PodiumD environment tests and manage their profiles and bootstrap.
 
 Exit codes: 0 pass, 1 test failures, 2 configuration or preflight error,
-3 tier not allowed for the environment.
+3 tier not allowed for the environment, 4 another agent holds the environment's lock.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ import sys
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 import yaml
@@ -39,6 +40,8 @@ from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
+from podiumd_tests.lock import LockBusyError
+from podiumd_tests.lock import held
 from podiumd_tests.process import ProcessError
 from podiumd_tests.results import LocalDirSink
 from podiumd_tests.results import RunInfo
@@ -51,10 +54,18 @@ from podiumd_tests.results import suite_commit
 from podiumd_tests.results import write_run
 from podiumd_tests.tiers import TIERS
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from collections.abc import Sequence
+
+    from podiumd_tests.bootstrap import Outcome
+    from podiumd_tests.bootstrap import Step
+
 EXIT_OK = 0
 EXIT_TESTS_FAILED = 1
 EXIT_CONFIG = 2
 EXIT_NOT_ALLOWED = 3
+EXIT_BUSY = 4
 
 
 def _load(args: argparse.Namespace) -> Profile:
@@ -182,22 +193,37 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
     if reason:
         print(f"refused: {reason}", file=sys.stderr)
         return EXIT_NOT_ALLOWED
-    env = _bootstrap_env(args)
-    if isinstance(env, int):
-        return env
-    outcomes = bootstrap(env, STEPS, rotate=args.rotate)
-    print(format_outcomes(outcomes))
-    return EXIT_CONFIG if failed(outcomes) else EXIT_OK
+    return _apply_steps(args, "bootstrap", lambda env, steps: bootstrap(env, steps, rotate=args.rotate))
 
 
 def cmd_unbootstrap(args: argparse.Namespace) -> int:
     """Remove everything bootstrap created."""
+    return _apply_steps(args, "unbootstrap", unbootstrap)
+
+
+def _apply_steps(
+    args: argparse.Namespace, verb: str, action: Callable[[Environment, Sequence[Step]], list[Outcome]]
+) -> int:
+    """Run action on the selected steps while holding the environment's lock."""
     env = _bootstrap_env(args)
     if isinstance(env, int):
         return env
-    outcomes = unbootstrap(env, STEPS)
+    steps = selected_steps(args.step)
+    with held(env.profile.settings.get("lock_file"), f"{verb} {env.profile.name}"):
+        outcomes = action(env, steps)
     print(format_outcomes(outcomes))
     return EXIT_CONFIG if failed(outcomes) else EXIT_OK
+
+
+def selected_steps(names: list[str] | None) -> tuple[Step, ...]:
+    """All steps, or only the named ones; ProfileError for an unknown name."""
+    if not names:
+        return STEPS
+    unknown = sorted(set(names) - {s.name for s in STEPS})
+    if unknown:
+        msg = f"unknown bootstrap steps: {', '.join(unknown)} (known: {', '.join(s.name for s in STEPS)})"
+        raise ProfileError(msg)
+    return tuple(s for s in STEPS if s.name in names)
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -227,7 +253,10 @@ def cmd_run(args: argparse.Namespace) -> int:
     junit = Path(sink.location(f"{directory}/junit.xml"))
     junit.parent.mkdir(parents=True, exist_ok=True)
     info.selection = _pytest_selection(profile, args.tier, info.run_id, junit, args)
-    info.exit_code = int(pytest.main(info.selection))
+    # Smoke only reads; every other tier writes to the environment and takes the shared lock.
+    lock_file = None if args.tier == "smoke" else profile.settings.get("lock_file")
+    with held(lock_file, f"run {args.tier} {profile.name}"):
+        info.exit_code = int(pytest.main(info.selection))
     info.finished = now_iso()
     failures = []
     if junit.exists():
@@ -268,11 +297,13 @@ def build_parser() -> argparse.ArgumentParser:
     boot.add_argument("--env", required=True)
     boot.add_argument("--rotate", action="store_true", help="recreate every step with new credentials")
     boot.add_argument("--skip-doctor", action="store_true")
+    boot.add_argument("--step", action="append", help="only this step (repeatable; default: all)")
     boot.set_defaults(func=cmd_bootstrap)
 
     unboot = commands.add_parser("unbootstrap", help="remove everything bootstrap created")
     unboot.add_argument("--env", required=True)
     unboot.add_argument("--skip-doctor", action="store_true")
+    unboot.add_argument("--step", action="append", help="only this step (repeatable; default: all)")
     unboot.set_defaults(func=cmd_unbootstrap)
 
     run = commands.add_parser("run", help="run a tier against an environment")
@@ -299,6 +330,9 @@ def main(argv: list[str] | None = None) -> int:
     except ProcessError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_CONFIG
+    except LockBusyError as exc:
+        print(f"busy: {exc}", file=sys.stderr)
+        return EXIT_BUSY
 
 
 if __name__ == "__main__":
