@@ -14,15 +14,9 @@ from typing import cast
 import pytest
 
 from podiumd_tests import results
-from podiumd_tests.auth.zgw_jwt import zgw_headers
-from podiumd_tests.auth.zgw_jwt import zgw_jwt
 from podiumd_tests.bootstrap import bootstrap
 from podiumd_tests.bootstrap import check
 from podiumd_tests.bootstrap import refusal
-from podiumd_tests.bootstrap.steps import NRC_CLIENT_ID
-from podiumd_tests.bootstrap.steps import NRC_STORE_KEY
-from podiumd_tests.bootstrap.steps import OBJECTEN_STORE_KEY
-from podiumd_tests.bootstrap.steps import OPENKLANT_STORE_KEY
 from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.bootstrap.steps import TEST_ZAAKTYPE
 from podiumd_tests.bootstrap.steps import ZGW_CLIENT_ID
@@ -33,7 +27,11 @@ from podiumd_tests.bootstrap.steps import ZGW_OPENBAAR_STORE_KEY
 from podiumd_tests.bootstrap.steps import ZGW_PRODUCTAANVRAAG_CLIENT_ID
 from podiumd_tests.bootstrap.steps import ZGW_PRODUCTAANVRAAG_STORE_KEY
 from podiumd_tests.bootstrap.steps import ZGW_STORE_KEY
-from podiumd_tests.clients.api import ApiClient
+from podiumd_tests.clients.platform import mailpit_client
+from podiumd_tests.clients.platform import objecten_client
+from podiumd_tests.clients.platform import openklant_client
+from podiumd_tests.clients.platform import opennotificaties_client
+from podiumd_tests.clients.platform import openzaak_client
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
@@ -52,6 +50,7 @@ if TYPE_CHECKING:
     from _pytest.mark.structures import ParameterSet  # pytest.param's type; pytest has no public name for it
 
     from podiumd_tests.capabilities import Capabilities
+    from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.credentials import SecretResolver
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.kube import Kube
@@ -164,18 +163,14 @@ def fixture_need_bootstrap(request: pytest.FixtureRequest, podiumd_env: Environm
 def fixture_openklant(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Open Klant klantinteracties API with the suite's own token (bootstrap step openklant-token)."""
     need_bootstrap("openklant-token")
-    token = podiumd_env.credentials.get(OPENKLANT_STORE_KEY)
-    url = podiumd_env.profile.urls["openklant"] + "/klantinteracties/api/v1"
-    return ApiClient(podiumd_env.session(cookies=False), url, {"Authorization": f"Token {token}"})
+    return openklant_client(podiumd_env)
 
 
 @pytest.fixture(scope="session", name="objecten")
 def fixture_objecten(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Objecten API with the suite's own token (bootstrap step objecten-token)."""
     need_bootstrap("objecten-token")
-    token = podiumd_env.credentials.get(OBJECTEN_STORE_KEY)
-    headers = {"Authorization": f"Token {token}", "Content-Crs": "EPSG:4326", "Accept-Crs": "EPSG:4326"}
-    return ApiClient(podiumd_env.session(cookies=False), podiumd_env.profile.urls["objecten"] + "/api/v2", headers)
+    return objecten_client(podiumd_env)
 
 
 # The test running now; Open Zaak writes it into its audittrail through X-Audit-Toelichting.
@@ -194,14 +189,7 @@ def _zgw_client(  # pylint: disable=too-many-arguments,too-many-positional-argum
     run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None], step: str, client_id: str, key: str
 ) -> ApiClient:
     need_bootstrap(step)
-    secret = podiumd_env.credentials.get(key)
-
-    def headers() -> dict[str, str]:
-        # Each change in Open Zaak's audittrail then names the run and the test that made it.
-        token = zgw_jwt(client_id, secret, user=f"podiumd-tests {run_tag}")
-        return {**zgw_headers(token), "X-Audit-Toelichting": f"{run_tag} {_CURRENT_TEST.get()}"[:255]}
-
-    return ApiClient(podiumd_env.session(cookies=False), podiumd_env.profile.urls["openzaak"], headers)
+    return openzaak_client(podiumd_env, client_id, key, run_tag, _CURRENT_TEST.get)
 
 
 @pytest.fixture(scope="session", name="openzaak")
@@ -252,9 +240,7 @@ def fixture_openzaak_productaanvraag(
 def fixture_opennotificaties(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Open Notificaties as the suite's own client ptest-bootstrap-nrc."""
     need_bootstrap("opennotificaties-client")
-    secret = podiumd_env.credentials.get(NRC_STORE_KEY)
-    url = podiumd_env.profile.urls["opennotificaties"] + "/api/v1"
-    return ApiClient(podiumd_env.session(cookies=False), url, lambda: zgw_headers(zgw_jwt(NRC_CLIENT_ID, secret)))
+    return opennotificaties_client(podiumd_env)
 
 
 @pytest.fixture(scope="session", name="test_zaaktype")
@@ -284,7 +270,7 @@ def fixture_registry(request: pytest.FixtureRequest, run_tag: str) -> Iterator[R
 @pytest.fixture(scope="session", name="mailpit")
 def fixture_mailpit(podiumd_env: Environment) -> ApiClient:
     """The environment's Mailpit API."""
-    return ApiClient(podiumd_env.session(cookies=False), podiumd_env.profile.urls["mailpit"] + "/api/v1", {})
+    return mailpit_client(podiumd_env)
 
 
 @pytest.fixture(name="callback")
