@@ -373,10 +373,19 @@ EHERKENNING_CLAIMS = {
 LOA_DEFAULT = "urn:oasis:names:tc:SAML:2.0:ac:classes:MobileTwoFactorContract"
 
 
-def openinwoner_account(user: KeycloakUser) -> dict[str, str]:
-    """The Open Inwoner account a test identity logs in to: its bsn or kvk, e-mail and name."""
+def openinwoner_number(user: KeycloakUser) -> dict[str, str]:
+    """The bsn or kvk an Open Inwoner account of a test identity is found by."""
     key = "bsn" if "bsn" in user.attributes else "kvk"
-    return {key: user.attributes[key][0], "email": user_email(user.username), "first": "PodiumD", "last": user.username}
+    return {key: user.attributes[key][0]}
+
+
+def openinwoner_account(user: KeycloakUser) -> dict[str, str]:
+    """The Open Inwoner account prepared for a DigiD test identity: its bsn, e-mail and name.
+
+    The DigiD login uses it as a complete profile; for eHerkenning Open Inwoner always
+    creates its own account, so none is prepared.
+    """
+    return {**openinwoner_number(user), "email": user_email(user.username), "first": "PodiumD", "last": user.username}
 
 
 STEPS: tuple[Step, ...] = (
@@ -517,7 +526,8 @@ STEPS: tuple[Step, ...] = (
                 },
             },
             "eherkenning_site": True,
-            "users": [openinwoner_account(u) for u in IDENTITIES],
+            "accounts": [openinwoner_account(u) for u in IDENTITIES if "bsn" in u.attributes],
+            "identities": [openinwoner_number(u) for u in IDENTITIES],
         },
         record=True,
         wiring=True,

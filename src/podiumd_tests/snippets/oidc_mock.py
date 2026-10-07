@@ -2,13 +2,14 @@
 
 Actions: status, apply, remove. Params: action, endpoint (Keycloak's openid-connect base as the
 app calls it), client_id, secret (apply only), clients ({identifier: {provider, scopes, options}}),
-and app extras: eherkenning_site (Open Inwoner SiteConfiguration.eherkenning_enabled), users
-(Open Inwoner accounts [{bsn|kvk, email, first, last}]), form (Open Formulieren form slug that
+and app extras: eherkenning_site (Open Inwoner SiteConfiguration.eherkenning_enabled), identities
+(the test identities' numbers [{bsn} or {kvk}]), accounts (Open Inwoner accounts to prepare
+[{bsn, email, first, last}]), form (Open Formulieren form slug that
 gets the digid_oidc login), and record ({"clients": {identifier: old field values}, "providers":
 [created], "created": [client identifiers created], "eherkenning_enabled": old value, "accounts_before":
-[pks of accounts for the users that existed before], "form_backend": created}), which remove restores
-exactly. remove deletes every account for the users except those that existed before: also the
-ones Open Inwoner creates itself at a login.
+[pks of the identities' accounts that existed before], "form_backend": created}), which remove restores
+exactly. remove deletes every account of the identities except those that existed before: also
+the ones Open Inwoner creates itself at a login.
 """
 
 ENDPOINTS = {
@@ -29,17 +30,17 @@ def run(params):
     record = params.get("record") or {}
     if params["action"] == "remove":
         _remove(record, clients)
-        if params.get("users") and "accounts_before" in record:
-            _accounts(params["users"]).exclude(pk__in=record["accounts_before"]).delete()
+        if params.get("identities") and "accounts_before" in record:
+            _accounts(params["identities"]).exclude(pk__in=record["accounts_before"]).delete()
         return {"present": False}
     for key, empty in (("clients", {}), ("created", []), ("providers", [])):
         record.setdefault(key, empty)
     _clients(params, clients, record)
     if params.get("eherkenning_site"):
         _site(record)
-    if params.get("users"):
-        record.setdefault("accounts_before", list(_accounts(params["users"]).values_list("pk", flat=True)))
-        _create_accounts(params["users"])
+    if params.get("identities"):
+        record.setdefault("accounts_before", list(_accounts(params["identities"]).values_list("pk", flat=True)))
+        _create_accounts(params.get("accounts") or [])
     if params.get("form") and _form_backend(params["form"]):
         record["form_backend"] = params["form"]
     return {"present": True, "record": record}
@@ -82,35 +83,31 @@ def _site(record):
     site.save()
 
 
-def _key(user):
-    return {"bsn": user["bsn"]} if "bsn" in user else {"kvk": user["kvk"]}
-
-
-def _accounts(users):
-    """The Open Inwoner accounts with the users' bsn or kvk."""
+def _accounts(identities):
+    """The Open Inwoner accounts with the identities' bsn or kvk."""
     from django.db.models import Q
     from open_inwoner.accounts.models import User
 
     query = Q(pk__in=[])
-    for user in users:
-        query |= Q(**_key(user))
+    for identity in identities:
+        query |= Q(**identity)
     return User.objects.filter(query)
 
 
-def _create_accounts(users):
+def _create_accounts(accounts):
     from open_inwoner.accounts.choices import LoginTypeChoices
     from open_inwoner.accounts.models import User
 
-    for user in users:
-        if User.objects.filter(**_key(user)).exists():
+    for user in accounts:
+        if User.objects.filter(bsn=user["bsn"]).exists():
             continue
         User.objects.create(
-            **_key(user),
+            bsn=user["bsn"],
             email=user["email"],
             verified_email=user["email"],
             first_name=user["first"],
             last_name=user["last"],
-            login_type=LoginTypeChoices.digid if "bsn" in user else LoginTypeChoices.eherkenning,
+            login_type=LoginTypeChoices.digid,
             is_active=True,
         )
 
@@ -145,10 +142,10 @@ def _present(params, clients):
 
         if not SiteConfiguration.get_solo().eherkenning_enabled:
             return False
-    if params.get("users"):
+    if params.get("accounts"):
         from open_inwoner.accounts.models import User
 
-        if not all(User.objects.filter(**_key(u)).exists() for u in params["users"]):
+        if not all(User.objects.filter(bsn=u["bsn"]).exists() for u in params["accounts"]):
             return False
     if params.get("form"):
         from openforms.forms.models import FormAuthenticationBackend
