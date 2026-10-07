@@ -63,6 +63,12 @@ KANALEN = {
     "internetaken": ["nummer", "gevraagde_handeling", "toelichting", "status"],
 }
 # API tokens (TokenAuth identifier = store key).
+# The productaanvraag chain (Objecten → Open Notificaties → ZAC → Open Zaak) runs on the
+# environment's own wiring: profile settings productaanvraag_type and productaanvraag_zaaktype.
+PRODUCTAANVRAAG_OBJECTTYPE = "Productaanvraag-Dimpact"
+ZGW_PRODUCTAANVRAAG_CLIENT_ID = "ptest-bootstrap-zgw-productaanvraag"
+ZGW_PRODUCTAANVRAAG_STORE_KEY = "ptest_bootstrap_zgw_productaanvraag_secret"
+OBJECTEN_STORE_KEY = "ptest_bootstrap_objecten_token"
 OPENKLANT_STORE_KEY = "ptest_bootstrap_openklant_token"
 OBJECTTYPEN_STORE_KEY = "ptest_bootstrap_objecttypen_token"
 
@@ -325,10 +331,24 @@ def openzaak_client_step(  # pylint: disable=too-many-arguments  # mirrors the s
     return SnippetStep(name, ("openzaak",), "zgw_client", store_key, params)
 
 
-def token_step(component: str, module: str, store_key: str) -> SnippetStep:
+def token_step(component: str, module: str, store_key: str, **extra: object) -> SnippetStep:
     """A TokenAuth step; the token's identifier is its store key."""
-    params: dict[str, object] = {"module": module, "identifier": store_key}
+    params: dict[str, object] = {"module": module, "identifier": store_key, **extra}
     return SnippetStep(f"{component}-token", (component,), "token_auth", store_key, params)
+
+
+def productaanvraag_zaaktypen(ctx: Context) -> dict[str, object]:
+    """Read and delete rights on the zaaktype ZAC starts for a productaanvraag; none without the setting."""
+    zaaktype = ctx.env.profile.settings.get("productaanvraag_zaaktype")
+    if not zaaktype:
+        return {}
+    return {
+        "zaaktypen": {
+            "identificaties": [zaaktype],
+            "scopes": ["zaken.lezen", "zaken.verwijderen"],
+            "max_va": "zeer_geheim",
+        }
+    }
 
 
 STEPS: tuple[Step, ...] = (
@@ -356,6 +376,16 @@ STEPS: tuple[Step, ...] = (
     ),
     token_step("openklant", "openklant.components.token.models", OPENKLANT_STORE_KEY),
     token_step("objecttypen", "objecttypes.token.models", OBJECTTYPEN_STORE_KEY),
+    token_step("objecten", "objects.token.models", OBJECTEN_STORE_KEY, object_types=[PRODUCTAANVRAAG_OBJECTTYPE]),
+    # Only reads and deletes the zaken ZAC creates for the test's productaanvragen.
+    SnippetStep(
+        "openzaak-client-productaanvraag",
+        ("openzaak", "zac"),
+        "zgw_client",
+        ZGW_PRODUCTAANVRAAG_STORE_KEY,
+        {"client_id": ZGW_PRODUCTAANVRAAG_CLIENT_ID, "scopes": {}},
+        context_params=productaanvraag_zaaktypen,
+    ),
     SnippetStep(
         "openzaak-zaaktype",
         ("openzaak",),

@@ -4,7 +4,9 @@ Actions: status, apply (replaces the client), remove. Params: action, client_id,
 secret (apply only), scopes ({component: [scope, ...]}, plain autorisaties), and in
 Open Zaak optionally catalogus, rights limited to the test catalogus (PLAN.md §11a):
 {domein, rsin, owns (creates the catalogus; on remove deletes it with all its zaken),
-components ({component: [scope prefix, ...]}), exclude (scope words left out), max_va}.
+components ({component: [scope prefix, ...]}), exclude (scope words left out), max_va}; and
+optionally zaaktypen, Zaken API rights on every version of zaaktypen the environment owns:
+{identificaties, scopes, max_va}.
 """
 
 
@@ -19,7 +21,14 @@ def run(params):
     catalogus_params = params.get("catalogus")
     if params["action"] == "status":
         present = applicaties.exists() and secrets.exists()
-        return {"present": bool(present and (not catalogus_params or _catalogi(catalogus_params).exists()))}
+        if catalogus_params and not _catalogi(catalogus_params).exists():
+            present = False
+        if (
+            params.get("zaaktypen")
+            and not Autorisatie.objects.filter(applicatie__in=applicaties, component="zrc").exists()
+        ):
+            present = False
+        return {"present": bool(present)}
     if params["action"] == "remove":
         removed = applicaties.delete()[0] + secrets.delete()[0]
         if catalogus_params and catalogus_params["owns"]:
@@ -32,8 +41,29 @@ def run(params):
             Autorisatie.objects.create(applicatie=applicatie, component=component, scopes=scopes)
     if catalogus_params:
         _catalogus_autorisaties(applicatie, catalogus_params)
+    notes = _zaaktype_autorisaties(applicatie, params["zaaktypen"]) if params.get("zaaktypen") else []
     JWTSecret.objects.update_or_create(identifier=client_id, defaults={"secret": params["secret"]})
-    return {"present": True}
+    return {"present": True, "notes": notes}
+
+
+def _zaaktype_autorisaties(applicatie, zaaktypen_params):
+    from openzaak.components.catalogi.models import ZaakType
+    from openzaak.utils import build_absolute_url
+    from vng_api_common.authorizations.models import Autorisatie
+
+    wanted = zaaktypen_params["identificaties"]
+    found = ZaakType.objects.filter(identificatie__in=wanted, concept=False)
+    for zaaktype in found:
+        # Open Zaak resolves a local zaaktype URL by its path; the host must be in ALLOWED_HOSTS.
+        Autorisatie.objects.create(
+            applicatie=applicatie,
+            component="zrc",
+            zaaktype=build_absolute_url(zaaktype.get_absolute_api_url()),
+            scopes=zaaktypen_params["scopes"],
+            max_vertrouwelijkheidaanduiding=zaaktypen_params["max_va"],
+        )
+    missing = sorted(set(wanted) - {z.identificatie for z in found})
+    return [f"no published zaaktype {i}" for i in missing]
 
 
 def _catalogi(catalogus_params):

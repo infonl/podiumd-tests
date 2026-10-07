@@ -21,6 +21,7 @@ from podiumd_tests.bootstrap import check
 from podiumd_tests.bootstrap import refusal
 from podiumd_tests.bootstrap.steps import NRC_CLIENT_ID
 from podiumd_tests.bootstrap.steps import NRC_STORE_KEY
+from podiumd_tests.bootstrap.steps import OBJECTEN_STORE_KEY
 from podiumd_tests.bootstrap.steps import OPENKLANT_STORE_KEY
 from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.bootstrap.steps import TEST_ZAAKTYPE
@@ -29,6 +30,8 @@ from podiumd_tests.bootstrap.steps import ZGW_NOAUTH_CLIENT_ID
 from podiumd_tests.bootstrap.steps import ZGW_NOAUTH_STORE_KEY
 from podiumd_tests.bootstrap.steps import ZGW_OPENBAAR_CLIENT_ID
 from podiumd_tests.bootstrap.steps import ZGW_OPENBAAR_STORE_KEY
+from podiumd_tests.bootstrap.steps import ZGW_PRODUCTAANVRAAG_CLIENT_ID
+from podiumd_tests.bootstrap.steps import ZGW_PRODUCTAANVRAAG_STORE_KEY
 from podiumd_tests.bootstrap.steps import ZGW_STORE_KEY
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.config import default_envs_dir
@@ -166,6 +169,15 @@ def fixture_openklant(podiumd_env: Environment, need_bootstrap: Callable[..., No
     return ApiClient(podiumd_env.session(cookies=False), url, {"Authorization": f"Token {token}"})
 
 
+@pytest.fixture(scope="session", name="objecten")
+def fixture_objecten(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
+    """Objecten API with the suite's own token (bootstrap step objecten-token)."""
+    need_bootstrap("objecten-token")
+    token = podiumd_env.credentials.get(OBJECTEN_STORE_KEY)
+    headers = {"Authorization": f"Token {token}", "Content-Crs": "EPSG:4326", "Accept-Crs": "EPSG:4326"}
+    return ApiClient(podiumd_env.session(cookies=False), podiumd_env.profile.urls["objecten"] + "/api/v2", headers)
+
+
 # The test running now; Open Zaak writes it into its audittrail through X-Audit-Toelichting.
 _CURRENT_TEST: ContextVar[str] = ContextVar("current_test", default="")
 
@@ -218,6 +230,21 @@ def fixture_openzaak_noauth(run_tag: str, podiumd_env: Environment, need_bootstr
     """Open Zaak as a known client without any autorisatie."""
     return _zgw_client(
         run_tag, podiumd_env, need_bootstrap, "openzaak-client-noauth", ZGW_NOAUTH_CLIENT_ID, ZGW_NOAUTH_STORE_KEY
+    )
+
+
+@pytest.fixture(scope="session", name="openzaak_productaanvraag")
+def fixture_openzaak_productaanvraag(
+    run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None]
+) -> ApiClient:
+    """Open Zaak as the client that may only read and delete zaken of the productaanvraag zaaktype."""
+    return _zgw_client(
+        run_tag,
+        podiumd_env,
+        need_bootstrap,
+        "openzaak-client-productaanvraag",
+        ZGW_PRODUCTAANVRAAG_CLIENT_ID,
+        ZGW_PRODUCTAANVRAAG_STORE_KEY,
     )
 
 

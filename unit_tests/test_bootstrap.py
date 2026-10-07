@@ -21,6 +21,7 @@ from podiumd_tests.bootstrap.steps import KeycloakUser
 from podiumd_tests.bootstrap.steps import OpenKlantActor
 from podiumd_tests.bootstrap.steps import SnippetStep
 from podiumd_tests.bootstrap.steps import keycloak_password_key
+from podiumd_tests.bootstrap.steps import productaanvraag_zaaktypen
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.credentials import env_var_name
 from podiumd_tests.kube import Kube
@@ -308,3 +309,18 @@ def test_snippet_notes_reach_the_outcome(env_factory, fake_runner, profile_facto
     outcome = bootstrap(env, [step])[0]
     assert outcome.action == "created"
     assert outcome.detail == "pw; no group Reviewer"
+
+
+def test_productaanvraag_client_gets_rights_only_with_the_profile_setting(env_factory, profile_factory):
+    without = Context(env_factory(profile_factory()), CredentialStore(Kube("ctx", "podiumd")))
+    assert productaanvraag_zaaktypen(without) == {}
+    with_setting = Context(
+        env_factory(profile_factory(settings={"productaanvraag_zaaktype": "zt-1"})),
+        CredentialStore(Kube("ctx", "podiumd")),
+    )
+    zaaktypen = productaanvraag_zaaktypen(with_setting)["zaaktypen"]
+    assert zaaktypen == {
+        "identificaties": ["zt-1"],
+        "scopes": ["zaken.lezen", "zaken.verwijderen"],
+        "max_va": "zeer_geheim",
+    }
