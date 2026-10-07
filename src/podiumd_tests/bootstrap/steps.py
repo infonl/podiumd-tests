@@ -347,6 +347,8 @@ IDENTITIES = (
     KeycloakUser("inwoner", attributes={"bsn": ["999990019"]}),
     KeycloakUser("bedrijf", attributes={"kvk": ["68750110"], "vestigingsnummer": ["000038509564"]}),
 )
+# Open Formulieren's DigiD level of assurance when the mock sends none.
+LOA_DEFAULT = "urn:oasis:names:tc:SAML:2.0:ac:classes:MobileTwoFactorContract"
 # Where Open Inwoner finds the eHerkenning claims (mappers in oidc_mock.SCOPES).
 EHERKENNING_CLAIMS = {
     "legal_subject_claim_path": ["urn:etoegang:core:LegalSubjectID"],
@@ -503,5 +505,28 @@ STEPS: tuple[Step, ...] = (
         record=True,
         wiring=True,
         context_params=oidc_params("openinwoner"),
+    ),
+    # Open Formulieren registers a zaak with a valid initiator only for a DigiD login (TA spec 183).
+    SnippetStep(
+        "openformulieren-oidc-mock",
+        ("openformulieren", "keycloak"),
+        "oidc_mock",
+        "ptest_bootstrap_openformulieren_oidc_mock_record",
+        {
+            "clients": {
+                "oidc-digid": {
+                    "provider": f"{PREFIX}-digid",
+                    "scopes": ["openid", "bsn"],
+                    "options": {
+                        "identity_settings": {"bsn_claim_path": ["bsn"]},
+                        "loa_settings": {"claim_path": ["authsp_level"], "default": LOA_DEFAULT, "value_mapping": []},
+                    },
+                },
+            },
+            "form": TEST_FORM,
+        },
+        record=True,
+        wiring=True,
+        context_params=oidc_params("openformulieren"),
     ),
 )

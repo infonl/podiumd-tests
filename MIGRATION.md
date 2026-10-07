@@ -109,7 +109,7 @@ Sources:
 | `regression/178-blacklist-upload.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/179-portaal-profiel-naar-openklant.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/18-klantcontact-zaak-koppeling.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_klantcontact_zaak.py`. |
-| `regression/183-of-digid-zaak-rol.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/183-of-digid-zaak-rol.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_formulier_digid.py` (DigiD through Keycloak's mock, wiring W1). |
 | `regression/184-ita-doorsturen-mutatie.spec.ts` | component or integration | 3/4/5 | port | `tests/component/ita/test_ita_internetaken.py`; ITA wants `{"afdeling"|"groep": identificatie}`, TA's actorType body gets 400. |
 | `regression/185-of-betaalstatus-zaak.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/19-notificaties-e2e.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_zaak_notificaties.py`, with the webhook receiver of `infra/`. |

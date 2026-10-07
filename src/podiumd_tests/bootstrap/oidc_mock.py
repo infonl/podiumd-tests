@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 # app's profile URL must be a redirect URI of the client.
 CLIENTS: dict[str, tuple[str, tuple[str, ...], bool]] = {
     "openinwoner": ("openinwoner", ("bsn", "eherkenning"), True),
+    "openformulieren": ("openformulieren", ("bsn",), False),
 }
 KEYCLOAK_STORE_KEY = "ptest_bootstrap_keycloak_oidc_mock_record"
 
@@ -106,7 +107,7 @@ def _record(ctx: Context) -> dict[str, object]:
 
 @dataclass(frozen=True)
 class KeycloakOidcMock:
-    """Keycloak side: the bsn and eherkenning client scopes on the Open Inwoner client, with its redirect URI."""
+    """Keycloak side: the bsn and eherkenning client scopes on the apps' clients, with Open Inwoner's redirect URI."""
 
     name: str = "keycloak-oidc-mock"
     requires: tuple[str, ...] = ("keycloak",)
