@@ -2,6 +2,8 @@
 
 A POST with an Authorization header gets 204; one without gets 403. Open Notificaties checks
 both when an abonnement is created: it refuses a callback that accepts requests without auth.
+It also stands in for Notify (NotifyNL): a POST to .../v2/notifications/email or /sms gets
+the 201 and notification JSON a Notify client expects.
 
 Standard library only. Tests read RECEIVED with `kubectl exec ... cat`; GET /healthz answers 200.
 """
@@ -9,6 +11,7 @@ Standard library only. Tests read RECEIVED with `kubectl exec ... cat`; GET /hea
 import json
 import os
 import time
+import uuid
 
 from http.server import BaseHTTPRequestHandler
 from http.server import ThreadingHTTPServer
@@ -20,7 +23,7 @@ RECEIVED = Path(os.environ.get("RECEIVED_FILE", "/data/received.jsonl"))
 
 
 class Handler(BaseHTTPRequestHandler):
-    """POST: record, then 204 with Authorization and 403 without. GET /healthz: 200."""
+    """POST: record, then 204 (Notify: 201) with Authorization and 403 without. GET /healthz: 200."""
 
     def do_POST(self):  # http.server's method name
         length = int(self.headers.get("Content-Length") or 0)
@@ -44,8 +47,30 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(507)
             self.end_headers()
             return
-        self.send_response(204 if entry["authorization"] else 403)
+        if not entry["authorization"]:
+            self.send_response(403)
+            self.end_headers()
+        elif "/v2/notifications/" in self.path:
+            self._notify_created(parsed if isinstance(parsed, dict) else {})
+        else:
+            self.send_response(204)
+            self.end_headers()
+
+    def _notify_created(self, request):
+        template = request.get("template_id")
+        notification = {
+            "id": str(uuid.uuid4()),
+            "reference": request.get("reference"),
+            "uri": f"{self.path}/{uuid.uuid4()}",
+            "template": {"id": template, "version": 1, "uri": f"/v2/template/{template}"},
+            "content": {"body": "", "subject": "", "from_email": "", "from_number": ""},
+        }
+        payload = json.dumps(notification).encode()
+        self.send_response(201)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
+        self.wfile.write(payload)
 
     def do_GET(self):  # http.server's method name
         self.send_response(200 if self.path == "/healthz" else 404)
