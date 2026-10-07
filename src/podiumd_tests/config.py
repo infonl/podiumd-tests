@@ -19,6 +19,8 @@ from podiumd_tests.components import COMPONENTS
 from podiumd_tests.tiers import TIERS
 
 ESTATES = ("minikube", "podiumd-infra", "externals")
+# ExternalsPodiumD environments get wiring only when their owner agrees (bootstrap.wiring: true).
+WIRING_BY_ESTATE = {"minikube": True, "podiumd-infra": True, "externals": False}
 # The repository: src/podiumd_tests/ is two levels below it.
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # Secret sources that read the cluster; without kube access they cannot resolve.
@@ -90,6 +92,8 @@ class Profile:  # pylint: disable=too-many-instance-attributes  # mirrors the YA
     chart_version: str | None = None
     # Non-secret per-environment values, e.g. zgw_client_id.
     settings: dict[str, str] = field(default_factory=dict[str, str])
+    # May bootstrap apply platform wiring (PLAN.md §4 A2)? Default per estate: WIRING_BY_ESTATE.
+    wiring: bool = False
     path: Path | None = None
 
 
@@ -193,6 +197,14 @@ def _parse_access(value: object, where: str) -> Access:
     return Access("host-header", ref)
 
 
+def _wiring(value: object, estate: str, where: str) -> bool:
+    wiring = _mapping(value or {}, where).get("wiring", WIRING_BY_ESTATE[estate])
+    if not isinstance(wiring, bool):
+        msg = f"{where}.wiring: expected true or false"
+        raise ProfileError(msg)
+    return wiring
+
+
 def parse_profile(raw: object, *, name: str, path: Path | None = None) -> Profile:
     """Validate raw YAML data and turn it into a Profile."""
     where = str(path or name)
@@ -231,5 +243,6 @@ def parse_profile(raw: object, *, name: str, path: Path | None = None) -> Profil
         keyvault=_optional_text(data, "keyvault", where),
         chart_version=_optional_text(data, "chart_version", where),
         settings={str(k): str(v) for k, v in _mapping(data.get("settings") or {}, f"{where}.settings").items()},
+        wiring=_wiring(data.get("bootstrap"), estate, f"{where}.bootstrap"),
         path=path,
     )

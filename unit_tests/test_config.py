@@ -36,6 +36,7 @@ def test_parses_a_valid_profile(profile_factory):
         ({"kube": {"context": "ctx"}}, "missing namespace"),
         ({"access": {"mode": "magic"}}, "expected direct or host-header"),
         ({"settings": ["zgw_client_id"]}, "settings"),
+        ({"bootstrap": {"wiring": "yes"}}, "expected true or false"),
     ],
 )
 def test_rejects_invalid_profiles(profile_factory, override, message):
@@ -78,3 +79,12 @@ def test_only_cluster_sources_need_the_cluster(profile_factory):
     )
     assert not profile.secrets["a"].needs_cluster
     assert profile.secrets["b"].needs_cluster
+
+
+@pytest.mark.parametrize(
+    ("estate", "override", "expected"),
+    [("podiumd-infra", None, True), ("externals", None, False), ("externals", True, True)],
+)
+def test_wiring_defaults_per_estate(profile_factory, estate, override, expected):
+    bootstrap = {} if override is None else {"wiring": override}
+    assert profile_factory(estate=estate, bootstrap=bootstrap).wiring is expected

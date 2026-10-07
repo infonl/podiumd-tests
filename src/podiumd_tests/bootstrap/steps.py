@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import secrets
 
 from dataclasses import dataclass
@@ -26,6 +27,14 @@ TEST_CATALOGUS_RSIN = "000000000"
 # The suite's client in Open Notificaties: publishes and subscribes.
 NRC_CLIENT_ID = "ptest-bootstrap-nrc"
 NRC_STORE_KEY = "ptest_bootstrap_nrc_secret"
+# Open Notificaties kanalen the ported tests use (TA seed-notificaties.sh), with their filters.
+KANALEN = {
+    "zaken": ["bronorganisatie", "zaaktype", "vertrouwelijkheidaanduiding"],
+    "statussen": ["bronorganisatie", "zaaktype", "vertrouwelijkheidaanduiding"],
+    "documenten": ["bronorganisatie", "informatieobjecttype", "vertrouwelijkheidaanduiding"],
+    "partijen": ["nummer", "soort_partij"],
+    "internetaken": ["nummer", "gevraagde_handeling", "toelichting", "status"],
+}
 # API tokens (TokenAuth identifier = store key).
 OPENKLANT_STORE_KEY = "ptest_bootstrap_openklant_token"
 OBJECTTYPEN_STORE_KEY = "ptest_bootstrap_objecttypen_token"
@@ -33,9 +42,12 @@ OBJECTTYPEN_STORE_KEY = "ptest_bootstrap_objecttypen_token"
 
 @dataclass(frozen=True)
 class SnippetStep:
-    """A step done by one Django snippet with actions status, apply and remove, and one random secret.
+    """A step done by one Django snippet with actions status, apply and remove.
 
-    The secret is generated here, sent to the snippet over stdin, and stored under store_key.
+    Secret mode (default): a random secret is generated here, sent to the snippet and stored
+    under store_key. Record mode (record=True), for wiring that adds to shared objects: apply
+    gets the stored record and returns it extended with what it added; remove gets it back
+    and undoes exactly that.
     """
 
     name: str
@@ -43,6 +55,8 @@ class SnippetStep:
     snippet: str
     store_key: str
     params: dict[str, object] = field(default_factory=dict[str, object])
+    record: bool = False
+    wiring: bool = False
 
     @property
     def requires(self) -> tuple[str, ...]:
@@ -58,15 +72,21 @@ class SnippetStep:
         """The objects exist, and the secret is in the credentials Secret."""
         return bool(self._run(ctx, "status")["present"]) and self.store_key in ctx.store.read()
 
+    def _stored_record(self, ctx: Context) -> object:
+        return json.loads(ctx.store.read().get(self.store_key, "{}"))
+
     def apply(self, ctx: Context, /) -> dict[str, str]:
-        """Create or replace the objects with a new random secret."""
+        """Create the objects: with a new random secret, or extending the stored record."""
+        if self.record:
+            result = self._run(ctx, "apply", record=self._stored_record(ctx))
+            return {self.store_key: json.dumps(result["record"], sort_keys=True)}
         secret = secrets.token_hex(20)  # 40 characters: the longest TokenAuth.token allows
         self._run(ctx, "apply", secret=secret)
         return {self.store_key: secret}
 
     def remove(self, ctx: Context, /) -> tuple[str, ...]:
-        """Delete the objects."""
-        self._run(ctx, "remove")
+        """Delete the objects, or undo what the stored record lists."""
+        self._run(ctx, "remove", **({"record": self._stored_record(ctx)} if self.record else {}))
         return (self.store_key,)
 
 
@@ -84,6 +104,7 @@ class KeycloakUser:
     groups: tuple[str, ...] = ()
     attributes: dict[str, list[str]] = field(default_factory=dict[str, list[str]])
     requires: tuple[str, ...] = ("keycloak",)
+    wiring: bool = False
 
     @property
     def name(self) -> str:
@@ -180,6 +201,16 @@ STEPS: tuple[Step, ...] = (
     ),
     token_step("openklant", "openklant.components.token.models", OPENKLANT_STORE_KEY),
     token_step("objecttypen", "objecttypes.token.models", OBJECTTYPEN_STORE_KEY),
+    # Platform wiring (PLAN.md §4 A2).
+    SnippetStep(
+        "opennotificaties-kanalen",
+        "opennotificaties",
+        "kanalen",
+        "ptest_bootstrap_kanalen_record",
+        {"kanalen": KANALEN},
+        record=True,
+        wiring=True,
+    ),
     # Users for KISS and ITA (TA kcc-medewerker), for the admin UIs, PABC and ZAC (TA testadmin),
     # and for the DigiD and eHerkenning logins through Keycloak (TA testinwoner, testinwoner2, testbedrijf).
     KeycloakUser(

@@ -50,6 +50,11 @@ class Step(Protocol):
         """Capabilities the step needs; it is skipped without them."""
         ...
 
+    @property
+    def wiring(self) -> bool:
+        """True for platform wiring (PLAN.md §4 A2): skipped unless the profile allows wiring."""
+        ...
+
     def is_present(self, ctx: Context, /) -> bool:
         """True when the step's objects and stored credentials are in place."""
         ...
@@ -85,6 +90,8 @@ def _each(env: Environment, steps: Sequence[Step], act: Callable[[Context, Step]
     outcomes: list[Outcome] = []
     for step in steps:
         reason = env.capabilities.skip_reason(CLUSTER, *step.requires)
+        if step.wiring and not env.profile.wiring:
+            reason = f"wiring is off for {env.profile.name} (profile bootstrap.wiring)"
         outcomes.append(Outcome(step.name, "skipped", reason) if reason else act(ctx, step))
     return outcomes
 

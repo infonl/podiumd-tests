@@ -16,6 +16,7 @@ from podiumd_tests.bootstrap import unbootstrap
 from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.bootstrap.steps import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.steps import KeycloakUser
+from podiumd_tests.bootstrap.steps import SnippetStep
 from podiumd_tests.bootstrap.steps import keycloak_password_key
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.credentials import env_var_name
@@ -28,6 +29,7 @@ class FakeStep:
 
     name: str = "fake"
     requires: tuple[str, ...] = ()
+    wiring: bool = False
     present: bool = False
     log: list[str] = field(default_factory=list)
 
@@ -218,3 +220,30 @@ def test_keycloak_user_remove_deletes_only_an_existing_user(env_factory, fake_ru
     sent = fake_http(keycloak_answers(user_exists=False, has_group=True))
     assert KeycloakUser("kcc").remove(ctx) == (keycloak_password_key("kcc"),)
     assert all(r.method != "DELETE" for r in sent)
+
+
+def test_wiring_steps_skip_unless_the_profile_allows_wiring(env_factory, fake_runner, profile_factory):
+    env = cluster_env(env_factory, fake_runner, profile_factory, estate="externals", allowed_tiers=["smoke", "full"])
+    step = FakeStep(wiring=True)
+    outcome = bootstrap(env, [step])[0]
+    assert (outcome.action, step.log) == ("skipped", [])
+    assert "bootstrap.wiring" in outcome.detail
+
+
+def test_record_mode_hands_the_stored_record_to_apply_and_remove(env_factory, fake_runner, profile_factory):
+    env = cluster_env(env_factory, fake_runner, profile_factory)
+    earlier = {"created": ["partijen"], "filters": {}}
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (
+        0,
+        stored({"rec": json.dumps(earlier)}),
+    )
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "opennotificaties"}}]}))
+    step = SnippetStep("kanalen", "opennotificaties", "kanalen", "rec", {"kanalen": {}}, record=True, wiring=True)
+    ctx = Context(env, CredentialStore(env.kube))
+    extended = {"created": ["partijen", "statussen"], "filters": {"zaken": ["zaaktype"]}}
+    fake_runner.answers["exec -i deploy/opennotificaties"] = snippet_answer({"present": True, "record": extended})
+    values = step.apply(ctx)
+    assert snippet_params(fake_runner.stdins[-1])["record"] == earlier
+    assert json.loads(values["rec"]) == extended
+    step.remove(ctx)
+    assert snippet_params(fake_runner.stdins[-1]) == {"kanalen": {}, "action": "remove", "record": earlier}
