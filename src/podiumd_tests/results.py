@@ -6,6 +6,7 @@ All writing goes through a ResultsSink, so another storage needs no caller chang
 from __future__ import annotations
 
 import json
+import re
 import secrets
 
 # Parses only the junit.xml written by our own pytest run.
@@ -58,9 +59,23 @@ class LocalDirSink:
         return str(self.root / relative_path)
 
 
-def new_run_id() -> str:
-    """Six hex characters that make a run directory unique."""
-    return secrets.token_hex(3)
+# A run id: its UTC start minute (yymmddHHMM) and four random hex characters. The start
+# time in every tag lets sweep judge a leftover's age without a timestamp on the object.
+RUN_ID = re.compile(r"(\d{10})([0-9a-f]{4})")
+# Any run tag in a text; legacy run ids were six hex characters. ptest-bootstrap-* is no run tag.
+RUN_TAG = re.compile(r"\bptest-(\d{10}[0-9a-f]{4}|[0-9a-f]{6})(?![0-9a-z])")
+
+
+def new_run_id(now: datetime | None = None) -> str:
+    """A run id for a run that starts now."""
+    started = (now or datetime.now(UTC)).astimezone(UTC)
+    return f"{started:%y%m%d%H%M}{secrets.token_hex(2)}"
+
+
+def run_started(run_id: str) -> datetime | None:
+    """The start minute a run id carries; None for a legacy id without one."""
+    found = RUN_ID.fullmatch(run_id)
+    return datetime.strptime(found.group(1), "%y%m%d%H%M").replace(tzinfo=UTC) if found else None
 
 
 def run_tag(run_id: str) -> str:
