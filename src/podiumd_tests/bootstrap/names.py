@@ -43,3 +43,5 @@ OBJECTEN_STORE_KEY = "ptest_bootstrap_objecten_token"
 # object; tests create the first two and clean up all three.
 ITA_OBJECTTYPES = ("Afdeling", "Groep", "Activiteitenlog")
 OPENKLANT_STORE_KEY = "ptest_bootstrap_openklant_token"
+# Open Inwoner's token in Open Klant (wiring W6).
+OPENKLANT_OPENINWONER_STORE_KEY = "ptest_bootstrap_openklant_openinwoner_token"

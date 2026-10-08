@@ -19,6 +19,7 @@ from podiumd_tests.bootstrap.names import KANALEN
 from podiumd_tests.bootstrap.names import NRC_CLIENT_ID
 from podiumd_tests.bootstrap.names import NRC_STORE_KEY
 from podiumd_tests.bootstrap.names import OBJECTEN_STORE_KEY
+from podiumd_tests.bootstrap.names import OPENKLANT_OPENINWONER_STORE_KEY
 from podiumd_tests.bootstrap.names import OPENKLANT_STORE_KEY
 from podiumd_tests.bootstrap.names import PREFIX
 from podiumd_tests.bootstrap.names import PRODUCTAANVRAAG_OBJECTTYPE
@@ -40,6 +41,7 @@ from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.oidc_mock import KeycloakOidcMock
 from podiumd_tests.bootstrap.oidc_mock import oidc_params
 from podiumd_tests.bootstrap.omc import OmcAbonnement
+from podiumd_tests.clients.platform import openklant_client
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
@@ -261,6 +263,31 @@ def openformulieren_params(ctx: Context) -> dict[str, object]:
     return {
         "secret": ctx.store.read().get(ZGW_STORE_KEY, ""),  # empty only before openzaak-client ran
         "openzaak_url": env.profile.settings.get("openzaak_internal_url", env.profile.urls["openzaak"]),
+    }
+
+
+def openinwoner_openklant_params(ctx: Context) -> dict[str, object]:
+    """Open Klant's API as Open Inwoner calls it, its token, and the contact flow's settings.
+
+    Questions go to the KCC test user's medewerker actor (bootstrap step openklant-actor-kcc).
+    """
+    openklant = openklant_client(ctx.env)
+    actor = openklant.list("actoren", {"actoridentificatorObjectId": user_email(KCC.username)})
+    if not actor:
+        msg = "no Open Klant actor for the KCC test user: run bootstrap step openklant-actor-kcc first"
+        raise LookupError(msg)
+    return {
+        "api_root": ctx.env.profile.urls["openklant"] + "/klantinteracties/api/v1/",
+        "token": ctx.store.read().get(OPENKLANT_OPENINWONER_STORE_KEY, ""),
+        "config": {
+            "mijn_vragen_kanaal": "contactformulier",
+            "mijn_vragen_actor": str(actor[0]["uuid"]),
+            "mijn_vragen_organisatie_naam": "podiumd-tests",
+            "interne_taak_gevraagde_handeling": "Vraag beantwoorden",
+            "interne_taak_toelichting": "Beantwoorden vraag inwoner",
+            # No cached partij: a test removes the partij Open Inwoner made for it.
+            "partij_cache_timeout": 0,
+        },
     }
 
 
@@ -581,5 +608,25 @@ STEPS: tuple[Step, ...] = (
         record=True,
         wiring=True,
         context_params=lambda ctx: {"zaken_url": ctx.env.profile.urls["openzaak"] + "/zaken/api/v1/"},
+    ),
+    # Wiring W6 and W8: Open Inwoner's klantensysteem is Open Klant 2, with the contact flow
+    # (TA seed-oi-openklant2.sh, seed-oi-contactflow.sh).
+    SnippetStep(
+        "openklant-token-openinwoner",
+        ("openklant",),
+        "token_auth",
+        OPENKLANT_OPENINWONER_STORE_KEY,
+        {"module": "openklant.components.token.models", "identifier": OPENKLANT_OPENINWONER_STORE_KEY},
+        wiring=True,
+    ),
+    SnippetStep(
+        "openinwoner-openklant",
+        ("openinwoner", "openklant"),
+        "oi_openklant",
+        "ptest_bootstrap_openinwoner_openklant_record",
+        {"subjects": ["Algemene vraag", "Vraag over zaak"]},
+        record=True,
+        wiring=True,
+        context_params=openinwoner_openklant_params,
     ),
 )
