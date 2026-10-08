@@ -64,6 +64,7 @@ def test_profile_can_be_edited(page: Page, portal: str) -> None:
     expect(page.locator('input[name="phone_addresses-TOTAL_FORMS"]').first).to_be_attached()
 
 
+@pytest.mark.tc("OI-048")
 def test_notification_setting_is_saved(page: Page, portal: str) -> None:
     """Switching the zaak notifications setting persists, and switching back too (TA reg-106, reg-165)."""
     page.goto(portal + "/mijn-profiel/notificaties/")
@@ -99,6 +100,7 @@ def test_mijn_vragen_answers(page: Page, portal: str) -> None:
         ("/contactformulier/", "contact|vraag"),
     ],
 )
+@pytest.mark.tc("OI-029")
 def test_page_heading_matches_its_menu_item(page: Page, portal: str, path: str, words: str) -> None:
     """Each page's heading names what its menu item promises (TA reg-163, reg-96, int-108)."""
     page.goto(portal + path)
@@ -154,6 +156,7 @@ def test_disabled_account_cannot_log_in(  # pylint: disable=too-many-arguments,t
 
 
 @pytest.mark.requires("api-proxy")
+@pytest.mark.tc("OI-083")
 def test_company_profile_shows_kvk_names(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,

@@ -48,6 +48,7 @@ def test_internetaak_found_by_its_klantcontact(openklant: ApiClient, registry: R
     assert [t["uuid"] for t in found] == [taak["uuid"]]
 
 
+@pytest.mark.tc("KI-038", "KI-060")
 def test_internetaak_without_klantcontact_is_refused(openklant: ApiClient) -> None:
     """An internetaak needs an aanleidinggevend klantcontact (TA reg-157 KI-060)."""
     body = {

@@ -41,6 +41,7 @@ def test_zac_redirects_to_keycloak(http: requests.Session, urls: dict[str, str])
 
 
 @pytest.mark.requires("openinwoner")
+@pytest.mark.tc("ARCH-019")
 def test_portaal_login_page_offers_digid_and_eherkenning(http: requests.Session, urls: dict[str, str]) -> None:
     """The Open Inwoner login page has the theme and both login options (82, 05a, 99)."""
     response = expect_status(http.get(urls["openinwoner"] + "/accounts/login/"), HTTPStatus.OK)

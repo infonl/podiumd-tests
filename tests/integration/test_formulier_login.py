@@ -74,6 +74,7 @@ def submit_after_login(  # pylint: disable=too-many-arguments,too-many-positiona
     return openzaak.list(f"{ZAKEN}/rollen", {"zaak": zaak})
 
 
+@pytest.mark.tc("ARCH-019")
 def test_digid_submission_has_the_inwoner_as_initiator(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,

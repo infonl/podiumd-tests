@@ -75,6 +75,7 @@ def test_form_publishes_its_settings(form: JsonObject) -> None:
         ),
     ],
 )
+@pytest.mark.tc("INT-017")
 def test_upload_of_a_false_file_is_refused(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     http: requests.Session,
     urls: dict[str, str],

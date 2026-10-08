@@ -31,6 +31,7 @@ def test_person_lookup(zac: requests.Session, urls: dict[str, str]) -> None:
     assert "Bultenaar" in personen[0]["naam"]
 
 
+@pytest.mark.tc("INT-004", "INT-005")
 def test_company_lookup(zac: requests.Session, urls: dict[str, str]) -> None:
     """ZAC finds the KvK test company's basisprofiel by KvK number (TA reg-193)."""
     url = f"{urls['zac']}/rest/klanten/basisprofiel/{KVK_TEST_NUMMER}"

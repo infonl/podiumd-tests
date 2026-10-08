@@ -25,6 +25,7 @@ DELIVERY_TIMEOUT = 30
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
+@pytest.mark.tc("INT-009")
 def test_app_mail_reaches_mailpit(
     podiumd_env: Environment, mailpit: ApiClient, registry: ResourceRegistry, component: str
 ) -> None:

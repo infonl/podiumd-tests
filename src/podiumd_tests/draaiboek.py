@@ -3,17 +3,20 @@
 The draaiboek is TA's test-catalog/cases.yaml (the Excel "Testscript PodiumD 4.6", 546 cases, class
 A automatable, B with a mock, C manual, N placeholder). A case is linked to TA specs by the catalog's
 poc_dekking and by the draaiboek rows TA's specs cite ("Portaal r54"); MIGRATION.md then says where
-each TA spec went. Run: python -m podiumd_tests.draaiboek <path to TA test-automation>.
+each TA spec went. podiumd-tests' own tests name their cases with @pytest.mark.tc("OF-001") (PLAN R15).
+Run: python -m podiumd_tests.draaiboek <path to TA test-automation>.
 """
 
 from __future__ import annotations
 
+import ast
 import re
 import sys
 
 from collections import Counter
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -57,6 +60,31 @@ def cited(tests: Path) -> dict[tuple[str, int], set[str]]:
     return found
 
 
+def _tc_ids(node: ast.expr) -> list[str]:
+    """The case ids of a pytest.mark.tc(...) call, or none for any other expression."""
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "tc":
+        return [a.value for a in node.args if isinstance(a, ast.Constant) and isinstance(a.value, str)]
+    return []
+
+
+def marked(tests: Path) -> dict[str, set[str]]:
+    """Case id -> the tests ("path::function") marked with @pytest.mark.tc for it (also through pytestmark)."""
+    found: dict[str, set[str]] = defaultdict(set)
+    for path in sorted(tests.rglob("test_*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        module_ids: list[str] = []
+        for node in tree.body:
+            if isinstance(node, ast.Assign) and any(getattr(t, "id", "") == "pytestmark" for t in node.targets):
+                values = node.value.elts if isinstance(node.value, ast.List) else [node.value]
+                module_ids += [i for v in values for i in _tc_ids(v)]
+        functions = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name.startswith("test_")]
+        for function in functions:
+            ids = module_ids + [i for d in function.decorator_list for i in _tc_ids(d)]
+            for case in ids:
+                found[case].add(f"{path.relative_to(tests.parent).as_posix()}::{function.name}")
+    return found
+
+
 def status(specs: set[str], decisions: dict[str, tuple[str, str]]) -> str:
     """covered, blocked or dropped, from the decisions of the case's TA specs; "" without any."""
     kinds = {decisions.get(s, ("unknown", ""))[0] for s in specs}
@@ -67,37 +95,46 @@ def status(specs: set[str], decisions: dict[str, tuple[str, str]]) -> str:
     return "dropped" if kinds else ""
 
 
+def _row(
+    case: dict[str, Any], specs: set[str], decisions: dict[str, tuple[str, str]], own: set[str]
+) -> tuple[str, str]:
+    """The case's status and its report row."""
+    state = "covered" if own else status(specs, decisions)
+    state = state or ("not covered" if case["klasse"] in {"A", "B"} else "out of scope")
+    notes = " ".join(decisions[s][1] for s in specs if s in decisions and decisions[s][0] != "drop")
+    names = set(TEST_FILE.findall(notes)) | {t.split("::")[1] for t in own}
+    where = ", ".join(f"`{name}`" for name in sorted(names))
+    text = re.sub(r"\s+", " ", str(case["sub"] or case["proces"])).replace("|", "/").replace("<", "&lt;")[:110]
+    return state, f"| {case['test_id']} | {case['klasse']} | {state} | {text} | {where} |"
+
+
 def main(ta: Path) -> None:
     """Write the report."""
     catalog = yaml.safe_load((ta / "test-catalog" / "cases.yaml").read_text(encoding="utf-8"))
     decisions = migration()
     citations = cited(ta / "tests")
+    tests = marked(REPO_ROOT / "tests")
     rows: list[str] = []
     totals: dict[str, Counter[str]] = defaultdict(Counter)
     for case in catalog["cases"]:
         specs = {p.split(":")[0] for p in case["poc_dekking"]} | citations.get(
             (case["sheet"], case["excel_rij"]), set()
         )
-        state = status(specs, decisions) or ("no TA test" if case["klasse"] in {"A", "B"} else "out of scope")
+        state, row = _row(case, specs, decisions, tests.get(case["test_id"], set()))
         totals[case["klasse"]][state] += 1
-        notes = " ".join(decisions[s][1] for s in specs if s in decisions and decisions[s][0] != "drop")
-        where = ", ".join(f"`{name}`" for name in sorted(set(TEST_FILE.findall(notes))))
-        text = re.sub(r"\s+", " ", str(case["sub"] or case["proces"])).replace("|", "/").replace("<", "&lt;")[:110]
-        rows.append(f"| {case['test_id']} | {case['klasse']} | {state} | {text} | {where} |")
-    states = ("covered", "blocked", "dropped", "no TA test", "out of scope")
+        rows.append(row)
+    states = ("covered", "blocked", "dropped", "not covered", "out of scope")
     summary = ["| Class | " + " | ".join(states) + " |", "|---|" + "---|" * len(states)]
     summary += [f"| {k} | " + " | ".join(str(totals[k][s]) for s in states) + " |" for k in sorted(totals)]
     out = REPO_ROOT / "docs" / "draaiboek-coverage.md"
     out.write_text(
         "# Draaiboek coverage\n\n"
-        "Generated by `python -m podiumd_tests.draaiboek` from TA's test-catalog (draaiboek PodiumD 4.6, 546 cases) "
-        "and "
-        "`MIGRATION.md`. Class A: automatable, B: with a mock, C: manual, N: placeholder. A case counts as "
-        "covered when a TA spec that covers it (catalog mapping or a row the spec cites) was ported or merged. "
-        '"no TA test": no TA spec covered it; tests that podiumd-tests added itself (e.g. the DigiD login) '
-        "are not mapped to draaiboek cases, so some of these are covered after all.\n\n"
+        "Generated by `python -m podiumd_tests.draaiboek` from TA's test-catalog (draaiboek PodiumD 4.6, "
+        "546 cases), `MIGRATION.md` and the tests' `@pytest.mark.tc` markers. Class A: automatable, B: with a "
+        "mock, C: manual, N: placeholder. A case is covered when a test is marked with it, or when a TA spec "
+        "that covered it (catalog mapping or a row the spec cites) was ported or merged.\n\n"
         + "\n".join(summary)
-        + "\n\n| Case | Class | Status | Draaiboek | podiumd-tests files (from MIGRATION.md) |\n|---|---|---|---|---|\n"
+        + "\n\n| Case | Class | Status | Draaiboek | podiumd-tests |\n|---|---|---|---|---|\n"
         + "\n".join(rows)
         + "\n",
         encoding="utf-8",

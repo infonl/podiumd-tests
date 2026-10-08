@@ -78,6 +78,7 @@ def ask_in_mijn_vragen(page: Page, podiumd_env: Environment, vraag: str) -> Loca
     return card
 
 
+@pytest.mark.tc("OI-031")
 def test_question_shows_in_mijn_vragen(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -93,6 +94,7 @@ def test_question_shows_in_mijn_vragen(  # pylint: disable=too-many-arguments,to
     expect(card).to_contain_text("Onbeantwoord")
 
 
+@pytest.mark.tc("OI-023")
 def test_profile_email_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,

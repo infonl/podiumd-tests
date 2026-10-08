@@ -36,6 +36,7 @@ def answers(http: requests.Session, url: str) -> bool:
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in STOPPED])
+@pytest.mark.tc("CONT-003", "CONT-004", "CONT-007", "CONT-012")
 def test_stopped_component_harms_no_other(
     http: requests.Session, urls: dict[str, str], podiumd_env: Environment, component: str
 ) -> None:

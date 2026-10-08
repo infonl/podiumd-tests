@@ -40,6 +40,7 @@ def fixture_kiss(page: Page, podiumd_env: Environment, need_bootstrap: Callable[
     return kcc_login(page, podiumd_env, "kiss")
 
 
+@pytest.mark.tc("KI-002")
 def test_kcc_user_is_a_klantcontactmedewerker(kiss: requests.Session, urls: dict[str, str]) -> None:
     """KISS knows the logged-in user as a klantcontactmedewerker (TA smoke 113)."""
     me = expect_status(kiss.get(urls["kiss"] + "/api/me"), HTTPStatus.OK).json()
@@ -47,6 +48,7 @@ def test_kcc_user_is_a_klantcontactmedewerker(kiss: requests.Session, urls: dict
     assert me["isKcm"]
 
 
+@pytest.mark.tc("KI-001")
 def test_kiss_renders_for_the_kcc_user(kiss: requests.Session, page: Page, urls: dict[str, str]) -> None:
     """After the login KISS's single-page app renders its search and navigation (TA smoke 06, reg-100)."""
     del kiss  # logs the page in

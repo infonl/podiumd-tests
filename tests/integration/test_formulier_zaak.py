@@ -31,6 +31,7 @@ REGISTRATION_TIMEOUT = 90
 
 
 @pytest.mark.core
+@pytest.mark.tc("OF-020")
 def test_submission_creates_a_zaak_with_the_form_pdf(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     podiumd_env: Environment,
     openzaak: ApiClient,

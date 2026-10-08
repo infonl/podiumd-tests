@@ -87,6 +87,7 @@ def test_afdelingen_and_groepen_are_seeded_together(ita: requests.Session, urls:
     assert bool(afdelingen) == bool(groepen), f"{len(afdelingen)} afdelingen, {len(groepen)} groepen"
 
 
+@pytest.mark.tc("ITA-024")
 def test_claimed_internetaak_is_on_my_list(
     ita: requests.Session, urls: dict[str, str], openklant: ApiClient, taak: JsonObject
 ) -> None:

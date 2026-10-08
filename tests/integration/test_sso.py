@@ -41,6 +41,7 @@ def logs_in_through_keycloak(http: requests.Session, url: str, keycloak: str) ->
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
+@pytest.mark.tc("FB-005")
 def test_one_login_opens_every_admin(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     http: requests.Session,

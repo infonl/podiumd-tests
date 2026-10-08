@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 pytestmark = [pytest.mark.integration, pytest.mark.requires("openformulieren", "mailpit", "cluster")]
 
 
+@pytest.mark.tc("INT-009")
 def test_paused_submission_mails_its_resume_link(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     http: requests.Session,
     urls: dict[str, str],

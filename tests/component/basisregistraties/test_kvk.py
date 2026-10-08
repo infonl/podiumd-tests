@@ -50,6 +50,7 @@ def test_search_by_type_finds_only_that_type(http: requests.Session, urls: dict[
     [{"naam": "Test"}, KVK_TEST_ADRES, {"kvkNummer": KVK_TEST_NUMMER, "naam": "Test"}],
     ids=["naam", "postcode-huisnummer", "kvknummer-naam"],
 )
+@pytest.mark.tc("INT-005")
 def test_search_finds_the_test_company(http: requests.Session, urls: dict[str, str], query: dict[str, str]) -> None:
     """Searching by name, by address or by number and name finds Test BV Donald (TA reg-47a, reg-47d, reg-125)."""
     found = resultaten(kvk_zoeken(http, urls["api-proxy"], query))
@@ -81,6 +82,7 @@ def test_postcode_without_huisnummer_is_refused(http: requests.Session, urls: di
     expect_status(kvk_zoeken(http, urls["api-proxy"], {"postcode": KVK_TEST_ADRES["postcode"]}), HTTPStatus.BAD_REQUEST)
 
 
+@pytest.mark.tc("INT-004", "INT-005")
 def test_basisprofiel(http: requests.Session, urls: dict[str, str]) -> None:
     """The basisprofiel of the test company answers with its number (TA reg-157c, reg-80)."""
     response = expect_status(kvk_basisprofiel(http, urls["api-proxy"], KVK_TEST_NUMMER), HTTPStatus.OK)

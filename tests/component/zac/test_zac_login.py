@@ -23,6 +23,7 @@ pytestmark = [pytest.mark.component, pytest.mark.ui, pytest.mark.core, pytest.ma
 ADMIN = KeycloakUser("admin")
 
 
+@pytest.mark.tc("ZAC-002")
 def test_login_shows_the_dashboard(
     page: Page, podiumd_env: Environment, urls: dict[str, str], need_bootstrap: Callable[..., None]
 ) -> None:

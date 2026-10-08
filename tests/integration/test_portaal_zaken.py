@@ -185,6 +185,7 @@ def test_uploaded_document_reaches_the_zaak(  # pylint: disable=too-many-argumen
 
 
 @pytest.mark.requires("cluster")
+@pytest.mark.tc("OI-010")
 def test_infected_upload_is_refused(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -206,6 +207,7 @@ def test_infected_upload_is_refused(  # pylint: disable=too-many-arguments,too-m
     assert documents_of(openzaak, zaak) == []
 
 
+@pytest.mark.tc("INT-018")
 def test_refused_file_type_cannot_be_uploaded(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,

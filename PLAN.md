@@ -488,6 +488,6 @@ Updated 2026-10-08. The detail lives where it is kept up to date: blocked ports 
 
 **Phase 8 (decommission):**
 
-- Done: every source test has a decision in MIGRATION.md, and `docs/draaiboek-coverage.md` (`python -m podiumd_tests.draaiboek`) maps the draaiboek's 546 cases: of 417 automatable (A) cases, 241 covered, 5 blocked, none dropped; every case TA covered is covered here.
-- Backlog beyond the migration: 171 A and 38 B cases had no TA test either (most in Formulier, Portaal, ABC, Continuïteit and ZAC). Some are covered by tests podiumd-tests added itself, which are not yet mapped to cases.
+- Done: every source test has a decision in MIGRATION.md, and `docs/draaiboek-coverage.md` (`python -m podiumd_tests.draaiboek`) maps the draaiboek's 546 cases, through TA's specs and the tests' own `@pytest.mark.tc` markers (R15): of 417 automatable (A) cases, 275 covered, 5 blocked, none dropped; every case TA covered is covered here.
+- Backlog beyond the migration: 137 A and 36 B cases have no test. Most are in Formulier (payment, co-signing, eSuite, Office Add-in), Portaal (search, eSuite, machtigingen), ABC, ZAC (zaak handling in its UI) and Continuïteit (user-facing messages during an outage, DigiD/eHerkenning down).
 - Freezing the old suites is for their owners: TA (icatt podiumd-testautomation), PI (podiumd-infra `tests/`), EX (ExternalsPodiumD smoke tests). podiumd-minikube keeps its checks of its own deploy (memory, OpenBao, ClamAV pod, Elasticsearch, edge, ZAC wiring); its application tests duplicate podiumd-tests.

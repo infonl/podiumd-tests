@@ -184,6 +184,7 @@ def test_role_permissions(oab: Callable[[str], requests.Session], api: str, role
 
 
 @pytest.mark.core
+@pytest.mark.tc("ABC-008", "ABC-018", "ABC-023")
 def test_list_goes_through_both_reviews(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
 ) -> None:
@@ -198,6 +199,7 @@ def test_list_goes_through_both_reviews(
     assert status(oab, api, lijst) == "ready_to_delete"
 
 
+@pytest.mark.tc("ABC-009", "ABC-016")
 def test_rejected_list_goes_back_to_the_record_manager(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
 ) -> None:
@@ -238,6 +240,7 @@ def test_record_manager_response_sends_the_list_back_to_review(
 
 
 @pytest.mark.ui
+@pytest.mark.tc("ABC-002")
 def test_record_manager_creates_a_list_in_the_ui(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -273,6 +276,7 @@ def test_record_manager_creates_a_list_in_the_ui(  # pylint: disable=too-many-ar
 
 
 @pytest.mark.ui
+@pytest.mark.tc("ABC-009", "ABC-010")
 def test_record_manager_sees_the_proposals_in_the_ui(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -293,6 +297,7 @@ def test_record_manager_sees_the_proposals_in_the_ui(  # pylint: disable=too-man
     expect(page.get_by_text(feedback).first).to_be_visible()
 
 
+@pytest.mark.tc("ABC-025", "ABC-030")
 def test_coreviewer_feedback_reaches_the_reviewer(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
 ) -> None:
@@ -333,6 +338,7 @@ def queue(oab: Callable[[str], requests.Session], api: str, lijst: str) -> JsonO
     return expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/"), HTTPStatus.OK).json()
 
 
+@pytest.mark.tc("ABC-024")
 def test_destruction_waits_and_can_be_aborted(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
 ) -> None:
@@ -367,6 +373,7 @@ def fixture_archive_config(podiumd_env: Environment) -> Iterator[Callable[..., N
     " (test_closed_zaak_delete_answers_204); Open Archiefbeheer marks the item failed, so the list"
     " never reaches deleted and files no report; not yet reported upstream",
 )
+@pytest.mark.tc("ABC-032")
 def test_destruction_deletes_the_zaak_and_leaves_a_report(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     podiumd_env: Environment,
     oab: Callable[[str], requests.Session],
@@ -415,6 +422,7 @@ def test_destruction_deletes_the_zaak_and_leaves_a_report(  # pylint: disable=to
 
 
 @pytest.mark.destructive
+@pytest.mark.tc("ABC-038")
 def test_short_procedure_skips_the_archivist(
     oab: Callable[[str], requests.Session],
     api: str,
