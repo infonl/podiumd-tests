@@ -72,7 +72,7 @@ Sources:
 | `regression/124-cluster-pod-recovery-multi.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_continuiteit.py` (tier chaos). The graceful-degradation case is dropped: anonymous `/mijn-zaken/` always redirects to the login. |
 | `regression/125-kvk-postcode-huisnummer-zoek.spec.ts` | component or integration | 3/4/5 | port | Same as 08. |
 | `regression/13-va-filter-cross-component.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py, with client ptest-bootstrap-zgw-openbaar. |
-| `regression/14-audit-trail.spec.ts` | component or integration | 3/4/5 | todo | Open Zaak audittrails need heeft_alle_autorisaties (xfail in test_documenten.py); decide on a client with full rights. |
+| `regression/14-audit-trail.spec.ts` | component or integration | 3/4/5 | merge | Into the strict xfail `test_document_audittrail_with_catalogus_rights` (`test_documenten.py`): Open Zaak serves audittrails only to clients with heeft_alle_autorisaties, and the suite keeps its clients at minimum scope. |
 | `regression/143-oab-vernietigingsflow.spec.ts` | component or integration | 3/4/5 | port | `test_vernietigingslijst.py`, through the API (make_final works without 2FA here); UI steps: todo. |
 | `regression/143-portaal-document-download.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_portaal_zaken.py`. |
 | `regression/144-continuiteit-component-stop.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/integration/test_continuiteit.py`: every other component root must keep answering, not only the pairs TA checked. |
@@ -114,7 +114,7 @@ Sources:
 | `regression/185-of-betaalstatus-zaak.spec.ts` | component or integration | 3/4/5 | drop | Needs Open Formulieren's demo payment plugin, which no estate enables (ENABLE_DEMO_PLUGINS is unset in podiumd-infra, ExternalsPodiumD and the chart); Ogone and Worldline need a real payment provider. TA kept it fixme. |
 | `regression/19-notificaties-e2e.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`, with the webhook receiver of `infra/`. |
 | `regression/190-kiss-contentbronnen-gevuld.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/191-ita-poller-split.spec.ts` | component or integration | 3/4/5 | drop | CronJob names and schedules are estate configuration; failed Jobs are caught by `tests/smoke/test_cluster.py`. Finding for podiumd-minikube: no `ita-verlopen-cv-notify` under ITA 3.3.2. |
+| `regression/191-ita-poller-split.spec.ts` | component or integration | 3/4/5 | drop | CronJob names and schedules are estate configuration; failed Jobs are caught by `tests/smoke/test_cluster.py`. The reminder job `ita-verlopen-cv-notify` is off in every estate (podiumd default, DRT-726). |
 | `regression/193-frankgateway-zac-openzaak-e2e.spec.ts` | component or integration | 3/4/5 | port | ZAC's BRP and KvK lookups → `tests/component/zac/test_zac_klanten.py`. The Frank!Gateway route ZAC → Open Zaak exists in no estate; rollen: `test_statussen_rollen.py`. |
 | `regression/22-negative-auth.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py, with client ptest-bootstrap-zgw-noauth. |
 | `regression/23-va-escalatie.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_autorisaties.py. |
@@ -139,7 +139,7 @@ Sources:
 | `regression/45-internetaak-event.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`. |
 | `regression/46-rol-delete-event.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`. |
 | `regression/47-kvk-edge-cases.spec.ts` | component or integration | 3/4/5 | port | `test_kvk.py`, with the KvK test set, as 08. |
-| `regression/48-audit-trail-acties.spec.ts` | component or integration | 3/4/5 | todo | As 14: audittrails need heeft_alle_autorisaties. |
+| `regression/48-audit-trail-acties.spec.ts` | component or integration | 3/4/5 | merge | As 14. |
 | `regression/49-document-download.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_documenten.py test_document_versions_and_definitief. |
 | `regression/50-zaak-zoeken.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_statussen_rollen.py test_zaak_found_by_initiator_bsn. |
 | `regression/51-document-crud-edges.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_documenten.py. |
@@ -153,7 +153,7 @@ Sources:
 | `regression/59-zaak-relatie-keten.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_zaken.py test_relevante_andere_zaken. |
 | `regression/60-seed-data-health.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_catalogi.py, on the bootstrap zaaktype. |
 | `regression/61-mobile-mijn-zaken.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_portaal_zaken.py`: iPhone 13 and Pixel 5 descriptors in Chromium; no cache flush (W4 has no zaken cache), so no retries. |
-| `regression/62-vergetelheid-categorieen.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/62-vergetelheid-categorieen.spec.ts` | component or integration | 3/4/5 | drop | Its assertions check the test's own classification logic, not PodiumD; the Open Klant objects it creates are covered by `tests/component/openklant/`. |
 | `regression/63-klacht-bezwaar-keten.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_klacht_bezwaar.py`; the audit trail check is left out (needs `heeft_alle_autorisaties`, see 14/48). |
 | `regression/64-document-lifecycle.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_documenten.py; its audittrail part is an xfail. |
 | `regression/65-oi-cache-webhook.spec.ts` | component or integration | 3/4/5 | port | 65a/b → `tests/component/openinwoner/test_portaal_anoniem.py`; 65c/d: dropped (hardcoded kube context). |
