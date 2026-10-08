@@ -7,10 +7,9 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.bootstrap.names import TEST_FORM
-from podiumd_tests.openformulieren import delete_submission
+from podiumd_tests.openformulieren import registered_zaak
 from podiumd_tests.openformulieren import submit
 from podiumd_tests.seed.openzaak import ZAKEN
-from podiumd_tests.seed.openzaak import delete_zaak
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -44,10 +43,6 @@ def test_submission_creates_a_zaak_with_the_form_pdf(  # pylint: disable=too-man
         {"klacht_omschrijving": omschrijving},
         timeout=REGISTRATION_TIMEOUT,
     )
-    submission = str(status["submission"])
-    registry.add(f"submission {submission}", lambda: delete_submission(podiumd_env, submission))
-    zaken = openzaak.list(f"{ZAKEN}/zaken", {"identificatie": str(status["publicReference"])})
-    assert [z["zaaktype"] for z in zaken] == [test_zaaktype["url"]]
-    zaak = str(zaken[0]["url"])
-    registry.add(f"zaak {zaak}", lambda: delete_zaak(openzaak, zaak))
-    assert openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": zaak})
+    zaak = registered_zaak(podiumd_env, openzaak, registry, status)
+    assert zaak["zaaktype"] == test_zaaktype["url"]
+    assert openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": str(zaak["url"])})

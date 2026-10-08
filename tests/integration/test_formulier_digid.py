@@ -16,11 +16,10 @@ from podiumd_tests.browser import browser_session
 from podiumd_tests.browser import keycloak_login
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
-from podiumd_tests.openformulieren import delete_submission
+from podiumd_tests.openformulieren import registered_zaak
 from podiumd_tests.openformulieren import submit
 from podiumd_tests.responses import url_host
 from podiumd_tests.seed.openzaak import ZAKEN
-from podiumd_tests.seed.openzaak import delete_zaak
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -58,6 +57,9 @@ def test_digid_submission_has_the_inwoner_as_initiator(  # pylint: disable=too-m
     page.goto(f"{digid['url']}?next={form_url}")
     keycloak_login(page, INWONER.username, podiumd_env.credentials.get(INWONER.store_key))
     page.wait_for_url(lambda url: url_host(url) == url_host(base) and "/callback" not in url)
+    # The form's SDK in the page shares the session and overwrites it with its own requests,
+    # which loses the submission the API calls below put in it (403).
+    page.goto("about:blank")
 
     status = submit(
         browser_session(page, podiumd_env),
@@ -66,11 +68,7 @@ def test_digid_submission_has_the_inwoner_as_initiator(  # pylint: disable=too-m
         {"klacht_omschrijving": registry.tagged("digid-klacht")},
         timeout=REGISTRATION_TIMEOUT,
     )
-    submission = str(status["submission"])
-    registry.add(f"submission {submission}", lambda: delete_submission(podiumd_env, submission))
-    zaken = openzaak.list(f"{ZAKEN}/zaken", {"identificatie": str(status["publicReference"])})
-    zaak = str(zaken[0]["url"])
-    registry.add(f"zaak {zaak}", lambda: delete_zaak(openzaak, zaak))
+    zaak = str(registered_zaak(podiumd_env, openzaak, registry, status)["url"])
     rollen = openzaak.list(f"{ZAKEN}/rollen", {"zaak": zaak})
     initiators = [r for r in rollen if r.get("betrokkeneType") == "natuurlijk_persoon"]
     assert [section(r, "betrokkeneIdentificatie").get("inpBsn") for r in initiators] == [INWONER.attributes["bsn"][0]]
