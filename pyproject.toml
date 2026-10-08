@@ -15,6 +15,7 @@ dependencies = [
     "requests",          # HTTP; already used by podiumd-minikube and podiumd-infra
     "PyYAML",            # environment profiles, known_issues.yaml, perf.yaml
     "locust",            # perf tier, replaces k6 (PLAN.md §6)
+    "axe-playwright-python", # ships axe-core for the WCAG scans (TA 172)
 ]
 
 [project.optional-dependencies]

@@ -100,7 +100,7 @@ Sources:
 | `regression/17-document-va-handhaving.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py. |
 | `regression/170-oab-destruction-execute.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openarchiefbeheer/test_vernietigingslijst.py`: queue and abort (tier full); the real destruction of the test's own zaak is destructive and a strict xfail (Open Zaak 1.29.3 answers 500 on the zaak DELETE, so OAB marks the item failed). TA faked the deleted state in the Django shell. |
 | `regression/171-oab-short-procedure.spec.ts` | component or integration | 3/4/5 | port | Same module: destructive, xdist_group with the destruction test; ArchiveConfig is restored after the test. |
-| `regression/172-architectuur-wcag-axe.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/172-architectuur-wcag-axe.spec.ts` | component or integration | 3/4/5 | port | `tests/component/platform/test_toegankelijkheid.py`: axe-core WCAG 2.1 AA on the portal homepage and the test form; critical violations fail. Dropped: the KISS fixme and the required-fields check (the test form has one field). |
 | `regression/173-fb-zaaktype-versie-isolatie.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_catalogi.py test_zaaktype_versions. |
 | `regression/174-oab-config-persist-filter.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/175-continuiteit-alertmanager-fber.spec.ts` | component or integration | 3/4/5 | drop | Alertmanager is disabled in podiumd-infra and ExternalsPodiumD; TA tested its own Alertmanager and webhook. |
