@@ -2,7 +2,8 @@
 
 Ported from podiumd-minikube and podiumd-infra test_database.py (portable: through each app's own
 Django connection, not a postgres pod) and test_django_admin_login.py. Not ported: MK's check of
-its own seeded zac_client secret (fixture data of podiumd-minikube).
+its own seeded zac_client secret (fixture data of podiumd-minikube). The API reachability is PI
+test_zgw_service_reachability.py, also for external APIs such as the VNG selectielijst.
 """
 
 from __future__ import annotations
@@ -39,6 +40,18 @@ def test_database(podiumd_env: Environment, component: str) -> None:
     assert info["vendor"] == "postgresql"
     if component in SPATIAL:
         assert "postgis" in cast("list[str]", info["extensions"])
+
+
+@pytest.mark.cluster
+@pytest.mark.requires("cluster")
+@pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
+def test_zgw_services_answer(podiumd_env: Environment, component: str) -> None:
+    """Every API the app has configured (zgw_consumers Service) answers it without a server error (PI)."""
+    services = cast(
+        "list[dict[str, str]]",
+        run_snippet(podiumd_env.kube, podiumd_env.deployment_for(component), "zgw_services", {}),
+    )
+    assert [f"{s['slug']} {s['api_root']}: {s['outcome']}" for s in services if s["outcome"] != "ok"] == []
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])

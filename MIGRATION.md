@@ -215,7 +215,7 @@ Sources:
 | `test_pods.py` | smoke | 1 | port | `test_cluster.py`: pods judged by owner (Job, CronJob) instead of per-estate prefix lists; core pod list dropped (every Deployment and StatefulSet must be ready). |
 | `test_productaanvraag_flow.py` | integration, marker `core` | 4 | merge | `tests/integration/test_productaanvraag.py`; Job and kanaal checks are covered by `test_jobs_succeeded` and the kanalen tests. |
 | `test_reachability.py` | smoke | 1 | port | `test_reachability.py`: redirects followed (R14), status < 500 per component plus admin login pages; no per-host expected codes. |
-| `test_zgw_service_reachability.py` | integration, marker `cluster` | 4 | todo |  |
+| `test_zgw_service_reachability.py` | integration, marker `cluster` | 4 | port | `tests/component/platform/test_django_apps.py` (snippet `zgw_services`), for every Django app and also external APIs. |
 
 ## PI
 
@@ -235,7 +235,7 @@ Sources:
 | `test_productaanvraag_flow.py` | integration, marker `core` | 4 | merge | `tests/integration/test_productaanvraag.py`, with profile settings instead of hard-coded types; PI's ZAC parameter check goes to the ZAC component tests. |
 | `test_reachability.py` | smoke | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
 | `test_zac_zaakafhandelparameters.py` | component (zac) | 3 | todo |  |
-| `test_zgw_service_reachability.py` | integration, marker `cluster` | 4 | merge | same test in MK and PI: merge into one environment-neutral test |
+| `test_zgw_service_reachability.py` | integration, marker `cluster` | 4 | merge | same test in MK and PI: one environment-neutral test in `test_django_apps.py`. |
 
 ## EX
 
