@@ -46,9 +46,9 @@ Sources:
 | `interaction/76-of-submission-end-to-end.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/integration/test_formulier_zaak.py`: submission through the SDK API, zaak and PDF in Open Zaak. |
 | `interaction/78-ita-add-klantcontact.spec.ts` | component or integration, marker `core` | 3/4/5 | drop | Superseded by 180 (outdated body). |
 | `maintenance/cleanup-test-zaken.spec.ts` | `podiumd-tests sweep` (CLI, not a test) | 2 | replace | |
-| `perf/api-perf.js` | perf (Locust) | 6 | todo | |
-| `perf/fg-compare.js` | perf (Locust) | 6 | todo | |
-| `perf/lib.js` | perf (Locust) | 6 | todo | |
+| `perf/api-perf.js` | perf (Locust) | 6 | port | `tests/perf/test_api_perf.py` with `src/podiumd_tests/perf/locustfile.py`; thresholds in `perf.yaml`. |
+| `perf/fg-compare.js` | perf (Locust) | 6 | todo | Needs an environment with both a Frank!Gateway and a direct route to Open Zaak (TA used a temporary `openzaak-direct` host); minikube's outway is in-cluster only. |
+| `perf/lib.js` | perf (Locust) | 6 | merge | Its auth helpers are the suite's own clients (`clients/platform.py`). |
 | `regression/07-brp-persoon-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/basisregistraties/test_brp.py`, through the api-proxy. |
 | `regression/08-kvk-bedrijf-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/basisregistraties/test_kvk.py` through the api-proxy, which routes to KvK's test API on every estate (TA called that API directly); test set Test BV Donald. |
 | `regression/100-kiss-frontend-basis.spec.ts` | component or integration | 3/4/5 | port | `tests/component/kiss/test_anonymous.py`; the Vue shell check is phase 5. |

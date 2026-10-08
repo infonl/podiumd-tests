@@ -203,11 +203,12 @@ sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 #   - pytest_* hooks, test_* functions, pytestmark and @pytest.fixture functions: used by pytest.
 #   - __call__ of a callable Protocol (process.Runner): called through the protocol.
 #   - wait_until, tagged: library API without a caller in tests/.
+#   - Locust's hooks in perf/locustfile.py (wait_time, @task, @events listeners): called by Locust.
 [tool.vulture]
 # Django snippets: run() is called inside the component, not from here.
 exclude = ["*/snippets/[a-z]*.py"]
-ignore_names = ["pytest_*", "test_*", "pytestmark", "__call__", "wait_until", "tagged"]
-ignore_decorators = ["@pytest.fixture"]
+ignore_names = ["pytest_*", "test_*", "pytestmark", "__call__", "wait_until", "tagged", "wait_time"]
+ignore_decorators = ["@pytest.fixture", "@task", "@events.*.add_listener"]
 
 [tool.bandit]
 skips = [
@@ -223,6 +224,8 @@ exclude = [
     ".venv",
     # podiumd-tests: Django snippets import models that exist only in the component images.
     "src/podiumd_tests/snippets/*.py",
+    # podiumd-tests: Locust's event hooks are untyped.
+    "src/podiumd_tests/perf/locustfile.py",
 ]
 typeCheckingMode = "strict"
 reportUnusedImport = false  # done by ruff F401

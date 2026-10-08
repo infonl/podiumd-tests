@@ -1,0 +1,6 @@
+# Thresholds of the perf tier (tests/perf), per endpoint of podiumd_tests.perf.ENDPOINTS.
+# The defaults are TA's k6 thresholds; an entry under endpoints overrides them for one endpoint.
+defaults:
+  p95_ms: 1500
+  max_failure_ratio: 0.01
+endpoints: {}
