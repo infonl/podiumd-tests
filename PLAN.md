@@ -143,7 +143,10 @@ Decided 2026-10-06, after mapping which source tests need which configuration (`
 
 **C. Volume seed for perf: `podiumd-tests seed-volume --scale smoke|perf`.**
 
-- A port of TA `seed-test-data`, with idempotency keys and a matching `unseed-volume`.
+- A port of TA `seed-test-data` (`src/podiumd_tests/seed/volume.py`), with a matching `unseed-volume`. Built 2026-10-08.
+- Kinds and TA's counts (smoke / perf): Keycloak users 5 / 100, zaken 3 / 50 000 (own zaaktype `ptest-volume`), partijen 5 / 2 000, Objecten objects 10 / 1 000 (own objecttype `ptest-volume`), Open Klant internetaken 5 / 100. A profile setting `seed_volume_<kind>` replaces a perf count (minikube seeds less).
+- Everything carries `ptest-volume`, no run tag, so sweep leaves it. A rerun tops up to the target. Creating goes through the APIs with the suite's own clients; counting and deleting through Django snippets.
+- `--parallel N` (default 8) and `--scale-cluster N` (Open Zaak, Open Klant and their workers at N replicas meanwhile). TA's `--no-notify` is not ported: Open Zaak refuses every write without a Notificaties service. TA's inwoner and kiss modules seeded nothing; its catalogus module is the bootstrap test zaaktype.
 
 ## 5. Version independence
 
@@ -189,10 +192,11 @@ Revisit this only if perf ever needs heavy load (hundreds of users or more).
 
 **How it runs:**
 
-- `podiumd-tests perf --env X --users 10 --duration 60s` runs Locust headless.
+- `podiumd-tests run --env X --tier perf -- --perf-users 10 --perf-duration 60s` runs Locust headless (defaults 5 users, 30 s), as a subprocess: Locust monkey-patches the standard library on import.
 - The wrapper in `tests/perf/` (marker `perf`, excluded from `full`) asserts the p95 and error-rate thresholds per endpoint from `perf.yaml`.
-- The results go to the run's `perf/` subdirectory and into `run.json`.
-- The Frank!Gateway compare becomes one test that asserts on the overhead between the direct path and the gateway path.
+- It also compares each endpoint's p95 with the median of the environment's earlier runs with the same settings (at least 3), so a slowdown shows also where absolute numbers mean little, such as minikube.
+- Locust's stats and the run's settings go to the run's `perf/` subdirectory.
+- The Frank!Gateway compare (TA `fg-compare.js`) waits for an environment with both a gateway and a direct route to Open Zaak.
 
 ## 7. Results
 
