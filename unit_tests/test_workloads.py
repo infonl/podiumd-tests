@@ -5,7 +5,9 @@ import json
 import pytest
 
 from podiumd_tests.kube import Kube
+from podiumd_tests.kube import KubeError
 from podiumd_tests.workloads import failed_jobs
+from podiumd_tests.workloads import run_cronjob
 from podiumd_tests.workloads import stopped
 from podiumd_tests.workloads import unhealthy_pods
 from podiumd_tests.workloads import unready_workloads
@@ -65,4 +67,15 @@ def test_stopped_restores_the_replicas_also_when_the_block_fails(fake_runner):
         ["scale", "deployment/openzaak", "--replicas=0"],
         ["scale", "deployment/openzaak", "--replicas=2"],
         ["rollout", "status", "deployment/openzaak", "--timeout=300s"],
+    ]
+
+
+def test_run_cronjob_deletes_the_job_also_when_it_does_not_complete(fake_runner):
+    fake_runner.answers = {"wait": (1, "timed out"), "": (0, "")}
+    with pytest.raises(KubeError):
+        run_cronjob(Kube("ctx", "podiumd", fake_runner), "contact-vac-sync", "ptest-x")
+    assert [c[5:8] for c in fake_runner.calls] == [
+        ["create", "job", "ptest-x"],
+        ["wait", "--for=condition=complete", "job/ptest-x"],
+        ["delete", "job", "ptest-x"],
     ]

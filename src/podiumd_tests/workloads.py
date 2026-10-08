@@ -52,6 +52,15 @@ def stopped(kube: Kube, deployment: str, timeout: int = 300) -> Generator[None]:
         kube.run("rollout", "status", f"deployment/{deployment}", f"--timeout={timeout}s", timeout=timeout + 10)
 
 
+def run_cronjob(kube: Kube, cronjob: str, job: str, timeout: int = 300) -> None:
+    """Run the CronJob once now, as Job `job`; returns when it completed and deletes the Job either way."""
+    kube.run("create", "job", job, f"--from=cronjob/{cronjob}")
+    try:
+        kube.run("wait", "--for=condition=complete", f"job/{job}", f"--timeout={timeout}s", timeout=timeout + 10)
+    finally:
+        kube.delete("job", job)
+
+
 def unready_workloads(items: Sequence[Item]) -> list[str]:
     """Deployments and StatefulSets with fewer ready replicas than wanted, as "name ready/wanted"."""
     found: list[str] = []

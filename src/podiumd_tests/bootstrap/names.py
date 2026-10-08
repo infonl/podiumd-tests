@@ -42,6 +42,8 @@ OBJECTEN_STORE_KEY = "ptest_bootstrap_objecten_token"
 # ITA forwards internetaken to Afdeling and Groep objects and logs each action in an Activiteitenlog
 # object; tests create the first two and clean up all three.
 ITA_OBJECTTYPES = ("Afdeling", "Groep", "Activiteitenlog")
+# Objecttypes KISS indexes for its search (its elastic-sync jobs vac and kennisbank).
+KISS_OBJECTTYPES = ("VAC", "Kennisartikel")
 OPENKLANT_STORE_KEY = "ptest_bootstrap_openklant_token"
 # Open Inwoner's token in Open Klant (wiring W6).
 OPENKLANT_OPENINWONER_STORE_KEY = "ptest_bootstrap_openklant_openinwoner_token"

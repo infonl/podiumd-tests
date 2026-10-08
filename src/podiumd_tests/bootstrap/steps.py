@@ -16,6 +16,7 @@ from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.bootstrap.names import CATALOGI_SCOPES
 from podiumd_tests.bootstrap.names import ITA_OBJECTTYPES
 from podiumd_tests.bootstrap.names import KANALEN
+from podiumd_tests.bootstrap.names import KISS_OBJECTTYPES
 from podiumd_tests.bootstrap.names import NRC_CLIENT_ID
 from podiumd_tests.bootstrap.names import NRC_STORE_KEY
 from podiumd_tests.bootstrap.names import OBJECTEN_STORE_KEY
@@ -507,7 +508,7 @@ STEPS: tuple[Step, ...] = (
         "objecten",
         "objects.token.models",
         OBJECTEN_STORE_KEY,
-        object_types=[PRODUCTAANVRAAG_OBJECTTYPE, *ITA_OBJECTTYPES],
+        object_types=[PRODUCTAANVRAAG_OBJECTTYPE, *ITA_OBJECTTYPES, *KISS_OBJECTTYPES],
     ),
     # Only reads and deletes the zaken ZAC creates for the test's productaanvragen.
     SnippetStep(
