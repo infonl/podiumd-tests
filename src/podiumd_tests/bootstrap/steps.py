@@ -372,7 +372,8 @@ KCC = KeycloakUser(
 # the Keycloak attributes become the bsn and eHerkenning claims of the mock.
 IDENTITIES = (
     KeycloakUser("inwoner", attributes={"bsn": ["999990019"]}),
-    KeycloakUser("inwoner2", attributes={"bsn": ["999990038"]}),
+    # Not TA's 999990038: it fails the eleven-test, and Open Klant refuses it.
+    KeycloakUser("inwoner2", attributes={"bsn": ["999993653"]}),
     KeycloakUser("bedrijf", attributes={"kvk": ["68750110"], "vestigingsnummer": ["000038509564"]}),
 )
 # Open Inwoner's portal pages; the contact form is a plugin on a page with its template.
