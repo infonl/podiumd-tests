@@ -63,7 +63,7 @@ Sources:
 | `regression/116-omc-mail-keten-e2e.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/117-portaal-contactmomenten-paginatie.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_inwoner.py`. |
 | `regression/118-portaal-vestigingsnaam-bedrijf.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_inwoner.py`, against the KvK test API (wiring `openinwoner-kvk`). |
-| `regression/119-infra-quick-wins.spec.ts` | component or integration | 3/4/5 | merge | Unknown BSN: `test_brp.py`; KISS `/api/me`: `test_kcc_session.py`. The BRP postcode search goes into `test_brp.py` (todo: the address of a test-set person). Dropped: KISS `/api/zoeken`, which also accepted 500, and the `/kennisartikelen` fixme. |
+| `regression/119-infra-quick-wins.spec.ts` | component or integration | 3/4/5 | merge | Unknown BSN: `test_brp.py`; KISS `/api/me`: `test_kcc_session.py`. BRP postcode search: `test_brp.py`. Dropped: KISS `/api/zoeken`, which also accepted 500, and the `/kennisartikelen` fixme. |
 | `regression/12-kiss-bff-kcc-flow.spec.ts` | component or integration | 3/4/5 | port | `tests/component/kiss/test_kcc_session.py`; KISS does not delete klantcontacten (405). |
 | `regression/120-of-payment-infrastructure.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/platform/test_public_surface.py`. |
 | `regression/121-continuiteit-graceful-degradation.spec.ts` | component or integration | 3/4/5 | port | `tests/component/platform/test_public_surface.py`; BRP and KvK parts wait for their ingress (handoff 6). |

@@ -1,6 +1,6 @@
 """BRP personen through the api-proxy: lookups, searches and refused queries.
 
-Ported from TA regression 07, 40, 11 and the BRP parts of 80, 121 and 150. The BSNs are from the
+Ported from TA regression 07, 40, 11 and the BRP parts of 80, 119, 121 and 150. The BSNs are from the
 BRP test set that the personen mock serves.
 """
 
@@ -78,6 +78,14 @@ def test_search_by_name_and_birth_date(
         "fields": NAAM[:1],
     }
     assert [p["burgerservicenummer"] for p in personen(http, urls, query)] == expected
+
+
+def test_search_by_postcode_and_huisnummer(http: requests.Session, urls: dict[str, str]) -> None:
+    """Searching by postcode and huisnummer finds the residents of that address, and no one at an unknown one (TA reg-119)."""
+    query = {"type": "ZoekMetPostcodeEnHuisnummer", "fields": NAAM[:1]}
+    erebos = personen(http, urls, {**query, "postcode": "3224TT", "huisnummer": 4})
+    assert EREBOS in [p["burgerservicenummer"] for p in erebos]
+    assert personen(http, urls, {**query, "postcode": "1234AB", "huisnummer": 1}) == []
 
 
 @pytest.mark.parametrize(
