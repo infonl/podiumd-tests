@@ -159,6 +159,48 @@ def test_bedrijfs_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,t
     expect_listed(page, zaak)
 
 
+@pytest.mark.tc("OI-014", "OI-068")
+@pytest.mark.parametrize(
+    "who",
+    [
+        "inwoner",
+        pytest.param(
+            "bedrijf",
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason="Open Inwoner 2.4.3: with fetch_eherkenning_zaken_with_openzaak_120_params Mijn zaken lists"
+                " a zaak by nietNatuurlijkPersoon.vestigingsNummer, but its detail accepts only a vestiging rol"
+                " (fetch_roles_for_zaak_and_vestigingsnummer) and answers 404; not yet reported upstream",
+            ),
+        ),
+    ],
+)
+def test_zaak_shows_its_current_status(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    parts: ZaaktypeParts,
+    need_bootstrap: Callable[..., None],
+    who: str,
+) -> None:
+    """The zaak's status page shows the status Open Zaak (and so ZAC) has now, not an earlier one."""
+    if who == "inwoner":
+        need_bootstrap(INWONER.name, *WIRING)
+        zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
+        portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
+    else:
+        need_bootstrap(BEDRIJF.name, *WIRING)
+        vestiging = BEDRIJF.attributes["vestigingsnummer"][0]
+        zaak = zaak_of(openzaak, registry, parts, kvkNummer=BEDRIJF.attributes["kvk"][0], vestigingsNummer=vestiging)
+        portal_login(page, podiumd_env, "eherkenning", BEDRIJF, "/mijn-zaken/")
+    current = parts.statustypen[1]
+    make_status(openzaak, zaak, str(current["url"]))
+    page.goto(f"{podiumd_env.profile.urls['openinwoner']}/mijn-zaken/")
+    page.locator(f'a[href*="{zaak["uuid"]}"]').first.click()
+    expect(page.locator("main")).to_contain_text(str(current["omschrijving"]))
+
+
 def test_zaak_document_can_be_downloaded(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
