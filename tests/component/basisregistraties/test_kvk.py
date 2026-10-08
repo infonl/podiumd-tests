@@ -1,6 +1,6 @@
 """KvK through the api-proxy, against KvK's test API and its test set (Test BV Donald).
 
-Ported from TA regression 08, 47, 57, 125 and the KvK parts of 157 and 80. TA called KvK's test
+Ported from TA regression 08, 47, 57, 125 and the KvK parts of 80, 150 and 157. TA called KvK's test
 API directly; here the requests go through the api-proxy, which routes there on every estate.
 """
 
@@ -68,6 +68,12 @@ def test_search_without_match_finds_nothing(
     response = kvk_zoeken(http, urls["api-proxy"], query)
     if response.status_code != HTTPStatus.NOT_FOUND:
         assert resultaten(response) == []
+
+
+@pytest.mark.parametrize("nummer", ["ABCDEFGH", "1234"], ids=["letters", "too-short"])
+def test_invalid_kvk_nummer_is_refused(http: requests.Session, urls: dict[str, str], nummer: str) -> None:
+    """A KvK number that is not 8 digits answers 400 (TA reg-150)."""
+    expect_status(kvk_zoeken(http, urls["api-proxy"], {"kvkNummer": nummer}), HTTPStatus.BAD_REQUEST)
 
 
 def test_postcode_without_huisnummer_is_refused(http: requests.Session, urls: dict[str, str]) -> None:

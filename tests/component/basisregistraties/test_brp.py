@@ -1,6 +1,6 @@
 """BRP personen through the api-proxy: lookups, searches and refused queries.
 
-Ported from TA regression 07, 40, 11 and the BRP parts of 80 and 121. The BSNs are from the
+Ported from TA regression 07, 40, 11 and the BRP parts of 80, 121 and 150. The BSNs are from the
 BRP test set that the personen mock serves.
 """
 
@@ -89,6 +89,15 @@ def test_invalid_query_is_refused(http: requests.Session, urls: dict[str, str], 
     """An invalid query answers 400 or 422, never 5xx (TA reg-40c, reg-80, reg-121)."""
     response = brp_personen(http, urls["api-proxy"], query)
     expect_status(response, HTTPStatus.BAD_REQUEST, HTTPStatus.UNPROCESSABLE_ENTITY)
+
+
+def test_bsn_failing_the_eleven_test_finds_no_one(http: requests.Session, urls: dict[str, str]) -> None:
+    """A BSN that fails the eleven-test is refused, or finds no one; never 5xx (TA reg-150)."""
+    query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": ["123456789"]}
+    response = brp_personen(http, urls["api-proxy"], {**query, "fields": ["burgerservicenummer"]})
+    expect_status(response, HTTPStatus.OK, HTTPStatus.BAD_REQUEST, HTTPStatus.UNPROCESSABLE_ENTITY)
+    if response.status_code == HTTPStatus.OK:
+        assert response.json()["personen"] == []
 
 
 def test_v1_lookup_is_not_offered(http: requests.Session, urls: dict[str, str]) -> None:
