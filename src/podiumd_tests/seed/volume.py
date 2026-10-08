@@ -8,6 +8,7 @@ through Django snippets, which is what makes tens of thousands of objects workab
 
 from __future__ import annotations
 
+import secrets
 import threading
 
 from concurrent.futures import ThreadPoolExecutor
@@ -19,6 +20,7 @@ from typing import cast
 
 import yaml
 
+from podiumd_tests.auth.keycloak_admin import for_environment
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_DOMEIN
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
@@ -43,12 +45,14 @@ if TYPE_CHECKING:
 
 VOLUME_TAG = "ptest-volume"
 VOLUME_ACTOR = f"{VOLUME_TAG}-actor"
+VOLUME_GROUP = "medewerkers"
+OBJECTEN_BATCH = 200
 # Deleting tens of thousands of objects through the ORM takes minutes.
 DELETE_TIMEOUT = 1800
 # TA's counts per scale; a profile setting seed_volume_<kind> replaces the perf count.
 SCALES = {
-    "smoke": {"zaken": 3, "partijen": 5, "internetaken": 5},
-    "perf": {"zaken": 50_000, "partijen": 2_000, "internetaken": 100},
+    "smoke": {"users": 5, "zaken": 3, "partijen": 5, "objecten": 10, "internetaken": 5},
+    "perf": {"users": 100, "zaken": 50_000, "partijen": 2_000, "objecten": 1_000, "internetaken": 100},
 }
 VOLUME_ZAAKTYPE = {
     "domein": TEST_CATALOGUS_DOMEIN,
@@ -105,8 +109,19 @@ class Kind:
     name: str
     component: str
     count: Callable[[Environment], int]
-    creator: Callable[[Environment], Callable[[int], None]]
+    create: Callable[[Environment, range, int], None]  # the indexes to create, and the concurrency
     delete_all: Callable[[Environment], object]
+
+
+def _one_by_one(creator: Callable[[Environment], Callable[[int], None]]) -> Callable[[Environment, range, int], None]:
+    """Create through an API, one object per call, `parallel` calls at a time."""
+
+    def create(env: Environment, missing: range, parallel: int) -> None:
+        one = creator(env)
+        with ThreadPoolExecutor(max_workers=parallel) as pool:
+            list(pool.map(one, missing))
+
+    return create
 
 
 def _per_thread(make: Callable[[], ApiClient]) -> Callable[[], ApiClient]:
@@ -200,22 +215,84 @@ def _internetaak_creator(env: Environment) -> Callable[[int], None]:
     return create
 
 
+def _count_users(env: Environment) -> int:
+    return for_environment(env).count_users(VOLUME_TAG)
+
+
+def _user_creator(env: Environment) -> Callable[[int], None]:
+    """Keycloak users with scifi names in TA's group medewerkers (when the realm has it); nobody logs in as them."""
+    group = for_environment(env).group_id(VOLUME_GROUP)
+
+    def create(index: int) -> None:
+        persoon = corpus().persoon(index)
+        username = f"{VOLUME_TAG}-{persoon['voornaam']}.{persoon['achternaam']}.{index}".lower().replace(" ", "")
+        # A fresh admin token per user: the master realm's tokens expire within minutes.
+        admin = for_environment(env)
+        user = admin.create_user(username, secrets.token_hex(20), {}, (persoon["voornaam"], persoon["achternaam"]))
+        if group:
+            admin.join_group(user, group)
+
+    return create
+
+
+def _delete_users(env: Environment) -> None:
+    admin = for_environment(env)
+    for user in admin.users(VOLUME_TAG):
+        admin.delete_user(str(user["id"]))
+
+
+def _objecttype(env: Environment, action: str) -> str | None:
+    params: dict[str, object] = {"action": action, "name": VOLUME_TAG}
+    found = run_snippet(env.kube, env.deployment_for("objecttypen"), "objecttypen_volume", params)
+    uuid = cast("dict[str, object]", found)["uuid"]
+    return str(uuid) if uuid else None
+
+
+def _objecten_volume(env: Environment, action: str, **params: object) -> int:
+    params = {"action": action, "name": VOLUME_TAG, "tag": VOLUME_TAG, **params}
+    found = run_snippet(env.kube, env.deployment_for("objecten"), "objecten_volume", params, DELETE_TIMEOUT)
+    return int(str(cast("dict[str, object]", found)["count"]))
+
+
+def _count_objecten(env: Environment) -> int:
+    return _objecten_volume(env, "count", uuid=_objecttype(env, "status"))
+
+
+def _create_objecten(env: Environment, missing: range, _parallel: int) -> None:
+    """Objects of the volume objecttype, OBJECTEN_BATCH per snippet call.
+
+    Through Django: the Objecten API would need the suite's token to have rights on this objecttype.
+    """
+    uuid = _objecttype(env, "apply")
+    body = "Tekst van podiumd-tests. " * 20
+    for start in range(missing.start, missing.stop, OBJECTEN_BATCH):
+        stop = min(start + OBJECTEN_BATCH, missing.stop)
+        _objecten_volume(env, "create", uuid=uuid, start=start, stop=stop, body=body)
+
+
+def _delete_objecten(env: Environment) -> None:
+    _objecten_volume(env, "delete", uuid=_objecttype(env, "status"))
+    _objecttype(env, "remove")
+
+
 KINDS: tuple[Kind, ...] = (
-    Kind("zaken", "openzaak", _count_zaken, _zaak_creator, lambda env: _zaaktype_snippet(env, "remove")),
+    Kind("users", "keycloak", _count_users, _one_by_one(_user_creator), _delete_users),
+    Kind("zaken", "openzaak", _count_zaken, _one_by_one(_zaak_creator), lambda env: _zaaktype_snippet(env, "remove")),
     Kind(
         "partijen",
         "openklant",
         lambda env: _openklant_volume(env, "count", "partijen"),
-        _partij_creator,
+        _one_by_one(_partij_creator),
         lambda env: _openklant_volume(env, "delete", "partijen"),
     ),
     Kind(
         "internetaken",
         "openklant",
         lambda env: _openklant_volume(env, "count", "internetaken"),
-        _internetaak_creator,
+        _one_by_one(_internetaak_creator),
         lambda env: _openklant_volume(env, "delete", "internetaken"),
     ),
+    Kind("objecten", "objecten", _count_objecten, _create_objecten, _delete_objecten),
 )
 
 
@@ -240,9 +317,7 @@ def seed(env: Environment, scale: str, *, parallel: int) -> list[Seeded]:
         before = kind.count(env)
         missing = range(before, target(env, scale, kind.name))
         if missing:
-            create = kind.creator(env)
-            with ThreadPoolExecutor(max_workers=parallel) as pool:
-                list(pool.map(create, missing))
+            kind.create(env, missing, parallel)
         seeded.append(Seeded(kind.name, before, kind.count(env)))
     return seeded
 

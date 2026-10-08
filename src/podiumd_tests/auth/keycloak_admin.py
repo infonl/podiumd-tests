@@ -66,15 +66,30 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
         user = self.user(username)
         return str(user["id"]) if user else None
 
-    def create_user(self, username: str, password: str, attributes: dict[str, list[str]]) -> str:
-        """Create an enabled user without required actions; its id."""
+    def users(self, search: str) -> list[JsonObject]:
+        """The users whose username, e-mail or name contains the text."""
+        count = self.count_users(search)
+        return cast(
+            "list[JsonObject]",
+            self._get("/users", {"search": search, "max": str(count), "briefRepresentation": "true"}),
+        )
+
+    def count_users(self, search: str) -> int:
+        """How many users' username, e-mail or name contains the text."""
+        return cast("int", self._get("/users/count", {"search": search}))
+
+    def create_user(
+        self, username: str, password: str, attributes: dict[str, list[str]], name: tuple[str, str] | None = None
+    ) -> str:
+        """Create an enabled user without required actions, by default named PodiumD <username>; its id."""
+        first, last = name or ("PodiumD", username)
         body = {
             "username": username,
             "enabled": True,
             "email": user_email(username),
             "emailVerified": True,
-            "firstName": "PodiumD",
-            "lastName": username,
+            "firstName": first,
+            "lastName": last,
             "attributes": attributes,
             "requiredActions": [],
             "credentials": [{"type": "password", "value": password, "temporary": False}],
