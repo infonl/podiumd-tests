@@ -1,8 +1,8 @@
 """Chain: a zaak in Open Zaak shows in the inwoner's or company's Mijn zaken in Open Inwoner.
 
-Ported from TA interaction 21, 31, 111, 141 and 162, regression 95 and 143. Open Inwoner reaches
+Ported from TA interaction 21, 31, 111, 141, 162 and 164, regression 95 and 143. Open Inwoner reaches
 Open Zaak through the API group of wiring W4 (no zaken cache), the pages are W5, the logins W1;
-upload needs the zaaktype configuration (bootstrap openinwoner-zaaktype-config).
+upload and questions need the zaaktype configuration (bootstrap openinwoner-zaaktype-config).
 """
 
 from __future__ import annotations
@@ -17,7 +17,10 @@ from playwright.sync_api import expect
 
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.browser import browser_session
+from podiumd_tests.json_data import section
 from podiumd_tests.openinwoner import portal_login
+from podiumd_tests.seed.openklant import clean_up_new_partijen
+from podiumd_tests.seed.openklant import delete_klantcontact_tree
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import clean_up_new_documents
 from podiumd_tests.seed.openzaak import link_document
@@ -142,3 +145,39 @@ def test_uploaded_document_reaches_the_zaak(  # pylint: disable=too-many-argumen
         return [str(openzaak.get(str(link["informatieobject"])).get("bestandsnaam")) for link in links]
 
     assert bestand in wait_until(uploaded, timeout=30, description=f"document {bestand} on the zaak")
+
+
+@pytest.mark.core
+def test_question_about_a_zaak_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    parts: ZaaktypeParts,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """A question asked on the zaak's status page becomes a klantcontact about the zaak (TA int-164)."""
+    need_bootstrap(INWONER.name, *WIRING, "openinwoner-zaaktype-config", "openinwoner-openklant")
+    zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
+    clean_up_new_partijen(openklant, registry, INWONER.attributes["bsn"][0])
+    about = {"onderwerpobjectidentificatorObjectId": str(zaak["uuid"])}
+
+    def klantcontacten() -> list[str]:
+        return [str(section(o, "klantcontact")["url"]) for o in openklant.list("onderwerpobjecten", about)]
+
+    registry.add(
+        f"questions about zaak {zaak['uuid']}",
+        lambda: [delete_klantcontact_tree(openklant, k) for k in klantcontacten()],
+    )
+    vraag = registry.tagged("zaakvraag")
+    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
+    page.locator(f'a[href*="{zaak["uuid"]}"]').first.click()
+    page.locator('#contact-form textarea[name="question"]').fill(vraag)
+    page.locator("#submit_contact").click()
+    found = wait_until(klantcontacten, timeout=30, description=f"klantcontact about zaak {zaak['uuid']}")
+    # Open Inwoner appends "Case number: <identificatie>" to the question.
+    inhoud = [str(openklant.get(k).get("inhoud")) for k in found]
+    assert len(inhoud) == 1
+    assert inhoud[0].startswith(vraag)
+    assert str(zaak["identificatie"]) in inhoud[0]

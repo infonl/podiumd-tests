@@ -674,7 +674,7 @@ STEPS: tuple[Step, ...] = (
         ("openinwoner", "openklant"),
         "oi_openklant",
         "ptest_bootstrap_openinwoner_openklant_record",
-        {"subjects": ["Algemene vraag", "Vraag over zaak"]},
+        {"subjects": ["Algemene vraag", "Vraag over zaak"], "group": f"{PREFIX}-openzaak"},
         record=True,
         wiring=True,
         context_params=openinwoner_openklant_params,

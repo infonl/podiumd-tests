@@ -2,25 +2,31 @@
 
 TA seed-oi-openklant2.sh and seed-oi-contactflow.sh. Actions: status, apply, remove. Params:
 action, api_root, token (apply only), config (OpenKlant2Config fields: mijn_vragen_kanaal,
-mijn_vragen_actor, ...), subjects (ContactFormSubject names), record ({"service": created pk,
-"config": old field values or null when created, "subjects": [created pks], "klanten": old
-KlantenSysteemConfig values}), which remove restores exactly.
+mijn_vragen_actor, ...), subjects (ContactFormSubject names), group (the suite's
+ZGWApiGroupConfig, whose klant_backend takes a question about a zaak), record ({"service":
+created pk, "config": old field values or null when created, "subjects": [created pks],
+"klanten": old KlantenSysteemConfig values, "group": [pk, old klant_backend]}), which remove
+restores exactly.
 """
 
 SLUG = "ptest-bootstrap-openklant2"
 KLANTEN = {"primary_backend": "openklant2", "register_contact_via_api": True}
+BACKEND = "openklant2"
 
 
 def run(params):
     from open_inwoner.openklant.models import KlantenSysteemConfig
     from open_inwoner.openklant.models import OpenKlant2Config
+    from open_inwoner.openzaak.models import ZGWApiGroupConfig
 
     config = OpenKlant2Config.objects.first()
     klanten = KlantenSysteemConfig.get_solo()
+    group = ZGWApiGroupConfig.objects.filter(name=params.get("group")).first()
     if params["action"] == "status":
         service = config.service if config is not None else None
         linked = service is not None and service.slug == SLUG and service.secret == params.get("token")
-        return {"present": bool(linked and all(getattr(klanten, k) == v for k, v in KLANTEN.items()))}
+        backend = group is None or group.klant_backend == BACKEND
+        return {"present": bool(linked and backend and all(getattr(klanten, k) == v for k, v in KLANTEN.items()))}
     record = params.get("record") or {}
     if params["action"] == "remove":
         _remove(record, config, klanten)
@@ -39,6 +45,10 @@ def run(params):
     for field, value in KLANTEN.items():
         setattr(klanten, field, value)
     klanten.save()
+    if group is not None:
+        record.setdefault("group", [group.pk, group.klant_backend])
+        group.klant_backend = BACKEND
+        group.save()
     return {"present": True, "record": record}
 
 
@@ -96,4 +106,9 @@ def _remove(record, config, klanten):
             for field, value in record["config"].items():
                 setattr(config, field, value)
             config.save()
+    from open_inwoner.openzaak.models import ZGWApiGroupConfig
+
+    if record.get("group"):
+        pk, backend = record["group"]
+        ZGWApiGroupConfig.objects.filter(pk=pk).update(klant_backend=backend)
     Service.objects.filter(pk=record.get("service")).delete()
