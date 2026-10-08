@@ -23,8 +23,6 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("kiss")]
 
-INDEXES = ("kennisbank", "vraagantwoord", "website")
-
 
 def test_challenge_redirects_to_keycloak(http: requests.Session, urls: dict[str, str]) -> None:
     """The login challenge redirects to the Keycloak auth endpoint (TA reg-100)."""
@@ -42,12 +40,15 @@ def test_pages_without_login(http: requests.Session, urls: dict[str, str], path:
     assert not is_server_error(response), describe(response)
 
 
-@pytest.mark.parametrize("index", INDEXES)
-def test_search_indexes_are_not_open(http: requests.Session, urls: dict[str, str], index: str) -> None:
-    """An anonymous Elasticsearch query through KISS is refused or answers, never a server error (TA reg-147)."""
-    body = {"query": {"match_all": {}}, "size": 1}
-    response = http.post(f"{urls['kiss']}/api/elasticsearch/{index}/_search", json=body)
-    assert response.status_code in {HTTPStatus.OK, HTTPStatus.NOT_FOUND, *REFUSED}, describe(response)
+@pytest.mark.parametrize(("method", "path"), [("GET", "/api/search/sources"), ("POST", "/api/search")])
+def test_search_needs_a_login(http: requests.Session, urls: dict[str, str], method: str, path: str) -> None:
+    """KISS's search answers no anonymous call: it is refused or sent to the Keycloak login (TA reg-147)."""
+    body = {"query": "a", "page": 1, "filters": []} if method == "POST" else None
+    response = http.request(method, urls["kiss"] + path, json=body, allow_redirects=False)
+    if response.is_redirect:
+        assert url_host(response.headers["Location"]) == url_host(urls["keycloak"])
+    else:
+        assert response.status_code in REFUSED, describe(response)
 
 
 def test_healthcheck(http: requests.Session, urls: dict[str, str]) -> None:
