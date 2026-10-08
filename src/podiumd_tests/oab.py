@@ -6,6 +6,8 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
+from playwright.sync_api import expect
+
 from podiumd_tests.bootstrap.names import PREFIX
 from podiumd_tests.bootstrap.steps import django_password_key
 from podiumd_tests.django_snippets import run_snippet
@@ -32,6 +34,8 @@ def ui_login(page: Page, env: Environment, role: str) -> None:
     """Log the role's test user in through OAB's own login page; the page ends on the vernietigingslijsten."""
     credentials = _credentials(env, role)
     page.goto(env.profile.urls["openarchiefbeheer"] + "/login")
+    # The SPA renders the form after its own requests; filling it earlier loses the input.
+    expect(page.get_by_role("button", name="Inloggen")).to_be_enabled()
     page.get_by_label("Gebruikersnaam").fill(credentials["username"])
     page.get_by_label("Wachtwoord").fill(credentials["password"])
     page.get_by_role("button", name="Inloggen").click()

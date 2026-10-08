@@ -40,6 +40,7 @@ from podiumd_tests.seed.openzaak import delete_documents_of
 from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.openzaak import today
+from podiumd_tests.wait import WaitTimeoutError
 from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
@@ -71,6 +72,21 @@ PERMISSIONS = {
 }
 
 
+# Only the timeout of a list stuck after a response is excused; any other failure still fails.
+RESPONSE_RACE = pytest.mark.xfail(
+    strict=False,
+    raises=WaitTimeoutError,
+    reason="Open Archiefbeheer 2.0.0 queues process_review_response inside the request's transaction"
+    " (destruction/api/serializers.py: .delay without on_commit); a quick worker finds no ReviewResponse"
+    " (DoesNotExist) and the list stays changes_requested; not yet reported",
+)
+REVIEWER_RENAMES = pytest.mark.xfail(
+    strict=True,
+    reason="Open Archiefbeheer: the reviewer, while the list is assigned to it, can rename (PATCH) the list;"
+    " the draaiboek leaves changes to the record manager; not yet reported",
+)
+
+
 @pytest.fixture(name="oab")
 def fixture_oab(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> Callable[[str], requests.Session]:
     """A logged-in session per role, made once per test."""
@@ -91,16 +107,28 @@ def fixture_api(urls: dict[str, str]) -> str:
     return urls["openarchiefbeheer"] + API
 
 
-@pytest.fixture(name="zaak")
-def fixture_zaak(
+@pytest.fixture(name="closed_zaak")
+def fixture_closed_zaak(
     podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
-) -> JsonObject:
-    """A zaak of the test that ended two days ago with archiefnominatie vernietigen, in OAB's zaken cache.
+) -> Callable[[], JsonObject]:
+    """Makes a zaak of the test that ended two days ago with archiefnominatie vernietigen, in OAB's zaken cache.
 
     Its archiefactiedatum is yesterday, not ten years ahead: queue_destruction accepts it.
     """
     if not parts.resultaattypen:
         pytest.skip("test zaaktype has no resultaattype (Selectielijst API was unreachable at bootstrap)")
+    return lambda: _closed_zaak(podiumd_env, openzaak, registry, parts)
+
+
+@pytest.fixture(name="zaak")
+def fixture_zaak(closed_zaak: Callable[[], JsonObject]) -> JsonObject:
+    """One closed zaak of the test, in OAB's zaken cache."""
+    return closed_zaak()
+
+
+def _closed_zaak(
+    podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
+) -> JsonObject:
     gezet = datetime.now(UTC) - timedelta(days=2)
     zaak = close_zaak(openzaak, make_zaak(openzaak, registry, parts.zaaktype), parts, gezet)
     yesterday = (datetime.now(UTC) - timedelta(days=1)).date().isoformat()
@@ -125,8 +153,9 @@ def rows(response: requests.Response) -> list[JsonObject]:
 
 
 def zaken_on(oab: Callable[[str], requests.Session], api: str, lijst: str) -> list[object]:
-    """The URLs of the zaken on the list."""
-    items = oab("recordmanager").get(api + "/destruction-list-items/", params={"item-destruction_list": lijst})
+    """The URLs of the zaken on the list; a zaak taken off keeps its item, with status removed."""
+    params = {"item-destruction_list": lijst, "item-status": "suggested"}
+    items = oab("recordmanager").get(api + "/destruction-list-items/", params=params)
     return [section(i, "zaak").get("url") for i in rows(items)]
 
 
@@ -137,26 +166,66 @@ def status(oab: Callable[[str], requests.Session], api: str, lijst: str) -> str:
     )
 
 
-def new_list(oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry) -> str:
-    """A vernietigingslijst with only the test's zaak and the test reviewer, made ready to review; its uuid."""
+def new_list(
+    oab: Callable[[str], requests.Session],
+    api: str,
+    zaak: JsonObject | list[JsonObject],
+    registry: ResourceRegistry,
+    *,
+    ready: bool = True,
+) -> str:
+    """A vernietigingslijst with only the test's zaak (or zaken) and the test reviewer, by default made ready to review."""
+    zaken = zaak if isinstance(zaak, list) else [zaak]
     body = {
         # OAB requires unique names, and the run tag is shared by all workers.
         "name": registry.tagged(f"vernietigingslijst-{secrets.token_hex(3)}"),
         "comment": "podiumd-tests",
         "containsSensitiveInfo": False,
-        "add": [{"zaak": zaak["url"]}],
+        "add": [{"zaak": z["url"]} for z in zaken],
         "reviewer": {"user": user_pk(oab, api, "reviewer")},
     }
     created = expect_status(
         oab("recordmanager").post(api + "/destruction-lists/", json=body), HTTPStatus.CREATED
     ).json()
     lijst = str(created["uuid"])
-    expect_status(
-        oab("recordmanager").post(f"{api}/destruction-lists/{lijst}/mark_ready_review/", json={}),
-        HTTPStatus.CREATED,
-        HTTPStatus.OK,
-    )
+    if ready:
+        expect_status(
+            oab("recordmanager").post(f"{api}/destruction-lists/{lijst}/mark_ready_review/", json={}),
+            HTTPStatus.CREATED,
+            HTTPStatus.OK,
+        )
     return lijst
+
+
+def reject(oab: Callable[[str], requests.Session], api: str, role: str, lijst: str, zaken: list[JsonObject]) -> int:
+    """The role's test user rejects the list, proposing to keep these zaken; the review's pk."""
+    proposals = [{"zaakUrl": z["url"], "feedback": "bewaren"} for z in zaken]
+    return int(str(review(oab, api, role, lijst, decision="rejected", zakenReviews=proposals)["pk"]))
+
+
+# The record manager's answers to a proposal: decline it, or take it over (OAB then changes the zaak).
+KEEP: dict[str, object] = {"actionItem": "keep"}
+TAKE_OVER: dict[str, object] = {
+    "actionItem": "remove",
+    "actionZaakType": "bewaartermijn",
+    "actionZaak": {"archiefactiedatum": (datetime.now(UTC) + timedelta(days=3650)).date().isoformat()},
+}
+
+
+def respond(
+    oab: Callable[[str], requests.Session], api: str, review_pk: int, actions: dict[str, dict[str, object]]
+) -> None:
+    """The record manager answers the review's items: zaak URL -> KEEP or TAKE_OVER."""
+    items = rows(oab("recordmanager").get(api + "/review-items/", params={"item-review-review": str(review_pk)}))
+    zaak_of = {item["pk"]: section(section(item, "destructionListItem"), "zaak").get("url") for item in items}
+    responses = [{"reviewItem": pk, **actions[str(url)]} for pk, url in zaak_of.items()]
+    body = {"review": review_pk, "comment": "podiumd-tests", "itemsResponses": responses}
+    expect_status(oab("recordmanager").post(api + "/review-responses/", json=body), HTTPStatus.CREATED)
+
+
+def wait_for_status(oab: Callable[[str], requests.Session], api: str, lijst: str, wanted: str) -> None:
+    """Wait until the list has the status; OAB processes review responses in a background task."""
+    wait_until(lambda: status(oab, api, lijst) == wanted, timeout=60, description=f"list {lijst} {wanted}")
 
 
 def make_final(oab: Callable[[str], requests.Session], api: str, lijst: str) -> requests.Response:
@@ -218,25 +287,120 @@ def test_rejected_list_goes_back_to_the_record_manager(
     )
 
 
+@RESPONSE_RACE
+@pytest.mark.tc("ABC-015")
 def test_record_manager_response_sends_the_list_back_to_review(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
 ) -> None:
-    """The record manager answers a rejection by keeping the zaak; the list goes back to the reviewer (TA 168, 169)."""
+    """The record manager declines the reviewer's proposal: the list goes back to the reviewer unchanged (TA 168, 169)."""
     lijst = new_list(oab, api, zaak, registry)
-    rejection = review(
-        oab, api, "reviewer", lijst, decision="rejected", zakenReviews=[{"zaakUrl": zaak["url"], "feedback": "bewaren"}]
-    )
-    items = rows(oab("recordmanager").get(api + "/review-items/", params={"review": str(rejection["pk"])}))
-    body = {
-        "review": rejection["pk"],
-        "comment": "podiumd-tests",
-        "itemsResponses": [{"reviewItem": i["pk"], "actionItem": "keep"} for i in items],
-    }
-    expect_status(oab("recordmanager").post(api + "/review-responses/", json=body), HTTPStatus.CREATED)
-    # OAB processes the response in a background task.
-    wait_until(
-        lambda: status(oab, api, lijst) == "ready_to_review", timeout=60, description=f"list {lijst} back to review"
-    )
+    respond(oab, api, reject(oab, api, "reviewer", lijst, [zaak]), {str(zaak["url"]): KEEP})
+    wait_for_status(oab, api, lijst, "ready_to_review")
+    assert zaken_on(oab, api, lijst) == [zaak["url"]]
+
+
+@RESPONSE_RACE
+@pytest.mark.tc("ABC-013")
+def test_record_manager_takes_the_proposals_over(
+    oab: Callable[[str], requests.Session], api: str, closed_zaak: Callable[[], JsonObject], registry: ResourceRegistry
+) -> None:
+    """The record manager agrees to the reviewer's proposal: that zaak leaves the list, which goes back to review."""
+    kept, stays = closed_zaak(), closed_zaak()
+    lijst = new_list(oab, api, [kept, stays], registry)
+    respond(oab, api, reject(oab, api, "reviewer", lijst, [kept]), {str(kept["url"]): TAKE_OVER})
+    wait_for_status(oab, api, lijst, "ready_to_review")
+    assert zaken_on(oab, api, lijst) == [stays["url"]]
+
+
+@pytest.mark.tc("ABC-012")
+@pytest.mark.xfail(
+    strict=True,
+    reason="Open Archiefbeheer: a review response cannot empty the archiefactiedatum ('Dit veld mag niet leeg"
+    " zijn'), so a proposal to keep a zaak forever cannot be taken over as the draaiboek asks; not yet reported",
+)
+def test_keeping_forever_empties_the_archiefactiedatum(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    oab: Callable[[str], requests.Session],
+    api: str,
+    closed_zaak: Callable[[], JsonObject],
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+) -> None:
+    """Agreeing to keep a zaak forever leaves its archiefactiedatum empty in Open Zaak."""
+    forever, stays = closed_zaak(), closed_zaak()
+    lijst = new_list(oab, api, [forever, stays], registry)
+    forever_action = {**TAKE_OVER, "actionZaak": {"archiefactiedatum": None}}
+    respond(oab, api, reject(oab, api, "reviewer", lijst, [forever]), {str(forever["url"]): forever_action})
+    wait_for_status(oab, api, lijst, "ready_to_review")
+    assert openzaak.get(str(forever["url"])).get("archiefactiedatum") is None
+
+
+@RESPONSE_RACE
+@pytest.mark.tc("ABC-019", "ABC-022")
+def test_archivist_rejection_goes_back_and_returns_to_the_archivist(
+    oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
+) -> None:
+    """The archivist's rejection goes back to the record manager; declined, the list returns to the archivist unchanged."""
+    lijst = new_list(oab, api, zaak, registry)
+    review(oab, api, "reviewer", lijst, decision="accepted")
+    expect_status(make_final(oab, api, lijst), HTTPStatus.CREATED, HTTPStatus.OK)
+    rejection = reject(oab, api, "archivist", lijst, [zaak])
+    assert status(oab, api, lijst) == "changes_requested"
+    respond(oab, api, rejection, {str(zaak["url"]): KEEP})
+    wait_for_status(oab, api, lijst, "ready_for_archivist")
+    assert zaken_on(oab, api, lijst) == [zaak["url"]]
+
+
+@RESPONSE_RACE
+@pytest.mark.tc("ABC-020", "ABC-021")
+def test_record_manager_takes_some_archivist_proposals_over(
+    oab: Callable[[str], requests.Session], api: str, closed_zaak: Callable[[], JsonObject], registry: ResourceRegistry
+) -> None:
+    """Agreeing to one of the archivist's two proposals: that zaak leaves, the list returns to the archivist."""
+    taken, declined, stays = closed_zaak(), closed_zaak(), closed_zaak()
+    lijst = new_list(oab, api, [taken, declined, stays], registry)
+    review(oab, api, "reviewer", lijst, decision="accepted")
+    expect_status(make_final(oab, api, lijst), HTTPStatus.CREATED, HTTPStatus.OK)
+    rejection = reject(oab, api, "archivist", lijst, [taken, declined])
+    respond(oab, api, rejection, {str(taken["url"]): TAKE_OVER, str(declined["url"]): KEEP})
+    wait_for_status(oab, api, lijst, "ready_for_archivist")
+    assert sorted(map(str, zaken_on(oab, api, lijst))) == sorted([str(declined["url"]), str(stays["url"])])
+
+
+@pytest.mark.tc("ABC-004")
+def test_record_manager_adds_zaken_before_review(
+    oab: Callable[[str], requests.Session], api: str, closed_zaak: Callable[[], JsonObject], registry: ResourceRegistry
+) -> None:
+    """A list not yet offered for review takes more zaken."""
+    first, second = closed_zaak(), closed_zaak()
+    lijst = new_list(oab, api, first, registry, ready=False)
+    added = oab("recordmanager").patch(f"{api}/destruction-lists/{lijst}/", json={"add": [{"zaak": second["url"]}]})
+    expect_status(added, HTTPStatus.OK)
+    assert sorted(map(str, zaken_on(oab, api, lijst))) == sorted([str(first["url"]), str(second["url"])])
+
+
+@pytest.mark.tc("ABC-006", "ABC-017", "ABC-026")
+@pytest.mark.parametrize("role", [pytest.param("reviewer", marks=REVIEWER_RENAMES), "archivist", "coreviewer"])
+def test_only_the_record_manager_changes_the_list(
+    oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry, role: str
+) -> None:
+    """Reviewers, co-reviewers and the archivist cannot rename the list; that is the record manager's work.
+
+    OAB answers 404 to a user who may not see the list, 403 to one who may see it.
+    """
+    lijst = new_list(oab, api, zaak, registry)
+    changed = oab(role).patch(f"{api}/destruction-lists/{lijst}/", json={"name": registry.tagged("hernoemd")})
+    expect_status(changed, *REFUSED, HTTPStatus.NOT_FOUND)
+
+
+@pytest.mark.tc("ABC-031")
+def test_reviewer_forwards_without_the_coreviewer(
+    oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
+) -> None:
+    """With a co-reviewer assigned who has not reacted, the reviewer can still accept the list."""
+    lijst = new_list(oab, api, zaak, registry)
+    assign_coreviewer(oab, api, lijst)
+    review(oab, api, "reviewer", lijst, decision="accepted")
+    assert status(oab, api, lijst) == "internally_reviewed"
 
 
 @pytest.mark.ui
@@ -297,19 +461,39 @@ def test_record_manager_sees_the_proposals_in_the_ui(  # pylint: disable=too-man
     expect(page.get_by_text(feedback).first).to_be_visible()
 
 
-@pytest.mark.tc("ABC-025", "ABC-030")
+@pytest.mark.tc("ABC-025", "ABC-027", "ABC-028", "ABC-030")
+@pytest.mark.ui
+@pytest.mark.tc("ABC-005")
+def test_reviewer_finds_the_assigned_list_in_the_ui(
+    page: Page,
+    podiumd_env: Environment,
+    oab: Callable[[str], requests.Session],
+    api: str,
+    zaak: JsonObject,
+    registry: ResourceRegistry,
+) -> None:
+    """The reviewer the list is assigned to sees it after logging in on OAB's own site."""
+    lijst = new_list(oab, api, zaak, registry)
+    naam = str(
+        expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/"), HTTPStatus.OK).json()["name"]
+    )
+    ui_login(page, podiumd_env, "reviewer")
+    expect(page.get_by_text(naam)).to_be_visible()
+
+
+def assign_coreviewer(oab: Callable[[str], requests.Session], api: str, lijst: str) -> None:
+    """The record manager adds the test co-reviewer to the list."""
+    add = {"comment": "podiumd-tests", "add": [{"user": user_pk(oab, api, "coreviewer")}]}
+    put = oab("recordmanager").put(f"{api}/destruction-lists/{lijst}/co-reviewers/", json=add)
+    expect_status(put, HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.NO_CONTENT)
+
+
 def test_coreviewer_feedback_reaches_the_reviewer(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
 ) -> None:
     """A co-reviewer added to the list gives feedback that the reviewer sees (TA reg-166 ABC-038..041)."""
     lijst = new_list(oab, api, zaak, registry)
-    add = {"comment": "podiumd-tests", "add": [{"user": user_pk(oab, api, "coreviewer")}]}
-    expect_status(
-        oab("recordmanager").put(f"{api}/destruction-lists/{lijst}/co-reviewers/", json=add),
-        HTTPStatus.OK,
-        HTTPStatus.CREATED,
-        HTTPStatus.NO_CONTENT,
-    )
+    assign_coreviewer(oab, api, lijst)
     feedback = registry.tagged("medebeoordeling")
     co_review = {"destructionList": lijst, "listFeedback": feedback}
     expect_status(oab("coreviewer").post(api + "/destruction-list-co-reviews/", json=co_review), HTTPStatus.CREATED)
