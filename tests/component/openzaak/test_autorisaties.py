@@ -55,9 +55,10 @@ def test_vertrouwelijk_document_is_hidden_from_an_openbaar_client(
     document = make_document(
         openzaak, registry, parts.informatieobjecttype, vertrouwelijkheidaanduiding="vertrouwelijk"
     )
-    titel = {"titel": str(document["titel"])}
-    assert openzaak_openbaar.list(f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", titel) == []
-    assert [d["url"] for d in openzaak.list(f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", titel)] == [document["url"]]
+    # Not titel: every document of a run has the same one, also those of parallel workers.
+    own = {"identificatie": str(document["identificatie"])}
+    assert openzaak_openbaar.list(f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", own) == []
+    assert [d["url"] for d in openzaak.list(f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", own)] == [document["url"]]
     openzaak_openbaar.request("GET", str(document["url"]), *REFUSED, 404)
 
 
