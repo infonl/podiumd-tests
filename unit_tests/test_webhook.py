@@ -1,5 +1,6 @@
 """Unit tests for the webhook receiver step and reading what it received."""
 
+import importlib.util
 import json
 
 from podiumd_tests import webhook
@@ -70,3 +71,32 @@ def test_callback_skips_a_line_cut_short(env_factory, fake_runner):
     good = {"path": "/run1/abc", "body": {}}
     fake_runner.answers[f"exec deploy/{NAME}"] = (0, json.dumps(good) + '\n{"path": "/run1/abc", "bo')
     assert Callback(env_factory(), "/run1/abc").received() == [good]
+
+
+def receiver_handler(path):
+    """A receiver Handler for a path, without a socket: enough for its status logic."""
+    spec = importlib.util.spec_from_file_location("receiver", webhook.INFRA / "receiver.py")
+    assert spec
+    assert spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    handler = module.Handler.__new__(module.Handler)
+    handler.path = path
+    return handler
+
+
+def test_fail_first_path_fails_the_first_notification_only():
+    handler = receiver_handler("/ptest-x/fail-first/abc")
+    check = {"authorization": "Bearer t", "body": {"kanaal": "test"}}
+    notification = {"authorization": "Bearer t", "body": {"kanaal": "zaken"}}
+    assert [handler._status(e) for e in (check, notification, notification)] == [204, 500, 204]  # pylint: disable=protected-access
+
+
+def test_receiver_refuses_without_authorization_and_answers_notify():
+    assert receiver_handler("/ptest-x/abc")._status({"authorization": None, "body": None}) == 403  # pylint: disable=protected-access
+    notify = receiver_handler("/ptest-x/notify/v2/notifications/email")
+    assert notify._status({"authorization": "ApiKey-v1 k", "body": {}}) == 201  # pylint: disable=protected-access
+
+
+def test_fail_first_callback_path(env_factory):
+    assert "/fail-first/" in Callback.new(env_factory(), "ptest-x", fail_first=True).path

@@ -3,7 +3,9 @@
 A POST with an Authorization header gets 204; one without gets 403. Open Notificaties checks
 both when an abonnement is created: it refuses a callback that accepts requests without auth.
 It also stands in for Notify (NotifyNL): a POST to .../v2/notifications/email or /sms gets
-the 201 and notification JSON a Notify client expects.
+the 201 and notification JSON a Notify client expects. On a path with /fail-first/ the first
+notification (not Open Notificaties' kanaal "test" check) gets 500, to test redelivery.
+Each recorded entry carries the status it got.
 
 Standard library only. Tests read RECEIVED with `kubectl exec ... cat`; GET /healthz answers 200.
 """
@@ -19,6 +21,7 @@ from pathlib import Path
 from threading import Lock
 
 WRITE_LOCK = Lock()
+FAILED_ONCE: set[str] = set()
 RECEIVED = Path(os.environ.get("RECEIVED_FILE", "/data/received.jsonl"))
 
 
@@ -41,20 +44,31 @@ class Handler(BaseHTTPRequestHandler):
         try:
             # One write per request under a lock: parallel requests never interleave lines.
             with WRITE_LOCK, RECEIVED.open("a", encoding="utf-8") as handle:
+                entry["status"] = self._status(entry)
                 handle.write(json.dumps(entry) + "\n")
         except OSError:
             # Not recorded (e.g. a full disk): say so instead of dropping the connection.
             self.send_response(507)
             self.end_headers()
             return
-        if not entry["authorization"]:
-            self.send_response(403)
-            self.end_headers()
-        elif "/v2/notifications/" in self.path:
+        if entry["status"] == 201:
             self._notify_created(parsed if isinstance(parsed, dict) else {})
         else:
-            self.send_response(204)
+            self.send_response(entry["status"])
             self.end_headers()
+
+    def _status(self, entry):
+        """The answer to a POST; called under WRITE_LOCK."""
+        if not entry["authorization"]:
+            return 403
+        if "/v2/notifications/" in self.path:
+            return 201
+        body = entry["body"]
+        check = isinstance(body, dict) and body.get("kanaal") == "test"
+        if "/fail-first/" in self.path and not check and self.path not in FAILED_ONCE:
+            FAILED_ONCE.add(self.path)
+            return 500
+        return 204
 
     def _notify_created(self, request):
         template = request.get("template_id")

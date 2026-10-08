@@ -112,32 +112,32 @@ Sources:
 | `regression/183-of-digid-zaak-rol.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_formulier_digid.py` (DigiD through Keycloak's mock, wiring W1). |
 | `regression/184-ita-doorsturen-mutatie.spec.ts` | component or integration | 3/4/5 | port | `tests/component/ita/test_ita_internetaken.py`; ITA wants `{"afdeling"|"groep": identificatie}`, TA's actorType body gets 400. |
 | `regression/185-of-betaalstatus-zaak.spec.ts` | component or integration | 3/4/5 | drop | Needs Open Formulieren's demo payment plugin, which no estate enables (ENABLE_DEMO_PLUGINS is unset in podiumd-infra, ExternalsPodiumD and the chart); Ogone and Worldline need a real payment provider. TA kept it fixme. |
-| `regression/19-notificaties-e2e.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_zaak_notificaties.py`, with the webhook receiver of `infra/`. |
+| `regression/19-notificaties-e2e.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`, with the webhook receiver of `infra/`. |
 | `regression/190-kiss-contentbronnen-gevuld.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/191-ita-poller-split.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/193-frankgateway-zac-openzaak-e2e.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/22-negative-auth.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py, with client ptest-bootstrap-zgw-noauth. |
 | `regression/23-va-escalatie.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_autorisaties.py. |
 | `regression/24-zaakeigenschappen.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_besluiten_eigenschappen.py, on bootstrap eigenschap kenteken. |
-| `regression/25-abonnement-filter.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/26-multi-subscriber.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/27-status-event-keten.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/25-abonnement-filter.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`. |
+| `regression/26-multi-subscriber.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`. |
+| `regression/27-status-event-keten.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`. |
 | `regression/28-gerelateerde-zaken.spec.ts` | component or integration | 3/4/5 | merge | With 59 into `tests/component/openzaak/` test_zaken.py test_relevante_andere_zaken. |
 | `regression/29-besluit-op-zaak.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_besluiten_eigenschappen.py, on the bootstrap besluittype. |
-| `regression/30-rol-event.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/33-zaak-update-event.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/34-zio-events.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/30-rol-event.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`. |
+| `regression/33-zaak-update-event.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`. |
+| `regression/34-zio-events.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`. |
 | `regression/36-zaakobject-koppeling.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_zaken.py. |
-| `regression/37-ok2-partij-events.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/37-ok2-partij-events.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`. |
 | `regression/38-concurrency-uniqueness.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_zaken.py: unique identificatie under parallel creates. |
 | `regression/39-zaak-lifecycle-close.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py, extended with closing by resultaat and eindstatus. |
 | `regression/40-brp-zoek-criteria.spec.ts` | component or integration | 3/4/5 | port | `tests/component/basisregistraties/test_brp.py`. |
 | `regression/41-multi-rollen-zaak.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py. |
-| `regression/42-notif-retry.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/42-notif-retry.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`. |
 | `regression/43-pagineren-filtering.spec.ts` | component or integration | 3/4/5 | merge | With 55 into `tests/component/openzaak/` test_zaken.py (ApiClient.list follows every page). |
 | `regression/44-validation-edge-cases.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_validatie.py, each invalid field named in invalidParams. |
-| `regression/45-internetaak-event.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/46-rol-delete-event.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/45-internetaak-event.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`. |
+| `regression/46-rol-delete-event.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`. |
 | `regression/47-kvk-edge-cases.spec.ts` | component or integration | 3/4/5 | port | `test_kvk.py`, with the KvK test set, as 08. |
 | `regression/48-audit-trail-acties.spec.ts` | component or integration | 3/4/5 | todo | As 14: audittrails need heeft_alle_autorisaties. |
 | `regression/49-document-download.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_documenten.py test_document_versions_and_definitief. |

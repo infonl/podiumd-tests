@@ -61,9 +61,9 @@ class Callback:
     path: str
 
     @classmethod
-    def new(cls, env: Environment, run_tag: str) -> Callback:
-        """A callback path of its own, under the run tag."""
-        return cls(env, f"/{run_tag}/{secrets.token_hex(6)}")
+    def new(cls, env: Environment, run_tag: str, *, fail_first: bool = False) -> Callback:
+        """A callback path of its own, under the run tag; fail_first: the first notification gets 500."""
+        return cls(env, f"/{run_tag}{'/fail-first' if fail_first else ''}/{secrets.token_hex(6)}")
 
     @property
     def url(self) -> str:
