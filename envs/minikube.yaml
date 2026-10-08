@@ -56,6 +56,8 @@ settings:
   django_admin_sso_only: openinwoner
   # A KvK number minikube's KvK WireMock knows (search with type=rechtspersoon, basisprofiel).
   kvk_nummer: "12345678"
+  # podiumd-minikube's opt-in clamav profile (clamd with the EICAR signature only).
+  clamav: "clamav:3310"
   productaanvraag_type: productaanvraag-test-zaaktype-1
   productaanvraag_zaaktype: zaaktype-test-1
   # Shared with the podiumd-minikube agent; bootstrap and writing runs take it.

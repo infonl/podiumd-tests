@@ -643,6 +643,17 @@ STEPS: tuple[Step, ...] = (
         wiring=True,
         context_params=lambda ctx: {"zaken_url": ctx.env.profile.urls["openzaak"] + "/zaken/api/v1/"},
     ),
+    # Open Inwoner scans uploads with the environment's ClamAV (profile setting clamav), for TA 123.
+    SnippetStep(
+        "openinwoner-virus-scan",
+        ("openinwoner",),
+        "oi_virus_scan",
+        "ptest_bootstrap_openinwoner_virus_scan_record",
+        {},
+        record=True,
+        wiring=True,
+        context_params=lambda ctx: {"clamav": ctx.env.profile.settings.get("clamav", "")},
+    ),
     # The test zaaktype in Open Inwoner, with contact form and document upload (TA zgw_import_data).
     SnippetStep(
         "openinwoner-zaaktype-config",

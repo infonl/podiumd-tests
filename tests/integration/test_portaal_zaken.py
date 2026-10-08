@@ -196,7 +196,9 @@ def test_infected_upload_is_refused(  # pylint: disable=too-many-arguments,too-m
 ) -> None:
     """With ClamAV on, an upload of the EICAR test file does not reach the zaak (TA reg-123)."""
     if not virus_scan_enabled(podiumd_env):
-        pytest.skip("Open Inwoner scans no uploads (SiteConfiguration.enable_virus_scan off)")
+        pytest.skip(
+            "Open Inwoner scans no uploads: set profile setting clamav and run bootstrap step openinwoner-virus-scan"
+        )
     need_bootstrap(INWONER.name, *WIRING, "openinwoner-zaaktype-config")
     zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
     clean_up_new_documents(openzaak, registry, zaak)
