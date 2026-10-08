@@ -104,7 +104,7 @@ Sources:
 | `regression/173-fb-zaaktype-versie-isolatie.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_catalogi.py test_zaaktype_versions. |
 | `regression/174-oab-config-persist-filter.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/175-continuiteit-alertmanager-fber.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/176-formulier-update-keten.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/176-formulier-update-keten.spec.ts` | component or integration | 3/4/5 | drop | r102 renames the form, which plays no part in registration (covered by the TA 76 chain); r97 checks that a later submission has a later timestamp. Both fixme in TA. A real form change would alter the shared test form under parallel tests. |
 | `regression/177-pen-admin-niet-publiek.spec.ts` | component or integration | 3/4/5 | port | `tests/component/platform/test_public_surface.py`. |
 | `regression/178-blacklist-upload.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/179-portaal-profiel-naar-openklant.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_portaal_openklant.py`. |
