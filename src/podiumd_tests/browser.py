@@ -40,6 +40,14 @@ def keycloak_login(page: Page, username: str, password: str) -> None:
     page.locator("#kc-login").click()
 
 
+def redirect_login(page: Page, env: Environment, app_url: str, username: str, password: str) -> requests.Session:
+    """Log in to an app whose pages redirect to Keycloak (ZAC); returns browser_session(page, env)."""
+    page.goto(app_url + "/")
+    keycloak_login(page, username, password)
+    page.wait_for_url(lambda url: url_host(url) == url_host(app_url))
+    return browser_session(page, env)
+
+
 def challenge_login(page: Page, env: Environment, app_url: str, username: str, password: str) -> requests.Session:
     """Log in to an ASP.NET app with a /api/challenge route (PABC, KISS, ITA) through Keycloak.
 

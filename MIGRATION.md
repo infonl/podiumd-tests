@@ -59,8 +59,8 @@ Sources:
 | `regression/110-portaal-anoniem-en-mobile.spec.ts` | component or integration | 3/4/5 | port | Contact part → `tests/component/openinwoner/test_portaal_anoniem.py`; mobile homepage: todo. |
 | `regression/112-ita-toewijzen-actor-types.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openklant/` test_internetaken.py (pure Open Klant, despite the name). |
 | `regression/114-portaal-multi-user-digid.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_inwoner.py`. |
-| `regression/115-omc-notifynl-mock-keten.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/116-omc-mail-keten-e2e.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/115-omc-notifynl-mock-keten.spec.ts` | component or integration | 3/4/5 | todo | Blocked: OMC is off on minikube (OMC 1.17.19 answers every notification 206 with an inner 422); port when a fixed OMC runs. NotifyNL calls go to the webhook receiver's `/notify`. |
+| `regression/116-omc-mail-keten-e2e.spec.ts` | component or integration | 3/4/5 | todo | Blocked: OMC is off on minikube (OMC 1.17.19 answers every notification 206 with an inner 422); port when a fixed OMC runs. NotifyNL calls go to the webhook receiver's `/notify`. |
 | `regression/117-portaal-contactmomenten-paginatie.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_inwoner.py`. |
 | `regression/118-portaal-vestigingsnaam-bedrijf.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_inwoner.py`, against the KvK test API (wiring `openinwoner-kvk`). |
 | `regression/119-infra-quick-wins.spec.ts` | component or integration | 3/4/5 | merge | Unknown BSN: `test_brp.py`; KISS `/api/me`: `test_kcc_session.py`. BRP postcode search: `test_brp.py`. Dropped: KISS `/api/zoeken`, which also accepted 500, and the `/kennisartikelen` fixme. |
@@ -84,7 +84,7 @@ Sources:
 | `regression/151-pdok-externe-service.spec.ts` | component or integration | 3/4/5 | drop | Tests the public PDOK Locatieserver, not PodiumD. |
 | `regression/152-of-retention-en-pdf.spec.ts` | component or integration | 3/4/5 | merge | With 76 into `tests/integration/test_formulier_zaak.py`: the PDF report downloads through reportDownloadUrl. |
 | `regression/153-of-features-direct.spec.ts` | component or integration | 3/4/5 | merge | Cosign → `test_formulier_api.py`. Demo payment: as 185. NotifyNL mock (fixme in TA) and form variables (need a login): drop. |
-| `regression/154-omc-cosign-direct.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/154-omc-cosign-direct.spec.ts` | component or integration | 3/4/5 | todo | OMC part blocked as 80. The Open Formulieren cosign and resume parts: todo. |
 | `regression/156-esuite-ui-navigatie.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/157-contact-haalcentraal-validatie.spec.ts` | component or integration | 3/4/5 | merge | KI-060 → `tests/component/openklant/` test_internetaken.py; KvK parts: phase 3, external services. |
 | `regression/158-of-eherkenning-vestiging.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_formulier_login.py`: eHerkenning through Keycloak's mock (W1), the vestiging is the zaak's initiator. |
@@ -115,7 +115,7 @@ Sources:
 | `regression/19-notificaties-e2e.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`, with the webhook receiver of `infra/`. |
 | `regression/190-kiss-contentbronnen-gevuld.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/191-ita-poller-split.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/193-frankgateway-zac-openzaak-e2e.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/193-frankgateway-zac-openzaak-e2e.spec.ts` | component or integration | 3/4/5 | port | ZAC's BRP and KvK lookups → `tests/component/zac/test_zac_klanten.py`. The Frank!Gateway route ZAC → Open Zaak exists in no estate; rollen: `test_statussen_rollen.py`. |
 | `regression/22-negative-auth.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py, with client ptest-bootstrap-zgw-noauth. |
 | `regression/23-va-escalatie.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_autorisaties.py. |
 | `regression/24-zaakeigenschappen.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_besluiten_eigenschappen.py, on bootstrap eigenschap kenteken. |
@@ -169,9 +169,9 @@ Sources:
 | `regression/77-ita-afdelingen-groepen.spec.ts` | component or integration | 3/4/5 | port | `tests/component/ita/test_ita_internetaken.py`. |
 | `regression/79-of-form-cosign-config.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openformulieren/test_formulier_api.py`: the published settings. |
 | `regression/80-brp-kvk-prefill-foutpaden.spec.ts` | component or integration | 3/4/5 | port | BRP parts → `test_brp.py`, basisprofiel and searches → `test_kvk.py` (KvK test set). |
-| `regression/80-omc-listen-event.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/81-omc-confirm-callback.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/82-omc-zaak-e2e.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/80-omc-listen-event.spec.ts` | component or integration | 3/4/5 | todo | Blocked: OMC is off on minikube (OMC 1.17.19 answers every notification 206 with an inner 422); port when a fixed OMC runs. NotifyNL calls go to the webhook receiver's `/notify`. |
+| `regression/81-omc-confirm-callback.spec.ts` | component or integration | 3/4/5 | todo | Blocked: OMC is off on minikube (OMC 1.17.19 answers every notification 206 with an inner 422); port when a fixed OMC runs. NotifyNL calls go to the webhook receiver's `/notify`. |
+| `regression/82-omc-zaak-e2e.spec.ts` | component or integration | 3/4/5 | todo | Blocked: OMC is off on minikube (OMC 1.17.19 answers every notification 206 with an inner 422); port when a fixed OMC runs. NotifyNL calls go to the webhook receiver's `/notify`. |
 | `regression/83-portaal-anonieme-pagina-bereikbaarheid.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_anoniem.py`. |
 | `regression/84-portaal-ingelogd-sessie.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_login.py`: Mijn zaken while logged in, the login page after /digid-oidc/logout/. |
 | `regression/85-ok2-bedrijf-partij.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openklant/` test_partijen.py: organisatie with KvK or RSIN. |
