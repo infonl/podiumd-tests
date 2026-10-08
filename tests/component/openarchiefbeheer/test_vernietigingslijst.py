@@ -8,6 +8,8 @@ tests are destructive (tier chaos) and run on one worker.
 
 from __future__ import annotations
 
+import secrets
+
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
@@ -120,7 +122,8 @@ def status(oab: Callable[[str], requests.Session], api: str, lijst: str) -> str:
 def new_list(oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry) -> str:
     """A vernietigingslijst with only the test's zaak and the test reviewer, made ready to review; its uuid."""
     body = {
-        "name": registry.tagged("vernietigingslijst"),
+        # OAB requires unique names, and the run tag is shared by all workers.
+        "name": registry.tagged(f"vernietigingslijst-{secrets.token_hex(3)}"),
         "comment": "podiumd-tests",
         "containsSensitiveInfo": False,
         "add": [{"zaak": zaak["url"]}],
