@@ -6,7 +6,12 @@ import random
 
 from datetime import UTC
 from datetime import datetime
+from http import HTTPStatus
 from typing import TYPE_CHECKING
+from typing import cast
+
+from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
 
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
@@ -194,3 +199,42 @@ def make_onderwerpobject(
         },
     }
     return _create(openklant, registry, "onderwerpobjecten", body)
+
+
+def delete_klantcontact_tree(openklant: ApiClient, url: str) -> None:
+    """Delete a klantcontact with the interne taken, onderwerpobjecten and betrokkenen hanging off it."""
+    expand = "leiddeTotInterneTaken,gingOverOnderwerpobjecten,hadBetrokkenen"
+    found = openklant.request("GET", url, HTTPStatus.OK, HTTPStatus.NOT_FOUND, params={"expand": expand})
+    if found.status_code == HTTPStatus.NOT_FOUND:
+        return
+    expanded = section(cast("JsonObject", found.json()), "_expand")
+    for key in expand.split(","):
+        for item in entries(expanded.get(key)):
+            openklant.delete(str(item["url"]))
+    openklant.delete(url)
+
+
+def partijen_of(openklant: ApiClient, bsn: str) -> dict[str, list[str]]:
+    """Partij URL -> URLs of its identificatoren, for the partijen identified by a BSN."""
+    found: dict[str, list[str]] = {}
+    for identificator in openklant.list("partij-identificatoren", {"partijIdentificatorObjectId": bsn}):
+        partij = str(section(identificator, "identificeerdePartij")["url"])
+        found.setdefault(partij, []).append(str(identificator["url"]))
+    return found
+
+
+def clean_up_new_partijen(openklant: ApiClient, registry: ResourceRegistry, bsn: str) -> None:
+    """Delete, at cleanup, partijen of the BSN that appear during the test (e.g. Open Inwoner makes one at login)."""
+    before = set(partijen_of(openklant, bsn))
+
+    def delete() -> None:
+        for partij, identificatoren in partijen_of(openklant, bsn).items():
+            if partij in before:
+                continue
+            for adres in openklant.list("digitaleadressen", {"verstrektDoorPartij__uuid": partij.rsplit("/", 1)[-1]}):
+                openklant.delete(str(adres["url"]))
+            for identificator in identificatoren:
+                openklant.delete(identificator)
+            openklant.delete(partij)
+
+    registry.add(f"new partijen of BSN {bsn}", delete)
