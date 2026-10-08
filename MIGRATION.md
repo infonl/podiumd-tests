@@ -85,7 +85,7 @@ Sources:
 | `regression/152-of-retention-en-pdf.spec.ts` | component or integration | 3/4/5 | merge | With 76 into `tests/integration/test_formulier_zaak.py`: the PDF report downloads through reportDownloadUrl. |
 | `regression/153-of-features-direct.spec.ts` | component or integration | 3/4/5 | merge | Cosign → `test_formulier_api.py`. Demo payment: as 185. NotifyNL mock (fixme in TA) and form variables (need a login): drop. |
 | `regression/154-omc-cosign-direct.spec.ts` | component or integration | 3/4/5 | todo | OMC part blocked as 80. The Open Formulieren cosign and resume parts: todo. |
-| `regression/156-esuite-ui-navigatie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/156-esuite-ui-navigatie.spec.ts` | component or integration | 3/4/5 | todo | Blocked with smoke 155: eSuite is outside PodiumD and no profile has an `esuite` URL. |
 | `regression/157-contact-haalcentraal-validatie.spec.ts` | component or integration | 3/4/5 | merge | KI-060 → `tests/component/openklant/` test_internetaken.py; KvK parts: phase 3, external services. |
 | `regression/158-of-eherkenning-vestiging.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_formulier_login.py`: eHerkenning through Keycloak's mock (W1), the vestiging is the zaak's initiator. |
 | `regression/159-of-zaak-keten.spec.ts` | component or integration | 3/4/5 | merge | With 158 into `tests/integration/test_formulier_login.py`. |
@@ -114,7 +114,7 @@ Sources:
 | `regression/185-of-betaalstatus-zaak.spec.ts` | component or integration | 3/4/5 | drop | Needs Open Formulieren's demo payment plugin, which no estate enables (ENABLE_DEMO_PLUGINS is unset in podiumd-infra, ExternalsPodiumD and the chart); Ogone and Worldline need a real payment provider. TA kept it fixme. |
 | `regression/19-notificaties-e2e.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`, with the webhook receiver of `infra/`. |
 | `regression/190-kiss-contentbronnen-gevuld.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/191-ita-poller-split.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/191-ita-poller-split.spec.ts` | component or integration | 3/4/5 | drop | CronJob names and schedules are estate configuration; failed Jobs are caught by `tests/smoke/test_cluster.py`. Finding for podiumd-minikube: no `ita-verlopen-cv-notify` under ITA 3.3.2. |
 | `regression/193-frankgateway-zac-openzaak-e2e.spec.ts` | component or integration | 3/4/5 | port | ZAC's BRP and KvK lookups → `tests/component/zac/test_zac_klanten.py`. The Frank!Gateway route ZAC → Open Zaak exists in no estate; rollen: `test_statussen_rollen.py`. |
 | `regression/22-negative-auth.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py, with client ptest-bootstrap-zgw-noauth. |
 | `regression/23-va-escalatie.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_autorisaties.py. |
@@ -160,7 +160,7 @@ Sources:
 | `regression/67-pabc-functional-roles.spec.ts` | component or integration | 3/4/5 | port | `tests/component/pabc/test_management.py` (browser session). |
 | `regression/68-pabc-decision.spec.ts` | component or integration | 3/4/5 | port | 68b/68c → `tests/component/pabc/test_api_key.py`; 68a → `test_management.py`. |
 | `regression/69-pabc-domains-entity-types.spec.ts` | component or integration | 3/4/5 | port | `tests/component/pabc/test_management.py`. |
-| `regression/70-pabc-groups-lookup.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/70-pabc-groups-lookup.spec.ts` | component or integration | 3/4/5 | drop | TA's GET passed on PABC's SPA page (200 HTML); the endpoint answers POST 401 even with the API key. PABC's API: `tests/component/pabc/`. |
 | `regression/71-pabc-zac-integration-coherence.spec.ts` | component or integration | 3/4/5 | port | `tests/component/pabc/test_management.py`. |
 | `regression/73-ita-assigned-list.spec.ts` | component or integration | 3/4/5 | merge | Into the claim test of `tests/component/ita/test_ita_internetaken.py`. |
 | `regression/75-ita-forward-flow.spec.ts` | component or integration | 3/4/5 | drop | Superseded by 184. |
