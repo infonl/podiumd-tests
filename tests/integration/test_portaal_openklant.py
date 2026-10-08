@@ -1,8 +1,7 @@
 """Chain: Open Inwoner with Open Klant 2 as klantensysteem: a question from Mijn vragen, a profile e-mail address.
 
 Ported from TA interaction 182 and regression 179. Open Inwoner reaches Open Klant with its own token (wiring
-W6); the contact flow sends questions to the KCC actor (W8). At login Open Inwoner makes a
-partij for the inwoner's BSN; the test removes it again if it made one.
+W6); the contact flow sends questions to the KCC actor (W8).
 """
 
 from __future__ import annotations
@@ -17,8 +16,7 @@ from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.openinwoner import set_account_email
-from podiumd_tests.seed.openklant import clean_up_new_partijen
-from podiumd_tests.seed.openklant import delete_klantcontact_tree
+from podiumd_tests.seed.openklant import clean_up_klantcontacten
 from podiumd_tests.seed.openklant import partijen_of
 
 if TYPE_CHECKING:
@@ -50,15 +48,8 @@ def test_question_shows_in_mijn_vragen(  # pylint: disable=too-many-arguments,to
 ) -> None:
     """A question asked in Mijn vragen becomes a klantcontact in Open Klant and is listed, unanswered (TA int-182)."""
     need_bootstrap(INWONER.name, "openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-openklant")
-    clean_up_new_partijen(openklant, registry, INWONER.attributes["bsn"][0])
     vraag = registry.tagged("vraag")
-
-    def delete_question() -> None:
-        for klantcontact in openklant.list("klantcontacten", {"onderwerp": SUBJECT}):
-            if klantcontact.get("inhoud") == vraag:
-                delete_klantcontact_tree(openklant, str(klantcontact["url"]))
-
-    registry.add(f"question {vraag}", delete_question)
+    clean_up_klantcontacten(openklant, registry, SUBJECT, vraag)
     portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/contactmomenten/")
     page.locator('select[name="subject"]').select_option(label=SUBJECT)
     page.locator('textarea[name="question"]').fill(vraag)
@@ -84,7 +75,6 @@ def test_profile_email_reaches_open_klant(  # pylint: disable=too-many-arguments
     """An e-mail address saved in the profile becomes a digitaal adres of the inwoner's partij (TA reg-179)."""
     need_bootstrap(INWONER.name, "openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-openklant")
     bsn = INWONER.attributes["bsn"][0]
-    clean_up_new_partijen(openklant, registry, bsn)
     adres = f"{registry.tagged('profiel')}@example.invalid"
     # The partij may predate the test (an earlier login made it); its new adres goes anyway. The
     # account keeps the address and every later login sends it again: set it back first.

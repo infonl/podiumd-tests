@@ -21,7 +21,6 @@ from podiumd_tests.json_data import section
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.openinwoner import upload_document
 from podiumd_tests.openinwoner import virus_scan_enabled
-from podiumd_tests.seed.openklant import clean_up_new_partijen
 from podiumd_tests.seed.openklant import delete_klantcontact_tree
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import clean_up_new_documents
@@ -227,7 +226,6 @@ def test_question_about_a_zaak_reaches_open_klant(  # pylint: disable=too-many-a
     """A question asked on the zaak's status page becomes a klantcontact about the zaak (TA int-164)."""
     need_bootstrap(INWONER.name, *WIRING, "openinwoner-zaaktype-config", "openinwoner-openklant")
     zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
-    clean_up_new_partijen(openklant, registry, INWONER.attributes["bsn"][0])
     about = {"onderwerpobjectidentificatorObjectId": str(zaak["uuid"])}
 
     def klantcontacten() -> list[str]:

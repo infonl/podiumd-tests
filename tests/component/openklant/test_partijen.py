@@ -10,8 +10,8 @@ from typing import cast
 
 import pytest
 
-from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.seed.openklant import expanded
 from podiumd_tests.seed.openklant import make_betrokkene
 from podiumd_tests.seed.openklant import make_digitaal_adres
 from podiumd_tests.seed.openklant import make_klantcontact
@@ -82,10 +82,8 @@ def test_digitaal_adres_patch_and_expand(openklant: ApiClient, registry: Resourc
     """A partij's e-mail address shows with expand, changes with PATCH and goes with DELETE (TA reg-58, reg-149)."""
     partij = make_partij(openklant, registry)
     adres = make_digitaal_adres(openklant, registry, partij, f"{registry.tagged('a')}@example.invalid")
-    expanded = entries(
-        section(openklant.get(str(partij["url"]), {"expand": "digitaleAdressen"}), "_expand").get("digitaleAdressen")
-    )
-    assert [a["uuid"] for a in expanded] == [adres["uuid"]]
+    adressen = expanded(openklant, str(partij["url"]), "digitaleAdressen")
+    assert [a["uuid"] for a in adressen] == [adres["uuid"]]
     nieuw = f"{registry.tagged('b')}@example.invalid"
     assert openklant.patch(str(adres["url"]), {"adres": nieuw})["adres"] == nieuw
     openklant.delete(str(adres["url"]))

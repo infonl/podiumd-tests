@@ -11,7 +11,7 @@ from typing import cast
 import pytest
 
 from podiumd_tests.json_data import entries
-from podiumd_tests.json_data import section
+from podiumd_tests.seed.openklant import expanded
 from podiumd_tests.seed.openklant import make_actor
 from podiumd_tests.seed.openklant import make_betrokkene
 from podiumd_tests.seed.openklant import make_klantcontact
@@ -69,7 +69,6 @@ def test_expand_had_betrokkenen(openklant: ApiClient, registry: ResourceRegistry
     """expand=hadBetrokkenen inlines an anonymous betrokkene (TA reg-87)."""
     klantcontact = make_klantcontact(openklant, registry)
     betrokkene = make_betrokkene(openklant, registry, klantcontact, None)
-    read = openklant.get(str(klantcontact["url"]), {"expand": "hadBetrokkenen"})
-    expanded = entries(section(read, "_expand").get("hadBetrokkenen"))
-    assert [b["uuid"] for b in expanded] == [betrokkene["uuid"]]
-    assert cast("dict[str, str]", expanded[0]["contactnaam"])["achternaam"] == "test"
+    betrokkenen = expanded(openklant, str(klantcontact["url"]), "hadBetrokkenen")
+    assert [b["uuid"] for b in betrokkenen] == [betrokkene["uuid"]]
+    assert cast("dict[str, str]", betrokkenen[0]["contactnaam"])["achternaam"] == "test"

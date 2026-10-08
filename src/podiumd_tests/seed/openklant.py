@@ -207,9 +207,9 @@ def delete_klantcontact_tree(openklant: ApiClient, url: str) -> None:
     found = openklant.request("GET", url, HTTPStatus.OK, HTTPStatus.NOT_FOUND, params={"expand": expand})
     if found.status_code == HTTPStatus.NOT_FOUND:
         return
-    expanded = section(cast("JsonObject", found.json()), "_expand")
+    inlined = section(cast("JsonObject", found.json()), "_expand")
     for key in expand.split(","):
-        for item in entries(expanded.get(key)):
+        for item in entries(inlined.get(key)):
             openklant.delete(str(item["url"]))
     openklant.delete(url)
 
@@ -220,16 +220,28 @@ def partijen_of(openklant: ApiClient, object_id: str) -> list[str]:
     return list(dict.fromkeys(str(section(i, "identificeerdePartij")["url"]) for i in identificatoren))
 
 
-def clean_up_new_partijen(openklant: ApiClient, registry: ResourceRegistry, bsn: str) -> None:
-    """Delete, at cleanup, partijen of the BSN that appear during the test (e.g. Open Inwoner makes one at login)."""
-    before = set(partijen_of(openklant, bsn))
+def expanded(openklant: ApiClient, url: str, key: str) -> list[JsonObject]:
+    """The objects that `expand=key` inlines in the object at the URL."""
+    return entries(section(openklant.get(url, {"expand": key}), "_expand").get(key))
 
-    def delete() -> None:
-        for partij in partijen_of(openklant, bsn):
-            if partij not in before:
-                delete_partij(openklant, partij)
 
-    registry.add(f"new partijen of BSN {bsn}", delete)
+def klantcontacten_about(openklant: ApiClient, onderwerp: str, inhoud: str | None = None) -> list[JsonObject]:
+    """The klantcontacten with the onderwerp and, when given, the inhoud."""
+    found = openklant.list("klantcontacten", {"onderwerp": onderwerp})
+    return [k for k in found if inhoud is None or k.get("inhoud") == inhoud]
+
+
+def clean_up_klantcontacten(
+    openklant: ApiClient, registry: ResourceRegistry, onderwerp: str, inhoud: str | None = None
+) -> None:
+    """Delete, at cleanup, the klantcontacten `klantcontacten_about` finds, with their trees."""
+    registry.add(
+        f"klantcontacten {onderwerp} {inhoud or ''}".rstrip(),
+        lambda: [
+            delete_klantcontact_tree(openklant, str(k["url"]))
+            for k in klantcontacten_about(openklant, onderwerp, inhoud)
+        ],
+    )
 
 
 def delete_partij(openklant: ApiClient, partij: str) -> None:

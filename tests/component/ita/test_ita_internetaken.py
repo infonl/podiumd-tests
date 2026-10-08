@@ -23,7 +23,9 @@ from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import clean_up_logboek
 from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
+from podiumd_tests.seed.openklant import clean_up_klantcontacten
 from podiumd_tests.seed.openklant import klantcontact_body
+from podiumd_tests.seed.openklant import klantcontacten_about
 from podiumd_tests.seed.openklant import make_internetaak
 from podiumd_tests.seed.openklant import make_klantcontact
 from podiumd_tests.wait import wait_until
@@ -100,16 +102,16 @@ def test_answering_an_internetaak_registers_a_klantcontact(
 ) -> None:
     """Answering an internetaak with a contact registers that klantcontact in Open Klant (TA int-180)."""
     aanleiding = cast("JsonObject", taak["aanleidinggevendKlantcontact"])
-    antwoord = klantcontact_body(registry, onderwerp=registry.tagged("ita-antwoord"), indicatieContactGelukt=False)
+    onderwerp = registry.tagged("ita-antwoord")
+    antwoord = klantcontact_body(registry, onderwerp=onderwerp, indicatieContactGelukt=False)
+    clean_up_klantcontacten(openklant, registry, onderwerp)
     body = {
         "interneTaakId": taak["uuid"],
         "aanleidinggevendKlantcontactUuid": aanleiding["uuid"],
         "klantcontactRequest": {k: v for k, v in antwoord.items() if k != "nummer"},
     }
     response = ita.post(urls["ita"] + "/api/klantcontacten/add-klantcontact", json=body)
-    found = openklant.list("klantcontacten", {"onderwerp": str(antwoord["onderwerp"])})
-    for klantcontact in found:
-        registry.add(f"klantcontact {klantcontact['url']}", lambda url=str(klantcontact["url"]): openklant.delete(url))
+    found = klantcontacten_about(openklant, onderwerp)
     assert response.status_code in {HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.NO_CONTENT}, describe(response)
     assert [k["indicatieContactGelukt"] for k in found] == [False]
 
