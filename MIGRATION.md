@@ -106,7 +106,7 @@ Sources:
 | `regression/175-continuiteit-alertmanager-fber.spec.ts` | component or integration | 3/4/5 | drop | Alertmanager is disabled in podiumd-infra and ExternalsPodiumD; TA tested its own Alertmanager and webhook. |
 | `regression/176-formulier-update-keten.spec.ts` | component or integration | 3/4/5 | drop | r102 renames the form, which plays no part in registration (covered by the TA 76 chain); r97 checks that a later submission has a later timestamp. Both fixme in TA. A real form change would alter the shared test form under parallel tests. |
 | `regression/177-pen-admin-niet-publiek.spec.ts` | component or integration | 3/4/5 | port | `tests/component/platform/test_public_surface.py`. |
-| `regression/178-blacklist-upload.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/178-blacklist-upload.spec.ts` | component or integration | 3/4/5 | port | Open Formulieren: `test_formulier_api.py` (a text file named .pdf, a file without extension: 400 with a reason). Open Inwoner: `test_portaal_zaken.py` (.html keeps the upload button disabled). |
 | `regression/179-portaal-profiel-naar-openklant.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_portaal_openklant.py`. |
 | `regression/18-klantcontact-zaak-koppeling.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_klantcontact_zaak.py`. |
 | `regression/183-of-digid-zaak-rol.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_formulier_login.py` (DigiD through Keycloak's mock, wiring W1). |

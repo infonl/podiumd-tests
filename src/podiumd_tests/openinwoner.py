@@ -11,6 +11,7 @@ from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.responses import url_host
 
 if TYPE_CHECKING:
+    from playwright.sync_api import Locator
     from playwright.sync_api import Page
 
     from podiumd_tests.bootstrap.steps import KeycloakUser
@@ -40,14 +41,20 @@ def refuse_cookies(page: Page) -> None:
         banner.first.click()
 
 
-def upload_document(page: Page, name: str, content: bytes) -> None:
-    """Upload a file with the form on the zaak status page the browser shows; returns when Open Inwoner answered."""
+def choose_document(page: Page, name: str, content: bytes) -> Locator:
+    """Choose a file in the upload form on the zaak status page; returns the form's upload button."""
     upload = page.locator("#document-upload")
     upload.locator('input[name="file"]').set_input_files(
         files=[{"name": name, "mimeType": "text/plain", "buffer": content}]
     )
+    return upload.get_by_role("button", name="Upload documenten")
+
+
+def upload_document(page: Page, name: str, content: bytes) -> None:
+    """Upload a file with the form on the zaak status page the browser shows; returns when Open Inwoner answered."""
+    button = choose_document(page, name, content)
     with page.expect_response(lambda r: r.request.method == "POST" and "/document-form/" in r.url):
-        upload.get_by_role("button", name="Upload documenten").click()
+        button.click()
 
 
 def virus_scan_enabled(env: Environment) -> bool:

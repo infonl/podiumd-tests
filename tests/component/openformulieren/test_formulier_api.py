@@ -1,10 +1,12 @@
 """Open Formulieren's public form API for the suite's test form (bootstrap openformulieren-form).
 
-Ported from TA regression 75 and 79, and the cosign part of 153. The submission itself and its
+Ported from TA regression 75, 79 and 178, and the cosign part of 153. The submission itself and its
 zaak are the integration tests test_formulier_zaak and test_formulier_digid.
 """
 
 from __future__ import annotations
+
+import re
 
 from http import HTTPStatus
 from typing import TYPE_CHECKING
@@ -13,6 +15,8 @@ import pytest
 
 from podiumd_tests.bootstrap.names import TEST_FORM
 from podiumd_tests.json_data import entries
+from podiumd_tests.openformulieren import delete_submission
+from podiumd_tests.openformulieren import start_submission
 from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
@@ -20,7 +24,9 @@ if TYPE_CHECKING:
 
     import requests
 
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("openformulieren")]
 
@@ -57,3 +63,32 @@ def test_form_publishes_its_settings(form: JsonObject) -> None:
         assert isinstance(form[flag], bool), flag
     assert isinstance(form["resumeLinkLifetime"], int)
     assert form["resumeLinkLifetime"] > 0
+
+
+@pytest.mark.requires("cluster")
+@pytest.mark.parametrize(
+    ("name", "message"),
+    [
+        pytest.param("document.pdf", r"geen \.pdf|not a \.pdf|geen geldig|not a valid", id="text-named-pdf"),
+        pytest.param(
+            "zonderextensie", r"bestandstype kon niet bepaald|extensie|could not.*determine", id="no-extension"
+        ),
+    ],
+)
+def test_upload_of_a_false_file_is_refused(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    http: requests.Session,
+    urls: dict[str, str],
+    podiumd_env: Environment,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+    name: str,
+    message: str,
+) -> None:
+    """A file whose content does not match its name, or that has no extension, is refused with a reason (TA reg-178)."""
+    need_bootstrap("openformulieren-form")
+    submission, headers = start_submission(http, urls["openformulieren"], TEST_FORM)
+    registry.add(f"submission {submission['id']}", lambda: delete_submission(podiumd_env, str(submission["id"])))
+    upload = {"file": (name, b"plain text, no PDF", "application/pdf")}
+    response = http.post(f"{urls['openformulieren']}/api/v2/formio/fileupload", files=upload, headers=headers)
+    expect_status(response, HTTPStatus.BAD_REQUEST)
+    assert re.search(message, response.text, re.IGNORECASE), response.text[:300]

@@ -18,6 +18,7 @@ from playwright.sync_api import expect
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.browser import browser_session
 from podiumd_tests.json_data import section
+from podiumd_tests.openinwoner import choose_document
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.openinwoner import upload_document
 from podiumd_tests.openinwoner import virus_scan_enabled
@@ -152,8 +153,7 @@ def test_zaak_document_can_be_downloaded(  # pylint: disable=too-many-arguments,
     inhoud = registry.tagged("documentinhoud")
     document = make_document(openzaak, registry, parts.informatieobjecttype, inhoud, status="definitief")
     link_document(openzaak, registry, zaak, document)
-    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
-    page.locator(f'a[href*="{zaak["uuid"]}"]').first.click()
+    open_status_page(page, podiumd_env, zaak)
     expect(page.get_by_text(str(document["titel"])).first).to_be_visible()
     href = page.locator(f'a[href*="{str(document["url"]).rsplit("/", 1)[-1]}"]').first.get_attribute("href")
     assert href, "no download link for the document"
@@ -177,8 +177,7 @@ def test_uploaded_document_reaches_the_zaak(  # pylint: disable=too-many-argumen
     zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
     clean_up_new_documents(openzaak, registry, zaak)
     bestand = f"{registry.tagged('upload')}.txt"
-    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
-    page.locator(f'a[href*="{zaak["uuid"]}"]').first.click()
+    open_status_page(page, podiumd_env, zaak)
     upload_document(page, bestand, bestand.encode())
     found = wait_until(lambda: documents_of(openzaak, zaak), timeout=30, description=f"document {bestand} on the zaak")
     assert bestand in found
@@ -201,10 +200,30 @@ def test_infected_upload_is_refused(  # pylint: disable=too-many-arguments,too-m
     need_bootstrap(INWONER.name, *WIRING, "openinwoner-zaaktype-config")
     zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
     clean_up_new_documents(openzaak, registry, zaak)
-    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
-    page.locator(f'a[href*="{zaak["uuid"]}"]').first.click()
+    open_status_page(page, podiumd_env, zaak)
     upload_document(page, f"{registry.tagged('eicar')}.txt", EICAR)
     assert documents_of(openzaak, zaak) == []
+
+
+def test_refused_file_type_cannot_be_uploaded(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    parts: ZaaktypeParts,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """The upload form keeps its button disabled for a file type outside the allowed list, such as .html (TA reg-178)."""
+    need_bootstrap(INWONER.name, *WIRING, "openinwoner-zaaktype-config")
+    zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
+    open_status_page(page, podiumd_env, zaak)
+    expect(choose_document(page, f"{registry.tagged('pagina')}.html", b"<html></html>")).to_be_disabled()
+
+
+def open_status_page(page: Page, podiumd_env: Environment, zaak: JsonObject) -> None:
+    """Log the inwoner in and open the zaak's status page from Mijn zaken."""
+    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
+    page.locator(f'a[href*="{zaak["uuid"]}"]').first.click()
 
 
 def documents_of(openzaak: ApiClient, zaak: JsonObject) -> list[str]:
@@ -236,8 +255,7 @@ def test_question_about_a_zaak_reaches_open_klant(  # pylint: disable=too-many-a
         lambda: [delete_klantcontact_tree(openklant, k) for k in klantcontacten()],
     )
     vraag = registry.tagged("zaakvraag")
-    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
-    page.locator(f'a[href*="{zaak["uuid"]}"]').first.click()
+    open_status_page(page, podiumd_env, zaak)
     page.locator('#contact-form textarea[name="question"]').fill(vraag)
     page.locator("#submit_contact").click()
     found = wait_until(klantcontacten, timeout=30, description=f"klantcontact about zaak {zaak['uuid']}")
