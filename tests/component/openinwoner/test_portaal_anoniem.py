@@ -1,6 +1,6 @@
-"""Open Inwoner without a login: homepage, search, contact form, unknown pages and the zaken webhook.
+"""Open Inwoner without a login: homepage, contact form, unknown pages and the zaken webhook.
 
-Ported from TA regression 83, 107, 110 (contact part), 161c/d and 65a/b.
+Ported from TA regression 83, 110 (contact part) and 65a/b; the search is test_portaal_zoeken.py.
 """
 
 from __future__ import annotations
@@ -43,15 +43,6 @@ def test_homepage_is_the_portal(
 def test_unknown_page_is_404(http: requests.Session, urls: dict[str, str]) -> None:
     """An unknown CMS path answers 404, not an error (TA reg-83)."""
     expect_status(http.get(urls["openinwoner"] + "/pages/ptest-bestaat-niet/"), HTTPStatus.NOT_FOUND)
-
-
-@pytest.mark.parametrize("query", ["informatie", "ptest-xyzzy-geen-resultaat"])
-def test_search_answers(http: requests.Session, urls: dict[str, str], query: str) -> None:
-    """Search answers with its form; a query without hits says so (TA int-107, reg-161c/d)."""
-    html = expect_status(http.get(urls["openinwoner"] + "/search/", params={"query": query}), HTTPStatus.OK).text
-    assert 'name="query"' in html
-    if "geen" in query:
-        assert "We konden geen zoekresultaten vinden" in html
 
 
 def test_contact_form_is_open_to_everyone(

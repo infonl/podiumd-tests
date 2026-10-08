@@ -477,6 +477,7 @@ Updated 2026-10-08. The detail lives where it is kept up to date: blocked ports 
 | Open Notificaties | an unreachable callback URL answers 500 instead of 400 | `test_abonnement_with_an_unreachable_callback_is_refused` |
 | Open Inwoner | `deactivated_on` does not stop a DigiD login | `test_disabled_account_cannot_log_in[deactivated]` |
 | OMC 1.17.19 | 206 to every notification ('source' property), so no mail | `tests/integration/test_omc.py` |
+| Open Inwoner | no "did you mean" on a search without hits, as the draaiboek asks (OI-097); only the autocomplete is fuzzy | `test_no_results_suggest_what_was_meant` |
 | mozilla-django-oidc | an unconfigured admin login answers 500 (`ImproperlyConfigured`) instead of refusing | none: every estate configures it |
 
 **Configuration finding for the estates:** KISS's Objecten token has no rights on Activiteitenlog, so KISS shows none of ITA's activities (`test_kiss_reads_itas_logboek`, the same in ExternalsPodiumD, podiumd-infra and minikube).
@@ -491,7 +492,7 @@ Updated 2026-10-08. The detail lives where it is kept up to date: blocked ports 
 
 **Phase 8 (decommission):**
 
-- Done: every source test has a decision in MIGRATION.md, and `docs/draaiboek-coverage.md` (`python -m podiumd_tests.draaiboek`) maps the draaiboek's 546 cases, through TA's specs and the tests' own `@pytest.mark.tc` markers (R15): of 417 automatable (A) cases, 290 covered, 5 blocked, none dropped; every case TA covered is covered here.
-- Backlog beyond the migration: 122 A and 36 B cases have no test. Most are in Formulier (payment, co-signing, eSuite, Office Add-in), Portaal (search, eSuite, machtigingen), ABC, ZAC (zaak handling in its UI) and Continuïteit (user-facing messages during an outage, DigiD/eHerkenning down).
+- Done: every source test has a decision in MIGRATION.md, and `docs/draaiboek-coverage.md` (`python -m podiumd_tests.draaiboek`) maps the draaiboek's 546 cases, through TA's specs and the tests' own `@pytest.mark.tc` markers (R15): of 417 automatable (A) cases, 298 covered, 5 blocked, none dropped; every case TA covered is covered here.
+- Backlog beyond the migration: 114 A and 36 B cases have no test. Most are in Formulier (payment, co-signing, eSuite, Office Add-in), Portaal (search, eSuite, machtigingen), ABC, ZAC (zaak handling in its UI) and Continuïteit (user-facing messages during an outage, DigiD/eHerkenning down).
 - podiumd-minikube: done (its commit 514e6bd). Its tests now cover only its own code (memory, OpenBao, ClamAV, Elasticsearch, edge, realm sync, HTTPRoutes, its outway routes); its application checks moved here, and its post-deploy check is `podiumd-tests run --env minikube --tier smoke`.
 - Freezing TA (icatt podiumd-testautomation), PI (podiumd-infra `tests/`) and EX (ExternalsPodiumD smoke tests) is for their owners; draft notices are in `docs/handoff/notices/` (not in git).

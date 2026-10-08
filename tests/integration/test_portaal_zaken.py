@@ -81,6 +81,25 @@ def test_inwoners_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,t
     expect_listed(page, zaak)
 
 
+# Search can be switched off by test_portaal_zoeken; it runs on the same worker.
+@pytest.mark.xdist_group("openinwoner-search")
+@pytest.mark.tc("OI-091")
+def test_search_on_a_zaaknummer_opens_the_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    parts: ZaaktypeParts,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """A logged-in inwoner who searches on the number of one of their zaken lands on that zaak."""
+    need_bootstrap(INWONER.name, *WIRING, "openinwoner-cms-pages")
+    zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
+    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
+    page.goto(f"{podiumd_env.profile.urls['openinwoner']}/search/?query={zaak['identificatie']}")
+    expect(page).to_have_url(re.compile(str(zaak["uuid"])))
+
+
 # Playwright's descriptors without default_browser_type: the suite runs Chromium.
 PHONES = {
     "iPhone 13": {

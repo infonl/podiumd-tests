@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from typing import Any
 from typing import cast
 
 from podiumd_tests.auth.keycloak_admin import user_email
@@ -66,3 +67,17 @@ def set_account(env: Environment, bsn: str, **fields: object) -> dict[str, objec
     """Set fields of the Open Inwoner account with this BSN; their old values, to set back."""
     params: dict[str, object] = {"bsn": bsn, "fields": fields}
     return cast("dict[str, object]", run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_account", params))
+
+
+def set_site_configuration(env: Environment, **fields: object) -> dict[str, object]:
+    """Set fields of Open Inwoner's SiteConfiguration; their old values, to set back."""
+    deployment = env.deployment_for("openinwoner")
+    return cast("dict[str, object]", run_snippet(env.kube, deployment, "oi_site_configuration", {"fields": fields}))
+
+
+def search_data(
+    env: Environment, action: str, tag: str, products: list[dict[str, object]] | None = None
+) -> dict[str, Any]:
+    """Seed, read or remove the search test data whose slugs and remarks start with the tag (snippet oi_search_data)."""
+    params: dict[str, object] = {"action": action, "tag": tag, "products": products or []}
+    return cast("dict[str, Any]", run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_search_data", params))
