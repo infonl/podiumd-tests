@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+import statistics
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -17,10 +18,11 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class Threshold:
-    """The most an endpoint may take: p95 response time and share of failed requests."""
+    """The most an endpoint may take: p95 response time, share of failed requests and slowdown against earlier runs."""
 
     p95_ms: float
     max_failure_ratio: float
+    max_slowdown: float
 
 
 @dataclass(frozen=True)
@@ -37,7 +39,7 @@ def thresholds(path: Path, endpoint: str) -> Threshold:
     data = cast("dict[str, object]", yaml.safe_load(path.read_text(encoding="utf-8")))
     endpoints = cast("dict[str, dict[str, float]]", data.get("endpoints") or {})
     merged = {**cast("dict[str, float]", data["defaults"]), **endpoints.get(endpoint, {})}
-    return Threshold(float(merged["p95_ms"]), float(merged["max_failure_ratio"]))
+    return Threshold(float(merged["p95_ms"]), float(merged["max_failure_ratio"]), float(merged["max_slowdown"]))
 
 
 def read_stats(csv_text: str) -> dict[str, EndpointStats]:
@@ -59,3 +61,33 @@ def violations(stats: EndpointStats, threshold: Threshold) -> list[str]:
     if stats.failures / stats.requests > threshold.max_failure_ratio:
         found.append(f"{stats.failures}/{stats.requests} failed > {threshold.max_failure_ratio:.0%}")
     return found
+
+
+STATS = "locust_stats.csv"
+SETTINGS = "settings.json"
+BASELINE_RUNS = 5
+# Fewer earlier runs give no baseline: one 30 s run's p95 swings with a single slow request.
+MIN_BASELINE_RUNS = 3
+
+
+def earlier_stats(run: Path) -> list[dict[str, EndpointStats]]:
+    """The stats of earlier perf runs of the same environment with the same settings.json, newest first.
+
+    run is this run's directory, <results>/<yyyy-mm>/<start>_<env>_perf_<run id>; its perf/ holds both files.
+    """
+    env = run.name.split("_")[1]
+    settings = (run / "perf" / SETTINGS).read_text(encoding="utf-8")
+    found: list[dict[str, EndpointStats]] = []
+    for other in sorted(run.parent.parent.glob(f"*/*_{env}_perf_*"), reverse=True):
+        perf = other / "perf"
+        if other.name >= run.name or not (perf / STATS).is_file() or not (perf / SETTINGS).is_file():
+            continue
+        if (perf / SETTINGS).read_text(encoding="utf-8") == settings:
+            found.append(read_stats((perf / STATS).read_text(encoding="utf-8")))
+    return found
+
+
+def baseline_p95(history: list[dict[str, EndpointStats]], endpoint: str) -> float | None:
+    """Median p95 of the endpoint over the newest BASELINE_RUNS runs with it; None below MIN_BASELINE_RUNS runs."""
+    values = [h[endpoint].p95_ms for h in history if endpoint in h and h[endpoint].requests][:BASELINE_RUNS]
+    return statistics.median(values) if len(values) >= MIN_BASELINE_RUNS else None
