@@ -80,7 +80,7 @@ Sources:
 | `regression/147-kiss-contentbronnen.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/kiss/test_anonymous.py`. |
 | `regression/149-ok2-crud-uitbreiding.spec.ts` | component or integration | 3/4/5 | merge | `tests/component/openklant/`: klantcontact and digitaal adres patch/delete; CRUD-3 (identificator PUT) dropped: it passed on any outcome. |
 | `regression/15-status-transitions.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py: statussen in order. |
-| `regression/150-of-prefill-foutpaden.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/150-of-prefill-foutpaden.spec.ts` | component or integration | 3/4/5 | port | `test_brp.py` (BSN failing the eleven-test) and `test_kvk.py` (invalid KvK numbers); the partner expand (FOUTPAD-4) stayed fixme in TA: drop. |
 | `regression/151-pdok-externe-service.spec.ts` | component or integration | 3/4/5 | drop | Tests the public PDOK Locatieserver, not PodiumD. |
 | `regression/152-of-retention-en-pdf.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/153-of-features-direct.spec.ts` | component or integration | 3/4/5 | todo | |
@@ -164,10 +164,10 @@ Sources:
 | `regression/71-pabc-zac-integration-coherence.spec.ts` | component or integration | 3/4/5 | port | `tests/component/pabc/test_management.py`. |
 | `regression/73-ita-assigned-list.spec.ts` | component or integration | 3/4/5 | merge | Into the claim test of `tests/component/ita/test_ita_internetaken.py`. |
 | `regression/75-ita-forward-flow.spec.ts` | component or integration | 3/4/5 | drop | Superseded by 184. |
-| `regression/75-of-zaaktype-matching.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/75-of-zaaktype-matching.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openformulieren/test_formulier_api.py`: active form, its field, login options. |
 | `regression/76-ita-close-with-klantcontact.spec.ts` | component or integration | 3/4/5 | drop | The route does not exist (405); covered by 180. |
 | `regression/77-ita-afdelingen-groepen.spec.ts` | component or integration | 3/4/5 | port | `tests/component/ita/test_ita_internetaken.py`. |
-| `regression/79-of-form-cosign-config.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/79-of-form-cosign-config.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openformulieren/test_formulier_api.py`: the published settings. |
 | `regression/80-brp-kvk-prefill-foutpaden.spec.ts` | component or integration | 3/4/5 | port | BRP parts → `test_brp.py`, basisprofiel and searches → `test_kvk.py` (KvK test set). |
 | `regression/80-omc-listen-event.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/81-omc-confirm-callback.spec.ts` | component or integration | 3/4/5 | todo | |
