@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 pytestmark = [pytest.mark.smoke, pytest.mark.requires("frankgateway")]
 
 ROUTES = {
-    "brp": "/haalcentraal/api/brp/ingeschrevenpersonen",
+    "brp": "/haalcentraal/api/brp/personen",
     "bag": "/lvbag/individuelebevragingen/v2/adressen",
     "kvk-basisprofiel": "/api/v1/basisprofielen/68750110",
     "kvk-vestiging": "/api/v1/vestigingsprofielen/000037171195",

@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     import requests
 
 BRP_PERSONEN = "/haalcentraal/api/brp/personen"
+BAG_ADRESSEN = "/lvbag/individuelebevragingen/v2/adressen"
 KVK_ZOEKEN = "/api/v2/zoeken"
 KVK_BASISPROFIELEN = "/api/v1/basisprofielen"
 KVK_VESTIGINGSPROFIELEN = "/api/v1/vestigingsprofielen"
@@ -22,6 +23,11 @@ KVK_TEST_ADRES = {"postcode": "8823SJ", "huisnummer": "3"}
 def brp_personen(http: requests.Session, proxy_url: str, query: Mapping[str, object]) -> requests.Response:
     """POST a Haal Centraal personen query (type, burgerservicenummer or search fields, fields)."""
     return http.post(proxy_url + BRP_PERSONEN, json=query)
+
+
+def bag_adres(http: requests.Session, proxy_url: str, nummeraanduiding: str) -> requests.Response:
+    """GET the BAG adres of a nummeraanduiding."""
+    return http.get(f"{proxy_url}{BAG_ADRESSEN}/{nummeraanduiding}", headers={"Accept": "*/*"})
 
 
 def kvk_zoeken(http: requests.Session, proxy_url: str, query: Mapping[str, str]) -> requests.Response:
