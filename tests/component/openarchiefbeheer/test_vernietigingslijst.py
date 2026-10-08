@@ -210,7 +210,7 @@ def test_record_manager_response_sends_the_list_back_to_review(
         oab, api, "reviewer", lijst, decision="rejected", zakenReviews=[{"zaakUrl": zaak["url"], "feedback": "bewaren"}]
     )
     items = expect_status(
-        oab("recordmanager").get(api + "/review-items/", params={"review": rejection["pk"]}), HTTPStatus.OK
+        oab("recordmanager").get(api + "/review-items/", params={"review": str(rejection["pk"])}), HTTPStatus.OK
     )
     body = {
         "review": rejection["pk"],
