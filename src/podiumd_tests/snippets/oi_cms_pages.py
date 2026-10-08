@@ -11,6 +11,7 @@ when empty), record ({"pages": [created page pks], "app_configs": [[apphook, con
 
 def run(params):
     from cms.models import Page
+    from cms.utils.apphook_reload import mark_urlconf_as_changed
     from open_inwoner.openklant.models import KlantenSysteemConfig
 
     existing = {p["slug"]: _find(Page, p) for p in params["pages"]}
@@ -22,6 +23,7 @@ def run(params):
     record = params.get("record") or {}
     if params["action"] == "remove":
         _remove(Page, record, config)
+        mark_urlconf_as_changed()
         return {"present": False}
     record.setdefault("pages", [])
     for wanted in params["pages"]:
@@ -35,6 +37,8 @@ def run(params):
         record.setdefault("contact_email", config.register_contact_email)
         config.register_contact_email = params["contact_email"]
         config.save()
+    # The running web processes load apphook URLs once; this makes them reload on their next request.
+    mark_urlconf_as_changed()
     return {"present": True, "record": record}
 
 

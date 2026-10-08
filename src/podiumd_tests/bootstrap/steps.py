@@ -409,6 +409,14 @@ OI_PAGES = [
         "namespace": "inbox",
     },
     {
+        "slug": "onderwerpen",
+        "title": "Onderwerpen",
+        "template": "cms/fullwidth.html",
+        # Search results link to product pages through this namespace; without it every search with hits fails.
+        "apphook": "ProductsApphook",
+        "namespace": "products",
+    },
+    {
         "slug": "contactformulier",
         "title": "Contactformulier",
         "template": "cms/contactform/form_outer.html",
