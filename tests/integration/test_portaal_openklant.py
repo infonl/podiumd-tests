@@ -6,6 +6,8 @@ Klant with its own token (wiring W6); the contact flow sends questions to the KC
 
 from __future__ import annotations
 
+import itertools
+
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -30,6 +32,8 @@ from podiumd_tests.seed.openklant import clean_up_klantcontacten
 from podiumd_tests.seed.openklant import expanded
 from podiumd_tests.seed.openklant import klantcontact_body
 from podiumd_tests.seed.openklant import klantcontacten_about
+from podiumd_tests.seed.openklant import make_betrokkene
+from podiumd_tests.seed.openklant import make_klantcontact
 from podiumd_tests.seed.openklant import partijen_of
 from podiumd_tests.wait import wait_until
 
@@ -53,6 +57,9 @@ pytestmark = [
 
 INWONER, _, BEDRIJF = IDENTITIES
 SUBJECT = "Algemene vraag"
+MIJN_VRAGEN = "/mijn-zaken/contactmomenten/"
+# PodiumD 3.3.0 showed at most 25 questions.
+MANY_QUESTIONS = 26
 
 
 def question_in_open_klant(openklant: ApiClient, vraag: str) -> JsonObject:
@@ -65,8 +72,8 @@ def question_in_open_klant(openklant: ApiClient, vraag: str) -> JsonObject:
 
 def ask_in_mijn_vragen(page: Page, podiumd_env: Environment, vraag: str) -> Locator:
     """Log the inwoner in, ask the question in Mijn vragen; its card in the reloaded list."""
-    mijn_vragen = podiumd_env.profile.urls["openinwoner"] + "/mijn-zaken/contactmomenten/"
-    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/contactmomenten/")
+    mijn_vragen = podiumd_env.profile.urls["openinwoner"] + MIJN_VRAGEN
+    portal_login(page, podiumd_env, "digid", INWONER, MIJN_VRAGEN)
     page.locator('select[name="subject"]').select_option(label=SUBJECT)
     page.locator('textarea[name="question"]').fill(vraag)
     email = page.locator('form:has(textarea[name="question"]) input[name="email"]')
@@ -179,6 +186,37 @@ def test_anonymous_question_reaches_open_klant(  # pylint: disable=too-many-argu
     assert [openklant.get(str(a["url"]))["adres"] for a in entries(betrokkene["digitaleAdressen"])] == [adres]
 
 
+@pytest.mark.tc("OI-040", "OI-081")
+def test_mijn_vragen_shows_more_than_one_page_of_questions(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """Mijn vragen lists every question of the inwoner, also beyond the 25th."""
+    need_bootstrap(INWONER.name, "openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-openklant")
+    mijn_vragen = podiumd_env.profile.urls["openinwoner"] + MIJN_VRAGEN
+    portal_login(page, podiumd_env, "digid", INWONER, MIJN_VRAGEN)
+    partijen = partijen_of(openklant, INWONER.attributes["bsn"][0])
+    assert len(partijen) == 1, f"inwoner has {len(partijen)} partijen in Open Klant"
+    partij = {"uuid": partijen[0].rsplit("/", 1)[-1]}
+    tag = registry.tagged("veel-vragen")
+    for number in range(MANY_QUESTIONS):
+        question = make_klantcontact(
+            openklant, registry, kanaal="contactformulier", onderwerp=SUBJECT, inhoud=f"{tag}-{number}"
+        )
+        make_betrokkene(openklant, registry, question, partij)
+    # Mijn vragen shows 9 questions per page; a page number past the last answers 404.
+    shown = 0
+    for number in itertools.count(1):
+        response = page.goto(f"{mijn_vragen}?page={number}")
+        if response and response.status == HTTPStatus.NOT_FOUND:
+            break
+        shown += page.locator(".card", has_text=tag).count()
+    assert shown == MANY_QUESTIONS
+
+
 @pytest.mark.requires("ita", "objecten")
 def test_question_answered_in_ita_shows_as_answered(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
@@ -224,7 +262,7 @@ def test_question_answered_in_ita_shows_as_answered(  # pylint: disable=too-many
     # ITA has no call to close the taak; KCC closes it as it does in ITA's UI.
     openklant.patch(str(taak["url"]), {"status": "verwerkt"})
     page.context.clear_cookies()
-    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/contactmomenten/")
+    portal_login(page, podiumd_env, "digid", INWONER, MIJN_VRAGEN)
     card = page.locator(".card", has_text=vraag)
     expect(card).to_contain_text("Beantwoord")
     card.locator("a").first.click()
