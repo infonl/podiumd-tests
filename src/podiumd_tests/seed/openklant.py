@@ -204,12 +204,16 @@ def make_onderwerpobject(
 
 
 def delete_klantcontact_tree(openklant: ApiClient, url: str) -> None:
-    """Delete a klantcontact with the interne taken, onderwerpobjecten and betrokkenen hanging off it."""
+    """Delete a klantcontact with the interne taken, onderwerpobjecten, betrokkenen and their digitale adressen."""
     expand = "leiddeTotInterneTaken,gingOverOnderwerpobjecten,hadBetrokkenen"
     found = openklant.request("GET", url, HTTPStatus.OK, HTTPStatus.NOT_FOUND, params={"expand": expand})
     if found.status_code == HTTPStatus.NOT_FOUND:
         return
     inlined = section(cast("JsonObject", found.json()), "_expand")
+    # Open Klant keeps a betrokkene's digitale adressen when the betrokkene goes.
+    for betrokkene in entries(inlined.get("hadBetrokkenen")):
+        for adres in entries(betrokkene.get("digitaleAdressen")):
+            openklant.delete(str(adres["url"]))
     for key in expand.split(","):
         for item in entries(inlined.get(key)):
             openklant.delete(str(item["url"]))
