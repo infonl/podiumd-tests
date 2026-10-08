@@ -450,3 +450,40 @@ Porting rule: triage each source test as **port**, **merge** (into a parametrize
 ## 12. Open questions
 
 1. Which ExternalsPodiumD environments are smoke-only and which run the full set? Not known yet. Until it is decided, every new profile defaults to `allowed_tiers: [smoke]`.
+
+## 13. Open work
+
+Updated 2026-10-08. The detail lives where it is kept up to date: blocked ports as `todo` rows in `MIGRATION.md` (`grep '| todo |' MIGRATION.md`), product bugs as strict xfails whose reason names the bug (a fix makes the test fail, so it gets noticed).
+
+**Blocked ports (waiting for an environment):**
+
+| Tests | Waits for |
+|---|---|
+| TA 80, 81, 82, 115, 116, the OMC part of 154; MK `test_omc.py` (`/Events/Version` with a JWT) | an OMC that handles Open Notificaties' notifications (1.17.19 answers 206 to each); then turn it on in minikube |
+| TA smoke 155, regression 156 | a profile with an `esuite` URL and credentials (eSuite is outside PodiumD) |
+| TA `perf/fg-compare.js` | an environment with both a Frank!Gateway route and a direct route to Open Zaak |
+
+**Findings to report upstream** (each a strict xfail; reasons say "not yet reported upstream"):
+
+| Product | Finding | Test |
+|---|---|---|
+| Open Zaak 1.29.3 | DELETE of a zaak with a resultaat answers 500 although it deletes it | `test_closed_zaak_delete_answers_204` |
+| Open Zaak 1.29.3 | `_zoek` ignores an unknown filter and returns all zaken | `test_zoek_refuses_an_unknown_filter` |
+| Open Zaak 1.29.3 | audittrails need `heeft_alle_autorisaties` | `test_document_audittrail_with_catalogus_rights` |
+| Open Archiefbeheer | a destruction never finishes because of the Open Zaak 500 | `test_destruction_deletes_the_zaak_and_leaves_a_report` |
+| Open Notificaties | an unreachable callback URL answers 500 instead of 400 | `test_abonnement_with_an_unreachable_callback_is_refused` |
+| Open Inwoner | `deactivated_on` does not stop a DigiD login | `test_disabled_account_cannot_log_in[deactivated]` |
+| OMC 1.17.19 | 206 to every notification ('source' property), so no mail | `tests/integration/test_omc.py` |
+| mozilla-django-oidc | an unconfigured admin login answers 500 (`ImproperlyConfigured`) instead of refusing | none: every estate configures it |
+
+**Configuration finding for the estates:** KISS's Objecten token has no rights on Activiteitenlog, so KISS shows none of ITA's activities (`test_kiss_reads_itas_logboek`, the same in ExternalsPodiumD, podiumd-infra and minikube).
+
+**Pipelines (§7a):**
+
+- `.github/workflows/run.yml` has not run end to end: podiumd-infra adds the calling workflow with its Azure OIDC identity (and a self-hosted runner if the AKS API is private).
+- SCC Twente: runs from a machine with access, with the container image; an Azure DevOps template only once pipeline rights exist.
+- The container image is built locally; publishing it (e.g. to GHCR) when a pipeline needs it.
+
+**Perf:** the trend check needs 3 earlier runs with the same users, duration and volume data per environment before it judges; minikube has them only for runs without volume data so far.
+
+**Phase 8 (decommission):** coverage report against the draaiboek, then freeze TA, MK and PI's tests (MIGRATION.md has a decision for every source test).
