@@ -12,6 +12,8 @@ import secrets
 import threading
 
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
+from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import cache
 from importlib.resources import files
@@ -36,9 +38,11 @@ from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.registry import ResourceRegistry
+from podiumd_tests.workloads import scaled
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from collections.abc import Generator
 
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
@@ -304,6 +308,22 @@ class Seeded:
     before: int
     after: int
     detail: str = ""
+
+
+@contextmanager
+def faster(env: Environment, replicas: int) -> Generator[None]:
+    """TA's --scale-cluster: Open Zaak, Open Klant and their workers at `replicas` in the block (0: unchanged).
+
+    TA's --no-notify is not ported: Open Zaak refuses every write while it has no Notificaties service.
+    """
+    with ExitStack() as stack:
+        for component in ("openzaak", "openklant"):
+            if replicas and not env.capabilities.skip_reason(component):
+                main = env.deployment_for(component)
+                for deployment in (main, f"{main}-worker"):
+                    if deployment in env.deployment_names:
+                        stack.enter_context(scaled(env.kube, deployment, replicas))
+        yield
 
 
 def seed(env: Environment, scale: str, *, parallel: int) -> list[Seeded]:

@@ -53,6 +53,7 @@ from podiumd_tests.results import run_dir
 from podiumd_tests.results import run_tag
 from podiumd_tests.results import suite_commit
 from podiumd_tests.results import write_run
+from podiumd_tests.seed.volume import faster
 from podiumd_tests.seed.volume import format_seeded
 from podiumd_tests.seed.volume import seed
 from podiumd_tests.seed.volume import unseed
@@ -262,7 +263,10 @@ def cmd_seed_volume(args: argparse.Namespace) -> int:
     env = _volume_env(args)
     if isinstance(env, int):
         return env
-    with held(env.profile.settings.get("lock_file"), f"seed-volume {env.profile.name}"):
+    with (
+        held(env.profile.settings.get("lock_file"), f"seed-volume {env.profile.name}"),
+        faster(env, args.scale_cluster),
+    ):
         print(format_seeded(seed(env, args.scale, parallel=args.parallel)))
     return EXIT_OK
 
@@ -336,6 +340,9 @@ def _add_volume_commands(add_parser: Callable[..., argparse.ArgumentParser]) -> 
     vol.add_argument("--env", required=True)
     vol.add_argument("--scale", choices=["smoke", "perf"], default="smoke", help="counts to reach (default: smoke)")
     vol.add_argument("--parallel", type=int, default=8, help="concurrent creates (default 8)")
+    vol.add_argument(
+        "--scale-cluster", type=int, default=0, help="run Open Zaak, Open Klant and workers at N replicas meanwhile"
+    )
     vol.add_argument("--skip-doctor", action="store_true")
     vol.set_defaults(func=cmd_seed_volume)
 

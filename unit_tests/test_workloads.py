@@ -8,7 +8,7 @@ from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
 from podiumd_tests.workloads import failed_jobs
 from podiumd_tests.workloads import run_cronjob
-from podiumd_tests.workloads import stopped
+from podiumd_tests.workloads import scaled
 from podiumd_tests.workloads import unhealthy_pods
 from podiumd_tests.workloads import unready_workloads
 
@@ -59,14 +59,16 @@ def test_failed_jobs_counts_only_the_latest_cronjob_run():
     assert failed_jobs(jobs) == ["other-1", "setup"]
 
 
-def test_stopped_restores_the_replicas_also_when_the_block_fails(fake_runner):
+def test_scaled_restores_the_replicas_also_when_the_block_fails(fake_runner):
     fake_runner.answers = {"get deployment openzaak": (0, json.dumps({"spec": {"replicas": 2}})), "": (0, "")}
-    with pytest.raises(RuntimeError), stopped(Kube("ctx", "podiumd", fake_runner), "openzaak"):
+    with pytest.raises(RuntimeError), scaled(Kube("ctx", "podiumd", fake_runner), "openzaak", 0):
         raise RuntimeError
+    rollout = ["rollout", "status", "deployment/openzaak", "--timeout=300s"]
     assert [c[5:] for c in fake_runner.calls[1:]] == [
         ["scale", "deployment/openzaak", "--replicas=0"],
+        rollout,
         ["scale", "deployment/openzaak", "--replicas=2"],
-        ["rollout", "status", "deployment/openzaak", "--timeout=300s"],
+        rollout,
     ]
 
 

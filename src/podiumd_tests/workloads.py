@@ -41,15 +41,19 @@ def _int(value: object) -> int:
 
 
 @contextmanager
-def stopped(kube: Kube, deployment: str, timeout: int = 300) -> Generator[None]:
-    """Scale the deployment to 0 for the block; afterwards restore its replicas and wait for the rollout."""
-    replicas = _int(section(kube.get_json("deployment", deployment), "spec").get("replicas"))
-    kube.run("scale", f"deployment/{deployment}", "--replicas=0")
+def scaled(kube: Kube, deployment: str, replicas: int, timeout: int = 300) -> Generator[None]:
+    """Run the block with the deployment at `replicas`; afterwards restore its replicas. Both wait for the rollout."""
+    before = _int(section(kube.get_json("deployment", deployment), "spec").get("replicas"))
+
+    def scale(count: int) -> None:
+        kube.run("scale", f"deployment/{deployment}", f"--replicas={count}")
+        kube.run("rollout", "status", f"deployment/{deployment}", f"--timeout={timeout}s", timeout=timeout + 10)
+
+    scale(replicas)
     try:
         yield
     finally:
-        kube.run("scale", f"deployment/{deployment}", f"--replicas={replicas}")
-        kube.run("rollout", "status", f"deployment/{deployment}", f"--timeout={timeout}s", timeout=timeout + 10)
+        scale(before)
 
 
 def run_cronjob(kube: Kube, cronjob: str, job: str, timeout: int = 300) -> None:

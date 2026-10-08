@@ -16,7 +16,7 @@ from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import get_root
 from podiumd_tests.responses import is_server_error
 from podiumd_tests.wait import wait_until
-from podiumd_tests.workloads import stopped
+from podiumd_tests.workloads import scaled
 
 if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
@@ -41,7 +41,7 @@ def test_stopped_component_harms_no_other(
 ) -> None:
     """While the component is stopped its root fails and every other root answers (TA reg-89, 124, 144)."""
     others = [c for c in sorted(urls) if c != component and c in COMPONENTS and answers(http, urls[c])]
-    with stopped(podiumd_env.kube, podiumd_env.deployment_for(component)):
+    with scaled(podiumd_env.kube, podiumd_env.deployment_for(component), 0):
         wait_until(lambda: not answers(http, urls[component]), timeout=120, description=f"{component} stopped")
         assert [c for c in others if not answers(http, urls[c])] == []
     wait_until(lambda: answers(http, urls[component]), timeout=300, description=f"{component} answers again")
