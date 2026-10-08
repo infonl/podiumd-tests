@@ -51,9 +51,9 @@ def openklant_client(env: Environment) -> ApiClient:
     return ApiClient(env.session(cookies=False), url, {"Authorization": f"Token {token}"})
 
 
-def objecten_client(env: Environment) -> ApiClient:
-    """Objecten API with the suite's own token."""
-    token = env.credentials.get(OBJECTEN_STORE_KEY)
+def objecten_client(env: Environment, token_key: str = OBJECTEN_STORE_KEY) -> ApiClient:
+    """Objecten API with the suite's own token, or with the secret token_key (e.g. an app's token)."""
+    token = env.credentials.get(token_key)
     headers = {"Authorization": f"Token {token}", "Content-Crs": "EPSG:4326", "Accept-Crs": "EPSG:4326"}
     return ApiClient(env.session(cookies=False), env.profile.urls["objecten"] + "/api/v2", headers)
 

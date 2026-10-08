@@ -2,7 +2,8 @@
 
 Ported from TA regression 77, 73 and interaction 74 and 180 (with a numeric nummer and the
 current add-klantcontact body; the TA versions failed on both). Claiming and answering write
-ITA's logboek to Objecten, which needs an edge that buffers request bodies, as nginx does.
+ITA's logboek to Objecten, which needs an edge that buffers request bodies, as nginx does;
+KISS reads that logboek with its own Objecten token.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from typing import cast
 import pytest
 
 from podiumd_tests.bootstrap.steps import KCC
+from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.json_data import entries
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.responses import describe
@@ -24,6 +26,7 @@ from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import klantcontact_body
 from podiumd_tests.seed.openklant import make_internetaak
 from podiumd_tests.seed.openklant import make_klantcontact
+from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -63,6 +66,12 @@ def fixture_taak(
     return taak
 
 
+def claim(ita: requests.Session, urls: dict[str, str], taak: JsonObject) -> None:
+    """The KCC user claims the internetaak in ITA."""
+    response = ita.post(f"{urls['ita']}/api/internetaken/{taak['uuid']}/aan-mij-toewijzen", json={})
+    expect_status(response, HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.NO_CONTENT)
+
+
 def get_list(ita: requests.Session, url: str) -> list[JsonObject]:
     """GET an ITA list; it must answer 200 with a JSON array."""
     response = expect_status(ita.get(url), HTTPStatus.OK)
@@ -80,8 +89,7 @@ def test_claimed_internetaak_is_on_my_list(
     ita: requests.Session, urls: dict[str, str], openklant: ApiClient, taak: JsonObject
 ) -> None:
     """A claimed internetaak is assigned to the user's actor and on the user's list (TA int-74, reg-73)."""
-    claim = ita.post(f"{urls['ita']}/api/internetaken/{taak['uuid']}/aan-mij-toewijzen", json={})
-    expect_status(claim, HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.NO_CONTENT)
+    claim(ita, urls, taak)
     assert entries(openklant.get(f"internetaken/{taak['uuid']}")["toegewezenAanActoren"])
     mine = get_list(ita, urls["ita"] + "/api/internetaken/aan-mij-toegewezen")
     assert taak["uuid"] in {str(t.get("uuid")) for t in mine}
@@ -133,3 +141,28 @@ def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(  # pylint: 
     expect_status(forward, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     assigned = entries(openklant.get(f"internetaken/{taak['uuid']}")["toegewezenAanActoren"])
     assert {str(a["uuid"]) for a in assigned} & {str(a["uuid"]) for a in openklant.list("actoren", actoren)}
+
+
+@pytest.mark.requires("kiss", "objecten", "cluster")
+@pytest.mark.xfail(
+    strict=True,
+    reason="reference configuration (ExternalsPodiumD, podiumd-infra, minikube): KISS's Objecten token"
+    " (LOGBOEK_TOKEN) has no permission on Activiteitenlog, only ITA's has; Objecten answers 200 with"
+    " an empty list, so KISS shows none of ITA's activities",
+)
+def test_kiss_reads_itas_logboek(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    ita: requests.Session,
+    urls: dict[str, str],
+    podiumd_env: Environment,
+    objecten: ApiClient,
+    logboek_type: str,
+    taak: JsonObject,
+) -> None:
+    """The logboek entry ITA writes when claiming an internetaak is visible with KISS's logboek token."""
+    if not podiumd_env.credentials.configured("kiss_logboek_token"):
+        pytest.skip(f"profile {podiumd_env.profile.name} has no secret kiss_logboek_token")
+    claim(ita, urls, taak)
+    query = {"type": logboek_type, "data_attr": f"heeftBetrekkingOp__objectId__exact__{taak['uuid']}"}
+    written = wait_until(lambda: objecten.list("objects", query), timeout=30, description="ITA's logboek entry")
+    kiss = objecten_client(podiumd_env, "kiss_logboek_token")
+    assert [o["url"] for o in kiss.list("objects", query)] == [o["url"] for o in written]

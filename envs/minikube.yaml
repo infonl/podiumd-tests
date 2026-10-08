@@ -45,6 +45,9 @@ secrets:
   # Read from Open Zaak in the cluster: the Open Formulieren client, for read-only smoke.
   pabc_api_key:
     pod_env: {deployment: pabc, var: API_KEY__0}
+  # KISS's Objecten token for its logboek (Activiteitenlog), as the contact pod sees it.
+  kiss_logboek_token:
+    pod_env: {deployment: contact-web, var: LOGBOEK_TOKEN}
   zgw_client_secret:
     zgw_jwt_secret: {deployment: openzaak, client_id: open-formulieren}
 settings:
