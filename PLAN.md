@@ -255,6 +255,12 @@ The pipelines are not decided yet. They will likely be GitHub Actions inside pod
 - **Stable logs:** `run` folds `doctor` and pytest into collapsible sections (`::group::` on GitHub Actions, `##[group]` on Azure DevOps, nothing elsewhere) and publishes `summary.md` as the step summary (`$GITHUB_STEP_SUMMARY`) or build summary (`##vso[task.uploadsummary]`) (`podiumd_tests/ci.py`).
 - **Locking:** every writing command (bootstrap, unbootstrap, sweep, seed-volume, unseed-volume, a run of any tier but smoke) takes a Lease `podiumd-tests-lock` in the environment's namespace when it has cluster access, so console and pipeline runs see each other. The Lease names its holder (user@host and what) and expires after `settings.lock_lease_seconds` (default 3 h); `doctor` reports it. A profile's `settings.lock_file` adds a local lock file shared with other agents on the same machine.
 
+**What phase 7 built (2026-10-08).** The platforms are not decided yet, so the suite ships the pieces each one needs:
+
+- `.github/workflows/checks.yml`: the suite's own code checks on every push and pull request.
+- `.github/workflows/run.yml`: a reusable workflow that another repository calls with an environment, a tier and its Azure OIDC identity. It installs the suite, gets the AKS credentials under the profile's kube context (with kubelogin), bootstraps for all tiers but smoke, runs the tier and keeps the results as an artifact. Meant for podiumd-infra's GitHub Actions; a private AKS API needs a self-hosted runner (`runs-on`). Not yet run end to end: that needs podiumd-infra's identity.
+- `Dockerfile`: the suite with all its tools, for runs from a machine with access where no pipeline can be created (SCC Twente), and for an Azure DevOps template later.
+
 ## 8. Repo layout
 
 The layout is a standard `src/` Python package, chosen for this project:

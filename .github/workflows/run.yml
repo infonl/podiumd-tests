@@ -1,0 +1,108 @@
+# Reusable: run a tier of podiumd-tests against one environment from another repository's workflow,
+# e.g. podiumd-infra. The caller grants `id-token: write` and passes its Azure OIDC identity:
+#
+#   jobs:
+#     smoke:
+#       permissions: {id-token: write, contents: read}
+#       uses: infonl/podiumd-tests/.github/workflows/run.yml@main
+#       with: {env: kees00, tier: smoke, aks-resource-group: rg-podiumd-kees00, aks-name: podiumd-kees00-aks}
+#       secrets: {azure-client-id: ..., azure-tenant-id: ..., azure-subscription-id: ...}
+#
+# The profile (envs/**/<env>.yaml) names the kube context; secrets come from the cluster and Key Vault
+# as on a console. Results are the job's artifact, and summary.md its step summary.
+name: run
+
+on:
+  workflow_call:
+    inputs:
+      env:
+        description: Profile name (envs/**/<env>.yaml)
+        type: string
+        required: true
+      tier:
+        description: smoke, core, full, perf or chaos; the profile's allowed_tiers decide
+        type: string
+        default: smoke
+      aks-resource-group:
+        description: Resource group of the AKS cluster
+        type: string
+        required: true
+      aks-name:
+        description: Name of the AKS cluster
+        type: string
+        required: true
+      suite-ref:
+        description: Branch, tag or commit of podiumd-tests to run
+        type: string
+        default: main
+      pytest-args:
+        description: Extra pytest arguments, e.g. "--perf-users 10"
+        type: string
+        default: ""
+      runs-on:
+        description: Runner label; a self-hosted runner when the AKS API is private
+        type: string
+        default: ubuntu-24.04
+    secrets:
+      azure-client-id:
+        required: true
+      azure-tenant-id:
+        required: true
+      azure-subscription-id:
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  run:
+    runs-on: ${{ inputs.runs-on }}
+    env:
+      PODIUMD_TESTS_ENV: ${{ inputs.env }}
+      PODIUMD_TESTS_TIER: ${{ inputs.tier }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          repository: infonl/podiumd-tests
+          ref: ${{ inputs.suite-ref }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install the suite and Chromium
+        run: |
+          pip install -e .
+          python -m playwright install --with-deps chromium
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.azure-client-id }}
+          tenant-id: ${{ secrets.azure-tenant-id }}
+          subscription-id: ${{ secrets.azure-subscription-id }}
+      - uses: azure/use-kubelogin@v1
+        with:
+          kubelogin-version: v0.2.20
+      - name: Kube context of the profile
+        env:
+          RESOURCE_GROUP: ${{ inputs.aks-resource-group }}
+          AKS_NAME: ${{ inputs.aks-name }}
+        run: |
+          context=$(python -c 'import os; from podiumd_tests.config import default_envs_dir, load_profile; print(load_profile(os.environ["PODIUMD_TESTS_ENV"], default_envs_dir()).kube.context)')
+          az aks get-credentials --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" --context "$context" --overwrite-existing
+          kubelogin convert-kubeconfig -l azurecli
+      - name: Bootstrap (all tiers but smoke)
+        if: inputs.tier != 'smoke'
+        run: podiumd-tests bootstrap
+      - name: Run the tier
+        env:
+          PYTEST_ARGS: ${{ inputs.pytest-args }}
+        run: |
+          # shellcheck disable=SC2086  # PYTEST_ARGS holds several arguments
+          podiumd-tests run --results-dir results -- $PYTEST_ARGS
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: podiumd-tests-${{ inputs.env }}-${{ inputs.tier }}
+          path: results/
+          if-no-files-found: ignore

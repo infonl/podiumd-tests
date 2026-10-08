@@ -44,6 +44,10 @@ set as `PODIUMD_TESTS_ENV`, `PODIUMD_TESTS_TIER`, ...; secrets as
 `PODIUMD_TESTS_SECRET_<NAME>`. On GitHub Actions and Azure DevOps a run folds
 its log into sections and publishes `summary.md` on the job page.
 
+From another repository's GitHub Actions (e.g. podiumd-infra), call the reusable
+workflow `.github/workflows/run.yml`; its header shows how. Without pipeline
+rights (SCC Twente), run the container image from a machine that has access.
+
 ## Environment profiles
 
 `envs/**/<name>.yaml` holds everything non-secret about an environment: kube
