@@ -50,7 +50,7 @@ Sources:
 | `perf/fg-compare.js` | perf (Locust) | 6 | todo | |
 | `perf/lib.js` | perf (Locust) | 6 | todo | |
 | `regression/07-brp-persoon-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/basisregistraties/test_brp.py`, through the api-proxy. |
-| `regression/08-kvk-bedrijf-zoeken.spec.ts` | component or integration | 3/4/5 | todo | Needs the KvK test set (68750110); minikube's KvK is WireMock with fixed mappings. |
+| `regression/08-kvk-bedrijf-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/basisregistraties/test_kvk.py` through the api-proxy (TA called KvK's test API directly; QA's proxy routes there). Skips where the proxy's KvK lacks the test set (minikube's WireMock). |
 | `regression/100-kiss-frontend-basis.spec.ts` | component or integration | 3/4/5 | port | `tests/component/kiss/test_anonymous.py`; the Vue shell check is phase 5. |
 | `regression/106-portaal-notificatievoorkeur.spec.ts` | component or integration | 3/4/5 | merge | With 165 into `tests/component/openinwoner/test_portaal_inwoner.py`. |
 | `regression/108-probe-contactform.spec.ts` | component or integration | 3/4/5 | todo | |
@@ -70,7 +70,7 @@ Sources:
 | `regression/122-gemachtigde-flow.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py: indicatieMachtiging. |
 | `regression/123-portaal-clamav-eicar-rejectie.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_portaal_zaken.py`; skips unless Open Inwoner's SiteConfiguration.enable_virus_scan is on (minikube runs no ClamAV). |
 | `regression/124-cluster-pod-recovery-multi.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/125-kvk-postcode-huisnummer-zoek.spec.ts` | component or integration | 3/4/5 | todo | Needs the KvK test set; minikube's KvK is WireMock with fixed mappings. |
+| `regression/125-kvk-postcode-huisnummer-zoek.spec.ts` | component or integration | 3/4/5 | port | Same as 08. |
 | `regression/13-va-filter-cross-component.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py, with client ptest-bootstrap-zgw-openbaar. |
 | `regression/14-audit-trail.spec.ts` | component or integration | 3/4/5 | todo | Open Zaak audittrails need heeft_alle_autorisaties (xfail in test_documenten.py); decide on a client with full rights. |
 | `regression/143-oab-vernietigingsflow.spec.ts` | component or integration | 3/4/5 | port | `test_vernietigingslijst.py`, through the API (make_final works without 2FA here); UI steps: todo. |
@@ -138,7 +138,7 @@ Sources:
 | `regression/44-validation-edge-cases.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_validatie.py, each invalid field named in invalidParams. |
 | `regression/45-internetaak-event.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/46-rol-delete-event.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/47-kvk-edge-cases.spec.ts` | component or integration | 3/4/5 | todo | 47b → `test_kvk.py`; 47a/c/d need the KvK test set (not on minikube's WireMock). |
+| `regression/47-kvk-edge-cases.spec.ts` | component or integration | 3/4/5 | port | `test_kvk.py`: 47b by kvk_nummer setting; 47a/c/d with the KvK test set, as 08. |
 | `regression/48-audit-trail-acties.spec.ts` | component or integration | 3/4/5 | todo | As 14: audittrails need heeft_alle_autorisaties. |
 | `regression/49-document-download.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_documenten.py test_document_versions_and_definitief. |
 | `regression/50-zaak-zoeken.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_statussen_rollen.py test_zaak_found_by_initiator_bsn. |
