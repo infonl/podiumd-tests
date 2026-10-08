@@ -1,6 +1,6 @@
 """Chain: a zaak in Open Zaak shows in the inwoner's or company's Mijn zaken in Open Inwoner.
 
-Ported from TA interaction 21, 31, 111, 141, 162 and 164, regression 61, 95 and 143. Open Inwoner reaches
+Ported from TA interaction 21, 31, 111, 141, 162 and 164, regression 61, 95, 123 and 143. Open Inwoner reaches
 Open Zaak through the API group of wiring W4 (no zaken cache), the pages are W5, the logins W1;
 upload and questions need the zaaktype configuration (bootstrap openinwoner-zaaktype-config).
 """
@@ -19,6 +19,8 @@ from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.browser import browser_session
 from podiumd_tests.json_data import section
 from podiumd_tests.openinwoner import portal_login
+from podiumd_tests.openinwoner import upload_document
+from podiumd_tests.openinwoner import virus_scan_enabled
 from podiumd_tests.seed.openklant import clean_up_new_partijen
 from podiumd_tests.seed.openklant import delete_klantcontact_tree
 from podiumd_tests.seed.openzaak import ZAKEN
@@ -48,6 +50,8 @@ pytestmark = [
 ]
 
 INWONER, _, BEDRIJF = IDENTITIES
+# The EICAR anti-virus test file: every virus scanner reports it, it is no malware.
+EICAR = rb"X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
 WIRING = ("openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-zgw-group")
 
 
@@ -176,17 +180,36 @@ def test_uploaded_document_reaches_the_zaak(  # pylint: disable=too-many-argumen
     bestand = f"{registry.tagged('upload')}.txt"
     portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
     page.locator(f'a[href*="{zaak["uuid"]}"]').first.click()
-    upload = page.locator("#document-upload")
-    upload.locator('input[name="file"]').set_input_files(
-        files=[{"name": bestand, "mimeType": "text/plain", "buffer": bestand.encode()}]
-    )
-    upload.get_by_role("button", name="Upload documenten").click()
+    upload_document(page, bestand, bestand.encode())
+    found = wait_until(lambda: documents_of(openzaak, zaak), timeout=30, description=f"document {bestand} on the zaak")
+    assert bestand in found
 
-    def uploaded() -> list[str]:
-        links = openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": str(zaak["url"])})
-        return [str(openzaak.get(str(link["informatieobject"])).get("bestandsnaam")) for link in links]
 
-    assert bestand in wait_until(uploaded, timeout=30, description=f"document {bestand} on the zaak")
+@pytest.mark.requires("cluster")
+def test_infected_upload_is_refused(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    parts: ZaaktypeParts,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """With ClamAV on, an upload of the EICAR test file does not reach the zaak (TA reg-123)."""
+    if not virus_scan_enabled(podiumd_env):
+        pytest.skip("Open Inwoner scans no uploads (SiteConfiguration.enable_virus_scan off)")
+    need_bootstrap(INWONER.name, *WIRING, "openinwoner-zaaktype-config")
+    zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
+    clean_up_new_documents(openzaak, registry, zaak)
+    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
+    page.locator(f'a[href*="{zaak["uuid"]}"]').first.click()
+    upload_document(page, f"{registry.tagged('eicar')}.txt", EICAR)
+    assert documents_of(openzaak, zaak) == []
+
+
+def documents_of(openzaak: ApiClient, zaak: JsonObject) -> list[str]:
+    """The file names of the zaak's documents."""
+    links = openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": str(zaak["url"])})
+    return [str(openzaak.get(str(link["informatieobject"])).get("bestandsnaam")) for link in links]
 
 
 @pytest.mark.core

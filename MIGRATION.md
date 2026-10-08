@@ -68,7 +68,7 @@ Sources:
 | `regression/120-of-payment-infrastructure.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/platform/test_public_surface.py`. |
 | `regression/121-continuiteit-graceful-degradation.spec.ts` | component or integration | 3/4/5 | port | `tests/component/platform/test_public_surface.py`; BRP and KvK parts wait for their ingress (handoff 6). |
 | `regression/122-gemachtigde-flow.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py: indicatieMachtiging. |
-| `regression/123-portaal-clamav-eicar-rejectie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/123-portaal-clamav-eicar-rejectie.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_portaal_zaken.py`; skips unless Open Inwoner's SiteConfiguration.enable_virus_scan is on (minikube runs no ClamAV). |
 | `regression/124-cluster-pod-recovery-multi.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/125-kvk-postcode-huisnummer-zoek.spec.ts` | component or integration | 3/4/5 | todo | Needs the KvK test set; minikube's KvK is WireMock with fixed mappings. |
 | `regression/13-va-filter-cross-component.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py, with client ptest-bootstrap-zgw-openbaar. |

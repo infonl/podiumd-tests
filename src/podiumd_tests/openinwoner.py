@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.browser import keycloak_login
+from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.responses import url_host
 
 if TYPE_CHECKING:
@@ -36,3 +37,19 @@ def refuse_cookies(page: Page) -> None:
     banner = page.get_by_role("button", name="Alles weigeren")
     if banner.count() and banner.first.is_visible():
         banner.first.click()
+
+
+def upload_document(page: Page, name: str, content: bytes) -> None:
+    """Upload a file with the form on the zaak status page the browser shows; returns when Open Inwoner answered."""
+    upload = page.locator("#document-upload")
+    upload.locator('input[name="file"]').set_input_files(
+        files=[{"name": name, "mimeType": "text/plain", "buffer": content}]
+    )
+    with page.expect_response(lambda r: r.request.method == "POST" and "/document-form/" in r.url):
+        upload.get_by_role("button", name="Upload documenten").click()
+
+
+def virus_scan_enabled(env: Environment) -> bool:
+    """True when Open Inwoner scans uploads with ClamAV."""
+    return bool(run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_virus_scan", {}))
+
