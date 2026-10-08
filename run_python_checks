@@ -41,7 +41,8 @@ mapfile -t shell_scripts < <(
         sort
 )
 wait "$!"
-mapfile -t markdown_files < <(find . -path ./.venv -prune -o -path ./.git -prune -o -name '*.md' -print | sort)
+# results/: generated run summaries, not authored markdown.
+mapfile -t markdown_files < <(find . -path ./.venv -prune -o -path ./.git -prune -o -path ./results -prune -o -name '*.md' -print | sort)
 wait "$!"
 
 echo "=== ruff check ==="
