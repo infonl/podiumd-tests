@@ -16,10 +16,13 @@ from playwright.sync_api import expect
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.bootstrap.steps import KCC
+from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.openinwoner import portal_login
+from podiumd_tests.openinwoner import refuse_cookies
 from podiumd_tests.openinwoner import set_account
+from podiumd_tests.openinwoner import solve_captcha
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import clean_up_logboek
 from podiumd_tests.seed.objecten import objecttype_url
@@ -145,6 +148,35 @@ def test_company_question_reaches_open_klant(  # pylint: disable=too-many-argume
     betrokkenen = expanded(openklant, str(question_in_open_klant(openklant, vraag)["url"]), "hadBetrokkenen")
     partijen = {str(section(b, "wasPartij").get("url")) for b in betrokkenen}
     assert partijen & set(partijen_of(openklant, vestiging)), "the question is not the vestiging's"
+
+
+@pytest.mark.tc("OI-038", "OI-079")
+def test_anonymous_question_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """Without a login, the contact form sends the question to Open Klant with the name and e-mail address, no partij."""
+    need_bootstrap("openinwoner-cms-pages", "openinwoner-openklant")
+    vraag = registry.tagged("anonieme-vraag")
+    adres = f"{vraag}@example.invalid"
+    clean_up_klantcontacten(openklant, registry, SUBJECT, vraag)
+    page.goto(podiumd_env.profile.urls["openinwoner"] + "/contactformulier/")
+    refuse_cookies(page)
+    form = page.locator("#contactmoment-form")
+    form.locator('select[name="subject"]').select_option(label=SUBJECT)
+    form.locator('input[name="first_name"]').fill("Anoniem")
+    form.locator('input[name="last_name"]').fill("Test")
+    form.locator('input[name="email"]').fill(adres)
+    form.locator('textarea[name="question"]').fill(vraag)
+    solve_captcha(page)
+    form.get_by_role("button", name="Verzenden").click()
+    betrokkene = expanded(openklant, str(question_in_open_klant(openklant, vraag)["url"]), "hadBetrokkenen")[0]
+    assert betrokkene["wasPartij"] is None, "an anonymous question is linked to a partij"
+    assert betrokkene["volledigeNaam"] == "Anoniem Test"
+    assert [openklant.get(str(a["url"]))["adres"] for a in entries(betrokkene["digitaleAdressen"])] == [adres]
 
 
 @pytest.mark.requires("ita", "objecten")

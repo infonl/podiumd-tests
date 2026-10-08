@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from typing import TYPE_CHECKING
 from typing import Any
 from typing import cast
@@ -40,6 +42,17 @@ def refuse_cookies(page: Page) -> None:
     banner = page.get_by_role("button", name="Alles weigeren")
     if banner.count() and banner.first.is_visible():
         banner.first.click()
+
+
+def solve_captcha(page: Page) -> None:
+    """Answer the sum ("Wat is 6 - 3?") the contact form asks anonymous users."""
+    question = page.locator(".captcha__check").inner_text()
+    match = re.search(r"(\d+)\s*([+-])\s*(\d+)", question)
+    if not match:
+        msg = f"no sum in Open Inwoner's captcha: {question!r}"
+        raise AssertionError(msg)
+    first, operator, second = int(match[1]), match[2], int(match[3])
+    page.locator('input[name="captcha"]').fill(str(first + second if operator == "+" else first - second))
 
 
 def choose_document(page: Page, name: str, content: bytes) -> Locator:
