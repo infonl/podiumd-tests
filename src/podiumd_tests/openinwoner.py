@@ -9,6 +9,8 @@ from typing import Any
 from typing import cast
 
 from podiumd_tests.auth.keycloak_admin import user_email
+from podiumd_tests.bootstrap.steps import IDENTITIES
+from podiumd_tests.bootstrap.steps import OI_BEGELEIDER
 from podiumd_tests.browser import keycloak_login
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.responses import url_host
@@ -19,6 +21,10 @@ if TYPE_CHECKING:
 
     from podiumd_tests.bootstrap.steps import KeycloakUser
     from podiumd_tests.environment import Environment
+
+INWONER, _, BEDRIJF = IDENTITIES
+# The portal's kinds of user: their test identity and login method.
+LOGINS = {"inwoner": (INWONER, "digid"), "bedrijf": (BEDRIJF, "eherkenning")}
 
 
 def portal_login(page: Page, env: Environment, method: str, user: KeycloakUser, next_path: str = "/") -> None:
@@ -35,6 +41,32 @@ def portal_login(page: Page, env: Environment, method: str, user: KeycloakUser, 
         page.wait_for_url(lambda url: "/register/necessary/" not in url)
         # Open Inwoner ignores `next` after the registration.
         page.goto(portal + next_path)
+
+
+def begeleider_login(page: Page, env: Environment) -> None:
+    """Log the test begeleider (bootstrap OI_BEGELEIDER) in with its password.
+
+    The login page shows the password form only when registration is allowed, so the browser
+    posts it itself, with the CSRF token of the contact form page.
+    """
+    portal = env.profile.urls["openinwoner"]
+    page.goto(portal + "/contactformulier/")
+    body = {
+        "csrfmiddlewaretoken": page.locator('input[name="csrfmiddlewaretoken"]').first.input_value(),
+        "username": str(OI_BEGELEIDER.params["email"]),
+        "password": env.credentials.get(str(OI_BEGELEIDER.store_key)),
+    }
+    page.evaluate(
+        "([url, body]) => fetch(url, {method: 'POST', body: new URLSearchParams(body), redirect: 'manual'})",
+        [portal + "/accounts/login/", body],
+    )
+    refuse_cookies(page)
+
+
+def reset_begeleider(env: Environment) -> None:
+    """Delete the test begeleider's plans and drop its contacts (snippet oi_begeleider_reset)."""
+    params = {"email": OI_BEGELEIDER.params["email"]}
+    run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_begeleider_reset", params)
 
 
 def refuse_cookies(page: Page) -> None:

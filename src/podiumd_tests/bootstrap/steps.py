@@ -299,10 +299,18 @@ def openinwoner_openklant_params(ctx: Context) -> dict[str, object]:
     }
 
 
-def django_user_step(component: str, key: str, groups: tuple[str, ...]) -> SnippetStep:
+def django_user_step(
+    component: str, key: str, groups: tuple[str, ...] = (), *, staff: bool = True, fields: dict[str, str] | None = None
+) -> SnippetStep:
     """A local Django user ptest-bootstrap-<key> in a component, with groups and a random password."""
     username = f"{PREFIX}-{key}"
-    params: dict[str, object] = {"username": username, "email": user_email(username), "groups": list(groups)}
+    params: dict[str, object] = {
+        "username": username,
+        "email": user_email(username),
+        "groups": list(groups),
+        "staff": staff,
+        "fields": fields or {},
+    }
     return SnippetStep(
         f"{component}-user-{key}", (component,), "django_user", django_password_key(component, key), params
     )
@@ -417,6 +425,13 @@ OI_PAGES = [
         "namespace": "products",
     },
     {
+        "slug": "samenwerken",
+        "title": "Samenwerken",
+        "template": "cms/fullwidth.html",
+        "apphook": "CollaborateApphook",
+        "namespace": "collaborate",
+    },
+    {
         "slug": "contactformulier",
         "title": "Contactformulier",
         "template": "cms/contactform/form_outer.html",
@@ -426,6 +441,13 @@ OI_PAGES = [
         "plugin": {"slot": "contact_form", "type": "ContactFormPlugin"},
     },
 ]
+# A gemeente employee in Open Inwoner who starts a samenwerking (plan) with an inwoner or company.
+OI_BEGELEIDER = django_user_step(
+    "openinwoner",
+    "begeleider",
+    staff=False,
+    fields={"contact_type": "begeleider", "first_name": "PodiumD", "last_name": "Begeleider"},
+)
 # Open Formulieren's DigiD level of assurance when the mock sends none.
 LOA_DEFAULT = "urn:oasis:names:tc:SAML:2.0:ac:classes:MobileTwoFactorContract"
 # Where Open Inwoner finds the eHerkenning claims (mappers in oidc_mock.SCOPES).
@@ -662,6 +684,7 @@ STEPS: tuple[Step, ...] = (
         record=True,
         wiring=True,
     ),
+    OI_BEGELEIDER,
     # Wiring W4: Open Inwoner shows zaken through an API group (TA seed-oi-bedrading.sh).
     SnippetStep(
         "openinwoner-zgw-group",

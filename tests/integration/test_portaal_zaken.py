@@ -18,6 +18,7 @@ from playwright.sync_api import expect
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.browser import browser_session
 from podiumd_tests.json_data import section
+from podiumd_tests.openinwoner import LOGINS
 from podiumd_tests.openinwoner import choose_document
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.openinwoner import upload_document
@@ -56,8 +57,6 @@ LIST_TIMEOUT_MS = 30_000
 WIRING = ("openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-zgw-group")
 
 
-# Each identity of Mijn zaken: its Keycloak user and login method.
-LOGINS = {"inwoner": (INWONER, "digid"), "bedrijf": (BEDRIJF, "eherkenning")}
 # The company parameter of tests that open a zaak's detail.
 WHO = [
     "inwoner",
