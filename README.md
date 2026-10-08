@@ -16,6 +16,13 @@ python3 -m venv .venv
 You also need `kubectl` with a context for the environment, and `az` when the
 profile reads secrets from Azure Key Vault.
 
+Or use the container image, which has all of it (`kubectl`, `kubelogin`, `az`,
+Chromium); see the `Dockerfile` for how to run it with your kubeconfig:
+
+```bash
+docker build -t podiumd-tests .
+```
+
 ## Use
 
 ```bash
@@ -30,7 +37,12 @@ Tiers: `smoke`, `core`, `full`, `perf`, `chaos`. A profile's `allowed_tiers`
 limits which tiers may run against that environment.
 
 Exit codes: 0 pass, 1 test failures, 2 configuration or preflight error,
-3 tier not allowed for the environment.
+3 tier not allowed for the environment, 4 environment locked by another run.
+
+In a pipeline: `--env`, `--tier`, `--results-dir` and `--envs-dir` can also be
+set as `PODIUMD_TESTS_ENV`, `PODIUMD_TESTS_TIER`, ...; secrets as
+`PODIUMD_TESTS_SECRET_<NAME>`. On GitHub Actions and Azure DevOps a run folds
+its log into sections and publishes `summary.md` on the job page.
 
 ## Environment profiles
 

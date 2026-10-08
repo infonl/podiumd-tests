@@ -1,0 +1,11 @@
+.git
+.venv
+.idea
+.junie
+.claude
+.pytest_cache
+.ruff_cache
+**/__pycache__
+results
+docs/handoff
+session_memory.json
