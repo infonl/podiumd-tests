@@ -21,7 +21,7 @@ Sources:
 | `interaction/02-zaak-creatie.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openzaak/` test_zaken.py: lifecycle. |
 | `interaction/03-document-koppeling.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openzaak/` test_documenten.py: document linked to zaak. |
 | `interaction/09-ok2-klantcontact.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openklant/` test_klantcontacten.py: roundtrip, actor link. |
-| `interaction/10-cross-component-zaak-portaal.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | Open Zaak part → `tests/component/openzaak/` test_statussen_rollen.py (zaak found by initiator BSN); Portaal part: phase 5. |
+| `interaction/10-cross-component-zaak-portaal.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | Open Zaak part → `test_statussen_rollen.py` (zaak found by initiator BSN); Portaal part → `test_inwoners_zaak_is_in_mijn_zaken` (`tests/integration/test_portaal_zaken.py`). |
 | `interaction/105-portaal-profiel-edit.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openinwoner/test_portaal_inwoner.py` (formsets in this OI). |
 | `interaction/107-portaal-zoeken.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openinwoner/test_portaal_anoniem.py` (anonymous; search needs no login). |
 | `interaction/108-portaal-vraag-stellen-inwoner.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | Into the heading test of `tests/component/openinwoner/test_portaal_inwoner.py`; asking a question needs W8. |
@@ -51,7 +51,7 @@ Sources:
 | `perf/lib.js` | perf (Locust) | 6 | merge | Its auth helpers are the suite's own clients (`clients/platform.py`). |
 | `regression/07-brp-persoon-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/basisregistraties/test_brp.py`, through the api-proxy. |
 | `regression/08-kvk-bedrijf-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/basisregistraties/test_kvk.py` through the api-proxy, which routes to KvK's test API on every estate (TA called that API directly); test set Test BV Donald. |
-| `regression/100-kiss-frontend-basis.spec.ts` | component or integration | 3/4/5 | port | `tests/component/kiss/test_anonymous.py`; the Vue shell check is phase 5. |
+| `regression/100-kiss-frontend-basis.spec.ts` | component or integration | 3/4/5 | port | `tests/component/kiss/test_anonymous.py`; the rendered app → `test_kiss_renders_for_the_kcc_user`. |
 | `regression/106-portaal-notificatievoorkeur.spec.ts` | component or integration | 3/4/5 | merge | With 165 into `tests/component/openinwoner/test_portaal_inwoner.py`. |
 | `regression/108-probe-contactform.spec.ts` | component or integration | 3/4/5 | merge | With 109 into `tests/integration/test_portaal_openklant.py`; the contact page needs OpenklantApphook (bootstrap `openinwoner-cms-pages`). |
 | `regression/109-portaal-vraag-stellen-bedrijf.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_portaal_openklant.py`: after an eHerkenning login the question belongs to the vestiging's partij. |
@@ -185,29 +185,29 @@ Sources:
 | `regression/96-portaal-profiel-navigatie.spec.ts` | component or integration | 3/4/5 | merge | Into the heading test of `tests/component/openinwoner/test_portaal_inwoner.py`. |
 | `smoke/00-environment-preflight.spec.ts` | smoke | 1 | port | 00c/00d/00h/00i/00j/00k/00l → `test_reachability.py`, `test_api_health.py`; 00f → `test_cluster.py` (all workloads ready). Phase 3: 00e (ZAC schemas, psql) and 00g (OZ Applicatie scopes for Open Inwoner). 00i form slug needs bootstrap data (phase 2). |
 | `smoke/01-zgw-auth.spec.ts` | smoke | 1 | port | `test_zgw_auth.py`: token accepted, wrong secret refused. Phase 2: the catalogus domein and test zaaktype checks need seeded data. |
-| `smoke/04-portaal-homepage.spec.ts` | smoke | 1 | port | HTTP part → `test_reachability.py` (root and admin login of `openinwoner`). Phase 5: the rendered-page checks need a browser. |
-| `smoke/05-portaal-digid-login.spec.ts` | smoke | 1 | port | 5a and the first leg of 5b → `test_oidc.py`. Phase 5: the login itself needs a DigiD test identity (phase 2) and a browser. |
-| `smoke/06-kiss-bff-healthz.spec.ts` | smoke | 1 | port | `/healthz` and `/api/healthcheck` → `test_api_health.py`. The rendered-page check moves to phase 5. |
+| `smoke/04-portaal-homepage.spec.ts` | smoke | 1 | port | HTTP part → `test_reachability.py`; the rendered homepage → `tests/component/openinwoner/test_portaal_anoniem.py` and the WCAG scan in `test_toegankelijkheid.py`. |
+| `smoke/05-portaal-digid-login.spec.ts` | smoke | 1 | port | 5a and the first leg of 5b → `test_oidc.py`; the DigiD login → `tests/component/openinwoner/test_portaal_login.py`. |
+| `smoke/06-kiss-bff-healthz.spec.ts` | smoke | 1 | port | `/healthz` and `/api/healthcheck` → `test_api_health.py`; the rendered app → `test_kiss_renders_for_the_kcc_user` (`tests/component/kiss/test_kcc_session.py`). |
 | `smoke/113-kiss-kcc-login-flow.spec.ts` | smoke | 1 | port | `tests/component/kiss/test_kcc_session.py` (`ui`). |
-| `smoke/155-esuite-smoke-login.spec.ts` | smoke | 1 | port | Phase 5 (`ui`): eSuite is outside PodiumD; needs a `esuite` URL and credentials in the profile. |
+| `smoke/155-esuite-smoke-login.spec.ts` | smoke | 1 | todo | Blocked: eSuite is outside PodiumD and no profile has an `esuite` URL and credentials. |
 | `smoke/192-frankgateway-health.spec.ts` | smoke | 1 | port | `test_frankgateway.py`; skips unless the profile has a `frankgateway` (outway) URL. Not in EX. |
-| `smoke/66-pabc-health.spec.ts` | smoke | 1 | port | API-key checks → `test_api_health.py`. Phase 5: app version behind the OIDC cookie login. |
-| `smoke/72-ita-health-kanalen.spec.ts` | smoke | 1 | port | Anonymous check → `test_api_health.py`. Phase 5: logged-in `/api/kanalen` needs a KCC identity and a browser. |
+| `smoke/66-pabc-health.spec.ts` | smoke | 1 | port | API-key checks → `test_api_health.py`; the app version after login → `test_app_version_is_shown_after_login` (`tests/component/pabc/test_management.py`). |
+| `smoke/72-ita-health-kanalen.spec.ts` | smoke | 1 | port | Anonymous → `test_api_health.py`; logged in → `test_kanalen_answer_the_kcc_user` (`tests/component/ita/test_ita_internetaken.py`). |
 | `smoke/79-omc-health.spec.ts` | smoke | 1 | port | Anonymous check → `test_api_health.py`. Phase 3: `/Events/Version` with an OMC JWT (needs OMC secret settings). |
 | `smoke/81-continuiteit-pings.spec.ts` | smoke | 1 | merge | Into `test_reachability.py` (root of every component under 5 s, admin login pages) and `test_api_health.py`. |
 | `smoke/82-portaal-login-config.spec.ts` | smoke | 1 | port | `test_oidc.py`: theme, DigiD links, 'Log in met DigiD', redirect to Keycloak. The exact count of 2 DigiD links (mobile and desktop) is not asserted: it is layout, not wiring. |
-| `smoke/92-fb-cross-component-sso.spec.ts` | smoke | 1 | port | Phase 5 (`ui`): needs an admin identity from bootstrap instead of the hardcoded `testadmin` password. |
-| `smoke/99-portaal-eherkenning-login.spec.ts` | smoke | 1 | port | Test 1 and the first leg of test 2 → `test_oidc.py`. Phase 5: login with an eHerkenning identity, and the KVK check in the Django shell. |
+| `smoke/92-fb-cross-component-sso.spec.ts` | smoke | 1 | port | `tests/integration/test_sso.py`, for every Django app whose admin logs in through Keycloak, with the test admin from bootstrap. |
+| `smoke/99-portaal-eherkenning-login.spec.ts` | smoke | 1 | port | Test 1 and the first leg of test 2 → `test_oidc.py`; the eHerkenning login → `test_portaal_login.py`; the account's KvK → `test_company_profile_shows_kvk_names`. |
 
 ## MK
 
 | Test | Target | Phase | Decision | Notes |
 |---|---|---|---|---|
-| `test_browser.py` | smoke, marker `ui` | 1/5 | port | Phase 5 (`ui`). |
+| `test_browser.py` | smoke, marker `ui` | 1/5 | port | `tests/component/zac/test_zac_login.py` (ZAC dashboard after the Keycloak login). |
 | `test_database.py` | component, marker `cluster` | 3 | port | `tests/component/platform/test_django_apps.py`, through each app's own Django connection. |
 | `test_django_admin_login.py` | component, marker `cluster` | 3 | port | `tests/component/platform/test_django_apps.py`; skips where admin login is SSO. |
-| `test_login_flow.py` | smoke (ZAC OIDC login) | 1 | port | First leg (ZAC redirects to the Keycloak login form) → `test_oidc.py`. The login itself needs a test identity: phase 5. |
-| `test_mailpit.py` | integration | 4 | merge | `tests/integration/test_mail.py` (every Django app, not only Open Zaak); web UI check: phase 5. |
+| `test_login_flow.py` | smoke (ZAC OIDC login) | 1 | port | First leg → `test_oidc.py`; the login → `test_zac_login.py`. |
+| `test_mailpit.py` | integration | 4 | merge | `tests/integration/test_mail.py` (every Django app, not only Open Zaak); the web UI's root → `test_reachability.py`. |
 | `test_metrics.py` | smoke | 1 | merge | With `test_monitoring_logging.py` into `test_metrics.py`; datasources found by type, not by name. |
 | `test_monitoring_logging.py` | smoke | 1 | merge | Into `test_metrics.py`; the Loki check runs where a Loki datasource exists. |
 | `test_pabc_migrations_guard.py` | component, marker `destructive` | 3 | drop | Tests a podiumd-minikube script, and changes the cluster. |
@@ -216,6 +216,13 @@ Sources:
 | `test_productaanvraag_flow.py` | integration, marker `core` | 4 | merge | `tests/integration/test_productaanvraag.py`; Job and kanaal checks are covered by `test_jobs_succeeded` and the kanalen tests. |
 | `test_reachability.py` | smoke | 1 | port | `test_reachability.py`: redirects followed (R14), status < 500 per component plus admin login pages; no per-host expected codes. |
 | `test_zgw_service_reachability.py` | integration, marker `cluster` | 4 | port | `tests/component/platform/test_django_apps.py` (snippet `zgw_services`), for every Django app and also external APIs. |
+| `test_api_proxy.py` | component | 3 | port | KvK and BRP → `test_kvk.py`, `test_brp.py`; BAG → `tests/component/basisregistraties/test_bag.py`. |
+| `test_clamav.py` | — | — | drop | clamdscan in minikube's ClamAV pod (its EICAR-only database); the application check is `test_infected_upload_is_refused`. |
+| `test_edge.py` | — | — | drop | The body limit of minikube's edge, which imitates ExternalsPodiumD's gateway; an estate setting, not PodiumD behaviour. |
+| `test_frankgateway.py` | smoke | 1 | merge | Outway routes → `tests/smoke/test_frankgateway.py` (now BRP V2 `/personen`); OpenBao unsealed and ZAC's ConfigMap: minikube's own deploy. |
+| `test_kiss_ita.py` | component | 3 | merge | Health and anonymous ITA → `test_api_health.py`; objecttypes → `tests/component/objecten/test_objecttypen.py` (by name); Elasticsearch health and chunked forwarding: minikube's deploy (forwarding also through `test_kiss_reads_itas_logboek`). |
+| `test_memory.py` | — | — | drop | minikube's memory budget and baseline. |
+| `test_omc.py` | smoke | 1 | todo | Anonymous `/Events/Listen` → `test_api_health.py`; `/Events/Version` with a JWT blocked with the OMC tests (OMC off on minikube). |
 
 ## PI
 
