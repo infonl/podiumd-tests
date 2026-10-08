@@ -214,13 +214,10 @@ def delete_klantcontact_tree(openklant: ApiClient, url: str) -> None:
     openklant.delete(url)
 
 
-def partijen_of(openklant: ApiClient, bsn: str) -> dict[str, list[str]]:
-    """Partij URL -> URLs of its identificatoren, for the partijen identified by a BSN."""
-    found: dict[str, list[str]] = {}
-    for identificator in openklant.list("partij-identificatoren", {"partijIdentificatorObjectId": bsn}):
-        partij = str(section(identificator, "identificeerdePartij")["url"])
-        found.setdefault(partij, []).append(str(identificator["url"]))
-    return found
+def partijen_of(openklant: ApiClient, object_id: str) -> list[str]:
+    """URLs of the partijen identified by a BSN or KvK number."""
+    identificatoren = openklant.list("partij-identificatoren", {"partijIdentificatorObjectId": object_id})
+    return list(dict.fromkeys(str(section(i, "identificeerdePartij")["url"]) for i in identificatoren))
 
 
 def clean_up_new_partijen(openklant: ApiClient, registry: ResourceRegistry, bsn: str) -> None:
@@ -228,13 +225,21 @@ def clean_up_new_partijen(openklant: ApiClient, registry: ResourceRegistry, bsn:
     before = set(partijen_of(openklant, bsn))
 
     def delete() -> None:
-        for partij, identificatoren in partijen_of(openklant, bsn).items():
-            if partij in before:
-                continue
-            for adres in openklant.list("digitaleadressen", {"verstrektDoorPartij__uuid": partij.rsplit("/", 1)[-1]}):
-                openklant.delete(str(adres["url"]))
-            for identificator in identificatoren:
-                openklant.delete(identificator)
-            openklant.delete(partij)
+        for partij in partijen_of(openklant, bsn):
+            if partij not in before:
+                delete_partij(openklant, partij)
 
     registry.add(f"new partijen of BSN {bsn}", delete)
+
+
+def delete_partij(openklant: ApiClient, partij: str) -> None:
+    """Delete a partij with its digitale adressen and identificatoren."""
+    for adres in openklant.list("digitaleadressen", {"verstrektDoorPartij__uuid": partij.rsplit("/", 1)[-1]}):
+        openklant.delete(str(adres["url"]))
+    identificatoren = [
+        openklant.get(str(ref["url"])) for ref in entries(openklant.get(partij).get("partijIdentificatoren"))
+    ]
+    # A sub-identificator (a vestigingsnummer under its kvk_nummer) protects its parent.
+    for identificator in sorted(identificatoren, key=lambda i: i.get("subIdentificatorVan") is None):
+        openklant.delete(str(identificator["url"]))
+    openklant.delete(partij)

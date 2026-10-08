@@ -20,6 +20,7 @@ from podiumd_tests.bootstrap.oidc_mock import KEYCLOAK_STORE_KEY
 from podiumd_tests.bootstrap.oidc_mock import KeycloakOidcMock
 from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.bootstrap.steps import KeycloakUser
+from podiumd_tests.bootstrap.steps import OpenInwonerPartijen
 from podiumd_tests.bootstrap.steps import OpenKlantActor
 from podiumd_tests.bootstrap.steps import SnippetStep
 from podiumd_tests.bootstrap.steps import keycloak_password_key
@@ -298,6 +299,47 @@ def test_openklant_actor_recreates_the_users_actor(env_factory, fake_runner, pro
     ]
     assert sent[0].url.endswith("actoridentificatorObjectId=ptest-bootstrap-kcc%40example.invalid")
     assert sent[-1].headers["Authorization"] == "Token tok"
+
+
+def test_openinwoner_partijen_remove_deletes_the_partijen_of_the_test_identities(
+    env_factory, fake_runner, profile_factory, fake_http
+):
+    env = cluster_env(env_factory, fake_runner, profile_factory, urls={"openklant": OK})
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (
+        0,
+        stored({OPENKLANT_STORE_KEY: "tok"}),
+    )
+    api = "/klantinteracties/api/v1"
+    identificator = {
+        "url": f"{OK}{api}/partij-identificatoren/i1",
+        "identificeerdePartij": {"url": f"{OK}{api}/partijen/p1"},
+    }
+    kvk = {"url": f"{OK}{api}/partij-identificatoren/i1", "subIdentificatorVan": None}
+    vestiging = {"url": f"{OK}{api}/partij-identificatoren/i2", "subIdentificatorVan": {"url": kvk["url"]}}
+    sent = fake_http(
+        {
+            f"GET {api}/partij-identificatoren": (200, {"results": [identificator], "next": None}),
+            f"GET {api}/digitaleadressen": (200, {"results": [], "next": None}),
+            f"GET {api}/partijen/p1": (
+                200,
+                {"partijIdentificatoren": [{"url": kvk["url"]}, {"url": vestiging["url"]}]},
+            ),
+            f"GET {api}/partij-identificatoren/i1": (200, kvk),
+            f"GET {api}/partij-identificatoren/i2": (200, vestiging),
+            f"DELETE {api}/partij-identificatoren/i1": (204, None),
+            f"DELETE {api}/partij-identificatoren/i2": (204, None),
+            f"DELETE {api}/partijen/p1": (204, None),
+        }
+    )
+    assert OpenInwonerPartijen().remove(Context(env, CredentialStore(env.kube))) == ()
+    searched = [r.url.split("ObjectId=")[1] for r in sent if "partijIdentificatorObjectId" in r.url]
+    assert searched == ["999990019", "999993653", "68750110"]
+    # The vestiging's sub-identificator goes before the kvk_nummer it refers to.
+    assert [r.url.removeprefix(OK + api) for r in sent if r.method == "DELETE"] == [
+        "/partij-identificatoren/i2",
+        "/partij-identificatoren/i1",
+        "/partijen/p1",
+    ] * 3
 
 
 def test_snippet_notes_reach_the_outcome(env_factory, fake_runner, profile_factory):

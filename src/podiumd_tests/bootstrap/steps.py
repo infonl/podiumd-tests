@@ -45,6 +45,8 @@ from podiumd_tests.clients.platform import openklant_client
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openklant import delete_partij
+from podiumd_tests.seed.openklant import partijen_of
 from podiumd_tests.webhook import WebhookReceiver
 
 if TYPE_CHECKING:
@@ -423,6 +425,37 @@ def openinwoner_number(user: KeycloakUser) -> dict[str, str]:
     return {key: user.attributes[key][0]}
 
 
+@dataclass(frozen=True)
+class OpenInwonerPartijen:
+    """Open Klant partijen of the test identities, which Open Inwoner creates at their first login.
+
+    Nothing to create: unbootstrap deletes them, so no test identity outlives the bootstrap.
+    """
+
+    name: str = "openinwoner-partijen"
+    requires: tuple[str, ...] = ("openinwoner", "openklant")
+    wiring: bool = True
+
+    def is_present(self, _ctx: Context, /) -> bool:
+        """Always: Open Inwoner creates the partijen."""
+        return True
+
+    def apply(self, _ctx: Context, /) -> dict[str, str]:
+        """Nothing."""
+        return {}
+
+    def remove(self, ctx: Context, /) -> tuple[str, ...]:
+        """Delete the partijen identified by a test identity's bsn or kvk."""
+        if OPENKLANT_STORE_KEY not in ctx.store.read():
+            return ()
+        openklant = openklant_client(ctx.env)
+        for user in IDENTITIES:
+            for number in openinwoner_number(user).values():
+                for partij in partijen_of(openklant, number):
+                    delete_partij(openklant, partij)
+        return ()
+
+
 def openinwoner_account(user: KeycloakUser) -> dict[str, str]:
     """The Open Inwoner account prepared for a DigiD test identity: its bsn, e-mail and name.
 
@@ -630,4 +663,5 @@ STEPS: tuple[Step, ...] = (
         wiring=True,
         context_params=openinwoner_openklant_params,
     ),
+    OpenInwonerPartijen(),
 )
