@@ -53,3 +53,7 @@ def virus_scan_enabled(env: Environment) -> bool:
     """True when Open Inwoner scans uploads with ClamAV."""
     return bool(run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_virus_scan", {}))
 
+
+def set_account_email(env: Environment, bsn: str, email: str) -> None:
+    """Set the e-mail of the Open Inwoner account with this BSN; a later login sends it to Open Klant."""
+    run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_account_email", {"bsn": bsn, "email": email})

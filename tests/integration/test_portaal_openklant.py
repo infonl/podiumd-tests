@@ -16,6 +16,7 @@ from playwright.sync_api import expect
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.openinwoner import portal_login
+from podiumd_tests.openinwoner import set_account_email
 from podiumd_tests.seed.openklant import clean_up_new_partijen
 from podiumd_tests.seed.openklant import delete_klantcontact_tree
 from podiumd_tests.seed.openklant import partijen_of
@@ -85,6 +86,13 @@ def test_profile_email_reaches_open_klant(  # pylint: disable=too-many-arguments
     bsn = INWONER.attributes["bsn"][0]
     clean_up_new_partijen(openklant, registry, bsn)
     adres = f"{registry.tagged('profiel')}@example.invalid"
+    # The partij may predate the test (an earlier login made it); its new adres goes anyway. The
+    # account keeps the address and every later login sends it again: set it back first.
+    registry.add(
+        f"digitaal adres {adres}",
+        lambda: [openklant.delete(str(a["url"])) for a in openklant.list("digitaleadressen", {"adres": adres})],
+    )
+    registry.add(f"e-mail of account {bsn}", lambda: set_account_email(podiumd_env, bsn, user_email(INWONER.username)))
     portal_login(page, podiumd_env, "digid", INWONER, "/mijn-profiel/edit/")
     page.locator('input[name="email_addresses-0-value"]').first.fill(adres)
     page.get_by_role("button", name="Sla wijzigingen op").first.click()
