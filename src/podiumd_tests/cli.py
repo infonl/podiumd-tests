@@ -10,6 +10,7 @@ import argparse
 import json
 import sys
 
+from contextlib import nullcontext
 from dataclasses import asdict
 from datetime import UTC
 from datetime import datetime
@@ -219,7 +220,7 @@ def _apply_steps(
     if isinstance(env, int):
         return env
     steps = selected_steps(args.step)
-    with held(env.profile.settings.get("lock_file"), f"{verb} {env.profile.name}"):
+    with held(env, f"{verb} {env.profile.name}"):
         outcomes = action(env, steps)
     print(format_outcomes(outcomes))
     return EXIT_CONFIG if failed(outcomes) else EXIT_OK
@@ -242,7 +243,7 @@ def cmd_sweep(args: argparse.Namespace) -> int:
     if args.dry_run:
         swept = sweep(env, cutoff, dry_run=True)
     else:
-        with held(env.profile.settings.get("lock_file"), f"sweep {env.profile.name}"):
+        with held(env, f"sweep {env.profile.name}"):
             swept = sweep(env, cutoff, dry_run=False)
     print(format_swept(swept))
     return EXIT_CONFIG if any(s.action == "failed" for s in swept) else EXIT_OK
@@ -264,7 +265,7 @@ def cmd_seed_volume(args: argparse.Namespace) -> int:
     if isinstance(env, int):
         return env
     with (
-        held(env.profile.settings.get("lock_file"), f"seed-volume {env.profile.name}"),
+        held(env, f"seed-volume {env.profile.name}"),
         faster(env, args.scale_cluster),
     ):
         print(format_seeded(seed(env, args.scale, parallel=args.parallel)))
@@ -276,7 +277,7 @@ def cmd_unseed_volume(args: argparse.Namespace) -> int:
     env = _volume_env(args)
     if isinstance(env, int):
         return env
-    with held(env.profile.settings.get("lock_file"), f"unseed-volume {env.profile.name}"):
+    with held(env, f"unseed-volume {env.profile.name}"):
         print(format_seeded(unseed(env)))
     return EXIT_OK
 
@@ -319,9 +320,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     junit = Path(sink.location(f"{directory}/junit.xml"))
     junit.parent.mkdir(parents=True, exist_ok=True)
     info.selection = pytest_selection(profile, args.tier, info.run_id, junit, args)
-    # Smoke only reads; every other tier writes to the environment and takes the shared lock.
-    lock_file = None if args.tier == "smoke" else profile.settings.get("lock_file")
-    with held(lock_file, f"run {args.tier} {profile.name}"):
+    # Smoke only reads; every other tier writes to the environment and takes its lock.
+    with nullcontext() if args.tier == "smoke" else held(env, f"run {args.tier} {profile.name}"):
         info.exit_code = int(pytest.main(info.selection))
     info.finished = now_iso()
     failures = []

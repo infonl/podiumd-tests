@@ -247,13 +247,13 @@ The pipelines are not decided yet. They will likely be GitHub Actions inside pod
   - 1: test failures
   - 2: configuration or preflight error
   - 3: environment not allowed (R20)
-  - 4: an infrastructure error during bootstrap
+  - 4: the environment is locked by another run
 - **Outputs:**
   - `--results-dir` (default `results/`);
   - `junit.xml`, which both platforms render natively;
   - `summary.md`, ready for `$GITHUB_STEP_SUMMARY` or a DevOps build summary.
 - **Stable logs:** plain text, no colours under CI, with grouped sections. `::group::` and `##[group]` markers are emitted only when they are detected.
-- **Locking:** an optional cluster-side lease (a `ConfigMap` called `podiumd-tests-lock`) stops two runs from bootstrapping or sweeping the same environment at the same time. That matters once console and pipeline runs overlap.
+- **Locking:** every writing command (bootstrap, unbootstrap, sweep, seed-volume, unseed-volume, a run of any tier but smoke) takes a Lease `podiumd-tests-lock` in the environment's namespace when it has cluster access, so console and pipeline runs see each other. The Lease names its holder (user@host and what) and expires after `settings.lock_lease_seconds` (default 3 h); `doctor` reports it. A profile's `settings.lock_file` adds a local lock file shared with other agents on the same machine.
 
 ## 8. Repo layout
 

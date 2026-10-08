@@ -21,6 +21,7 @@ import requests
 from podiumd_tests.credentials import SecretError
 from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import context_names
+from podiumd_tests.lock import lease_holder
 from podiumd_tests.responses import get_root
 from podiumd_tests.responses import is_server_error
 from podiumd_tests.responses import url_host
@@ -79,6 +80,7 @@ def _cluster(env: Environment) -> list[Check]:
         checks.append(Check("kube API", no_access, str(exc), "cluster stopped or deleted? (scheduled shutdown)"))
         return checks
     checks.append(Check("kube API", "ok", "readyz"))
+    checks.append(_lock(env))
     for namespace in env.namespaces:
         try:
             env.kube.run("get", "namespace", namespace, "-o", "name")
@@ -88,6 +90,16 @@ def _cluster(env: Environment) -> list[Check]:
         checks.append(Check(f"namespace {namespace}", "ok"))
         checks.append(_workloads(env, namespace))
     return checks
+
+
+def _lock(env: Environment) -> Check:
+    try:
+        current = lease_holder(env.kube)
+    except KubeError as exc:
+        return Check("lock", "warn", f"cannot read the lease: {exc}", "writing runs need RBAC on leases")
+    if current:
+        return Check("lock", "warn", f"held by {current}", "writing runs refuse until it is free")
+    return Check("lock", "ok", "free")
 
 
 def _workloads(env: Environment, namespace: str) -> Check:
