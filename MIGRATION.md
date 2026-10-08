@@ -26,7 +26,7 @@ Sources:
 | `interaction/107-portaal-zoeken.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openinwoner/test_portaal_anoniem.py` (anonymous; search needs no login). |
 | `interaction/108-portaal-vraag-stellen-inwoner.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | Into the heading test of `tests/component/openinwoner/test_portaal_inwoner.py`; asking a question needs W8. |
 | `interaction/111-portaal-documenten-uploaden.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | With 162 into `tests/integration/test_portaal_zaken.py`; bootstrap `openinwoner-zaaktype-config` configures only the test zaaktype, not TA's zgw_import_data. |
-| `interaction/140-inwoner-vraag-over-zaak.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/140-inwoner-vraag-over-zaak.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | Covered by TA 21 (zaak in Mijn zaken), 164 (question about a zaak) and 182 (Mijn vragen) in `test_portaal_zaken.py` and `test_portaal_openklant.py`. |
 | `interaction/141-bedrijf-eherkenning-mijn-zaken.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/integration/test_portaal_zaken.py`; the first eHerkenning login completes OI's registration (why TA landed elsewhere). |
 | `interaction/142-oab-vernietigingslijst.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openarchiefbeheer/test_vernietigingslijst.py`; the list holds only the test's own zaak, never select_all. |
 | `interaction/145-contact-lookup-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | `tests/component/openklant/`: betrokkenen of a partij, internetaak by klantcontact. |
@@ -173,7 +173,7 @@ Sources:
 | `regression/81-omc-confirm-callback.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/82-omc-zaak-e2e.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/83-portaal-anonieme-pagina-bereikbaarheid.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_anoniem.py`. |
-| `regression/84-portaal-ingelogd-sessie.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/84-portaal-ingelogd-sessie.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_login.py`: Mijn zaken while logged in, the login page after /digid-oidc/logout/. |
 | `regression/85-ok2-bedrijf-partij.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openklant/` test_partijen.py: organisatie with KvK or RSIN. |
 | `regression/86-ok2-klantcontact-bedrijf.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openklant/`. |
 | `regression/87-ok2-klantcontact-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openklant/` test_klantcontacten.py. |

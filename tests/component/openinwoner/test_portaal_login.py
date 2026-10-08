@@ -1,6 +1,6 @@
 """Open Inwoner in a browser: DigiD and eHerkenning login through Keycloak's mock end in a session.
 
-Ported from ExternalsPodiumD smoke 05b and 99 (TA portaal login specs); needs wiring W1.
+Ported from ExternalsPodiumD smoke 05b and 99 (TA portaal login specs) and TA regression 84; needs wiring W1.
 """
 
 from __future__ import annotations
@@ -46,3 +46,14 @@ def test_login_through_the_keycloak_mock_starts_a_session(  # pylint: disable=to
     expect(page).not_to_have_url(FAILED)
     cookies = [c.get("name") for c in page.context.cookies()]
     assert "open_inwoner_sessionid" in cookies, "no Open Inwoner session cookie"
+
+
+def test_logout_ends_the_session(page: Page, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> None:
+    """Logged in, Mijn zaken opens; after logging out it asks for a login again (TA reg-84)."""
+    need_bootstrap(INWONER.name, "openinwoner-oidc-mock", "openinwoner-cms-pages")
+    portal = podiumd_env.profile.urls["openinwoner"]
+    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
+    expect(page).to_have_url(re.compile(r"/mijn-zaken/"))
+    page.goto(portal + "/digid-oidc/logout/")
+    page.goto(portal + "/mijn-zaken/")
+    expect(page).to_have_url(re.compile(r"/accounts/login/\?next=/mijn-zaken/"))
