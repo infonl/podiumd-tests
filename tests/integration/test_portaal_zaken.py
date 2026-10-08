@@ -1,6 +1,6 @@
 """Chain: a zaak in Open Zaak shows in the inwoner's or company's Mijn zaken in Open Inwoner.
 
-Ported from TA interaction 21, 31, 111, 141, 162 and 164, regression 95 and 143. Open Inwoner reaches
+Ported from TA interaction 21, 31, 111, 141, 162 and 164, regression 61, 95 and 143. Open Inwoner reaches
 Open Zaak through the API group of wiring W4 (no zaken cache), the pages are W5, the logins W1;
 upload and questions need the zaaktype configuration (bootstrap openinwoner-zaaktype-config).
 """
@@ -74,6 +74,48 @@ def test_inwoners_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,t
     zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
     portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
     expect(page.get_by_text(str(zaak["identificatie"])).first).to_be_visible()
+
+
+# Playwright's descriptors without default_browser_type: the suite runs Chromium.
+PHONES = {
+    "iPhone 13": {
+        "viewport": {"width": 390, "height": 664},
+        "device_scale_factor": 3,
+        "is_mobile": True,
+        "has_touch": True,
+        "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15"
+        " (KHTML, like Gecko) Version/26.6 Mobile/15E148 Safari/604.1",
+    },
+    "Pixel 5": {
+        "viewport": {"width": 393, "height": 727},
+        "device_scale_factor": 2.75,
+        "is_mobile": True,
+        "has_touch": True,
+        "user_agent": "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko)"
+        " Chrome/153.0.8010.12 Mobile Safari/537.36",
+    },
+}
+
+
+@pytest.mark.parametrize(
+    "phone", [pytest.param(name, marks=pytest.mark.browser_context_args(**args)) for name, args in PHONES.items()]
+)
+def test_mijn_zaken_on_a_phone(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    parts: ZaaktypeParts,
+    need_bootstrap: Callable[..., None],
+    phone: str,
+) -> None:
+    """On a phone, Mijn zaken lists the inwoner's zaak and fits the screen width (TA reg-61)."""
+    need_bootstrap(INWONER.name, *WIRING)
+    zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
+    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
+    expect(page.get_by_text(str(zaak["identificatie"])).first).to_be_visible()
+    overflow = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
+    assert overflow <= 0, f"{phone}: page {overflow}px wider than the screen"
 
 
 def test_bedrijfs_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures

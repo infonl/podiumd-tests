@@ -152,7 +152,7 @@ Sources:
 | `regression/58-ok2-expand.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openklant/` test_partijen.py. |
 | `regression/59-zaak-relatie-keten.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_zaken.py test_relevante_andere_zaken. |
 | `regression/60-seed-data-health.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_catalogi.py, on the bootstrap zaaktype. |
-| `regression/61-mobile-mijn-zaken.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/61-mobile-mijn-zaken.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_portaal_zaken.py`: iPhone 13 and Pixel 5 descriptors in Chromium; no cache flush (W4 has no zaken cache), so no retries. |
 | `regression/62-vergetelheid-categorieen.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/63-klacht-bezwaar-keten.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_klacht_bezwaar.py`; the audit trail check is left out (needs `heeft_alle_autorisaties`, see 14/48). |
 | `regression/64-document-lifecycle.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_documenten.py; its audittrail part is an xfail. |
