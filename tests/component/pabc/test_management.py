@@ -16,6 +16,7 @@ from podiumd_tests.pabc import decide
 from podiumd_tests.pabc import listed
 from podiumd_tests.pabc import login
 from podiumd_tests.responses import describe
+from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -87,3 +88,10 @@ def test_zac_is_a_registered_application(pabc: requests.Session, urls: dict[str,
     """ZAC, PABC's first consumer, is a registered application (TA reg-71)."""
     found = names(get_list(pabc, urls["pabc"] + "/api/v1/applications"))
     assert any("zac" in n or "zaakafhandel" in n for n in found), found
+
+
+def test_app_version_is_shown_after_login(pabc: requests.Session, urls: dict[str, str]) -> None:
+    """PABC tells a logged-in user its version and revision (TA smoke 66)."""
+    version = expect_status(pabc.get(urls["pabc"] + "/api/app-version"), HTTPStatus.OK).json()
+    assert version["version"]
+    assert version["revision"]

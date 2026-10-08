@@ -1,6 +1,6 @@
 """KISS as the klantcontactmedewerker: a session with the KCC role, and klantcontacten through KISS.
 
-Ported from TA smoke 113 and regression 12.
+Ported from TA smoke 06 and 113, and regression 12 and 100.
 """
 
 from __future__ import annotations
@@ -9,6 +9,8 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
+
+from playwright.sync_api import expect
 
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.kcc import KISS_KLANTCONTACTEN
@@ -43,6 +45,14 @@ def test_kcc_user_is_a_klantcontactmedewerker(kiss: requests.Session, urls: dict
     me = expect_status(kiss.get(urls["kiss"] + "/api/me"), HTTPStatus.OK).json()
     assert me["isLoggedIn"]
     assert me["isKcm"]
+
+
+def test_kiss_renders_for_the_kcc_user(kiss: requests.Session, page: Page, urls: dict[str, str]) -> None:
+    """After the login KISS's single-page app renders its search and navigation (TA smoke 06, reg-100)."""
+    del kiss  # logs the page in
+    page.goto(urls["kiss"] + "/")
+    expect(page.get_by_role("banner").get_by_role("button", name="Zoeken")).to_be_visible()
+    expect(page.get_by_role("link", name="Uitloggen")).to_be_visible()
 
 
 def test_klantcontact_through_kiss(

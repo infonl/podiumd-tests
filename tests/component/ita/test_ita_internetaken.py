@@ -116,6 +116,11 @@ def test_answering_an_internetaak_registers_a_klantcontact(
     assert [k["indicatieContactGelukt"] for k in found] == [False]
 
 
+def test_kanalen_answer_the_kcc_user(ita: requests.Session, urls: dict[str, str]) -> None:
+    """With a login, ITA lists its kanalen (TA smoke 72; anonymous it refuses, test_api_health)."""
+    assert isinstance(expect_status(ita.get(urls["ita"] + "/api/kanalen"), HTTPStatus.OK).json(), list)
+
+
 @pytest.mark.parametrize("soort", ["Afdeling", "Groep"])
 def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     ita: requests.Session,
