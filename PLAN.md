@@ -239,7 +239,7 @@ A history per test case (one test's results across runs) is not stored separatel
 The pipelines are not decided yet. They will likely be GitHub Actions inside podiumd-infra, and Azure DevOps for SSC Twente. The suite therefore assumes nothing about the runner:
 
 - **One entry point:** `podiumd-tests <command>`, a console script declared in `pyproject.toml`. Set it up with `git clone`, then `python3 -m venv .venv && .venv/bin/pip install -e '.[dev]' && .venv/bin/playwright install chromium`. A pipeline does the same, or runs `pip install git+https://github.com/infonl/podiumd-tests`. A container image (with Playwright browsers, kubectl, az and helm) may follow in phase 7, but only if both pipelines need it.
-- **Configuration:** every setting can be given as a flag, an environment variable (`PODIUMD_TESTS_*`) or in the profile, in that order of precedence. There are no prompts. `--non-interactive` is implied when `CI=true`.
+- **Configuration:** environment settings live in the profile. A pipeline sets `--env`, `--tier`, `--results-dir` and `--envs-dir` as flags or as `PODIUMD_TESTS_ENV`, `PODIUMD_TESTS_TIER`, `PODIUMD_TESTS_RESULTS_DIR` and `PODIUMD_TESTS_ENVS_DIR`; a flag wins. There are no prompts.
 - **Credentials come from the runner.** The suite uses whatever `KUBECONFIG` and context, and whatever `az` login, the runner provides. It never runs a login flow itself. In GitHub Actions that is `azure/login` with OIDC; in Azure DevOps it is an `AzureCLI@2` task or a service connection.
 - **Secrets as environment variables:** any secret in the resolution chain can be overridden with `PODIUMD_TESTS_SECRET_<NAME>`. A pipeline can inject secrets from Actions secrets or a DevOps variable group without touching Key Vault.
 - **Exit codes:**
@@ -252,7 +252,7 @@ The pipelines are not decided yet. They will likely be GitHub Actions inside pod
   - `--results-dir` (default `results/`);
   - `junit.xml`, which both platforms render natively;
   - `summary.md`, ready for `$GITHUB_STEP_SUMMARY` or a DevOps build summary.
-- **Stable logs:** plain text, no colours under CI, with grouped sections. `::group::` and `##[group]` markers are emitted only when they are detected.
+- **Stable logs:** `run` folds `doctor` and pytest into collapsible sections (`::group::` on GitHub Actions, `##[group]` on Azure DevOps, nothing elsewhere) and publishes `summary.md` as the step summary (`$GITHUB_STEP_SUMMARY`) or build summary (`##vso[task.uploadsummary]`) (`podiumd_tests/ci.py`).
 - **Locking:** every writing command (bootstrap, unbootstrap, sweep, seed-volume, unseed-volume, a run of any tier but smoke) takes a Lease `podiumd-tests-lock` in the environment's namespace when it has cluster access, so console and pipeline runs see each other. The Lease names its holder (user@host and what) and expires after `settings.lock_lease_seconds` (default 3 h); `doctor` reports it. A profile's `settings.lock_file` adds a local lock file shared with other agents on the same machine.
 
 ## 8. Repo layout

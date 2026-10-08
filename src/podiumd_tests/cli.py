@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 
 from contextlib import nullcontext
@@ -28,6 +29,8 @@ from podiumd_tests.bootstrap import refusal
 from podiumd_tests.bootstrap import unbootstrap
 from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.capabilities import CLUSTER
+from podiumd_tests.ci import group
+from podiumd_tests.ci import publish_summary
 from podiumd_tests.components import component_for_host
 from podiumd_tests.config import ESTATES
 from podiumd_tests.config import REPO_ROOT
@@ -70,6 +73,8 @@ if TYPE_CHECKING:
     from podiumd_tests.bootstrap import Outcome
     from podiumd_tests.bootstrap import Step
 
+# Options a pipeline sets in the environment: PODIUMD_TESTS_<OPTION> (secrets have their own prefix).
+ENV_OPTION_PREFIX = "PODIUMD_TESTS_"
 EXIT_OK = 0
 EXIT_TESTS_FAILED = 1
 EXIT_CONFIG = 2
@@ -301,7 +306,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"tier {args.tier!r} is not allowed for {profile.name} (allowed: {allowed})", file=sys.stderr)
         return EXIT_NOT_ALLOWED
     env = Environment(profile)
-    if not _preflight_ok(env, args):
+    with group("doctor"):
+        preflight = _preflight_ok(env, args)
+    if not preflight:
         return EXIT_CONFIG
     info = RunInfo(
         run_id=new_run_id(),
@@ -321,13 +328,17 @@ def cmd_run(args: argparse.Namespace) -> int:
     junit.parent.mkdir(parents=True, exist_ok=True)
     info.selection = pytest_selection(profile, args.tier, info.run_id, junit, args)
     # Smoke only reads; every other tier writes to the environment and takes its lock.
-    with nullcontext() if args.tier == "smoke" else held(env, f"run {args.tier} {profile.name}"):
+    with (
+        group(f"pytest {args.tier}"),
+        nullcontext() if args.tier == "smoke" else held(env, f"run {args.tier} {profile.name}"),
+    ):
         info.exit_code = int(pytest.main(info.selection))
     info.finished = now_iso()
     failures = []
     if junit.exists():
         info.counts, failures = parse_junit(junit.read_text(encoding="utf-8"))
     write_run(sink, directory, info, failures, env.redactor)
+    publish_summary(Path(sink.location(f"{directory}/summary.md")))
     print(f"results: {sink.location(directory)}")
     if info.exit_code in {pytest.ExitCode.OK, pytest.ExitCode.NO_TESTS_COLLECTED}:
         return EXIT_OK
@@ -337,7 +348,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 def _add_volume_commands(add_parser: Callable[..., argparse.ArgumentParser]) -> None:
     """The seed-volume and unseed-volume subcommands."""
     vol = add_parser("seed-volume", help="top up the perf tier's volume data, tagged ptest-volume")
-    vol.add_argument("--env", required=True)
+    _add_env(vol)
     vol.add_argument("--scale", choices=["smoke", "perf"], default="smoke", help="counts to reach (default: smoke)")
     vol.add_argument("--parallel", type=int, default=8, help="concurrent creates (default 8)")
     vol.add_argument(
@@ -347,15 +358,32 @@ def _add_volume_commands(add_parser: Callable[..., argparse.ArgumentParser]) -> 
     vol.set_defaults(func=cmd_seed_volume)
 
     unvol = add_parser("unseed-volume", help="delete all volume data")
-    unvol.add_argument("--env", required=True)
+    _add_env(unvol)
     unvol.add_argument("--skip-doctor", action="store_true")
     unvol.set_defaults(func=cmd_unseed_volume)
 
 
+def _from_env(option: str, default: str | None = None) -> str | None:
+    """PODIUMD_TESTS_<OPTION> from the environment, for pipelines, else the default."""
+    return os.environ.get(ENV_OPTION_PREFIX + option.upper().replace("-", "_"), default)
+
+
+def _add_env(parser: argparse.ArgumentParser) -> None:
+    """--env, required unless PODIUMD_TESTS_ENV is set."""
+    default = _from_env("env")
+    parser.add_argument("--env", required=default is None, default=default, help="profile name (or PODIUMD_TESTS_ENV)")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The argument parser of `podiumd-tests`."""
-    parser = argparse.ArgumentParser(prog="podiumd-tests", description=__doc__)
-    parser.add_argument("--envs-dir", default=str(default_envs_dir()), help="profile directory (default: envs/)")
+    parser = argparse.ArgumentParser(
+        prog="podiumd-tests",
+        description=__doc__,
+        epilog="--env, --tier, --results-dir and --envs-dir can also come from PODIUMD_TESTS_<OPTION>.",
+    )
+    parser.add_argument(
+        "--envs-dir", default=_from_env("envs-dir", str(default_envs_dir())), help="profile directory (default: envs/)"
+    )
     commands = parser.add_subparsers(dest="command", required=True)
 
     env = commands.add_parser("env", help="environment profiles").add_subparsers(dest="env_command", required=True)
@@ -373,19 +401,19 @@ def build_parser() -> argparse.ArgumentParser:
     init.set_defaults(func=cmd_env_init)
 
     doc = commands.add_parser("doctor", help="preflight checks for an environment")
-    doc.add_argument("--env", required=True)
+    _add_env(doc)
     doc.add_argument("--json", help="also write the checks to this JSON file")
     doc.set_defaults(func=cmd_doctor)
 
     boot = commands.add_parser("bootstrap", help="create test-only credentials and wiring, named ptest-bootstrap-*")
-    boot.add_argument("--env", required=True)
+    _add_env(boot)
     boot.add_argument("--rotate", action="store_true", help="recreate every step with new credentials")
     boot.add_argument("--skip-doctor", action="store_true")
     boot.add_argument("--step", action="append", help="only this step (repeatable; default: all)")
     boot.set_defaults(func=cmd_bootstrap)
 
     unboot = commands.add_parser("unbootstrap", help="remove everything bootstrap created")
-    unboot.add_argument("--env", required=True)
+    _add_env(unboot)
     unboot.add_argument("--skip-doctor", action="store_true")
     unboot.add_argument("--step", action="append", help="only this step (repeatable; default: all)")
     unboot.set_defaults(func=cmd_unbootstrap)
@@ -393,7 +421,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_volume_commands(commands.add_parser)
 
     swp = commands.add_parser("sweep", help="delete run-tagged objects that test runs left behind")
-    swp.add_argument("--env", required=True)
+    _add_env(swp)
     swp.add_argument(
         "--older-than", default="24h", help="only runs that started before this age: 30m, 24h, 7d (default: 24h)"
     )
@@ -402,9 +430,15 @@ def build_parser() -> argparse.ArgumentParser:
     swp.set_defaults(func=cmd_sweep)
 
     run = commands.add_parser("run", help="run a tier against an environment")
-    run.add_argument("--env", required=True)
-    run.add_argument("--tier", choices=sorted(TIERS), default="smoke", help="tier to run (default: smoke)")
-    run.add_argument("--results-dir", default=str(REPO_ROOT / "results"), help="results directory (default: results/)")
+    _add_env(run)
+    run.add_argument(
+        "--tier", choices=sorted(TIERS), default=_from_env("tier", "smoke"), help="tier to run (default: smoke)"
+    )
+    run.add_argument(
+        "--results-dir",
+        default=_from_env("results-dir", str(REPO_ROOT / "results")),
+        help="results directory (default: results/)",
+    )
     run.add_argument("--keep-data", action="store_true", help="skip cleanup of created resources")
     run.add_argument("--skip-doctor", action="store_true")
     run.add_argument("pytest_args", nargs=argparse.REMAINDER, help="extra pytest arguments after --")
