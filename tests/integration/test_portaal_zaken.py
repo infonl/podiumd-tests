@@ -56,13 +56,43 @@ LIST_TIMEOUT_MS = 30_000
 WIRING = ("openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-zgw-group")
 
 
-def zaak_of(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts, **betrokkene: object) -> JsonObject:
-    """An openbaar zaak with its first status (Open Inwoner hides zaken without one) and this initiator."""
+# Each identity of Mijn zaken: its Keycloak user and login method.
+LOGINS = {"inwoner": (INWONER, "digid"), "bedrijf": (BEDRIJF, "eherkenning")}
+# The company parameter of tests that open a zaak's detail.
+WHO = [
+    "inwoner",
+    pytest.param(
+        "bedrijf",
+        marks=pytest.mark.xfail(
+            strict=True,
+            reason="Open Inwoner 2.4.3: with fetch_eherkenning_zaken_with_openzaak_120_params Mijn zaken lists"
+            " a zaak by nietNatuurlijkPersoon.vestigingsNummer, but its detail accepts only a vestiging rol"
+            " (fetch_roles_for_zaak_and_vestigingsnummer) and answers 404; not yet reported upstream",
+        ),
+    ),
+]
+
+
+def zaak_of(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts, who: str = "inwoner") -> JsonObject:
+    """An openbaar zaak with its first status (Open Inwoner hides zaken without one) and the identity as initiator."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
-    soort = "natuurlijk_persoon" if "inpBsn" in betrokkene else "niet_natuurlijk_persoon"
-    make_rol(openzaak, registry, zaak, parts.roltypen["initiator"], soort, **betrokkene)
+    attributes = LOGINS[who][0].attributes
+    if who == "inwoner":
+        make_rol(
+            openzaak, registry, zaak, parts.roltypen["initiator"], "natuurlijk_persoon", inpBsn=attributes["bsn"][0]
+        )
+    else:
+        # The login carries the vestiging, and Open Inwoner filters on it too.
+        vestiging = {"kvkNummer": attributes["kvk"][0], "vestigingsNummer": attributes["vestigingsnummer"][0]}
+        make_rol(openzaak, registry, zaak, parts.roltypen["initiator"], "niet_natuurlijk_persoon", **vestiging)
     make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
     return zaak
+
+
+def log_in(page: Page, podiumd_env: Environment, who: str = "inwoner") -> None:
+    """Log the identity in; the page ends on Mijn zaken."""
+    identity, method = LOGINS[who]
+    portal_login(page, podiumd_env, method, identity, "/mijn-zaken/")
 
 
 @pytest.mark.core
@@ -76,8 +106,8 @@ def test_inwoners_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,t
 ) -> None:
     """A zaak with the inwoner as initiator is listed in Mijn zaken (TA int-21, reg-95)."""
     need_bootstrap(INWONER.name, *WIRING)
-    zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
-    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
+    zaak = zaak_of(openzaak, registry, parts)
+    log_in(page, podiumd_env)
     expect_listed(page, zaak)
 
 
@@ -94,8 +124,8 @@ def test_search_on_a_zaaknummer_opens_the_zaak(  # pylint: disable=too-many-argu
 ) -> None:
     """A logged-in inwoner who searches on the number of one of their zaken lands on that zaak."""
     need_bootstrap(INWONER.name, *WIRING, "openinwoner-cms-pages")
-    zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
-    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
+    zaak = zaak_of(openzaak, registry, parts)
+    log_in(page, podiumd_env)
     page.goto(f"{podiumd_env.profile.urls['openinwoner']}/search/?query={zaak['identificatie']}")
     expect(page).to_have_url(re.compile(str(zaak["uuid"])))
 
@@ -135,8 +165,8 @@ def test_mijn_zaken_on_a_phone(  # pylint: disable=too-many-arguments,too-many-p
 ) -> None:
     """On a phone, Mijn zaken lists the inwoner's zaak and fits the screen width (TA reg-61)."""
     need_bootstrap(INWONER.name, *WIRING)
-    zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
-    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
+    zaak = zaak_of(openzaak, registry, parts)
+    log_in(page, podiumd_env)
     expect_listed(page, zaak)
     overflow = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
     assert overflow <= 0, f"{phone}: page {overflow}px wider than the screen"
@@ -152,29 +182,13 @@ def test_bedrijfs_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,t
 ) -> None:
     """A zaak of the company's vestiging is listed after an eHerkenning login (TA int-141)."""
     need_bootstrap(BEDRIJF.name, *WIRING)
-    # The login carries the vestiging, and Open Inwoner filters on it too.
-    vestiging = BEDRIJF.attributes["vestigingsnummer"][0]
-    zaak = zaak_of(openzaak, registry, parts, kvkNummer=BEDRIJF.attributes["kvk"][0], vestigingsNummer=vestiging)
-    portal_login(page, podiumd_env, "eherkenning", BEDRIJF, "/mijn-zaken/")
+    zaak = zaak_of(openzaak, registry, parts, "bedrijf")
+    log_in(page, podiumd_env, "bedrijf")
     expect_listed(page, zaak)
 
 
 @pytest.mark.tc("OI-014", "OI-068")
-@pytest.mark.parametrize(
-    "who",
-    [
-        "inwoner",
-        pytest.param(
-            "bedrijf",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="Open Inwoner 2.4.3: with fetch_eherkenning_zaken_with_openzaak_120_params Mijn zaken lists"
-                " a zaak by nietNatuurlijkPersoon.vestigingsNummer, but its detail accepts only a vestiging rol"
-                " (fetch_roles_for_zaak_and_vestigingsnummer) and answers 404; not yet reported upstream",
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("who", WHO)
 def test_zaak_shows_its_current_status(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -185,19 +199,11 @@ def test_zaak_shows_its_current_status(  # pylint: disable=too-many-arguments,to
     who: str,
 ) -> None:
     """The zaak's status page shows the status Open Zaak (and so ZAC) has now, not an earlier one."""
-    if who == "inwoner":
-        need_bootstrap(INWONER.name, *WIRING)
-        zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
-        portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
-    else:
-        need_bootstrap(BEDRIJF.name, *WIRING)
-        vestiging = BEDRIJF.attributes["vestigingsnummer"][0]
-        zaak = zaak_of(openzaak, registry, parts, kvkNummer=BEDRIJF.attributes["kvk"][0], vestigingsNummer=vestiging)
-        portal_login(page, podiumd_env, "eherkenning", BEDRIJF, "/mijn-zaken/")
+    need_bootstrap(LOGINS[who][0].name, *WIRING)
+    zaak = zaak_of(openzaak, registry, parts, who)
     current = parts.statustypen[1]
     make_status(openzaak, zaak, str(current["url"]))
-    page.goto(f"{podiumd_env.profile.urls['openinwoner']}/mijn-zaken/")
-    page.locator(f'a[href*="{zaak["uuid"]}"]').first.click()
+    open_status_page(page, podiumd_env, zaak, who)
     expect(page.locator("main")).to_contain_text(str(current["omschrijving"]))
 
 
@@ -211,7 +217,7 @@ def test_zaak_document_can_be_downloaded(  # pylint: disable=too-many-arguments,
 ) -> None:
     """A definitief document of the zaak is on its status page and downloads with its content (TA int-31, reg-143)."""
     need_bootstrap(INWONER.name, *WIRING)
-    zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
+    zaak = zaak_of(openzaak, registry, parts)
     inhoud = registry.tagged("documentinhoud")
     document = make_document(openzaak, registry, parts.informatieobjecttype, inhoud, status="definitief")
     link_document(openzaak, registry, zaak, document)
@@ -236,7 +242,7 @@ def test_uploaded_document_reaches_the_zaak(  # pylint: disable=too-many-argumen
 ) -> None:
     """A file uploaded on the zaak's status page becomes a document of the zaak (TA int-111, int-162)."""
     need_bootstrap(INWONER.name, *WIRING, "openinwoner-zaaktype-config")
-    zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
+    zaak = zaak_of(openzaak, registry, parts)
     clean_up_new_documents(openzaak, registry, zaak)
     bestand = f"{registry.tagged('upload')}.txt"
     open_status_page(page, podiumd_env, zaak)
@@ -246,7 +252,8 @@ def test_uploaded_document_reaches_the_zaak(  # pylint: disable=too-many-argumen
 
 
 @pytest.mark.requires("cluster")
-@pytest.mark.tc("OI-010")
+@pytest.mark.tc("OI-010", "OI-064")
+@pytest.mark.parametrize("who", WHO)
 def test_infected_upload_is_refused(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -254,16 +261,17 @@ def test_infected_upload_is_refused(  # pylint: disable=too-many-arguments,too-m
     registry: ResourceRegistry,
     parts: ZaaktypeParts,
     need_bootstrap: Callable[..., None],
+    who: str,
 ) -> None:
     """With ClamAV on, an upload of the EICAR test file does not reach the zaak (TA reg-123)."""
     if not virus_scan_enabled(podiumd_env):
         pytest.skip(
             "Open Inwoner scans no uploads: set profile setting clamav and run bootstrap step openinwoner-virus-scan"
         )
-    need_bootstrap(INWONER.name, *WIRING, "openinwoner-zaaktype-config")
-    zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
+    need_bootstrap(LOGINS[who][0].name, *WIRING, "openinwoner-zaaktype-config")
+    zaak = zaak_of(openzaak, registry, parts, who)
     clean_up_new_documents(openzaak, registry, zaak)
-    open_status_page(page, podiumd_env, zaak)
+    open_status_page(page, podiumd_env, zaak, who)
     upload_document(page, f"{registry.tagged('eicar')}.txt", EICAR)
     assert documents_of(openzaak, zaak) == []
 
@@ -279,7 +287,7 @@ def test_refused_file_type_cannot_be_uploaded(  # pylint: disable=too-many-argum
 ) -> None:
     """The upload form keeps its button disabled for a file type outside the allowed list, such as .html (TA reg-178)."""
     need_bootstrap(INWONER.name, *WIRING, "openinwoner-zaaktype-config")
-    zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
+    zaak = zaak_of(openzaak, registry, parts)
     open_status_page(page, podiumd_env, zaak)
     expect(choose_document(page, f"{registry.tagged('pagina')}.html", b"<html></html>")).to_be_disabled()
 
@@ -289,9 +297,9 @@ def expect_listed(page: Page, zaak: JsonObject) -> None:
     expect(page.get_by_text(str(zaak["identificatie"])).first).to_be_visible(timeout=LIST_TIMEOUT_MS)
 
 
-def open_status_page(page: Page, podiumd_env: Environment, zaak: JsonObject) -> None:
-    """Log the inwoner in and open the zaak's status page from Mijn zaken."""
-    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
+def open_status_page(page: Page, podiumd_env: Environment, zaak: JsonObject, who: str = "inwoner") -> None:
+    """Log the identity in and open the zaak's status page from Mijn zaken."""
+    log_in(page, podiumd_env, who)
     page.locator(f'a[href*="{zaak["uuid"]}"]').first.click()
 
 
@@ -313,7 +321,7 @@ def test_question_about_a_zaak_reaches_open_klant(  # pylint: disable=too-many-a
 ) -> None:
     """A question asked on the zaak's status page becomes a klantcontact about the zaak (TA int-164)."""
     need_bootstrap(INWONER.name, *WIRING, "openinwoner-zaaktype-config", "openinwoner-openklant")
-    zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
+    zaak = zaak_of(openzaak, registry, parts)
     about = {"onderwerpobjectidentificatorObjectId": str(zaak["uuid"])}
 
     def klantcontacten() -> list[str]:
