@@ -18,6 +18,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from playwright.sync_api import expect
+
+from podiumd_tests.bootstrap.names import PREFIX
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.bootstrap.names import TEST_ZAAKTYPE
 from podiumd_tests.bootstrap.steps import OAB_ROLES
@@ -28,6 +31,7 @@ from podiumd_tests.oab import cache_zaken
 from podiumd_tests.oab import destroy_now
 from podiumd_tests.oab import login
 from podiumd_tests.oab import set_archive_config
+from podiumd_tests.oab import ui_login
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
@@ -43,6 +47,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     import requests
+
+    from playwright.sync_api import Page
 
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
@@ -112,6 +118,18 @@ def user_pk(oab: Callable[[str], requests.Session], api: str, role: str) -> int:
     return next(int(str(u["pk"])) for u in entries(users.json()) if str(u["username"]).endswith(f"-{role}"))
 
 
+def rows(response: requests.Response) -> list[JsonObject]:
+    """The objects of an OAB list answer (200), paginated or not."""
+    body = expect_status(response, HTTPStatus.OK).json()
+    return entries(body.get("results") if isinstance(body, dict) else body)
+
+
+def zaken_on(oab: Callable[[str], requests.Session], api: str, lijst: str) -> list[object]:
+    """The URLs of the zaken on the list."""
+    items = oab("recordmanager").get(api + "/destruction-list-items/", params={"item-destruction_list": lijst})
+    return [section(i, "zaak").get("url") for i in rows(items)]
+
+
 def status(oab: Callable[[str], requests.Session], api: str, lijst: str) -> str:
     """The list's status, as the record manager sees it."""
     return str(
@@ -171,10 +189,7 @@ def test_list_goes_through_both_reviews(
 ) -> None:
     """Reviewer and archivist accept the list of the test's zaak, which then waits for destruction (TA 142, 143, 168)."""
     lijst = new_list(oab, api, zaak, registry)
-    items = oab("recordmanager").get(api + "/destruction-list-items/", params={"item-destruction_list": lijst})
-    body = expect_status(items, HTTPStatus.OK).json()
-    rows = entries(body.get("results") if isinstance(body, dict) else body)
-    assert [section(i, "zaak").get("url") for i in rows] == [zaak["url"]]
+    assert zaken_on(oab, api, lijst) == [zaak["url"]]
     review(oab, api, "reviewer", lijst, decision="accepted")
     assert status(oab, api, lijst) == "internally_reviewed"
     expect_status(make_final(oab, api, lijst), HTTPStatus.CREATED, HTTPStatus.OK)
@@ -209,19 +224,73 @@ def test_record_manager_response_sends_the_list_back_to_review(
     rejection = review(
         oab, api, "reviewer", lijst, decision="rejected", zakenReviews=[{"zaakUrl": zaak["url"], "feedback": "bewaren"}]
     )
-    items = expect_status(
-        oab("recordmanager").get(api + "/review-items/", params={"review": str(rejection["pk"])}), HTTPStatus.OK
-    )
+    items = rows(oab("recordmanager").get(api + "/review-items/", params={"review": str(rejection["pk"])}))
     body = {
         "review": rejection["pk"],
         "comment": "podiumd-tests",
-        "itemsResponses": [{"reviewItem": i["pk"], "actionItem": "keep"} for i in entries(items.json())],
+        "itemsResponses": [{"reviewItem": i["pk"], "actionItem": "keep"} for i in items],
     }
     expect_status(oab("recordmanager").post(api + "/review-responses/", json=body), HTTPStatus.CREATED)
     # OAB processes the response in a background task.
     wait_until(
         lambda: status(oab, api, lijst) == "ready_to_review", timeout=60, description=f"list {lijst} back to review"
     )
+
+
+@pytest.mark.ui
+def test_record_manager_creates_a_list_in_the_ui(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    oab: Callable[[str], requests.Session],
+    api: str,
+    zaak: JsonObject,
+    registry: ResourceRegistry,
+) -> None:
+    """The record manager selects the test's zaak in the UI and makes a list of it, which opens for editing (TA 143 ABC-001-003)."""
+    oab("recordmanager")  # bootstraps the test user
+    naam = registry.tagged(f"ui-lijst-{secrets.token_hex(3)}")
+    ui_login(page, podiumd_env, "recordmanager")
+    identificatie = str(zaak["identificatie"])
+    page.goto(
+        f"{podiumd_env.profile.urls['openarchiefbeheer']}/destruction-lists/create?identificatie__icontains={identificatie}"
+    )
+    page.get_by_role("row", name=identificatie).get_by_role("checkbox").check()
+    page.get_by_role("button", name="Vernietigingslijst opstellen").last.click()
+    dialog = page.get_by_role("dialog")
+    dialog.get_by_label("Naam").fill(naam)
+    dialog.get_by_role("combobox", name="Reviewer").click()
+    # The options are a listbox without option roles.
+    dialog.get_by_role("listbox").get_by_text(f"{PREFIX}-reviewer", exact=True).click()
+    dialog.get_by_label("Toelichting").fill("podiumd-tests")
+    dialog.get_by_role("button", name="Vernietigingslijst opstellen").click()
+    expect(page.get_by_text(naam)).to_be_visible()
+    lijsten = rows(oab("recordmanager").get(api + "/destruction-lists/", params={"name": naam}))
+    lijst = next(str(found["uuid"]) for found in lijsten if found.get("name") == naam)
+    assert zaken_on(oab, api, lijst) == [zaak["url"]]
+    page.get_by_text(naam).click()
+    expect(page.get_by_role("heading", name=naam)).to_be_visible()
+    expect(page.get_by_text(identificatie).first).to_be_visible()
+
+
+@pytest.mark.ui
+def test_record_manager_sees_the_proposals_in_the_ui(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    oab: Callable[[str], requests.Session],
+    api: str,
+    zaak: JsonObject,
+    registry: ResourceRegistry,
+) -> None:
+    """After a rejection, the list's page shows the record manager the reviewer's proposal for the zaak (TA 143 ABC-011)."""
+    lijst = new_list(oab, api, zaak, registry)
+    feedback = registry.tagged("voorstel")
+    review(
+        oab, api, "reviewer", lijst, decision="rejected", zakenReviews=[{"zaakUrl": zaak["url"], "feedback": feedback}]
+    )
+    ui_login(page, podiumd_env, "recordmanager")
+    page.goto(f"{podiumd_env.profile.urls['openarchiefbeheer']}/destruction-lists/{lijst}")
+    expect(page.get_by_text(str(zaak["identificatie"])).first).to_be_visible()
+    expect(page.get_by_text(feedback).first).to_be_visible()
 
 
 def test_coreviewer_feedback_reaches_the_reviewer(

@@ -73,7 +73,7 @@ Sources:
 | `regression/125-kvk-postcode-huisnummer-zoek.spec.ts` | component or integration | 3/4/5 | port | Same as 08. |
 | `regression/13-va-filter-cross-component.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py, with client ptest-bootstrap-zgw-openbaar. |
 | `regression/14-audit-trail.spec.ts` | component or integration | 3/4/5 | merge | Into the strict xfail `test_document_audittrail_with_catalogus_rights` (`test_documenten.py`): Open Zaak serves audittrails only to clients with heeft_alle_autorisaties, and the suite keeps its clients at minimum scope. |
-| `regression/143-oab-vernietigingsflow.spec.ts` | component or integration | 3/4/5 | port | `test_vernietigingslijst.py`, through the API (make_final works without 2FA here); UI steps: todo. |
+| `regression/143-oab-vernietigingsflow.spec.ts` | component or integration | 3/4/5 | port | `test_vernietigingslijst.py`, through the API (make_final works without 2FA here). UI: the record manager makes a list in the SPA (ABC-001 to 003) and sees the reviewer's proposals (ABC-011). |
 | `regression/143-portaal-document-download.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_portaal_zaken.py`. |
 | `regression/144-continuiteit-component-stop.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/integration/test_continuiteit.py`: every other component root must keep answering, not only the pairs TA checked. |
 | `regression/146-portaal-uitbreiding.spec.ts` | component or integration | 3/4/5 | merge | Into the TA 118 test: the vestiging's eersteHandelsnaam from the KvK vestigingsprofiel. |

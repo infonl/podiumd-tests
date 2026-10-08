@@ -1,4 +1,4 @@
-"""Open Archiefbeheer: a local login per role, its zaken cache, its ArchiveConfig and the destruction of a list."""
+"""Open Archiefbeheer: a local login per role (API, UI), its zaken cache, its ArchiveConfig and list destruction."""
 
 from __future__ import annotations
 
@@ -14,9 +14,28 @@ from podiumd_tests.responses import expect_status
 if TYPE_CHECKING:
     import requests
 
+    from playwright.sync_api import Page
+
     from podiumd_tests.environment import Environment
 
 API = "/api/v1"
+
+
+def _credentials(env: Environment, role: str) -> dict[str, str]:
+    return {
+        "username": f"{PREFIX}-{role}",
+        "password": env.credentials.get(django_password_key("openarchiefbeheer", role)),
+    }
+
+
+def ui_login(page: Page, env: Environment, role: str) -> None:
+    """Log the role's test user in through OAB's own login page; the page ends on the vernietigingslijsten."""
+    credentials = _credentials(env, role)
+    page.goto(env.profile.urls["openarchiefbeheer"] + "/login")
+    page.get_by_label("Gebruikersnaam").fill(credentials["username"])
+    page.get_by_label("Wachtwoord").fill(credentials["password"])
+    page.get_by_role("button", name="Inloggen").click()
+    page.wait_for_url("**/destruction-lists")
 
 
 def login(env: Environment, role: str) -> requests.Session:
@@ -26,9 +45,9 @@ def login(env: Environment, role: str) -> requests.Session:
     # whoami sets the csrftoken cookie that the login and every later write must echo.
     http.get(url + API + "/whoami/")
     http.headers.update({"X-CSRFToken": http.cookies.get("csrftoken") or "", "Referer": url + "/login"})
-    password = env.credentials.get(django_password_key("openarchiefbeheer", role))
-    credentials = {"username": f"{PREFIX}-{role}", "password": password}
-    expect_status(http.post(url + API + "/auth/login/", json=credentials), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    expect_status(
+        http.post(url + API + "/auth/login/", json=_credentials(env, role)), HTTPStatus.OK, HTTPStatus.NO_CONTENT
+    )
     # The login rotates the token.
     http.headers["X-CSRFToken"] = http.cookies.get("csrftoken") or ""
     return http
