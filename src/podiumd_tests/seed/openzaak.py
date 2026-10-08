@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.json_data import strings
+from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
@@ -20,6 +21,7 @@ if TYPE_CHECKING:
     from podiumd_tests.seed.registry import ResourceRegistry
 
 ZAKEN = "zaken/api/v1"
+DELETE_TIMEOUT = 30
 CATALOGI = "catalogi/api/v1"
 
 
@@ -36,17 +38,23 @@ def _create(openzaak: ApiClient, registry: ResourceRegistry, path: str, body: di
 
 
 def delete_zaak(openzaak: ApiClient, url: str) -> None:
-    """DELETE a zaak.
+    """DELETE a zaak, retrying until it is gone.
 
     Open Zaak 1.29.3 answers 500 on deleting a zaak with a resultaat although it deletes it
     (the ETag of the deleted resultaat is recalculated; test_closed_zaak_delete_answers_204
-    tracks it). A 500 counts as deleted only when the zaak is gone.
+    tracks it). It also answers 500 and keeps the zaak when another client (ZAC) adds a rol
+    during the delete. A 500 counts as deleted only when the zaak is gone.
     """
-    response = openzaak.request(
-        "DELETE", url, HTTPStatus.NO_CONTENT, HTTPStatus.NOT_FOUND, HTTPStatus.INTERNAL_SERVER_ERROR
-    )
-    if response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:
-        openzaak.request("GET", url, HTTPStatus.NOT_FOUND)
+
+    def deleted() -> bool:
+        response = openzaak.request(
+            "DELETE", url, HTTPStatus.NO_CONTENT, HTTPStatus.NOT_FOUND, HTTPStatus.INTERNAL_SERVER_ERROR
+        )
+        if response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:
+            openzaak.request("GET", url, HTTPStatus.NOT_FOUND)
+        return True
+
+    wait_until(deleted, timeout=DELETE_TIMEOUT, description=f"DELETE {url}")
 
 
 def make_zaak(openzaak: ApiClient, registry: ResourceRegistry, zaaktype: str, **fields: object) -> JsonObject:
