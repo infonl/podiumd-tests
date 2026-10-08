@@ -419,6 +419,10 @@ EHERKENNING_CLAIMS = {
 }
 
 
+# Open Formulieren's level of assurance: the mock sends none, so every login gets the default.
+OF_LOA = {"claim_path": ["authsp_level"], "default": LOA_DEFAULT, "value_mapping": []}
+
+
 def openinwoner_number(user: KeycloakUser) -> dict[str, str]:
     """The bsn or kvk an Open Inwoner account of a test identity is found by."""
     key = "bsn" if "bsn" in user.attributes else "kvk"
@@ -610,13 +614,20 @@ STEPS: tuple[Step, ...] = (
                 "oidc-digid": {
                     "provider": f"{PREFIX}-digid",
                     "scopes": ["openid", "bsn"],
+                    "options": {"identity_settings": {"bsn_claim_path": ["bsn"]}, "loa_settings": OF_LOA},
+                },
+                "oidc-eherkenning": {
+                    "provider": f"{PREFIX}-eherkenning",
+                    "scopes": ["openid", "eherkenning"],
+                    # The mock sends no acting subject; Open Formulieren needs it only in strict mode.
                     "options": {
-                        "identity_settings": {"bsn_claim_path": ["bsn"]},
-                        "loa_settings": {"claim_path": ["authsp_level"], "default": LOA_DEFAULT, "value_mapping": []},
+                        "identity_settings": {**EHERKENNING_CLAIMS, "acting_subject_claim_path": ["acting_subject"]},
+                        "loa_settings": OF_LOA,
                     },
                 },
             },
             "form": TEST_FORM,
+            "form_backends": ["digid_oidc", "eherkenning_oidc"],
         },
         record=True,
         wiring=True,

@@ -40,7 +40,7 @@ Sources:
 | `interaction/20-klacht-journey-e2e.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
 | `interaction/21-portaal-mijn-zaken-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/integration/test_portaal_zaken.py` (W4 group without zaken cache: no flush). |
 | `interaction/31-document-portaal-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | With 143 into `tests/integration/test_portaal_zaken.py`. |
-| `interaction/32-of-submission-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | todo | |
+| `interaction/32-of-submission-ui.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | With 76 into `tests/integration/test_formulier_zaak.py`: form API, submission and the zgw registration backend (proven by the registered zaak). |
 | `interaction/35-ok2-partij-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/openklant/` test_partijen.py: persoon with BSN and e-mail. |
 | `interaction/74-ita-claim-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/ita/test_ita_internetaken.py`, with a numeric nummer. |
 | `interaction/76-of-submission-end-to-end.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/integration/test_formulier_zaak.py`: submission through the SDK API, zaak and PDF in Open Zaak. |
@@ -82,13 +82,13 @@ Sources:
 | `regression/15-status-transitions.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py: statussen in order. |
 | `regression/150-of-prefill-foutpaden.spec.ts` | component or integration | 3/4/5 | port | `test_brp.py` (BSN failing the eleven-test) and `test_kvk.py` (invalid KvK numbers); the partner expand (FOUTPAD-4) stayed fixme in TA: drop. |
 | `regression/151-pdok-externe-service.spec.ts` | component or integration | 3/4/5 | drop | Tests the public PDOK Locatieserver, not PodiumD. |
-| `regression/152-of-retention-en-pdf.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/152-of-retention-en-pdf.spec.ts` | component or integration | 3/4/5 | merge | With 76 into `tests/integration/test_formulier_zaak.py`: the PDF report downloads through reportDownloadUrl. |
 | `regression/153-of-features-direct.spec.ts` | component or integration | 3/4/5 | merge | Cosign → `test_formulier_api.py`. Demo payment: as 185. NotifyNL mock (fixme in TA) and form variables (need a login): drop. |
 | `regression/154-omc-cosign-direct.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/156-esuite-ui-navigatie.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/157-contact-haalcentraal-validatie.spec.ts` | component or integration | 3/4/5 | merge | KI-060 → `tests/component/openklant/` test_internetaken.py; KvK parts: phase 3, external services. |
-| `regression/158-of-eherkenning-vestiging.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/159-of-zaak-keten.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/158-of-eherkenning-vestiging.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_formulier_login.py`: eHerkenning through Keycloak's mock (W1), the vestiging is the zaak's initiator. |
+| `regression/159-of-zaak-keten.spec.ts` | component or integration | 3/4/5 | merge | With 158 into `tests/integration/test_formulier_login.py`. |
 | `regression/16-bedrijf-aanvraag-kvk.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py: rol of a company (generated KvK number). |
 | `regression/160-portaal-deactivated-on-pseudo-blokkade.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/161-portaal-low-prio-coverage.spec.ts` | component or integration | 3/4/5 | port | 161c/d → `tests/component/openinwoner/test_portaal_anoniem.py`; a/b/e/f read OI source files: dropped. |
@@ -109,7 +109,7 @@ Sources:
 | `regression/178-blacklist-upload.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/179-portaal-profiel-naar-openklant.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_portaal_openklant.py`. |
 | `regression/18-klantcontact-zaak-koppeling.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_klantcontact_zaak.py`. |
-| `regression/183-of-digid-zaak-rol.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_formulier_digid.py` (DigiD through Keycloak's mock, wiring W1). |
+| `regression/183-of-digid-zaak-rol.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_formulier_login.py` (DigiD through Keycloak's mock, wiring W1). |
 | `regression/184-ita-doorsturen-mutatie.spec.ts` | component or integration | 3/4/5 | port | `tests/component/ita/test_ita_internetaken.py`; ITA wants `{"afdeling"|"groep": identificatie}`, TA's actorType body gets 400. |
 | `regression/185-of-betaalstatus-zaak.spec.ts` | component or integration | 3/4/5 | drop | Needs Open Formulieren's demo payment plugin, which no estate enables (ENABLE_DEMO_PLUGINS is unset in podiumd-infra, ExternalsPodiumD and the chart); Ogone and Worldline need a real payment provider. TA kept it fixme. |
 | `regression/19-notificaties-e2e.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`, with the webhook receiver of `infra/`. |

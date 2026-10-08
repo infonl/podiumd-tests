@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 # app's profile URL must be a redirect URI of the client.
 CLIENTS: dict[str, tuple[str, tuple[str, ...], bool]] = {
     "openinwoner": ("openinwoner", ("bsn", "eherkenning"), True),
-    "openformulieren": ("openformulieren", ("bsn",), False),
+    "openformulieren": ("openformulieren", ("bsn", "eherkenning"), False),
 }
 KEYCLOAK_STORE_KEY = "ptest_bootstrap_keycloak_oidc_mock_record"
 
