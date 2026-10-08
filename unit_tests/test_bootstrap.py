@@ -333,13 +333,13 @@ def test_openinwoner_partijen_remove_deletes_the_partijen_of_the_test_identities
     )
     assert OpenInwonerPartijen().remove(Context(env, CredentialStore(env.kube))) == ()
     searched = [r.url.split("ObjectId=")[1] for r in sent if "partijIdentificatorObjectId" in r.url]
-    assert searched == ["999990019", "999993653", "68750110"]
+    assert searched == ["000037178601", "999990019", "999993653", "68750110"]
     # The vestiging's sub-identificator goes before the kvk_nummer it refers to.
     assert [r.url.removeprefix(OK + api) for r in sent if r.method == "DELETE"] == [
         "/partij-identificatoren/i2",
         "/partij-identificatoren/i1",
         "/partijen/p1",
-    ] * 3
+    ] * 4
 
 
 def test_snippet_notes_reach_the_outcome(env_factory, fake_runner, profile_factory):

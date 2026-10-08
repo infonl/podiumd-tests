@@ -44,6 +44,7 @@ from podiumd_tests.bootstrap.omc import OmcAbonnement
 from podiumd_tests.clients.platform import openklant_client
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openklant import delete_partij
 from podiumd_tests.seed.openklant import partijen_of
@@ -148,8 +149,12 @@ class KeycloakUser:
         return keycloak_password_key(self.key)
 
     def is_present(self, ctx: Context, /) -> bool:
-        """The user exists, and its password is in the credentials Secret."""
-        return for_environment(ctx.env).user_id(self.username) is not None and self.store_key in ctx.store.read()
+        """The user exists with the wanted attributes, and its password is in the credentials Secret."""
+        user = for_environment(ctx.env).user(self.username)
+        if user is None or self.store_key not in ctx.store.read():
+            return False
+        attributes = section(user, "attributes")
+        return all(attributes.get(name) == values for name, values in self.attributes.items())
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Recreate the user with a new password and the wanted roles and groups that exist."""
@@ -376,7 +381,7 @@ IDENTITIES = (
     KeycloakUser("inwoner", attributes={"bsn": ["999990019"]}),
     # Not TA's 999990038: it fails the eleven-test, and Open Klant refuses it.
     KeycloakUser("inwoner2", attributes={"bsn": ["999993653"]}),
-    KeycloakUser("bedrijf", attributes={"kvk": ["68750110"], "vestigingsnummer": ["000038509564"]}),
+    KeycloakUser("bedrijf", attributes={"kvk": ["68750110"], "vestigingsnummer": ["000037178601"]}),
 )
 # Open Inwoner's portal pages; the contact form is a plugin on a page with its template.
 OI_PAGES = [
@@ -449,14 +454,16 @@ class OpenInwonerPartijen:
         return {}
 
     def remove(self, ctx: Context, /) -> tuple[str, ...]:
-        """Delete the partijen identified by a test identity's bsn or kvk."""
+        """Delete the partijen identified by a test identity's vestigingsnummer, bsn or kvk."""
         if OPENKLANT_STORE_KEY not in ctx.store.read():
             return ()
         openklant = openklant_client(ctx.env)
-        for user in IDENTITIES:
-            for number in openinwoner_number(user).values():
-                for partij in partijen_of(openklant, number):
-                    delete_partij(openklant, partij)
+        # A vestiging's partij goes first: its identificator protects the kvk_nummer's.
+        for key in ("vestigingsnummer", "bsn", "kvk"):
+            for user in IDENTITIES:
+                for number in user.attributes.get(key, []):
+                    for partij in partijen_of(openklant, number):
+                        delete_partij(openklant, partij)
         return ()
 
 

@@ -56,10 +56,15 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
         """The realm's own settings, e.g. smtpServer."""
         return cast("JsonObject", self._get(""))
 
+    def user(self, username: str) -> JsonObject | None:
+        """The user with exactly this username, or None."""
+        users = cast("list[JsonObject]", self._get("/users", {"username": username, "exact": "true"}))
+        return users[0] if users else None
+
     def user_id(self, username: str) -> str | None:
         """Id of the user with exactly this username, or None."""
-        users = cast("list[JsonObject]", self._get("/users", {"username": username, "exact": "true"}))
-        return str(users[0]["id"]) if users else None
+        user = self.user(username)
+        return str(user["id"]) if user else None
 
     def create_user(self, username: str, password: str, attributes: dict[str, list[str]]) -> str:
         """Create an enabled user without required actions; its id."""
