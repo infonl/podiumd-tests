@@ -207,13 +207,13 @@ Sources:
 | `test_database.py` | component, marker `cluster` | 3 | port | `tests/component/platform/test_django_apps.py`, through each app's own Django connection. |
 | `test_django_admin_login.py` | component, marker `cluster` | 3 | port | `tests/component/platform/test_django_apps.py`; skips where admin login is SSO. |
 | `test_login_flow.py` | smoke (ZAC OIDC login) | 1 | port | First leg → `test_oidc.py`; the login → `test_zac_login.py`. |
-| `test_mailpit.py` | integration | 4 | merge | `tests/integration/test_mail.py` (every Django app, not only Open Zaak); the web UI's root → `test_reachability.py`. |
+| `test_mailpit.py` | integration | 4 | merge | `tests/integration/test_mail.py`: every Django app's mail, and a sent mail shown in Mailpit's web UI (`test_sent_mail_shows_in_the_mailpit_ui`). |
 | `test_metrics.py` | smoke | 1 | merge | With `test_monitoring_logging.py` into `test_metrics.py`; datasources found by type, not by name. |
 | `test_monitoring_logging.py` | smoke | 1 | merge | Into `test_metrics.py`; the Loki check runs where a Loki datasource exists. |
 | `test_pabc_migrations_guard.py` | component, marker `destructive` | 3 | drop | Tests a podiumd-minikube script, and changes the cluster. |
-| `test_pkce.py` | component (keycloak) | 3 | port | `tests/component/keycloak/test_pkce.py`; MK's login round trip and ZAC experiment not ported. |
+| `test_pkce.py` | component (keycloak) | 3 | port | `tests/component/keycloak/test_pkce.py`, with PABC's PKCE login round trip and the ita/kiss clients not requiring PKCE (handed over 2026-10-08); ZAC's experimental PKCE not ported (a minikube chart switch). |
 | `test_pods.py` | smoke | 1 | port | `test_cluster.py`: pods judged by owner (Job, CronJob) instead of per-estate prefix lists; core pod list dropped (every Deployment and StatefulSet must be ready). |
-| `test_productaanvraag_flow.py` | integration, marker `core` | 4 | merge | `tests/integration/test_productaanvraag.py`; Job and kanaal checks are covered by `test_jobs_succeeded` and the kanalen tests. |
+| `test_productaanvraag_flow.py` | integration, marker `core` | 4 | merge | `tests/integration/test_productaanvraag.py`; the Objects API registration check → `test_objects_api_registrations_are_valid` (every active form); Job and kanaal checks via `test_jobs_succeeded` and the kanalen tests. |
 | `test_reachability.py` | smoke | 1 | port | `test_reachability.py`: redirects followed (R14), status < 500 per component plus admin login pages; no per-host expected codes. |
 | `test_zgw_service_reachability.py` | integration, marker `cluster` | 4 | port | `tests/component/platform/test_django_apps.py` (snippet `zgw_services`), for every Django app and also external APIs. |
 | `test_api_proxy.py` | component | 3 | port | KvK and BRP → `test_kvk.py`, `test_brp.py`; BAG → `tests/component/basisregistraties/test_bag.py`. |
@@ -233,13 +233,13 @@ Sources:
 | `test_database.py` | component, marker `cluster` | 3 | port | `tests/component/platform/test_django_apps.py`, through each app's own Django connection. |
 | `test_django_admin_login.py` | component, marker `cluster` | 3 | port | `tests/component/platform/test_django_apps.py`; skips where admin login is SSO. |
 | `test_login_flow.py` | smoke (ZAC OIDC login) | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
-| `test_mailpit.py` | integration | 4 | merge | `tests/integration/test_mail.py`; the PI-only skip is the `mailpit` capability. |
+| `test_mailpit.py` | integration | 4 | merge | `tests/integration/test_mail.py`: every Django app's mail, and a sent mail shown in Mailpit's web UI (`test_sent_mail_shows_in_the_mailpit_ui`). |
 | `test_metrics.py` | smoke | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
 | `test_monitoring_logging.py` | smoke | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
 | `test_pabc_migrations_guard.py` | component, marker `destructive` | 3 | drop | Tests a podiumd-minikube script, and changes the cluster. |
-| `test_pkce.py` | component (keycloak) | 3 | port | `tests/component/keycloak/test_pkce.py`; MK's login round trip and ZAC experiment not ported. |
+| `test_pkce.py` | component (keycloak) | 3 | port | `tests/component/keycloak/test_pkce.py`, with PABC's PKCE login round trip and the ita/kiss clients not requiring PKCE (handed over 2026-10-08); ZAC's experimental PKCE not ported (a minikube chart switch). |
 | `test_pods.py` | smoke | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
-| `test_productaanvraag_flow.py` | integration, marker `core` | 4 | merge | `tests/integration/test_productaanvraag.py`, with profile settings instead of hard-coded types; PI's ZAC parameter check goes to the ZAC component tests. |
+| `test_productaanvraag_flow.py` | integration, marker `core` | 4 | merge | `tests/integration/test_productaanvraag.py`; the Objects API registration check → `test_objects_api_registrations_are_valid` (every active form); Job and kanaal checks via `test_jobs_succeeded` and the kanalen tests. |
 | `test_reachability.py` | smoke | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
 | `test_zac_zaakafhandelparameters.py` | component (zac) | 3 | port | `tests/component/zac/test_zac_zaakafhandelparameters.py`, for the profile's `productaanvraag_zaaktype`. |
 | `test_zgw_service_reachability.py` | integration, marker `cluster` | 4 | merge | same test in MK and PI: one environment-neutral test in `test_django_apps.py`. |

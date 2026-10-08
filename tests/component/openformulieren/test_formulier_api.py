@@ -10,10 +10,12 @@ import re
 
 from http import HTTPStatus
 from typing import TYPE_CHECKING
+from typing import cast
 
 import pytest
 
 from podiumd_tests.bootstrap.names import TEST_FORM
+from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.openformulieren import delete_submission
 from podiumd_tests.openformulieren import start_submission
@@ -93,3 +95,17 @@ def test_upload_of_a_false_file_is_refused(  # pylint: disable=too-many-argument
     response = http.post(f"{urls['openformulieren']}/api/v2/formio/fileupload", files=upload, headers=headers)
     expect_status(response, HTTPStatus.BAD_REQUEST)
     assert re.search(message, response.text, re.IGNORECASE), response.text[:300]
+
+
+@pytest.mark.requires("cluster")
+def test_objects_api_registrations_are_valid(podiumd_env: Environment) -> None:
+    """Every active form's Objects API registration resolves its objecttype and types (MK test_productaanvraag_flow.py)."""
+    backends = cast(
+        "list[dict[str, object]]",
+        run_snippet(
+            podiumd_env.kube, podiumd_env.deployment_for("openformulieren"), "openformulieren_objects_backends", {}
+        ),
+    )
+    if not backends:
+        pytest.skip("no active form registers in the Objects API")
+    assert [f"{b['form']}/{b['backend']}: {b['errors']}" for b in backends if b["errors"]] == []
