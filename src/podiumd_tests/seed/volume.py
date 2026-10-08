@@ -20,6 +20,7 @@ from importlib.resources import files
 from typing import TYPE_CHECKING
 from typing import cast
 
+import requests
 import yaml
 
 from podiumd_tests.auth.keycloak_admin import for_environment
@@ -29,7 +30,9 @@ from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.clients.platform import openklant_client
 from podiumd_tests.clients.platform import openzaak_client
+from podiumd_tests.credentials import SecretError
 from podiumd_tests.django_snippets import run_snippet
+from podiumd_tests.process import ProcessError
 from podiumd_tests.seed.openklant import make_actor
 from podiumd_tests.seed.openklant import make_internetaak
 from podiumd_tests.seed.openklant import make_klantcontact
@@ -354,6 +357,18 @@ def unseed(env: Environment) -> list[Seeded]:
         kind.delete_all(env)
         unseeded.append(Seeded(kind.name, before, kind.count(env)))
     return unseeded
+
+
+def counts(env: Environment) -> dict[str, int | None]:
+    """The volume objects per kind the environment has now; None where they cannot be counted."""
+    found: dict[str, int | None] = {}
+    for kind in KINDS:
+        try:
+            found[kind.name] = None if env.capabilities.skip_reason(kind.component) else kind.count(env)
+        except (ProcessError, SecretError, AssertionError, LookupError, requests.RequestException):
+            # No kubectl, no Keycloak admin secret, an API refusing: this run's volume is unknown.
+            found[kind.name] = None
+    return found
 
 
 def format_seeded(seeded: list[Seeded]) -> str:

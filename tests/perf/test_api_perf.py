@@ -3,7 +3,7 @@
 One Locust run (src/podiumd_tests/perf/locustfile.py, headless, --perf-users users for
 --perf-duration) serves every test; each endpoint must meet its p95 and failure-ratio threshold
 from perf.yaml, and may not have slowed down more than max_slowdown against the environment's
-earlier runs with the same settings. Locust's stats and the settings go to the run's perf/
+earlier runs with the same settings (users, duration, volume data). Locust's stats and the settings go to the run's perf/
 directory; without a run directory (plain pytest) there is no history to compare with.
 """
 
@@ -29,6 +29,7 @@ from podiumd_tests.perf.stats import violations
 from podiumd_tests.process import run_checked
 from podiumd_tests.process import run_process
 from podiumd_tests.pytest_plugin import requiring
+from podiumd_tests.seed.volume import counts
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -59,7 +60,9 @@ def fixture_stats(
     directory = perf_dir
     users = str(request.config.getoption("--perf-users"))
     duration = str(request.config.getoption("--perf-duration"))
-    (directory / SETTINGS).write_text(json.dumps({"users": users, "duration": duration}) + "\n", encoding="utf-8")
+    # Runs compare only with runs of the same load and volume data (seed-volume).
+    settings = {"users": users, "duration": duration, "volume": counts(podiumd_env)}
+    (directory / SETTINGS).write_text(json.dumps(settings, sort_keys=True) + "\n", encoding="utf-8")
     command = [sys.executable, "-m", "locust", "-f", str(LOCUSTFILE), "--headless", "--only-summary"]
     command += ["--users", users, "--spawn-rate", users, "--run-time", duration, "--exit-code-on-error", "0"]
     command += ["--csv", str(directory / "locust"), "--podiumd-env", podiumd_env.profile.name]
