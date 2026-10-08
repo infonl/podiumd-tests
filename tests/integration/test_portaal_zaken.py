@@ -52,6 +52,7 @@ pytestmark = [
 INWONER, _, BEDRIJF = IDENTITIES
 # The EICAR anti-virus test file: every virus scanner reports it, it is no malware.
 EICAR = rb"X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
+LIST_TIMEOUT_MS = 30_000
 WIRING = ("openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-zgw-group")
 
 
@@ -77,7 +78,7 @@ def test_inwoners_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,t
     need_bootstrap(INWONER.name, *WIRING)
     zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
     portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
-    expect(page.get_by_text(str(zaak["identificatie"])).first).to_be_visible()
+    expect_listed(page, zaak)
 
 
 # Playwright's descriptors without default_browser_type: the suite runs Chromium.
@@ -117,7 +118,7 @@ def test_mijn_zaken_on_a_phone(  # pylint: disable=too-many-arguments,too-many-p
     need_bootstrap(INWONER.name, *WIRING)
     zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
     portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
-    expect(page.get_by_text(str(zaak["identificatie"])).first).to_be_visible()
+    expect_listed(page, zaak)
     overflow = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
     assert overflow <= 0, f"{phone}: page {overflow}px wider than the screen"
 
@@ -136,7 +137,7 @@ def test_bedrijfs_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,t
     vestiging = BEDRIJF.attributes["vestigingsnummer"][0]
     zaak = zaak_of(openzaak, registry, parts, kvkNummer=BEDRIJF.attributes["kvk"][0], vestigingsNummer=vestiging)
     portal_login(page, podiumd_env, "eherkenning", BEDRIJF, "/mijn-zaken/")
-    expect(page.get_by_text(str(zaak["identificatie"])).first).to_be_visible()
+    expect_listed(page, zaak)
 
 
 def test_zaak_document_can_be_downloaded(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
@@ -218,6 +219,11 @@ def test_refused_file_type_cannot_be_uploaded(  # pylint: disable=too-many-argum
     zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
     open_status_page(page, podiumd_env, zaak)
     expect(choose_document(page, f"{registry.tagged('pagina')}.html", b"<html></html>")).to_be_disabled()
+
+
+def expect_listed(page: Page, zaak: JsonObject) -> None:
+    """Mijn zaken lists the zaak; it fetches the list from Open Zaak after the page loads, slower with much data."""
+    expect(page.get_by_text(str(zaak["identificatie"])).first).to_be_visible(timeout=LIST_TIMEOUT_MS)
 
 
 def open_status_page(page: Page, podiumd_env: Environment, zaak: JsonObject) -> None:
