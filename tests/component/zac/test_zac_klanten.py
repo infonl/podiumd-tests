@@ -12,31 +12,15 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
-from podiumd_tests.bootstrap.steps import KeycloakUser
-from podiumd_tests.browser import redirect_login
 from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     import requests
 
-    from playwright.sync_api import Page
-
-    from podiumd_tests.environment import Environment
 
 pytestmark = [pytest.mark.component, pytest.mark.ui, pytest.mark.requires("zac", "keycloak")]
 
-ADMIN = KeycloakUser("admin")
 EREBOS = "999990019"
-
-
-@pytest.fixture(name="zac")
-def fixture_zac(page: Page, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> requests.Session:
-    """The test admin's ZAC session."""
-    need_bootstrap(ADMIN.name)
-    urls = podiumd_env.profile.urls
-    return redirect_login(page, podiumd_env, urls["zac"], ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
 
 
 def test_person_lookup(zac: requests.Session, urls: dict[str, str]) -> None:
