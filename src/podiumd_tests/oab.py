@@ -1,9 +1,10 @@
-"""Open Archiefbeheer: a local login per role, and its zaken cache for a test's own zaken."""
+"""Open Archiefbeheer: a local login per role, its zaken cache, its ArchiveConfig and the destruction of a list."""
 
 from __future__ import annotations
 
 from http import HTTPStatus
 from typing import TYPE_CHECKING
+from typing import cast
 
 from podiumd_tests.bootstrap.names import PREFIX
 from podiumd_tests.bootstrap.steps import django_password_key
@@ -37,3 +38,14 @@ def cache_zaken(env: Environment, urls: list[str], *, cached: bool) -> None:
     """Put zaken in OAB's zaken cache, or take them out with every destruction list holding one."""
     params: dict[str, object] = {"action": "cache" if cached else "uncache", "urls": urls}
     run_snippet(env.kube, env.deployment_for("openarchiefbeheer"), "oab_zaken", params)
+
+
+def set_archive_config(env: Environment, fields: dict[str, object]) -> dict[str, object]:
+    """Set fields of OAB's global ArchiveConfig; their old values, to set back."""
+    old = run_snippet(env.kube, env.deployment_for("openarchiefbeheer"), "oab_archive_config", {"fields": fields})
+    return cast("dict[str, object]", old)
+
+
+def destroy_now(env: Environment, lijst: str) -> None:
+    """Start the destruction of a queued list now instead of on its planned date."""
+    run_snippet(env.kube, env.deployment_for("openarchiefbeheer"), "oab_destroy_now", {"uuid": lijst})

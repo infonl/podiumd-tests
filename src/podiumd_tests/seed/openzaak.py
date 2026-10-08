@@ -200,12 +200,14 @@ def clean_up_new_documents(openzaak: ApiClient, registry: ResourceRegistry, zaak
     Register it after the zaak, so it runs before the zaak is deleted.
     """
 
-    def delete() -> None:
-        for link in openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": str(zaak["url"])}):
-            openzaak.delete(str(link["url"]))
-            openzaak.delete(str(link["informatieobject"]))
+    registry.add(f"new documents of zaak {zaak['url']}", lambda: delete_documents_of(openzaak, str(zaak["url"])))
 
-    registry.add(f"new documents of zaak {zaak['url']}", delete)
+
+def delete_documents_of(openzaak: ApiClient, zaak: str) -> None:
+    """Delete the documents linked to a zaak, with their links."""
+    for link in openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": zaak}):
+        openzaak.delete(str(link["url"]))
+        openzaak.delete(str(link["informatieobject"]))
 
 
 def make_besluit(openzaak: ApiClient, registry: ResourceRegistry, besluittype: str, **fields: object) -> JsonObject:

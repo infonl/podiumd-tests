@@ -98,8 +98,8 @@ Sources:
 | `regression/167-fb-zaaktype-crud-api.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_catalogi.py: concept zaaktype CRUD and versions. |
 | `regression/169-oab-process-review-flow.spec.ts` | component or integration | 3/4/5 | port | Rejection and the refused make_final in `test_vernietigingslijst.py`; review-responses: todo. |
 | `regression/17-document-va-handhaving.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py. |
-| `regression/170-oab-destruction-execute.spec.ts` | component or integration | 3/4/5 | todo | queue_destruction schedules the deletion of zaken in Open Zaak; needs a destructive-marked test. |
-| `regression/171-oab-short-procedure.spec.ts` | component or integration | 3/4/5 | todo | Changes the global ArchiveConfig; needs a serial, destructive-marked test. |
+| `regression/170-oab-destruction-execute.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openarchiefbeheer/test_vernietigingslijst.py`: queue and abort (tier full); the real destruction of the test's own zaak is destructive and a strict xfail (Open Zaak 1.29.3 answers 500 on the zaak DELETE, so OAB marks the item failed). TA faked the deleted state in the Django shell. |
+| `regression/171-oab-short-procedure.spec.ts` | component or integration | 3/4/5 | port | Same module: destructive, xdist_group with the destruction test; ArchiveConfig is restored after the test. |
 | `regression/172-architectuur-wcag-axe.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/173-fb-zaaktype-versie-isolatie.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_catalogi.py test_zaaktype_versions. |
 | `regression/174-oab-config-persist-filter.spec.ts` | component or integration | 3/4/5 | todo | |

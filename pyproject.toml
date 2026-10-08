@@ -46,7 +46,8 @@ podiumd_tests = ["py.typed"]
 # A bare `pytest` runs the offline unit tests only; environment tests run
 # through `podiumd-tests run`, which passes the paths explicitly.
 testpaths = ["unit_tests"]
-addopts = "-ra"
+# loadgroup: tests with the same xdist_group (shared global state) run on one worker.
+addopts = "-ra --dist loadgroup"
 markers = [
     "smoke: read-only check that a component is up and wired",
     "component: behaviour of one component, with its own seed and cleanup",
