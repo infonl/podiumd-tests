@@ -31,7 +31,7 @@ def run(params):
     if params["action"] == "remove":
         _remove(record, clients)
         if params.get("identities") and "accounts_before" in record:
-            _accounts(params["identities"]).exclude(pk__in=record["accounts_before"]).delete()
+            _delete_accounts(_accounts(params["identities"]).exclude(pk__in=record["accounts_before"]))
         return {"present": False}
     for key, empty in (("clients", {}), ("created", []), ("providers", [])):
         record.setdefault(key, empty)
@@ -92,6 +92,17 @@ def _accounts(identities):
     for identity in identities:
         query |= Q(**identity)
     return User.objects.filter(query)
+
+
+def _delete_accounts(accounts):
+    # Rendering a page for a logged-in account creates CMS static alias Versions with
+    # created_by that account, a protected foreign key: hand them over to a superuser.
+    from django.contrib.auth import get_user_model
+    from djangocms_versioning.models import Version
+
+    superuser = get_user_model().objects.filter(is_superuser=True).first()
+    Version.objects.filter(created_by__in=accounts).update(created_by=superuser)
+    accounts.delete()
 
 
 def _create_accounts(accounts):
