@@ -194,6 +194,20 @@ def link_document(
     return _create(openzaak, registry, f"{ZAKEN}/zaakinformatieobjecten", body)
 
 
+def clean_up_new_documents(openzaak: ApiClient, registry: ResourceRegistry, zaak: JsonObject) -> None:
+    """Delete, at cleanup, the documents another component links to the zaak (e.g. a portal upload).
+
+    Register it after the zaak, so it runs before the zaak is deleted.
+    """
+
+    def delete() -> None:
+        for link in openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": str(zaak["url"])}):
+            openzaak.delete(str(link["url"]))
+            openzaak.delete(str(link["informatieobject"]))
+
+    registry.add(f"new documents of zaak {zaak['url']}", delete)
+
+
 def make_besluit(openzaak: ApiClient, registry: ResourceRegistry, besluittype: str, **fields: object) -> JsonObject:
     """A besluit of a besluittype whose toelichting carries the run tag."""
     body: dict[str, object] = {

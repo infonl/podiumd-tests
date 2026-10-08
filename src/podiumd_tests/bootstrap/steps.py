@@ -643,6 +643,22 @@ STEPS: tuple[Step, ...] = (
         wiring=True,
         context_params=lambda ctx: {"zaken_url": ctx.env.profile.urls["openzaak"] + "/zaken/api/v1/"},
     ),
+    # The test zaaktype in Open Inwoner, with contact form and document upload (TA zgw_import_data).
+    SnippetStep(
+        "openinwoner-zaaktype-config",
+        ("openinwoner", "openzaak"),
+        "oi_zaaktype_config",
+        "ptest_bootstrap_openinwoner_zaaktype_config_record",
+        {
+            "group": f"{PREFIX}-openzaak",
+            "domein": TEST_CATALOGUS_DOMEIN,
+            "rsin": TEST_CATALOGUS_RSIN,
+            "identificatie": TEST_ZAAKTYPE,
+            "iot_omschrijving": TEST_IOT,
+        },
+        record=True,
+        wiring=True,
+    ),
     # Wiring W6 and W8: Open Inwoner's klantensysteem is Open Klant 2, with the contact flow
     # (TA seed-oi-openklant2.sh, seed-oi-contactflow.sh).
     SnippetStep(

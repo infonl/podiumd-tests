@@ -1,7 +1,8 @@
 """Chain: a zaak in Open Zaak shows in the inwoner's or company's Mijn zaken in Open Inwoner.
 
-Ported from TA interaction 21, 31 and 141, regression 95 and 143. Open Inwoner reaches Open
-Zaak through the API group of wiring W4 (no zaken cache), the pages are W5, the logins W1.
+Ported from TA interaction 21, 31, 111, 141 and 162, regression 95 and 143. Open Inwoner reaches
+Open Zaak through the API group of wiring W4 (no zaken cache), the pages are W5, the logins W1;
+upload needs the zaaktype configuration (bootstrap openinwoner-zaaktype-config).
 """
 
 from __future__ import annotations
@@ -17,11 +18,14 @@ from playwright.sync_api import expect
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.browser import browser_session
 from podiumd_tests.openinwoner import portal_login
+from podiumd_tests.seed.openzaak import ZAKEN
+from podiumd_tests.seed.openzaak import clean_up_new_documents
 from podiumd_tests.seed.openzaak import link_document
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
 from podiumd_tests.seed.openzaak import make_zaak
+from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -109,3 +113,32 @@ def test_zaak_document_can_be_downloaded(  # pylint: disable=too-many-arguments,
         re.sub(r"^/", podiumd_env.profile.urls["openinwoner"] + "/", href)
     )
     assert inhoud in download.text
+
+
+@pytest.mark.core
+def test_uploaded_document_reaches_the_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    parts: ZaaktypeParts,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """A file uploaded on the zaak's status page becomes a document of the zaak (TA int-111, int-162)."""
+    need_bootstrap(INWONER.name, *WIRING, "openinwoner-zaaktype-config")
+    zaak = zaak_of(openzaak, registry, parts, inpBsn=INWONER.attributes["bsn"][0])
+    clean_up_new_documents(openzaak, registry, zaak)
+    bestand = f"{registry.tagged('upload')}.txt"
+    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
+    page.locator(f'a[href*="{zaak["uuid"]}"]').first.click()
+    upload = page.locator("#document-upload")
+    upload.locator('input[name="file"]').set_input_files(
+        files=[{"name": bestand, "mimeType": "text/plain", "buffer": bestand.encode()}]
+    )
+    upload.get_by_role("button", name="Upload documenten").click()
+
+    def uploaded() -> list[str]:
+        links = openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": str(zaak["url"])})
+        return [str(openzaak.get(str(link["informatieobject"])).get("bestandsnaam")) for link in links]
+
+    assert bestand in wait_until(uploaded, timeout=30, description=f"document {bestand} on the zaak")
