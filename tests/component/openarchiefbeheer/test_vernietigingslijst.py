@@ -201,6 +201,29 @@ def test_rejected_list_goes_back_to_the_record_manager(
     )
 
 
+def test_record_manager_response_sends_the_list_back_to_review(
+    oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
+) -> None:
+    """The record manager answers a rejection by keeping the zaak; the list goes back to the reviewer (TA 168, 169)."""
+    lijst = new_list(oab, api, zaak, registry)
+    rejection = review(
+        oab, api, "reviewer", lijst, decision="rejected", zakenReviews=[{"zaakUrl": zaak["url"], "feedback": "bewaren"}]
+    )
+    items = expect_status(
+        oab("recordmanager").get(api + "/review-items/", params={"review": rejection["pk"]}), HTTPStatus.OK
+    )
+    body = {
+        "review": rejection["pk"],
+        "comment": "podiumd-tests",
+        "itemsResponses": [{"reviewItem": i["pk"], "actionItem": "keep"} for i in entries(items.json())],
+    }
+    expect_status(oab("recordmanager").post(api + "/review-responses/", json=body), HTTPStatus.CREATED)
+    # OAB processes the response in a background task.
+    wait_until(
+        lambda: status(oab, api, lijst) == "ready_to_review", timeout=60, description=f"list {lijst} back to review"
+    )
+
+
 def test_coreviewer_feedback_reaches_the_reviewer(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
 ) -> None:

@@ -33,7 +33,7 @@ Sources:
 | `interaction/148-ita-doorsturen-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | merge | Its afdelingen/groepen reads are in 77 and 184. |
 | `interaction/162-portaal-document-upload-e2e.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/integration/test_portaal_zaken.py`: upload through the UI, document checked in Open Zaak. |
 | `interaction/164-portaal-vraag-stellen-vanuit-zaak.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/integration/test_portaal_zaken.py`; W6 sets the API group's klant_backend to openklant2 (esuite gave 500). |
-| `interaction/168-oab-archivist-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | port | Archivist accept → ready_to_delete in `test_vernietigingslijst.py`; review-responses that change archiefactiedatum: todo. |
+| `interaction/168-oab-archivist-flow.spec.ts` | component or integration, marker `core` | 3/4/5 | port | Archivist accept → ready_to_delete in `test_vernietigingslijst.py`; the record manager's review response: `test_record_manager_response_sends_the_list_back_to_review` (keeps the zaak; changing its archiefactiedatum would change Open Zaak data for no extra coverage of OAB). |
 | `interaction/180-ita-contactmoment-afsluiten.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/component/ita/test_ita_internetaken.py`; closing via an Open Klant PATCH is not ITA and is dropped. |
 | `interaction/181-keten-ita-contactmoment-portaal-beantwoord.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/integration/test_portaal_openklant.py`: answered in ITA (with `partijUuid`, or Mijn vragen does not list the answer), shown as Beantwoord with the answer. |
 | `interaction/182-keten-contactformulier-mijn-vragen.spec.ts` | component or integration, marker `core` | 3/4/5 | port | `tests/integration/test_portaal_openklant.py` (wiring W6/W8; no opt-in). |
@@ -96,7 +96,7 @@ Sources:
 | `regression/165-portaal-notif-save.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_inwoner.py`. |
 | `regression/166-oab-medebeoordelaar.spec.ts` | component or integration | 3/4/5 | port | `test_vernietigingslijst.py`. |
 | `regression/167-fb-zaaktype-crud-api.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_catalogi.py: concept zaaktype CRUD and versions. |
-| `regression/169-oab-process-review-flow.spec.ts` | component or integration | 3/4/5 | port | Rejection and the refused make_final in `test_vernietigingslijst.py`; review-responses: todo. |
+| `regression/169-oab-process-review-flow.spec.ts` | component or integration | 3/4/5 | port | Rejection and the refused make_final in `test_vernietigingslijst.py`; review response: as 168. |
 | `regression/17-document-va-handhaving.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py. |
 | `regression/170-oab-destruction-execute.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openarchiefbeheer/test_vernietigingslijst.py`: queue and abort (tier full); the real destruction of the test's own zaak is destructive and a strict xfail (Open Zaak 1.29.3 answers 500 on the zaak DELETE, so OAB marks the item failed). TA faked the deleted state in the Django shell. |
 | `regression/171-oab-short-procedure.spec.ts` | component or integration | 3/4/5 | port | Same module: destructive, xdist_group with the destruction test; ArchiveConfig is restored after the test. |
