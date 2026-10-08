@@ -50,7 +50,7 @@ Sources:
 | `perf/fg-compare.js` | perf (Locust) | 6 | todo | |
 | `perf/lib.js` | perf (Locust) | 6 | todo | |
 | `regression/07-brp-persoon-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/basisregistraties/test_brp.py`, through the api-proxy. |
-| `regression/08-kvk-bedrijf-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/basisregistraties/test_kvk.py` through the api-proxy (TA called KvK's test API directly; QA's proxy routes there). Skips where the proxy's KvK lacks the test set (minikube's WireMock). |
+| `regression/08-kvk-bedrijf-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/basisregistraties/test_kvk.py` through the api-proxy, which routes to KvK's test API on every estate (TA called that API directly); test set Test BV Donald. |
 | `regression/100-kiss-frontend-basis.spec.ts` | component or integration | 3/4/5 | port | `tests/component/kiss/test_anonymous.py`; the Vue shell check is phase 5. |
 | `regression/106-portaal-notificatievoorkeur.spec.ts` | component or integration | 3/4/5 | merge | With 165 into `tests/component/openinwoner/test_portaal_inwoner.py`. |
 | `regression/108-probe-contactform.spec.ts` | component or integration | 3/4/5 | todo | |
@@ -138,7 +138,7 @@ Sources:
 | `regression/44-validation-edge-cases.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_validatie.py, each invalid field named in invalidParams. |
 | `regression/45-internetaak-event.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/46-rol-delete-event.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/47-kvk-edge-cases.spec.ts` | component or integration | 3/4/5 | port | `test_kvk.py`: 47b by kvk_nummer setting; 47a/c/d with the KvK test set, as 08. |
+| `regression/47-kvk-edge-cases.spec.ts` | component or integration | 3/4/5 | port | `test_kvk.py`, with the KvK test set, as 08. |
 | `regression/48-audit-trail-acties.spec.ts` | component or integration | 3/4/5 | todo | As 14: audittrails need heeft_alle_autorisaties. |
 | `regression/49-document-download.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_documenten.py test_document_versions_and_definitief. |
 | `regression/50-zaak-zoeken.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_statussen_rollen.py test_zaak_found_by_initiator_bsn. |
@@ -148,7 +148,7 @@ Sources:
 | `regression/54-ok2-conversation-tree.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openklant/` test_partijen.py test_betrokkenen_of_a_partij. |
 | `regression/55-multi-zaaktype.spec.ts` | component or integration | 3/4/5 | merge | With 43 into `tests/component/openzaak/` test_zaken.py. |
 | `regression/56-zaak-rel-batch.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py; its inpBsn__in filter does not exist (xfail: _zoek ignores unknown filters). |
-| `regression/57-kvk-prefill.spec.ts` | component or integration | 3/4/5 | port | `tests/component/basisregistraties/test_kvk.py` (KvK number from `settings.kvk_nummer`). |
+| `regression/57-kvk-prefill.spec.ts` | component or integration | 3/4/5 | port | `tests/component/basisregistraties/test_kvk.py`, with the KvK test set. |
 | `regression/58-ok2-expand.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openklant/` test_partijen.py. |
 | `regression/59-zaak-relatie-keten.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_zaken.py test_relevante_andere_zaken. |
 | `regression/60-seed-data-health.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_catalogi.py, on the bootstrap zaaktype. |
@@ -168,7 +168,7 @@ Sources:
 | `regression/76-ita-close-with-klantcontact.spec.ts` | component or integration | 3/4/5 | drop | The route does not exist (405); covered by 180. |
 | `regression/77-ita-afdelingen-groepen.spec.ts` | component or integration | 3/4/5 | port | `tests/component/ita/test_ita_internetaken.py`. |
 | `regression/79-of-form-cosign-config.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/80-brp-kvk-prefill-foutpaden.spec.ts` | component or integration | 3/4/5 | port | BRP parts → `test_brp.py`, basisprofiel → `test_kvk.py`; the KvK key and name searches need the KvK test set. |
+| `regression/80-brp-kvk-prefill-foutpaden.spec.ts` | component or integration | 3/4/5 | port | BRP parts → `test_brp.py`, basisprofiel and searches → `test_kvk.py` (KvK test set). |
 | `regression/80-omc-listen-event.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/81-omc-confirm-callback.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/82-omc-zaak-e2e.spec.ts` | component or integration | 3/4/5 | todo | |

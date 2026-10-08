@@ -57,8 +57,6 @@ settings:
   # ZAC's zaakafhandelparameters map this productaanvraagtype to this zaaktype (podiumd-minikube values).
   # As in ExternalsPodiumD and podiumd-infra, Open Inwoner has no local superuser.
   django_admin_sso_only: openinwoner
-  # A KvK number minikube's KvK WireMock knows (search with type=rechtspersoon, basisprofiel).
-  kvk_nummer: "12345678"
   # podiumd-minikube's opt-in clamav profile (clamd with the EICAR signature only).
   clamav: "clamav:3310"
   productaanvraag_type: productaanvraag-test-zaaktype-1
