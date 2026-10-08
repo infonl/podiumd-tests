@@ -11,7 +11,7 @@ from podiumd_tests.components import DJANGO_APPS
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import section
 from podiumd_tests.mailpit import delete_message
-from podiumd_tests.mailpit import wait_for_subject
+from podiumd_tests.mailpit import wait_for_mail
 from podiumd_tests.pytest_plugin import requiring
 
 if TYPE_CHECKING:
@@ -39,6 +39,6 @@ def test_app_mail_reaches_mailpit(
             {"subject": subject, "to": "ptest@example.invalid"},
         ),
     )
-    message = wait_for_subject(mailpit, subject, timeout=DELIVERY_TIMEOUT)
+    message = wait_for_mail(mailpit, timeout=DELIVERY_TIMEOUT, subject=subject)
     registry.add(f"mail {subject}", lambda: delete_message(mailpit, str(message["ID"])))
     assert str(section(message, "From")["Address"]) in sent["from"]
