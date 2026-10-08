@@ -63,5 +63,11 @@ settings:
   clamav: "clamav:3310"
   productaanvraag_type: productaanvraag-test-zaaktype-1
   productaanvraag_zaaktype: zaaktype-test-1
+  # seed-volume --scale perf on one laptop; other environments take TA's counts.
+  seed_volume_users: "20"
+  seed_volume_zaken: "2000"
+  seed_volume_partijen: "500"
+  seed_volume_objecten: "300"
+  seed_volume_internetaken: "50"
   # Shared with the podiumd-minikube agent; bootstrap and writing runs take it.
   lock_file: /home/kvv/development/werk/infonl-dimpact/infonl/.minikube-lock
