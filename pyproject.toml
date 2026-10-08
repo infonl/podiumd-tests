@@ -41,7 +41,7 @@ podiumd-tests = "podiumd_tests.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-podiumd_tests = ["py.typed"]
+podiumd_tests = ["py.typed", "seed/volume_corpus.yaml"]
 
 [tool.pytest.ini_options]
 # A bare `pytest` runs the offline unit tests only; environment tests run

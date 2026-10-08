@@ -153,9 +153,11 @@ def make_betrokkene(
     return _create(openklant, registry, "betrokkenen", body)
 
 
-def make_actor(openklant: ApiClient, registry: ResourceRegistry, soort: str = "medewerker") -> JsonObject:
-    """An actor of a kind (medewerker, organisatorische_eenheid, geautomatiseerde_actor) named after the run tag."""
-    name = registry.tagged(f"actor-{_rng.randint(0, 999_999)}")
+def make_actor(
+    openklant: ApiClient, registry: ResourceRegistry, soort: str = "medewerker", name: str | None = None
+) -> JsonObject:
+    """An actor of a kind (medewerker, organisatorische_eenheid, geautomatiseerde_actor); default name: the run tag."""
+    name = name or registry.tagged(f"actor-{_rng.randint(0, 999_999)}")
     body: dict[str, object] = {
         "naam": name,
         "soortActor": soort,

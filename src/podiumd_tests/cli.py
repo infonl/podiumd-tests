@@ -53,6 +53,9 @@ from podiumd_tests.results import run_dir
 from podiumd_tests.results import run_tag
 from podiumd_tests.results import suite_commit
 from podiumd_tests.results import write_run
+from podiumd_tests.seed.volume import format_seeded
+from podiumd_tests.seed.volume import seed
+from podiumd_tests.seed.volume import unseed
 from podiumd_tests.sweep import format_swept
 from podiumd_tests.sweep import parse_age
 from podiumd_tests.sweep import sweep
@@ -244,6 +247,36 @@ def cmd_sweep(args: argparse.Namespace) -> int:
     return EXIT_CONFIG if any(s.action == "failed" for s in swept) else EXIT_OK
 
 
+def _volume_env(args: argparse.Namespace) -> Environment | int:
+    """The environment for seed-volume and unseed-volume, or the exit code that stops them."""
+    profile = _load(args)
+    if "perf" not in profile.allowed_tiers:
+        print(f"refused: {profile.name} does not allow tier perf (allowed_tiers), so no volume data", file=sys.stderr)
+        return EXIT_NOT_ALLOWED
+    env = Environment(profile)
+    return env if _preflight_ok(env, args) else EXIT_CONFIG
+
+
+def cmd_seed_volume(args: argparse.Namespace) -> int:
+    """Top the environment's volume data up to the scale's counts (PLAN.md §4 C)."""
+    env = _volume_env(args)
+    if isinstance(env, int):
+        return env
+    with held(env.profile.settings.get("lock_file"), f"seed-volume {env.profile.name}"):
+        print(format_seeded(seed(env, args.scale, parallel=args.parallel)))
+    return EXIT_OK
+
+
+def cmd_unseed_volume(args: argparse.Namespace) -> int:
+    """Delete all volume data."""
+    env = _volume_env(args)
+    if isinstance(env, int):
+        return env
+    with held(env.profile.settings.get("lock_file"), f"unseed-volume {env.profile.name}"):
+        print(format_seeded(unseed(env)))
+    return EXIT_OK
+
+
 def selected_steps(names: list[str] | None) -> tuple[Step, ...]:
     """All steps, or only the named ones; ProfileError for an unknown name."""
     if not names:
@@ -297,6 +330,21 @@ def cmd_run(args: argparse.Namespace) -> int:
     return EXIT_TESTS_FAILED if info.exit_code == pytest.ExitCode.TESTS_FAILED else EXIT_CONFIG
 
 
+def _add_volume_commands(add_parser: Callable[..., argparse.ArgumentParser]) -> None:
+    """The seed-volume and unseed-volume subcommands."""
+    vol = add_parser("seed-volume", help="top up the perf tier's volume data, tagged ptest-volume")
+    vol.add_argument("--env", required=True)
+    vol.add_argument("--scale", choices=["smoke", "perf"], default="smoke", help="counts to reach (default: smoke)")
+    vol.add_argument("--parallel", type=int, default=8, help="concurrent creates (default 8)")
+    vol.add_argument("--skip-doctor", action="store_true")
+    vol.set_defaults(func=cmd_seed_volume)
+
+    unvol = add_parser("unseed-volume", help="delete all volume data")
+    unvol.add_argument("--env", required=True)
+    unvol.add_argument("--skip-doctor", action="store_true")
+    unvol.set_defaults(func=cmd_unseed_volume)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The argument parser of `podiumd-tests`."""
     parser = argparse.ArgumentParser(prog="podiumd-tests", description=__doc__)
@@ -334,6 +382,8 @@ def build_parser() -> argparse.ArgumentParser:
     unboot.add_argument("--skip-doctor", action="store_true")
     unboot.add_argument("--step", action="append", help="only this step (repeatable; default: all)")
     unboot.set_defaults(func=cmd_unbootstrap)
+
+    _add_volume_commands(commands.add_parser)
 
     swp = commands.add_parser("sweep", help="delete run-tagged objects that test runs left behind")
     swp.add_argument("--env", required=True)

@@ -1,0 +1,333 @@
+# Fictional names and zaak scenarios from sci-fi cinema, for volume data (seed-volume).
+# Copied from TA seed-test-data fixtures/scifi-corpus.yaml.
+
+personen:
+  # Pre-1980
+  - {voornaam: "Maria",       achternaam: "Fredersen",         film: "Metropolis (1927)"}
+  - {voornaam: "Johnny",      achternaam: "Cabal",             film: "Things to Come (1936)"}
+  - {voornaam: "Klaatu",      achternaam: "Carpenter",         film: "The Day the Earth Stood Still (1951)"}
+  - {voornaam: "Robby",       achternaam: "Morbius",           film: "Forbidden Planet (1956)"}
+  - {voornaam: "Dave",        achternaam: "Bowman",            film: "2001: A Space Odyssey (1968)"}
+  - {voornaam: "Frank",       achternaam: "Poole",             film: "2001: A Space Odyssey (1968)"}
+  - {voornaam: "Heywood",     achternaam: "Floyd",             film: "2001: A Space Odyssey (1968)"}
+  - {voornaam: "Kris",        achternaam: "Kelvin",            film: "Solaris (1972)"}
+  - {voornaam: "Logan",       achternaam: "Five",              film: "Logan's Run (1976)"}
+  - {voornaam: "Jessica",     achternaam: "Six",               film: "Logan's Run (1976)"}
+  - {voornaam: "Roy",         achternaam: "Neary",             film: "Close Encounters (1977)"}
+  - {voornaam: "Jillian",     achternaam: "Guiler",            film: "Close Encounters (1977)"}
+  # Star Wars (1977-)
+  - {voornaam: "Luke",        achternaam: "Skywalker",         film: "Star Wars (1977)"}
+  - {voornaam: "Leia",        achternaam: "Organa",            film: "Star Wars (1977)"}
+  - {voornaam: "Han",         achternaam: "Solo",              film: "Star Wars (1977)"}
+  - {voornaam: "Lando",       achternaam: "Calrissian",        film: "Empire Strikes Back (1980)"}
+  - {voornaam: "Wedge",       achternaam: "Antilles",          film: "Star Wars (1977)"}
+  - {voornaam: "Boba",        achternaam: "Fett",              film: "Empire Strikes Back (1980)"}
+  - {voornaam: "Mace",        achternaam: "Windu",             film: "Phantom Menace (1999)"}
+  - {voornaam: "Padme",       achternaam: "Amidala",           film: "Phantom Menace (1999)"}
+  - {voornaam: "Qui-Gon",     achternaam: "Jinn",              film: "Phantom Menace (1999)"}
+  - {voornaam: "Obi-Wan",     achternaam: "Kenobi",            film: "Star Wars (1977)"}
+  - {voornaam: "Rey",         achternaam: "Skywalker",         film: "The Force Awakens (2015)"}
+  - {voornaam: "Finn",        achternaam: "Storm",             film: "The Force Awakens (2015)"}
+  - {voornaam: "Poe",         achternaam: "Dameron",           film: "The Force Awakens (2015)"}
+  - {voornaam: "Jyn",         achternaam: "Erso",              film: "Rogue One (2016)"}
+  - {voornaam: "Cassian",     achternaam: "Andor",             film: "Rogue One (2016)"}
+  - {voornaam: "Bodhi",       achternaam: "Rook",              film: "Rogue One (2016)"}
+  - {voornaam: "Qira",        achternaam: "Solo",              film: "Solo (2018)"}
+  - {voornaam: "Tobias",      achternaam: "Beckett",           film: "Solo (2018)"}
+  # Alien series
+  - {voornaam: "Ellen",       achternaam: "Ripley",            film: "Alien (1979)"}
+  - {voornaam: "Arthur",      achternaam: "Dallas",            film: "Alien (1979)"}
+  - {voornaam: "Thomas",      achternaam: "Kane",              film: "Alien (1979)"}
+  - {voornaam: "Dwayne",      achternaam: "Hicks",             film: "Aliens (1986)"}
+  - {voornaam: "William",     achternaam: "Hudson",            film: "Aliens (1986)"}
+  - {voornaam: "Jenette",     achternaam: "Vasquez",           film: "Aliens (1986)"}
+  - {voornaam: "Carter",      achternaam: "Burke",             film: "Aliens (1986)"}
+  - {voornaam: "Rebecca",     achternaam: "Jorden",            film: "Aliens (1986)"}
+  # Blade Runner
+  - {voornaam: "Rick",        achternaam: "Deckard",           film: "Blade Runner (1982)"}
+  - {voornaam: "Roy",         achternaam: "Batty",             film: "Blade Runner (1982)"}
+  - {voornaam: "Rachael",     achternaam: "Tyrell",            film: "Blade Runner (1982)"}
+  - {voornaam: "Pris",        achternaam: "Stratton",          film: "Blade Runner (1982)"}
+  - {voornaam: "Eldon",       achternaam: "Tyrell",            film: "Blade Runner (1982)"}
+  - {voornaam: "Joe",         achternaam: "Kay",               film: "Blade Runner 2049 (2017)"}
+  - {voornaam: "Niander",     achternaam: "Wallace",           film: "Blade Runner 2049 (2017)"}
+  - {voornaam: "Luv",         achternaam: "Wallace",           film: "Blade Runner 2049 (2017)"}
+  # The Thing / E.T. / Tron
+  - {voornaam: "Robert",      achternaam: "MacReady",          film: "The Thing (1982)"}
+  - {voornaam: "Kevin",       achternaam: "Flynn",             film: "Tron (1982)"}
+  - {voornaam: "Sam",         achternaam: "Flynn",             film: "Tron Legacy (2010)"}
+  # Back to the Future
+  - {voornaam: "Marty",       achternaam: "McFly",             film: "Back to the Future (1985)"}
+  - {voornaam: "Emmett",      achternaam: "Brown",             film: "Back to the Future (1985)"}
+  - {voornaam: "Biff",        achternaam: "Tannen",            film: "Back to the Future (1985)"}
+  - {voornaam: "Lorraine",    achternaam: "Baines",            film: "Back to the Future (1985)"}
+  # Predator / Total Recall / Abyss
+  - {voornaam: "Alan",        achternaam: "Schaefer",          film: "Predator (1987)"}
+  - {voornaam: "Anna",        achternaam: "Gonsalves",         film: "Predator (1987)"}
+  - {voornaam: "Douglas",     achternaam: "Quaid",             film: "Total Recall (1990)"}
+  - {voornaam: "Melina",      achternaam: "Mars",              film: "Total Recall (1990)"}
+  - {voornaam: "Vilos",       achternaam: "Cohaagen",          film: "Total Recall (1990)"}
+  - {voornaam: "Bud",         achternaam: "Brigman",           film: "The Abyss (1989)"}
+  - {voornaam: "Lindsey",     achternaam: "Brigman",           film: "The Abyss (1989)"}
+  # Terminator
+  - {voornaam: "Sarah",       achternaam: "Connor",            film: "The Terminator (1984)"}
+  - {voornaam: "John",        achternaam: "Connor",            film: "Terminator 2 (1991)"}
+  - {voornaam: "Kyle",        achternaam: "Reese",             film: "The Terminator (1984)"}
+  # Jurassic Park / Stargate / Twelve Monkeys
+  - {voornaam: "Alan",        achternaam: "Grant",             film: "Jurassic Park (1993)"}
+  - {voornaam: "Ian",         achternaam: "Malcolm",           film: "Jurassic Park (1993)"}
+  - {voornaam: "Ellie",       achternaam: "Sattler",           film: "Jurassic Park (1993)"}
+  - {voornaam: "John",        achternaam: "Hammond",           film: "Jurassic Park (1993)"}
+  - {voornaam: "Jonathan",    achternaam: "ONeill",            film: "Stargate (1994)"}
+  - {voornaam: "Daniel",      achternaam: "Jackson",           film: "Stargate (1994)"}
+  - {voornaam: "Samantha",    achternaam: "Carter",            film: "Stargate SG-1 (1997)"}
+  - {voornaam: "James",       achternaam: "Cole",              film: "Twelve Monkeys (1995)"}
+  - {voornaam: "Kathryn",     achternaam: "Railly",            film: "Twelve Monkeys (1995)"}
+  # Independence Day / Mars Attacks / Fifth Element
+  - {voornaam: "Steven",      achternaam: "Hiller",            film: "Independence Day (1996)"}
+  - {voornaam: "David",       achternaam: "Levinson",          film: "Independence Day (1996)"}
+  - {voornaam: "Thomas",      achternaam: "Whitmore",          film: "Independence Day (1996)"}
+  - {voornaam: "Korben",      achternaam: "Dallas",            film: "The Fifth Element (1997)"}
+  - {voornaam: "Leeloominai", achternaam: "Lekatariba",        film: "The Fifth Element (1997)"}
+  - {voornaam: "Jean-Baptiste", achternaam: "Zorg",            film: "The Fifth Element (1997)"}
+  # Contact / Gattaca / Starship Troopers / Dark City
+  - {voornaam: "Eleanor",     achternaam: "Arroway",           film: "Contact (1997)"}
+  - {voornaam: "Palmer",      achternaam: "Joss",              film: "Contact (1997)"}
+  - {voornaam: "Vincent",     achternaam: "Freeman",           film: "Gattaca (1997)"}
+  - {voornaam: "Jerome",      achternaam: "Morrow",            film: "Gattaca (1997)"}
+  - {voornaam: "Johnny",      achternaam: "Rico",              film: "Starship Troopers (1997)"}
+  - {voornaam: "Carmen",      achternaam: "Ibanez",            film: "Starship Troopers (1997)"}
+  - {voornaam: "Carl",        achternaam: "Jenkins",           film: "Starship Troopers (1997)"}
+  - {voornaam: "John",        achternaam: "Murdoch",           film: "Dark City (1998)"}
+  # The Matrix
+  - {voornaam: "Thomas",      achternaam: "Anderson",          film: "The Matrix (1999)"}
+  - {voornaam: "Trinity",     achternaam: "Murphy",            film: "The Matrix (1999)"}
+  - {voornaam: "Morpheus",    achternaam: "Zion",              film: "The Matrix (1999)"}
+  - {voornaam: "Niobe",       achternaam: "Logos",              film: "The Matrix Reloaded (2003)"}
+  - {voornaam: "Cypher",      achternaam: "Reagan",            film: "The Matrix (1999)"}
+  - {voornaam: "Tank",        achternaam: "Nebuchadnezzar",    film: "The Matrix (1999)"}
+  # Pitch Black / A.I. / Donnie Darko / Minority Report / Equilibrium
+  - {voornaam: "Richard",     achternaam: "Riddick",           film: "Pitch Black (2000)"}
+  - {voornaam: "Carolyn",     achternaam: "Fry",               film: "Pitch Black (2000)"}
+  - {voornaam: "David",       achternaam: "Swinton",           film: "A.I. (2001)"}
+  - {voornaam: "Donnie",      achternaam: "Darko",             film: "Donnie Darko (2001)"}
+  - {voornaam: "John",        achternaam: "Anderton",          film: "Minority Report (2002)"}
+  - {voornaam: "Agatha",      achternaam: "Lively",            film: "Minority Report (2002)"}
+  - {voornaam: "John",        achternaam: "Preston",           film: "Equilibrium (2002)"}
+  # Sunshine / I Am Legend / Children of Men / District 9 / Avatar / Moon
+  - {voornaam: "Robert",      achternaam: "Capa",              film: "Sunshine (2007)"}
+  - {voornaam: "Robert",      achternaam: "Neville",           film: "I Am Legend (2007)"}
+  - {voornaam: "Theo",        achternaam: "Faron",             film: "Children of Men (2006)"}
+  - {voornaam: "Wikus",       achternaam: "vanDeMerwe",        film: "District 9 (2009)"}
+  - {voornaam: "Christopher", achternaam: "Johnson",           film: "District 9 (2009)"}
+  - {voornaam: "Jake",        achternaam: "Sully",             film: "Avatar (2009)"}
+  - {voornaam: "Neytiri",     achternaam: "Mokarya",           film: "Avatar (2009)"}
+  - {voornaam: "Miles",       achternaam: "Quaritch",          film: "Avatar (2009)"}
+  - {voornaam: "Sam",         achternaam: "Bell",              film: "Moon (2009)"}
+  # Inception / Source Code / Looper / Pacific Rim
+  - {voornaam: "Dominic",     achternaam: "Cobb",              film: "Inception (2010)"}
+  - {voornaam: "Ariadne",     achternaam: "Phillips",          film: "Inception (2010)"}
+  - {voornaam: "Arthur",      achternaam: "Eames",             film: "Inception (2010)"}
+  - {voornaam: "Yusuf",       achternaam: "Mombasa",           film: "Inception (2010)"}
+  - {voornaam: "Saito",       achternaam: "Proclus",           film: "Inception (2010)"}
+  - {voornaam: "Colter",      achternaam: "Stevens",           film: "Source Code (2011)"}
+  - {voornaam: "Joseph",      achternaam: "Simmons",           film: "Looper (2012)"}
+  - {voornaam: "Raleigh",     achternaam: "Becket",            film: "Pacific Rim (2013)"}
+  - {voornaam: "Mako",        achternaam: "Mori",              film: "Pacific Rim (2013)"}
+  - {voornaam: "Stacker",     achternaam: "Pentecost",         film: "Pacific Rim (2013)"}
+  # Edge of Tomorrow / Interstellar / Ex Machina
+  - {voornaam: "William",     achternaam: "Cage",              film: "Edge of Tomorrow (2014)"}
+  - {voornaam: "Rita",        achternaam: "Vrataski",          film: "Edge of Tomorrow (2014)"}
+  - {voornaam: "Joseph",      achternaam: "Cooper",            film: "Interstellar (2014)"}
+  - {voornaam: "Murphy",      achternaam: "Cooper",            film: "Interstellar (2014)"}
+  - {voornaam: "Amelia",      achternaam: "Brand",             film: "Interstellar (2014)"}
+  - {voornaam: "Caleb",       achternaam: "Smith",             film: "Ex Machina (2014)"}
+  - {voornaam: "Ava",         achternaam: "Bluebook",          film: "Ex Machina (2014)"}
+  - {voornaam: "Nathan",      achternaam: "Bateman",           film: "Ex Machina (2014)"}
+  # The Martian / Mad Max / Arrival / Annihilation / Ready Player One
+  - {voornaam: "Mark",        achternaam: "Watney",            film: "The Martian (2015)"}
+  - {voornaam: "Melissa",     achternaam: "Lewis",             film: "The Martian (2015)"}
+  - {voornaam: "Beth",        achternaam: "Johanssen",         film: "The Martian (2015)"}
+  - {voornaam: "Max",         achternaam: "Rockatansky",       film: "Mad Max Fury Road (2015)"}
+  - {voornaam: "Imperator",   achternaam: "Furiosa",           film: "Mad Max Fury Road (2015)"}
+  - {voornaam: "Louise",      achternaam: "Banks",             film: "Arrival (2016)"}
+  - {voornaam: "Ian",         achternaam: "Donnelly",          film: "Arrival (2016)"}
+  - {voornaam: "Lena",        achternaam: "Kerans",            film: "Annihilation (2018)"}
+  - {voornaam: "Wade",        achternaam: "Watts",             film: "Ready Player One (2018)"}
+  - {voornaam: "Samantha",    achternaam: "Cook",              film: "Ready Player One (2018)"}
+  # Captain Marvel / Dune / The Creator / Mickey 17
+  - {voornaam: "Carol",       achternaam: "Danvers",           film: "Captain Marvel (2019)"}
+  - {voornaam: "Talos",       achternaam: "Skrull",            film: "Captain Marvel (2019)"}
+  - {voornaam: "Paul",        achternaam: "Atreides",          film: "Dune (2021)"}
+  - {voornaam: "Jessica",     achternaam: "Atreides",          film: "Dune (2021)"}
+  - {voornaam: "Duncan",      achternaam: "Idaho",             film: "Dune (2021)"}
+  - {voornaam: "Gurney",      achternaam: "Halleck",           film: "Dune (2021)"}
+  - {voornaam: "Stilgar",     achternaam: "Naib",              film: "Dune (2021)"}
+  - {voornaam: "Chani",       achternaam: "Kynes",             film: "Dune (2021)"}
+  - {voornaam: "Vladimir",    achternaam: "Harkonnen",         film: "Dune (2021)"}
+  - {voornaam: "Joshua",      achternaam: "Taylor",            film: "The Creator (2023)"}
+  - {voornaam: "Mickey",      achternaam: "Barnes",            film: "Mickey 17 (2025)"}
+  # Star Trek (selected)
+  - {voornaam: "James",       achternaam: "Kirk",              film: "Star Trek (1966)"}
+  - {voornaam: "Spock",       achternaam: "Sarek",             film: "Star Trek (1966)"}
+  - {voornaam: "Leonard",     achternaam: "McCoy",             film: "Star Trek (1966)"}
+  - {voornaam: "Jean-Luc",    achternaam: "Picard",            film: "TNG (1987)"}
+  - {voornaam: "William",     achternaam: "Riker",             film: "TNG (1987)"}
+  - {voornaam: "Data",        achternaam: "Soong",             film: "TNG (1987)"}
+  - {voornaam: "Geordi",      achternaam: "LaForge",           film: "TNG (1987)"}
+  - {voornaam: "Worf",        achternaam: "Rozhenko",          film: "TNG (1987)"}
+  - {voornaam: "Beverly",     achternaam: "Crusher",           film: "TNG (1987)"}
+  - {voornaam: "Deanna",      achternaam: "Troi",              film: "TNG (1987)"}
+  - {voornaam: "Kathryn",     achternaam: "Janeway",           film: "Voyager (1995)"}
+  - {voornaam: "Seven",       achternaam: "ofNine",            film: "Voyager (1997)"}
+  - {voornaam: "Benjamin",    achternaam: "Sisko",             film: "Deep Space Nine (1993)"}
+  # Doctor Who / Battlestar / Firefly
+  - {voornaam: "Rose",        achternaam: "Tyler",             film: "Doctor Who (2005)"}
+  - {voornaam: "Donna",       achternaam: "Noble",             film: "Doctor Who (2008)"}
+  - {voornaam: "Amy",         achternaam: "Pond",              film: "Doctor Who (2010)"}
+  - {voornaam: "William",     achternaam: "Adama",             film: "Battlestar Galactica (2004)"}
+  - {voornaam: "Laura",       achternaam: "Roslin",            film: "Battlestar Galactica (2004)"}
+  - {voornaam: "Kara",        achternaam: "Thrace",            film: "Battlestar Galactica (2004)"}
+  - {voornaam: "Lee",         achternaam: "Adama",             film: "Battlestar Galactica (2004)"}
+  - {voornaam: "Malcolm",     achternaam: "Reynolds",          film: "Firefly (2002)"}
+  - {voornaam: "Zoe",         achternaam: "Washburne",         film: "Firefly (2002)"}
+  - {voornaam: "Kaylee",      achternaam: "Frye",              film: "Firefly (2002)"}
+  - {voornaam: "River",       achternaam: "Tam",               film: "Firefly (2002)"}
+  - {voornaam: "Inara",       achternaam: "Serra",             film: "Firefly (2002)"}
+  # The Expanse / Foundation / Severance / Silo
+  - {voornaam: "James",       achternaam: "Holden",            film: "The Expanse (2015)"}
+  - {voornaam: "Naomi",       achternaam: "Nagata",            film: "The Expanse (2015)"}
+  - {voornaam: "Amos",        achternaam: "Burton",            film: "The Expanse (2015)"}
+  - {voornaam: "Joe",         achternaam: "Miller",            film: "The Expanse (2015)"}
+  - {voornaam: "Chrisjen",    achternaam: "Avasarala",         film: "The Expanse (2015)"}
+  - {voornaam: "Camestros",   achternaam: "Felapton",          film: "Foundation (2021)"}
+  - {voornaam: "Mark",        achternaam: "Scout",              film: "Severance (2022)"}
+  - {voornaam: "Helly",       achternaam: "Riggs",             film: "Severance (2022)"}
+  - {voornaam: "Juliette",    achternaam: "Nichols",           film: "Silo (2023)"}
+  # Black Mirror / Westworld / Stranger Things
+  - {voornaam: "Bernard",     achternaam: "Lowe",              film: "Westworld (2016)"}
+  - {voornaam: "Dolores",     achternaam: "Abernathy",         film: "Westworld (2016)"}
+  - {voornaam: "Maeve",       achternaam: "Millay",            film: "Westworld (2016)"}
+  - {voornaam: "Eleven",      achternaam: "Hopper",            film: "Stranger Things (2016)"}
+  - {voornaam: "Joyce",       achternaam: "Byers",             film: "Stranger Things (2016)"}
+  # Misc additions for breadth
+  - {voornaam: "Furiosa",     achternaam: "Vuvalini",          film: "Furiosa (2024)"}
+  - {voornaam: "Buzz",        achternaam: "Lightyear",         film: "Toy Story (1995)"}
+  - {voornaam: "WallE",       achternaam: "Eve",               film: "WALL-E (2008)"}
+  - {voornaam: "Tony",        achternaam: "Stark",             film: "Iron Man (2008)"}
+  - {voornaam: "Peter",       achternaam: "Quill",             film: "Guardians of the Galaxy (2014)"}
+  - {voornaam: "Gamora",      achternaam: "Zen",               film: "Guardians of the Galaxy (2014)"}
+  - {voornaam: "Rocket",      achternaam: "Raccoon",           film: "Guardians of the Galaxy (2014)"}
+  - {voornaam: "Groot",       achternaam: "IamGroot",          film: "Guardians of the Galaxy (2014)"}
+  - {voornaam: "Drax",        achternaam: "Destroyer",         film: "Guardians of the Galaxy (2014)"}
+  - {voornaam: "Diana",       achternaam: "Prince",            film: "Wonder Woman (2017)"}
+  - {voornaam: "Walter",      achternaam: "Bishop",            film: "Fringe (2008)"}
+  - {voornaam: "Olivia",      achternaam: "Dunham",            film: "Fringe (2008)"}
+  - {voornaam: "Will",        achternaam: "Robinson",          film: "Lost in Space (1965)"}
+  - {voornaam: "John",        achternaam: "Crichton",          film: "Farscape (1999)"}
+  - {voornaam: "Aeryn",       achternaam: "Sun",               film: "Farscape (1999)"}
+  - {voornaam: "Avon",        achternaam: "Kerr",              film: "Blakes 7 (1978)"}
+  - {voornaam: "Servalan",    achternaam: "Federation",        film: "Blakes 7 (1978)"}
+
+organisaties:
+  - {naam: "Weyland-Yutani Corporation",     film: "Alien"}
+  - {naam: "Tyrell Corporation",             film: "Blade Runner"}
+  - {naam: "Wallace Corporation",            film: "Blade Runner 2049"}
+  - {naam: "Cyberdyne Systems",              film: "Terminator"}
+  - {naam: "OmniConsumer Products",          film: "RoboCop"}
+  - {naam: "Soylent Corporation",            film: "Soylent Green"}
+  - {naam: "Rekall Incorporated",            film: "Total Recall"}
+  - {naam: "InGen Technologies",             film: "Jurassic Park"}
+  - {naam: "BiosynGenetics",                 film: "Jurassic Park"}
+  - {naam: "Umbrella Corporation",           film: "Resident Evil"}
+  - {naam: "Aperture Science",               film: "Portal"}
+  - {naam: "Black Mesa Research Facility",   film: "Half-Life"}
+  - {naam: "Massive Dynamic",                film: "Fringe"}
+  - {naam: "Veidt Enterprises",              film: "Watchmen"}
+  - {naam: "Stark Industries",               film: "Iron Man"}
+  - {naam: "Oscorp Industries",              film: "Spider-Man"}
+  - {naam: "LexCorp",                        film: "Superman"}
+  - {naam: "Wayne Enterprises",              film: "Batman"}
+  - {naam: "InitechSoft",                    film: "Office Space"}
+  - {naam: "Pied Piper Logistics",           film: "Silicon Valley"}
+  - {naam: "Hooli Holdings",                 film: "Silicon Valley"}
+  - {naam: "Lumon Industries",               film: "Severance"}
+  - {naam: "Encom International",            film: "Tron"}
+  - {naam: "Krell Foundation",               film: "Forbidden Planet"}
+  - {naam: "Spacing Guild Heighliner BV",    film: "Dune"}
+  - {naam: "House Atreides Trust",           film: "Dune"}
+  - {naam: "House Harkonnen Holdings",       film: "Dune"}
+  - {naam: "Bene Gesserit Order",            film: "Dune"}
+  - {naam: "CHOAM Combine",                  film: "Dune"}
+  - {naam: "First Order Logistics",          film: "Star Wars"}
+  - {naam: "Rebel Alliance Cooperative",     film: "Star Wars"}
+  - {naam: "Trade Federation NL",            film: "Star Wars"}
+  - {naam: "Sirius Cybernetics Corporation", film: "Hitchhikers Guide"}
+  - {naam: "Megadodo Publications",          film: "Hitchhikers Guide"}
+  - {naam: "Yoyodyne Propulsion Systems",    film: "Buckaroo Banzai"}
+  - {naam: "Veridian Dynamics",              film: "Better Off Ted"}
+  - {naam: "Roxxon Energy Corporation",      film: "Marvel Cinematic Universe"}
+  - {naam: "Hammer Industries",              film: "Iron Man 2"}
+  - {naam: "Pym Technologies",               film: "Ant-Man"}
+  - {naam: "Strickland Propane",             film: "King of the Hill"}
+  - {naam: "Globex Corporation",             film: "The Simpsons"}
+  - {naam: "Vehement Capital Partners",      film: "Mr Robot"}
+  - {naam: "ECorp Holding NV",               film: "Mr Robot"}
+  - {naam: "Allsafe Cybersecurity",          film: "Mr Robot"}
+  - {naam: "ZeroOne Manufacturing",          film: "The Animatrix"}
+  - {naam: "Buy n Large Corporation",        film: "WALL-E"}
+  - {naam: "Mom Friendly Robot Company",     film: "Futurama"}
+  - {naam: "Planet Express Delivery",        film: "Futurama"}
+  - {naam: "Mooby World Holdings",           film: "Clerks"}
+
+zaak_scenarios:
+  - "Verzoek tot herregistratie van burger na ontwaken uit cryostase"
+  - "Aanvraag verblijfsvergunning voor gerepatrieerde tijdreiziger"
+  - "Klacht over geluidsoverlast door warpdrive-tests in nachtelijke uren"
+  - "Verzekeringsclaim na schade door tijdparadox in de woonkamer"
+  - "Identiteitsverificatie aanvraag voor replicant-burger Klasse Nexus-9"
+  - "Bezwaar tegen WOZ-aanslag op zwevend voertuig (categorie luchtvaart)"
+  - "Vergunningsaanvraag voor exploitatie van wormgat-veerdienst"
+  - "Klacht over uitzicht-belemmering door geparkeerd ruimteschip"
+  - "Verzoek tot inschrijving van buitenaardse partner in BRP"
+  - "Aanvraag bouwvergunning ondergrondse cryo-bunker"
+  - "Schadeloosstelling na onverwachte regressie naar embryonale staat"
+  - "Verzoek tot beëindiging huurcontract wegens dimensionaal lek in slaapkamer"
+  - "Klacht over kwaliteitsdaling vleeswarenpakket na contact met Solaris-oceaan"
+  - "Aanvraag voor wijziging geslacht in BRP na transformatie door precogs"
+  - "Bezwaar tegen verkeersboete: voertuig was in tachyonversnelling"
+  - "Verzoek tot adoptie van geredde alien-jongere"
+  - "Klacht over onbekend voorwerp in gemeentelijke afvalcontainer"
+  - "Aanvraag WW-uitkering na ontslag bij faillissement scheepsmaatschappij"
+  - "Verzoek tot inschrijving van AI als juridisch persoon"
+  - "Aanvraag identiteitsbewijs na geheugenwissing door Mannen in Zwart"
+  - "Bezwaar tegen onteigening woning ten behoeve van bouw hyperruimte-snelweg"
+  - "Klacht over verstoorde nachtrust door tijdreis-experimenten van buurman"
+  - "Verzoek tot rectificatie geboortedatum: terugkeer uit cryoslaap"
+  - "Aanvraag rouwverlof na ontmoeting met eigen toekomstige zelf"
+  - "Schadeclaim na verkeerd geleverde teleporter (eindigde in muur)"
+  - "Aanvraag persoonsgebonden budget voor onderhoud cybernetisch ledemaat"
+  - "Verzoek tot vergoeding fysiotherapie na zware turbolift-val"
+  - "Bezwaar tegen weigering paspoort voor verblijf op Mars-kolonie"
+  - "Klacht over slechte ontvangst kwantum-internet in buitengebied"
+  - "Verzoek tot opheffing borgstelling na vrijspraak quantum-superpositie aanklacht"
+  - "Aanvraag handelsvergunning voor handel in selenium-erts"
+  - "Verzoek aanpassing huursubsidie wegens uitbreiding gezin met kloon"
+  - "Klacht over wateroverlast in verband met defecte gravitatie-controle"
+  - "Bezwaar tegen WMO-besluit: aanvraag voor exoskelet werd afgewezen"
+  - "Verzoek vrijstelling leerplicht wegens deelname bemand Mars-traject"
+  - "Schademelding na aanrijding met onbekend vliegend object"
+  - "Aanvraag uittreksel BRP voor immigratie naar Aldebaran-systeem"
+  - "Klacht over onveilige situatie: open dimensiepoort op kruispunt"
+  - "Verzoek inschrijving in handelsregister voor zwarte-gat boorbedrijf"
+  - "Aanvraag bijstand na verlies inkomsten door dubbelganger uit parallel universum"
+  - "Bezwaar tegen aanslag inkomstenbelasting: tijdsdimensie-fout in salarisstrook"
+  - "Verzoek tot intrekking rijbewijs van klonende ouder met dementie"
+  - "Klacht over leveringsproblemen voedselrantsoen na ineenstorting handel"
+  - "Aanvraag vergunning oprichting androïde-rusthuis"
+  - "Verzoek tot wijziging adresgegevens: nieuwe locatie is in baan om de aarde"
+  - "Schademelding waterleidingbreuk veroorzaakt door buitenaardse boor"
+  - "Aanvraag jaarvignet voor toegang tot beschermd asteroïdengebied"
+  - "Klacht over discriminatie op werkvloer wegens cybernetische upgrades"
+  - "Verzoek tot herziening pensioenuitkering na 200-jarige slaapperiode"
+  - "Bezwaar tegen handhavingsbesluit omtrent illegaal gebruik singulariteit"
