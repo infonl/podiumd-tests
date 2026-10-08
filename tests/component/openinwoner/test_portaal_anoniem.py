@@ -62,7 +62,9 @@ def test_contact_form_is_open_to_everyone(
     html = expect_status(http.get(urls["openinwoner"] + "/contactformulier/"), HTTPStatus.OK).text
     # The contact form page has an empty <title> (also in TA); its heading names it.
     assert re.search(r"<h1[^>]*>\s*Contactformulier", html), "no Contactformulier heading"
-    assert "<form" in html
+    # The fields, not just the form: without its apphook the page renders empty field labels.
+    for field in ('name="subject"', 'name="question"'):
+        assert field in html, f"contact form without {field}"
 
 
 @pytest.mark.parametrize("body", [{}, {"kanaal": "test"}], ids=["empty", "test-kanaal"])

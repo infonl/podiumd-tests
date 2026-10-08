@@ -411,6 +411,9 @@ OI_PAGES = [
         "slug": "contactformulier",
         "title": "Contactformulier",
         "template": "cms/contactform/form_outer.html",
+        # The apphook's view puts the form in the context; without it the plugin renders empty fields.
+        "apphook": "OpenklantApphook",
+        "namespace": "openklant",
         "plugin": {"slot": "contact_form", "type": "ContactFormPlugin"},
     },
 ]
@@ -660,6 +663,17 @@ STEPS: tuple[Step, ...] = (
         record=True,
         wiring=True,
         context_params=lambda ctx: {"zaken_url": ctx.env.profile.urls["openzaak"] + "/zaken/api/v1/"},
+    ),
+    # Open Inwoner reads company names from KvK (profile setting openinwoner_kvk_api_root), for TA 118.
+    SnippetStep(
+        "openinwoner-kvk",
+        ("openinwoner",),
+        "oi_kvk",
+        "ptest_bootstrap_openinwoner_kvk_record",
+        {},
+        record=True,
+        wiring=True,
+        context_params=lambda ctx: {"api_root": ctx.env.profile.settings.get("openinwoner_kvk_api_root", "")},
     ),
     # Open Inwoner scans uploads with the environment's ClamAV (profile setting clamav), for TA 123.
     SnippetStep(

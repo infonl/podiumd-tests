@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from typing import cast
 
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.browser import keycloak_login
@@ -54,6 +55,7 @@ def virus_scan_enabled(env: Environment) -> bool:
     return bool(run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_virus_scan", {"action": "read"}))
 
 
-def set_account_email(env: Environment, bsn: str, email: str) -> None:
-    """Set the e-mail of the Open Inwoner account with this BSN; a later login sends it to Open Klant."""
-    run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_account_email", {"bsn": bsn, "email": email})
+def set_account(env: Environment, bsn: str, **fields: object) -> dict[str, object]:
+    """Set fields of the Open Inwoner account with this BSN; their old values, to set back."""
+    params: dict[str, object] = {"bsn": bsn, "fields": fields}
+    return cast("dict[str, object]", run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_account", params))

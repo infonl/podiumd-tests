@@ -1,6 +1,6 @@
 """Open Inwoner as a logged-in inwoner: profile, notification settings, Mijn vragen, contact form, headings.
 
-Ported from TA interaction 105 and 108, regression 96, 106, 114, 117, 163 and 165. DigiD is
+Ported from TA interaction 105 and 108, regression 96, 106, 114, 117, 118, 146, 160, 163 and 165. DigiD is
 Keycloak's mock (wiring W1), the pages come from wiring W5.
 """
 
@@ -8,21 +8,30 @@ from __future__ import annotations
 
 import re
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
 
 from playwright.sync_api import expect
 
+from podiumd_tests.basisregistraties import kvk_basisprofiel
+from podiumd_tests.basisregistraties import kvk_vestigingsprofiel
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.openinwoner import portal_login
+from podiumd_tests.openinwoner import set_account
+from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openzaak import today
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    import requests
+
     from playwright.sync_api import Page
 
     from podiumd_tests.environment import Environment
+    from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [
     pytest.mark.component,
@@ -30,7 +39,7 @@ pytestmark = [
     pytest.mark.requires("openinwoner", "keycloak"),
 ]
 
-INWONER, INWONER2, _ = IDENTITIES
+INWONER, INWONER2, BEDRIJF = IDENTITIES
 
 
 @pytest.fixture(name="portal")
@@ -96,6 +105,7 @@ def test_page_heading_matches_its_menu_item(page: Page, portal: str, path: str, 
     assert re.search(words, heading(page), re.IGNORECASE), heading(page)
 
 
+@pytest.mark.xdist_group("inwoner2")
 def test_second_inwoner_sees_own_profile(
     page: Page, podiumd_env: Environment, portal: str, need_bootstrap: Callable[..., None]
 ) -> None:
@@ -105,3 +115,61 @@ def test_second_inwoner_sees_own_profile(
     page.context.clear_cookies()
     portal_login(page, podiumd_env, "digid", INWONER2, "/mijn-profiel/")
     expect(page).to_have_url(re.compile(r"/mijn-profiel/"))
+
+
+@pytest.mark.xdist_group("inwoner2")
+@pytest.mark.parametrize(
+    "fields",
+    [
+        pytest.param({"is_active": False}, id="inactive"),
+        pytest.param(
+            {"deactivated_on": today()},
+            id="deactivated",
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason="Open Inwoner: deactivated_on (set by 'Profiel verwijderen') does not stop a DigiD login;"
+                " its OIDC backend filters on neither is_active nor deactivated_on (TA reg-160b); not yet"
+                " reported upstream",
+            ),
+        ),
+    ],
+)
+def test_disabled_account_cannot_log_in(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    portal: str,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+    fields: dict[str, object],
+) -> None:
+    """An inactive or deactivated account cannot log in with DigiD (TA reg-160)."""
+    need_bootstrap(INWONER2.name)
+    bsn = INWONER2.attributes["bsn"][0]
+    old = set_account(podiumd_env, bsn, **fields)
+    registry.add(f"account {bsn}", lambda: set_account(podiumd_env, bsn, **old))
+    page.context.clear_cookies()
+    portal_login(page, podiumd_env, "digid", INWONER2, "/mijn-profiel/")
+    page.goto(portal + "/mijn-profiel/")
+    assert "/accounts/login/" in page.url
+
+
+@pytest.mark.requires("api-proxy")
+def test_company_profile_shows_kvk_names(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    portal: str,
+    http: requests.Session,
+    urls: dict[str, str],
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """The company's profile shows its KvK number, its name and the vestiging's trade name from KvK (TA reg-118, reg-146)."""
+    need_bootstrap(BEDRIJF.name, "openinwoner-kvk")
+    kvk, vestiging = BEDRIJF.attributes["kvk"][0], BEDRIJF.attributes["vestigingsnummer"][0]
+    naam = expect_status(kvk_basisprofiel(http, urls["api-proxy"], kvk), HTTPStatus.OK).json()["naam"]
+    profiel = expect_status(kvk_vestigingsprofiel(http, urls["api-proxy"], vestiging), HTTPStatus.OK).json()
+    page.context.clear_cookies()
+    portal_login(page, podiumd_env, "eherkenning", BEDRIJF, "/mijn-profiel/")
+    page.goto(portal + "/mijn-profiel/")
+    main = page.locator("main")
+    for text in (kvk, naam, profiel["eersteHandelsnaam"]):
+        expect(main).to_contain_text(text)
