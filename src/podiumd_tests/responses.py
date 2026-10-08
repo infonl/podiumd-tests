@@ -10,6 +10,8 @@ if TYPE_CHECKING:
     import requests
 
 REFUSED = frozenset({HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN})
+# Characters of the body an unexpected status reports: enough for an API error's detail.
+BODY_EXCERPT = 300
 
 
 class UnexpectedStatusError(AssertionError):
@@ -27,7 +29,8 @@ def expect_status(response: requests.Response, *expected: int) -> requests.Respo
     """The response, when its status is one of expected; UnexpectedStatusError otherwise."""
     if response.status_code not in expected:
         msg = f"{describe(response)}, expected {' or '.join(str(e) for e in expected)}"
-        raise UnexpectedStatusError(msg)
+        body = " ".join(response.text.split())[:BODY_EXCERPT]
+        raise UnexpectedStatusError(f"{msg}: {body}" if body else msg)
     return response
 
 
