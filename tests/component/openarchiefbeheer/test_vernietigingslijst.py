@@ -269,7 +269,6 @@ def fixture_archive_config(podiumd_env: Environment) -> Iterator[Callable[..., N
 
 
 @pytest.mark.destructive
-@pytest.mark.xdist_group("oab-archive-config")
 @pytest.mark.xfail(
     strict=True,
     reason="Open Zaak 1.29.3 answers 500 on DELETE of a zaak with a resultaat although it deletes it"
@@ -324,7 +323,6 @@ def test_destruction_deletes_the_zaak_and_leaves_a_report(  # pylint: disable=to
 
 
 @pytest.mark.destructive
-@pytest.mark.xdist_group("oab-archive-config")
 def test_short_procedure_skips_the_archivist(
     oab: Callable[[str], requests.Session],
     api: str,

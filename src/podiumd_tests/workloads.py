@@ -8,6 +8,7 @@ and only the latest Job of each CronJob counts, as older runs are history.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 from podiumd_tests.json_data import JsonObject
@@ -16,7 +17,10 @@ from podiumd_tests.json_data import section
 from podiumd_tests.kube import metadata_name
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
     from collections.abc import Sequence
+
+    from podiumd_tests.kube import Kube
 
 type Item = JsonObject
 
@@ -34,6 +38,18 @@ def _owner_name(item: Item, kind: str) -> str | None:
 
 def _int(value: object) -> int:
     return value if isinstance(value, int) else 0
+
+
+@contextmanager
+def stopped(kube: Kube, deployment: str, timeout: int = 300) -> Generator[None]:
+    """Scale the deployment to 0 for the block; afterwards restore its replicas and wait for the rollout."""
+    replicas = _int(section(kube.get_json("deployment", deployment), "spec").get("replicas"))
+    kube.run("scale", f"deployment/{deployment}", "--replicas=0")
+    try:
+        yield
+    finally:
+        kube.run("scale", f"deployment/{deployment}", f"--replicas={replicas}")
+        kube.run("rollout", "status", f"deployment/{deployment}", f"--timeout={timeout}s", timeout=timeout + 10)
 
 
 def unready_workloads(items: Sequence[Item]) -> list[str]:

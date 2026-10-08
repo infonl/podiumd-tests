@@ -71,3 +71,23 @@ def test_requiring_builds_a_param_that_requires_its_component():
     assert param.values == ("kiss", "/healthz")
     assert param.id == "kiss/healthz"
     assert [(m.name, m.args) for m in param.marks] == [("requires", ("kiss",))]
+
+
+def test_destructive_tests_share_one_xdist_group(pytester):
+    pytester.makeconftest(INNER_CONFTEST)
+    pytester.makepyfile(
+        """
+import pytest
+
+
+@pytest.mark.destructive
+def test_destructive(request):
+    assert request.node.get_closest_marker("xdist_group").args == ("destructive",)
+
+
+def test_other(request):
+    assert request.node.get_closest_marker("xdist_group") is None
+"""
+    )
+    result = pytester.runpytest_inprocess("-p", "no:playwright", "-W", "ignore::pytest.PytestUnknownMarkWarning")
+    result.assert_outcomes(passed=2)

@@ -63,19 +63,19 @@ Sources:
 | `regression/116-omc-mail-keten-e2e.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/117-portaal-contactmomenten-paginatie.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_inwoner.py`. |
 | `regression/118-portaal-vestigingsnaam-bedrijf.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_inwoner.py`, against the KvK test API (wiring `openinwoner-kvk`). |
-| `regression/119-infra-quick-wins.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/119-infra-quick-wins.spec.ts` | component or integration | 3/4/5 | merge | Unknown BSN: `test_brp.py`; KISS `/api/me`: `test_kcc_session.py`. The BRP postcode search goes into `test_brp.py` (todo: the address of a test-set person). Dropped: KISS `/api/zoeken`, which also accepted 500, and the `/kennisartikelen` fixme. |
 | `regression/12-kiss-bff-kcc-flow.spec.ts` | component or integration | 3/4/5 | port | `tests/component/kiss/test_kcc_session.py`; KISS does not delete klantcontacten (405). |
 | `regression/120-of-payment-infrastructure.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/platform/test_public_surface.py`. |
 | `regression/121-continuiteit-graceful-degradation.spec.ts` | component or integration | 3/4/5 | port | `tests/component/platform/test_public_surface.py`; BRP and KvK parts wait for their ingress (handoff 6). |
 | `regression/122-gemachtigde-flow.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_statussen_rollen.py: indicatieMachtiging. |
 | `regression/123-portaal-clamav-eicar-rejectie.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_portaal_zaken.py`; skips unless Open Inwoner's SiteConfiguration.enable_virus_scan is on (minikube runs no ClamAV). |
-| `regression/124-cluster-pod-recovery-multi.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/124-cluster-pod-recovery-multi.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_continuiteit.py` (tier chaos). The graceful-degradation case is dropped: anonymous `/mijn-zaken/` always redirects to the login. |
 | `regression/125-kvk-postcode-huisnummer-zoek.spec.ts` | component or integration | 3/4/5 | port | Same as 08. |
 | `regression/13-va-filter-cross-component.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py, with client ptest-bootstrap-zgw-openbaar. |
 | `regression/14-audit-trail.spec.ts` | component or integration | 3/4/5 | todo | Open Zaak audittrails need heeft_alle_autorisaties (xfail in test_documenten.py); decide on a client with full rights. |
 | `regression/143-oab-vernietigingsflow.spec.ts` | component or integration | 3/4/5 | port | `test_vernietigingslijst.py`, through the API (make_final works without 2FA here); UI steps: todo. |
 | `regression/143-portaal-document-download.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_portaal_zaken.py`. |
-| `regression/144-continuiteit-component-stop.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/144-continuiteit-component-stop.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/integration/test_continuiteit.py`: every other component root must keep answering, not only the pairs TA checked. |
 | `regression/146-portaal-uitbreiding.spec.ts` | component or integration | 3/4/5 | merge | Into the TA 118 test: the vestiging's eersteHandelsnaam from the KvK vestigingsprofiel. |
 | `regression/147-kiss-contentbronnen.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/kiss/test_anonymous.py`. |
 | `regression/149-ok2-crud-uitbreiding.spec.ts` | component or integration | 3/4/5 | merge | `tests/component/openklant/`: klantcontact and digitaal adres patch/delete; CRUD-3 (identificator PUT) dropped: it passed on any outcome. |
@@ -103,7 +103,7 @@ Sources:
 | `regression/172-architectuur-wcag-axe.spec.ts` | component or integration | 3/4/5 | todo | |
 | `regression/173-fb-zaaktype-versie-isolatie.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_catalogi.py test_zaaktype_versions. |
 | `regression/174-oab-config-persist-filter.spec.ts` | component or integration | 3/4/5 | todo | |
-| `regression/175-continuiteit-alertmanager-fber.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/175-continuiteit-alertmanager-fber.spec.ts` | component or integration | 3/4/5 | drop | Alertmanager is disabled in podiumd-infra and ExternalsPodiumD; TA tested its own Alertmanager and webhook. |
 | `regression/176-formulier-update-keten.spec.ts` | component or integration | 3/4/5 | drop | r102 renames the form, which plays no part in registration (covered by the TA 76 chain); r97 checks that a later submission has a later timestamp. Both fixme in TA. A real form change would alter the shared test form under parallel tests. |
 | `regression/177-pen-admin-niet-publiek.spec.ts` | component or integration | 3/4/5 | port | `tests/component/platform/test_public_surface.py`. |
 | `regression/178-blacklist-upload.spec.ts` | component or integration | 3/4/5 | todo | |
@@ -178,7 +178,7 @@ Sources:
 | `regression/86-ok2-klantcontact-bedrijf.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openklant/`. |
 | `regression/87-ok2-klantcontact-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openklant/` test_klantcontacten.py. |
 | `regression/88-pdok-locatieserver.spec.ts` | component or integration | 3/4/5 | drop | Tests the public PDOK Locatieserver, not PodiumD. |
-| `regression/89-cluster-pod-recovery.spec.ts` | component or integration | 3/4/5 | todo | |
+| `regression/89-cluster-pod-recovery.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/integration/test_continuiteit.py` (openinwoner is one of the stopped components). |
 | `regression/90-fb-oz-catalogi-integriteit.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_catalogi.py. |
 | `regression/91-fb-keycloak-realm-snapshot.spec.ts` | component or integration | 3/4/5 | port | `tests/component/keycloak/test_realm.py`. |
 | `regression/95-portaal-filtering.spec.ts` | component or integration | 3/4/5 | merge | Test 1 → `test_portaal_inwoner.py`-style login, test 2 → `tests/integration/test_portaal_zaken.py`. |

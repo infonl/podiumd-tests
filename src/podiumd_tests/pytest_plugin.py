@@ -289,6 +289,14 @@ def fixture_callback(run_tag: str, podiumd_env: Environment, need_bootstrap: Cal
     return Callback.new(podiumd_env, run_tag)
 
 
+@pytest.hookimpl(tryfirst=True)  # before xdist reads the groups
+def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+    """Put the destructive tests in one xdist group: each disturbs state the others use."""
+    for item in items:
+        if item.get_closest_marker("destructive"):
+            item.add_marker(pytest.mark.xdist_group("destructive"))
+
+
 def pytest_runtest_setup(item: pytest.Item) -> None:
     """Skip tests whose @pytest.mark.requires(...) capabilities are absent.
 
