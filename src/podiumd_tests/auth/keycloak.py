@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import html
+import re
+
 from dataclasses import dataclass
 from http import HTTPStatus
 from typing import TYPE_CHECKING
@@ -56,3 +59,21 @@ def password_grant(session: requests.Session, keycloak_url: str, realm: str, log
         msg = f"token response for {login.username!r} has no access_token"
         raise TokenError(msg)
     return token
+
+
+def form_login(http: requests.Session, start_url: str, username: str, password: str) -> requests.Response:
+    """Log in through Keycloak's login form without a browser; start_url redirects there. The app's final response.
+
+    For apps that accept only their own session (code flow), such as ZAC's REST API.
+    """
+    page = http.get(start_url)
+    form = re.search(r'<form[^>]*id="kc-form-login"[^>]*>', page.text)
+    action = re.search(r'action="([^"]+)"', form[0]) if form else None
+    if action is None:
+        msg = f"no Keycloak login form at {page.url}"
+        raise TokenError(msg)
+    response = http.post(html.unescape(action[1]), data={"username": username, "password": password})
+    if 'id="kc-form-login"' in response.text:
+        msg = f"Keycloak refused the login of {username!r}"
+        raise TokenError(msg)
+    return response

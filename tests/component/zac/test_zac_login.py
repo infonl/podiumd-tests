@@ -8,7 +8,7 @@ import pytest
 
 from playwright.sync_api import expect
 
-from podiumd_tests.bootstrap.steps import KeycloakUser
+from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.browser import redirect_login
 
 if TYPE_CHECKING:
@@ -19,8 +19,6 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
 
 pytestmark = [pytest.mark.component, pytest.mark.ui, pytest.mark.core, pytest.mark.requires("zac", "keycloak")]
-
-ADMIN = KeycloakUser("admin")
 
 
 @pytest.mark.tc("ZAC-002")

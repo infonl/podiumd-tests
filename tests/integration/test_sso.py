@@ -13,7 +13,7 @@ import pytest
 
 from podiumd_tests.auth.keycloak import realm_url
 from podiumd_tests.auth.keycloak_admin import realm_of
-from podiumd_tests.bootstrap.steps import KeycloakUser
+from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.browser import keycloak_login
 from podiumd_tests.components import DJANGO_APPS
 from podiumd_tests.pytest_plugin import requiring
@@ -30,7 +30,6 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.integration, pytest.mark.ui, pytest.mark.requires("keycloak")]
 
-ADMIN = KeycloakUser("admin")
 AUTHENTICATE = "/oidc/authenticate/?next=/admin/"
 
 

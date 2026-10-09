@@ -42,6 +42,7 @@ from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.oidc_mock import KeycloakOidcMock
 from podiumd_tests.bootstrap.oidc_mock import oidc_params
 from podiumd_tests.bootstrap.omc import OmcAbonnement
+from podiumd_tests.bootstrap.zac import ZacEmailConfirmation
 from podiumd_tests.clients.platform import openklant_client
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
@@ -388,6 +389,13 @@ OAB_ROLES = {
     "archivist": "Archivist",
 }
 # The klantcontactmedewerker of KISS and ITA (TA kcc-medewerker).
+# The test admin: ZAC beheerder, PABC administrator and admin of the Django apps' SSO.
+ADMIN = KeycloakUser(
+    "admin",
+    realm_roles=("Registreerders", "Behandelaar", "Coordinator", "Functioneel-beheerder", "beheerder_elk_domein"),
+    client_roles=(("pabc", "administrator"),),
+    groups=("beheerders-elk-domein",),
+)
 KCC = KeycloakUser(
     "kcc",
     realm_roles=("Klantcontactmedewerker",),
@@ -663,12 +671,7 @@ STEPS: tuple[Step, ...] = (
     # OAB logs them in locally, as in podiumd-minikube.
     *(django_user_step("openarchiefbeheer", key, (group,)) for key, group in OAB_ROLES.items()),
     KCC,
-    KeycloakUser(
-        "admin",
-        realm_roles=("Registreerders", "Behandelaar", "Coordinator", "Functioneel-beheerder", "beheerder_elk_domein"),
-        client_roles=(("pabc", "administrator"),),
-        groups=("beheerders-elk-domein",),
-    ),
+    ADMIN,
     OpenKlantActor("kcc"),
     *IDENTITIES,
     # Wiring W1: DigiD and eHerkenning through Keycloak's mock (TA seed-*-oidc-mock.sh, seed-of-digid-oidc.sh).
@@ -808,4 +811,6 @@ STEPS: tuple[Step, ...] = (
         context_params=openinwoner_openklant_params,
     ),
     OpenInwonerPartijen(),
+    # ZAC's ontvangstbevestiging of productaanvragen, where the profile allows it (draaiboek OF-002).
+    ZacEmailConfirmation(ADMIN),
 )

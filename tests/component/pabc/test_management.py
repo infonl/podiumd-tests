@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.bootstrap.steps import KeycloakUser
+from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import entries
 from podiumd_tests.pabc import decide
 from podiumd_tests.pabc import listed
@@ -31,7 +31,6 @@ if TYPE_CHECKING:
 pytestmark = [pytest.mark.component, pytest.mark.ui, pytest.mark.requires("pabc", "keycloak")]
 
 # Has PABC's administrator client role (bootstrap step keycloak-user-admin).
-ADMIN = KeycloakUser("admin")
 
 
 @pytest.fixture(name="pabc")

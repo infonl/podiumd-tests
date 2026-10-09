@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 import pytest
 
 from podiumd_tests.auth.keycloak_admin import for_environment
-from podiumd_tests.bootstrap.steps import KeycloakUser
+from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import section
 from podiumd_tests.pabc import login
 from podiumd_tests.responses import url_host
@@ -43,7 +43,6 @@ NO_PKCE_REQUIRED = (
     "ita",
     "kiss",
 )
-ADMIN = KeycloakUser("admin")
 
 
 @pytest.fixture(scope="module", name="keycloak_admin")

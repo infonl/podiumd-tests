@@ -90,6 +90,7 @@ class Sent:
     url: str
     headers: dict[str, str]
     timeout: object
+    body: object = None
 
 
 @pytest.fixture
@@ -103,7 +104,7 @@ def fake_http(monkeypatch, response_factory):
 
     def install(answers=None):
         def fake_send(_adapter, request, **kwargs):
-            sent.append(Sent(request.method, request.url, dict(request.headers), kwargs.get("timeout")))
+            sent.append(Sent(request.method, request.url, dict(request.headers), kwargs.get("timeout"), request.body))
             path = request.path_url.split("?")[0]
             table = answers or {}
             status, json_body = table.get(f"{request.method} {path}", table.get(path, (404, {"detail": "not found"})))

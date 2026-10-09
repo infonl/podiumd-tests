@@ -104,11 +104,15 @@ def make_partij_identificator(
 
 
 def make_digitaal_adres(
-    openklant: ApiClient, registry: ResourceRegistry, partij: JsonObject | None, adres: str
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    partij: JsonObject | None,
+    adres: str,
+    betrokkene: JsonObject | None = None,
 ) -> JsonObject:
-    """An e-mail address, of a partij or (partij None) of no one."""
+    """An e-mail address of a partij (its standard address), of a klantcontact's betrokkene, or of no one."""
     body: dict[str, object] = {
-        "verstrektDoorBetrokkene": None,
+        "verstrektDoorBetrokkene": ref(betrokkene) if betrokkene else None,
         "verstrektDoorPartij": ref(partij) if partij else None,
         "adres": adres,
         "soortDigitaalAdres": "email",
@@ -187,17 +191,27 @@ def make_internetaak(
     return _create(openklant, registry, "internetaken", body)
 
 
+# (codeObjecttype, codeRegister, codeSoortObjectId) of what an onderwerpobject points at.
+ZAAK = ("zaak", "openzaak", "zaak-uuid")
+FORMULIERINZENDING = ("formulierinzending", "Open Formulieren", "public_registration_reference")
+
+
 def make_onderwerpobject(
-    openklant: ApiClient, registry: ResourceRegistry, klantcontact: JsonObject, zaak_uuid: str
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    klantcontact: JsonObject,
+    object_id: str,
+    codes: tuple[str, str, str] = ZAAK,
 ) -> JsonObject:
-    """Links a klantcontact to an Open Zaak zaak, the way KISS records "contact about this zaak"."""
+    """Links a klantcontact to what it is about: a zaak (as KISS records it) or a form submission."""
+    objecttype, register, soort = codes
     body: dict[str, object] = {
         "klantcontact": ref(klantcontact),
         "onderwerpobjectidentificator": {
-            "objectId": zaak_uuid,
-            "codeObjecttype": "zaak",
-            "codeRegister": "openzaak",
-            "codeSoortObjectId": "zaak-uuid",
+            "objectId": object_id,
+            "codeObjecttype": objecttype,
+            "codeRegister": register,
+            "codeSoortObjectId": soort,
         },
     }
     return _create(openklant, registry, "onderwerpobjecten", body)

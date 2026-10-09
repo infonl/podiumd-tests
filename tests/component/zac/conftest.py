@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.bootstrap.steps import KeycloakUser
+from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.browser import redirect_login
 
 if TYPE_CHECKING:
@@ -17,8 +17,6 @@ if TYPE_CHECKING:
     from playwright.sync_api import Page
 
     from podiumd_tests.environment import Environment
-
-ADMIN = KeycloakUser("admin")
 
 
 @pytest.fixture(name="zac")
