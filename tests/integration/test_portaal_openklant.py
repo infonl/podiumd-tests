@@ -22,6 +22,7 @@ from podiumd_tests.browser import refuse_cookies
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.kcc import kcc_login
+from podiumd_tests.mailpit import forget_mails
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.openinwoner import set_account
 from podiumd_tests.openinwoner import solve_captcha
@@ -62,6 +63,12 @@ MIJN_VRAGEN = "/mijn-zaken/contactmomenten/"
 MANY_QUESTIONS = 26
 
 
+def clean_up_question(podiumd_env: Environment, openklant: ApiClient, registry: ResourceRegistry, vraag: str) -> None:
+    """Delete, at cleanup, the question's klantcontacten and the copy Open Inwoner mails to the contact address."""
+    clean_up_klantcontacten(openklant, registry, SUBJECT, vraag)
+    forget_mails(podiumd_env, registry, f'"{vraag}"')
+
+
 def question_in_open_klant(openklant: ApiClient, vraag: str) -> JsonObject:
     """The klantcontact Open Inwoner makes for the question, once it is there."""
     found = wait_until(
@@ -99,7 +106,7 @@ def test_question_shows_in_mijn_vragen(  # pylint: disable=too-many-arguments,to
     """A question asked in Mijn vragen becomes a klantcontact in Open Klant and is listed, unanswered (TA int-182)."""
     need_bootstrap(INWONER.name, "openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-openklant")
     vraag = registry.tagged("vraag")
-    clean_up_klantcontacten(openklant, registry, SUBJECT, vraag)
+    clean_up_question(podiumd_env, openklant, registry, vraag)
     card = ask_in_mijn_vragen(page, podiumd_env, vraag)
     expect(card).to_contain_text("Onbeantwoord")
 
@@ -146,7 +153,7 @@ def test_company_question_reaches_open_klant(  # pylint: disable=too-many-argume
     need_bootstrap(BEDRIJF.name, "openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-openklant")
     vestiging = BEDRIJF.attributes["vestigingsnummer"][0]
     vraag = registry.tagged("bedrijfsvraag")
-    clean_up_klantcontacten(openklant, registry, SUBJECT, vraag)
+    clean_up_question(podiumd_env, openklant, registry, vraag)
     portal_login(page, podiumd_env, "eherkenning", BEDRIJF, "/contactformulier/")
     form = page.locator("#contactmoment-form")
     form.locator('select[name="subject"]').select_option(label=SUBJECT)
@@ -169,7 +176,7 @@ def test_anonymous_question_reaches_open_klant(  # pylint: disable=too-many-argu
     need_bootstrap("openinwoner-cms-pages", "openinwoner-openklant")
     vraag = registry.tagged("anonieme-vraag")
     adres = f"{vraag}@example.invalid"
-    clean_up_klantcontacten(openklant, registry, SUBJECT, vraag)
+    clean_up_question(podiumd_env, openklant, registry, vraag)
     page.goto(podiumd_env.profile.urls["openinwoner"] + "/contactformulier/")
     refuse_cookies(page)
     form = page.locator("#contactmoment-form")
@@ -236,7 +243,7 @@ def test_question_answered_in_ita_shows_as_answered(  # pylint: disable=too-many
         "openinwoner-openklant",
     )
     vraag = registry.tagged("ita-vraag")
-    clean_up_klantcontacten(openklant, registry, SUBJECT, vraag)
+    clean_up_question(podiumd_env, openklant, registry, vraag)
     ask_in_mijn_vragen(page, podiumd_env, vraag)
     question = question_in_open_klant(openklant, vraag)
     taak = expanded(openklant, str(question["url"]), "leiddeTotInterneTaken")[0]

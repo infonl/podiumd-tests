@@ -159,6 +159,7 @@ FINDERS: tuple[Finder, ...] = (
     ),
     Finder("object", "objecten", "objecten-token", objecten_client, "objects", {}),
     Finder("mail", "mailpit", "", mailpit_client, "search", {"query": 'subject:"ptest-"'}, _message),
+    Finder("mail", "mailpit", "", mailpit_client, "search", {"query": 'to:"ptest-"'}, _message),
 )
 
 

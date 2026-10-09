@@ -18,6 +18,7 @@ from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.json_data import entries
 from podiumd_tests.kcc import kcc_login
+from podiumd_tests.mailpit import forget_mails
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import clean_up_logboek
@@ -147,6 +148,8 @@ def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(  # pylint: 
     )
     forward = ita.post(f"{urls['ita']}/api/internetaken/{taak['uuid']}/forward", json={soort.lower(): identificatie})
     expect_status(forward, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    # ITA mails the afdeling or groep about the forwarded contactverzoek.
+    forget_mails(podiumd_env, registry, f'to:"{data["email"]}"')
     assigned = entries(openklant.get(f"internetaken/{taak['uuid']}")["toegewezenAanActoren"])
     assert {str(a["uuid"]) for a in assigned} & {str(a["uuid"]) for a in openklant.list("actoren", actoren)}
 
