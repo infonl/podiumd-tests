@@ -29,9 +29,11 @@ def run(params):
     if params["action"] == "status":
         backends = FormRegistrationBackend.objects.filter(form__in=forms.filter(active=True))
         logins = FormAuthenticationBackend.objects.filter(form__in=forms, backend__in=params["auth_backends"])
+        definition = FormDefinition.objects.filter(slug=f"{slug}-step").first()
         # A recreated API group has a new pk; options holding the old one are stale.
         present = backends.filter(backend=registration["backend"], options=options).exists()
-        return {"present": present and logins.count() == len(params["auth_backends"])}
+        current = definition is not None and definition.configuration.get("components") == params["components"]
+        return {"present": present and current and logins.count() == len(params["auth_backends"])}
 
     # Submissions protect their form.
     Submission.objects.filter(form__in=forms).delete()

@@ -8,7 +8,6 @@ import pytest
 
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.mailpit import received
-from podiumd_tests.openformulieren import delete_submission
 from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import submit
 
@@ -56,9 +55,7 @@ def test_registered_submission_is_removed_after_the_limit(  # pylint: disable=to
         successful_submissions_removal_limit=LIMIT_DAYS,
         successful_submissions_removal_method="delete_permanently",
     )
-    status = submit(http, urls["openformulieren"], slug, {"omschrijving": slug}, timeout=TIMEOUT)
-    submission = str(status["submission"])
-    registry.add(f"submission {submission}", lambda: delete_submission(podiumd_env, submission))
+    submission = str(submit(podiumd_env, http, registry, slug, {"omschrijving": slug}, timeout=TIMEOUT)["submission"])
     assert slug in received(mailpit, registry, timeout=TIMEOUT, to=address), "not registered"
     assert kept_after_removal(podiumd_env, submission, 0), "removed within the limit"
     assert not kept_after_removal(podiumd_env, submission, LIMIT_DAYS + 1), "kept after the limit"

@@ -35,7 +35,9 @@ def delete_message(mailpit: ApiClient, message_id: str) -> None:
 def received(
     mailpit: ApiClient, registry: ResourceRegistry, *, timeout: float, to: str, subject: str | None = None
 ) -> str:
-    """The HTML of the first mail to the address (wait_for_mail); cleanup deletes the mail."""
+    """The HTML of the first mail to the address (wait_for_mail); cleanup deletes every mail to the address."""
     message = wait_for_mail(mailpit, timeout=timeout, to=to, subject=subject)
-    registry.add(f"mail to {to}", lambda: delete_message(mailpit, str(message["ID"])))
+    registry.add(
+        f"mail to {to}", lambda: mailpit.request("DELETE", "search", HTTPStatus.OK, params={"query": f'to:"{to}"'})
+    )
     return str(mailpit.get(f"message/{message['ID']}").get("HTML"))

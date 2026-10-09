@@ -448,6 +448,29 @@ OI_BEGELEIDER = django_user_step(
     staff=False,
     fields={"contact_type": "begeleider", "first_name": "PodiumD", "last_name": "Begeleider"},
 )
+# The test form's fields. The name makes the initiator of an anonymous submission: without it
+# Open Formulieren sends Open Zaak an initiator rol without betrokkeneIdentificatie, which it refuses.
+NAW = [
+    {
+        "type": "textfield",
+        "key": "achternaam",
+        "label": "Achternaam",
+        "validate": {"required": True},
+        "registration": {"attribute": "initiator_geslachtsnaam"},
+    },
+    {
+        "type": "textfield",
+        "key": "voornamen",
+        "label": "Voornamen",
+        "registration": {"attribute": "initiator_voornamen"},
+    },
+]
+TEST_FORM_COMPONENTS = [
+    {"type": "textfield", "key": "klacht_omschrijving", "label": "Omschrijving", "validate": {"required": True}},
+    *NAW,
+]
+# The NAW values the tests fill in.
+NAW_DATA = {"achternaam": "Testpersoon", "voornamen": "PodiumD"}
 # Open Formulieren's registration of a test form as a zaak of the test zaaktype (step openformulieren-zgw-group).
 ZGW_REGISTRATION = {
     "backend": "zgw-create-zaak",
@@ -604,14 +627,7 @@ STEPS: tuple[Step, ...] = (
         None,
         {
             "slug": TEST_FORM,
-            "components": [
-                {
-                    "type": "textfield",
-                    "key": "klacht_omschrijving",
-                    "label": "Omschrijving",
-                    "validate": {"required": True},
-                }
-            ],
+            "components": TEST_FORM_COMPONENTS,
             "registration": ZGW_REGISTRATION,
             # Logins through Keycloak's mock (step openformulieren-oidc-mock).
             "auth_backends": ["digid_oidc", "eherkenning_oidc"],

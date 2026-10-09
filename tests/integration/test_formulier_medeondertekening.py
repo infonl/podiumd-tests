@@ -19,7 +19,6 @@ from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.browser import keycloak_login
 from podiumd_tests.browser import refuse_cookies
 from podiumd_tests.mailpit import received
-from podiumd_tests.openformulieren import delete_submission
 from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import submit
 
@@ -68,12 +67,8 @@ def test_cosigned_form_is_registered(  # pylint: disable=too-many-arguments,too-
     registration = {"backend": "email", "options": {"to_emails": [registratie]}}
     make_form(podiumd_env, registry, slug, components, registration, ("digid_oidc",))
     omschrijving = registry.tagged("ondertekend")
-    status = submit(
-        http, urls["openformulieren"], slug, {"omschrijving": omschrijving, "cosign": cosigner}, timeout=TIMEOUT
-    )
-    registry.add(
-        f"submission {status['submission']}", lambda: delete_submission(podiumd_env, str(status["submission"]))
-    )
+    data = {"omschrijving": omschrijving, "cosign": cosigner}
+    status = submit(podiumd_env, http, registry, slug, data, timeout=TIMEOUT, registers=False)
 
     # The submitter can let the co-signer sign right away, on the confirmation page.
     assert "Nu mede-ondertekenen" in str(status.get("confirmationPageContent"))

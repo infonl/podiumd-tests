@@ -10,6 +10,7 @@ from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
+from podiumd_tests.seed.openzaak import delete_documents_of
 from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.wait import wait_until
 
@@ -39,34 +40,68 @@ def start_submission(http: requests.Session, base_url: str, slug: str) -> tuple[
     return submission, headers
 
 
-def submit(http: requests.Session, base_url: str, slug: str, data: dict[str, object], *, timeout: float) -> JsonObject:
+def submit(  # pylint: disable=too-many-arguments  # one flow
+    env: Environment,
+    http: requests.Session,
+    registry: ResourceRegistry,
+    slug: str,
+    data: Mapping[str, object],
+    *,
+    timeout: float,
+    registers: bool = True,
+) -> JsonObject:
     """Fill the single step of an anonymous form, complete it and return the final submission status.
 
     The status has `publicReference`: the identificatie of the zaak a ZGW registration created,
-    and `submission`: the submission's uuid, for delete_submission.
+    and `submission`: the submission's uuid. Cleanup deletes the submission. With registers,
+    also wait_for_registration; a form waiting for a co-signer does not register yet.
     """
+    base_url = env.profile.urls["openformulieren"]
     submission, headers = start_submission(http, base_url, slug)
+    registry.add(f"submission {submission['id']}", lambda: delete_submission(env, str(submission["id"])))
     step = entries(submission["steps"])[0]
-    expect_status(http.put(str(step["url"]), json={"data": data}, headers=headers), HTTPStatus.CREATED, HTTPStatus.OK)
+    expect_status(
+        http.put(str(step["url"]), json={"data": dict(data)}, headers=headers), HTTPStatus.CREATED, HTTPStatus.OK
+    )
     complete = _json(
         http.post(f"{submission['url']}/_complete", json={"privacyPolicyAccepted": True}, headers=headers),
         HTTPStatus.OK,
     )
-    status = _registered(http, str(complete["statusUrl"]), str(submission["id"]), timeout=timeout)
+    status = _processed(http, str(complete["statusUrl"]), str(submission["id"]), timeout=timeout)
+    if registers:
+        wait_for_registration(env, str(submission["id"]), timeout=timeout)
     return {**status, "submission": submission["id"]}
 
 
-def _registered(http: requests.Session, status_url: str, submission: str, *, timeout: float) -> JsonObject:
-    """The submission's final status once registration succeeded; AssertionError otherwise."""
+def wait_for_registration(env: Environment, submission: str, *, timeout: float) -> None:
+    """Wait for Open Formulieren's own registration status of the submission; AssertionError when it failed.
+
+    The public status reports success before the registration has finished, also when it fails.
+    """
+    deployment = env.deployment_for("openformulieren")
+    params: dict[str, object] = {"uuid": submission, "action": "registration"}
+
+    def finished() -> dict[str, str] | None:
+        result = cast("dict[str, str]", run_snippet(env.kube, deployment, "openformulieren_submission", params))
+        return result if result["status"] in {"success", "failed"} else None
+
+    result = wait_until(finished, timeout=timeout, description=f"registration of submission {submission}")
+    if result["status"] == "failed":
+        msg = f"registration of submission {submission} failed: {result['error']}"
+        raise AssertionError(msg)
+
+
+def _processed(http: requests.Session, status_url: str, submission: str, *, timeout: float) -> JsonObject:
+    """The submission's public status once Open Formulieren processed it; AssertionError when that failed."""
 
     def finished() -> JsonObject | None:
         status = _json(http.get(status_url), HTTPStatus.OK)
-        if status.get("status") == "failed":
-            msg = f"submission {submission} failed: {status.get('errorMessage')}"
-            raise AssertionError(msg)
-        return status if status.get("status") == "done" else None
+        return status if status.get("status") in {"done", "failed"} else None
 
     status = wait_until(finished, timeout=timeout, description=f"submission {submission} done")
+    if status.get("status") == "failed":
+        msg = f"submission {submission} failed: {status.get('errorMessage')}"
+        raise AssertionError(msg)
     # "done" also covers a failed registration, which leaves publicReference empty.
     if status.get("result") != "success" or not status.get("publicReference"):
         msg = f"submission {submission}: result {status.get('result')!r}, {status.get('errorMessage')!r}"
@@ -91,6 +126,8 @@ def registered_zaak(
             delete_submission(env, submission)
         finally:
             for zaak in zaken:
+                # Open Zaak keeps a deleted zaak's documents: the form's PDF and attachments.
+                delete_documents_of(openzaak, str(zaak["url"]))
                 delete_zaak(openzaak, str(zaak["url"]))
 
     registry.add(f"submission {submission} and its zaak", delete)
@@ -128,7 +165,8 @@ def make_form(  # pylint: disable=too-many-arguments,too-many-positional-argumen
 
 def delete_submission(env: Environment, uuid: str) -> None:
     """Delete a submission, so its public reference cannot block a later registration."""
-    run_snippet(env.kube, env.deployment_for("openformulieren"), "openformulieren_submission", {"uuid": uuid})
+    params: dict[str, object] = {"uuid": uuid, "action": "delete"}
+    run_snippet(env.kube, env.deployment_for("openformulieren"), "openformulieren_submission", params)
 
 
 def _json(response: requests.Response, *expected: int) -> JsonObject:

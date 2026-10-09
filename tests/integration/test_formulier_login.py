@@ -12,6 +12,7 @@ import pytest
 
 from podiumd_tests.bootstrap.names import TEST_FORM
 from podiumd_tests.bootstrap.steps import IDENTITIES
+from podiumd_tests.bootstrap.steps import NAW_DATA
 from podiumd_tests.browser import browser_session
 from podiumd_tests.browser import keycloak_login
 from podiumd_tests.json_data import entries
@@ -63,10 +64,11 @@ def submit_after_login(  # pylint: disable=too-many-arguments,too-many-positiona
     # which loses the submission the API calls below put in it (403).
     page.goto("about:blank")
     status = submit(
+        podiumd_env,
         browser_session(page, podiumd_env),
-        base,
+        registry,
         TEST_FORM,
-        {"klacht_omschrijving": registry.tagged(f"{method}-klacht")},
+        {"klacht_omschrijving": registry.tagged(f"{method}-klacht"), **NAW_DATA},
         timeout=REGISTRATION_TIMEOUT,
     )
     zaak = str(registered_zaak(podiumd_env, openzaak, registry, status)["url"])
