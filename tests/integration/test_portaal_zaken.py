@@ -209,7 +209,8 @@ def test_zaak_shows_its_current_status(  # pylint: disable=too-many-arguments,to
     current = parts.statustypen[1]
     make_status(openzaak, zaak, str(current["url"]))
     open_status_page(page, podiumd_env, zaak, who)
-    expect(page.locator("main")).to_contain_text(str(current["omschrijving"]))
+    # The status page loads the zaak's data after the page itself, like the list.
+    expect(page.locator("main")).to_contain_text(str(current["omschrijving"]), timeout=LIST_TIMEOUT_MS)
 
 
 def test_zaak_document_can_be_downloaded(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
