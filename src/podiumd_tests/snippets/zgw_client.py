@@ -24,16 +24,8 @@ def run(params):
         present = applicaties.exists() and secrets.exists()
         if catalogus_params and not _catalogi(catalogus_params).exists():
             present = False
-        zaaktypen_params = params.get("zaaktypen")
-        if zaaktypen_params:
-            # A right on another Open Zaak URL (e.g. http before the switch to https) is stale.
-            prefix = zaaktypen_params["base_url"].rstrip("/") + "/"
-            mine = Autorisatie.objects.filter(applicatie__in=applicaties, component="zrc")
-            if not mine.filter(zaaktype__startswith=prefix).exists():
-                present = False
-            documents = Autorisatie.objects.filter(applicatie__in=applicaties, component="drc")
-            if zaaktypen_params.get("document_scopes") and not documents.exists():
-                present = False
+        if params.get("zaaktypen") and not _zaaktype_rights_present(applicaties, params["zaaktypen"]):
+            present = False
         return {"present": bool(present)}
     if params["action"] == "remove":
         removed = applicaties.delete()[0] + secrets.delete()[0]
@@ -50,6 +42,17 @@ def run(params):
     notes = _zaaktype_autorisaties(applicatie, params["zaaktypen"]) if params.get("zaaktypen") else []
     JWTSecret.objects.update_or_create(identifier=client_id, defaults={"secret": params["secret"]})
     return {"present": True, "notes": notes}
+
+
+def _zaaktype_rights_present(applicaties, zaaktypen_params):
+    from vng_api_common.authorizations.models import Autorisatie
+
+    rights = Autorisatie.objects.filter(applicatie__in=applicaties)
+    # A right on another Open Zaak URL (e.g. http before the switch to https) is stale.
+    prefix = zaaktypen_params["base_url"].rstrip("/") + "/"
+    if not rights.filter(component="zrc", zaaktype__startswith=prefix).exists():
+        return False
+    return not zaaktypen_params.get("document_scopes") or rights.filter(component="drc").exists()
 
 
 def _zaaktype_autorisaties(applicatie, zaaktypen_params):
