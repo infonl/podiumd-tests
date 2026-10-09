@@ -12,6 +12,7 @@ from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.bootstrap.steps import OI_BEGELEIDER
 from podiumd_tests.browser import keycloak_login
+from podiumd_tests.browser import refuse_cookies
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.responses import url_host
 
@@ -67,13 +68,6 @@ def reset_begeleider(env: Environment) -> None:
     """Delete the test begeleider's plans and drop its contacts (snippet oi_begeleider_reset)."""
     params = {"email": OI_BEGELEIDER.params["email"]}
     run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_begeleider_reset", params)
-
-
-def refuse_cookies(page: Page) -> None:
-    """Close the cookie banner, which otherwise lies over the page's buttons."""
-    banner = page.get_by_role("button", name="Alles weigeren")
-    if banner.count() and banner.first.is_visible():
-        banner.first.click()
 
 
 def solve_captcha(page: Page) -> None:

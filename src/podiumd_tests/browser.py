@@ -70,3 +70,10 @@ def browser_session(page: Page, env: Environment) -> requests.Session:
         name, value, domain = str(cookie.get("name")), str(cookie.get("value")), cookie.get("domain") or ""
         http.cookies.set(name, value, domain=domain)  # pyright: ignore[reportUnknownMemberType]  # untyped **kwargs in the stubs
     return http
+
+
+def refuse_cookies(page: Page) -> None:
+    """Close the cookie banner of Open Inwoner or Open Formulieren, which otherwise lies over the page's buttons."""
+    banner = page.get_by_role("button", name="Alles weigeren")
+    if banner.count() and banner.first.is_visible():
+        banner.first.click()

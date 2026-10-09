@@ -13,8 +13,7 @@ import pytest
 
 from podiumd_tests.bootstrap.names import TEST_FORM
 from podiumd_tests.json_data import entries
-from podiumd_tests.mailpit import delete_message
-from podiumd_tests.mailpit import wait_for_mail
+from podiumd_tests.mailpit import received
 from podiumd_tests.openformulieren import delete_submission
 from podiumd_tests.openformulieren import start_submission
 from podiumd_tests.responses import expect_status
@@ -51,7 +50,5 @@ def test_paused_submission_mails_its_resume_link(  # pylint: disable=too-many-ar
     address = f"{registry.tagged('pauze')}@example.invalid"
     suspend = http.post(f"{submission['url']}/_suspend", json={"email": address}, headers=headers)
     expect_status(suspend, HTTPStatus.CREATED)
-    message = wait_for_mail(mailpit, timeout=60, to=address)
-    registry.add(f"mail to {address}", lambda: delete_message(mailpit, str(message["ID"])))
-    html = str(mailpit.get(f"message/{message['ID']}").get("HTML"))
+    html = received(mailpit, registry, timeout=60, to=address)
     assert url_host(urls["openformulieren"]) in html, "no link to Open Formulieren in the mail"

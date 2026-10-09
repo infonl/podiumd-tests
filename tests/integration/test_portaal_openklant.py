@@ -18,11 +18,11 @@ from playwright.sync_api import expect
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.bootstrap.steps import KCC
+from podiumd_tests.browser import refuse_cookies
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.openinwoner import portal_login
-from podiumd_tests.openinwoner import refuse_cookies
 from podiumd_tests.openinwoner import set_account
 from podiumd_tests.openinwoner import solve_captcha
 from podiumd_tests.responses import expect_status

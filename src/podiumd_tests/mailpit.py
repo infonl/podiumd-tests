@@ -11,6 +11,7 @@ from podiumd_tests.wait import wait_until
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.registry import ResourceRegistry
 
 
 def wait_for_mail(
@@ -29,3 +30,12 @@ def wait_for_mail(
 def delete_message(mailpit: ApiClient, message_id: str) -> None:
     """Delete one message."""
     mailpit.request("DELETE", "messages", HTTPStatus.OK, json={"IDs": [message_id]})
+
+
+def received(
+    mailpit: ApiClient, registry: ResourceRegistry, *, timeout: float, to: str, subject: str | None = None
+) -> str:
+    """The HTML of the first mail to the address (wait_for_mail); cleanup deletes the mail."""
+    message = wait_for_mail(mailpit, timeout=timeout, to=to, subject=subject)
+    registry.add(f"mail to {to}", lambda: delete_message(mailpit, str(message["ID"])))
+    return str(mailpit.get(f"message/{message['ID']}").get("HTML"))

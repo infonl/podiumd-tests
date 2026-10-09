@@ -16,7 +16,7 @@ from playwright.sync_api import expect
 from podiumd_tests.accessibility import describe_violation
 from podiumd_tests.accessibility import wcag_violations
 from podiumd_tests.bootstrap.names import TEST_FORM
-from podiumd_tests.openinwoner import refuse_cookies
+from podiumd_tests.browser import refuse_cookies
 from podiumd_tests.pytest_plugin import requiring
 
 if TYPE_CHECKING:

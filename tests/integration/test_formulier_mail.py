@@ -6,8 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.mailpit import delete_message
-from podiumd_tests.mailpit import wait_for_mail
+from podiumd_tests.mailpit import received
 from podiumd_tests.openformulieren import delete_submission
 from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import submit
@@ -17,7 +16,6 @@ if TYPE_CHECKING:
 
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
-    from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [pytest.mark.integration, pytest.mark.requires("openformulieren", "mailpit", "cluster")]
@@ -25,13 +23,6 @@ pytestmark = [pytest.mark.integration, pytest.mark.requires("openformulieren", "
 # Open Formulieren registers and mails in Celery tasks after _complete.
 TIMEOUT = 90
 OMSCHRIJVING = {"type": "textfield", "key": "omschrijving", "label": "Omschrijving", "validate": {"required": True}}
-
-
-def received(mailpit: ApiClient, registry: ResourceRegistry, address: str) -> str:
-    """The HTML of the mail to the address; cleanup deletes it."""
-    message: JsonObject = wait_for_mail(mailpit, timeout=TIMEOUT, to=address)
-    registry.add(f"mail to {address}", lambda: delete_message(mailpit, str(message["ID"])))
-    return str(mailpit.get(f"message/{message['ID']}").get("HTML"))
 
 
 @pytest.mark.tc("OF-009", "OF-041")
@@ -51,7 +42,7 @@ def test_email_registration_mails_the_submission(  # pylint: disable=too-many-ar
     registry.add(
         f"submission {status['submission']}", lambda: delete_submission(podiumd_env, str(status["submission"]))
     )
-    assert omschrijving in received(mailpit, registry, address)
+    assert omschrijving in received(mailpit, registry, timeout=TIMEOUT, to=address)
 
 
 @pytest.mark.tc("OF-040")
@@ -77,4 +68,4 @@ def test_confirmation_mail_summarises_the_submission(  # pylint: disable=too-man
     registry.add(
         f"submission {status['submission']}", lambda: delete_submission(podiumd_env, str(status["submission"]))
     )
-    assert omschrijving in received(mailpit, registry, filler)
+    assert omschrijving in received(mailpit, registry, timeout=TIMEOUT, to=filler)
