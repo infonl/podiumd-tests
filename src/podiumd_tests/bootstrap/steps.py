@@ -448,6 +448,18 @@ OI_BEGELEIDER = django_user_step(
     staff=False,
     fields={"contact_type": "begeleider", "first_name": "PodiumD", "last_name": "Begeleider"},
 )
+# Open Formulieren's registration of a test form as a zaak of the test zaaktype (step openformulieren-zgw-group).
+ZGW_REGISTRATION = {
+    "backend": "zgw-create-zaak",
+    "api_group": PREFIX,
+    "options": {
+        "catalogue": {"domain": TEST_CATALOGUS_DOMEIN, "rsin": TEST_CATALOGUS_RSIN},
+        "case_type_identification": TEST_ZAAKTYPE,
+        "document_type_description": TEST_IOT,
+        "organisatie_rsin": TEST_CATALOGUS_RSIN,
+        "zaak_vertrouwelijkheidaanduiding": "openbaar",
+    },
+}
 # Open Formulieren's DigiD level of assurance when the mock sends none.
 LOA_DEFAULT = "urn:oasis:names:tc:SAML:2.0:ac:classes:MobileTwoFactorContract"
 # Where Open Inwoner finds the eHerkenning claims (mappers in oidc_mock.SCOPES).
@@ -577,21 +589,34 @@ STEPS: tuple[Step, ...] = (
         },
     ),
     SnippetStep(
+        "openformulieren-zgw-group",
+        ("openformulieren", "openzaak"),
+        "openformulieren_zgw_group",
+        None,
+        {"prefix": PREFIX, "client_id": ZGW_CLIENT_ID, "domein": TEST_CATALOGUS_DOMEIN, "rsin": TEST_CATALOGUS_RSIN},
+        wiring=True,
+        context_params=openformulieren_params,
+    ),
+    SnippetStep(
         "openformulieren-form",
         ("openformulieren", "openzaak"),
         "openformulieren_form",
         None,
         {
-            "prefix": PREFIX,
-            "form_slug": TEST_FORM,
-            "client_id": ZGW_CLIENT_ID,
-            "domein": TEST_CATALOGUS_DOMEIN,
-            "rsin": TEST_CATALOGUS_RSIN,
-            "zaaktype": TEST_ZAAKTYPE,
-            "informatieobjecttype": TEST_IOT,
+            "slug": TEST_FORM,
+            "components": [
+                {
+                    "type": "textfield",
+                    "key": "klacht_omschrijving",
+                    "label": "Omschrijving",
+                    "validate": {"required": True},
+                }
+            ],
+            "registration": ZGW_REGISTRATION,
+            # Logins through Keycloak's mock (step openformulieren-oidc-mock).
+            "auth_backends": ["digid_oidc", "eherkenning_oidc"],
+            "settings": {},
         },
-        wiring=True,
-        context_params=openformulieren_params,
     ),
     SnippetStep(
         "opennotificaties-kanalen",
@@ -667,8 +692,6 @@ STEPS: tuple[Step, ...] = (
                     },
                 },
             },
-            "form": TEST_FORM,
-            "form_backends": ["digid_oidc", "eherkenning_oidc"],
         },
         record=True,
         wiring=True,
