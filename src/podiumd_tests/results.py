@@ -73,9 +73,12 @@ def new_run_id(now: datetime | None = None) -> str:
 
 
 def run_started(run_id: str) -> datetime | None:
-    """The start minute a run id carries; None for a legacy id without one."""
+    """The start minute a run id carries; None for a legacy id or one whose digits are no date."""
     found = RUN_ID.fullmatch(run_id)
-    return datetime.strptime(found.group(1), "%y%m%d%H%M").replace(tzinfo=UTC) if found else None
+    try:
+        return datetime.strptime(found.group(1), "%y%m%d%H%M").replace(tzinfo=UTC) if found else None
+    except ValueError:
+        return None
 
 
 def run_tag(run_id: str) -> str:

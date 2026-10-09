@@ -19,6 +19,7 @@ def test_run_id_carries_its_start_minute():
     assert run_id.startswith("2610071230") and len(run_id) == 14
     assert run_started(run_id) == NOW
     assert run_started("a1b2c3") is None
+    assert run_started("260000000000aa") is None  # month 00
 
 
 def test_stale_by_the_tag_anywhere_in_the_object():
