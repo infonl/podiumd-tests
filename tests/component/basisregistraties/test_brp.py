@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.basisregistraties import BRP_PERSONEN
+from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import brp_personen
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
@@ -25,7 +26,6 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("api-proxy")]
 
-EREBOS = "999990019"
 KIERKEGAARD = "999990020"
 NAAM = ["burgerservicenummer", "naam.voornamen", "naam.geslachtsnaam"]
 

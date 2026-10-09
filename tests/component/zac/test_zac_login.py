@@ -31,3 +31,15 @@ def test_login_shows_the_dashboard(
     # The navigation only renders once the SPA has loaded the user's rights.
     expect(page.get_by_role("button", name="Dashboard", exact=True)).to_be_visible()
     expect(page.get_by_role("button", name="Menu voor zaken", exact=True)).to_be_visible()
+
+
+@pytest.mark.tc("ZAC-003")
+def test_logout_ends_the_session(
+    page: Page, podiumd_env: Environment, urls: dict[str, str], need_bootstrap: Callable[..., None]
+) -> None:
+    """Uitloggen in the account menu ends the session: the browser ends on Keycloak's login form."""
+    need_bootstrap(ADMIN.name)
+    redirect_login(page, podiumd_env, urls["zac"], ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
+    page.get_by_role("button", name="Gebruikers profiel").click()
+    page.get_by_role("menuitem", name="Uitloggen").click()
+    expect(page.locator("#kc-form-login")).to_be_visible()

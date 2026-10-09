@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from typing import TYPE_CHECKING
+from typing import cast
 
 from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.json_data import entries
@@ -39,3 +40,23 @@ def confirmation_on(http: requests.Session, zac_url: str, identificatie: str) ->
     """ZAC sends its ontvangstbevestiging for productaanvragen of every version of the zaaktype."""
     found = zaakafhandelparameters(http, zac_url, identificatie)
     return bool(found) and all(confirmation_sent(section(p, "automaticEmailConfirmation")) for p in found)
+
+
+def create_zaak(http: requests.Session, zac_url: str, parameters: JsonObject, **fields: object) -> JsonObject:
+    """A zaak started in ZAC, of the zaaktype of these zaakafhandelparameters, in their default group."""
+    groep = {"id": parameters["defaultGroepId"], "naam": str(parameters["defaultGroepId"])}
+    body = {"zaak": {"zaaktype": parameters["zaaktype"], "groep": groep, **fields}}
+    return cast("JsonObject", expect_status(http.post(f"{zac_url}/rest/zaken/zaak", json=body), HTTPStatus.OK).json())
+
+
+def read_zaak(http: requests.Session, zac_url: str, uuid: str) -> JsonObject:
+    """ZAC's view of a zaak."""
+    return cast("JsonObject", expect_status(http.get(f"{zac_url}/rest/zaken/zaak/{uuid}"), HTTPStatus.OK).json())
+
+
+def person_key(http: requests.Session, zac_url: str, bsn: str) -> str:
+    """ZAC's temporaryPersonId for a BSN, from its person lookup; ZAC's API takes it instead of the BSN."""
+    found = cast(
+        "JsonObject", expect_status(http.put(f"{zac_url}/rest/klanten/personen", json={"bsn": bsn}), 200).json()
+    )
+    return str(entries(found["resultaten"])[0]["temporaryPersonId"])

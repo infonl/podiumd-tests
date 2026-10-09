@@ -13,6 +13,7 @@ from typing import cast
 
 from podiumd_tests.auth.keycloak_admin import for_environment
 from podiumd_tests.auth.keycloak_admin import user_email
+from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.bootstrap.names import CATALOGI_SCOPES
 from podiumd_tests.bootstrap.names import ITA_OBJECTTYPES
 from podiumd_tests.bootstrap.names import KANALEN
@@ -406,7 +407,7 @@ KCC = KeycloakUser(
 # Test identities for DigiD and eHerkenning logins (TA testinwoner, testinwoner2, testbedrijf):
 # the Keycloak attributes become the bsn and eHerkenning claims of the mock.
 IDENTITIES = (
-    KeycloakUser("inwoner", attributes={"bsn": ["999990019"]}),
+    KeycloakUser("inwoner", attributes={"bsn": [EREBOS]}),
     # Not TA's 999990038: it fails the eleven-test, and Open Klant refuses it.
     KeycloakUser("inwoner2", attributes={"bsn": ["999993653"]}),
     KeycloakUser("bedrijf", attributes={"kvk": ["68750110"], "vestigingsnummer": ["000037178601"]}),

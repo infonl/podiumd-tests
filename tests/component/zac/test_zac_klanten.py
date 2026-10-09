@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
 from podiumd_tests.responses import expect_status
 
@@ -18,9 +19,7 @@ if TYPE_CHECKING:
     import requests
 
 
-pytestmark = [pytest.mark.component, pytest.mark.ui, pytest.mark.requires("zac", "keycloak")]
-
-EREBOS = "999990019"
+pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "keycloak")]
 
 
 def test_person_lookup(zac: requests.Session, urls: dict[str, str]) -> None:
