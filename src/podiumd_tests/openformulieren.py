@@ -14,6 +14,9 @@ from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from collections.abc import Sequence
+
     import requests
 
     from podiumd_tests.clients.api import ApiClient
@@ -95,6 +98,32 @@ def registered_zaak(
         msg = f"submission {submission}: {len(zaken)} zaken with identificatie {status['publicReference']}"
         raise AssertionError(msg)
     return zaken[0]
+
+
+def make_form(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # mirrors the snippet's parameters
+    env: Environment,
+    registry: ResourceRegistry,
+    slug: str,
+    components: Sequence[Mapping[str, object]],
+    registration: Mapping[str, object],
+    auth_backends: tuple[str, ...] = (),
+    **settings: object,
+) -> None:
+    """A one-step test form (snippet openformulieren_form) that cleanup deletes with its submissions."""
+    deployment = env.deployment_for("openformulieren")
+    params: dict[str, object] = {
+        "slug": slug,
+        "components": [dict(c) for c in components],
+        "registration": dict(registration),
+        "auth_backends": list(auth_backends),
+    }
+    run_snippet(env.kube, deployment, "openformulieren_form", {**params, "settings": settings, "action": "apply"})
+    registry.add(
+        f"form {slug}",
+        lambda: run_snippet(
+            env.kube, deployment, "openformulieren_form", {**params, "settings": {}, "action": "remove"}
+        ),
+    )
 
 
 def delete_submission(env: Environment, uuid: str) -> None:
