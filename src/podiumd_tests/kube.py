@@ -105,6 +105,11 @@ class Kube:
         """Raise KubeError unless the API server answers /readyz."""
         self.run("get", "--raw", "/readyz", f"--request-timeout={timeout}s", timeout=timeout + 5)
 
+    def logs(self, deployment: str, *, since: str, container: str | None = None) -> str:
+        """The log lines a deployment's pod wrote in the last `since` (e.g. "5m")."""
+        args = ["logs", f"deployment/{deployment}", f"--since={since}"]
+        return self.run(*args, *([f"--container={container}"] if container else []))
+
     def exec(self, deployment: str, *argv: str, timeout: int = DEFAULT_TIMEOUT) -> str:
         """Run a command in the first pod of a deployment; return its stdout."""
         return self.run("exec", f"deploy/{deployment}", "--", *argv, timeout=timeout)

@@ -275,3 +275,17 @@ def delete_partij(openklant: ApiClient, partij: str) -> None:
     for identificator in sorted(identificatoren, key=lambda i: i.get("subIdentificatorVan") is None):
         openklant.delete(str(identificator["url"]))
     openklant.delete(partij)
+
+
+def make_submission_contact(openklant: ApiClient, registry: ResourceRegistry, kenmerk: str, adres: str) -> None:
+    """The e-mail address a form's submitter left, as Open Formulieren registers it in Open Klant.
+
+    A klantcontact about the submission (onderwerpobject with its kenmerk) with a betrokkene and the
+    address; ZAC finds it for the productaanvraag with that kenmerk. Cleanup deletes the whole tree,
+    also the onderwerpobject ZAC adds for the zaak.
+    """
+    klantcontact = make_klantcontact(openklant, registry, onderwerp=kenmerk)
+    betrokkene = make_betrokkene(openklant, registry, klantcontact, None)
+    make_digitaal_adres(openklant, registry, None, adres, betrokkene)
+    make_onderwerpobject(openklant, registry, klantcontact, kenmerk, FORMULIERINZENDING)
+    clean_up_klantcontacten(openklant, registry, kenmerk)

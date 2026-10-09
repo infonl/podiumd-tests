@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 from http import HTTPStatus
-from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
-if TYPE_CHECKING:
-    import requests
+import requests
 
 REFUSED = frozenset({HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN})
 # Characters of the body an unexpected status reports: enough for an API error's detail.
@@ -42,6 +40,14 @@ def is_server_error(response: requests.Response) -> bool:
 def get_root(session: requests.Session, base_url: str, timeout: float | tuple[float, float]) -> requests.Response:
     """GET the root of a component, following redirects (R14: only the final answer counts)."""
     return session.get(base_url + "/", timeout=timeout)
+
+
+def root_answers(session: requests.Session, base_url: str, timeout: float) -> bool:
+    """Whether the component's root answers without a server error (a refused connection counts as no)."""
+    try:
+        return not is_server_error(get_root(session, base_url, timeout))
+    except requests.RequestException:
+        return False
 
 
 def url_host(url: str) -> str:

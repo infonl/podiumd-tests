@@ -15,16 +15,23 @@ from podiumd_tests.json_data import JsonObject
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import metadata_name
+from podiumd_tests.responses import root_answers
+from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from collections.abc import Generator
     from collections.abc import Sequence
 
+    import requests
+
+    from podiumd_tests.environment import Environment
     from podiumd_tests.kube import Kube
 
 type Item = JsonObject
 
 GOOD_POD_PHASES = frozenset({"Running", "Succeeded"})
+# Seconds a stopped or restarted component's root gets to answer.
+ROOT_TIMEOUT = 10.0
 
 
 def _owner_kinds(item: Item) -> set[str]:
@@ -118,3 +125,16 @@ def failed_jobs(jobs: Sequence[Item]) -> list[str]:
         if current is None or created > str(section(current, "metadata").get("creationTimestamp", "")):
             latest[cronjob] = job
     return sorted(metadata_name(j) for j in [*standalone, *latest.values()] if _job_failed(j))
+
+
+@contextmanager
+def component_down(env: Environment, http: requests.Session, component: str) -> Generator[None]:
+    """Run the block with the component's main deployment stopped and its root failing.
+
+    Afterwards the deployment is restored and the block returns once the root answers again.
+    """
+    url = env.profile.urls[component]
+    with scaled(env.kube, env.deployment_for(component), 0):
+        wait_until(lambda: not root_answers(http, url, ROOT_TIMEOUT), timeout=120, description=f"{component} stopped")
+        yield
+    wait_until(lambda: root_answers(http, url, ROOT_TIMEOUT), timeout=300, description=f"{component} answers again")

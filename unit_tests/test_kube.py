@@ -103,3 +103,9 @@ def test_exec_errors_prefer_the_exception_over_later_log_lines(fake_runner):
     fake_runner.answers["exec -i deploy/openzaak"] = (1, "\n".join(stderr))
     with pytest.raises(KubeError, match=r"IntegrityError: duplicate key$"):
         Kube("ctx", "ns", fake_runner).exec_django_shell("openzaak", "print(1)")
+
+
+def test_logs_reads_a_deployments_recent_lines_of_one_container(fake_runner):
+    fake_runner.answers["logs deployment/zac"] = (0, "line 1\nline 2\n")
+    assert Kube("ctx", "podiumd", fake_runner).logs("zac", since="10m", container="zac") == "line 1\nline 2\n"
+    assert fake_runner.calls[-1][-3:] == ["deployment/zac", "--since=10m", "--container=zac"]

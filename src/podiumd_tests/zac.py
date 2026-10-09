@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
@@ -10,14 +11,23 @@ from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openzaak import ZAKEN
+from podiumd_tests.seed.openzaak import delete_zaak
+from podiumd_tests.seed.openzaak import today
+from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     import requests
 
+    from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.registry import ResourceRegistry
+
+# Objecten notifies, Open Notificaties delivers to ZAC, and ZAC starts the zaak and its case.
+PRODUCTAANVRAAG_TIMEOUT = 120
 
 
 def zac_session(env: Environment, username: str, password: str) -> requests.Session:
@@ -44,11 +54,20 @@ def confirmation_on(http: requests.Session, zac_url: str, identificatie: str) ->
     return bool(found) and all(confirmation_sent(section(p, "automaticEmailConfirmation")) for p in found)
 
 
-def create_zaak(http: requests.Session, zac_url: str, parameters: JsonObject, **fields: object) -> JsonObject:
-    """A zaak started in ZAC, of the zaaktype of these zaakafhandelparameters, in their default group."""
+def zaak_body(parameters: JsonObject, **fields: object) -> JsonObject:
+    """ZAC's request to start a zaak of the zaaktype of these zaakafhandelparameters, in their default group.
+
+    With a startdatum (today unless given) and communicatiekanaal, as ZAC's UI always sends them.
+    """
     groep = {"id": parameters["defaultGroepId"], "naam": str(parameters["defaultGroepId"])}
-    body = {"zaak": {"zaaktype": parameters["zaaktype"], "groep": groep, **fields}}
-    return cast("JsonObject", expect_status(http.post(f"{zac_url}/rest/zaken/zaak", json=body), HTTPStatus.OK).json())
+    defaults = {"startdatum": date.today().isoformat(), "communicatiekanaal": "E-mail"}  # noqa: DTZ011  # a local date
+    return {"zaak": {"zaaktype": parameters["zaaktype"], "groep": groep, **defaults, **fields}}
+
+
+def create_zaak(http: requests.Session, zac_url: str, parameters: JsonObject, **fields: object) -> JsonObject:
+    """A zaak started in ZAC (zaak_body)."""
+    response = http.post(f"{zac_url}/rest/zaken/zaak", json=zaak_body(parameters, **fields))
+    return cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
 
 
 def read_zaak(http: requests.Session, zac_url: str, uuid: str) -> JsonObject:
@@ -78,3 +97,21 @@ def send_with_person(
 
     response = attempt()
     return attempt() if response.status_code == HTTPStatus.GONE else response
+
+
+def productaanvraag_zaak(
+    openzaak: ApiClient, registry: ResourceRegistry, kenmerk: str, timeout: float = PRODUCTAANVRAAG_TIMEOUT
+) -> JsonObject:
+    """The zaak ZAC starts for a productaanvraag, with its kenmerk in the toelichting; cleanup deletes it.
+
+    openzaak: a client that may read and delete zaken of the zaaktype (bootstrap openzaak-client-productaanvraag).
+    """
+
+    def started() -> JsonObject | None:
+        zaken = openzaak.list(f"{ZAKEN}/zaken", {"startdatum": today()})
+        return next((z for z in zaken if kenmerk in str(z.get("toelichting") or "")), None)
+
+    zaak = wait_until(started, timeout=timeout, interval=3, description=f"zaak for productaanvraag {kenmerk}")
+    url = str(zaak["url"])
+    registry.add(f"zaak {url}", lambda: delete_zaak(openzaak, url, with_documents=True))
+    return zaak

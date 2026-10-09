@@ -23,7 +23,7 @@ COMPONENTS: dict[str, Component] = {
     "openzaak": Component(("openzaak",), ("openzaak",)),
     "keycloak": Component(("keycloak",), ("keycloak",)),
     "keycloak-admin": Component(("keycloak-admin",), ()),
-    "kiss": Component(("contact", "kiss"), ("contact", "kiss")),
+    "kiss": Component(("contact", "kiss"), ("contact", "contact-web", "kiss")),
     "ita": Component(("ita", "internetaakafhandeling"), ("ita", "ita-web")),
     "pabc": Component(("pabc",), ("pabc",)),
     "openarchiefbeheer": Component(("abc", "openarchiefbeheer", "openarchiefbeheer-ui"), ("openarchiefbeheer",)),
