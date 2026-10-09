@@ -6,7 +6,8 @@ Open Zaak optionally catalogus, rights limited to the test catalogus (PLAN.md §
 {domein, rsin, owns (creates the catalogus; on remove deletes it with all its zaken),
 components ({component: [scope prefix, ...]}), exclude (scope words left out), max_va}; and
 optionally zaaktypen, Zaken API rights on every version of zaaktypen the environment owns:
-{identificaties, scopes, max_va, base_url (Open Zaak's URL as the client calls it)}.
+{identificaties, scopes, max_va, base_url (Open Zaak's URL as the client calls it), and optionally
+document_scopes: Documenten API rights on those zaaktypen's informatieobjecttypen}.
 """
 
 
@@ -29,6 +30,9 @@ def run(params):
             prefix = zaaktypen_params["base_url"].rstrip("/") + "/"
             mine = Autorisatie.objects.filter(applicatie__in=applicaties, component="zrc")
             if not mine.filter(zaaktype__startswith=prefix).exists():
+                present = False
+            documents = Autorisatie.objects.filter(applicatie__in=applicaties, component="drc")
+            if zaaktypen_params.get("document_scopes") and not documents.exists():
                 present = False
         return {"present": bool(present)}
     if params["action"] == "remove":
@@ -64,6 +68,16 @@ def _zaaktype_autorisaties(applicatie, zaaktypen_params):
             scopes=zaaktypen_params["scopes"],
             max_vertrouwelijkheidaanduiding=zaaktypen_params["max_va"],
         )
+        for iot in zaaktype.informatieobjecttypen.all() if zaaktypen_params.get("document_scopes") else []:
+            Autorisatie.objects.get_or_create(
+                applicatie=applicatie,
+                component="drc",
+                informatieobjecttype=zaaktypen_params["base_url"].rstrip("/") + iot.get_absolute_api_url(),
+                defaults={
+                    "scopes": zaaktypen_params["document_scopes"],
+                    "max_vertrouwelijkheidaanduiding": zaaktypen_params["max_va"],
+                },
+            )
     missing = sorted(set(wanted) - {z.identificatie for z in found})
     return [f"no published zaaktype {i}" for i in missing]
 

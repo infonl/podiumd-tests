@@ -47,6 +47,8 @@ def test_handled_zaaktypen_pass_zacs_inrichtingscheck(zac: requests.Session, url
     The check covers what ZAC needs of a zaaktype in Open Zaak, e.g. an informatieobjecttype "e-mail",
     without which ZAC fails after sending a mail when it stores the mail with the zaak.
     """
+    # ZAC caches catalogus data; clear it (Admin, as after changing a zaaktype) so the check sees Open Zaak's state.
+    expect_status(zac.delete(f"{urls['zac']}/rest/health-check/ztc-cache"), HTTPStatus.OK)
     handled = {section(p, "zaaktype").get("identificatie") for p in zaakafhandelparameters(zac, urls["zac"])}
     checks = entries(expect_status(zac.get(f"{urls['zac']}/rest/health-check/zaaktypes"), HTTPStatus.OK).json())
     failing = {

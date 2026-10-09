@@ -71,7 +71,7 @@ def zaak_for(openzaak_productaanvraag: ApiClient, registry: ResourceRegistry, ke
 
     zaak = wait_until(started, timeout=ZAAK_TIMEOUT, interval=3, description=f"zaak for productaanvraag {kenmerk}")
     url = str(zaak["url"])
-    registry.add(f"zaak {url}", lambda: delete_zaak(openzaak_productaanvraag, url))
+    registry.add(f"zaak {url}", lambda: delete_zaak(openzaak_productaanvraag, url, with_documents=True))
     return zaak
 
 

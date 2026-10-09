@@ -333,7 +333,10 @@ def fixture_zac_zaak(
         body = {"omschrijving": registry.tagged("zac-zaak"), **defaults, **fields}
         zaak = create_zaak(zac, urls["zac"], zac_parameters, **body)
         url = f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}"
-        registry.add(f"zaak {zaak['identificatie']}", lambda: delete_zaak(openzaak_productaanvraag, url))
+        registry.add(
+            f"zaak {zaak['identificatie']}",
+            lambda: delete_zaak(openzaak_productaanvraag, url, with_documents=True),
+        )
         return zaak
 
     return start

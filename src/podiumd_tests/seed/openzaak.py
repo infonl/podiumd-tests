@@ -37,8 +37,8 @@ def _create(openzaak: ApiClient, registry: ResourceRegistry, path: str, body: di
     return created
 
 
-def delete_zaak(openzaak: ApiClient, url: str) -> None:
-    """DELETE a zaak, retrying until it is gone.
+def delete_zaak(openzaak: ApiClient, url: str, *, with_documents: bool = False) -> None:
+    """DELETE a zaak, retrying until it is gone; with_documents also its documents, which Open Zaak keeps.
 
     Open Zaak 1.29.3 answers 500 on deleting a zaak with a resultaat although it deletes it
     (the ETag of the deleted resultaat is recalculated; test_closed_zaak_delete_answers_204
@@ -54,7 +54,14 @@ def delete_zaak(openzaak: ApiClient, url: str) -> None:
             openzaak.request("GET", url, HTTPStatus.NOT_FOUND)
         return True
 
+    documents = (
+        [str(link["informatieobject"]) for link in openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": url})]
+        if with_documents
+        else []
+    )
     wait_until(deleted, timeout=DELETE_TIMEOUT, description=f"DELETE {url}")
+    for document in documents:
+        openzaak.delete(document)
 
 
 def make_zaak(openzaak: ApiClient, registry: ResourceRegistry, zaaktype: str, **fields: object) -> JsonObject:

@@ -11,7 +11,6 @@ from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
-from podiumd_tests.seed.openzaak import delete_documents_of
 from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.wait import wait_until
 
@@ -127,9 +126,7 @@ def registered_zaak(
             delete_submission(env, submission)
         finally:
             for zaak in zaken:
-                # Open Zaak keeps a deleted zaak's documents: the form's PDF and attachments.
-                delete_documents_of(openzaak, str(zaak["url"]))
-                delete_zaak(openzaak, str(zaak["url"]))
+                delete_zaak(openzaak, str(zaak["url"]), with_documents=True)
 
     registry.add(f"submission {submission} and its zaak", delete)
     if len(zaken) != 1:

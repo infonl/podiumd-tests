@@ -368,7 +368,7 @@ def token_step(component: str, module: str, store_key: str, **extra: object) -> 
 
 
 def productaanvraag_zaaktypen(ctx: Context) -> dict[str, object]:
-    """Read and delete rights on the zaaktype ZAC starts for a productaanvraag; none without the setting."""
+    """Read and delete rights on the zaaktype ZAC starts zaken of, and on their documents; none without the setting."""
     zaaktype = ctx.env.profile.settings.get("productaanvraag_zaaktype")
     if not zaaktype:
         return {}
@@ -376,6 +376,8 @@ def productaanvraag_zaaktypen(ctx: Context) -> dict[str, object]:
         "zaaktypen": {
             "identificaties": [zaaktype],
             "scopes": ["zaken.lezen", "zaken.verwijderen"],
+            # ZAC adds documents, e.g. the ontvangstbevestiging it sent; Open Zaak keeps them when the zaak goes.
+            "document_scopes": ["documenten.lezen", "documenten.verwijderen"],
             "max_va": "zeer_geheim",
             "base_url": ctx.env.profile.urls["openzaak"],
         }
@@ -814,4 +816,18 @@ STEPS: tuple[Step, ...] = (
     OpenInwonerPartijen(),
     # ZAC's ontvangstbevestiging of productaanvragen, where the profile allows it (draaiboek OF-002).
     ZacEmailConfirmation(ADMIN),
+    # A besluittype for the zaaktype ZAC handles, where the profile allows it: ZAC's inrichtingscheck needs one.
+    SnippetStep(
+        "openzaak-zac-besluittype",
+        ("openzaak", "zac"),
+        "openzaak_besluittype",
+        None,
+        {"omschrijving": f"{PREFIX}-zac-besluit"},
+        wiring=True,
+        context_params=lambda ctx: {
+            "zaaktype": ctx.env.profile.settings.get("productaanvraag_zaaktype", "")
+            if ctx.env.profile.settings.get("zac_besluittype", "").lower() == "true"  # settings are strings
+            else ""
+        },
+    ),
 )

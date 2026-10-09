@@ -6,7 +6,9 @@ the test admin is ZAC beheerder of every domain.
 
 from __future__ import annotations
 
+from datetime import UTC
 from datetime import date
+from datetime import datetime
 from datetime import timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
@@ -186,3 +188,46 @@ def test_betrokkenen_with_the_same_and_different_roles_are_listed(
         expect_status(response, HTTPStatus.OK)
     listed = entries(expect_status(zac.get(f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}/betrokkene"), 200).json())
     assert sorted(str(b.get("roltype")) for b in listed) == sorted(r for r, _ in wanted)
+
+
+@pytest.mark.tc("ZAC-058")
+def test_document_can_be_deleted(
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
+) -> None:
+    """A document uploaded to the zaak in ZAC is gone from the zaak after ZAC deletes it."""
+    zaak = zac_zaak()
+    documents = f"{urls['zac']}/rest/informatieobjecten"
+    types = entries(expect_status(zac.get(f"{documents}/informatieobjecttypes/zaak/{zaak['uuid']}"), 200).json())
+    if not types:
+        pytest.skip(f"zaaktype {section(zaak, 'zaaktype').get('identificatie')} has no informatieobjecttypen")
+    name = f"{registry.tagged('document')}.txt"
+    form = {
+        "titel": name,
+        "bestandsnaam": name,
+        "formaat": "text/plain",
+        "informatieobjectTypeUUID": str(types[0]["uuid"]),
+        "vertrouwelijkheidaanduiding": "openbaar",
+        "status": "definitief",
+        "taal": "dut",
+        # ZAC parses the format its UI sends: date, hours and minutes, offset.
+        "creatiedatum": datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M+00:00"),
+        "auteur": "podiumd-tests",
+    }
+    upload = zac.post(
+        f"{documents}/informatieobject/{zaak['uuid']}/{registry.tagged('upload')}",
+        params={"taakObject": "false"},
+        data=form,
+        files={"file": (name, b"podiumd-tests", "text/plain")},
+    )
+    document = expect_status(upload, HTTPStatus.OK).json()
+
+    def titles() -> list[str]:
+        listed = zac.put(f"{documents}/informatieobjectenList", json={"zaakUUID": zaak["uuid"]})
+        return [str(d.get("titel")) for d in entries(expect_status(listed, HTTPStatus.OK).json())]
+
+    assert name in titles()
+    deleted = zac.delete(
+        f"{documents}/informatieobject/{document['uuid']}", json={"zaakUuid": zaak["uuid"], "reden": "test"}
+    )
+    expect_status(deleted, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    assert name not in titles()

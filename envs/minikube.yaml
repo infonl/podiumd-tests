@@ -65,6 +65,8 @@ settings:
   productaanvraag_zaaktype: zaaktype-test-1
   # podiumd-minikube allows bootstrap to switch on ZAC's ontvangstbevestiging for that zaaktype (2026-10-09).
   zac_email_confirmation: true
+  # podiumd-minikube asks bootstrap to give that zaaktype the besluittype ZAC's inrichtingscheck needs (2026-10-09).
+  zac_besluittype: true
   # seed-volume --scale perf on one laptop; other environments take TA's counts.
   seed_volume_users: "20"
   seed_volume_zaken: "2000"
