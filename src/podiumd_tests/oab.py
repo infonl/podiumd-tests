@@ -9,7 +9,7 @@ from typing import cast
 from playwright.sync_api import expect
 
 from podiumd_tests.bootstrap.names import PREFIX
-from podiumd_tests.bootstrap.steps import django_password_key
+from podiumd_tests.bootstrap.steps import django_secret_key
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.responses import expect_status
 
@@ -26,7 +26,7 @@ API = "/api/v1"
 def _credentials(env: Environment, role: str) -> dict[str, str]:
     return {
         "username": f"{PREFIX}-{role}",
-        "password": env.credentials.get(django_password_key("openarchiefbeheer", role)),
+        "password": env.credentials.get(django_secret_key("openarchiefbeheer", role)),
     }
 
 

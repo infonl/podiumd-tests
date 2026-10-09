@@ -299,10 +299,16 @@ def openinwoner_openklant_params(ctx: Context) -> dict[str, object]:
     }
 
 
-def django_user_step(
-    component: str, key: str, groups: tuple[str, ...] = (), *, staff: bool = True, fields: dict[str, str] | None = None
+def django_user_step(  # pylint: disable=too-many-arguments  # mirrors the snippet's parameters
+    component: str,
+    key: str,
+    groups: tuple[str, ...] = (),
+    *,
+    staff: bool = True,
+    fields: dict[str, str] | None = None,
+    api_token: bool = False,
 ) -> SnippetStep:
-    """A local Django user ptest-bootstrap-<key> in a component, with groups and a random password."""
+    """A local Django user ptest-bootstrap-<key> in a component, with groups and a random password or API token."""
     username = f"{PREFIX}-{key}"
     params: dict[str, object] = {
         "username": username,
@@ -310,15 +316,20 @@ def django_user_step(
         "groups": list(groups),
         "staff": staff,
         "fields": fields or {},
+        "api_token": api_token,
     }
     return SnippetStep(
-        f"{component}-user-{key}", (component,), "django_user", django_password_key(component, key), params
+        f"{component}-user-{key}",
+        (component,),
+        "django_user",
+        django_secret_key(component, key, "token" if api_token else "password"),
+        params,
     )
 
 
-def django_password_key(component: str, key: str) -> str:
-    """Key of a Django test user's password in the credentials Secret."""
-    return f"{PREFIX.replace('-', '_')}_{component}_{key}_password"
+def django_secret_key(component: str, key: str, kind: str = "password") -> str:
+    """Key of a Django test user's password or API token in the credentials Secret."""
+    return f"{PREFIX.replace('-', '_')}_{component}_{key}_{kind}"
 
 
 def openzaak_client_step(  # pylint: disable=too-many-arguments  # mirrors the snippet's parameters
@@ -448,6 +459,8 @@ OI_BEGELEIDER = django_user_step(
     staff=False,
     fields={"contact_type": "begeleider", "first_name": "PodiumD", "last_name": "Begeleider"},
 )
+# An Open Formulieren form editor (its own group Redacteurs) that changes test forms through the API.
+OF_REDACTEUR = django_user_step("openformulieren", "redacteur", ("Redacteurs",), api_token=True)
 # The test form's fields. The name makes the initiator of an anonymous submission: without it
 # Open Formulieren sends Open Zaak an initiator rol without betrokkeneIdentificatie, which it refuses.
 NAW = [
@@ -620,6 +633,7 @@ STEPS: tuple[Step, ...] = (
         wiring=True,
         context_params=openformulieren_params,
     ),
+    OF_REDACTEUR,
     SnippetStep(
         "openformulieren-form",
         ("openformulieren", "openzaak"),

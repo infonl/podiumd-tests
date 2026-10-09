@@ -6,6 +6,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
+from podiumd_tests.bootstrap.steps import OF_REDACTEUR
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
@@ -161,6 +162,13 @@ def make_form(  # pylint: disable=too-many-arguments,too-many-positional-argumen
             env.kube, deployment, "openformulieren_form", {**params, "settings": {}, "action": "remove"}
         ),
     )
+
+
+def redacteur_session(env: Environment) -> requests.Session:
+    """A session on Open Formulieren's API as the test form editor (bootstrap OF_REDACTEUR), by its API token."""
+    http = env.session()
+    http.headers["Authorization"] = f"Token {env.credentials.get(str(OF_REDACTEUR.store_key))}"
+    return http
 
 
 def delete_submission(env: Environment, uuid: str) -> None:
