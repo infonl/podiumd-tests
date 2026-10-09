@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import itertools
 
+from datetime import UTC
+from datetime import datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -40,6 +42,8 @@ from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    import requests
 
     from playwright.sync_api import Locator
     from playwright.sync_api import Page
@@ -274,3 +278,32 @@ def test_question_answered_in_ita_shows_as_answered(  # pylint: disable=too-many
     expect(card).to_contain_text("Beantwoord")
     card.locator("a").first.click()
     expect(page.locator("main")).to_contain_text(f"Antwoord {antwoord}")
+
+
+@pytest.mark.tc("ZAC-067")
+@pytest.mark.requires("zac")
+def test_question_from_the_portal_shows_in_zac(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    openklant: ApiClient,
+    zac: requests.Session,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """A question the inwoner asks in Mijn vragen is among the inwoner's contactmomenten in ZAC.
+
+    ZAC shows a klantcontact's onderwerp as its text, and pages over partijen, not contactmomenten:
+    the inwoner's one partij is page 0.
+    """
+    need_bootstrap(INWONER.name, "openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-openklant")
+    vraag = registry.tagged("zac-vraag")
+    clean_up_question(podiumd_env, openklant, registry, vraag)
+    asked = datetime.now(tz=UTC)
+    ask_in_mijn_vragen(page, podiumd_env, vraag)
+    query = {"bsn": INWONER.attributes["bsn"][0], "page": 0}
+    found = zac.put(podiumd_env.profile.urls["zac"] + "/rest/klanten/contactmomenten", json=query)
+    contactmomenten = entries(expect_status(found, HTTPStatus.OK).json()["resultaten"])
+    assert any(
+        c.get("tekst") == SUBJECT and datetime.fromisoformat(str(c["registratiedatum"])) >= asked
+        for c in contactmomenten
+    ), f"no question asked after {asked:%H:%M:%S} among {contactmomenten}"

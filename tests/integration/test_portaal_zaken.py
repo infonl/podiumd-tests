@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import re
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
 
 from playwright.sync_api import expect
 
+from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.browser import browser_session
 from podiumd_tests.json_data import section
@@ -23,6 +25,7 @@ from podiumd_tests.openinwoner import choose_document
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.openinwoner import upload_document
 from podiumd_tests.openinwoner import virus_scan_enabled
+from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openklant import delete_klantcontact_tree
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import clean_up_new_documents
@@ -32,9 +35,12 @@ from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import send_with_person
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    import requests
 
     from playwright.sync_api import Page
 
@@ -340,3 +346,26 @@ def test_question_about_a_zaak_reaches_open_klant(  # pylint: disable=too-many-a
     assert len(inhoud) == 1
     assert inhoud[0].startswith(vraag)
     assert str(zaak["identificatie"]) in inhoud[0]
+
+
+@pytest.mark.tc("ZAC-066")
+@pytest.mark.requires("zac")
+def test_zaak_started_in_zac_shows_in_mijn_zaken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """A zaak started in ZAC with the inwoner as initiator is listed in the inwoner's Mijn zaken."""
+    need_bootstrap(INWONER.name, *WIRING)
+    zaak = zac_zaak()
+
+    def make_initiator(identificatie: JsonObject) -> requests.Response:
+        body = {"zaakUUID": zaak["uuid"], "betrokkeneIdentificatie": identificatie}
+        return zac.patch(f"{urls['zac']}/rest/zaken/initiator", json=body)
+
+    expect_status(send_with_person(zac, urls["zac"], EREBOS, make_initiator), HTTPStatus.OK)
+    log_in(page, podiumd_env)
+    expect_listed(page, zaak)

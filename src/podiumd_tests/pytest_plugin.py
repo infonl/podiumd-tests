@@ -7,6 +7,7 @@ so tests that request them do not shadow a module-level function.
 from __future__ import annotations
 
 from contextvars import ContextVar
+from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import cast
@@ -26,6 +27,7 @@ from podiumd_tests.bootstrap.names import ZGW_OPENBAAR_STORE_KEY
 from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_STORE_KEY
 from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
+from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.clients.platform import mailpit_client
 from podiumd_tests.clients.platform import objecten_client
@@ -36,10 +38,15 @@ from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
 from podiumd_tests.seed.openzaak import CATALOGI
+from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import ZaaktypeParts
+from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.openzaak import zaaktype_parts
 from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.webhook import Callback
+from podiumd_tests.zac import create_zaak
+from podiumd_tests.zac import zaakafhandelparameters
+from podiumd_tests.zac import zac_session
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -289,6 +296,47 @@ def fixture_callback(run_tag: str, podiumd_env: Environment, need_bootstrap: Cal
     """A callback path of this test's own on the webhook receiver (infra/webhook-receiver)."""
     need_bootstrap("infra-webhook-receiver")
     return Callback.new(podiumd_env, run_tag)
+
+
+@pytest.fixture(name="zac")
+def fixture_zac(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> requests.Session:
+    """The test admin's session on ZAC's REST API."""
+    need_bootstrap(ADMIN.name)
+    return zac_session(podiumd_env, ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
+
+
+@pytest.fixture(name="zac_parameters")
+def fixture_zac_parameters(zac: requests.Session, urls: dict[str, str], podiumd_env: Environment) -> JsonObject:
+    """ZAC's zaakafhandelparameters of the zaaktype ZAC starts zaken of (profile setting productaanvraag_zaaktype)."""
+    identificatie = podiumd_env.profile.settings.get("productaanvraag_zaaktype")
+    if not identificatie:
+        pytest.skip(f"profile {podiumd_env.profile.name} has no settings.productaanvraag_zaaktype")
+    found = zaakafhandelparameters(zac, urls["zac"], identificatie)
+    if not found:
+        pytest.skip(f"ZAC has no zaakafhandelparameters for {identificatie}")
+    return found[0]
+
+
+@pytest.fixture(name="zac_zaak")
+def fixture_zac_zaak(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_parameters: JsonObject,
+    openzaak_productaanvraag: ApiClient,
+    registry: ResourceRegistry,
+) -> Callable[..., JsonObject]:
+    """Start a zaak in ZAC with a run-tagged omschrijving; cleanup deletes it from Open Zaak."""
+
+    def start(**fields: object) -> JsonObject:
+        # ZAC's UI always sends a startdatum; without one ZAC answers 500.
+        defaults = {"startdatum": date.today().isoformat(), "communicatiekanaal": "E-mail"}  # noqa: DTZ011  # a local date
+        body = {"omschrijving": registry.tagged("zac-zaak"), **defaults, **fields}
+        zaak = create_zaak(zac, urls["zac"], zac_parameters, **body)
+        url = f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}"
+        registry.add(f"zaak {zaak['identificatie']}", lambda: delete_zaak(openzaak_productaanvraag, url))
+        return zaak
+
+    return start
 
 
 @pytest.hookimpl(tryfirst=True)  # before xdist reads the groups

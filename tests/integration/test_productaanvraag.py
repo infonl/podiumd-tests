@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.bootstrap.names import PRODUCTAANVRAAG_OBJECTTYPE
-from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.mailpit import received
 from podiumd_tests.seed.objecten import make_productaanvraag
 from podiumd_tests.seed.objecten import objecttype_url
@@ -27,10 +26,11 @@ from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import confirmation_on
-from podiumd_tests.zac import zac_session
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    import requests
 
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
@@ -100,14 +100,14 @@ def test_zac_mails_the_initiator_an_ontvangstbevestiging(  # pylint: disable=too
     productaanvraagtype: str,
     objecttype: str,
     need_bootstrap: Callable[..., None],
+    zac: requests.Session,
 ) -> None:
     """ZAC mails the zaaknummer to the e-mail address the form's submitter left in Open Klant.
 
     Open Formulieren's registration of the submitter's contact details: a klantcontact about the
     submission (onderwerpobject with the productaanvraag's kenmerk), with a betrokkene and its address.
     """
-    need_bootstrap(ADMIN.name, "zac-email-confirmation")
-    zac = zac_session(podiumd_env, ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
+    need_bootstrap("zac-email-confirmation")
     zaaktype = str(podiumd_env.profile.settings.get("productaanvraag_zaaktype"))
     if not confirmation_on(zac, podiumd_env.profile.urls["zac"], zaaktype):
         pytest.skip(

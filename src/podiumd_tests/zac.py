@@ -12,6 +12,8 @@ from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import requests
 
     from podiumd_tests.environment import Environment
@@ -25,10 +27,10 @@ def zac_session(env: Environment, username: str, password: str) -> requests.Sess
     return http
 
 
-def zaakafhandelparameters(http: requests.Session, zac_url: str, identificatie: str) -> list[JsonObject]:
-    """ZAC's zaakafhandelparameters of every version of the zaaktype."""
+def zaakafhandelparameters(http: requests.Session, zac_url: str, identificatie: str | None = None) -> list[JsonObject]:
+    """ZAC's zaakafhandelparameters of every version of the zaaktype, or of every zaaktype ZAC handles."""
     found = entries(expect_status(http.get(f"{zac_url}/rest/zaakafhandelparameters"), HTTPStatus.OK).json())
-    return [p for p in found if section(p, "zaaktype").get("identificatie") == identificatie]
+    return [p for p in found if identificatie in {None, section(p, "zaaktype").get("identificatie")}]
 
 
 def confirmation_sent(confirmation: JsonObject) -> bool:
@@ -60,3 +62,19 @@ def person_key(http: requests.Session, zac_url: str, bsn: str) -> str:
         "JsonObject", expect_status(http.put(f"{zac_url}/rest/klanten/personen", json={"bsn": bsn}), 200).json()
     )
     return str(entries(found["resultaten"])[0]["temporaryPersonId"])
+
+
+def send_with_person(
+    http: requests.Session, zac_url: str, bsn: str, send: Callable[[JsonObject], requests.Response]
+) -> requests.Response:
+    """send(the person's BetrokkeneIdentificatie); once more with a fresh lookup when ZAC answers 410.
+
+    ZAC 5.4.5 keeps handing out a temporaryPersonId it forgot 12 h after its last read (PLAN §13);
+    the 410 clears it, as for a user who tries again.
+    """
+
+    def attempt() -> requests.Response:
+        return send({"type": "BSN", "temporaryPersonId": person_key(http, zac_url, bsn)})
+
+    response = attempt()
+    return attempt() if response.status_code == HTTPStatus.GONE else response

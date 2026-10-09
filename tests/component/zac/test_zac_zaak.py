@@ -21,8 +21,8 @@ from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.wait import wait_until
-from podiumd_tests.zac import person_key
 from podiumd_tests.zac import read_zaak
+from podiumd_tests.zac import send_with_person
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -173,21 +173,16 @@ def test_betrokkenen_with_the_same_and_different_roles_are_listed(
     wanted = [("Belanghebbende", "persoon"), ("Contactpersoon", "persoon"), ("Belanghebbende", "bedrijf")]
     for rol, who in wanted:
 
-        def add(rol: str = rol, who: str = who) -> requests.Response:
-            person = {"type": "BSN", "temporaryPersonId": person_key(zac, urls["zac"], EREBOS)}
+        def add(identificatie: JsonObject, rol: str = rol) -> requests.Response:
             body = {
                 "zaakUUID": zaak["uuid"],
                 "roltypeUUID": roltypen[rol],
                 "roltoelichting": "test",
-                "betrokkeneIdentificatie": person if who == "persoon" else company,
+                "betrokkeneIdentificatie": identificatie,
             }
             return zac.post(f"{urls['zac']}/rest/zaken/betrokkene", json=body)
 
-        response = add()
-        if response.status_code == HTTPStatus.GONE:
-            # ZAC 5.4.5 keeps handing out a temporaryPersonId it forgot 12 h after its last read (PLAN §13);
-            # the 410 clears it and a new lookup gets a fresh one, as for a user who tries again.
-            response = add()
+        response = send_with_person(zac, urls["zac"], EREBOS, add) if who == "persoon" else add(company)
         expect_status(response, HTTPStatus.OK)
     listed = entries(expect_status(zac.get(f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}/betrokkene"), 200).json())
     assert sorted(str(b.get("roltype")) for b in listed) == sorted(r for r, _ in wanted)
