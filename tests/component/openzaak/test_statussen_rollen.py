@@ -87,20 +87,7 @@ def test_archiefnominatie_can_be_set_and_filtered(
 
 @pytest.mark.core
 def test_zaak_found_by_initiator_bsn(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
-    """The initiator's BSN finds the zaak through the list filter and _zoek; another BSN does not (TA int-10, reg-50)."""
-    bsn = random_bsn()
-    zaak = make_zaak(openzaak, registry, parts.zaaktype)
-    make_rol(openzaak, registry, zaak, parts.roltypen["initiator"], inpBsn=bsn)
-    assert urls(openzaak.list(f"{ZAKEN}/zaken", {BSN_FILTER: bsn})) == {str(zaak["url"])}
-    assert openzaak.list(f"{ZAKEN}/zaken", {BSN_FILTER: random_bsn()}) == []
-    zoek = openzaak.request("POST", f"{ZAKEN}/zaken/_zoek", 200, json={BSN_FILTER: bsn}).json()
-    assert urls(zoek["results"]) == {str(zaak["url"])}
-
-
-def test_zoek_finds_each_bsn_only_its_own_zaak(
-    openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
-) -> None:
-    """For three zaken with their own initiator, _zoek by each BSN finds exactly that zaak (TA reg-56, as a loop)."""
+    """Each initiator's BSN finds only its zaak, by list filter and _zoek; another finds none (TA int-10, reg-50, 56)."""
     zaken: dict[str, str] = {}
     for _ in range(3):
         bsn = random_bsn()
@@ -108,8 +95,10 @@ def test_zoek_finds_each_bsn_only_its_own_zaak(
         make_rol(openzaak, registry, zaak, parts.roltypen["initiator"], inpBsn=bsn)
         zaken[bsn] = str(zaak["url"])
     for bsn, url in zaken.items():
+        assert urls(openzaak.list(f"{ZAKEN}/zaken", {BSN_FILTER: bsn})) == {url}
         zoek = openzaak.request("POST", f"{ZAKEN}/zaken/_zoek", 200, json={BSN_FILTER: bsn}).json()
         assert urls(zoek["results"]) == {url}
+    assert openzaak.list(f"{ZAKEN}/zaken", {BSN_FILTER: random_bsn()}) == []
 
 
 @pytest.mark.xfail(
