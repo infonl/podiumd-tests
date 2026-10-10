@@ -32,6 +32,9 @@ TEST_FORM = "ptest-bootstrap-klacht"
 # The Ogone merchant of the payment tests in Open Formulieren; the tests play Ogone with its passphrase.
 OGONE_MERCHANT = "ptest-bootstrap-ogone"
 OGONE_STORE_KEY = "ptest_bootstrap_ogone_secret"
+# The Worldline merchant; the webhook receiver plays Worldline's Hosted Checkout API.
+WORLDLINE_MERCHANT = "ptest-bootstrap-worldline"
+WORLDLINE_STORE_KEY = "ptest_bootstrap_worldline_secret"
 # Open Notificaties kanalen the ported tests subscribe on, with the filters of ExternalsPodiumD
 # and podiumd-infra.
 KANALEN = {"zaken": ["bronorganisatie", "zaaktype", "vertrouwelijkheidaanduiding"]}

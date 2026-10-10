@@ -4,9 +4,9 @@ Actions: status, apply (recreates), remove. Params: action, slug, components (Fo
 components of the step), registration ({"backend", "options"}; "api_group" names the ZGW
 API group whose pk goes into the options, "objects_api" is the Objecten API root of the Objects
 API group whose identifier goes into the options), auth_backends (login plugins, e.g. digid_oidc),
-settings (other Form fields), payment (optional {"backend", "merchant": label of an Ogone merchant,
-"price"}: a product named after the form carries the price). Submissions of the form are test
-data and go with it.
+settings (other Form fields), payment (optional {"backend": ogone-legacy or worldline, "merchant":
+an Ogone merchant's label or a Worldline merchant's pspid, "price"}: a product named after the form
+carries the price). Submissions of the form are test data and go with it.
 """
 
 
@@ -79,9 +79,12 @@ def _payment(params, slug):
     payment = params.get("payment")
     if not payment:
         return {}
-    merchant = OgoneMerchant.objects.get(label=payment["merchant"])
+    if payment["backend"] == "ogone-legacy":
+        options = {"merchant_id": OgoneMerchant.objects.get(label=payment["merchant"]).pk}
+    else:
+        options = {"merchant": payment["merchant"], "variant": "", "descriptor_template": ""}
     return {
         "product": Product.objects.create(name=slug[:50], price=payment["price"]),
         "payment_backend": payment["backend"],
-        "payment_backend_options": {"merchant_id": merchant.pk},
+        "payment_backend_options": options,
     }

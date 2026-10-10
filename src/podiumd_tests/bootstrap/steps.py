@@ -35,6 +35,8 @@ from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.bootstrap.names import TEST_FORM
 from podiumd_tests.bootstrap.names import TEST_IOT
 from podiumd_tests.bootstrap.names import TEST_ZAAKTYPE
+from podiumd_tests.bootstrap.names import WORLDLINE_MERCHANT
+from podiumd_tests.bootstrap.names import WORLDLINE_STORE_KEY
 from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_COMPONENTS
 from podiumd_tests.bootstrap.names import ZGW_NOAUTH_CLIENT_ID
@@ -61,6 +63,7 @@ from podiumd_tests.seed.openklant import delete_partij
 from podiumd_tests.seed.openklant import partijen_of
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.webhook import WebhookReceiver
+from podiumd_tests.webhook import receiver_root
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -745,6 +748,15 @@ STEPS: tuple[Step, ...] = (
         "openformulieren_ogone",
         OGONE_STORE_KEY,
         {"label": OGONE_MERCHANT, "pspid": PREFIX, "hash_algorithm": OGONE_HASH, "endpoint": OGONE_ENDPOINT},
+    ),
+    # The Worldline merchant; its endpoint is the webhook receiver (step infra-webhook-receiver).
+    SnippetStep(
+        "openformulieren-worldline",
+        ("openformulieren", "cluster"),
+        "openformulieren_worldline",
+        WORLDLINE_STORE_KEY,
+        {"pspid": WORLDLINE_MERCHANT},
+        context_params=lambda ctx: {"endpoint": receiver_root(ctx.env)},
     ),
     # Register a submission only once it is paid (draaiboek OF-022), where the profile allows it.
     SnippetStep(

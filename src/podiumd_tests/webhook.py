@@ -30,6 +30,8 @@ if TYPE_CHECKING:
 NAME = "ptest-bootstrap-webhook-receiver"
 INFRA = REPO_ROOT / "infra" / "webhook-receiver"
 RECEIVED_FILE = "/data/received.jsonl"
+# Where the receiver keeps the Worldline checkouts it plays.
+CHECKOUTS_DIR = "/data/worldline"
 # The receiver's Notify (NotifyNL) API: OMC's Notify base URL is the receiver's /notify.
 NOTIFY_EMAIL = "/notify/v2/notifications/email"
 ROLLOUT_TIMEOUT = 180
@@ -53,6 +55,11 @@ def _entry(line: str) -> JsonObject | None:
     return cast("JsonObject", found) if isinstance(found, dict) else None
 
 
+def receiver_root(env: Environment) -> str:
+    """The root URL the platform reaches the receiver on from inside the cluster."""
+    return f"http://{NAME}.{env.profile.kube.namespace}"
+
+
 @dataclass(frozen=True)
 class Callback:
     """One test's callback path on the receiver."""
@@ -68,7 +75,7 @@ class Callback:
     @property
     def url(self) -> str:
         """URL the platform reaches the callback on from inside the cluster."""
-        return f"http://{NAME}.{self.env.profile.kube.namespace}{self.path}"
+        return receiver_root(self.env) + self.path
 
     def received(self) -> list[JsonObject]:
         """Everything the receiver got on this path, oldest first."""
