@@ -41,7 +41,7 @@ class KissKanalen:
 
     @staticmethod
     def _allowed(ctx: Context) -> bool:
-        return ctx.env.profile.settings.get("kiss_kanalen", "").lower() == "true"  # settings are strings
+        return ctx.env.profile.allows("kiss_kanalen")
 
     def _session(self, ctx: Context) -> tuple[requests.Session, str]:
         kiss = ctx.env.profile.urls["kiss"]

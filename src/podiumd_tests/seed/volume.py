@@ -354,7 +354,7 @@ def _kiss_kind(name: str, source: KissSource) -> Kind:
 
 
 def _volume_zac_allowed(env: Environment) -> str | None:
-    if env.profile.settings.get("pabc_volume_zaaktype", "").lower() != "true":  # settings are strings
+    if not env.profile.allows("pabc_volume_zaaktype"):
         return "not allowed: profile setting pabc_volume_zaaktype is off"
     return None
 

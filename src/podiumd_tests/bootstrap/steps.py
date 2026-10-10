@@ -894,7 +894,7 @@ STEPS: tuple[Step, ...] = (
         wiring=True,
         context_params=lambda ctx: {
             "zaaktype": ctx.env.profile.settings.get("productaanvraag_zaaktype", "")
-            if ctx.env.profile.settings.get("zac_besluittype", "").lower() == "true"  # settings are strings
+            if ctx.env.profile.allows("zac_besluittype")
             else ""
         },
     ),

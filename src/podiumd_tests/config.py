@@ -109,6 +109,10 @@ class Profile:  # pylint: disable=too-many-instance-attributes  # mirrors the YA
     wiring: bool = False
     path: Path | None = None
 
+    def allows(self, setting: str) -> bool:
+        """Whether an opt-in setting that changes the owner's configuration is "true"."""
+        return self.settings.get(setting, "").lower() == "true"  # settings are strings
+
 
 def default_envs_dir() -> Path:
     """envs/ in the repository root."""

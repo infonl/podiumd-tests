@@ -48,9 +48,8 @@ class ZacEmailConfirmation:
     @staticmethod
     def _allowed(ctx: Context) -> str | None:
         """The zaaktype identificatie when the profile allows the change, else None."""
-        settings = ctx.env.profile.settings
-        allowed = settings.get("zac_email_confirmation", "").lower() == "true"  # settings are strings
-        return settings.get("productaanvraag_zaaktype") if allowed else None
+        profile = ctx.env.profile
+        return profile.settings.get("productaanvraag_zaaktype") if profile.allows("zac_email_confirmation") else None
 
     def _session(self, ctx: Context) -> requests.Session:
         return zac_session(ctx.env, self.admin.username, ctx.env.credentials.get(self.admin.store_key))
