@@ -24,7 +24,7 @@ TIMEOUT = 90
 OMSCHRIJVING = {"type": "textfield", "key": "omschrijving", "label": "Omschrijving", "validate": {"required": True}}
 
 
-@pytest.mark.tc("OF-009", "OF-041")
+@pytest.mark.tc("OF-009", "OF-041", "OF-075")
 def test_email_registration_mails_the_submission(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     http: requests.Session,
     urls: dict[str, str],

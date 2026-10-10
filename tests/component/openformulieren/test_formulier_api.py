@@ -31,6 +31,8 @@ if TYPE_CHECKING:
     from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("openformulieren")]
+# A public address PDOK knows.
+PDOK_ADDRESS = "Keizersgracht 117 Amsterdam"
 
 
 @pytest.fixture(name="form")
@@ -109,3 +111,25 @@ def test_objects_api_registrations_are_valid(podiumd_env: Environment) -> None:
     if not backends:
         pytest.skip("no active form registers in the Objects API")
     assert [f"{b['form']}/{b['backend']}: {b['errors']}" for b in backends if b["errors"]] == []
+
+
+@pytest.mark.tc("INT-003")
+def test_address_search_reaches_pdok(
+    http: requests.Session,
+    urls: dict[str, str],
+    podiumd_env: Environment,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """A form's address search finds a known address in the PDOK Locatieserver (Open Formulieren's Kadaster plugin).
+
+    Open Formulieren answers it only within an active submission.
+    """
+    need_bootstrap("openformulieren-form")
+    submission, headers = start_submission(http, urls["openformulieren"], TEST_FORM)
+    registry.add(f"submission {submission['id']}", lambda: delete_submission(podiumd_env, str(submission["id"])))
+    found = http.get(
+        urls["openformulieren"] + "/api/v2/geo/address-search", params={"q": PDOK_ADDRESS}, headers=headers
+    )
+    labels = [str(a.get("label")) for a in entries(expect_status(found, HTTPStatus.OK).json())]
+    assert any("1015CJ Amsterdam" in label for label in labels), labels

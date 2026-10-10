@@ -20,6 +20,7 @@ from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.json_data import strings
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.wait import wait_until
@@ -40,6 +41,11 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "ke
 # ZAC indexes a zaak in Solr after Open Notificaties tells it about the change.
 INDEX_TIMEOUT = 60
 _, _, BEDRIJF = IDENTITIES
+# The smallest PDF a viewer opens: one empty page.
+MINIMAL_PDF = (
+    b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj"
+    b" 3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n"
+)
 # The reason ZAC always offers for aborting a zaak.
 NIET_ONTVANKELIJK = "ZAAK_NIET_ONTVANKELIJK"
 
@@ -190,21 +196,25 @@ def test_betrokkenen_with_the_same_and_different_roles_are_listed(
     assert sorted(str(b.get("roltype")) for b in listed) == sorted(r for r, _ in wanted)
 
 
-@pytest.mark.tc("ZAC-058")
-def test_document_can_be_deleted(
-    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
-) -> None:
-    """A document uploaded to the zaak in ZAC is gone from the zaak after ZAC deletes it."""
-    zaak = zac_zaak()
-    documents = f"{urls['zac']}/rest/informatieobjecten"
+def uploaded_document(
+    zac: requests.Session, zac_url: str, zaak: JsonObject, registry: ResourceRegistry, *, pdf: bool = False
+) -> JsonObject:
+    """A text or PDF document the user uploads to the zaak in ZAC; skips when the zaaktype has none of its types.
+
+    The zaak's cleanup deletes it (delete_zaak with_documents).
+    """
+    documents = f"{zac_url}/rest/informatieobjecten"
     types = entries(expect_status(zac.get(f"{documents}/informatieobjecttypes/zaak/{zaak['uuid']}"), 200).json())
     if not types:
         pytest.skip(f"zaaktype {section(zaak, 'zaaktype').get('identificatie')} has no informatieobjecttypen")
-    name = f"{registry.tagged('document')}.txt"
+    formaat, suffix, content = (
+        ("application/pdf", "pdf", MINIMAL_PDF) if pdf else ("text/plain", "txt", b"podiumd-tests")
+    )
+    name = f"{registry.tagged('document')}.{suffix}"
     form = {
         "titel": name,
         "bestandsnaam": name,
-        "formaat": "text/plain",
+        "formaat": formaat,
         "informatieobjectTypeUUID": str(types[0]["uuid"]),
         "vertrouwelijkheidaanduiding": "openbaar",
         "status": "definitief",
@@ -217,17 +227,49 @@ def test_document_can_be_deleted(
         f"{documents}/informatieobject/{zaak['uuid']}/{registry.tagged('upload')}",
         params={"taakObject": "false"},
         data=form,
-        files={"file": (name, b"podiumd-tests", "text/plain")},
+        files={"file": (name, content, formaat)},
     )
-    document = expect_status(upload, HTTPStatus.OK).json()
+    return expect_status(upload, HTTPStatus.OK).json()
 
-    def titles() -> list[str]:
-        listed = zac.put(f"{documents}/informatieobjectenList", json={"zaakUUID": zaak["uuid"]})
-        return [str(d.get("titel")) for d in entries(expect_status(listed, HTTPStatus.OK).json())]
 
-    assert name in titles()
+def zaak_documents(zac: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:
+    """The documents ZAC lists with the zaak."""
+    listed = zac.put(f"{zac_url}/rest/informatieobjecten/informatieobjectenList", json={"zaakUUID": zaak["uuid"]})
+    return entries(expect_status(listed, HTTPStatus.OK).json())
+
+
+@pytest.mark.tc("ZAC-058")
+def test_document_can_be_deleted(
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
+) -> None:
+    """A document uploaded to the zaak in ZAC is gone from the zaak after ZAC deletes it."""
+    zaak = zac_zaak()
+    document = uploaded_document(zac, urls["zac"], zaak, registry)
+    assert document["uuid"] in [d.get("uuid") for d in zaak_documents(zac, urls["zac"], zaak)]
     deleted = zac.delete(
-        f"{documents}/informatieobject/{document['uuid']}", json={"zaakUuid": zaak["uuid"], "reden": "test"}
+        f"{urls['zac']}/rest/informatieobjecten/informatieobject/{document['uuid']}",
+        json={"zaakUuid": zaak["uuid"], "reden": "test"},
     )
     expect_status(deleted, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    assert name not in titles()
+    assert document["uuid"] not in [d.get("uuid") for d in zaak_documents(zac, urls["zac"], zaak)]
+
+
+@pytest.mark.tc("ZAC-039")
+def test_sent_document_is_marked_verzonden(
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
+) -> None:
+    """A PDF marked as sent (by post, outside ZAC) has the indication VERZONDEN in the zaak's documents.
+
+    ZAC lets only definitief, not confidential PDFs be sent.
+    """
+    zaak = zac_zaak()
+    document = uploaded_document(zac, urls["zac"], zaak, registry, pdf=True)
+    body = {
+        "zaakUuid": zaak["uuid"],
+        "verzenddatum": date.today().isoformat(),  # noqa: DTZ011  # a local date
+        "informatieobjecten": [document["uuid"]],
+        "toelichting": "per post",
+    }
+    expect_status(zac.post(f"{urls['zac']}/rest/informatieobjecten/informatieobjecten/verzenden", json=body), 200, 204)
+    listed = {str(d.get("uuid")): d for d in zaak_documents(zac, urls["zac"], zaak)}
+    assert "VERZONDEN" in strings(listed[str(document["uuid"])].get("indicaties"))
