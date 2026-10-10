@@ -35,7 +35,6 @@ PUBLIC = sorted(set(COMPONENTS) - set(NOT_PUBLIC))
 FOREIGN_ORIGIN = "https://ptest-foreign.example.invalid"
 # Apps that send none or part of the headers themselves; xfail without strict, as an edge may add them.
 HEADER_GAPS = {
-    "zac": "ZAC itself sends no HSTS or nosniff, its chart's nginx adds them; minikube runs ZAC without it",
     "pabc": "PABC sends no HSTS, nosniff or frame protection",
     "ita": "ITA sends no HSTS and no nosniff",
     "openarchiefbeheer": "Open Archiefbeheer sends no HSTS and no nosniff",
