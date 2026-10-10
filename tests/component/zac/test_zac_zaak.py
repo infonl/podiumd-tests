@@ -123,30 +123,19 @@ def test_extension_moves_the_planned_and_final_dates(  # pylint: disable=too-man
     assert expect_status(extended, HTTPStatus.OK).json()["uiterlijkeEinddatumAfdoening"] == final.isoformat()
 
 
-def abort(zac: requests.Session, zac_url: str, zaak: JsonObject) -> None:
-    """Abort the zaak in ZAC as niet ontvankelijk."""
+@pytest.mark.tc("ZAC-045", "ZAC-062")
+def test_aborted_zaak_is_closed_and_listed_among_the_closed_zaken(
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
+) -> None:
+    """Aborting a zaak (niet ontvankelijk) closes it; ZAC's search for closed zaken then lists it.
+
+    ZAC indexes the zaak on Open Notificaties' zaken kanaal.
+    """
+    zaak = zac_zaak()
     body = {"zaakbeeindigRedenId": NIET_ONTVANKELIJK}
-    response = zac.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/afbreken", json=body)
+    response = zac.patch(f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}/afbreken", json=body)
     expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-
-
-@pytest.mark.tc("ZAC-045")
-def test_aborted_zaak_is_closed(
-    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
-) -> None:
-    """Aborting a zaak (niet ontvankelijk) closes it."""
-    zaak = zac_zaak()
-    abort(zac, urls["zac"], zaak)
     assert not read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpen"]
-
-
-@pytest.mark.tc("ZAC-062")
-def test_closed_zaak_is_listed_among_the_closed_zaken(
-    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
-) -> None:
-    """ZAC's search for closed zaken lists a zaak once it is closed (ZAC indexes it on Open Notificaties' zaken kanaal)."""
-    zaak = zac_zaak()
-    abort(zac, urls["zac"], zaak)
     query = {
         "page": 0,
         "rows": 10,
