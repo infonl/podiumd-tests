@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -35,6 +36,12 @@ pytestmark = [pytest.mark.integration, pytest.mark.ui, pytest.mark.requires("key
 AUTHENTICATE = "/oidc/authenticate/?next=/admin/"
 # The logout control of the Django admins, in Dutch or English.
 LOGOUT = re.compile("Afmelden|Uitloggen|Log out", re.IGNORECASE)
+
+
+def in_admin(url: str, app_url: str) -> bool:
+    """Whether the URL is a page of the logged-in admin: not its login (or login failure) page, nor OIDC's own pages."""
+    path = urlsplit(url).path
+    return url_host(url) == url_host(app_url) and path.startswith("/admin") and not path.startswith("/admin/login")
 
 
 def logs_in_through_keycloak(http: requests.Session, url: str, keycloak: str) -> bool:
@@ -69,7 +76,7 @@ def test_one_login_opens_every_admin(  # pylint: disable=too-many-arguments,too-
     page.wait_for_url(lambda url: url_host(url) == url_host(urls[component]))
     assert not page.url.startswith(realm_url(keycloak, realm_of(podiumd_env))), "Keycloak asked for a new login"
     # A failing OIDC callback also ends on the app's host, on an error page.
-    assert "/admin" in page.url, f"the login did not reach {component}'s admin: {page.url}"
+    assert in_admin(page.url, urls[component]), f"the login did not reach {component}'s admin: {page.url}"
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
@@ -88,7 +95,7 @@ def test_admin_logout_returns_to_the_login(  # pylint: disable=too-many-argument
     need_bootstrap(ADMIN.name)
     page.goto(urls[component] + AUTHENTICATE)
     keycloak_login(page, ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
-    page.wait_for_url(lambda url: url_host(url) == url_host(urls[component]) and "/admin" in url)
+    page.wait_for_url(lambda url: in_admin(url, urls[component]))
     page.get_by_role("button", name=LOGOUT).or_(page.get_by_role("link", name=LOGOUT)).first.click()
     page.goto(urls[component] + "/admin/")
     assert "login" in page.url or url_host(page.url) == url_host(urls["keycloak"]), f"still in the admin: {page.url}"
