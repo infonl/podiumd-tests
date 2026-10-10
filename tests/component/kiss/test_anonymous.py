@@ -1,4 +1,4 @@
-"""KISS without a login: health, the OIDC challenge, and what anonymous users get.
+"""KISS without a login: the OIDC challenge, and what anonymous users get (health: smoke test_api_health).
 
 Ported from TA regression 100 and 147. The logged-in tests (12, 119, 190) need a KCC user
 session: phase 5.
@@ -6,7 +6,6 @@ session: phase 5.
 
 from __future__ import annotations
 
-from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
@@ -14,7 +13,6 @@ import pytest
 from podiumd_tests.oidc import AUTH_PATH
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import describe
-from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import is_server_error
 from podiumd_tests.responses import url_host
 
@@ -49,8 +47,3 @@ def test_search_needs_a_login(http: requests.Session, urls: dict[str, str], meth
         assert url_host(response.headers["Location"]) == url_host(urls["keycloak"])
     else:
         assert response.status_code in REFUSED, describe(response)
-
-
-def test_healthcheck(http: requests.Session, urls: dict[str, str]) -> None:
-    """KISS's own health check answers 200 (TA reg-100, 147)."""
-    expect_status(http.get(urls["kiss"] + "/api/healthcheck"), HTTPStatus.OK)

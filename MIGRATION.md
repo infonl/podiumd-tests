@@ -51,7 +51,7 @@ Sources:
 | `perf/lib.js` | perf (Locust) | 6 | merge | Its auth helpers are the suite's own clients (`clients/platform.py`). |
 | `regression/07-brp-persoon-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/basisregistraties/test_brp.py`, through the api-proxy. |
 | `regression/08-kvk-bedrijf-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/basisregistraties/test_kvk.py` through the api-proxy, which routes to KvK's test API on every estate (TA called that API directly); test set Test BV Donald. |
-| `regression/100-kiss-frontend-basis.spec.ts` | component or integration | 3/4/5 | port | `tests/component/kiss/test_anonymous.py`; the rendered app → `test_kiss_renders_for_the_kcc_user`. |
+| `regression/100-kiss-frontend-basis.spec.ts` | component or integration | 3/4/5 | port | `tests/component/kiss/test_anonymous.py`, health check → `tests/smoke/test_api_health.py`; the rendered app → `test_kiss_renders_for_the_kcc_user`. |
 | `regression/106-portaal-notificatievoorkeur.spec.ts` | component or integration | 3/4/5 | merge | With 165 into `tests/component/openinwoner/test_portaal_inwoner.py`. |
 | `regression/108-probe-contactform.spec.ts` | component or integration | 3/4/5 | merge | With 109 into `tests/integration/test_portaal_openklant.py`; the contact page needs OpenklantApphook (bootstrap `openinwoner-cms-pages`). |
 | `regression/109-portaal-vraag-stellen-bedrijf.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_portaal_openklant.py`: after an eHerkenning login the question belongs to the vestiging's partij. |
