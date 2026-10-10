@@ -498,7 +498,7 @@ Updated 2026-10-08. The detail lives where it is kept up to date: blocked ports 
 - SCC Twente: runs from a machine with access, with the container image; an Azure DevOps template only once pipeline rights exist.
 - The container image is built locally; publishing it (e.g. to GHCR) when a pipeline needs it.
 
-**Perf:** the trend check needs 3 earlier runs with the same users, duration and volume data per environment before it judges; minikube has them only for runs without volume data so far.
+**Perf:** the trend check judges an endpoint after 3 earlier runs with the same users, duration and volume data per environment. A slowdown must exceed both `max_slowdown` and `min_slowdown_ms` (`perf.yaml`). On minikube, 5 trend-checked runs with volume data passed on 2026-10-10.
 
 **Phase 8 (decommission):**
 
