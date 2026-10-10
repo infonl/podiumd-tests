@@ -262,3 +262,26 @@ Sources:
 | `82-portaal-login-config.spec.ts` | smoke | 1 | merge | same spec number as TA `smoke/`; port once, environment-neutral |
 | `92-fb-cross-component-sso.spec.ts` | smoke | 1 | merge | same spec number as TA `smoke/`; port once, environment-neutral |
 | `99-portaal-eherkenning-login.spec.ts` | smoke | 1 | merge | same spec number as TA `smoke/`; port once, environment-neutral |
+
+## Draaiboek
+
+Draaiboek cases of class A or B that no test covers on purpose, and why; `python -m podiumd_tests.draaiboek` reports
+them as out of scope with this reason.
+
+| Cases | Reason |
+|---|---|
+| OF-055, OF-057, OF-058, OF-072, OI-022, OI-024, OI-030, OI-032, OI-047, OI-049, OI-052, OI-053, OI-067, KI-021, KI-022 | eSuite, outside PodiumD |
+| ARCH-008, ARCH-014 | legal check, no system behaviour |
+| OI-016, OI-070 | DigiD machtigen, which Open Inwoner 2.4.3 does not support |
+| OF-074 | a gemeente's own TSA |
+| OFA-001, OFA-003, OFA-005, OFA-006, OFA-011 | Office add-in, outside PodiumD |
+| FB-001, FB-002, ZAC-001 | AD login, which no estate has |
+| ABC-003 | traceable selection, not in Open Archiefbeheer 2.0.0 |
+| ITA-022 | organisation-wide list, not in ITA 3.3 |
+| INT-006 | Signicat's real DigiD broker |
+| CONT-056, CONT-057, CONT-058, CONT-059 | DigiD or eHerkenning down needs the real broker chain; the mocks log in at Keycloak |
+| CONT-045 | SmartDocuments down needs a SmartDocuments mock, which no environment has |
+| CONT-001, CONT-002, CONT-006, KETEN-001 | heading, no case |
+| CONT-046, CONT-047, CONT-050, CONT-051, CONT-052, CONT-053, CONT-054, CONT-055 | expected result "?", and the catalog lost which connection |
+| OF-066, OF-069 | the case does not say what to check |
+| OI-100 | no case: "beheer tests toevoegen" |

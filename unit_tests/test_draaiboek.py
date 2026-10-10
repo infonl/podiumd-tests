@@ -3,6 +3,8 @@
 from podiumd_tests.draaiboek import cited
 from podiumd_tests.draaiboek import marked
 from podiumd_tests.draaiboek import migration
+from podiumd_tests.draaiboek import out_of_scope
+from podiumd_tests.draaiboek import report_row
 from podiumd_tests.draaiboek import status
 
 DECISIONS = {"a.spec.ts": ("port", "x"), "b.spec.ts": ("todo", "y"), "c.spec.ts": ("drop", "z")}
@@ -39,3 +41,19 @@ def test_tc_markers_of_functions_and_modules_are_found(tmp_path):
     found = marked(tests)
     assert found["OF-001"] == {"tests/test_x.py::test_a", "tests/test_x.py::test_b"}
     assert found["OF-003"] == {"tests/test_x.py::test_a"}
+
+
+def test_out_of_scope_reads_the_draaiboek_reasons():
+    reasons = out_of_scope()
+    assert reasons["OI-022"] == reasons["KI-021"] == "eSuite, outside PodiumD"
+    assert "ZAC-004" not in reasons
+
+
+def test_a_reason_makes_an_uncovered_case_out_of_scope_but_never_hides_a_test():
+    case = {"test_id": "OF-066", "klasse": "A", "sub": "Verwijderen", "proces": ""}
+    assert (
+        report_row(case, set(), DECISIONS, set(), "unclear")[1]
+        == "| OF-066 | A | out of scope | Verwijderen | unclear |"
+    )
+    assert report_row(case, set(), DECISIONS, set(), "")[0] == "not covered"
+    assert report_row(case, set(), DECISIONS, {"tests/test_x.py::test_a"}, "unclear")[0] == "covered"
