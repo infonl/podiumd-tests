@@ -33,6 +33,10 @@ podiumd-tests run --env kees00 --tier smoke  # results in results/<YYYY-MM>/<run
 podiumd-tests env init ontw-icat --estate externals --context aks-blue-ontw-icat
 ```
 
+Before a PodiumD release on an environment, run `podiumd-tests snapshot --env kees00`.
+After the release, the full tier compares zaaktypen, ZAC's zaakafhandelparameters and
+the 100 oldest zaken with it. The snapshot keeps hashes, never values.
+
 Tiers: `smoke`, `core`, `full`, `perf`, `chaos`. A profile's `allowed_tiers`
 limits which tiers may run against that environment.
 

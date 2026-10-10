@@ -12,6 +12,7 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.kube import metadata_name
+from podiumd_tests.workloads import pod_containers
 
 if TYPE_CHECKING:
     from podiumd_tests.json_data import JsonObject
@@ -36,21 +37,12 @@ BASELINE_CAPABILITIES = frozenset(
 )
 
 
-def _pod_spec(workload: JsonObject) -> JsonObject:
-    return section(section(section(workload, "spec"), "template"), "spec")
-
-
-def _containers(pod: JsonObject, *, with_init: bool) -> list[JsonObject]:
-    found = entries(pod.get("containers"))
-    return [*entries(pod.get("initContainers")), *found] if with_init else found
-
-
 def baseline_violations(workload: JsonObject) -> list[str]:
     """What in the workload's pod template breaks the Pod Security Standard "baseline"."""
-    name, pod = metadata_name(workload), _pod_spec(workload)
+    name, pod = metadata_name(workload), section(section(section(workload, "spec"), "template"), "spec")
     found = [f"{name}: {key}" for key in ("hostNetwork", "hostPID", "hostIPC") if pod.get(key) is True]
     found += [f"{name}: hostPath volume {v.get('name')}" for v in entries(pod.get("volumes")) if "hostPath" in v]
-    for container in _containers(pod, with_init=True):
+    for container in pod_containers(workload, with_init=True):
         where = f"{name}/{container.get('name')}"
         context = section(container, "securityContext")
         if context.get("privileged") is True:
@@ -67,7 +59,7 @@ def baseline_violations(workload: JsonObject) -> list[str]:
 def unpinned_images(workload: JsonObject) -> list[str]:
     """Images of the workload without a tag or digest, or tagged latest."""
     found: list[str] = []
-    for container in _containers(_pod_spec(workload), with_init=True):
+    for container in pod_containers(workload, with_init=True):
         image = str(container.get("image") or "")
         reference = image.rsplit("/", 1)[-1]
         if "@sha256:" not in image and (":" not in reference or reference.endswith(":latest")):
@@ -78,7 +70,7 @@ def unpinned_images(workload: JsonObject) -> list[str]:
 def missing_requests(workload: JsonObject) -> list[str]:
     """Containers of the workload without a CPU or a memory request: the scheduler cannot place them by size."""
     found: list[str] = []
-    for container in _containers(_pod_spec(workload), with_init=False):
+    for container in pod_containers(workload, with_init=False):
         asked = section(section(container, "resources"), "requests")
         missing = [r for r in ("cpu", "memory") if not asked.get(r)]
         if missing:

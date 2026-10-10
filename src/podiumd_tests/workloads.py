@@ -34,6 +34,13 @@ GOOD_POD_PHASES = frozenset({"Running", "Succeeded"})
 ROOT_TIMEOUT = 10.0
 
 
+def pod_containers(workload: JsonObject, *, with_init: bool) -> list[JsonObject]:
+    """The containers of a Deployment's or StatefulSet's pod template, init containers first when asked."""
+    pod = section(section(section(workload, "spec"), "template"), "spec")
+    found = entries(pod.get("containers"))
+    return [*entries(pod.get("initContainers")), *found] if with_init else found
+
+
 def _owner_kinds(item: Item) -> set[str]:
     return {str(o.get("kind")) for o in entries(section(item, "metadata").get("ownerReferences"))}
 
