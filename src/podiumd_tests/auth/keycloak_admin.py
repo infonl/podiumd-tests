@@ -82,23 +82,26 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
         self, username: str, password: str, attributes: dict[str, list[str]], name: tuple[str, str] | None = None
     ) -> str:
         """Create an enabled user without required actions, by default named PodiumD <username>; its id."""
-        first, last = name or ("PodiumD", username)
-        body = {
-            "username": username,
-            "enabled": True,
-            "email": user_email(username),
-            "emailVerified": True,
-            "firstName": first,
-            "lastName": last,
-            "attributes": attributes,
-            "requiredActions": [],
-            "credentials": [{"type": "password", "value": password, "temporary": False}],
-        }
+        body = {**_user_body(username, attributes, name), "credentials": [_password(password)]}
         self._send("POST", "/users", body, HTTPStatus.CREATED)
         user_id = self.user_id(username)
         if user_id is None:
             msg = f"user {username} not found after creating it"
             raise LookupError(msg)
+        return user_id
+
+    def save_user(
+        self, username: str, password: str, attributes: dict[str, list[str]], name: tuple[str, str] | None = None
+    ) -> str:
+        """Create the user, or update an existing one in place with a new password; its id.
+
+        Updating keeps the user's id, the sub claim apps may have made their own account from.
+        """
+        user_id = self.user_id(username)
+        if user_id is None:
+            return self.create_user(username, password, attributes, name)
+        self._send("PUT", f"/users/{user_id}", _user_body(username, attributes, name), HTTPStatus.NO_CONTENT)
+        self._send("PUT", f"/users/{user_id}/reset-password", _password(password), HTTPStatus.NO_CONTENT)
         return user_id
 
     def delete_user(self, user_id: str) -> None:
@@ -187,3 +190,22 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
     def set_optional_scope(self, client_uuid: str, scope_id: str, *, attached: bool) -> None:
         """Attach a client scope to a client as optional, or detach it."""
         self._send("PUT" if attached else "DELETE", f"/clients/{client_uuid}/optional-client-scopes/{scope_id}", None)
+
+
+def _user_body(username: str, attributes: dict[str, list[str]], name: tuple[str, str] | None) -> JsonObject:
+    """An enabled user without required actions, by default named PodiumD <username>."""
+    first, last = name or ("PodiumD", username)
+    return {
+        "username": username,
+        "enabled": True,
+        "email": user_email(username),
+        "emailVerified": True,
+        "firstName": first,
+        "lastName": last,
+        "attributes": attributes,
+        "requiredActions": [],
+    }
+
+
+def _password(password: str) -> JsonObject:
+    return {"type": "password", "value": password, "temporary": False}

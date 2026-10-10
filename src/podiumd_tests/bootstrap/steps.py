@@ -165,13 +165,10 @@ class KeycloakUser:
         return all(attributes.get(name) == values for name, values in self.attributes.items())
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
-        """Recreate the user with a new password and the wanted roles and groups that exist."""
+        """Create or update the user with a new password and the wanted roles and groups that exist."""
         admin = for_environment(ctx.env)
-        old = admin.user_id(self.username)
-        if old:
-            admin.delete_user(old)
         password = secrets.token_hex(20)
-        user = admin.create_user(self.username, password, self.attributes)
+        user = admin.save_user(self.username, password, self.attributes)
         realm_roles = admin.realm_roles(self.realm_roles)
         admin.add_realm_roles(user, realm_roles)
         missing = sorted(set(self.realm_roles) - {str(r["name"]) for r in realm_roles})

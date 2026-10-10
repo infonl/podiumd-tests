@@ -187,6 +187,8 @@ def keycloak_answers(*, user_exists, has_group):
         f"GET {REALM}/users": (200, [{"id": "u1"}] if user_exists else []),
         f"DELETE {REALM}/users/u1": (204, None),
         f"POST {REALM}/users": (201, None),
+        f"PUT {REALM}/users/u1": (204, None),
+        f"PUT {REALM}/users/u1/reset-password": (204, None),
         f"GET {REALM}/roles": (200, [{"id": "r1", "name": "Behandelaar"}, {"id": "r2", "name": "other"}]),
         f"POST {REALM}/users/u1/role-mappings/realm": (204, None),
         f"GET {REALM}/clients": (200, [{"id": "c1"}]),
@@ -219,7 +221,9 @@ def test_keycloak_user_gets_existing_roles_and_reports_missing_ones(
     password = values[keycloak_password_key("admin")]
     assert len(password) == 40
     calls = [(r.method, r.url.removeprefix(KC).split("?")[0]) for r in sent]
-    assert ("DELETE", f"{REALM}/users/u1") in calls  # a stale user is replaced
+    # An existing user is updated in place: its id is the sub apps made their accounts from.
+    assert ("DELETE", f"{REALM}/users/u1") not in calls
+    assert ("PUT", f"{REALM}/users/u1/reset-password") in calls
     assert ("POST", f"{REALM}/users/u1/role-mappings/clients/c1") in calls
     assert ctx.notes == ["not in realm: Coordinator, group beheerders"]
 
