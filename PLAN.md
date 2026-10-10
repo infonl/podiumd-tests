@@ -455,7 +455,7 @@ Porting rule: triage each source test as **port**, **merge** (into a parametrize
 
 ## 13. Open work
 
-Updated 2026-10-08. The detail lives where it is kept up to date: blocked ports as `todo` rows in `MIGRATION.md` (`grep '| todo |' MIGRATION.md`), product bugs as strict xfails whose reason names the bug (a fix makes the test fail, so it gets noticed).
+Updated 2026-10-10. The detail lives where it is kept up to date: blocked ports as `todo` rows in `MIGRATION.md` (`grep '| todo |' MIGRATION.md`), product bugs as strict xfails whose reason names the bug (a fix makes the test fail, so it gets noticed).
 
 **Blocked ports (waiting for an environment):**
 
@@ -495,6 +495,8 @@ Updated 2026-10-08. The detail lives where it is kept up to date: blocked ports 
 | podiumd chart | Open Beheer's and Referentielijsten's main containers have `resources: {}` (no CPU or memory request) | `test_containers_request_cpu_and_memory` warns (`KNOWN_WITHOUT_REQUESTS`) |
 
 **Configuration finding for the estates:** KISS's Objecten token has no rights on Activiteitenlog, so KISS shows none of ITA's activities (`test_kiss_reads_itas_logboek`, the same in ExternalsPodiumD, podiumd-infra and minikube).
+
+**No network isolation (no test):** neither estate deploys NetworkPolicies (no default-deny; Keycloak's `networkPolicy` is off), and the podiumd chart's only policies, Frank!Gateway's per traffic class (`frankgateway.networkPolicies.enabled`), are off everywhere. Every pod can reach every database, Redis and Elasticsearch of the cluster. podiumd-infra's Cyso clusters run Calico, which would enforce policies; minikube's kindnet ignores them. Tests follow once an estate has a policy model.
 
 **Pipelines (§7a):**
 
