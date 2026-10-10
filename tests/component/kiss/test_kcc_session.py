@@ -5,6 +5,8 @@ Ported from TA smoke 06 and 113, and regression 12 and 100.
 
 from __future__ import annotations
 
+import json
+
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -12,7 +14,11 @@ import pytest
 
 from playwright.sync_api import expect
 
+from podiumd_tests.basisregistraties import EREBOS
+from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
 from podiumd_tests.bootstrap.steps import KCC
+from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
 from podiumd_tests.kcc import KISS_KLANTCONTACTEN
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.kcc import kiss_register
@@ -69,3 +75,27 @@ def test_klantcontact_through_kiss(
     created = expect_status(response, HTTPStatus.CREATED).json()
     registry.add(f"klantcontact {created['url']}", lambda: openklant.delete(str(created["url"])))
     assert openklant.get(f"klantcontacten/{created['uuid']}")["onderwerp"] == body["onderwerp"]
+
+
+@pytest.mark.tc("KI-007")
+def test_person_unknown_to_kiss_is_found_in_the_brp(kiss: requests.Session, urls: dict[str, str]) -> None:
+    """KISS finds a person by BSN through its Haal Centraal BRP proxy.
+
+    KISS rewrites the request body and keeps its Content-Length, so the JSON must be compact, as
+    KISS's own frontend sends it (PLAN §13).
+    """
+    query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": [EREBOS], "fields": ["naam"]}
+    found = kiss.post(
+        urls["kiss"] + "/api/haalcentraal/brp/personen",
+        data=json.dumps(query, separators=(",", ":")),
+        headers={"Content-Type": "application/json"},
+    )
+    personen = entries(expect_status(found, HTTPStatus.OK).json()["personen"])
+    assert [section(p, "naam").get("voornamen") for p in personen] == ["Erebos"]
+
+
+@pytest.mark.tc("KI-013")
+def test_company_unknown_to_kiss_is_found_in_the_kvk(kiss: requests.Session, urls: dict[str, str]) -> None:
+    """KISS finds a company by KvK number through its KvK proxy."""
+    found = expect_status(kiss.get(urls["kiss"] + "/api/kvk/v2/zoeken", params={"kvkNummer": KVK_TEST_NUMMER}), 200)
+    assert KVK_TEST_NUMMER in {str(r.get("kvkNummer")) for r in entries(found.json()["resultaten"])}
