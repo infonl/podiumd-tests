@@ -19,6 +19,7 @@ import pytest
 from podiumd_tests.openinwoner import search_data
 from podiumd_tests.openinwoner import set_site_configuration
 from podiumd_tests.responses import expect_status
+from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -38,6 +39,8 @@ pytestmark = [
 # letters differ: the index also matches word prefixes (edge n-grams).
 SUFFIX = secrets.token_hex(3)
 PASPOORT, GROFVUIL, KEYWORD, BOTH = (f"{w}{SUFFIX}" for w in ("paspoort", "grofvuil", "reisdocument", "beide"))
+# Each Open Inwoner process caches SiteConfiguration for SOLO_CACHE_TIMEOUT (5 s) in local memory.
+SOLO_TIMEOUT = 30
 
 
 @pytest.fixture(scope="module", name="categories")
@@ -122,9 +125,15 @@ def test_no_results_suggest_what_was_meant(http: requests.Session, urls: dict[st
 @pytest.mark.tc("OI-098", "OI-099")
 def test_search_can_be_switched_off(http: requests.Session, urls: dict[str, str], podiumd_env: Environment) -> None:
     """With search switched off in the admin, the search page and links to it answer 404, and the form is gone."""
+    search = urls["openinwoner"] + "/search/"
+
+    def search_answers(status: HTTPStatus) -> bool:
+        return http.get(search, params={"query": PASPOORT}).status_code == status
+
     old = set_site_configuration(podiumd_env, search_enabled=False)
     try:
-        expect_status(http.get(urls["openinwoner"] + "/search/", params={"query": PASPOORT}), HTTPStatus.NOT_FOUND)
+        wait_until(lambda: search_answers(HTTPStatus.NOT_FOUND), timeout=SOLO_TIMEOUT, description="search off")
         assert 'id="search-form"' not in expect_status(http.get(urls["openinwoner"] + "/"), HTTPStatus.OK).text
     finally:
         set_site_configuration(podiumd_env, **old)
+        wait_until(lambda: search_answers(HTTPStatus.OK), timeout=SOLO_TIMEOUT, description="search back on")
