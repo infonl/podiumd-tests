@@ -71,7 +71,7 @@ def cited(tests: Path) -> dict[tuple[str, int], set[str]]:
     return found
 
 
-def _tc_ids(node: ast.expr) -> list[str]:
+def _tc_ids(node: ast.AST) -> list[str]:
     """The case ids of a pytest.mark.tc(...) call, or none for any other expression."""
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "tc":
         return [a.value for a in node.args if isinstance(a, ast.Constant) and isinstance(a.value, str)]
@@ -90,7 +90,8 @@ def marked(tests: Path) -> dict[str, set[str]]:
                 module_ids += [i for v in values for i in _tc_ids(v)]
         functions = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name.startswith("test_")]
         for function in functions:
-            ids = module_ids + [i for d in function.decorator_list for i in _tc_ids(d)]
+            # Also the marks of pytest.param(...) in a parametrize decorator.
+            ids = module_ids + [i for d in function.decorator_list for n in ast.walk(d) for i in _tc_ids(n)]
             for case in ids:
                 found[case].add(f"{path.relative_to(tests.parent).as_posix()}::{function.name}")
     return found

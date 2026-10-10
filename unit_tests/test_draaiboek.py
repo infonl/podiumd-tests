@@ -35,12 +35,14 @@ def test_tc_markers_of_functions_and_modules_are_found(tmp_path):
     tests.mkdir()
     (tests / "test_x.py").write_text(
         'import pytest\npytestmark = [pytest.mark.ui, pytest.mark.tc("OF-001")]\n\n'
-        '@pytest.mark.tc("OF-002", "OF-003")\ndef test_a():\n    pass\n\ndef test_b():\n    pass\n',
+        '@pytest.mark.tc("OF-002", "OF-003")\ndef test_a():\n    pass\n\ndef test_b():\n    pass\n\n'
+        '@pytest.mark.parametrize("x", [pytest.param(1, marks=pytest.mark.tc("OF-004"))])\ndef test_c(x):\n    pass\n',
         encoding="utf-8",
     )
     found = marked(tests)
-    assert found["OF-001"] == {"tests/test_x.py::test_a", "tests/test_x.py::test_b"}
+    assert found["OF-001"] == {"tests/test_x.py::test_a", "tests/test_x.py::test_b", "tests/test_x.py::test_c"}
     assert found["OF-003"] == {"tests/test_x.py::test_a"}
+    assert found["OF-004"] == {"tests/test_x.py::test_c"}
 
 
 def test_out_of_scope_reads_the_draaiboek_reasons():
