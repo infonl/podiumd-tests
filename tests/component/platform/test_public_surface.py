@@ -56,13 +56,6 @@ def test_keycloak_admin_api_is_not_public(
 
 
 @pytest.mark.requires("openzaak")
-def test_openzaak_refuses_a_bogus_token(http: requests.Session, urls: dict[str, str]) -> None:
-    """A token that is not a JWT gets 401 or 403 (TA reg-121)."""
-    response = http.get(f"{urls['openzaak']}/{ZAKEN}/zaken", headers={"Authorization": "Bearer ptest-bogus"})
-    assert response.status_code in REFUSED, describe(response)
-
-
-@pytest.mark.requires("openzaak")
 def test_openzaak_unknown_zaak_and_bad_ordering(openzaak: ApiClient) -> None:
     """An unknown zaak is a 404 and an unknown ordering field a 400, not a server error (TA reg-121)."""
     openzaak.request("GET", f"{ZAKEN}/zaken/{NIL}", HTTPStatus.NOT_FOUND)

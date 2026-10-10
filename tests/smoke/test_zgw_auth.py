@@ -50,7 +50,9 @@ def test_jwt_is_accepted(
     assert isinstance(body["count"], int)
 
 
-def test_jwt_with_wrong_secret_is_refused(http: requests.Session, urls: dict[str, str], client_id: str) -> None:
-    """A token with a wrong signature is refused."""
-    response = _get(http, urls["openzaak"] + "/catalogi/api/v1/catalogussen", zgw_jwt(client_id, "ptest-wrong-secret"))
+@pytest.mark.parametrize("wrong", ["secret", "not-a-jwt"])
+def test_bad_token_is_refused(http: requests.Session, urls: dict[str, str], client_id: str, wrong: str) -> None:
+    """A token with a wrong signature, or one that is no JWT, is refused (TA reg-121, 22b)."""
+    token = zgw_jwt(client_id, "ptest-wrong-secret") if wrong == "secret" else "ptest-bogus"
+    response = _get(http, urls["openzaak"] + "/catalogi/api/v1/catalogussen", token)
     expect_status(response, *REFUSED)

@@ -99,12 +99,11 @@ def test_openbaar_client_cannot_delete(
     "token",
     [
         pytest.param(lambda secret: zgw_jwt(ZGW_CLIENT_ID, secret, issued_at=int(time.time()) - 7200), id="expired"),
-        pytest.param(lambda _secret: zgw_jwt(ZGW_CLIENT_ID, "ptest-wrong-secret"), id="wrong-secret"),
         pytest.param(lambda secret: zgw_jwt("ptest-unknown-client", secret), id="unknown-client"),
     ],
 )
 def test_bad_tokens_are_refused(openzaak: ApiClient, zgw_secret: str, token: Callable[[str], str]) -> None:
-    """An expired token, a wrong signature or an unknown client get 401/403 (TA reg-22a-c)."""
+    """An expired token or an unknown client gets 401/403 (TA reg-22a, c; b: smoke test_bad_token_is_refused)."""
     headers = zgw_headers(token(zgw_secret))
     response = openzaak.http.get(openzaak.url(f"{ZAKEN}/zaken"), headers=headers)
     assert response.status_code in REFUSED, response.status_code
