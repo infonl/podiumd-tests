@@ -158,9 +158,16 @@ def make_betrokkene(
 
 
 def make_actor(
-    openklant: ApiClient, registry: ResourceRegistry, soort: str = "medewerker", name: str | None = None
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    soort: str = "medewerker",
+    name: str | None = None,
+    objecttype: str = "act",
 ) -> JsonObject:
-    """An actor of a kind (medewerker, organisatorische_eenheid, geautomatiseerde_actor); default name: the run tag."""
+    """An actor of a kind (medewerker, organisatorische_eenheid, geautomatiseerde_actor); default name: the run tag.
+
+    objecttype: its actoridentificator's codeObjecttype; ITA reads "grp" and "afd" as groep and afdeling.
+    """
     name = name or registry.tagged(f"actor-{_rng.randint(0, 999_999)}")
     body: dict[str, object] = {
         "naam": name,
@@ -168,7 +175,7 @@ def make_actor(
         "indicatieActief": True,
         "actoridentificator": {
             "objectId": name,
-            "codeObjecttype": "act",
+            "codeObjecttype": objecttype,
             "codeRegister": "obj",
             "codeSoortObjectId": "idf",
         },

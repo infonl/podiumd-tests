@@ -19,10 +19,12 @@ from playwright.sync_api import expect
 
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.bootstrap.steps import IDENTITIES
+from podiumd_tests.bootstrap.steps import ITA_GROEP
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.browser import refuse_cookies
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.kcc import ita_detail_text
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.mailpit import forget_mails
 from podiumd_tests.openinwoner import portal_login
@@ -35,6 +37,7 @@ from podiumd_tests.seed.openklant import clean_up_klantcontacten
 from podiumd_tests.seed.openklant import expanded
 from podiumd_tests.seed.openklant import klantcontact_body
 from podiumd_tests.seed.openklant import klantcontacten_about
+from podiumd_tests.seed.openklant import make_actor
 from podiumd_tests.seed.openklant import make_betrokkene
 from podiumd_tests.seed.openklant import make_klantcontact
 from podiumd_tests.seed.openklant import partijen_of
@@ -62,6 +65,8 @@ pytestmark = [
 
 INWONER, _, BEDRIJF = IDENTITIES
 SUBJECT = "Algemene vraag"
+# Open Inwoner's logins (W1), pages (W5) and Open Klant with the contact flow (W6, W8).
+PORTAL_WIRING = ("openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-openklant")
 MIJN_VRAGEN = "/mijn-zaken/contactmomenten/"
 # PodiumD 3.3.0 showed at most 25 questions.
 MANY_QUESTIONS = 26
@@ -108,7 +113,7 @@ def test_question_shows_in_mijn_vragen(  # pylint: disable=too-many-arguments,to
     need_bootstrap: Callable[..., None],
 ) -> None:
     """A question asked in Mijn vragen becomes a klantcontact in Open Klant and is listed, unanswered (TA int-182)."""
-    need_bootstrap(INWONER.name, "openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-openklant")
+    need_bootstrap(INWONER.name, *PORTAL_WIRING)
     vraag = registry.tagged("vraag")
     clean_up_question(podiumd_env, openklant, registry, vraag)
     card = ask_in_mijn_vragen(page, podiumd_env, vraag)
@@ -124,7 +129,7 @@ def test_profile_email_reaches_open_klant(  # pylint: disable=too-many-arguments
     need_bootstrap: Callable[..., None],
 ) -> None:
     """An e-mail address saved in the profile becomes a digitaal adres of the inwoner's partij (TA reg-179)."""
-    need_bootstrap(INWONER.name, "openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-openklant")
+    need_bootstrap(INWONER.name, *PORTAL_WIRING)
     bsn = INWONER.attributes["bsn"][0]
     adres = f"{registry.tagged('profiel')}@example.invalid"
     # The partij may predate the test (an earlier login made it); its new adres goes anyway. The
@@ -154,7 +159,7 @@ def test_company_question_reaches_open_klant(  # pylint: disable=too-many-argume
     need_bootstrap: Callable[..., None],
 ) -> None:
     """After an eHerkenning login, the contact form sends the question to Open Klant as the vestiging's (TA reg-108, reg-109)."""
-    need_bootstrap(BEDRIJF.name, "openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-openklant")
+    need_bootstrap(BEDRIJF.name, *PORTAL_WIRING)
     vestiging = BEDRIJF.attributes["vestigingsnummer"][0]
     vraag = registry.tagged("bedrijfsvraag")
     clean_up_question(podiumd_env, openklant, registry, vraag)
@@ -206,7 +211,7 @@ def test_mijn_vragen_shows_more_than_one_page_of_questions(  # pylint: disable=t
     need_bootstrap: Callable[..., None],
 ) -> None:
     """Mijn vragen lists every question of the inwoner, also beyond the 25th."""
-    need_bootstrap(INWONER.name, "openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-openklant")
+    need_bootstrap(INWONER.name, *PORTAL_WIRING)
     mijn_vragen = podiumd_env.profile.urls["openinwoner"] + MIJN_VRAGEN
     portal_login(page, podiumd_env, "digid", INWONER, MIJN_VRAGEN)
     partijen = partijen_of(openklant, INWONER.attributes["bsn"][0])
@@ -295,7 +300,7 @@ def test_question_from_the_portal_shows_in_zac(  # pylint: disable=too-many-argu
     ZAC shows a klantcontact's onderwerp as its text, and pages over partijen, not contactmomenten:
     the inwoner's one partij is page 0.
     """
-    need_bootstrap(INWONER.name, "openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-openklant")
+    need_bootstrap(INWONER.name, *PORTAL_WIRING)
     vraag = registry.tagged("zac-vraag")
     clean_up_question(podiumd_env, openklant, registry, vraag)
     asked = datetime.now(tz=UTC)
@@ -307,3 +312,29 @@ def test_question_from_the_portal_shows_in_zac(  # pylint: disable=too-many-argu
         c.get("tekst") == SUBJECT and datetime.fromisoformat(str(c["registratiedatum"])) >= asked
         for c in contactmomenten
     ), f"no question asked after {asked:%H:%M:%S} among {contactmomenten}"
+
+
+@pytest.mark.tc("ITA-030")
+@pytest.mark.requires("ita", "objecten")
+def test_question_from_the_portal_shows_in_full_in_ita(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    openklant: ApiClient,
+    objecten: ApiClient,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """A question from Mijn vragen, routed to the KCC user's groep, shows in ITA with its text."""
+    need_bootstrap(INWONER.name, KCC.name, "openklant-actor-kcc", "objecten-medewerker-kcc", *PORTAL_WIRING)
+    vraag = registry.tagged("ita-detail")
+    clean_up_question(podiumd_env, openklant, registry, vraag)
+    ask_in_mijn_vragen(page, podiumd_env, vraag)
+    taak = expanded(openklant, str(question_in_open_klant(openklant, vraag)["url"]), "leiddeTotInterneTaken")[0]
+    clean_up_logboek(objecten, registry, objecttype_url(podiumd_env, "Activiteitenlog"), str(taak["uuid"]))
+    groep = make_actor(openklant, registry, "organisatorische_eenheid", ITA_GROEP, "grp")
+    openklant.patch(
+        str(taak["url"]), {"toegewezenAanActoren": [*entries(taak["toegewezenAanActoren"]), {"uuid": groep["uuid"]}]}
+    )
+    page.context.clear_cookies()
+    ita = kcc_login(page, podiumd_env, "ita")
+    assert vraag in ita_detail_text(ita, podiumd_env.profile.urls["ita"], taak)

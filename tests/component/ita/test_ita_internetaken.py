@@ -14,9 +14,12 @@ from typing import cast
 
 import pytest
 
+from podiumd_tests.bootstrap.steps import ITA_GROEP
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.json_data import entries
+from podiumd_tests.kcc import ITA_GROUP_ACCESS
+from podiumd_tests.kcc import ita_detail_text
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.mailpit import forget_mails
 from podiumd_tests.responses import describe
@@ -27,6 +30,8 @@ from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import clean_up_klantcontacten
 from podiumd_tests.seed.openklant import klantcontact_body
 from podiumd_tests.seed.openklant import klantcontacten_about
+from podiumd_tests.seed.openklant import make_actor
+from podiumd_tests.seed.openklant import make_betrokkene
 from podiumd_tests.seed.openklant import make_internetaak
 from podiumd_tests.seed.openklant import make_klantcontact
 from podiumd_tests.wait import wait_until
@@ -177,3 +182,26 @@ def test_kiss_reads_itas_logboek(  # pylint: disable=too-many-arguments,too-many
     written = wait_until(lambda: objecten.list("objects", query), timeout=30, description="ITA's logboek entry")
     kiss = objecten_client(podiumd_env, "kiss_logboek_token")
     assert [o["url"] for o in kiss.list("objects", query)] == [o["url"] for o in written]
+
+
+@pytest.mark.tc("ITA-035")
+@ITA_GROUP_ACCESS
+def test_contactverzoek_from_kiss_shows_in_full_in_ita(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    ita: requests.Session,
+    urls: dict[str, str],
+    openklant: ApiClient,
+    objecten: ApiClient,
+    registry: ResourceRegistry,
+    logboek_type: str,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """A contactverzoek as KISS registers it (klantcontact, klant, internetaak to a groep) shows in full in ITA."""
+    need_bootstrap("objecten-medewerker-kcc")
+    groep = make_actor(openklant, registry, "organisatorische_eenheid", ITA_GROEP, "grp")
+    onderwerp = registry.tagged("contactverzoek")
+    klantcontact = make_klantcontact(openklant, registry, onderwerp=onderwerp, inhoud=f"Vraag {onderwerp}")
+    make_betrokkene(openklant, registry, klantcontact, None)
+    taak = make_internetaak(openklant, registry, klantcontact, [groep])
+    clean_up_logboek(objecten, registry, logboek_type, str(taak["uuid"]))
+    detail = ita_detail_text(ita, urls["ita"], taak)
+    assert [v for v in (onderwerp, f"Vraag {onderwerp}", str(taak["toelichting"]), "PodiumD") if v not in detail] == []

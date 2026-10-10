@@ -39,9 +39,9 @@ PRODUCTAANVRAAG_OBJECTTYPE = "Productaanvraag-Dimpact"
 ZGW_PRODUCTAANVRAAG_CLIENT_ID = "ptest-bootstrap-zgw-productaanvraag"
 ZGW_PRODUCTAANVRAAG_STORE_KEY = "ptest_bootstrap_zgw_productaanvraag_secret"
 OBJECTEN_STORE_KEY = "ptest_bootstrap_objecten_token"
-# ITA forwards internetaken to Afdeling and Groep objects and logs each action in an Activiteitenlog
-# object; tests create the first two and clean up all three.
-ITA_OBJECTTYPES = ("Afdeling", "Groep", "Activiteitenlog")
+# ITA forwards internetaken to Afdeling and Groep objects, finds a user's groepen in their Medewerker
+# object and logs each action in an Activiteitenlog object; the suite creates and cleans up all four.
+ITA_OBJECTTYPES = ("Afdeling", "Groep", "Medewerker", "Activiteitenlog")
 # Objecttypes KISS indexes for its search (its elastic-sync jobs vac and kennisbank).
 KISS_OBJECTTYPES = ("VAC", "Kennisartikel")
 OPENKLANT_STORE_KEY = "ptest_bootstrap_openklant_token"

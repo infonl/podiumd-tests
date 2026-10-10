@@ -44,13 +44,16 @@ from podiumd_tests.bootstrap.oidc_mock import KeycloakOidcMock
 from podiumd_tests.bootstrap.oidc_mock import oidc_params
 from podiumd_tests.bootstrap.omc import OmcAbonnement
 from podiumd_tests.bootstrap.zac import ZacEmailConfirmation
+from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.clients.platform import openklant_client
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import delete_partij
 from podiumd_tests.seed.openklant import partijen_of
+from podiumd_tests.seed.openzaak import today
 from podiumd_tests.webhook import WebhookReceiver
 
 if TYPE_CHECKING:
@@ -60,6 +63,7 @@ if TYPE_CHECKING:
 
     from podiumd_tests.bootstrap import Context
     from podiumd_tests.bootstrap import Step
+    from podiumd_tests.json_data import JsonObject
 
 
 @dataclass(frozen=True)
@@ -193,6 +197,65 @@ class KeycloakUser:
         if user:
             admin.delete_user(user)
         return (self.store_key,)
+
+
+# The groep of the KCC test user in ITA: ITA shows a contactverzoek only to members of the
+# afdeling or groep it is assigned to (or to a functioneel beheerder).
+ITA_GROEP = f"{PREFIX}-groep"
+
+
+@dataclass(frozen=True)
+class ItaMedewerker:
+    """The Medewerker object in Objecten of a Keycloak test user, in groep ITA_GROEP.
+
+    ITA finds it by the identificatie the user's samaccountname claim carries.
+    """
+
+    user: KeycloakUser
+    requires: tuple[str, ...] = ("objecten", "ita")
+    wiring: bool = False
+
+    @property
+    def name(self) -> str:
+        """Step name."""
+        return f"objecten-medewerker-{self.user.key}"
+
+    @property
+    def identificatie(self) -> str:
+        """The user's samaccountname."""
+        return self.user.attributes["samaccountname"][0]
+
+    def _found(self, ctx: Context) -> list[JsonObject]:
+        query = {"data_attr": f"identificatie__exact__{self.identificatie}"}
+        return objecten_client(ctx.env).list("objects", query)
+
+    def is_present(self, ctx: Context, /) -> bool:
+        """A Medewerker object with the user's identificatie exists."""
+        return OBJECTEN_STORE_KEY in ctx.store.read() and bool(self._found(ctx))
+
+    def apply(self, ctx: Context, /) -> dict[str, str]:
+        """Recreate the Medewerker object."""
+        self.remove(ctx)
+        data = {
+            "identificatie": self.identificatie,
+            "email": user_email(self.user.username),
+            "groepen": [{"groepsnaam": ITA_GROEP}],
+            "afdelingen": [],
+        }
+        body = {
+            "type": objecttype_url(ctx.env, "Medewerker"),
+            "record": {"typeVersion": 1, "data": data, "startAt": today()},
+        }
+        objecten_client(ctx.env).post("objects", body)
+        return {}
+
+    def remove(self, ctx: Context, /) -> tuple[str, ...]:
+        """Delete the user's Medewerker objects."""
+        if OBJECTEN_STORE_KEY not in ctx.store.read():
+            return ()
+        for found in self._found(ctx):
+            objecten_client(ctx.env).delete(str(found["url"]))
+        return ()
 
 
 @dataclass(frozen=True)
@@ -678,6 +741,7 @@ STEPS: tuple[Step, ...] = (
     KCC,
     ADMIN,
     OpenKlantActor("kcc"),
+    ItaMedewerker(KCC),
     *IDENTITIES,
     # Wiring W1: DigiD and eHerkenning through Keycloak's mock (TA seed-*-oidc-mock.sh, seed-of-digid-oidc.sh).
     KeycloakOidcMock(),
