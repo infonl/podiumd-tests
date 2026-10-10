@@ -22,6 +22,7 @@ from podiumd_tests.bootstrap.names import KISS_OBJECTTYPES
 from podiumd_tests.bootstrap.names import NRC_CLIENT_ID
 from podiumd_tests.bootstrap.names import NRC_STORE_KEY
 from podiumd_tests.bootstrap.names import OBJECTEN_STORE_KEY
+from podiumd_tests.bootstrap.names import OBJECTTYPEN_STORE_KEY
 from podiumd_tests.bootstrap.names import OPENKLANT_OPENINWONER_STORE_KEY
 from podiumd_tests.bootstrap.names import OPENKLANT_STORE_KEY
 from podiumd_tests.bootstrap.names import PREFIX
@@ -656,6 +657,7 @@ STEPS: tuple[Step, ...] = (
         {"client_id": NRC_CLIENT_ID, "scopes": {"nrc": ["notificaties.consumeren", "notificaties.publiceren"]}},
     ),
     token_step("openklant", "openklant.components.token.models", OPENKLANT_STORE_KEY),
+    token_step("objecttypen", "objecttypes.token.models", OBJECTTYPEN_STORE_KEY),
     token_step(
         "objecten",
         "objects.token.models",

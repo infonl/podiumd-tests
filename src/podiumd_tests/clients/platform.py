@@ -12,6 +12,7 @@ from podiumd_tests.auth.zgw_jwt import zgw_jwt
 from podiumd_tests.bootstrap.names import NRC_CLIENT_ID
 from podiumd_tests.bootstrap.names import NRC_STORE_KEY
 from podiumd_tests.bootstrap.names import OBJECTEN_STORE_KEY
+from podiumd_tests.bootstrap.names import OBJECTTYPEN_STORE_KEY
 from podiumd_tests.bootstrap.names import OPENKLANT_STORE_KEY
 from podiumd_tests.clients.api import ApiClient
 
@@ -56,6 +57,14 @@ def objecten_client(env: Environment, token_key: str = OBJECTEN_STORE_KEY) -> Ap
     token = env.credentials.get(token_key)
     headers = {"Authorization": f"Token {token}", "Content-Crs": "EPSG:4326", "Accept-Crs": "EPSG:4326"}
     return ApiClient(env.session(cookies=False), env.profile.urls["objecten"] + "/api/v2", headers)
+
+
+def objecttypen_client(env: Environment) -> ApiClient:
+    """Objecttypen API with the suite's own token."""
+    token = env.credentials.get(OBJECTTYPEN_STORE_KEY)
+    return ApiClient(
+        env.session(cookies=False), env.profile.urls["objecttypen"] + "/api/v2", {"Authorization": f"Token {token}"}
+    )
 
 
 def mailpit_client(env: Environment) -> ApiClient:

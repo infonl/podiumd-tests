@@ -33,6 +33,7 @@ from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.clients.platform import mailpit_client
 from podiumd_tests.clients.platform import objecten_client
+from podiumd_tests.clients.platform import objecttypen_client
 from podiumd_tests.clients.platform import openklant_client
 from podiumd_tests.clients.platform import opennotificaties_client
 from podiumd_tests.clients.platform import openzaak_client
@@ -185,6 +186,13 @@ def fixture_objecten(podiumd_env: Environment, need_bootstrap: Callable[..., Non
     """Objecten API with the suite's own token (bootstrap step objecten-token)."""
     need_bootstrap("objecten-token")
     return objecten_client(podiumd_env)
+
+
+@pytest.fixture(scope="session", name="objecttypen")
+def fixture_objecttypen(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
+    """Objecttypen API with the suite's own token (bootstrap step objecttypen-token)."""
+    need_bootstrap("objecttypen-token")
+    return objecttypen_client(podiumd_env)
 
 
 # The test running now; Open Zaak writes it into its audittrail through X-Audit-Toelichting.
