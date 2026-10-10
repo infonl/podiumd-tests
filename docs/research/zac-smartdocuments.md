@@ -10,8 +10,8 @@ the podiumd chart. For draaiboek ZAC-035, ZAC-036, INT-010 and CONT-045, which a
   ExternalsPodiumD and podiumd-infra environments, and on minikube.
 - ZAC reads the SmartDocuments URL and token from its Deployment's environment. Pointing ZAC at a mock changes the
   environment owner's deployment, unlike Open Formulieren's payment merchants, which are runtime data.
-- minikube runs ZAC's own SmartDocuments WireMock (vendored from ZAC's
-  `scripts/docker-compose/imports/smartdocuments-wiremock/`), but ZAC is not pointed at it.
+- A mock can start from ZAC's own WireMock stubs, `scripts/docker-compose/imports/smartdocuments-wiremock/` in
+  ZAC's repository (minikube removed its unused copy on 2026-10-10).
 - On an estate with the real SmartDocuments, a test can check the connection and the start of a document. The
   document only exists after a user fills in SmartDocuments' own wizard.
 
