@@ -16,6 +16,8 @@ ENDPOINTS = {
     "ok2_klantcontact_create": "openklant",
     "oz_zaken_by_bsn": "openzaak",
     "ok2_partij_by_bsn": "openklant",
+    "obj_vac_create": "objecten",
+    "obj_vac_search": "objecten",
     "zac_search": "zac",
     "kiss_search": "kiss",
     "oi_search": "openinwoner",

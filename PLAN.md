@@ -193,7 +193,7 @@ Revisit this only if perf ever needs heavy load (hundreds of users or more).
 
 **How it runs:**
 
-- `podiumd-tests run --env X --tier perf -- --perf-users 10 --perf-duration 60s` runs Locust headless (defaults 5 users, 30 s), as a subprocess: Locust monkey-patches the standard library on import.
+- `podiumd-tests run --env X --tier perf -- --perf-users 10 --perf-duration 60s` runs Locust headless (defaults 5 users, 60 s; TA's k6 default of 30 s let one worker restart of a single-process app push a p95 over 1500 ms on minikube), as a subprocess: Locust monkey-patches the standard library on import.
 - Besides TA's reads, each Locust user creates a zaak in Open Zaak and a klantcontact in Open Klant (deleted after the timing, tagged with the run tag), looks up zaken and a partij by BSN, and searches in ZAC (Solr), KISS (Elasticsearch) and the portal. With seed-volume's search data, the search term "aanvraag" finds hundreds of volume zaken in ZAC and VAC and kennisartikelen in KISS.
 - The wrapper in `tests/perf/` (marker `perf`, excluded from `full`) asserts the p95 and error-rate thresholds per endpoint from `perf.yaml`.
 - It also compares each endpoint's p95 with the median of the environment's earlier runs with the same settings (users, duration, calls and volume data; at least 3), so a slowdown shows also where absolute numbers mean little, such as minikube.

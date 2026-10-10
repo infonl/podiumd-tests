@@ -63,7 +63,7 @@ def fixture_stats(
     run_tag: str,
 ) -> dict[str, EndpointStats]:
     """The stats of one Locust run against the environment."""
-    need_bootstrap("openzaak-client", "openklant-token", "openzaak-zaaktype", ADMIN.name, KCC.name)
+    need_bootstrap("openzaak-client", "openklant-token", "objecten-token", "openzaak-zaaktype", ADMIN.name, KCC.name)
     directory = perf_dir
     users = str(request.config.getoption("--perf-users"))
     duration = str(request.config.getoption("--perf-duration"))

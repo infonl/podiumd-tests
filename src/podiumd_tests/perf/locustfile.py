@@ -26,12 +26,16 @@ from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import KCC
+from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.clients.platform import openklant_client
 from podiumd_tests.clients.platform import openzaak_client
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
+from podiumd_tests.kcc import vac_data
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.objecten import make_object
+from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import make_klantcontact
 from podiumd_tests.seed.openklant import random_bsn
 from podiumd_tests.seed.openzaak import BSN_FILTER
@@ -89,6 +93,17 @@ def _openklant_calls(env: Environment) -> dict[str, Call]:
     }
 
 
+def _objecten_calls(env: Environment) -> dict[str, Call]:
+    """VAC objects: harmless to create, as no app acts on a new one (a productaanvraag would start a zaak)."""
+    objecten = objecten_client(env)
+    vac = objecttype_url(env, "VAC")
+    query = {"type": vac, "data_attr": f"vraag__icontains__{SEARCH_TERM}", "pageSize": "20"}
+    return {
+        "obj_vac_create": lambda registry: make_object(objecten, registry, vac, vac_data(registry.tagged("perf-vac"))),
+        "obj_vac_search": lambda _r: objecten.request("GET", "objects", 200, params=query),
+    }
+
+
 def _search_calls(env: Environment) -> dict[str, Call]:
     """Searches as users do them: ZAC's (Solr) and KISS's (Elasticsearch) logged in, the portal's anonymous."""
     urls = env.profile.urls
@@ -132,6 +147,8 @@ class ApiUser(User):
             calls |= _openzaak_calls(env)
         if "openklant" in urls:
             calls |= _openklant_calls(env)
+        if "objecten" in urls:
+            calls |= _objecten_calls(env)
         if "api-proxy" in urls:
             query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": [EREBOS], "fields": ["naam"]}
             calls["brp_persoon"] = lambda _r: expect_status(brp_personen(http, urls["api-proxy"], query), 200)
