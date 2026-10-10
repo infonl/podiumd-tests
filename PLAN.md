@@ -486,7 +486,7 @@ Updated 2026-10-08. The detail lives where it is kept up to date: blocked ports 
 | ITA 3.3.2 | its access guard reads Open Klant's deprecated `toegewezenAanActor` (a bare reference) over the expanded actor: a groep member gets 403 on a contactverzoek assigned to the groep first; fixed in ITA 3.3.4 (ITA#582) | `test_contactverzoek_from_kiss_shows_in_full_in_ita` |
 | mozilla-django-oidc-db 2.0.1 | it migrates the deprecated flat group fields (make_users_staff, groups_claim) into `options.group_settings` but reads `options.groups_settings` at login: KeyError, the admin's OIDC callback answers 500 (Open Inwoner on minikube; found by podiumd-minikube) | `test_one_login_opens_every_admin[openinwoner]` |
 | ITA 3.3.2 | forwarding a contactverzoek during an SMTP outage answers 200 but drops the mail to the afdeling or groep (SmtpException logged), no queue, no retry, no message to the user | `test_ita_mail_is_sent_after_a_mail_outage` |
-| OMC 1.17.19 | 206 to every notification ('source' property), so no mail | `tests/integration/test_omc.py` |
+| OMC 1.17.19, also 2.3.1 | 206 to every notification ('source' property), so no mail | `tests/integration/test_omc.py` |
 | Open Inwoner | no "did you mean" on a search without hits, as the draaiboek asks (OI-097); only the autocomplete is fuzzy | `test_no_results_suggest_what_was_meant` |
 | mozilla-django-oidc | an unconfigured admin login answers 500 (`ImproperlyConfigured`) instead of refusing | none: every estate configures it |
 
