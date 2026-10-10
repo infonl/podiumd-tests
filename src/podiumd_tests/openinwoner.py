@@ -44,6 +44,20 @@ def portal_login(page: Page, env: Environment, method: str, user: KeycloakUser, 
         page.goto(portal + next_path)
 
 
+def ask_anonymously(page: Page, env: Environment, subject: str, vraag: str, email: str) -> None:
+    """Ask a question in the contact form without a login, as "Anoniem Test" with this e-mail address."""
+    page.goto(env.profile.urls["openinwoner"] + "/contactformulier/")
+    refuse_cookies(page)
+    form = page.locator("#contactmoment-form")
+    form.locator('select[name="subject"]').select_option(label=subject)
+    form.locator('input[name="first_name"]').fill("Anoniem")
+    form.locator('input[name="last_name"]').fill("Test")
+    form.locator('input[name="email"]').fill(email)
+    form.locator('textarea[name="question"]').fill(vraag)
+    solve_captcha(page)
+    form.get_by_role("button", name="Verzenden").click()
+
+
 def begeleider_login(page: Page, env: Environment) -> None:
     """Log the test begeleider (bootstrap OI_BEGELEIDER) in with its password.
 

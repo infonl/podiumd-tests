@@ -21,15 +21,14 @@ from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.bootstrap.steps import ITA_GROEP
 from podiumd_tests.bootstrap.steps import KCC
-from podiumd_tests.browser import refuse_cookies
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.kcc import ita_detail_text
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.mailpit import forget_mails
+from podiumd_tests.openinwoner import ask_anonymously
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.openinwoner import set_account
-from podiumd_tests.openinwoner import solve_captcha
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import clean_up_logboek
 from podiumd_tests.seed.objecten import objecttype_url
@@ -186,16 +185,7 @@ def test_anonymous_question_reaches_open_klant(  # pylint: disable=too-many-argu
     vraag = registry.tagged("anonieme-vraag")
     adres = f"{vraag}@example.invalid"
     clean_up_question(podiumd_env, openklant, registry, vraag)
-    page.goto(podiumd_env.profile.urls["openinwoner"] + "/contactformulier/")
-    refuse_cookies(page)
-    form = page.locator("#contactmoment-form")
-    form.locator('select[name="subject"]').select_option(label=SUBJECT)
-    form.locator('input[name="first_name"]').fill("Anoniem")
-    form.locator('input[name="last_name"]').fill("Test")
-    form.locator('input[name="email"]').fill(adres)
-    form.locator('textarea[name="question"]').fill(vraag)
-    solve_captcha(page)
-    form.get_by_role("button", name="Verzenden").click()
+    ask_anonymously(page, podiumd_env, SUBJECT, vraag, adres)
     betrokkene = expanded(openklant, str(question_in_open_klant(openklant, vraag)["url"]), "hadBetrokkenen")[0]
     assert betrokkene["wasPartij"] is None, "an anonymous question is linked to a partij"
     assert betrokkene["volledigeNaam"] == "Anoniem Test"

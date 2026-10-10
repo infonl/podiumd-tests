@@ -16,19 +16,29 @@ from playwright.sync_api import expect
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.bootstrap.names import TEST_FORM
 from podiumd_tests.bootstrap.steps import IDENTITIES
+from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.components import COMPONENTS
-from podiumd_tests.django_snippets import run_snippet
+from podiumd_tests.kcc import kcc_login
+from podiumd_tests.mailpit import forget_mails
+from podiumd_tests.mailpit import mail_queue
 from podiumd_tests.mailpit import received
 from podiumd_tests.openformulieren import delete_submission
 from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import start_submission
 from podiumd_tests.openformulieren import submit
+from podiumd_tests.openinwoner import ask_anonymously
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import is_server_error
 from podiumd_tests.responses import root_answers
+from podiumd_tests.seed.objecten import clean_up_logboek
+from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import make_productaanvraag
+from podiumd_tests.seed.objecten import objecttype_url
+from podiumd_tests.seed.openklant import clean_up_klantcontacten
+from podiumd_tests.seed.openklant import make_internetaak
+from podiumd_tests.seed.openklant import make_klantcontact
 from podiumd_tests.seed.openklant import make_submission_contact
 from podiumd_tests.wait import WaitTimeoutError
 from podiumd_tests.wait import wait_until
@@ -58,6 +68,8 @@ INWONER, _, _ = IDENTITIES
 # Open Inwoner's logins (W1), pages (W5) and zaken (W4).
 WIRING = ("openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-zgw-group")
 REGISTRATION_TIMEOUT = 90
+# The subject of the contact form questions (bootstrap openinwoner-openklant).
+QUESTION_SUBJECT = "Algemene vraag"
 # Open Inwoner's Mijn zaken retries its fetch of the zaken before it shows the failure.
 FETCH_RETRY_TIMEOUT_MS = 180_000
 # Time a failed mail gets to be sent again after the outage.
@@ -162,11 +174,7 @@ def test_form_mail_is_sent_after_a_mail_outage(
     address = f"{slug}@example.invalid"
     field = {"type": "textfield", "key": "omschrijving", "label": "Omschrijving"}
     make_form(podiumd_env, registry, slug, [field], {"backend": "email", "options": {"to_emails": [address]}})
-    deployment = podiumd_env.deployment_for("openformulieren")
-    registry.add(
-        f"queued mails to {address}",
-        lambda: run_snippet(podiumd_env.kube, deployment, "openformulieren_mail_queue", {"address": address}),
-    )
+    registry.add(f"queued mails to {address}", lambda: mail_queue(podiumd_env, "openformulieren", "delete", address))
     with component_down(podiumd_env, http, "mailpit"):
         submit(podiumd_env, http, registry, slug, {"omschrijving": slug}, timeout=REGISTRATION_TIMEOUT, registers=False)
     assert slug in received(mailpit, registry, timeout=RETRY_TIMEOUT, to=address)
@@ -234,3 +242,90 @@ def test_without_open_klant_a_zaak_with_a_person_cannot_be_opened(
         assert opened.json().get("message") == "msg.error.server.generic"
         assert root_answers(zac, zac_url, ROOT_TIMEOUT), "ZAC itself fails without Open Klant"
     assert read_zaak(zac, zac_url, str(zaak["uuid"]))["identificatie"] == zaak["identificatie"]
+
+
+@pytest.mark.requires("openinwoner", "openklant", "mailpit")
+@pytest.mark.tc("CONT-063")
+def test_portal_mail_waits_in_the_queue_during_a_mail_outage(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    http: requests.Session,
+    podiumd_env: Environment,
+    openklant: ApiClient,
+    mailpit: ApiClient,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """A contact form question during a mail outage is taken; its mail waits in Open Inwoner's queue and goes out after.
+
+    Open Inwoner's beat retries the queue every hour; the test runs that retry itself once the server is back.
+    """
+    need_bootstrap("openinwoner-cms-pages", "openinwoner-openklant")
+    vraag = registry.tagged("portaal-mailstoring")
+    clean_up_klantcontacten(openklant, registry, QUESTION_SUBJECT, vraag)
+    registry.add(f"queued mails about {vraag}", lambda: mail_queue(podiumd_env, "openinwoner", "delete", vraag))
+    forget_mails(podiumd_env, registry, f'"{vraag}"')
+    with component_down(podiumd_env, http, "mailpit"):
+        ask_anonymously(page, podiumd_env, QUESTION_SUBJECT, vraag, f"{vraag}@example.invalid")
+        expect(
+            page.get_by_text("Vraag verstuurd", exact=False).or_(page.locator(".notification")).first
+        ).to_be_visible()
+        statuses = wait_until(
+            lambda: [
+                s for s in mail_queue(podiumd_env, "openinwoner", "status", vraag) if s in {"Mislukt", "Verzonden"}
+            ],
+            timeout=REGISTRATION_TIMEOUT,
+            description=f"Open Inwoner's attempt to mail {vraag}",
+        )
+        assert "Verzonden" not in statuses
+    mail_queue(podiumd_env, "openinwoner", "retry", vraag)
+    wait_until(
+        lambda: mailpit.get("search", {"query": f'"{vraag}"'}).get("messages"),
+        timeout=REGISTRATION_TIMEOUT,
+        description=f"mail about {vraag} in Mailpit",
+    )
+
+
+@pytest.mark.requires("ita", "openklant", "objecten", "mailpit", "keycloak")
+@pytest.mark.tc("CONT-064")
+@pytest.mark.xfail(
+    strict=True,
+    raises=WaitTimeoutError,
+    reason="ITA 3.3.2 sends mail straight over SMTP: during an outage it logs the SmtpException, still answers 200"
+    " and drops the mail, without a queue or a retry; not yet reported upstream",
+)
+def test_ita_mail_is_sent_after_a_mail_outage(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    http: requests.Session,
+    podiumd_env: Environment,
+    openklant: ApiClient,
+    objecten: ApiClient,
+    mailpit: ApiClient,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """ITA's mail to the groep a contactverzoek is forwarded to during a mail outage is sent once the server is back."""
+    need_bootstrap(KCC.name, "openklant-actor-kcc")
+    ita = kcc_login(page, podiumd_env, "ita")
+    ita_url = podiumd_env.profile.urls["ita"]
+    groep = registry.tagged("groep")
+    adres = f"{groep}@example.invalid"
+    make_object(
+        objecten,
+        registry,
+        objecttype_url(podiumd_env, "Groep"),
+        {"naam": groep, "identificatie": groep, "email": adres},
+    )
+    registry.add(
+        f"actoren of {groep}",
+        lambda: [
+            openklant.delete(str(a["url"])) for a in openklant.list("actoren", {"actoridentificatorObjectId": groep})
+        ],
+    )
+    taak = make_internetaak(openklant, registry, make_klantcontact(openklant, registry), [])
+    clean_up_logboek(objecten, registry, objecttype_url(podiumd_env, "Activiteitenlog"), str(taak["uuid"]))
+    forget_mails(podiumd_env, registry, f'to:"{adres}"')
+    expect_status(ita.post(f"{ita_url}/api/internetaken/{taak['uuid']}/aan-mij-toewijzen", json={}), 200, 201, 204)
+    with component_down(podiumd_env, http, "mailpit"):
+        forward = ita.post(f"{ita_url}/api/internetaken/{taak['uuid']}/forward", json={"groep": groep})
+        expect_status(forward, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    assert received(mailpit, registry, timeout=RETRY_TIMEOUT, to=adres)

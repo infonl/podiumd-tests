@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from typing import TYPE_CHECKING
+from typing import cast
 
 from podiumd_tests.clients.platform import mailpit_client
+from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.wait import wait_until
 
@@ -55,3 +57,10 @@ def forget_mails(env: Environment, registry: ResourceRegistry, query: str) -> No
     """
     if env.capabilities.skip_reason("mailpit") is None:
         registry.add(f"mails {query}", lambda: delete_mails(mailpit_client(env), query))
+
+
+def mail_queue(env: Environment, component: str, action: str, text: str) -> list[str]:
+    """Status, retry or delete (action) the mails mentioning text in the app's django_yubin queue; their statuses."""
+    params: dict[str, object] = {"action": action, "text": text}
+    result = cast("dict[str, list[str]]", run_snippet(env.kube, env.deployment_for(component), "mail_queue", params))
+    return result.get("status", [])
