@@ -5,6 +5,7 @@ allowed_tiers: [smoke, core, full, perf]
 kube:
   context: podiumd-kees00-aks
   namespace: podiumd
+  monitoring_namespace: monitoring
 keyvault: podiumd-kees00-kv
 urls:
   zac: https://zac.kees00.pd.test-rig.nl
@@ -14,7 +15,6 @@ urls:
   kiss: https://contact.kees00.pd.test-rig.nl
   ita: https://ita.kees00.pd.test-rig.nl
   pabc: https://pabc.kees00.pd.test-rig.nl
-  openarchiefbeheer: https://abc.kees00.pd.test-rig.nl
   openinwoner: https://portaal.kees00.pd.test-rig.nl
   openformulieren: https://formulier.kees00.pd.test-rig.nl
   openklant: https://openklant.kees00.pd.test-rig.nl
@@ -22,8 +22,6 @@ urls:
   objecttypen: https://objecttypen.kees00.pd.test-rig.nl
   opennotificaties: https://notificaties.kees00.pd.test-rig.nl
   omc: https://omc.kees00.pd.test-rig.nl
-  openbeheer: https://openbeheer.kees00.pd.test-rig.nl
-  referentielijsten: https://referentielijsten.kees00.pd.test-rig.nl
   grafana: https://grafana.kees00.pd.test-rig.nl
 secrets:
   keycloak_admin_username:

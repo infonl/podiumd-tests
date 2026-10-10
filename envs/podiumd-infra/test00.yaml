@@ -1,0 +1,32 @@
+# ICATT podiumd-infra AKS environment test00 (values/test00/).
+# values/test00/infra.yaml pins no chartVersion.
+estate: podiumd-infra
+allowed_tiers: [smoke, core, full, perf]
+kube:
+  context: podiumd-test00-aks
+  namespace: podiumd
+  monitoring_namespace: monitoring
+keyvault: podiumd-test00-kv
+urls:
+  zac: https://zac.test00.pd.test-rig.nl
+  openzaak: https://openzaak.test00.pd.test-rig.nl
+  keycloak: https://keycloak.test00.pd.test-rig.nl
+  keycloak-admin: https://keycloak-admin.test00.pd.test-rig.nl
+  kiss: https://contact.test00.pd.test-rig.nl
+  # infra.yaml routes ITA only on internetaakafhandeling; ITA's own host ita.test00 has no ingress.
+  ita: https://internetaakafhandeling.test00.pd.test-rig.nl
+  pabc: https://pabc.test00.pd.test-rig.nl
+  openarchiefbeheer: https://abc.test00.pd.test-rig.nl
+  openinwoner: https://portaal.test00.pd.test-rig.nl
+  openformulieren: https://formulier.test00.pd.test-rig.nl
+  openklant: https://openklant.test00.pd.test-rig.nl
+  objecten: https://objecten.test00.pd.test-rig.nl
+  objecttypen: https://objecttypen.test00.pd.test-rig.nl
+  opennotificaties: https://notificaties.test00.pd.test-rig.nl
+secrets:
+  keycloak_admin_username:
+    k8s_secret: {name: keycloak-podiumd-admin, key: username}
+  keycloak_admin_password:
+    k8s_secret: {name: keycloak-podiumd-admin, key: password}
+  keycloak_test_user_password:
+    keyvault: {secret: keycloak-user-test00-password}

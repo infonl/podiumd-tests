@@ -1,0 +1,27 @@
+# ICATT podiumd-infra AKS environment bas00 (values/bas00/).
+estate: podiumd-infra
+chart_version: "4.7.5"
+allowed_tiers: [smoke, core, full, perf]
+kube:
+  context: podiumd-bas00-aks
+  namespace: podiumd
+  monitoring_namespace: monitoring
+keyvault: podiumd-bas00-kv
+urls:
+  zac: https://zac.bas00.pd.test-rig.nl
+  openzaak: https://openzaak.bas00.pd.test-rig.nl
+  keycloak: https://keycloak.bas00.pd.test-rig.nl
+  keycloak-admin: https://keycloak-admin.bas00.pd.test-rig.nl
+  pabc: https://pabc.bas00.pd.test-rig.nl
+  openformulieren: https://formulier.bas00.pd.test-rig.nl
+  openklant: https://openklant.bas00.pd.test-rig.nl
+  objecten: https://objecten.bas00.pd.test-rig.nl
+  objecttypen: https://objecttypen.bas00.pd.test-rig.nl
+  opennotificaties: https://notificaties.bas00.pd.test-rig.nl
+secrets:
+  keycloak_admin_username:
+    k8s_secret: {name: keycloak-podiumd-admin, key: username}
+  keycloak_admin_password:
+    k8s_secret: {name: keycloak-podiumd-admin, key: password}
+  keycloak_test_user_password:
+    keyvault: {secret: keycloak-user-bas00-password}

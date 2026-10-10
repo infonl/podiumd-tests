@@ -1,0 +1,27 @@
+# ICATT podiumd-infra AKS environment anna00 (values/anna00/).
+estate: podiumd-infra
+chart_version: "4.7.5"
+allowed_tiers: [smoke, core, full, perf]
+kube:
+  context: podiumd-anna00-aks
+  namespace: podiumd
+  monitoring_namespace: monitoring
+keyvault: podiumd-anna00-kv
+urls:
+  zac: https://zac.anna00.pd.test-rig.nl
+  openzaak: https://openzaak.anna00.pd.test-rig.nl
+  keycloak: https://keycloak.anna00.pd.test-rig.nl
+  keycloak-admin: https://keycloak-admin.anna00.pd.test-rig.nl
+  pabc: https://pabc.anna00.pd.test-rig.nl
+  openformulieren: https://formulier.anna00.pd.test-rig.nl
+  openklant: https://openklant.anna00.pd.test-rig.nl
+  objecten: https://objecten.anna00.pd.test-rig.nl
+  objecttypen: https://objecttypen.anna00.pd.test-rig.nl
+  opennotificaties: https://notificaties.anna00.pd.test-rig.nl
+secrets:
+  keycloak_admin_username:
+    k8s_secret: {name: keycloak-podiumd-admin, key: username}
+  keycloak_admin_password:
+    k8s_secret: {name: keycloak-podiumd-admin, key: password}
+  keycloak_test_user_password:
+    keyvault: {secret: keycloak-user-anna00-password}
