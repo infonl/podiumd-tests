@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from playwright.sync_api import sync_playwright
 
+from podiumd_tests.auth.keycloak import one_login_at_a_time
 from podiumd_tests.responses import url_host
 
 if TYPE_CHECKING:
@@ -53,7 +54,9 @@ def keycloak_login(page: Page, username: str, password: str) -> None:
     """Fill and submit the Keycloak login form the page shows."""
     page.locator("#username").fill(username)
     page.locator("#password").fill(password)
-    page.locator("#kc-login").click()
+    # Keycloak checks the login during the form's POST, the navigation the click starts.
+    with one_login_at_a_time(username), page.expect_navigation():
+        page.locator("#kc-login").click()
 
 
 def redirect_login(page: Page, env: Environment, app_url: str, username: str, password: str) -> requests.Session:
