@@ -30,3 +30,9 @@ secrets:
     k8s_secret: {name: keycloak-podiumd-admin, key: password}
   keycloak_test_user_password:
     keyvault: {secret: keycloak-user-kees00-password}
+settings:
+  # The owner allows bootstrap to change these (2026-10-10). The ZAC ones act on productaanvraag_zaaktype,
+  # which needs kees00's ZAC zaakafhandelparameters (runtime data, not in its values).
+  zac_email_confirmation: true
+  zac_besluittype: true
+  kiss_kanalen: true
