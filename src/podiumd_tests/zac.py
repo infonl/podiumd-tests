@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+from datetime import timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
@@ -110,8 +111,11 @@ def productaanvraag_zaak(
     openzaak: a client that may read and delete zaken of the zaaktype (bootstrap openzaak-client-productaanvraag).
     """
 
+    # ZAC dates the zaak in Dutch time: around midnight a day after the UTC date.
+    since = (date.fromisoformat(today()) - timedelta(days=1)).isoformat()
+
     def started() -> JsonObject | None:
-        zaken = openzaak.list(f"{ZAKEN}/zaken", {"startdatum": today()})
+        zaken = openzaak.list(f"{ZAKEN}/zaken", {"startdatum__gte": since})
         return next((z for z in zaken if kenmerk in str(z.get("toelichting") or "")), None)
 
     zaak = wait_until(started, timeout=timeout, interval=3, description=f"zaak for productaanvraag {kenmerk}")
