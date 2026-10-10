@@ -104,6 +104,10 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
         self._send("PUT", f"/users/{user_id}/reset-password", _password(password), HTTPStatus.NO_CONTENT)
         return user_id
 
+    def brute_force_status(self, user_id: str) -> JsonObject:
+        """Keycloak's brute-force detection state of a user: disabled (locked), numFailures."""
+        return cast("JsonObject", self._get(f"/attack-detection/brute-force/users/{user_id}"))
+
     def delete_user(self, user_id: str) -> None:
         """Delete a user."""
         self._send("DELETE", f"/users/{user_id}", None)

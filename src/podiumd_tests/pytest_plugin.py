@@ -55,6 +55,7 @@ from podiumd_tests.zac import zac_session
 if TYPE_CHECKING:
     from collections.abc import Callable
     from collections.abc import Iterator
+    from collections.abc import Sequence
 
     import requests
 
@@ -400,9 +401,11 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
             pytest.skip(reason)
 
 
-def requiring(component: str, *values: object, test_id: str | None = None) -> ParameterSet:
-    """A pytest.param with these values that skips unless the environment has the component.
+def requiring(
+    component: str, *values: object, test_id: str | None = None, marks: Sequence[pytest.MarkDecorator] = ()
+) -> ParameterSet:
+    """A pytest.param with these values that skips unless the environment has the component; marks add to that.
 
     For tests parametrized per component, e.g. [requiring(c, c) for c in COMPONENTS].
     """
-    return pytest.param(*values, id=test_id or component, marks=pytest.mark.requires(component))
+    return pytest.param(*values, id=test_id or component, marks=[pytest.mark.requires(component), *marks])

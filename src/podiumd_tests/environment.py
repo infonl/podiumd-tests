@@ -20,6 +20,7 @@ from podiumd_tests.kube import metadata_name
 from podiumd_tests.process import Runner
 from podiumd_tests.process import run_process
 from podiumd_tests.sessions import make_session
+from podiumd_tests.sessions import peer_certificate
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -78,6 +79,10 @@ class Environment:
             handle.write(bundle)
         Path(handle.name).replace(path)
         return str(path)
+
+    def peer_certificate(self, url: str) -> dict[str, object]:
+        """The verified certificate the host of an https profile URL presents."""
+        return peer_certificate(url, self.ingress_ip(), self.ca_file)
 
     def session(self, *, cookies: bool = True) -> requests.Session:
         """HTTP session for the profile URLs; cookies=False for token APIs."""

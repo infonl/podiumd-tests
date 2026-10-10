@@ -7,6 +7,9 @@ clients keep using the real URLs, e.g. http://zac.local/.
 
 from __future__ import annotations
 
+import socket
+import ssl
+
 from http.cookiejar import DefaultCookiePolicy
 from typing import TYPE_CHECKING
 from typing import cast
@@ -126,3 +129,15 @@ def make_session(
         session.mount("http://", adapter)
         session.mount("https://", adapter)
     return session
+
+
+def peer_certificate(url: str, ingress_ip: str | None = None, ca_file: str | None = None) -> dict[str, object]:
+    """The certificate the host of an https URL presents, verified for that host; through ingress_ip if given."""
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    context = ssl.create_default_context(cafile=ca_file)
+    with (
+        socket.create_connection((ingress_ip or host, parts.port or 443), DEFAULT_TIMEOUT) as connection,
+        context.wrap_socket(connection, server_hostname=host) as tls,
+    ):
+        return cast("dict[str, object]", tls.getpeercert())
