@@ -2,7 +2,7 @@
 
 In host-header mode (minikube), requests to a profile host go to the IP of
 the ingress service, with the original host in the Host header. Tests and
-clients keep using the real URLs, e.g. http://zac.local/.
+clients keep using the real URLs, e.g. https://zac.local/.
 """
 
 from __future__ import annotations
