@@ -85,6 +85,12 @@ def question_in_open_klant(openklant: ApiClient, vraag: str) -> JsonObject:
     return found[0]
 
 
+def asked_by(openklant: ApiClient, vraag: str) -> set[str]:
+    """URLs of the partijen the question's klantcontact names as betrokkenen."""
+    betrokkenen = expanded(openklant, str(question_in_open_klant(openklant, vraag)["url"]), "hadBetrokkenen")
+    return {str(section(b, "wasPartij").get("url")) for b in betrokkenen}
+
+
 def ask_in_mijn_vragen(page: Page, podiumd_env: Environment, vraag: str) -> Locator:
     """Log the inwoner in, ask the question in Mijn vragen; its card in the reloaded list."""
     mijn_vragen = podiumd_env.profile.urls["openinwoner"] + MIJN_VRAGEN
@@ -117,6 +123,8 @@ def test_question_shows_in_mijn_vragen(  # pylint: disable=too-many-arguments,to
     clean_up_question(podiumd_env, openklant, registry, vraag)
     card = ask_in_mijn_vragen(page, podiumd_env, vraag)
     expect(card).to_contain_text("Onbeantwoord")
+    bsn = INWONER.attributes["bsn"][0]
+    assert asked_by(openklant, vraag) & set(partijen_of(openklant, bsn)), "the question is not the inwoner's"
 
 
 @pytest.mark.tc("OI-023")
@@ -167,9 +175,7 @@ def test_company_question_reaches_open_klant(  # pylint: disable=too-many-argume
     form.locator('select[name="subject"]').select_option(label=SUBJECT)
     form.locator('textarea[name="question"]').fill(vraag)
     form.get_by_role("button", name="Verzenden").click()
-    betrokkenen = expanded(openklant, str(question_in_open_klant(openklant, vraag)["url"]), "hadBetrokkenen")
-    partijen = {str(section(b, "wasPartij").get("url")) for b in betrokkenen}
-    assert partijen & set(partijen_of(openklant, vestiging)), "the question is not the vestiging's"
+    assert asked_by(openklant, vraag) & set(partijen_of(openklant, vestiging)), "the question is not the vestiging's"
 
 
 @pytest.mark.tc("OI-038", "OI-079")
