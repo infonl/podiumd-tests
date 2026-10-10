@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 DEFAULT_TIMEOUT = 30
 # Django project path in every Maykin image (Open Zaak, Open Klant, Objecten, Open Inwoner).
 MANAGE_PY = "/app/src/manage.py"
+READ_STDIN = "import sys; exec(sys.stdin.read())"
 DJANGO_VALUE_MARKER = "PTEST_VALUE="
 
 
@@ -120,9 +121,22 @@ class Kube:
         The code goes over stdin, so nothing in it appears in argv or errors.
         The stdout also holds Django's own chatter ("118 objects imported
         automatically"); use django_value() to pick out one printed value.
+        `shell -c` reads stdin itself: plain `shell` checks stdin without
+        waiting and falls back to the interactive interpreter when the code
+        has not arrived yet.
         """
         return self.run(
-            "exec", "-i", f"deploy/{deployment}", "--", "python", MANAGE_PY, "shell", stdin=code, timeout=timeout
+            "exec",
+            "-i",
+            f"deploy/{deployment}",
+            "--",
+            "python",
+            MANAGE_PY,
+            "shell",
+            "-c",
+            READ_STDIN,
+            stdin=code,
+            timeout=timeout,
         )
 
     def secret_value(self, name: str, key: str) -> str:
