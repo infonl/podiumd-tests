@@ -1,0 +1,31 @@
+# SSC Twente ExternalsPodiumD environment ontw-dim1 (applications/gemeenten/dim1/ontw/).
+# Smoke only until the allowed tiers are decided (PLAN.md R20).
+estate: externals
+chart_version: "4.9.1"
+allowed_tiers: [smoke]
+kube:
+  context: aks-blue-ontw-dim1
+  namespace: podiumd
+  monitoring_namespace: monitoring
+keyvault: kv-ontw-dim1
+urls:
+  zac: https://ontw-zac.dev.dimpact.nl
+  openzaak: https://ontw-openzaak.dev.dimpact.nl
+  openklant: https://ontw-openklant.dev.dimpact.nl
+  objecten: https://ontw-objecten.dev.dimpact.nl
+  objecttypen: https://ontw-objecttypen.dev.dimpact.nl
+  opennotificaties: https://ontw-notificaties.dev.dimpact.nl
+  openformulieren: https://ontw-formulier.dev.dimpact.nl
+  openinwoner: https://ontw-mijn.dev.dimpact.nl
+  keycloak: https://ontw-keycloak.dev.dimpact.nl
+  keycloak-admin: https://ontw-keycloak-admin.dev.dimpact.nl
+  kiss: https://ontw-contact.dev.dimpact.nl
+  ita: https://ontw-ita.dev.dimpact.nl
+  pabc: https://ontw-pabc.dev.dimpact.nl
+  openarchiefbeheer: https://ontw-abc.dev.dimpact.nl
+  openbeheer: https://ontw-openbeheer.dev.dimpact.nl
+  referentielijsten: https://ontw-referentielijsten.dev.dimpact.nl
+  grafana: https://ontw-podiumd-logs.dev.dimpact.nl
+secrets:
+  pabc_api_key:
+    pod_env: {deployment: pabc, var: API_KEY__0}

@@ -1,6 +1,7 @@
 # SSC Twente ExternalsPodiumD environment ontw-dimp (applications/gemeenten/dimp/ontw/).
 # Smoke only until the allowed tiers are decided (PLAN.md R20).
 estate: externals
+chart_version: "4.9.1"
 allowed_tiers: [smoke]
 kube:
   context: aks-blue-ontw-dimp
@@ -8,8 +9,12 @@ kube:
   monitoring_namespace: monitoring
 keyvault: kv-ontw-dimp
 urls:
+  zac: https://ontw-zac.dimpact.nl
   openzaak: https://ontw-openzaak.dimpact.nl
   openklant: https://ontw-openklant.dimpact.nl
+  objecten: https://ontw-objecten.dimpact.nl
+  objecttypen: https://ontw-objecttypen.dimpact.nl
+  opennotificaties: https://ontw-notificaties.dimpact.nl
   openformulieren: https://ontw-formulier.dimpact.nl
   openinwoner: https://ontw-mijn.dimpact.nl
   keycloak: https://ontw-keycloak.dimpact.nl
@@ -18,6 +23,8 @@ urls:
   ita: https://ontw-ita.dimpact.nl
   pabc: https://ontw-pabc.dimpact.nl
   openarchiefbeheer: https://ontw-abc.dimpact.nl
+  openbeheer: https://ontw-openbeheer.dimpact.nl
+  grafana: https://ontw-podiumd-logs.dimpact.nl
 secrets:
   pabc_api_key:
     pod_env: {deployment: pabc, var: API_KEY__0}

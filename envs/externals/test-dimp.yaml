@@ -1,0 +1,29 @@
+# SSC Twente ExternalsPodiumD environment test-dimp (applications/gemeenten/dimp/test/).
+# Smoke only until the allowed tiers are decided (PLAN.md R20).
+estate: externals
+chart_version: "4.9.1"
+allowed_tiers: [smoke]
+kube:
+  context: aks-blue-test-dimp
+  namespace: podiumd
+  monitoring_namespace: monitoring
+keyvault: kv-test-dimp
+urls:
+  zac: https://test-zac.dimpact.nl
+  openzaak: https://test-openzaak.dimpact.nl
+  openklant: https://test-openklant.dimpact.nl
+  objecten: https://test-objecten.dimpact.nl
+  objecttypen: https://test-objecttypen.dimpact.nl
+  opennotificaties: https://test-notificaties.dimpact.nl
+  openformulieren: https://test-formulier.dimpact.nl
+  openinwoner: https://test-mijn.dimpact.nl
+  keycloak: https://test-keycloak.dimpact.nl
+  keycloak-admin: https://test-keycloak-admin.dimpact.nl
+  kiss: https://test-contact.dimpact.nl
+  ita: https://test-ita.dimpact.nl
+  pabc: https://test-pabc.dimpact.nl
+  openarchiefbeheer: https://test-abc.dimpact.nl
+  grafana: https://test-podiumd-logs.dimpact.nl
+secrets:
+  pabc_api_key:
+    pod_env: {deployment: pabc, var: API_KEY__0}
