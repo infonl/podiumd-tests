@@ -59,7 +59,7 @@ def test_zaak_closes_with_resultaat_and_eindstatus(
 @pytest.mark.xfail(
     strict=True,
     reason="Open Zaak 1.29.3: DELETE of a zaak with a resultaat answers 500 although it deletes the zaak "
-    "(vng_api_common etag recalculated for the deleted resultaat); not yet reported upstream",
+    "(vng_api_common etag recalculated for the deleted resultaat); open-zaak#2484, fixed on main after 1.30.0",
 )
 def test_closed_zaak_delete_answers_204(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """Deleting a zaak with a resultaat answers 204."""

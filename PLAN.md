@@ -465,15 +465,15 @@ Updated 2026-10-10. The detail lives where it is kept up to date: blocked ports 
 | TA smoke 155, regression 156 | a profile with an `esuite` URL and credentials (eSuite is outside PodiumD) |
 | TA `perf/fg-compare.js` | an environment with both a Frank!Gateway route and a direct route to Open Zaak |
 
-**Findings to report upstream** (each a strict xfail; reasons say "not yet reported upstream"):
+**Findings to report upstream** (each a strict xfail; a reason names the upstream issue once there is one; issue texts ready to file in `bug-reports/issues/`, not committed):
 
 | Product | Finding | Test |
 |---|---|---|
-| Open Zaak 1.29.3 | DELETE of a zaak with a resultaat answers 500 although it deletes it | `test_closed_zaak_delete_answers_204` |
+| Open Zaak 1.29.3 | DELETE of a zaak with a resultaat answers 500 although it deletes it (open-zaak#2484, fixed on main after 1.30.0) | `test_closed_zaak_delete_answers_204` |
 | Open Zaak 1.29.3 | `_zoek` ignores an unknown filter and returns all zaken | `test_zoek_refuses_an_unknown_filter` |
 | Open Zaak 1.29.3 | audittrails need `heeft_alle_autorisaties` | `test_document_audittrail_with_catalogus_rights` |
 | Open Archiefbeheer | a destruction never finishes because of the Open Zaak 500 | `test_destruction_deletes_the_zaak_and_leaves_a_report` |
-| Open Archiefbeheer 2.0.0 | `process_review_response` is queued inside the request's transaction (no `on_commit`): a quick worker finds no ReviewResponse and the list stays `changes_requested` | non-strict xfail `RESPONSE_RACE` on four review-response tests |
+| Open Archiefbeheer 2.0.0 | `process_review_response` is queued inside the request's transaction (no `on_commit`): a quick worker finds no ReviewResponse and the list stays `changes_requested` | non-strict xfail `RESPONSE_RACE` (open-archiefbeheer#1103 reports the symptom) on four review-response tests |
 | Open Archiefbeheer 2.0.0 | the reviewer, while the list is assigned to it, can rename the list | `test_only_the_record_manager_changes_the_list[reviewer]` |
 | Open Archiefbeheer 2.0.0 | a review response cannot empty the archiefactiedatum, so "keep forever" cannot be taken over | `test_keeping_forever_empties_the_archiefactiedatum` |
 | Open Notificaties | an unreachable callback URL answers 500 instead of 400 | `test_abonnement_with_an_unreachable_callback_is_refused` |

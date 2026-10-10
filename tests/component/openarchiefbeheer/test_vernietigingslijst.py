@@ -80,7 +80,7 @@ RESPONSE_RACE = pytest.mark.xfail(
     raises=WaitTimeoutError,
     reason="Open Archiefbeheer 2.0.0 queues process_review_response inside the request's transaction"
     " (destruction/api/serializers.py: .delay without on_commit); a quick worker finds no ReviewResponse"
-    " (DoesNotExist) and the list stays changes_requested; not yet reported",
+    " (DoesNotExist) and the list stays changes_requested; open-archiefbeheer#1103 (symptom only)",
 )
 REVIEWER_RENAMES = pytest.mark.xfail(
     strict=True,
@@ -557,7 +557,7 @@ DESTRUCTION_FAILS = pytest.mark.xfail(
     strict=True,
     reason="Open Zaak 1.29.3 answers 500 on DELETE of a zaak with a resultaat although it deletes it"
     " (test_closed_zaak_delete_answers_204); Open Archiefbeheer marks the item failed, so the list"
-    " never reaches deleted and files no report; not yet reported upstream",
+    " never reaches deleted and files no report; open-zaak#2484",
 )
 # Columns of the report's sheet "Deleted zaken": the metadata OAB keeps of a destroyed zaak.
 REPORT_COLUMNS = ("Zaak Identificatie", "Zaaktype Identificatie", "Resultaat", "Zaak Startdatum", "Zaak Einddatum")
