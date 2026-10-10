@@ -390,6 +390,8 @@ OAB_ROLES = {
     "reviewer": "Reviewer",
     "coreviewer": "Co-reviewer",
     "archivist": "Archivist",
+    # The functioneel beheerder: the only role that may change OAB's archive configuration.
+    "beheerder": "Administrator",
 }
 # The klantcontactmedewerker of KISS and ITA (TA kcc-medewerker).
 # The test admin: ZAC beheerder, PABC administrator and admin of the Django apps' SSO.

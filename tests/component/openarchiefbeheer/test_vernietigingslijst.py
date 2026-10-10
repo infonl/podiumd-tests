@@ -8,7 +8,9 @@ tests are destructive (tier chaos) and run on one worker.
 
 from __future__ import annotations
 
+import io
 import secrets
+import zipfile
 
 from datetime import UTC
 from datetime import datetime
@@ -36,7 +38,6 @@ from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import close_zaak
-from podiumd_tests.seed.openzaak import delete_documents_of
 from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.openzaak import today
@@ -69,6 +70,7 @@ PERMISSIONS = {
     "reviewer": {"canStartDestruction": False, "canReviewDestruction": True},
     "coreviewer": {"canStartDestruction": False, "canCoReviewDestruction": True},
     "archivist": {"canStartDestruction": False, "canReviewFinalList": True},
+    "beheerder": {"canConfigureApplication": True},
 }
 
 
@@ -550,36 +552,30 @@ def fixture_archive_config(podiumd_env: Environment) -> Iterator[Callable[..., N
         set_archive_config(podiumd_env, old)
 
 
-@pytest.mark.destructive
-@pytest.mark.xfail(
+# The destruction never completes on Open Zaak 1.29.3.
+DESTRUCTION_FAILS = pytest.mark.xfail(
     strict=True,
     reason="Open Zaak 1.29.3 answers 500 on DELETE of a zaak with a resultaat although it deletes it"
     " (test_closed_zaak_delete_answers_204); Open Archiefbeheer marks the item failed, so the list"
     " never reaches deleted and files no report; not yet reported upstream",
 )
-@pytest.mark.tc("ABC-032")
-def test_destruction_deletes_the_zaak_and_leaves_a_report(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+# Columns of the report's sheet "Deleted zaken": the metadata OAB keeps of a destroyed zaak.
+REPORT_COLUMNS = ("Zaak Identificatie", "Zaaktype Identificatie", "Resultaat", "Zaak Startdatum", "Zaak Einddatum")
+
+
+def destroy(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # one flow
     podiumd_env: Environment,
     oab: Callable[[str], requests.Session],
     api: str,
     openzaak: ApiClient,
-    zaak: JsonObject,
     parts: ZaaktypeParts,
     registry: ResourceRegistry,
-    archive_config: Callable[..., None],
-) -> None:
-    """The destruction deletes the zaak in Open Zaak and files a report the record manager downloads (TA reg-170).
+    lijst: str,
+) -> str:
+    """Destroy the list now; once it is deleted, the text of the report the record manager downloads.
 
-    The report goes to a zaak of the test zaaktype; the waiting period is skipped for this list only.
+    The report goes to a zaak of the test zaaktype (ArchiveConfig, set back after the test).
     """
-    archive_config(
-        bronorganisatie=TEST_CATALOGUS_RSIN,
-        zaaktype=parts.zaaktype,
-        statustype=str(parts.statustypen[-1]["url"]),
-        resultaattype=parts.resultaattypen[0],
-        informatieobjecttype=parts.informatieobjecttype,
-    )
-    lijst = ready_to_delete(oab, api, zaak, registry)
     naam = str(
         expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/"), HTTPStatus.OK).json()["name"]
     )
@@ -587,8 +583,7 @@ def test_destruction_deletes_the_zaak_and_leaves_a_report(  # pylint: disable=to
     def delete_report() -> None:
         for rapport in openzaak.list(f"{ZAKEN}/zaken", {"zaaktype": parts.zaaktype}):
             if naam in str(rapport.get("toelichting") or ""):
-                delete_documents_of(openzaak, str(rapport["url"]))
-                delete_zaak(openzaak, str(rapport["url"]))
+                delete_zaak(openzaak, str(rapport["url"]), with_documents=True)
 
     registry.add(f"destruction report of {naam}", delete_report)
     queue(oab, api, lijst)
@@ -600,9 +595,42 @@ def test_destruction_deletes_the_zaak_and_leaves_a_report(  # pylint: disable=to
 
     assert wait_until(processed, timeout=120, description=f"destruction of list {lijst}") == "succeeded"
     assert status(oab, api, lijst) == "deleted"
-    openzaak.request("GET", str(zaak["url"]), HTTPStatus.NOT_FOUND)
     report = oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/download_report/")
-    assert expect_status(report, HTTPStatus.OK).content
+    # An xlsx: its cell texts are in the shared strings.
+    with zipfile.ZipFile(io.BytesIO(expect_status(report, HTTPStatus.OK).content)) as workbook:
+        return workbook.read("xl/sharedStrings.xml").decode()
+
+
+def report_config(parts: ZaaktypeParts) -> dict[str, object]:
+    """ArchiveConfig fields that file the destruction report as a zaak of the test zaaktype."""
+    return {
+        "bronorganisatie": TEST_CATALOGUS_RSIN,
+        "zaaktype": parts.zaaktype,
+        "statustype": str(parts.statustypen[-1]["url"]),
+        "resultaattype": parts.resultaattypen[0],
+        "informatieobjecttype": parts.informatieobjecttype,
+    }
+
+
+@pytest.mark.destructive
+@DESTRUCTION_FAILS
+@pytest.mark.tc("ABC-032", "ABC-033")
+def test_destruction_deletes_the_zaak_and_leaves_a_report(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    podiumd_env: Environment,
+    oab: Callable[[str], requests.Session],
+    api: str,
+    openzaak: ApiClient,
+    zaak: JsonObject,
+    parts: ZaaktypeParts,
+    registry: ResourceRegistry,
+    archive_config: Callable[..., None],
+) -> None:
+    """The destruction deletes the zaak in Open Zaak; the report keeps its metadata (TA reg-170)."""
+    archive_config(**report_config(parts))
+    report = destroy(podiumd_env, oab, api, openzaak, parts, registry, ready_to_delete(oab, api, zaak, registry))
+    openzaak.request("GET", str(zaak["url"]), HTTPStatus.NOT_FOUND)
+    assert str(zaak["identificatie"]) in report
+    assert [c for c in REPORT_COLUMNS if c not in report] == []
 
 
 @pytest.mark.destructive
@@ -619,3 +647,64 @@ def test_short_procedure_skips_the_archivist(
     lijst = new_list(oab, api, zaak, registry)
     review(oab, api, "reviewer", lijst, decision="accepted")
     assert status(oab, api, lijst) == "ready_to_delete"
+
+
+@pytest.mark.destructive
+@pytest.mark.tc("ABC-034", "ABC-035")
+def test_beheerder_sets_the_short_procedure_zaaktypen(
+    oab: Callable[[str], requests.Session], api: str, registry: ResourceRegistry
+) -> None:
+    """Only the functioneel beheerder changes which zaaktypen take the short procedure, and the choice is kept."""
+    config = f"{api}/archive-config"
+    old = expect_status(oab("beheerder").get(config), HTTPStatus.OK).json()["zaaktypesShortProcess"]
+    registry.add(
+        "short procedure zaaktypen",
+        lambda: expect_status(oab("beheerder").patch(config, json={"zaaktypesShortProcess": old}), HTTPStatus.OK),
+    )
+    refused = oab("recordmanager").patch(config, json={"zaaktypesShortProcess": [TEST_ZAAKTYPE]})
+    expect_status(refused, *REFUSED)
+    expect_status(oab("beheerder").patch(config, json={"zaaktypesShortProcess": [TEST_ZAAKTYPE]}), HTTPStatus.OK)
+    assert expect_status(oab("recordmanager").get(config), HTTPStatus.OK).json()["zaaktypesShortProcess"] == [
+        TEST_ZAAKTYPE
+    ]
+
+
+@pytest.mark.destructive
+@pytest.mark.tc("ABC-036")
+def test_short_procedure_list_cannot_go_to_the_archivist(
+    oab: Callable[[str], requests.Session],
+    api: str,
+    zaak: JsonObject,
+    registry: ResourceRegistry,
+    archive_config: Callable[..., None],
+) -> None:
+    """For a zaaktype with the short procedure, the archivist cannot review the accepted list."""
+    archive_config(zaaktypes_short_process=[TEST_ZAAKTYPE])
+    lijst = new_list(oab, api, zaak, registry)
+    review(oab, api, "reviewer", lijst, decision="accepted")
+    body = {"destructionList": lijst, "listFeedback": "podiumd-tests", "decision": "accepted"}
+    response = oab("archivist").post(api + "/destruction-list-reviews/", json=body)
+    expect_status(response, HTTPStatus.FORBIDDEN, HTTPStatus.BAD_REQUEST)
+    assert status(oab, api, lijst) == "ready_to_delete"
+
+
+@pytest.mark.destructive
+@DESTRUCTION_FAILS
+@pytest.mark.tc("ABC-039", "ABC-040", "ABC-041")
+def test_short_procedure_destruction_leaves_a_report(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    podiumd_env: Environment,
+    oab: Callable[[str], requests.Session],
+    api: str,
+    openzaak: ApiClient,
+    zaak: JsonObject,
+    parts: ZaaktypeParts,
+    registry: ResourceRegistry,
+    archive_config: Callable[..., None],
+) -> None:
+    """After a short-procedure destruction the report lists the zaak with its metadata columns."""
+    archive_config(zaaktypes_short_process=[TEST_ZAAKTYPE], **report_config(parts))
+    lijst = new_list(oab, api, zaak, registry)
+    review(oab, api, "reviewer", lijst, decision="accepted")
+    report = destroy(podiumd_env, oab, api, openzaak, parts, registry, lijst)
+    assert str(zaak["identificatie"]) in report
+    assert [c for c in REPORT_COLUMNS if c not in report] == []
