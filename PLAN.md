@@ -193,8 +193,9 @@ Revisit this only if perf ever needs heavy load (hundreds of users or more).
 **How it runs:**
 
 - `podiumd-tests run --env X --tier perf -- --perf-users 10 --perf-duration 60s` runs Locust headless (defaults 5 users, 30 s), as a subprocess: Locust monkey-patches the standard library on import.
+- Besides TA's reads, each Locust user creates a zaak in Open Zaak and a klantcontact in Open Klant (deleted after the timing, tagged with the run tag), looks up zaken and a partij by BSN, and searches in ZAC (Solr), KISS (Elasticsearch) and the portal. The searches measure the path more than the index: on minikube ZAC's index holds only the zaken of the zaaktypen ZAC handles (not the volume zaken), and KISS's indexes are empty.
 - The wrapper in `tests/perf/` (marker `perf`, excluded from `full`) asserts the p95 and error-rate thresholds per endpoint from `perf.yaml`.
-- It also compares each endpoint's p95 with the median of the environment's earlier runs with the same settings (at least 3), so a slowdown shows also where absolute numbers mean little, such as minikube.
+- It also compares each endpoint's p95 with the median of the environment's earlier runs with the same settings (users, duration, calls and volume data; at least 3), so a slowdown shows also where absolute numbers mean little, such as minikube.
 - Locust's stats and the run's settings go to the run's `perf/` subdirectory.
 - The Frank!Gateway compare (TA `fg-compare.js`) waits for an environment with both a gateway and a direct route to Open Zaak.
 
@@ -499,7 +500,7 @@ Updated 2026-10-08. The detail lives where it is kept up to date: blocked ports 
 - SCC Twente: runs from a machine with access, with the container image; an Azure DevOps template only once pipeline rights exist.
 - The container image is built locally; publishing it (e.g. to GHCR) when a pipeline needs it.
 
-**Perf:** the trend check judges an endpoint after 3 earlier runs with the same users, duration and volume data per environment. A slowdown must exceed both `max_slowdown` and `min_slowdown_ms` (`perf.yaml`). On minikube, 5 trend-checked runs with volume data passed on 2026-10-10.
+**Perf:** the trend check judges an endpoint after 3 earlier runs with the same users, duration, calls and volume data per environment. A slowdown must exceed both `max_slowdown` and `min_slowdown_ms` (`perf.yaml`). On minikube, 5 trend-checked runs with volume data passed on 2026-10-10.
 
 **Phase 8 (decommission):**
 

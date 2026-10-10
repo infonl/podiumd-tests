@@ -1,10 +1,10 @@
-"""API response times under load: TA's k6 api-perf.js, ported to Locust.
+"""Response times under load: TA's k6 api-perf.js reads, plus writes and the users' searches, in Locust.
 
 One Locust run (src/podiumd_tests/perf/locustfile.py, headless, --perf-users users for
 --perf-duration) serves every test; each endpoint must meet its p95 and failure-ratio threshold
-from perf.yaml, and may not have slowed down more than max_slowdown against the environment's
-earlier runs with the same settings (users, duration, volume data). Locust's stats and the settings go to the run's perf/
-directory; without a run directory (plain pytest) there is no history to compare with.
+from perf.yaml, and may not have slowed down (stats.slowdown_limit) against the environment's
+earlier runs with the same settings (users, duration, calls, volume data). Locust's stats and the
+settings go to the run's perf/ directory; without a run directory (plain pytest) there is no history.
 """
 
 from __future__ import annotations
@@ -17,6 +17,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.steps import ADMIN
+from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.config import REPO_ROOT
 from podiumd_tests.perf import ENDPOINTS
 from podiumd_tests.perf.stats import SETTINGS
@@ -54,19 +56,27 @@ def fixture_perf_dir(request: pytest.FixtureRequest, tmp_path_factory: pytest.Te
 
 @pytest.fixture(scope="module", name="stats")
 def fixture_stats(
-    request: pytest.FixtureRequest, podiumd_env: Environment, need_bootstrap: Callable[..., None], perf_dir: Path
+    request: pytest.FixtureRequest,
+    podiumd_env: Environment,
+    need_bootstrap: Callable[..., None],
+    perf_dir: Path,
+    run_tag: str,
 ) -> dict[str, EndpointStats]:
     """The stats of one Locust run against the environment."""
-    need_bootstrap("openzaak-client", "openklant-token")
+    need_bootstrap("openzaak-client", "openklant-token", "openzaak-zaaktype", ADMIN.name, KCC.name)
     directory = perf_dir
     users = str(request.config.getoption("--perf-users"))
     duration = str(request.config.getoption("--perf-duration"))
-    # Runs compare only with runs of the same load and volume data (seed-volume).
-    settings = {"users": users, "duration": duration, "volume": counts(podiumd_env)}
+    # Runs compare only with runs of the same load, calls and volume data (seed-volume).
+    calls = sorted(e for e, c in ENDPOINTS.items() if c in podiumd_env.profile.urls)
+    settings = {"users": users, "duration": duration, "calls": calls, "volume": counts(podiumd_env)}
     (directory / SETTINGS).write_text(json.dumps(settings, sort_keys=True) + "\n", encoding="utf-8")
     command = [sys.executable, "-m", "locust", "-f", str(LOCUSTFILE), "--headless", "--only-summary"]
     command += ["--users", users, "--spawn-rate", users, "--run-time", duration, "--exit-code-on-error", "0"]
+    # Users finish their round, so every write is deleted.
+    command += ["--stop-timeout", "60"]
     command += ["--csv", str(directory / "locust"), "--podiumd-env", podiumd_env.profile.name]
+    command += ["--podiumd-run-tag", run_tag]
     run_checked(run_process, command, timeout=600)
     return read_stats((directory / STATS).read_text(encoding="utf-8"))
 

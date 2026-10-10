@@ -4,11 +4,19 @@ This package must not import locust: it monkey-patches the standard library on i
 the Locust process may have.
 """
 
-# Endpoint name -> the component it needs; ported from TA's k6 api-perf.js.
+# Endpoint name -> the component it needs. Reads are TA's k6 api-perf.js; writes create and delete
+# their own objects; searches are what users type in ZAC, KISS and the portal.
 ENDPOINTS = {
     "oz_zaken": "openzaak",
     "oz_zaaktypen": "openzaak",
     "ok2_partijen": "openklant",
     "brp_persoon": "api-proxy",
     "kc_discovery": "keycloak",
+    "oz_zaak_create": "openzaak",
+    "ok2_klantcontact_create": "openklant",
+    "oz_zaken_by_bsn": "openzaak",
+    "ok2_partij_by_bsn": "openklant",
+    "zac_search": "zac",
+    "kiss_search": "kiss",
+    "oi_search": "openinwoner",
 }
