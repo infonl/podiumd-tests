@@ -498,6 +498,8 @@ Updated 2026-10-10. The detail lives where it is kept up to date: blocked ports 
 
 **No network isolation (no test):** neither estate deploys NetworkPolicies (no default-deny; Keycloak's `networkPolicy` is off), and the podiumd chart's only policies, Frank!Gateway's per traffic class (`frankgateway.networkPolicies.enabled`), are off everywhere. Every pod can reach every database, Redis and Elasticsearch of the cluster. podiumd-infra's Cyso clusters run Calico, which would enforce policies; minikube's kindnet ignores them. Tests follow once an estate has a policy model.
 
+**No alerting (no test):** no estate has alert rules for PodiumD. The monitoring-logging chart both estates use (kube-prometheus-stack, Loki, Grafana) runs with `alertmanager.enabled: false` and no PrometheusRules; Prometheus only collects. podiumd-infra's manual `deploy-admin-tools.yml` installs a stock kube-prometheus-stack with its generic default rules but no receivers; which environments ran it is unknown. The podiumd chart has no alert rules either. Tests follow once an estate defines rules.
+
 **Pipelines (§7a):**
 
 - `.github/workflows/run.yml` has not run end to end: podiumd-infra adds the calling workflow with its Azure OIDC identity (and a self-hosted runner if the AKS API is private).
