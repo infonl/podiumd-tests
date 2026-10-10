@@ -492,6 +492,7 @@ Updated 2026-10-08. The detail lives where it is kept up to date: blocked ports 
 | Open Inwoner | no "did you mean" on a search without hits, as the draaiboek asks (OI-097); only the autocomplete is fuzzy | `test_no_results_suggest_what_was_meant` |
 | mozilla-django-oidc | an unconfigured admin login answers 500 (`ImproperlyConfigured`) instead of refusing | none: every estate configures it |
 | ZAC, PABC, ITA, Open Archiefbeheer, Open Formulieren, Grafana | no HSTS on their own responses (PABC, ITA, Open Archiefbeheer and ZAC also no nosniff; PABC no frame protection); neither estate's edge adds security headers | `test_security_headers` (xfail per app) |
+| podiumd chart | Open Beheer's and Referentielijsten's main containers have `resources: {}` (no CPU or memory request); KISS's Elasticsearch (`kiss-es-default`) requests no CPU | `test_containers_request_cpu_and_memory` warns (`KNOWN_WITHOUT_REQUESTS`) |
 
 **Configuration finding for the estates:** KISS's Objecten token has no rights on Activiteitenlog, so KISS shows none of ITA's activities (`test_kiss_reads_itas_logboek`, the same in ExternalsPodiumD, podiumd-infra and minikube).
 
