@@ -20,9 +20,8 @@ from podiumd_tests.bootstrap.kiss import KANALEN
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
-from podiumd_tests.kcc import KISS_KLANTCONTACTEN
 from podiumd_tests.kcc import kcc_login
-from podiumd_tests.kcc import kiss_register
+from podiumd_tests.kcc import kiss_klantcontact
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openklant import klantcontact_body
@@ -68,15 +67,9 @@ def test_kiss_renders_for_the_kcc_user(kiss: requests.Session, page: Page, urls:
 def test_klantcontact_through_kiss(
     kiss: requests.Session, urls: dict[str, str], openklant: ApiClient, registry: ResourceRegistry
 ) -> None:
-    """A klantcontact registered through KISS lands in Open Klant (TA reg-12).
-
-    KISS does not delete klantcontacten (DELETE answers 405); cleanup goes to Open Klant.
-    """
+    """A klantcontact registered through KISS lands in Open Klant (TA reg-12)."""
     body = klantcontact_body(registry, onderwerp=registry.tagged("kiss-klantcontact"))
-    response = kiss.post(urls["kiss"] + KISS_KLANTCONTACTEN, json=body, headers=kiss_register(kiss, urls["kiss"]))
-    created = expect_status(response, HTTPStatus.CREATED).json()
-    registry.add(f"klantcontact {created['url']}", lambda: openklant.delete(str(created["url"])))
-    assert openklant.get(f"klantcontacten/{created['uuid']}")["onderwerp"] == body["onderwerp"]
+    assert kiss_klantcontact(kiss, urls["kiss"], openklant, registry, body)["onderwerp"] == body["onderwerp"]
 
 
 @pytest.mark.tc("KI-007")
@@ -121,7 +114,4 @@ def test_klantcontact_keeps_the_kanaal_chosen_in_kiss(  # pylint: disable=too-ma
             f"KISS offers no kanaal {kanaal}: add it in KISS (Beheer, Kanalen) or set profile setting kiss_kanalen"
         )
     body = klantcontact_body(registry, kanaal=kanaal, onderwerp=registry.tagged(f"kanaal-{kanaal.lower()}"))
-    response = kiss.post(urls["kiss"] + KISS_KLANTCONTACTEN, json=body, headers=kiss_register(kiss, urls["kiss"]))
-    created = expect_status(response, HTTPStatus.CREATED).json()
-    registry.add(f"klantcontact {created['url']}", lambda: openklant.delete(str(created["url"])))
-    assert openklant.get(f"klantcontacten/{created['uuid']}")["kanaal"] == kanaal
+    assert kiss_klantcontact(kiss, urls["kiss"], openklant, registry, body)["kanaal"] == kanaal

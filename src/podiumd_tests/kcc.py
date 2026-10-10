@@ -20,8 +20,10 @@ if TYPE_CHECKING:
 
     from playwright.sync_api import Page
 
+    from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.registry import ResourceRegistry
 
 # KISS proxies Open Klant's klantinteracties API under this path.
 KISS_KLANTCONTACTEN = "/api/klantinteracties/api/v1/klantcontacten"
@@ -37,6 +39,19 @@ def kiss_register(kiss: requests.Session, kiss_url: str) -> dict[str, str]:
     systemen = entries(expect_status(kiss.get(kiss_url + "/api/environment/registers"), 200).json()["systemen"])
     default = next(s for s in systemen if s.get("isDefault"))
     return {"systemIdentifier": str(default["identifier"])}
+
+
+def kiss_klantcontact(
+    kiss: requests.Session, kiss_url: str, openklant: ApiClient, registry: ResourceRegistry, body: JsonObject
+) -> JsonObject:
+    """Register a klantcontact through KISS; Open Klant's copy of it.
+
+    KISS does not delete klantcontacten (DELETE answers 405); cleanup goes to Open Klant.
+    """
+    response = kiss.post(kiss_url + KISS_KLANTCONTACTEN, json=body, headers=kiss_register(kiss, kiss_url))
+    created = expect_status(response, HTTPStatus.CREATED).json()
+    registry.add(f"klantcontact {created['url']}", lambda: openklant.delete(str(created["url"])))
+    return openklant.get(f"klantcontacten/{created['uuid']}")
 
 
 def ita_detail_text(ita: requests.Session, ita_url: str, taak: JsonObject) -> str:
