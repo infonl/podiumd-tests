@@ -24,6 +24,8 @@ urls:
   ita: https://ita.local
   objecten: https://objecten.local
   objecttypen: https://objecttypen.local
+  openbeheer: https://openbeheer.local
+  referentielijsten: https://referentielijsten.local
   opennotificaties: https://opennotificaties.local
   openarchiefbeheer: https://openarchiefbeheer-ui.local
   openformulieren: https://openformulieren-nginx.local
