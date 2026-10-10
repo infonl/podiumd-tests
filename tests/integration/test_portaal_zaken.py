@@ -100,22 +100,6 @@ def log_in(page: Page, podiumd_env: Environment, who: str = "inwoner") -> None:
     portal_login(page, podiumd_env, method, identity, "/mijn-zaken/")
 
 
-@pytest.mark.core
-def test_inwoners_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
-    page: Page,
-    podiumd_env: Environment,
-    openzaak: ApiClient,
-    registry: ResourceRegistry,
-    parts: ZaaktypeParts,
-    need_bootstrap: Callable[..., None],
-) -> None:
-    """A zaak with the inwoner as initiator is listed in Mijn zaken (TA int-21, reg-95)."""
-    need_bootstrap(INWONER.name, *WIRING)
-    zaak = zaak_of(openzaak, registry, parts)
-    log_in(page, podiumd_env)
-    expect_listed(page, zaak)
-
-
 # Search can be switched off by test_portaal_zoeken; it runs on the same worker.
 @pytest.mark.xdist_group("openinwoner-search")
 @pytest.mark.tc("OI-091")
@@ -157,24 +141,28 @@ PHONES = {
 
 
 @pytest.mark.parametrize(
-    "phone", [pytest.param(name, marks=pytest.mark.browser_context_args(**args)) for name, args in PHONES.items()]
+    "screen",
+    [
+        pytest.param("desktop", marks=pytest.mark.core),
+        *(pytest.param(name, marks=pytest.mark.browser_context_args(**args)) for name, args in PHONES.items()),
+    ],
 )
-def test_mijn_zaken_on_a_phone(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_inwoners_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
     registry: ResourceRegistry,
     parts: ZaaktypeParts,
     need_bootstrap: Callable[..., None],
-    phone: str,
+    screen: str,
 ) -> None:
-    """On a phone, Mijn zaken lists the inwoner's zaak and fits the screen width (TA reg-61)."""
+    """Mijn zaken lists a zaak with the inwoner as initiator and fits the screen width (TA int-21, reg-95, 61)."""
     need_bootstrap(INWONER.name, *WIRING)
     zaak = zaak_of(openzaak, registry, parts)
     log_in(page, podiumd_env)
     expect_listed(page, zaak)
     overflow = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
-    assert overflow <= 0, f"{phone}: page {overflow}px wider than the screen"
+    assert overflow <= 0, f"{screen}: page {overflow}px wider than the screen"
 
 
 def test_bedrijfs_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
