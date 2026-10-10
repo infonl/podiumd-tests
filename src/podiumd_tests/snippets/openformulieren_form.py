@@ -2,7 +2,8 @@
 
 Actions: status, apply (recreates), remove. Params: action, slug, components (Form.io
 components of the step), registration ({"backend", "options"}; "api_group" names the ZGW
-API group whose pk goes into the options), auth_backends (login plugins, e.g. digid_oidc),
+API group whose pk goes into the options, "objects_api" is the Objecten API root of the Objects
+API group whose identifier goes into the options), auth_backends (login plugins, e.g. digid_oidc),
 settings (other Form fields). Submissions of
 the form are test data and go with it.
 """
@@ -24,6 +25,11 @@ def run(params):
     if "api_group" in registration:
         group = ZGWApiGroupConfig.objects.filter(identifier=registration["api_group"]).first()
         options["zgw_api_group"] = group.pk if group else None
+    if "objects_api" in registration:
+        from openforms.contrib.objects_api.models import ObjectsAPIGroupConfig
+
+        objects = ObjectsAPIGroupConfig.objects.filter(objects_service__api_root=registration["objects_api"]).first()
+        options["objects_api_group"] = objects.identifier if objects else None
     forms = Form.objects.filter(slug=slug)
 
     if params["action"] == "status":
