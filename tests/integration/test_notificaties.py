@@ -22,16 +22,15 @@ from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
 from podiumd_tests.seed.openzaak import make_zaak
-from podiumd_tests.webhook import Callback
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from podiumd_tests.clients.api import ApiClient
-    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.openzaak import ZaaktypeParts
     from podiumd_tests.seed.registry import ResourceRegistry
+    from podiumd_tests.webhook import Callback
 
 pytestmark = [pytest.mark.integration, pytest.mark.requires("openzaak", "opennotificaties")]
 
@@ -62,34 +61,15 @@ def notified(callback: Callback, match: Callable[[JsonObject], bool], descriptio
     return section(callback.wait_for(match, timeout=DELIVERY_TIMEOUT, description=description), "body")
 
 
-@pytest.mark.core
-def test_new_zaak_is_notified_to_a_subscriber(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
-    openzaak: ApiClient,
-    opennotificaties: ApiClient,
-    registry: ResourceRegistry,
-    callback: Callback,
-    test_zaaktype: JsonObject,
-) -> None:
-    """A subscriber on kanaal zaken gets the zaak's create notification with its zaaktype (TA reg-19)."""
-    make_abonnement(opennotificaties, registry, callback.url, "zaken", OWN)
-    zaak = make_zaak(openzaak, registry, str(test_zaaktype["url"]))
-    notification = notified(callback, event("zaken", "zaak", "create", zaak["url"]), "the zaak's create notification")
-    assert notification["resourceUrl"] == zaak["url"]
-    assert section(notification, "kenmerken")["zaaktype"] == test_zaaktype["url"]
-
-
-def test_kenmerk_filter_selects_the_subscriber(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
-    podiumd_env: Environment,
-    run_tag: str,
+def test_kenmerk_filter_selects_the_subscriber(
     openzaak: ApiClient,
     opennotificaties: ApiClient,
     registry: ResourceRegistry,
     test_zaaktype: JsonObject,
-    need_bootstrap: Callable[..., None],
+    new_callback: Callable[..., Callback],
 ) -> None:
     """Only the subscriber whose filter matches the vertrouwelijkheidaanduiding gets the zaak (TA reg-25)."""
-    need_bootstrap("infra-webhook-receiver")
-    openbaar, vertrouwelijk = Callback.new(podiumd_env, run_tag), Callback.new(podiumd_env, run_tag)
+    openbaar, vertrouwelijk = new_callback(), new_callback()
     for callback, va in ((openbaar, "openbaar"), (vertrouwelijk, "vertrouwelijk")):
         make_abonnement(opennotificaties, registry, callback.url, "zaken", {**OWN, "vertrouwelijkheidaanduiding": va})
     zaaktype = str(test_zaaktype["url"])
@@ -101,18 +81,16 @@ def test_kenmerk_filter_selects_the_subscriber(  # pylint: disable=too-many-argu
     assert not [e for e in vertrouwelijk.received() if event("zaken", "zaak", "create", open_zaak["url"])(e)]
 
 
-def test_every_subscriber_gets_the_notification(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
-    podiumd_env: Environment,
-    run_tag: str,
+@pytest.mark.core
+def test_every_subscriber_gets_the_notification(
     openzaak: ApiClient,
     opennotificaties: ApiClient,
     registry: ResourceRegistry,
     test_zaaktype: JsonObject,
-    need_bootstrap: Callable[..., None],
+    new_callback: Callable[..., Callback],
 ) -> None:
-    """Two subscribers on kanaal zaken (as ZAC and the portal) both get the same notification (TA reg-26)."""
-    need_bootstrap("infra-webhook-receiver")
-    callbacks = [Callback.new(podiumd_env, run_tag), Callback.new(podiumd_env, run_tag)]
+    """Two subscribers on kanaal zaken (as ZAC and the portal) get the same create notification (TA reg-19, 26)."""
+    callbacks = [new_callback(), new_callback()]
     for callback in callbacks:
         make_abonnement(opennotificaties, registry, callback.url, "zaken", OWN)
     zaak = make_zaak(openzaak, registry, str(test_zaaktype["url"]))
@@ -120,6 +98,8 @@ def test_every_subscriber_gets_the_notification(  # pylint: disable=too-many-arg
     first, second = (notified(c, match, "the zaak's create notification") for c in callbacks)
     core = ("kanaal", "resource", "actie", "hoofdObject", "resourceUrl", "kenmerken")
     assert {k: first[k] for k in core} == {k: second[k] for k in core}
+    assert first["resourceUrl"] == zaak["url"]
+    assert section(first, "kenmerken")["zaaktype"] == test_zaaktype["url"]
 
 
 def test_zaak_changes_are_notified_with_their_resource(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
@@ -187,18 +167,15 @@ def test_internetaak_changes_are_notified(
         notified(callback, event("internetaken", "internetaak", actie, taak["url"]), f"internetaak {actie}")
 
 
-def test_failed_delivery_is_retried(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
-    podiumd_env: Environment,
-    run_tag: str,
+def test_failed_delivery_is_retried(
     openzaak: ApiClient,
     opennotificaties: ApiClient,
     registry: ResourceRegistry,
     test_zaaktype: JsonObject,
-    need_bootstrap: Callable[..., None],
+    new_callback: Callable[..., Callback],
 ) -> None:
     """A subscriber that answers 500 gets the notification again and then accepts it (TA reg-42)."""
-    need_bootstrap("infra-webhook-receiver")
-    callback = Callback.new(podiumd_env, run_tag, fail_first=True)
+    callback = new_callback(fail_first=True)
     # A vertrouwelijkheidaanduiding no other test uses: another test's notification must not take the 500.
     only = {**OWN, "vertrouwelijkheidaanduiding": "beperkt_openbaar"}
     make_abonnement(opennotificaties, registry, callback.url, "zaken", only)

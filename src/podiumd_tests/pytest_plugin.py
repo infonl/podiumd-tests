@@ -6,6 +6,8 @@ so tests that request them do not shadow a module-level function.
 
 from __future__ import annotations
 
+import functools
+
 from contextvars import ContextVar
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -293,11 +295,19 @@ def fixture_pabc_api_key(credentials: SecretResolver) -> str:
     return key
 
 
-@pytest.fixture(name="callback")
-def fixture_callback(run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> Callback:
-    """A callback path of this test's own on the webhook receiver (infra/webhook-receiver)."""
+@pytest.fixture(name="new_callback")
+def fixture_new_callback(
+    run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None]
+) -> Callable[..., Callback]:
+    """Makes callback paths of this test's own on the webhook receiver (infra/webhook-receiver); takes fail_first."""
     need_bootstrap("infra-webhook-receiver")
-    return Callback.new(podiumd_env, run_tag)
+    return functools.partial(Callback.new, podiumd_env, run_tag)
+
+
+@pytest.fixture(name="callback")
+def fixture_callback(new_callback: Callable[..., Callback]) -> Callback:
+    """A callback path of this test's own on the webhook receiver."""
+    return new_callback()
 
 
 @pytest.fixture(scope="session", name="productaanvraagtype")
