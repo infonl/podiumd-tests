@@ -13,6 +13,7 @@ import pytest
 
 from playwright.sync_api import expect
 
+from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.bootstrap.names import TEST_FORM
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.components import COMPONENTS
@@ -24,6 +25,7 @@ from podiumd_tests.openformulieren import start_submission
 from podiumd_tests.openformulieren import submit
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.pytest_plugin import requiring
+from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import is_server_error
 from podiumd_tests.responses import root_answers
 from podiumd_tests.seed.objecten import make_productaanvraag
@@ -34,6 +36,8 @@ from podiumd_tests.workloads import ROOT_TIMEOUT
 from podiumd_tests.workloads import component_down
 from podiumd_tests.zac import PRODUCTAANVRAAG_TIMEOUT
 from podiumd_tests.zac import productaanvraag_zaak
+from podiumd_tests.zac import read_zaak
+from podiumd_tests.zac import send_with_person
 from podiumd_tests.zac import zaak_body
 
 if TYPE_CHECKING:
@@ -204,3 +208,29 @@ def test_zac_mail_is_sent_after_a_mail_outage(  # pylint: disable=too-many-argum
             description=f"ZAC's failed mail for {zaak['identificatie']}",
         )
     assert str(zaak["identificatie"]) in received(mailpit, registry, timeout=RETRY_TIMEOUT, to=adres)
+
+
+@pytest.mark.requires("openklant", "zac", "keycloak")
+@pytest.mark.tc("CONT-034")
+def test_without_open_klant_a_zaak_with_a_person_cannot_be_opened(
+    http: requests.Session, podiumd_env: Environment, zac: requests.Session, zac_zaak: Callable[..., JsonObject]
+) -> None:
+    """Without Open Klant ZAC cannot open a zaak whose initiator is a person: it shows its error message and stays up.
+
+    ZAC reads the initiator's contact details from Open Klant; its message is the generic "Er heeft zich
+    helaas een technische fout voorgedaan." Once Open Klant is back the zaak opens again.
+    """
+    zaak = zac_zaak()
+    zac_url = podiumd_env.profile.urls["zac"]
+
+    def make_initiator(identificatie: JsonObject) -> requests.Response:
+        body = {"zaakUUID": zaak["uuid"], "betrokkeneIdentificatie": identificatie}
+        return zac.patch(f"{zac_url}/rest/zaken/initiator", json=body)
+
+    expect_status(send_with_person(zac, zac_url, EREBOS, make_initiator), HTTPStatus.OK)
+    with component_down(podiumd_env, http, "openklant"):
+        opened = zac.get(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}")
+        assert opened.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        assert opened.json().get("message") == "msg.error.server.generic"
+        assert root_answers(zac, zac_url, ROOT_TIMEOUT), "ZAC itself fails without Open Klant"
+    assert read_zaak(zac, zac_url, str(zaak["uuid"]))["identificatie"] == zaak["identificatie"]
