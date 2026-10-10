@@ -24,6 +24,7 @@ from podiumd_tests.kcc import kcc_login
 from podiumd_tests.mailpit import forget_mails
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
+from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.objecten import clean_up_logboek
 from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
@@ -80,16 +81,10 @@ def claim(ita: requests.Session, urls: dict[str, str], taak: JsonObject) -> None
     expect_status(response, HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.NO_CONTENT)
 
 
-def get_list(ita: requests.Session, url: str) -> list[JsonObject]:
-    """GET an ITA list; it must answer 200 with a JSON array."""
-    response = expect_status(ita.get(url), HTTPStatus.OK)
-    return entries(response.json())
-
-
 def test_afdelingen_and_groepen_are_seeded_together(ita: requests.Session, urls: dict[str, str]) -> None:
     """Afdelingen and groepen both answer, and are both empty or both filled (TA reg-77)."""
-    afdelingen = get_list(ita, urls["ita"] + "/api/afdelingen")
-    groepen = get_list(ita, urls["ita"] + "/api/groepen")
+    afdelingen = get_entries(ita, urls["ita"] + "/api/afdelingen")
+    groepen = get_entries(ita, urls["ita"] + "/api/groepen")
     assert bool(afdelingen) == bool(groepen), f"{len(afdelingen)} afdelingen, {len(groepen)} groepen"
 
 
@@ -100,7 +95,7 @@ def test_claimed_internetaak_is_on_my_list(
     """A claimed internetaak is assigned to the user's actor and on the user's list (TA int-74, reg-73)."""
     claim(ita, urls, taak)
     assert entries(openklant.get(f"internetaken/{taak['uuid']}")["toegewezenAanActoren"])
-    mine = get_list(ita, urls["ita"] + "/api/internetaken/aan-mij-toegewezen")
+    mine = get_entries(ita, urls["ita"] + "/api/internetaken/aan-mij-toegewezen")
     assert taak["uuid"] in {str(t.get("uuid")) for t in mine}
 
 

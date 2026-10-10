@@ -11,6 +11,7 @@ from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
+from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.openzaak import today
@@ -39,7 +40,7 @@ def zac_session(env: Environment, username: str, password: str) -> requests.Sess
 
 def zaakafhandelparameters(http: requests.Session, zac_url: str, identificatie: str | None = None) -> list[JsonObject]:
     """ZAC's zaakafhandelparameters of every version of the zaaktype, or of every zaaktype ZAC handles."""
-    found = entries(expect_status(http.get(f"{zac_url}/rest/zaakafhandelparameters"), HTTPStatus.OK).json())
+    found = get_entries(http, f"{zac_url}/rest/zaakafhandelparameters")
     return [p for p in found if identificatie in {None, section(p, "zaaktype").get("identificatie")}]
 
 

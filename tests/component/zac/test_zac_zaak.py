@@ -22,6 +22,7 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.responses import expect_status
+from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import read_zaak
@@ -72,7 +73,7 @@ def test_note_can_be_added_changed_and_deleted(
     zaak = zac_zaak()
 
     def texts() -> list[str]:
-        return [str(n["tekst"]) for n in entries(expect_status(zac.get(f"{notes}/zaken/{zaak['uuid']}"), 200).json())]
+        return [str(n["tekst"]) for n in get_entries(zac, f"{notes}/zaken/{zaak['uuid']}")]
 
     body = {"zaakUUID": zaak["uuid"], "tekst": registry.tagged("notitie"), "gebruikersnaamMedewerker": ADMIN.username}
     note = expect_status(zac.post(notes, json=body), HTTPStatus.OK).json()
@@ -181,7 +182,7 @@ def test_betrokkenen_with_the_same_and_different_roles_are_listed(
 
         response = send_with_person(zac, urls["zac"], EREBOS, add) if who == "persoon" else add(company)
         expect_status(response, HTTPStatus.OK)
-    listed = entries(expect_status(zac.get(f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}/betrokkene"), 200).json())
+    listed = get_entries(zac, f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}/betrokkene")
     assert sorted(str(b.get("roltype")) for b in listed) == sorted(r for r, _ in wanted)
 
 
@@ -193,7 +194,7 @@ def uploaded_document(
     The zaak's cleanup deletes it (delete_zaak with_documents).
     """
     documents = f"{zac_url}/rest/informatieobjecten"
-    types = entries(expect_status(zac.get(f"{documents}/informatieobjecttypes/zaak/{zaak['uuid']}"), 200).json())
+    types = get_entries(zac, f"{documents}/informatieobjecttypes/zaak/{zaak['uuid']}")
     if not types:
         pytest.skip(f"zaaktype {section(zaak, 'zaaktype').get('identificatie')} has no informatieobjecttypen")
     formaat, suffix, content = (

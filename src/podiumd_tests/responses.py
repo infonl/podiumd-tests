@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from http import HTTPStatus
+from typing import cast
 from urllib.parse import urlsplit
 
 import requests
+
+from podiumd_tests.json_data import JsonObject
+from podiumd_tests.json_data import entries
 
 REFUSED = frozenset({HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN})
 # Characters of the body an unexpected status reports: enough for an API error's detail.
@@ -53,3 +57,12 @@ def root_answers(session: requests.Session, base_url: str, timeout: float) -> bo
 def url_host(url: str) -> str:
     """The hostname of a URL, or "" when it has none."""
     return urlsplit(url).hostname or ""
+
+
+def get_entries(http: requests.Session, url: str) -> list[JsonObject]:
+    """The objects GET url answers with 200: a JSON array, or one under results or items (PABC)."""
+    body: object = expect_status(http.get(url), HTTPStatus.OK).json()
+    if isinstance(body, dict):
+        found = cast("JsonObject", body)
+        return entries(found.get("results") or found.get("items"))
+    return entries(body)

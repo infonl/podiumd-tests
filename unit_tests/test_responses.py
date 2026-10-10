@@ -9,6 +9,7 @@ from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
+from podiumd_tests.responses import get_entries
 from podiumd_tests.responses import is_server_error
 from podiumd_tests.responses import url_host
 
@@ -41,3 +42,21 @@ def test_is_server_error(response_factory, status, expected):
 )
 def test_url_host(url, host):
     assert url_host(url) == host
+
+
+def test_get_entries_reads_an_array_or_results_or_items(fake_http):
+    fake_http(
+        {"/a": (200, [{"id": 1}, "x"]), "/r": (200, {"results": [{"id": 2}]}), "/i": (200, {"items": [{"id": 3}]})}
+    )
+    http = requests.Session()
+    assert [get_entries(http, f"https://x.test/{p}") for p in ("a", "r", "i")] == [
+        [{"id": 1}],
+        [{"id": 2}],
+        [{"id": 3}],
+    ]
+
+
+def test_get_entries_needs_200(fake_http):
+    fake_http({"/a": (403, {"detail": "no"})})
+    with pytest.raises(UnexpectedStatusError):
+        get_entries(requests.Session(), "https://x.test/a")

@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 from typing import cast
 
 from podiumd_tests.browser import challenge_login
-from podiumd_tests.json_data import entries
 
 if TYPE_CHECKING:
     import requests
@@ -35,11 +34,3 @@ def login(page: Page, env: Environment, username: str, password: str) -> request
         msg = f"PABC login as {username} kept no session: /api/me says isLoggedIn false"
         raise AssertionError(msg)
     return api
-
-
-def listed(body: object) -> list[JsonObject]:
-    """The objects of a PABC list response: a JSON array, or one under results or items."""
-    if isinstance(body, dict):
-        found = cast("JsonObject", body)
-        return entries(found.get("results") or found.get("items"))
-    return entries(body)

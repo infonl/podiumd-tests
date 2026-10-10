@@ -13,10 +13,10 @@ import pytest
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import entries
 from podiumd_tests.pabc import decide
-from podiumd_tests.pabc import listed
 from podiumd_tests.pabc import login
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
+from podiumd_tests.responses import get_entries
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -42,13 +42,6 @@ def fixture_pabc(
     return login(page, podiumd_env, ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
 
 
-def get_list(pabc: requests.Session, url: str) -> list[JsonObject]:
-    """GET a management list; it must answer 200."""
-    response = pabc.get(url)
-    assert response.status_code == HTTPStatus.OK, describe(response)
-    return listed(response.json())
-
-
 def names(items: list[JsonObject]) -> list[str]:
     """The lowercase names of PABC objects."""
     return [str(i.get("name") or "").lower() for i in items]
@@ -56,12 +49,12 @@ def names(items: list[JsonObject]) -> list[str]:
 
 def test_functional_roles_are_configured(pabc: requests.Session, urls: dict[str, str]) -> None:
     """PABC has at least one functional role (TA reg-67)."""
-    assert get_list(pabc, urls["pabc"] + "/api/v1/functional-roles")
+    assert get_entries(pabc, urls["pabc"] + "/api/v1/functional-roles")
 
 
 def test_application_roles_include_a_handling_role(pabc: requests.Session, urls: dict[str, str]) -> None:
     """The application roles include ZAC's behandelaar or KISS's KCC role (TA reg-67)."""
-    found = names(get_list(pabc, urls["pabc"] + "/api/v1/application-roles"))
+    found = names(get_entries(pabc, urls["pabc"] + "/api/v1/application-roles"))
     assert any(word in n for n in found for word in ("behandelaar", "kcc", "medewerker")), found
 
 
@@ -69,7 +62,7 @@ def test_known_functional_roles_get_application_roles(
     pabc: requests.Session, http: requests.Session, urls: dict[str, str], pabc_api_key: str
 ) -> None:
     """The decision endpoint answers per entity type for configured functional roles (TA reg-68a)."""
-    functional = [str(r["name"]) for r in get_list(pabc, urls["pabc"] + "/api/v1/functional-roles")[:3]]
+    functional = [str(r["name"]) for r in get_entries(pabc, urls["pabc"] + "/api/v1/functional-roles")[:3]]
     response = decide(http, urls["pabc"], pabc_api_key, functional)
     assert response.status_code == HTTPStatus.OK, describe(response)
     for result in entries(response.json()["results"]):
@@ -78,14 +71,14 @@ def test_known_functional_roles_get_application_roles(
 
 def test_entity_types_have_unique_ids(pabc: requests.Session, urls: dict[str, str]) -> None:
     """Domains answer, and no entity type was seeded twice (TA reg-69)."""
-    get_list(pabc, urls["pabc"] + "/api/v1/domains")
-    ids = [str(e["id"]) for e in get_list(pabc, urls["pabc"] + "/api/v1/entity-types")]
+    get_entries(pabc, urls["pabc"] + "/api/v1/domains")
+    ids = [str(e["id"]) for e in get_entries(pabc, urls["pabc"] + "/api/v1/entity-types")]
     assert len(ids) == len(set(ids)), f"duplicate entity type ids: {sorted(ids)}"
 
 
 def test_zac_is_a_registered_application(pabc: requests.Session, urls: dict[str, str]) -> None:
     """ZAC, PABC's first consumer, is a registered application (TA reg-71)."""
-    found = names(get_list(pabc, urls["pabc"] + "/api/v1/applications"))
+    found = names(get_entries(pabc, urls["pabc"] + "/api/v1/applications"))
     assert any("zac" in n or "zaakafhandel" in n for n in found), found
 
 

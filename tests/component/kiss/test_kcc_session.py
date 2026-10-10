@@ -24,6 +24,7 @@ from podiumd_tests.kcc import KISS_KLANTCONTACTEN
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.kcc import kiss_register
 from podiumd_tests.responses import expect_status
+from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openklant import klantcontact_body
 
 if TYPE_CHECKING:
@@ -114,10 +115,7 @@ def test_klantcontact_keeps_the_kanaal_chosen_in_kiss(  # pylint: disable=too-ma
 ) -> None:
     """A klantcontact registered through KISS on a kanaal KISS offers lands in Open Klant on exactly that kanaal."""
     need_bootstrap("kiss-kanalen")
-    offered = {
-        str(k["naam"])
-        for k in entries(expect_status(kiss.get(urls["kiss"] + "/api/KanalenContactmomentKeuzelijst"), 200).json())
-    }
+    offered = {str(k["naam"]) for k in get_entries(kiss, urls["kiss"] + "/api/KanalenContactmomentKeuzelijst")}
     if kanaal not in offered:
         pytest.skip(
             f"KISS offers no kanaal {kanaal}: add it in KISS (Beheer, Kanalen) or set profile setting kiss_kanalen"

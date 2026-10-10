@@ -14,8 +14,8 @@ from typing import TYPE_CHECKING
 from typing import cast
 
 from podiumd_tests.auth.keycloak import form_login
-from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
+from podiumd_tests.responses import get_entries
 
 if TYPE_CHECKING:
     import requests
@@ -56,7 +56,7 @@ class KissKanalen:
 
     @staticmethod
     def _current(http: requests.Session, kiss: str) -> dict[str, str]:
-        found = entries(expect_status(http.get(kiss + "/api/KanalenBeheerOverzicht"), HTTPStatus.OK).json())
+        found = get_entries(http, kiss + "/api/KanalenBeheerOverzicht")
         return {str(k["naam"]): str(k["id"]) for k in found}
 
     def is_present(self, ctx: Context, /) -> bool:

@@ -12,9 +12,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
+from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.zac import zaakafhandelparameters
 
@@ -50,7 +50,7 @@ def test_handled_zaaktypen_pass_zacs_inrichtingscheck(zac: requests.Session, url
     # ZAC caches catalogus data; clear it (Admin, as after changing a zaaktype) so the check sees Open Zaak's state.
     expect_status(zac.delete(f"{urls['zac']}/rest/health-check/ztc-cache"), HTTPStatus.OK)
     handled = {section(p, "zaaktype").get("identificatie") for p in zaakafhandelparameters(zac, urls["zac"])}
-    checks = entries(expect_status(zac.get(f"{urls['zac']}/rest/health-check/zaaktypes"), HTTPStatus.OK).json())
+    checks = get_entries(zac, f"{urls['zac']}/rest/health-check/zaaktypes")
     failing = {
         str(section(c, "zaaktype").get("identificatie")): sorted(
             k for k, v in c.items() if v is False and k != "valide"
