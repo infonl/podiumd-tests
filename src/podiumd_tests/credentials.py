@@ -6,6 +6,7 @@ registered with the Redactor, so it never ends up in output or results.
 
 from __future__ import annotations
 
+import contextlib
 import os
 
 from typing import TYPE_CHECKING
@@ -88,6 +89,15 @@ class SecretResolver:
                 self._redactor.add(value)
             self._cache[name] = value
         return self._cache[name]
+
+    def register_all(self) -> None:
+        """Register every secret that resolves, and the credentials Secret's values, for redaction."""
+        for name in self.names:
+            # A secret that does not resolve here cannot be in the output either.
+            with contextlib.suppress(SecretError):
+                self.get(name)
+        for value in self._bootstrap().values():
+            self._redactor.add(value)
 
     def configured(self, name: str) -> bool:
         """True when the secret has a source: the profile, its env var, or the credentials Secret."""

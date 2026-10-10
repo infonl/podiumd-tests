@@ -92,3 +92,19 @@ def test_optional_secrets_come_from_profile_or_env_var(profile_factory, env_fact
     assert creds.optional("grafana_password") == "from-env"
     assert not creds.configured("zgw_client_secret")
     assert creds.optional("zgw_client_secret") is None
+
+
+def test_register_all_masks_resolvable_and_stored_secrets_without_a_get(profile_factory, fake_runner, env_factory):
+    encoded = base64.b64encode(b"kv-secret-value").decode()
+    stored = base64.b64encode(b"stored-token-value").decode()
+    fake_runner.answers["get secret kc -o json"] = (0, json.dumps({"data": {"password": encoded}}))
+    fake_runner.answers["get secret podiumd-tests-credentials"] = (0, json.dumps({"data": {"tok": stored}}))
+    profile = profile_factory(
+        secrets={
+            "pw": {"k8s_secret": {"name": "kc", "key": "password"}},
+            "gone": {"pod_env": {"deployment": "x", "var": "Y"}},
+        }
+    )
+    env = env_factory(profile)
+    env.credentials.register_all()
+    assert env.redactor.redact("kv-secret-value stored-token-value") == "*** ***"

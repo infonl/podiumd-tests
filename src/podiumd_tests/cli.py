@@ -351,6 +351,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     info.finished = now_iso()
     failures = []
     if junit.exists():
+        # pytest writes the failure texts as they are; mask secrets as write_run does.
+        env.credentials.register_all()
+        junit.write_text(env.redactor.redact(junit.read_text(encoding="utf-8")), encoding="utf-8")
         info.counts, failures = parse_junit(junit.read_text(encoding="utf-8"))
     write_run(sink, directory, info, failures, env.redactor)
     publish_summary(Path(sink.location(f"{directory}/summary.md")))

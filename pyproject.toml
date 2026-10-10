@@ -48,7 +48,8 @@ podiumd_tests = ["py.typed", "seed/volume_corpus.yaml"]
 # through `podiumd-tests run`, which passes the paths explicitly.
 testpaths = ["unit_tests"]
 # loadgroup: tests with the same xdist_group (shared global state) run on one worker.
-addopts = "-ra --dist loadgroup"
+# --tb=short: long tracebacks print the arguments of each frame, passwords included.
+addopts = "-ra --tb=short --dist loadgroup"
 markers = [
     "smoke: read-only check that a component is up and wired",
     "component: behaviour of one component, with its own seed and cleanup",

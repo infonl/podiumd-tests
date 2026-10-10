@@ -6,6 +6,7 @@ import html
 import re
 
 from dataclasses import dataclass
+from dataclasses import field
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -40,8 +41,8 @@ class PasswordLogin:
 
     client_id: str
     username: str
-    password: str
-    client_secret: str | None = None
+    password: str = field(repr=False)
+    client_secret: str | None = field(default=None, repr=False)
 
 
 def password_grant(session: requests.Session, keycloak_url: str, realm: str, login: PasswordLogin) -> str:
