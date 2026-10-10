@@ -23,6 +23,7 @@ class Threshold:
     p95_ms: float
     max_failure_ratio: float
     max_slowdown: float
+    min_slowdown_ms: float
 
 
 @dataclass(frozen=True)
@@ -39,7 +40,12 @@ def thresholds(path: Path, endpoint: str) -> Threshold:
     data = cast("dict[str, object]", yaml.safe_load(path.read_text(encoding="utf-8")))
     endpoints = cast("dict[str, dict[str, float]]", data.get("endpoints") or {})
     merged = {**cast("dict[str, float]", data["defaults"]), **endpoints.get(endpoint, {})}
-    return Threshold(float(merged["p95_ms"]), float(merged["max_failure_ratio"]), float(merged["max_slowdown"]))
+    return Threshold(
+        float(merged["p95_ms"]),
+        float(merged["max_failure_ratio"]),
+        float(merged["max_slowdown"]),
+        float(merged["min_slowdown_ms"]),
+    )
 
 
 def read_stats(csv_text: str) -> dict[str, EndpointStats]:
@@ -91,3 +97,11 @@ def baseline_p95(history: list[dict[str, EndpointStats]], endpoint: str) -> floa
     """Median p95 of the endpoint over the newest BASELINE_RUNS runs with it; None below MIN_BASELINE_RUNS runs."""
     values = [h[endpoint].p95_ms for h in history if endpoint in h and h[endpoint].requests][:BASELINE_RUNS]
     return statistics.median(values) if len(values) >= MIN_BASELINE_RUNS else None
+
+
+def slowdown_limit(threshold: Threshold, baseline_ms: float) -> float:
+    """The highest p95 that is no slowdown: above both max_slowdown times and min_slowdown_ms more than the baseline.
+
+    The margin keeps noise on small numbers (a p95 of 130 ms becoming 260 ms) from counting as a slowdown.
+    """
+    return max(threshold.max_slowdown * baseline_ms, baseline_ms + threshold.min_slowdown_ms)

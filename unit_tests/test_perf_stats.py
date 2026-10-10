@@ -7,6 +7,7 @@ from podiumd_tests.perf.stats import Threshold
 from podiumd_tests.perf.stats import baseline_p95
 from podiumd_tests.perf.stats import earlier_stats
 from podiumd_tests.perf.stats import read_stats
+from podiumd_tests.perf.stats import slowdown_limit
 from podiumd_tests.perf.stats import thresholds
 from podiumd_tests.perf.stats import violations
 
@@ -23,17 +24,21 @@ def test_read_stats_skips_the_aggregated_row():
 def test_endpoint_entry_overrides_the_defaults(tmp_path):
     perf = tmp_path / "perf.yaml"
     perf.write_text(
-        "defaults: {p95_ms: 1500, max_failure_ratio: 0.01, max_slowdown: 1.5}\nendpoints: {oz_zaken: {p95_ms: 2000}}\n"
+        "defaults: {p95_ms: 1500, max_failure_ratio: 0.01, max_slowdown: 1.5, min_slowdown_ms: 200}\nendpoints: {oz_zaken: {p95_ms: 2000}}\n"
     )
-    assert thresholds(perf, "oz_zaken") == Threshold(p95_ms=2000.0, max_failure_ratio=0.01, max_slowdown=1.5)
-    assert thresholds(perf, "kc_discovery") == Threshold(p95_ms=1500.0, max_failure_ratio=0.01, max_slowdown=1.5)
+    assert thresholds(perf, "oz_zaken") == Threshold(
+        p95_ms=2000.0, max_failure_ratio=0.01, max_slowdown=1.5, min_slowdown_ms=200.0
+    )
+    assert thresholds(perf, "kc_discovery") == Threshold(
+        p95_ms=1500.0, max_failure_ratio=0.01, max_slowdown=1.5, min_slowdown_ms=200.0
+    )
 
 
 def test_violations_name_each_exceeded_limit():
     stats = read_stats(CSV)["oz_zaken"]
-    assert violations(stats, Threshold(1500, 0.01, 1.5)) == ["p95 1600 ms > 1500 ms", "2/100 failed > 1%"]
-    assert violations(stats, Threshold(2000, 0.05, 1.5)) == []
-    assert violations(EndpointStats(0, 0, 0.0), Threshold(2000, 0.05, 1.5)) == ["no requests"]
+    assert violations(stats, Threshold(1500, 0.01, 1.5, 200)) == ["p95 1600 ms > 1500 ms", "2/100 failed > 1%"]
+    assert violations(stats, Threshold(2000, 0.05, 1.5, 200)) == []
+    assert violations(EndpointStats(0, 0, 0.0), Threshold(2000, 0.05, 1.5, 200)) == ["no requests"]
 
 
 def perf_run(root, name, p95, settings='{"users": "5"}'):
@@ -55,3 +60,9 @@ def test_earlier_stats_take_only_older_runs_of_the_env_with_the_same_settings(tm
     assert baseline_p95(history, "oz_zaken") is None  # one earlier run is no baseline
     assert baseline_p95([*history, *history, *history], "oz_zaken") == 300.0
     assert baseline_p95([*history, *history, *history], "kc_discovery") is None
+
+
+def test_a_slowdown_must_pass_both_the_ratio_and_the_margin():
+    threshold = Threshold(1500, 0.01, 1.5, 200)
+    assert slowdown_limit(threshold, 130) == 330  # small numbers: the margin
+    assert slowdown_limit(threshold, 1000) == 1500  # large numbers: the ratio

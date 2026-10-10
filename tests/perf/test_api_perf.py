@@ -24,6 +24,7 @@ from podiumd_tests.perf.stats import STATS
 from podiumd_tests.perf.stats import baseline_p95
 from podiumd_tests.perf.stats import earlier_stats
 from podiumd_tests.perf.stats import read_stats
+from podiumd_tests.perf.stats import slowdown_limit
 from podiumd_tests.perf.stats import thresholds
 from podiumd_tests.perf.stats import violations
 from podiumd_tests.process import run_checked
@@ -79,13 +80,13 @@ def test_endpoint_meets_its_threshold(stats: dict[str, EndpointStats], endpoint:
 
 @pytest.mark.parametrize("endpoint", [requiring(c, e, test_id=e) for e, c in ENDPOINTS.items()])
 def test_endpoint_is_not_slower_than_before(stats: dict[str, EndpointStats], perf_dir: Path, endpoint: str) -> None:
-    """The endpoint's p95 stays within max_slowdown of its median over the earlier comparable runs."""
+    """The endpoint's p95 is no slowdown (stats.slowdown_limit) against its median over the earlier comparable runs."""
     if endpoint not in stats:
         pytest.skip(f"Locust made no {endpoint} requests")
     baseline = baseline_p95(earlier_stats(perf_dir.parent), endpoint) if perf_dir.parent.name.count("_") >= 3 else None
     if baseline is None:
         pytest.skip(f"no earlier perf run of this environment with the same settings has {endpoint}")
-    limit = thresholds(REPO_ROOT / "perf.yaml", endpoint).max_slowdown * baseline
+    limit = slowdown_limit(thresholds(REPO_ROOT / "perf.yaml", endpoint), baseline)
     assert stats[endpoint].p95_ms <= limit, (
         f"p95 {stats[endpoint].p95_ms:.0f} ms > {limit:.0f} ms (baseline {baseline:.0f} ms)"
     )
