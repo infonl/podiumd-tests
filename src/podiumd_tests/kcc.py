@@ -3,17 +3,21 @@
 from __future__ import annotations
 
 import json
+import uuid
 
 from http import HTTPStatus
 from typing import TYPE_CHECKING
+from urllib.parse import quote
 
 import pytest
 
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.browser import challenge_login
 from podiumd_tests.json_data import entries
+from podiumd_tests.kube import metadata_name
 from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openzaak import today
 
 if TYPE_CHECKING:
     import requests
@@ -27,6 +31,8 @@ if TYPE_CHECKING:
 
 # KISS proxies Open Klant's klantinteracties API under this path.
 KISS_KLANTCONTACTEN = "/api/klantinteracties/api/v1/klantcontacten"
+# URLs in KISS's search content that point nowhere.
+KENNIS_URL = "https://example.invalid/"
 
 
 def kcc_login(page: Page, env: Environment, component: str) -> requests.Session:
@@ -72,3 +78,35 @@ ITA_GROUP_ACCESS = pytest.mark.xfail(
     reason="ITA 3.3.2 refuses a groep member a contactverzoek assigned to the groep first (403: its guard reads"
     " the deprecated toegewezenAanActor reference); fixed in ITA 3.3.4 (ITA#582)",
 )
+
+
+def kiss_sync_cronjob(env: Environment, source: str) -> str:
+    """The name of KISS's elastic-sync CronJob for a search source (vac, kennisbank), e.g. contact-vac-sync."""
+    names = [metadata_name(c) for c in env.items("cronjobs")]
+    return next(n for n in names if n.endswith(f"-{source}-sync"))
+
+
+def vac_data(titel: str, antwoord: str = "Antwoord van podiumd-tests.") -> dict[str, object]:
+    """A VAC (vraag-antwoordcombinatie) for Objecten with the title as its question."""
+    return {"vraag": titel, "antwoord": antwoord, "doelgroep": "eu-burger", "status": "actief"}
+
+
+def kennisartikel_data(titel: str, tekst: str = "Tekst van podiumd-tests.") -> dict[str, object]:
+    """An SDG kennisartikel for Objecten with the title in its Dutch translation, at KENNIS_URL + title."""
+    return {
+        "url": KENNIS_URL + quote(titel),
+        "uuid": str(uuid.uuid4()),
+        "upnUri": KENNIS_URL + "upn",
+        "publicatieDatum": today(),
+        "productAanwezig": True,
+        "productValtOnder": None,
+        "verantwoordelijkeOrganisatie": {
+            "url": KENNIS_URL + "organisatie",
+            "owmsIdentifier": KENNIS_URL + "owms",
+            "owmsEndDate": "2099-12-31T00:00:00Z",
+        },
+        "locaties": None,
+        "doelgroep": "eu-burger",
+        "vertalingen": [{"taal": "nl", "datumWijziging": today(), "titel": titel, "tekst": tekst}],
+        "beschikbareTalen": ["nl"],
+    }

@@ -27,6 +27,8 @@ if TYPE_CHECKING:
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
+# ZAC reindexes in the request, page by page; tens of thousands of zaken take minutes.
+REINDEX_TIMEOUT = 1800
 # Objecten notifies, Open Notificaties delivers to ZAC, and ZAC starts the zaak and its case.
 PRODUCTAANVRAAG_TIMEOUT = 120
 
@@ -116,3 +118,22 @@ def productaanvraag_zaak(
     url = str(zaak["url"])
     registry.add(f"zaak {url}", lambda: delete_zaak(openzaak, url, with_documents=True))
     return zaak
+
+
+def reindex_zaken(env: Environment) -> None:
+    """Rebuild ZAC's search index of zaken from Open Zaak, through ZAC's internal endpoint.
+
+    Called inside the ZAC pod with the key from its own environment, as ZAC's signaleringen
+    CronJob does: the reindex outlasts an ingress timeout. ZAC first empties the index, so its
+    search misses zaken until the call returns.
+    """
+    url = "http://localhost:8080/rest/internal/indexeren/herindexeren/ZAAK"
+    command = f'curl -sS -f -o /dev/null -H "X-API-KEY: $ZAC_INTERNAL_ENDPOINTS_API_KEY" {url}'
+    env.kube.exec(env.deployment_for("zac"), "sh", "-c", command, timeout=REINDEX_TIMEOUT)
+
+
+def count_zaken_found(zac: requests.Session, zac_url: str, zaaktype_omschrijving: str) -> int:
+    """How many zaken of the zaaktype ZAC's search shows the session's user."""
+    query = {"page": 0, "rows": 1, "type": "ZAAK", "filters": {"ZAAKTYPE": {"values": [zaaktype_omschrijving]}}}
+    found = expect_status(zac.put(zac_url + "/rest/zoeken/list", json=query), HTTPStatus.OK).json()
+    return int(found["totaal"])

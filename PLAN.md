@@ -145,6 +145,7 @@ Decided 2026-10-06, after mapping which source tests need which configuration (`
 
 - A port of TA `seed-test-data` (`src/podiumd_tests/seed/volume.py`), with a matching `unseed-volume`. Built 2026-10-08.
 - Kinds and TA's counts (smoke / perf): Keycloak users 5 / 100, zaken 3 / 50 000 (own zaaktype `ptest-volume`), partijen 5 / 2 000, Objecten objects 10 / 1 000 (own objecttype `ptest-volume`), Open Klant internetaken 5 / 100. A profile setting `seed_volume_<kind>` replaces a perf count (minikube seeds less).
+- Search data (smoke / perf): VAC and Kennisartikel objects 5 / 500 each, which KISS's `vac` and `kennisbank` sync jobs put in its search index; and `zaken_in_zac`, the volume zaken in ZAC's search. For ZAC, PABC must know the zaaktype: with profile setting `pabc_volume_zaaktype` (an opt-in, it changes PABC's configuration) seed-volume adds the ZAAKTYPE entity type `ptest-volume`, which the test admin's all-domains role then covers, and reindexes ZAC's zaken inside the ZAC pod (2 000 zaken take about 6 minutes; ZAC's search misses zaken meanwhile). Unseeding removes the entity type and reindexes again.
 - Everything carries `ptest-volume`, no run tag, so sweep leaves it. A rerun tops up to the target. Creating goes through the APIs with the suite's own clients; counting and deleting through Django snippets.
 - `--parallel N` (default 8) and `--scale-cluster N` (Open Zaak, Open Klant and their workers at N replicas meanwhile). TA's `--no-notify` is not ported: Open Zaak refuses every write without a Notificaties service. TA's inwoner and kiss modules seeded nothing; its catalogus module is the bootstrap test zaaktype.
 
@@ -193,7 +194,7 @@ Revisit this only if perf ever needs heavy load (hundreds of users or more).
 **How it runs:**
 
 - `podiumd-tests run --env X --tier perf -- --perf-users 10 --perf-duration 60s` runs Locust headless (defaults 5 users, 30 s), as a subprocess: Locust monkey-patches the standard library on import.
-- Besides TA's reads, each Locust user creates a zaak in Open Zaak and a klantcontact in Open Klant (deleted after the timing, tagged with the run tag), looks up zaken and a partij by BSN, and searches in ZAC (Solr), KISS (Elasticsearch) and the portal. The searches measure the path more than the index: on minikube ZAC's index holds only the zaken of the zaaktypen ZAC handles (not the volume zaken), and KISS's indexes are empty.
+- Besides TA's reads, each Locust user creates a zaak in Open Zaak and a klantcontact in Open Klant (deleted after the timing, tagged with the run tag), looks up zaken and a partij by BSN, and searches in ZAC (Solr), KISS (Elasticsearch) and the portal. With seed-volume's search data, the search term "aanvraag" finds hundreds of volume zaken in ZAC and VAC and kennisartikelen in KISS.
 - The wrapper in `tests/perf/` (marker `perf`, excluded from `full`) asserts the p95 and error-rate thresholds per endpoint from `perf.yaml`.
 - It also compares each endpoint's p95 with the median of the environment's earlier runs with the same settings (users, duration, calls and volume data; at least 3), so a slowdown shows also where absolute numbers mean little, such as minikube.
 - Locust's stats and the run's settings go to the run's `perf/` subdirectory.

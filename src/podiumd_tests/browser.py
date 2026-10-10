@@ -7,11 +7,16 @@ certificate checks; the HTTP tests verify those certificates.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
+
+from playwright.sync_api import sync_playwright
 
 from podiumd_tests.responses import url_host
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     import requests
 
     from playwright.sync_api import Page
@@ -31,6 +36,17 @@ def launch_args(env: Environment) -> list[str]:
 def context_args(env: Environment) -> dict[str, object]:
     """Browser context options: skip certificate checks only for a local CA."""
     return {"ignore_https_errors": True} if env.profile.access.ca_bundle else {}
+
+
+@contextmanager
+def headless_page(env: Environment) -> Generator[Page]:
+    """A page in headless Chromium with the profile's settings, outside pytest (bootstrap, seed-volume)."""
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(args=launch_args(env))
+        try:
+            yield browser.new_context(**context_args(env)).new_page()  # pyright: ignore[reportArgumentType]
+        finally:
+            browser.close()
 
 
 def keycloak_login(page: Page, username: str, password: str) -> None:

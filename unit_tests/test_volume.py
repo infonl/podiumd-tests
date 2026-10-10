@@ -1,6 +1,7 @@
 """Unit tests for the volume seed's counts, corpus and report."""
 
 from podiumd_tests.environment import Environment
+from podiumd_tests.seed.volume import KINDS
 from podiumd_tests.seed.volume import SCALES
 from podiumd_tests.seed.volume import Seeded
 from podiumd_tests.seed.volume import corpus
@@ -24,3 +25,12 @@ def test_corpus_picks_wrap_around():
 def test_report_shows_counts_or_the_skip_reason():
     report = format_seeded([Seeded("zaken", 3, 50), Seeded("objecten", 0, 0, "skipped: no objecten")])
     assert report.splitlines() == ["zaken          3 -> 50", "objecten       skipped: no objecten"]
+
+
+def test_zaken_in_zac_need_the_profile_setting(profile_factory, fake_runner):
+    zaken_in_zac = next(k for k in KINDS if k.name == "zaken_in_zac")
+    refused = Environment(profile_factory(), fake_runner, environ={})
+    allowed = Environment(profile_factory(settings={"pabc_volume_zaaktype": "True"}), fake_runner, environ={})
+    assert "pabc_volume_zaaktype" in str(zaken_in_zac.refused(refused))
+    assert zaken_in_zac.refused(allowed) is None
+    assert zaken_in_zac.target_kind == "zaken"

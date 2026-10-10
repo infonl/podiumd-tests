@@ -75,5 +75,9 @@ settings:
   seed_volume_partijen: "500"
   seed_volume_objecten: "300"
   seed_volume_internetaken: "50"
+  seed_volume_vac: "200"
+  seed_volume_kennisartikelen: "200"
+  # seed-volume may add the volume zaaktype to PABC's entity types, so ZAC shows its zaken to the test admin.
+  pabc_volume_zaaktype: true
   # Shared with the podiumd-minikube agent; bootstrap and writing runs take it.
   lock_file: /home/kvv/development/werk/infonl-dimpact/infonl/.minikube-lock
