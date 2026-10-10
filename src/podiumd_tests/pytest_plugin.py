@@ -391,16 +391,10 @@ def fixture_zac_zaak(
 
 @pytest.hookimpl(tryfirst=True)  # before xdist reads the groups
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    """Put tests in one xdist group per shared state: the destructive tests each disturb what the others use.
-
-    The productaanvraag tests share ZAC's handling of Objecten notifications: in parallel, one waited
-    in vain for its zaak.
-    """
+    """Put the destructive tests in one xdist group: each disturbs state the others use."""
     for item in items:
         if item.get_closest_marker("destructive"):
             item.add_marker(pytest.mark.xdist_group("destructive"))
-        elif "productaanvraagtype" in getattr(item, "fixturenames", ()):
-            item.add_marker(pytest.mark.xdist_group("zac-productaanvraag"))
 
 
 def pytest_runtest_setup(item: pytest.Item) -> None:
