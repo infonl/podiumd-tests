@@ -60,6 +60,8 @@ pytestmark = [
     pytest.mark.ui,
     pytest.mark.core,
     pytest.mark.requires("openinwoner", "openklant", "keycloak"),
+    # One inwoner asks every question: a list loaded in one test misses another's question meanwhile.
+    pytest.mark.xdist_group("openinwoner-vragen"),
 ]
 
 INWONER, _, BEDRIJF = IDENTITIES

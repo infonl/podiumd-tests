@@ -12,6 +12,8 @@ class Tier:
     paths: tuple[str, ...]
     marker_expression: str
     description: str
+    # Run on pytest-xdist workers (profile setting pytest_workers).
+    parallel: bool = False
 
 
 TIERS: dict[str, Tier] = {
@@ -20,16 +22,19 @@ TIERS: dict[str, Tier] = {
         ("tests/smoke", "tests/component", "tests/integration"),
         "(smoke or core) and not destructive",
         "smoke plus the key user flows",
+        parallel=True,
     ),
     "full": Tier(
         ("tests/smoke", "tests/component", "tests/integration"),
         "not destructive",
         "smoke, component and integration",
+        parallel=True,
     ),
     "perf": Tier(("tests/perf",), "perf", "response-time thresholds (Locust)"),
     "chaos": Tier(
         ("tests/smoke", "tests/component", "tests/integration"),
         "destructive",
         "destructive and chaos tests; opt-in",
+        parallel=True,
     ),
 }

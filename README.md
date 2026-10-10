@@ -38,7 +38,9 @@ After the release, the full tier compares zaaktypen, ZAC's zaakafhandelparameter
 the 100 oldest zaken with it. The snapshot keeps hashes, never values.
 
 Tiers: `smoke`, `core`, `full`, `perf`, `chaos`. A profile's `allowed_tiers`
-limits which tiers may run against that environment.
+limits which tiers may run against that environment. `core`, `full` and `chaos`
+run on 4 pytest-xdist workers; profile setting `pytest_workers` changes that
+(1 runs serially).
 
 Exit codes: 0 pass, 1 test failures, 2 configuration or preflight error,
 3 tier not allowed for the environment, 4 environment locked by another run.

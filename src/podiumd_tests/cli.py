@@ -81,6 +81,8 @@ EXIT_TESTS_FAILED = 1
 EXIT_CONFIG = 2
 EXIT_NOT_ALLOWED = 3
 EXIT_BUSY = 4
+# pytest-xdist workers of a parallel tier; profile setting pytest_workers overrides, 1 runs serially.
+DEFAULT_WORKERS = 4
 
 
 def _load(args: argparse.Namespace) -> Profile:
@@ -192,6 +194,9 @@ def pytest_selection(profile: Profile, tier_name: str, run_id: str, junit: Path,
     selection += [f"--output={junit.parent / 'artifacts'}", "--screenshot=only-on-failure"]
     if args.keep_data:
         selection.append("--keep-data")
+    workers = int(profile.settings.get("pytest_workers", DEFAULT_WORKERS))
+    if tier.parallel and workers > 1:
+        selection += ["-n", str(workers)]
     return [*selection, *args.pytest_args]
 
 

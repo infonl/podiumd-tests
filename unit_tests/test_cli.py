@@ -65,3 +65,21 @@ def test_run_keeps_screenshots_of_failed_browser_tests_but_no_traces(tmp_path, p
     assert f"--output={tmp_path / 'artifacts'}" in selection
     assert "--screenshot=only-on-failure" in selection
     assert not any(a.startswith("--tracing") for a in selection)
+
+
+@pytest.mark.parametrize(
+    ("tier", "settings", "workers"),
+    [
+        ("full", {}, "4"),
+        ("full", {"pytest_workers": "2"}, "2"),
+        ("full", {"pytest_workers": "1"}, None),
+        ("smoke", {}, None),
+    ],
+)
+def test_parallel_tiers_run_on_xdist_workers(tmp_path, profile_factory, tier, settings, workers):
+    args = cli.build_parser().parse_args(["run", "--env", "x", "--tier", tier])
+    selection = cli.pytest_selection(
+        profile_factory(settings=settings), tier, "2610071230a3f1", tmp_path / "j.xml", args
+    )
+    found = selection[selection.index("-n") + 1] if "-n" in selection else None
+    assert found == workers
