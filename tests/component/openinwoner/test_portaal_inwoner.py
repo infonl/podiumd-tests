@@ -129,8 +129,8 @@ def test_second_inwoner_sees_own_profile(
             id="deactivated",
             marks=pytest.mark.xfail(
                 strict=True,
-                reason="Open Inwoner: deactivated_on (set by 'Profiel verwijderen') does not stop a DigiD login;"
-                " its OIDC backend filters on neither is_active nor deactivated_on (TA reg-160b); not yet"
+                reason="Open Inwoner 2.4.3: the admin still offers the deprecated deactivated_on ('Profiel"
+                " verwijderen' now deletes the account), but it does not stop a DigiD login (TA reg-160b); not yet"
                 " reported upstream",
             ),
         ),
