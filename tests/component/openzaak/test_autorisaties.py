@@ -17,6 +17,7 @@ from podiumd_tests.auth.zgw_jwt import zgw_jwt
 from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.seed.openklant import random_bsn
+from podiumd_tests.seed.openzaak import BSN_FILTER
 from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import make_document
@@ -31,8 +32,6 @@ if TYPE_CHECKING:
     from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("openzaak")]
-
-BSN_FILTER = "rol__betrokkeneIdentificatie__natuurlijkPersoon__inpBsn"
 
 
 @pytest.mark.core
