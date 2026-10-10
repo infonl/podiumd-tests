@@ -280,7 +280,7 @@ them as out of scope with this reason.
 | ITA-022 | organisation-wide list, not in ITA 3.3 |
 | INT-006 | Signicat's real DigiD broker |
 | CONT-056, CONT-057, CONT-058, CONT-059 | DigiD or eHerkenning down needs the real broker chain; the mocks log in at Keycloak |
-| CONT-045 | SmartDocuments down needs a SmartDocuments mock, which no environment has |
+| ZAC-035, ZAC-036, INT-010, CONT-045 | SmartDocuments is off in ZAC on every estate; pointing ZAC at a mock changes its deployment, which is the owner's (docs/research/zac-smartdocuments.md) |
 | CONT-001, CONT-002, CONT-006, KETEN-001 | heading, no case |
 | CONT-046, CONT-047, CONT-050, CONT-051, CONT-052, CONT-053, CONT-054, CONT-055 | expected result "?", and the catalog lost which connection |
 | OF-066, OF-069 | the case does not say what to check |
