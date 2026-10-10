@@ -430,3 +430,13 @@ def test_oidc_mock_remove_undoes_the_record(env_factory, fake_runner, profile_fa
     deletes = sorted(r.url.removeprefix(KC + REALM) for r in sent if r.method == "DELETE")
     assert deletes == ["/client-scopes/s-eh/protocol-mappers/models/m2", "/clients/c1/optional-client-scopes/s-bsn"]
     assert any(r.method == "PUT" and r.url.endswith("/clients/c1") for r in sent)
+
+
+def test_an_opt_in_step_does_nothing_unless_the_profile_allows_it(env_factory, fake_runner, profile_factory):
+    env = cluster_env(env_factory, fake_runner, profile_factory)
+    ctx = Context(env, CredentialStore(env.kube))
+    step = next(s for s in STEPS if s.name == "openformulieren-payment-wait")
+    assert step.is_present(ctx)
+    assert step.apply(ctx) == {}
+    assert ctx.notes == ["not allowed: profile setting of_wait_for_payment is off"]
+    assert not any("exec" in c for c in fake_runner.calls)

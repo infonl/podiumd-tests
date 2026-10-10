@@ -23,6 +23,8 @@ from podiumd_tests.bootstrap.names import NRC_CLIENT_ID
 from podiumd_tests.bootstrap.names import NRC_STORE_KEY
 from podiumd_tests.bootstrap.names import OBJECTEN_STORE_KEY
 from podiumd_tests.bootstrap.names import OBJECTTYPEN_STORE_KEY
+from podiumd_tests.bootstrap.names import OGONE_MERCHANT
+from podiumd_tests.bootstrap.names import OGONE_STORE_KEY
 from podiumd_tests.bootstrap.names import OPENKLANT_OPENINWONER_STORE_KEY
 from podiumd_tests.bootstrap.names import OPENKLANT_STORE_KEY
 from podiumd_tests.bootstrap.names import PREFIX
@@ -51,6 +53,8 @@ from podiumd_tests.clients.platform import openklant_client
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.payments import OGONE_ENDPOINT
+from podiumd_tests.payments import OGONE_HASH
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import delete_partij
@@ -75,7 +79,8 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
     Secret mode (default): a random secret is generated here, sent to the snippet and stored
     under store_key. Record mode (record=True), for wiring that adds to shared objects: apply
     gets the stored record and returns it extended with what it added; remove gets it back
-    and undoes exactly that. Without store_key the step stores nothing.
+    and undoes exactly that. Without store_key the step stores nothing. With opt_in, apply
+    does nothing unless the profile allows that setting.
     """
 
     name: str
@@ -86,6 +91,7 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
     params: dict[str, object] = field(default_factory=dict[str, object])
     record: bool = False
     wiring: bool = False
+    opt_in: str | None = None
     # Parameters known only at run time, e.g. a stored secret or an in-cluster URL.
     context_params: Callable[[Context], dict[str, object]] | None = None
 
@@ -95,8 +101,13 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
         params = {**self.params, **runtime, "action": action, **extra}
         return cast("dict[str, object]", run_snippet(ctx.env.kube, deployment, self.snippet, params))
 
+    def _refused(self, ctx: Context) -> bool:
+        return self.opt_in is not None and not ctx.env.profile.allows(self.opt_in)
+
     def is_present(self, ctx: Context, /) -> bool:
-        """The objects exist, and what the step stores is in the credentials Secret."""
+        """Not allowed (nothing to do), or the objects exist and what the step stores is in the credentials Secret."""
+        if self._refused(ctx):
+            return True
         stored = self.store_key is None or self.store_key in ctx.store.read()
         return bool(self._run(ctx, "status")["present"]) and stored
 
@@ -105,6 +116,9 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Create the objects: with a new random secret, or extending the stored record."""
+        if self._refused(ctx):
+            ctx.notes.append(f"not allowed: profile setting {self.opt_in} is off")
+            return {}
         if self.store_key is None:
             self._apply(ctx)
             return {}
@@ -723,6 +737,24 @@ STEPS: tuple[Step, ...] = (
             "auth_backends": ["digid_oidc", "eherkenning_oidc"],
             "settings": {},
         },
+    ),
+    # The payment tests' Ogone merchant; the tests sign as Ogone with its passphrase.
+    SnippetStep(
+        "openformulieren-ogone",
+        ("openformulieren",),
+        "openformulieren_ogone",
+        OGONE_STORE_KEY,
+        {"label": OGONE_MERCHANT, "pspid": PREFIX, "hash_algorithm": OGONE_HASH, "endpoint": OGONE_ENDPOINT},
+    ),
+    # Register a submission only once it is paid (draaiboek OF-022), where the profile allows it.
+    SnippetStep(
+        "openformulieren-payment-wait",
+        ("openformulieren",),
+        "openformulieren_payment_wait",
+        "ptest_bootstrap_of_payment_wait_record",
+        record=True,
+        wiring=True,
+        opt_in="of_wait_for_payment",
     ),
     SnippetStep(
         "opennotificaties-kanalen",

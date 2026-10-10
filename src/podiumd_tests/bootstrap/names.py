@@ -29,6 +29,9 @@ TEST_ZAAKTYPE = "ptest-bootstrap-klacht"
 TEST_IOT = "ptest-bootstrap-bijlage"
 TEST_BESLUITTYPE = "ptest-bootstrap-besluit"
 TEST_FORM = "ptest-bootstrap-klacht"
+# The Ogone merchant of the payment tests in Open Formulieren; the tests play Ogone with its passphrase.
+OGONE_MERCHANT = "ptest-bootstrap-ogone"
+OGONE_STORE_KEY = "ptest_bootstrap_ogone_secret"
 # Open Notificaties kanalen the ported tests subscribe on, with the filters of ExternalsPodiumD
 # and podiumd-infra.
 KANALEN = {"zaken": ["bronorganisatie", "zaaktype", "vertrouwelijkheidaanduiding"]}

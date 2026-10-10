@@ -26,13 +26,18 @@ if TYPE_CHECKING:
     from podiumd_tests.seed.registry import ResourceRegistry
 
 
+def form_and_headers(http: requests.Session, base_url: str, slug: str) -> tuple[JsonObject, dict[str, str]]:
+    """The form, and the headers the session's writes to Open Formulieren's API need."""
+    form_response = expect_status(http.get(f"{base_url}/api/v2/forms/{slug}"), HTTPStatus.OK)
+    # Every write echoes the CSRF token that API responses carry in this header.
+    headers = {"X-CSRFToken": form_response.headers.get("X-CSRFToken", ""), "Referer": f"{base_url}/{slug}/"}
+    return cast("JsonObject", form_response.json()), headers
+
+
 def start_submission(http: requests.Session, base_url: str, slug: str) -> tuple[JsonObject, dict[str, str]]:
     """Start an anonymous submission of the form; returns it and the headers its writes need."""
     form_url = f"{base_url}/{slug}/"
-    form_response = expect_status(http.get(f"{base_url}/api/v2/forms/{slug}"), HTTPStatus.OK)
-    form = cast("JsonObject", form_response.json())
-    # Every write echoes the CSRF token that API responses carry in this header.
-    headers = {"X-CSRFToken": form_response.headers.get("X-CSRFToken", ""), "Referer": form_url}
+    form, headers = form_and_headers(http, base_url, slug)
     submission = _json(
         http.post(f"{base_url}/api/v2/submissions", json={"form": form["url"], "formUrl": form_url}, headers=headers),
         HTTPStatus.CREATED,
@@ -78,17 +83,22 @@ def wait_for_registration(env: Environment, submission: str, *, timeout: float) 
 
     The public status reports success before the registration has finished, also when it fails.
     """
-    deployment = env.deployment_for("openformulieren")
-    params: dict[str, object] = {"uuid": submission, "action": "registration"}
 
     def finished() -> dict[str, str] | None:
-        result = cast("dict[str, str]", run_snippet(env.kube, deployment, "openformulieren_submission", params))
+        result = registration_state(env, submission)
         return result if result["status"] in {"success", "failed"} else None
 
     result = wait_until(finished, timeout=timeout, description=f"registration of submission {submission}")
     if result["status"] == "failed":
         msg = f"registration of submission {submission} failed: {result['error']}"
         raise AssertionError(msg)
+
+
+def registration_state(env: Environment, submission: str) -> dict[str, str]:
+    """Open Formulieren's registration status of the submission (pending, in_progress, success, failed) and error."""
+    params: dict[str, object] = {"uuid": submission, "action": "registration"}
+    deployment = env.deployment_for("openformulieren")
+    return cast("dict[str, str]", run_snippet(env.kube, deployment, "openformulieren_submission", params))
 
 
 def _processed(http: requests.Session, status_url: str, submission: str, *, timeout: float) -> JsonObject:
@@ -142,15 +152,20 @@ def make_form(  # pylint: disable=too-many-arguments,too-many-positional-argumen
     components: Sequence[Mapping[str, object]],
     registration: Mapping[str, object],
     auth_backends: tuple[str, ...] = (),
+    payment: Mapping[str, object] | None = None,
     **settings: object,
 ) -> None:
-    """A one-step test form (snippet openformulieren_form) that cleanup deletes with its submissions."""
+    """A one-step test form (snippet openformulieren_form) that cleanup deletes with its submissions.
+
+    payment: {"backend", "merchant", "price"} for a form that asks for a payment.
+    """
     deployment = env.deployment_for("openformulieren")
     params: dict[str, object] = {
         "slug": slug,
         "components": [dict(c) for c in components],
         "registration": dict(registration),
         "auth_backends": list(auth_backends),
+        "payment": dict(payment or {}),
     }
     run_snippet(env.kube, deployment, "openformulieren_form", {**params, "settings": settings, "action": "apply"})
     registry.add(
