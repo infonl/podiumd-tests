@@ -39,7 +39,7 @@ OMSCHRIJVING = {"type": "textfield", "key": "omschrijving", "label": "Omschrijvi
 KENTEKEN = {"type": "textfield", "key": "kenteken", "label": "Kenteken"}
 
 
-@pytest.mark.tc("OF-068", "OF-073")
+@pytest.mark.tc("OF-068", "OF-073", "FB-009")
 def test_changed_form_registers_the_new_field(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     http: requests.Session,
     urls: dict[str, str],
