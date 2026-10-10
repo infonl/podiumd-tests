@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import secrets
-
 from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
@@ -17,6 +15,7 @@ from podiumd_tests.auth.keycloak_admin import for_environment
 from podiumd_tests.auth.keycloak_admin import realm_of
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import url_host
+from podiumd_tests.security import policy_breaking_passwords
 from podiumd_tests.security import realm_policy_gaps
 
 if TYPE_CHECKING:
@@ -66,7 +65,7 @@ def test_password_guessing_locks_the_user_out(
 ) -> None:
     """After failureFactor wrong passwords Keycloak locks the user, and then refuses the right one too."""
     admin = for_environment(podiumd_env, realm)
-    username, password = registry.tagged("lockout"), secrets.token_hex(20)
+    username, password = registry.tagged("lockout"), admin.new_password()
     user_id = admin.create_user(username, password, {})
     registry.add(f"keycloak user {username}", lambda: admin.delete_user(user_id))
     # Keycloak's own account client: its auth URL shows the login form without an app in between.
@@ -82,3 +81,17 @@ def test_password_guessing_locks_the_user_out(
     assert admin.brute_force_status(user_id)["disabled"] is True
     with pytest.raises(TokenError):
         form_login(podiumd_env.session(), login, username, password)
+
+
+@pytest.mark.tc("FB-004")
+def test_realm_enforces_its_password_policy(podiumd_env: Environment, realm: str, registry: ResourceRegistry) -> None:
+    """Keycloak refuses a new password that misses one counted rule of the realm's passwordPolicy by one."""
+    admin = for_environment(podiumd_env, realm)
+    policy = str(admin.representation().get("passwordPolicy") or "")
+    breaking = policy_breaking_passwords(policy)
+    assert breaking, f"realm {realm} has no counted password rules: {policy!r}"
+    username = registry.tagged("policy")
+    user_id = admin.create_user(username, admin.new_password(), {})
+    registry.add(f"keycloak user {username}", lambda: admin.delete_user(user_id))
+    accepted = [rule for rule, password in breaking.items() if admin.password_refusal(user_id, password) is None]
+    assert not accepted, f"realm {realm} accepted a password breaking {accepted} of {policy!r}"

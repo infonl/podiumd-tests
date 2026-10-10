@@ -184,6 +184,7 @@ REALM = "/admin/realms/podiumd"
 def keycloak_answers(*, user_exists, has_group):
     return {
         "POST /realms/master/protocol/openid-connect/token": (200, {"access_token": "admin-token"}),
+        f"GET {REALM}": (200, {"passwordPolicy": "length(50) and digits(3)"}),
         f"GET {REALM}/users": (200, [{"id": "u1"}] if user_exists else []),
         f"DELETE {REALM}/users/u1": (204, None),
         f"POST {REALM}/users": (201, None),
@@ -219,7 +220,8 @@ def test_keycloak_user_gets_existing_roles_and_reports_missing_ones(
     )
     values = user.apply(ctx)
     password = values[keycloak_password_key("admin")]
-    assert len(password) == 40
+    # Meets the realm's passwordPolicy.
+    assert (len(password), sum(c.isdigit() for c in password) >= 3) == (50, True)
     calls = [(r.method, r.url.removeprefix(KC).split("?")[0]) for r in sent]
     # An existing user is updated in place: its id is the sub apps made their accounts from.
     assert ("DELETE", f"{REALM}/users/u1") not in calls

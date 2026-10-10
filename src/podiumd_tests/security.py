@@ -7,7 +7,9 @@ The baseline is what podiumd's own Keycloak realm templates set since podiumd 4.
 from __future__ import annotations
 
 import re
+import secrets
 import ssl
+import string
 
 from typing import TYPE_CHECKING
 from typing import cast
@@ -25,6 +27,15 @@ MAX_ACCESS_TOKEN_SECONDS = 300
 MAX_FAILURE_FACTOR = 5
 # Shortest password the realm may accept (podiumd realm 12, master 14).
 MIN_PASSWORD_LENGTH = 12
+# Length of the suite's own passwords where the realm asks less.
+PASSWORD_LENGTH = 40
+# Character classes a Keycloak passwordPolicy can count; the suite's passwords have one of each at least.
+PASSWORD_CLASSES = {
+    "upperCase": string.ascii_uppercase,
+    "lowerCase": string.ascii_lowercase,
+    "digits": string.digits,
+    "specialChars": "-_.!*",
+}
 # A certificate that expires sooner needs renewing now.
 MIN_CERT_DAYS = 14
 SESSION_COOKIE = re.compile(r"session|auth|token", re.IGNORECASE)
@@ -50,6 +61,34 @@ def realm_policy_gaps(realm: JsonObject) -> list[str]:
     if not section(realm, "browserSecurityHeaders").get("strictTransportSecurity"):
         gaps.append("browserSecurityHeaders has no strictTransportSecurity")
     return gaps
+
+
+def _policy_rules(policy: str) -> dict[str, int]:
+    """The counted rules of a Keycloak passwordPolicy, e.g. {"length": 12, "digits": 1}."""
+    rules = dict(re.findall(r"(\w+)\((\d+)\)", policy))
+    return {rule: int(count) for rule, count in rules.items() if rule in {*PASSWORD_CLASSES, "length", "maxLength"}}
+
+
+def _password(rules: dict[str, int], broken: str | None = None) -> str:
+    """A random password that meets the rules, except the broken one, which it misses by one."""
+    counts = {rule: rules.get(rule, 1) - (rule == broken) for rule in PASSWORD_CLASSES}
+    chars = [secrets.choice(PASSWORD_CLASSES[rule]) for rule, count in counts.items() for _ in range(count)]
+    wanted = max(rules.get("length", 0), PASSWORD_LENGTH)
+    length = rules["length"] - 1 if broken == "length" else wanted
+    filler = PASSWORD_CLASSES["upperCase" if broken == "lowerCase" else "lowerCase"]
+    chars += [secrets.choice(filler) for _ in range(length - len(chars))]
+    return "".join(chars)[: rules.get("maxLength")]
+
+
+def conforming_password(policy: str) -> str:
+    """A random password that a realm with this passwordPolicy accepts."""
+    return _password(_policy_rules(policy))
+
+
+def policy_breaking_passwords(policy: str) -> dict[str, str]:
+    """Per counted rule of the passwordPolicy, a password that breaks only that rule."""
+    rules = _policy_rules(policy)
+    return {rule: _password(rules, rule) for rule in rules if rule != "maxLength"}
 
 
 def missing_security_headers(response: requests.Response) -> list[str]:

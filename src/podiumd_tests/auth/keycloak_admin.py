@@ -10,6 +10,7 @@ from podiumd_tests.auth.keycloak import PasswordLogin
 from podiumd_tests.auth.keycloak import admin_realm_url
 from podiumd_tests.auth.keycloak import password_grant
 from podiumd_tests.responses import expect_status
+from podiumd_tests.security import conforming_password
 
 if TYPE_CHECKING:
     import requests
@@ -103,6 +104,20 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
         self._send("PUT", f"/users/{user_id}", _user_body(username, attributes, name), HTTPStatus.NO_CONTENT)
         self._send("PUT", f"/users/{user_id}/reset-password", _password(password), HTTPStatus.NO_CONTENT)
         return user_id
+
+    def new_password(self) -> str:
+        """A random password that the realm's passwordPolicy accepts."""
+        return conforming_password(str(self.representation().get("passwordPolicy") or ""))
+
+    def password_refusal(self, user_id: str, password: str) -> str | None:
+        """Keycloak's reason to refuse the password as the user's new one; None when it takes it."""
+        response = self.http.put(
+            f"{self.base}/users/{user_id}/reset-password", json=_password(password), headers=self.headers
+        )
+        if response.status_code == HTTPStatus.NO_CONTENT:
+            return None
+        body = expect_status(response, HTTPStatus.BAD_REQUEST).json()
+        return str(body.get("error_description") or body.get("error"))
 
     def brute_force_status(self, user_id: str) -> JsonObject:
         """Keycloak's brute-force detection state of a user: disabled (locked), numFailures."""

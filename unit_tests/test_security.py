@@ -1,5 +1,6 @@
 """Unit tests for the security baseline checks."""
 
+import re
 import ssl
 
 import pytest
@@ -7,10 +8,12 @@ import pytest
 from urllib3 import HTTPHeaderDict
 from urllib3 import HTTPResponse
 
+from podiumd_tests.security import conforming_password
 from podiumd_tests.security import days_valid
 from podiumd_tests.security import foreign_origin_allowed
 from podiumd_tests.security import insecure_session_cookies
 from podiumd_tests.security import missing_security_headers
+from podiumd_tests.security import policy_breaking_passwords
 from podiumd_tests.security import realm_policy_gaps
 
 PODIUMD_REALM = {
@@ -117,3 +120,39 @@ def test_days_valid():
     expires = "Jan 31 00:00:00 2027 GMT"
     now = ssl.cert_time_to_seconds(expires) - 10 * 86400
     assert days_valid({"notAfter": expires}, now) == 10
+
+
+POLICY = "length(12) and digits(2) and upperCase(1) and lowerCase(1) and specialChars(1) and notUsername(undefined)"
+
+
+def counts(password):
+    return {
+        "length": len(password),
+        "digits": sum(c.isdigit() for c in password),
+        "upperCase": sum(c.isupper() for c in password),
+        "lowerCase": sum(c.islower() for c in password),
+        "specialChars": sum(not c.isalnum() for c in password),
+    }
+
+
+def meets(password, policy):
+    rules = dict(re.findall(r"(\w+)\((\d+)\)", policy))
+    return {rule for rule, count in counts(password).items() if rule in rules and count < int(rules[rule])}
+
+
+def test_a_conforming_password_meets_every_rule():
+    assert meets(conforming_password(POLICY), POLICY) == set()
+    assert len(conforming_password("length(8)")) == 40
+    assert len(conforming_password("length(60)")) == 60
+    assert len(conforming_password("length(12) and maxLength(20)")) == 20
+
+
+def test_each_breaking_password_breaks_only_its_rule():
+    breaking = policy_breaking_passwords(POLICY)
+    assert sorted(breaking) == ["digits", "length", "lowerCase", "specialChars", "upperCase"]
+    for rule, password in breaking.items():
+        assert meets(password, POLICY) == {rule}, rule
+
+
+def test_a_policy_without_counted_rules_has_nothing_to_break():
+    assert policy_breaking_passwords("notUsername(undefined) and passwordHistory(5)") == {}

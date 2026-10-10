@@ -168,7 +168,7 @@ class KeycloakUser:
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Create or update the user with a new password and the wanted roles and groups that exist."""
         admin = for_environment(ctx.env)
-        password = secrets.token_hex(20)
+        password = admin.new_password()
         user = admin.save_user(self.username, password, self.attributes)
         realm_roles = admin.realm_roles(self.realm_roles)
         admin.add_realm_roles(user, realm_roles)

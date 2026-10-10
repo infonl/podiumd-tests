@@ -8,7 +8,6 @@ through Django snippets, which is what makes tens of thousands of objects workab
 
 from __future__ import annotations
 
-import secrets
 import threading
 
 from concurrent.futures import ThreadPoolExecutor
@@ -271,7 +270,7 @@ def _user_creator(env: Environment) -> Callable[[int], None]:
         username = f"{VOLUME_TAG}-{persoon['voornaam']}.{persoon['achternaam']}.{index}".lower().replace(" ", "")
         # A fresh admin token per user: the master realm's tokens expire within minutes.
         admin = for_environment(env)
-        user = admin.create_user(username, secrets.token_hex(20), {}, (persoon["voornaam"], persoon["achternaam"]))
+        user = admin.create_user(username, admin.new_password(), {}, (persoon["voornaam"], persoon["achternaam"]))
         if group:
             admin.join_group(user, group)
 
