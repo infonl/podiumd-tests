@@ -1,8 +1,9 @@
 """PKCE on the OIDC logins. Ported from podiumd-minikube and podiumd-infra test_pkce.py.
 
-PABC always sends a PKCE code challenge (UsePkce is hard-coded in its source); that Keycloak accepts
-its login with the verifier, every test in component/pabc shows through its browser login. The Django apps' clients must not require PKCE (mozilla-django-oidc
-does not send it), nor ita's and kiss's: they send it, but the podiumd chart does not require it.
+PABC always sends a PKCE code challenge (UsePkce is hard-coded in its source); every test in
+component/pabc logs in through it, so Keycloak accepts the verifier. The Django apps' clients must
+not require PKCE (mozilla-django-oidc does not send it), nor ita's and kiss's: they send it, but the
+podiumd chart does not require it.
 ZAC's experimental PKCE is not ported (a podiumd-minikube chart switch).
 """
 
