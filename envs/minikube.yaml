@@ -67,6 +67,8 @@ settings:
   zac_email_confirmation: true
   # podiumd-minikube asks bootstrap to give that zaaktype the besluittype ZAC's inrichtingscheck needs (2026-10-09).
   zac_besluittype: true
+  # KISS's kanalen are runtime data no environment seeds; bootstrap adds Balie, Telefoon and Internet (2026-10-10).
+  kiss_kanalen: true
   # seed-volume --scale perf on one laptop; other environments take TA's counts.
   seed_volume_users: "20"
   seed_volume_zaken: "2000"

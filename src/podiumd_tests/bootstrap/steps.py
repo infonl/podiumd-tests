@@ -14,6 +14,7 @@ from typing import cast
 from podiumd_tests.auth.keycloak_admin import for_environment
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.basisregistraties import EREBOS
+from podiumd_tests.bootstrap.kiss import KissKanalen
 from podiumd_tests.bootstrap.names import CATALOGI_SCOPES
 from podiumd_tests.bootstrap.names import ITA_OBJECTTYPES
 from podiumd_tests.bootstrap.names import KANALEN
@@ -457,11 +458,11 @@ OAB_ROLES = {
     "beheerder": "Administrator",
 }
 # The klantcontactmedewerker of KISS and ITA (TA kcc-medewerker).
-# The test admin: ZAC beheerder, PABC administrator and admin of the Django apps' SSO.
+# The test admin: ZAC beheerder, PABC administrator, KISS beheerder and admin of the Django apps' SSO.
 ADMIN = KeycloakUser(
     "admin",
     realm_roles=("Registreerders", "Behandelaar", "Coordinator", "Functioneel-beheerder", "beheerder_elk_domein"),
-    client_roles=(("pabc", "administrator"),),
+    client_roles=(("pabc", "administrator"), ("kiss", "Beheerder")),
     groups=("beheerders-elk-domein",),
 )
 KCC = KeycloakUser(
@@ -882,6 +883,8 @@ STEPS: tuple[Step, ...] = (
     OpenInwonerPartijen(),
     # ZAC's ontvangstbevestiging of productaanvragen, where the profile allows it (draaiboek OF-002).
     ZacEmailConfirmation(ADMIN),
+    # KISS's contactmoment kanalen, where the profile allows it (draaiboek KI-053-055).
+    KissKanalen(ADMIN),
     # A besluittype for the zaaktype ZAC handles, where the profile allows it: ZAC's inrichtingscheck needs one.
     SnippetStep(
         "openzaak-zac-besluittype",

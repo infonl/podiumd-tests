@@ -64,7 +64,7 @@ def password_grant(session: requests.Session, keycloak_url: str, realm: str, log
 def form_login(http: requests.Session, start_url: str, username: str, password: str) -> requests.Response:
     """Log in through Keycloak's login form without a browser; start_url redirects there. The app's final response.
 
-    For apps that accept only their own session (code flow), such as ZAC's REST API.
+    For apps that accept only their own session (code flow), such as ZAC's REST API and KISS.
     """
     page = http.get(start_url)
     form = re.search(r'<form[^>]*id="kc-form-login"[^>]*>', page.text)
@@ -76,4 +76,11 @@ def form_login(http: requests.Session, start_url: str, username: str, password: 
     if 'id="kc-form-login"' in response.text:
         msg = f"Keycloak refused the login of {username!r}"
         raise TokenError(msg)
+    # An app with response_mode form_post (KISS, ITA) gets the code through a form the browser submits.
+    form_post = re.search(
+        r'<FORM METHOD="POST" ACTION="([^"]+)">(.*?)</FORM>', response.text, re.IGNORECASE | re.DOTALL
+    )
+    if form_post:
+        fields = dict(re.findall(r'NAME="([^"]+)"\s+VALUE="([^"]*)"', form_post[2], re.IGNORECASE))
+        response = http.post(html.unescape(form_post[1]), data={k: html.unescape(v) for k, v in fields.items()})
     return response

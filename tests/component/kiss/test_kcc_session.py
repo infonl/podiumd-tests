@@ -16,6 +16,7 @@ from playwright.sync_api import expect
 
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
+from podiumd_tests.bootstrap.kiss import KANALEN
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
@@ -99,3 +100,30 @@ def test_company_unknown_to_kiss_is_found_in_the_kvk(kiss: requests.Session, url
     """KISS finds a company by KvK number through its KvK proxy."""
     found = expect_status(kiss.get(urls["kiss"] + "/api/kvk/v2/zoeken", params={"kvkNummer": KVK_TEST_NUMMER}), 200)
     assert KVK_TEST_NUMMER in {str(r.get("kvkNummer")) for r in entries(found.json()["resultaten"])}
+
+
+@pytest.mark.tc("KI-053", "KI-054", "KI-055")
+@pytest.mark.parametrize("kanaal", KANALEN)
+def test_klantcontact_keeps_the_kanaal_chosen_in_kiss(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    kiss: requests.Session,
+    urls: dict[str, str],
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+    kanaal: str,
+) -> None:
+    """A klantcontact registered through KISS on a kanaal KISS offers lands in Open Klant on exactly that kanaal."""
+    need_bootstrap("kiss-kanalen")
+    offered = {
+        str(k["naam"])
+        for k in entries(expect_status(kiss.get(urls["kiss"] + "/api/KanalenContactmomentKeuzelijst"), 200).json())
+    }
+    if kanaal not in offered:
+        pytest.skip(
+            f"KISS offers no kanaal {kanaal}: add it in KISS (Beheer, Kanalen) or set profile setting kiss_kanalen"
+        )
+    body = klantcontact_body(registry, kanaal=kanaal, onderwerp=registry.tagged(f"kanaal-{kanaal.lower()}"))
+    response = kiss.post(urls["kiss"] + KISS_KLANTCONTACTEN, json=body, headers=kiss_register(kiss, urls["kiss"]))
+    created = expect_status(response, HTTPStatus.CREATED).json()
+    registry.add(f"klantcontact {created['url']}", lambda: openklant.delete(str(created["url"])))
+    assert openklant.get(f"klantcontacten/{created['uuid']}")["kanaal"] == kanaal
