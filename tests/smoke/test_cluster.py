@@ -20,12 +20,8 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.smoke, pytest.mark.cluster, pytest.mark.requires("cluster")]
 
-# The podiumd chart gives these containers `resources: {}`; KISS's Elasticsearch requests memory only.
-KNOWN_WITHOUT_REQUESTS = (
-    "openbeheer/openbeheer",
-    "referentielijsten/referentielijsten",
-    "kiss-es-default/elasticsearch",
-)
+# The podiumd chart gives these containers `resources: {}`.
+KNOWN_WITHOUT_REQUESTS = ("openbeheer/openbeheer", "referentielijsten/referentielijsten")
 
 
 def test_workloads_ready(podiumd_env: Environment) -> None:
