@@ -55,6 +55,8 @@ from podiumd_tests.clients.platform import openklant_client
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.mock_server import MockServer
+from podiumd_tests.mock_server import mock_server_root
 from podiumd_tests.payments import OGONE_ENDPOINT
 from podiumd_tests.payments import OGONE_HASH
 from podiumd_tests.responses import expect_status
@@ -62,8 +64,6 @@ from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import delete_partij
 from podiumd_tests.seed.openklant import partijen_of
 from podiumd_tests.seed.openzaak import today
-from podiumd_tests.webhook import WebhookReceiver
-from podiumd_tests.webhook import receiver_root
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -652,7 +652,7 @@ def openinwoner_account(user: KeycloakUser) -> dict[str, str]:
 
 STEPS: tuple[Step, ...] = (
     # podiumd-tests' own infra (infra/), for the integration chains (PLAN.md §4 phase 4).
-    WebhookReceiver(),
+    MockServer(),
     openzaak_client_step("openzaak-client", ZGW_CLIENT_ID, ZGW_STORE_KEY, owns_catalogus=True),
     # TA's restricted Open Formulieren client: vertrouwelijkheid openbaar at most, no deletes.
     openzaak_client_step(
@@ -749,14 +749,14 @@ STEPS: tuple[Step, ...] = (
         OGONE_STORE_KEY,
         {"label": OGONE_MERCHANT, "pspid": PREFIX, "hash_algorithm": OGONE_HASH, "endpoint": OGONE_ENDPOINT},
     ),
-    # The Worldline merchant; its endpoint is the webhook receiver (step infra-webhook-receiver).
+    # The Worldline merchant; its endpoint is the mock server (step infra-mock-server).
     SnippetStep(
         "openformulieren-worldline",
         ("openformulieren", "cluster"),
         "openformulieren_worldline",
         WORLDLINE_STORE_KEY,
         {"pspid": WORLDLINE_MERCHANT},
-        context_params=lambda ctx: {"endpoint": receiver_root(ctx.env)},
+        context_params=lambda ctx: {"endpoint": mock_server_root(ctx.env)},
     ),
     # Register a submission only once it is paid (draaiboek OF-022), where the profile allows it.
     SnippetStep(

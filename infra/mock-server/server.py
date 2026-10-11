@@ -1,4 +1,4 @@
-"""Webhook receiver for podiumd-tests: every POST is appended to a JSON-lines file.
+"""Mock server for podiumd-tests: every POST is appended to a JSON-lines file.
 
 A POST with an Authorization header gets 204; one without gets 403. Open Notificaties checks
 both when an abonnement is created: it refuses a callback that accepts requests without auth.

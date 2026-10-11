@@ -17,8 +17,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.mock_server import Callback
     from podiumd_tests.seed.registry import ResourceRegistry
-    from podiumd_tests.webhook import Callback
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("opennotificaties")]
 

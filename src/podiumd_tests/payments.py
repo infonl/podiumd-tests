@@ -4,10 +4,10 @@ Ogone (legacy): Open Formulieren hands the browser a form to POST to Ogone, sign
 sends the browser back to one of the return URLs in that form, with the outcome signed with SHA-OUT.
 The test merchant uses one passphrase for both.
 
-Worldline: Open Formulieren creates a hosted checkout through Worldline's API, which the webhook
-receiver plays, and sends the browser to its redirect URL. The test writes the payment's status to
-the receiver and returns to Open Formulieren as Worldline would; Open Formulieren then reads the
-status from the receiver.
+Worldline: Open Formulieren creates a hosted checkout through Worldline's API, which the mock
+server plays, and sends the browser to its redirect URL. The test writes the payment's status to
+the mock server and returns to Open Formulieren as Worldline would; Open Formulieren then reads the
+status from the mock server.
 """
 
 from __future__ import annotations
@@ -28,9 +28,9 @@ from urllib.parse import urlencode
 from urllib.parse import urlsplit
 
 from podiumd_tests.json_data import section
+from podiumd_tests.mock_server import CHECKOUTS_DIR
+from podiumd_tests.mock_server import NAME as MOCK_SERVER
 from podiumd_tests.responses import expect_status
-from podiumd_tests.webhook import CHECKOUTS_DIR
-from podiumd_tests.webhook import NAME as RECEIVER
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -45,7 +45,7 @@ OGONE_HASH = "sha512"
 OGONE_ENDPOINT = "https://ogone.example.invalid/ncol/test/orderstandard_utf8.asp"
 # The return URL Ogone sends the browser to, per outcome.
 RETURN_URLS = {"accept": "ACCEPTURL", "decline": "DECLINEURL", "exception": "EXCEPTIONURL", "cancel": "CANCELURL"}
-# Where the receiver's hosted checkouts send the browser (infra/webhook-receiver/receiver.py); never visited.
+# Where the mock server's hosted checkouts send the browser (infra/mock-server/server.py); never visited.
 WORLDLINE_REDIRECT = "https://worldline.example.invalid/hostedcheckout/"
 
 
@@ -90,7 +90,7 @@ def payment_return(http: requests.Session, url: str) -> dict[str, str]:
 
 
 def worldline_return_url(env: Environment, redirect_url: str, status: str) -> tuple[str, str]:
-    """Pay at the receiver's hosted checkout with this payment status (or CANCELLED_BY_CONSUMER).
+    """Pay at the mock server's hosted checkout with this payment status (or CANCELLED_BY_CONSUMER).
 
     Returns the URL Worldline sends the browser back to, and the payment's merchantReference.
     """
@@ -100,7 +100,7 @@ def worldline_return_url(env: Environment, redirect_url: str, status: str) -> tu
         raise ValueError(msg)
     checkout_file = f"{CHECKOUTS_DIR}/{checkout_id}"
     script = f"echo {status} > {checkout_file}.status && cat {checkout_file}.json"
-    checkout = cast("dict[str, str]", json.loads(env.kube.exec(RECEIVER, "sh", "-c", script)))
+    checkout = cast("dict[str, str]", json.loads(env.kube.exec(MOCK_SERVER, "sh", "-c", script)))
     query = urlencode({"RETURNMAC": checkout["RETURNMAC"], "hostedCheckoutId": checkout_id})
     return f"{checkout['returnUrl']}?{query}", checkout["merchantReference"]
 

@@ -1,7 +1,7 @@
 """Chains: changes in Open Zaak and Open Klant reach subscribers through Open Notificaties.
 
 Ported from TA regression 19, 25, 26, 27, 30, 33, 34, 37, 42, 45 and 46. Each test subscribes
-callbacks of its own on the webhook receiver (infra/webhook-receiver) and matches the
+callbacks of its own on the mock server (infra/mock-server) and matches the
 notifications by their hoofdObject, so parallel tests and other subscribers do not interfere.
 """
 
@@ -28,9 +28,9 @@ if TYPE_CHECKING:
 
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.mock_server import Callback
     from podiumd_tests.seed.openzaak import ZaaktypeParts
     from podiumd_tests.seed.registry import ResourceRegistry
-    from podiumd_tests.webhook import Callback
 
 pytestmark = [pytest.mark.integration, pytest.mark.requires("openzaak", "opennotificaties")]
 

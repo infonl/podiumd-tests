@@ -1,31 +1,31 @@
-# podiumd-tests webhook receiver (PLAN.md §4 A2). Applied and deleted by bootstrap step infra-webhook-receiver;
-# the ConfigMap's receiver.py is filled in from infra/webhook-receiver/receiver.py at apply time.
+# podiumd-tests mock server (PLAN.md §4 A2). Applied and deleted by bootstrap step infra-mock-server;
+# the ConfigMap's server.py is filled in from infra/mock-server/server.py at apply time.
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: ptest-bootstrap-webhook-receiver
+  name: ptest-bootstrap-mock-server
   labels:
-    app.kubernetes.io/name: ptest-bootstrap-webhook-receiver
+    app.kubernetes.io/name: ptest-bootstrap-mock-server
     app.kubernetes.io/managed-by: podiumd-tests
 data:
-  receiver.py: ""
+  server.py: ""
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ptest-bootstrap-webhook-receiver
+  name: ptest-bootstrap-mock-server
   labels:
-    app.kubernetes.io/name: ptest-bootstrap-webhook-receiver
+    app.kubernetes.io/name: ptest-bootstrap-mock-server
     app.kubernetes.io/managed-by: podiumd-tests
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: ptest-bootstrap-webhook-receiver
+      app.kubernetes.io/name: ptest-bootstrap-mock-server
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: ptest-bootstrap-webhook-receiver
+        app.kubernetes.io/name: ptest-bootstrap-mock-server
         app.kubernetes.io/managed-by: podiumd-tests
     spec:
       securityContext:
@@ -34,9 +34,9 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: receiver
+        - name: server
           image: python:3.13-alpine
-          command: ["python", "/app/receiver.py"]
+          command: ["python", "/app/server.py"]
           ports:
             - containerPort: 8080
           readinessProbe:
@@ -57,20 +57,20 @@ spec:
       volumes:
         - name: app
           configMap:
-            name: ptest-bootstrap-webhook-receiver
+            name: ptest-bootstrap-mock-server
         - name: data
           emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: ptest-bootstrap-webhook-receiver
+  name: ptest-bootstrap-mock-server
   labels:
-    app.kubernetes.io/name: ptest-bootstrap-webhook-receiver
+    app.kubernetes.io/name: ptest-bootstrap-mock-server
     app.kubernetes.io/managed-by: podiumd-tests
 spec:
   selector:
-    app.kubernetes.io/name: ptest-bootstrap-webhook-receiver
+    app.kubernetes.io/name: ptest-bootstrap-mock-server
   ports:
     - port: 80
       targetPort: 8080

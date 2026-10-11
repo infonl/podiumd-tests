@@ -1,25 +1,25 @@
-"""Unit tests for the webhook receiver step and reading what it received."""
+"""Unit tests for the mock server step and reading what it received."""
 
 import importlib.util
 import json
 
-from podiumd_tests import webhook
+from podiumd_tests import mock_server
 from podiumd_tests.bootstrap import Context
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.json_data import section
-from podiumd_tests.webhook import NAME
-from podiumd_tests.webhook import Callback
-from podiumd_tests.webhook import WebhookReceiver
+from podiumd_tests.mock_server import NAME
+from podiumd_tests.mock_server import Callback
+from podiumd_tests.mock_server import MockServer
 
 
 def ctx_for(env):
     return Context(env, CredentialStore(env.kube))
 
 
-def test_manifests_carry_the_receiver_code_and_the_managed_by_label():
-    docs = webhook.manifests()
+def test_manifests_carry_the_mock_server_code_and_the_managed_by_label():
+    docs = mock_server.manifests()
     assert [d["kind"] for d in docs] == ["ConfigMap", "Deployment", "Service"]
-    assert docs[0]["data"] == {"receiver.py": (webhook.INFRA / "receiver.py").read_text()}
+    assert docs[0]["data"] == {"server.py": (mock_server.INFRA / "server.py").read_text()}
     labels = [section(section(d, "metadata"), "labels") for d in docs]
     assert all(label["app.kubernetes.io/managed-by"] == "podiumd-tests" for label in labels)
 
@@ -41,20 +41,20 @@ def test_callback_url_is_the_in_cluster_service(env_factory):
     assert Callback.new(env_factory(), "run1").path != callback.path
 
 
-def test_receiver_is_present_only_with_current_code_and_a_ready_replica(env_factory, fake_runner):
-    code = (webhook.INFRA / "receiver.py").read_text()
+def test_mock_server_is_present_only_with_current_code_and_a_ready_replica(env_factory, fake_runner):
+    code = (mock_server.INFRA / "server.py").read_text()
     fake_runner.answers[f"get deployment {NAME}"] = (0, json.dumps({"status": {"readyReplicas": 1}}))
-    fake_runner.answers[f"get configmap {NAME}"] = (0, json.dumps({"data": {"receiver.py": "old"}}))
+    fake_runner.answers[f"get configmap {NAME}"] = (0, json.dumps({"data": {"server.py": "old"}}))
     ctx = ctx_for(env_factory())
-    assert not WebhookReceiver().is_present(ctx)
-    fake_runner.answers[f"get configmap {NAME}"] = (0, json.dumps({"data": {"receiver.py": code}}))
-    assert WebhookReceiver().is_present(ctx)
+    assert not MockServer().is_present(ctx)
+    fake_runner.answers[f"get configmap {NAME}"] = (0, json.dumps({"data": {"server.py": code}}))
+    assert MockServer().is_present(ctx)
 
 
 def test_apply_sends_manifests_over_stdin_and_waits_for_the_rollout(env_factory, fake_runner):
     fake_runner.answers["apply -f -"] = (0, "")
     fake_runner.answers["rollout"] = (0, "")
-    WebhookReceiver().apply(ctx_for(env_factory()))
+    MockServer().apply(ctx_for(env_factory()))
     kinds = [json.loads(s)["kind"] for s in fake_runner.stdins if s]
     assert kinds == ["ConfigMap", "Deployment", "Service"]
     assert any("status" in call and f"deployment/{NAME}" in call for call in fake_runner.calls)
@@ -62,7 +62,7 @@ def test_apply_sends_manifests_over_stdin_and_waits_for_the_rollout(env_factory,
 
 def test_remove_deletes_service_first(env_factory, fake_runner):
     fake_runner.answers["delete"] = (0, "")
-    assert WebhookReceiver().remove(ctx_for(env_factory())) == ()
+    assert MockServer().remove(ctx_for(env_factory())) == ()
     deleted = [call[call.index("delete") + 1] for call in fake_runner.calls]
     assert deleted == ["service", "deployment", "configmap"]
 
@@ -73,9 +73,9 @@ def test_callback_skips_a_line_cut_short(env_factory, fake_runner):
     assert Callback(env_factory(), "/run1/abc").received() == [good]
 
 
-def receiver_handler(path):
-    """A receiver Handler for a path, without a socket: enough for its status logic."""
-    spec = importlib.util.spec_from_file_location("receiver", webhook.INFRA / "receiver.py")
+def mock_server_handler(path):
+    """A mock server Handler for a path, without a socket: enough for its status logic."""
+    spec = importlib.util.spec_from_file_location("server", mock_server.INFRA / "server.py")
     assert spec
     assert spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -86,15 +86,15 @@ def receiver_handler(path):
 
 
 def test_fail_first_path_fails_the_first_notification_only():
-    handler = receiver_handler("/ptest-x/fail-first/abc")
+    handler = mock_server_handler("/ptest-x/fail-first/abc")
     check = {"authorization": "Bearer t", "body": {"kanaal": "test"}}
     notification = {"authorization": "Bearer t", "body": {"kanaal": "zaken"}}
     assert [handler._status(e) for e in (check, notification, notification)] == [204, 500, 204]  # pylint: disable=protected-access
 
 
-def test_receiver_refuses_without_authorization_and_answers_notify():
-    assert receiver_handler("/ptest-x/abc")._status({"authorization": None, "body": None}) == 403  # pylint: disable=protected-access
-    notify = receiver_handler("/ptest-x/notify/v2/notifications/email")
+def test_mock_server_refuses_without_authorization_and_answers_notify():
+    assert mock_server_handler("/ptest-x/abc")._status({"authorization": None, "body": None}) == 403  # pylint: disable=protected-access
+    notify = mock_server_handler("/ptest-x/notify/v2/notifications/email")
     assert notify._status({"authorization": "ApiKey-v1 k", "body": {}}) == 201  # pylint: disable=protected-access
 
 

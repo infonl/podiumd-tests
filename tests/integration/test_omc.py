@@ -1,7 +1,7 @@
 """Chain: a new zaak of an inwoner reaches OMC, which mails the inwoner through Notify.
 
 Open Zaak → Open Notificaties → OMC (abonnement: bootstrap wiring omc-abonnement) → Open Klant
-(the inwoner's e-mail address) → Notify, here the webhook receiver. TA's OMC specs check only
+(the inwoner's e-mail address) → Notify, here the mock server. TA's OMC specs check only
 OMC's API; this is the chain PLAN.md lists as OMC → notify mock.
 """
 
@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.json_data import section
+from podiumd_tests.mock_server import NOTIFY_EMAIL
+from podiumd_tests.mock_server import Callback
 from podiumd_tests.seed.openklant import make_digitaal_adres
 from podiumd_tests.seed.openklant import make_partij
 from podiumd_tests.seed.openklant import make_partij_identificator
@@ -19,8 +21,6 @@ from podiumd_tests.seed.openklant import random_bsn
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
 from podiumd_tests.seed.openzaak import make_zaak
-from podiumd_tests.webhook import NOTIFY_EMAIL
-from podiumd_tests.webhook import Callback
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -52,7 +52,7 @@ def test_new_zaak_mails_the_initiator(  # pylint: disable=too-many-arguments,too
     parts: ZaaktypeParts,
 ) -> None:
     """The first status of an inwoner's zaak makes OMC send a zaak-created e-mail to the inwoner's address."""
-    need_bootstrap("omc-abonnement", "infra-webhook-receiver")
+    need_bootstrap("omc-abonnement", "infra-mock-server")
     bsn = random_bsn()
     email = f"{registry.tagged('omc')}@example.invalid"
     partij = make_partij(openklant, registry)

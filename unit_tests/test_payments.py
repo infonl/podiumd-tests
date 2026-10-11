@@ -67,7 +67,7 @@ CHECKOUT = "0123456789abcdef0123456789abcdef"
 
 def test_worldline_return_writes_the_status_and_returns_as_worldline(env_factory, fake_runner):
     checkout = {"returnUrl": "https://of.test/payment/1/return", "RETURNMAC": "mac", "merchantReference": "OF-1"}
-    fake_runner.answers["exec deploy/ptest-bootstrap-webhook-receiver"] = (0, json.dumps(checkout))
+    fake_runner.answers["exec deploy/ptest-bootstrap-mock-server"] = (0, json.dumps(checkout))
     url, reference = worldline_return_url(env_factory(), WORLDLINE_REDIRECT + CHECKOUT, "CAPTURED")
     assert url == f"https://of.test/payment/1/return?RETURNMAC=mac&hostedCheckoutId={CHECKOUT}"
     assert reference == "OF-1"

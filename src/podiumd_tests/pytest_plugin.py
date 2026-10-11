@@ -40,6 +40,7 @@ from podiumd_tests.clients.platform import openzaak_client
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
+from podiumd_tests.mock_server import Callback
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
@@ -47,7 +48,6 @@ from podiumd_tests.seed.openzaak import ZaaktypeParts
 from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.openzaak import zaaktype_parts
 from podiumd_tests.seed.registry import ResourceRegistry
-from podiumd_tests.webhook import Callback
 from podiumd_tests.zac import confirmation_on
 from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import zaakafhandelparameters
@@ -309,14 +309,14 @@ def fixture_pabc_api_key(credentials: SecretResolver) -> str:
 def fixture_new_callback(
     run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None]
 ) -> Callable[..., Callback]:
-    """Makes callback paths of this test's own on the webhook receiver (infra/webhook-receiver); takes fail_first."""
-    need_bootstrap("infra-webhook-receiver")
+    """Makes callback paths of this test's own on the mock server (infra/mock-server); takes fail_first."""
+    need_bootstrap("infra-mock-server")
     return functools.partial(Callback.new, podiumd_env, run_tag)
 
 
 @pytest.fixture(name="callback")
 def fixture_callback(new_callback: Callable[..., Callback]) -> Callback:
-    """A callback path of this test's own on the webhook receiver."""
+    """A callback path of this test's own on the mock server."""
     return new_callback()
 
 

@@ -1,7 +1,7 @@
-"""podiumd-tests' webhook receiver in the cluster (infra/webhook-receiver), and reading what it received.
+"""podiumd-tests' mock server in the cluster (infra/mock-server), and reading what it received.
 
-The receiver records every POST in a JSON-lines file and answers 204 only when it carries auth; tests read that
-file through `kubectl exec`, so the receiver needs no ingress. Each test uses its own callback
+The mock server records every POST in a JSON-lines file and answers 204 only when it carries auth;
+tests read that file through `kubectl exec`, so the mock server needs no ingress. Each test uses its own callback
 path, which keeps parallel tests apart.
 """
 
@@ -27,22 +27,22 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
 
-NAME = "ptest-bootstrap-webhook-receiver"
-INFRA = REPO_ROOT / "infra" / "webhook-receiver"
+NAME = "ptest-bootstrap-mock-server"
+INFRA = REPO_ROOT / "infra" / "mock-server"
 RECEIVED_FILE = "/data/received.jsonl"
-# Where the receiver keeps the Worldline checkouts it plays.
+# Where the mock server keeps the Worldline checkouts it plays.
 CHECKOUTS_DIR = "/data/worldline"
-# The receiver's Notify (NotifyNL) API: OMC's Notify base URL is the receiver's /notify.
+# The mock server's Notify (NotifyNL) API: OMC's Notify base URL is the mock server's /notify.
 NOTIFY_EMAIL = "/notify/v2/notifications/email"
 ROLLOUT_TIMEOUT = 180
 
 
 def manifests() -> list[dict[str, object]]:
-    """The receiver's ConfigMap, Deployment and Service, with receiver.py in the ConfigMap."""
+    """The mock server's ConfigMap, Deployment and Service, with server.py in the ConfigMap."""
     docs = [cast("dict[str, object]", d) for d in yaml.safe_load_all((INFRA / "manifests.yaml").read_text()) if d]
     for doc in docs:
         if doc["kind"] == "ConfigMap":
-            doc["data"] = {"receiver.py": (INFRA / "receiver.py").read_text()}
+            doc["data"] = {"server.py": (INFRA / "server.py").read_text()}
     return docs
 
 
@@ -55,14 +55,14 @@ def _entry(line: str) -> JsonObject | None:
     return cast("JsonObject", found) if isinstance(found, dict) else None
 
 
-def receiver_root(env: Environment) -> str:
-    """The root URL the platform reaches the receiver on from inside the cluster."""
+def mock_server_root(env: Environment) -> str:
+    """The root URL the platform reaches the mock server on from inside the cluster."""
     return f"http://{NAME}.{env.profile.kube.namespace}"
 
 
 @dataclass(frozen=True)
 class Callback:
-    """One test's callback path on the receiver."""
+    """One test's callback path on the mock server."""
 
     env: Environment
     path: str
@@ -75,10 +75,10 @@ class Callback:
     @property
     def url(self) -> str:
         """URL the platform reaches the callback on from inside the cluster."""
-        return receiver_root(self.env) + self.path
+        return mock_server_root(self.env) + self.path
 
     def received(self) -> list[JsonObject]:
-        """Everything the receiver got on this path, oldest first."""
+        """Everything the mock server got on this path, oldest first."""
         out = self.env.kube.exec(NAME, "sh", "-c", f"cat {RECEIVED_FILE} 2>/dev/null || true")
         return [e for e in map(_entry, out.splitlines()) if e is not None and e.get("path") == self.path]
 
@@ -90,23 +90,23 @@ class Callback:
 
 
 @dataclass(frozen=True)
-class WebhookReceiver:
-    """Bootstrap step: deploy the receiver; it is present when its Deployment is ready and runs the current code."""
+class MockServer:
+    """Bootstrap step: deploy the mock server; it is present when its Deployment is ready and runs the current code."""
 
-    name: str = "infra-webhook-receiver"
+    name: str = "infra-mock-server"
     requires: tuple[str, ...] = ("cluster",)
     wiring: bool = False
 
     def is_present(self, ctx: Context, /) -> bool:
-        """The ConfigMap holds the current receiver.py and the Deployment has a ready replica."""
+        """The ConfigMap holds the current server.py and the Deployment has a ready replica."""
         kube = ctx.env.kube
         config_map = kube.get_optional("configmap", NAME)
         deployment = kube.get_optional("deployment", NAME)
         if config_map is None or deployment is None:
             return False
-        code = cast("dict[str, object]", config_map.get("data") or {}).get("receiver.py")
+        code = cast("dict[str, object]", config_map.get("data") or {}).get("server.py")
         ready = cast("dict[str, object]", deployment.get("status") or {}).get("readyReplicas")
-        return code == (INFRA / "receiver.py").read_text() and bool(ready)
+        return code == (INFRA / "server.py").read_text() and bool(ready)
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Apply the manifests, restart on new code, and wait until the Deployment is ready."""

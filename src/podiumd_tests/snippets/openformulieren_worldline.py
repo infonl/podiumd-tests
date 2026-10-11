@@ -1,7 +1,7 @@
-"""podiumd-tests' Worldline merchant and webhook key in Open Formulieren; the webhook receiver plays Worldline.
+"""podiumd-tests' Worldline merchant and webhook key in Open Formulieren; the mock server plays Worldline.
 
 Params: action (status, apply, remove), pspid (also the label and the webhook key id), endpoint (the
-receiver's in-cluster root URL: Worldline's SDK refuses an endpoint with a path); for apply also
+mock server's in-cluster root URL: Worldline's SDK refuses an endpoint with a path); for apply also
 secret, used as API secret and webhook key secret.
 """
 
