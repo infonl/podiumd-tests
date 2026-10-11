@@ -41,7 +41,7 @@ def test_email_registration_mails_the_submission(  # pylint: disable=too-many-ar
     assert omschrijving in received(mailpit, registry, timeout=TIMEOUT, to=address)
 
 
-@pytest.mark.tc("OF-040")
+@pytest.mark.tc("OF-040", "ARCH-011")
 def test_confirmation_mail_summarises_the_submission(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     http: requests.Session,
     urls: dict[str, str],

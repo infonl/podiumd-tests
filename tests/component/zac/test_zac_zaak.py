@@ -47,6 +47,9 @@ MINIMAL_PDF = (
     b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj"
     b" 3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n"
 )
+DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+# ZAC checks only the format, not the content.
+FILES = {"txt": ("text/plain", b"podiumd-tests"), "pdf": ("application/pdf", MINIMAL_PDF), "docx": (DOCX, b"versie 1")}
 # The reason ZAC always offers for aborting a zaak.
 NIET_ONTVANKELIJK = "ZAAK_NIET_ONTVANKELIJK"
 
@@ -186,10 +189,16 @@ def test_betrokkenen_with_the_same_and_different_roles_are_listed(
     assert sorted(str(b.get("roltype")) for b in listed) == sorted(r for r, _ in wanted)
 
 
-def uploaded_document(
-    zac: requests.Session, zac_url: str, zaak: JsonObject, registry: ResourceRegistry, *, pdf: bool = False
+def uploaded_document(  # pylint: disable=too-many-arguments  # fixtures and two choices
+    zac: requests.Session,
+    zac_url: str,
+    zaak: JsonObject,
+    registry: ResourceRegistry,
+    *,
+    suffix: str = "txt",
+    status: str = "definitief",
 ) -> JsonObject:
-    """A text or PDF document the user uploads to the zaak in ZAC; skips when the zaaktype has none of its types.
+    """A document (suffix a key of FILES) the user uploads to the zaak in ZAC; skips when the zaaktype has none of its types.
 
     The zaak's cleanup deletes it (delete_zaak with_documents).
     """
@@ -197,9 +206,7 @@ def uploaded_document(
     types = get_entries(zac, f"{documents}/informatieobjecttypes/zaak/{zaak['uuid']}")
     if not types:
         pytest.skip(f"zaaktype {section(zaak, 'zaaktype').get('identificatie')} has no informatieobjecttypen")
-    formaat, suffix, content = (
-        ("application/pdf", "pdf", MINIMAL_PDF) if pdf else ("text/plain", "txt", b"podiumd-tests")
-    )
+    formaat, content = FILES[suffix]
     name = f"{registry.tagged('document')}.{suffix}"
     form = {
         "titel": name,
@@ -207,7 +214,7 @@ def uploaded_document(
         "formaat": formaat,
         "informatieobjectTypeUUID": str(types[0]["uuid"]),
         "vertrouwelijkheidaanduiding": "openbaar",
-        "status": "definitief",
+        "status": status,
         "taal": "dut",
         # ZAC parses the format its UI sends: date, hours and minutes, offset.
         "creatiedatum": datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M+00:00"),
@@ -244,6 +251,32 @@ def test_document_can_be_deleted(
     assert document["uuid"] not in [d.get("uuid") for d in zaak_documents(zac, urls["zac"], zaak)]
 
 
+@pytest.mark.tc("ZAC-056")
+def test_word_saves_an_edited_document_as_a_new_version(
+    zac: requests.Session,
+    http: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    registry: ResourceRegistry,
+) -> None:
+    """Word opens the document through ZAC's WebDAV link and saves it as the document's next version.
+
+    The link's token alone gives access; ZAC keeps it in the memory of the pod that handed it out.
+    """
+    zaak = zac_zaak()
+    document = uploaded_document(zac, urls["zac"], zaak, registry, suffix="docx", status="in_bewerking")
+    documents = f"{urls['zac']}/rest/informatieobjecten/informatieobject/{document['uuid']}"
+    of_zaak = {"zaak": str(zaak["uuid"])}
+    link = str(expect_status(zac.get(f"{documents}/edit", params=of_zaak), HTTPStatus.OK).json())
+    scheme, _, url = link.partition(":")
+    assert scheme == "ms-word"
+    assert url.startswith(f"{urls['zac']}/webdav/folder/")
+    expect_status(http.put(url, data=b"versie 2"), HTTPStatus.CREATED, HTTPStatus.NO_CONTENT)
+    current = expect_status(zac.get(documents, params=of_zaak), HTTPStatus.OK).json()
+    assert current["versie"] == int(str(document["versie"])) + 1
+    assert expect_status(zac.get(f"{documents}/download"), HTTPStatus.OK).content == b"versie 2"
+
+
 @pytest.mark.tc("ZAC-039")
 def test_sent_document_is_marked_verzonden(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
@@ -253,7 +286,7 @@ def test_sent_document_is_marked_verzonden(
     ZAC lets only definitief, not confidential PDFs be sent.
     """
     zaak = zac_zaak()
-    document = uploaded_document(zac, urls["zac"], zaak, registry, pdf=True)
+    document = uploaded_document(zac, urls["zac"], zaak, registry, suffix="pdf")
     body = {
         "zaakUuid": zaak["uuid"],
         "verzenddatum": date.today().isoformat(),  # noqa: DTZ011  # a local date
