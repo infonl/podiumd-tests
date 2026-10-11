@@ -10,6 +10,7 @@ from podiumd_tests.bootstrap.steps import OF_REDACTEUR
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
+from podiumd_tests.results import TAG_PREFIX
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.wait import wait_until
@@ -168,12 +169,20 @@ def make_form(  # pylint: disable=too-many-arguments,too-many-positional-argumen
         "payment": dict(payment or {}),
     }
     run_snippet(env.kube, deployment, "openformulieren_form", {**params, "settings": settings, "action": "apply"})
-    registry.add(
-        f"form {slug}",
-        lambda: run_snippet(
-            env.kube, deployment, "openformulieren_form", {**params, "settings": {}, "action": "remove"}
-        ),
-    )
+    registry.add(f"form {slug}", lambda: remove_form(env, slug))
+
+
+def remove_form(env: Environment, slug: str) -> None:
+    """Delete a test form with its step, product and submissions."""
+    params: dict[str, object] = {"slug": slug, "action": "remove"}
+    run_snippet(env.kube, env.deployment_for("openformulieren"), "openformulieren_form", params)
+
+
+def tagged_forms(env: Environment) -> list[str]:
+    """The slugs of the forms, steps and products whose name starts with ptest-, bootstrap ones included."""
+    params: dict[str, object] = {"prefix": TAG_PREFIX, "action": "list"}
+    found = run_snippet(env.kube, env.deployment_for("openformulieren"), "openformulieren_form", params)
+    return [str(slug) for slug in cast("list[object]", found)]
 
 
 def redacteur_session(env: Environment) -> requests.Session:

@@ -118,10 +118,14 @@ def productaanvraag_zaak(
         zaken = openzaak.list(f"{ZAKEN}/zaken", {"startdatum__gte": since})
         return next((z for z in zaken if kenmerk in str(z.get("toelichting") or "")), None)
 
-    zaak = wait_until(started, timeout=timeout, interval=3, description=f"zaak for productaanvraag {kenmerk}")
-    url = str(zaak["url"])
-    registry.add(f"zaak {url}", lambda: delete_zaak(openzaak, url, with_documents=True))
-    return zaak
+    def delete() -> None:
+        zaak = started()
+        if zaak:
+            delete_zaak(openzaak, str(zaak["url"]), with_documents=True)
+
+    # Registered before the wait, so a zaak started after a timeout goes too.
+    registry.add(f"zaak for productaanvraag {kenmerk}", delete)
+    return wait_until(started, timeout=timeout, interval=3, description=f"zaak for productaanvraag {kenmerk}")
 
 
 def reindex_zaken(env: Environment) -> None:

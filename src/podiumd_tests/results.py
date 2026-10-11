@@ -62,8 +62,9 @@ class LocalDirSink:
 # A run id: its UTC start minute (yymmddHHMM) and four random hex characters. The start
 # time in every tag lets sweep judge a leftover's age without a timestamp on the object.
 RUN_ID = re.compile(r"(\d{10})([0-9a-f]{4})")
+TAG_PREFIX = "ptest-"
 # Any run tag in a text; legacy run ids were six hex characters. ptest-bootstrap-* is no run tag.
-RUN_TAG = re.compile(r"\bptest-(\d{10}[0-9a-f]{4}|[0-9a-f]{6})(?![0-9a-z])")
+RUN_TAG = re.compile(r"\b" + TAG_PREFIX + r"(\d{10}[0-9a-f]{4}|[0-9a-f]{6})(?![0-9a-z])")
 
 
 def new_run_id(now: datetime | None = None) -> str:
@@ -83,7 +84,7 @@ def run_started(run_id: str) -> datetime | None:
 
 def run_tag(run_id: str) -> str:
     """Tag carried by every resource a run creates (PLAN.md R9); sweep finds leftovers by it."""
-    return f"ptest-{run_id}"
+    return f"{TAG_PREFIX}{run_id}"
 
 
 def run_dir(started: datetime, env: str, tier: str, run_id: str) -> str:

@@ -139,7 +139,7 @@ Decided 2026-10-06, after mapping which source tests need which configuration (`
 - Scope:
   - Expensive objects are created once per session and run-tagged. Examples: the catalogus with a unique `domein`, and a published zaaktype.
   - Zaken, documents and partijen are created per test.
-- Some things cannot be deleted through the API, such as published zaaktypen and audit trails. They stay tagged. `podiumd-tests sweep --older-than 24h` deletes, through the APIs, every run-tagged object whose run started before the cutoff; the run id carries its start minute, so no object timestamp is needed.
+- Some things cannot be deleted through the API, such as published zaaktypen and audit trails. They stay tagged. `podiumd-tests sweep --older-than 24h` deletes, through the APIs, every run-tagged object whose run started before the cutoff; the run id carries its start minute, so no object timestamp is needed. A zaak ZAC started for a run-tagged productaanvraag counts as run-tagged; Open Formulieren test forms go through a Django snippet.
 
 **C. Volume seed for perf: `podiumd-tests seed-volume --scale smoke|perf`.**
 
