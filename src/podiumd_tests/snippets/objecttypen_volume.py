@@ -19,7 +19,7 @@ SCHEMA = {
 
 
 def run(params):
-    import datetime
+    import datetime as dt
 
     from objecttypes.core.models import ObjectType
     from objecttypes.core.models import ObjectVersion
@@ -32,7 +32,7 @@ def run(params):
         return {"uuid": str(object_type.uuid) if object_type else None}
     if object_type is None:
         object_type = ObjectType.objects.create(name=params["name"], name_plural=params["name"])
-        today = datetime.datetime.now(tz=datetime.UTC).date()
+        today = dt.datetime.now(tz=dt.UTC).date()
         ObjectVersion.objects.create(
             object_type=object_type, version=1, json_schema=SCHEMA, status="published", published_at=today
         )

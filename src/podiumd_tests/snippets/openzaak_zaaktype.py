@@ -13,7 +13,7 @@ ROLTYPEN = (("Initiator", "initiator"), ("Behandelaar", "behandelaar"), ("Belang
 
 
 def run(params):
-    import datetime
+    import datetime as dt
 
     from django.db import transaction
     from openzaak.components.catalogi.models import BesluitType
@@ -39,11 +39,11 @@ def run(params):
         return {"present": False}
 
     with transaction.atomic():  # all or nothing: a failure leaves no half zaaktype
-        return _create(params, catalogus, datetime.datetime.now(tz=datetime.UTC).date())
+        return _create(params, catalogus, dt.datetime.now(tz=dt.UTC).date())
 
 
 def _create(params, catalogus, today):
-    import datetime
+    import datetime as dt
 
     from openzaak.components.catalogi.models import BesluitType
     from openzaak.components.catalogi.models import Eigenschap
@@ -66,7 +66,7 @@ def _create(params, catalogus, today):
         handeling_initiator="Indienen",
         onderwerp="Klacht",
         handeling_behandelaar="Behandelen",
-        doorlooptijd_behandeling=datetime.timedelta(days=30),
+        doorlooptijd_behandeling=dt.timedelta(days=30),
         opschorting_en_aanhouding_mogelijk=False,
         verlenging_mogelijk=False,
         publicatie_indicatie=False,
@@ -103,7 +103,7 @@ def _create(params, catalogus, today):
         catalogus=catalogus,
         omschrijving=params["besluittype"],
         besluitcategorie="podiumd-tests",
-        reactietermijn=datetime.timedelta(days=14),
+        reactietermijn=dt.timedelta(days=14),
         publicatie_indicatie=False,
         datum_begin_geldigheid=today,
         concept=False,
@@ -114,7 +114,7 @@ def _create(params, catalogus, today):
 
 def _resultaattype(zaaktype, resultaattype_model):
     """Create a resultaattype from the first 2020 selectielijst procestype; notes when that is not possible."""
-    import datetime
+    import datetime as dt
 
     from openzaak.selectielijst.models import ReferentieLijstConfig
     from zgw_consumers.client import build_client
@@ -134,7 +134,7 @@ def _resultaattype(zaaktype, resultaattype_model):
         resultaattypeomschrijving=omschrijving["url"],
         selectielijstklasse=resultaat["url"],
         archiefnominatie="vernietigen",
-        archiefactietermijn=datetime.timedelta(days=3650),
+        archiefactietermijn=dt.timedelta(days=3650),
         brondatum_archiefprocedure_afleidingswijze="afgehandeld",
     )
     return []

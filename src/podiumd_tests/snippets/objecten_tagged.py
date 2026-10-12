@@ -7,7 +7,7 @@ object. Returns {"count": ...} afterwards; 0 when Objecten has no such objecttyp
 
 
 def run(params):
-    import datetime
+    import datetime as dt
 
     from django.db import transaction
     from objects.core.models import Object
@@ -24,7 +24,7 @@ def run(params):
             ObjectRecord.objects.filter(object__in=tagged).delete()
             Object.objects.filter(pk__in=tagged.values("pk")).delete()
     if params["action"] == "create":
-        today = datetime.datetime.now(tz=datetime.UTC).date()
+        today = dt.datetime.now(tz=dt.UTC).date()
         with transaction.atomic():
             for data in params["items"]:
                 obj = Object.objects.create(object_type=object_type)

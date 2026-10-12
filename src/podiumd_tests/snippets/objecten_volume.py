@@ -8,7 +8,7 @@ Returns {"count": ...} afterwards.
 
 
 def run(params):
-    import datetime
+    import datetime as dt
 
     from django.db import transaction
     from objects.core.models import Object
@@ -29,7 +29,7 @@ def run(params):
             registered = ObjectType.objects.create(
                 service=service, uuid=params["uuid"], _name=params["name"], name=params["name"]
             )
-        today = datetime.datetime.now(tz=datetime.UTC).date()
+        today = dt.datetime.now(tz=dt.UTC).date()
         with transaction.atomic():
             for seq in range(params["start"], params["stop"]):
                 obj = Object.objects.create(object_type=registered)

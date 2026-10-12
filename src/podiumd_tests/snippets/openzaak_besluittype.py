@@ -8,7 +8,7 @@ and is linked to every version of it.
 
 
 def run(params):
-    import datetime
+    import datetime as dt
 
     from django.utils import timezone
     from openzaak.components.catalogi.models import BesluitType
@@ -27,7 +27,7 @@ def run(params):
         catalogus=zaaktypen.first().catalogus,
         omschrijving=params["omschrijving"],
         besluitcategorie="podiumd-tests",
-        reactietermijn=datetime.timedelta(days=14),
+        reactietermijn=dt.timedelta(days=14),
         publicatie_indicatie=False,
         datum_begin_geldigheid=timezone.localdate(),
         concept=False,
