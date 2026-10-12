@@ -130,6 +130,8 @@ def test_question_shows_in_mijn_vragen(  # pylint: disable=too-many-arguments,to
 
 
 @pytest.mark.tc("OI-023")
+# The begeleider finds the inwoner by this e-mail address (test_portaal_samenwerken).
+@pytest.mark.xdist_group("openinwoner-begeleider")
 def test_profile_email_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -142,12 +144,13 @@ def test_profile_email_reaches_open_klant(  # pylint: disable=too-many-arguments
     bsn = INWONER.attributes["bsn"][0]
     adres = f"{registry.tagged('profiel')}@example.invalid"
     # The partij may predate the test (an earlier login made it); its new adres goes anyway. The
-    # account keeps the address and every later login sends it again: set it back first.
+    # account keeps the address and every later login sends it again: set it back, after the adres
+    # is gone (cleanup runs last-added first).
+    registry.add(f"e-mail of account {bsn}", lambda: set_account(podiumd_env, bsn, email=user_email(INWONER.username)))
     registry.add(
         f"digitaal adres {adres}",
         lambda: [openklant.delete(str(a["url"])) for a in openklant.list("digitaleadressen", {"adres": adres})],
     )
-    registry.add(f"e-mail of account {bsn}", lambda: set_account(podiumd_env, bsn, email=user_email(INWONER.username)))
     portal_login(page, podiumd_env, "digid", INWONER, "/mijn-profiel/edit/")
     page.locator('input[name="email_addresses-0-value"]').first.fill(adres)
     page.get_by_role("button", name="Sla wijzigingen op").first.click()
