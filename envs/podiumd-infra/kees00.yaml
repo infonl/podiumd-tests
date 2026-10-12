@@ -33,14 +33,20 @@ secrets:
     k8s_secret: {name: keycloak-podiumd-admin, key: password}
   keycloak_test_user_password:
     keyvault: {secret: keycloak-user-kees00-password}
-  # Exists once podiumd-infra deploys with grafana-deploy=true. The username
-  # (grafana-admin) has no Key Vault or podiumd-namespace source: set
-  # PODIUMD_TESTS_SECRET_GRAFANA_USERNAME=grafana-admin, or test_metrics skips.
+  # Grafana's own admin (basic auth), from the monitoring stack podiumd-infra deploys with
+  # grafana-deploy=true. grafana-admin in Key Vault is a Keycloak SSO user and cannot log in with basic auth.
+  grafana_username:
+    k8s_secret: {name: monitoring-grafana, key: admin-user, namespace: monitoring}
   grafana_password:
-    keyvault: {secret: grafana-admin-user-kees00-password}
+    k8s_secret: {name: monitoring-grafana, key: admin-password, namespace: monitoring}
+  # Signs the bootstrap's OMC abonnement token; read from OMC's own Secret.
+  omc_jwt_secret:
+    k8s_secret: {name: omc, key: OMC_AUTH_JWT_SECRET}
 settings:
   # The owner allows bootstrap to change these (2026-10-10). The ZAC ones act on productaanvraag_zaaktype,
   # which needs kees00's ZAC zaakafhandelparameters (runtime data, not in its values).
   zac_email_confirmation: true
   zac_besluittype: true
   kiss_kanalen: true
+  # Open Formulieren's Open Zaak client in podiumd-infra's values is "formulier", not the default "open-formulieren".
+  openformulieren_zgw_client_id: formulier
