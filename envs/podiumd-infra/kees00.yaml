@@ -47,8 +47,10 @@ secrets:
   zgw_client_secret:
     zgw_jwt_secret: {deployment: openzaak, client_id: formulier}
 settings:
-  # The owner allows bootstrap to change these (2026-10-10). The ZAC ones act on productaanvraag_zaaktype,
-  # which needs kees00's ZAC zaakafhandelparameters (runtime data, not in its values).
+  # podiumd's e2e zaaktype; podiumd-infra seeds ZAC's zaakafhandelparameters for it (runtime data, not in its values).
+  productaanvraag_type: productaanvraag-zaaktype-voor-e2e-testen
+  productaanvraag_zaaktype: zaaktype-voor-e2e-testen
+  # The owner allows bootstrap to change these (2026-10-10). The ZAC ones act on productaanvraag_zaaktype.
   zac_email_confirmation: true
   zac_besluittype: true
   kiss_kanalen: true
