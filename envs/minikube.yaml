@@ -34,6 +34,7 @@ urls:
   grafana: https://grafana.local
   mailpit: https://mailpit.local
   api-proxy: https://api-proxy.local
+  omc: https://omc.local
 secrets:
   # Well-known dev defaults of podiumd-minikube; the only place literals are allowed (PLAN.md R8).
   keycloak_admin_username:
@@ -53,6 +54,9 @@ secrets:
     pod_env: {deployment: contact-web, var: LOGBOEK_TOKEN}
   zgw_client_secret:
     zgw_jwt_secret: {deployment: openzaak, client_id: open-formulieren}
+  # Signs the bootstrap's OMC abonnement token; read from OMC's own Secret.
+  omc_jwt_secret:
+    k8s_secret: {name: omc, key: OMC_AUTH_JWT_SECRET}
 settings:
   zgw_client_id: open-formulieren
   # podiumd-minikube imports the ZAC realm only; the QA estates use realm podiumd (the default).
