@@ -5,6 +5,14 @@ the ICATT podiumd-infra AKS environments and the SSC Twente ExternalsPodiumD
 environments. One Python/pytest suite, run from the console against an
 environment profile. See [PLAN.md](PLAN.md) for the design and the phases.
 
+More documentation:
+
+- [results/README.md](results/README.md): where runs are stored, what each outcome means, how to view a run.
+- [MIGRATION.md](MIGRATION.md): where each test of the older suites went.
+- [docs/draaiboek-coverage.md](docs/draaiboek-coverage.md): which draaiboek case which test covers.
+- [docs/handoff/notices/README.md](docs/handoff/notices/README.md): freeze notices for the older suites' owners.
+- `docs/handoff/`: open requests to other repositories; `docs/research/`: background research.
+
 ## Setup
 
 ```bash
@@ -48,6 +56,8 @@ Tiers: `smoke`, `core`, `full`, `perf`, `chaos`. A profile's `allowed_tiers`
 limits which tiers may run against that environment. `core`, `full` and `chaos`
 run on 4 pytest-xdist workers; profile setting `pytest_workers` changes that
 (1 runs serially).
+
+What each outcome means and how to view a run: [results/README.md](results/README.md).
 
 Exit codes: 0 pass, 1 test failures, 2 configuration or preflight error,
 3 tier not allowed for the environment, 4 environment locked by another run.
