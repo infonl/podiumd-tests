@@ -9,9 +9,9 @@ Source: `~/development/werk/infonl-dimpact/infonl/podiumd-minikube`. Analysed 20
   - The scope is ZAC plus its ZGW dependencies. It is not a full PodiumD install.
 - **Chart files:** `Chart.yaml`, `values.yaml` (130 KB, heavily commented), `templates/`, `charts/` (vendored podiumd and monitoring-logging tgz).
 - **`vendor/dimpact-zaakafhandelcomponent/`:** realm JSON, WireMock mappings, SQL fixtures and seed scripts. `NOTES.md` records where each came from.
-- **`scripts/`:** cluster lifecycle and deploy tooling in Python, with shared modules in `scripts/lib/`.
-- **`tests/`:** a flat pytest directory, the only test suite.
-- **No CI, Makefile or justfile.**
+- **`src/podiumd_minikube/`:** cluster lifecycle and deploy tooling, one CLI `podiumd-minikube <command>` (`cli.py`), installed with `pip install -e '.[dev]'`. `bin/<command>` symlinks run the same commands (`./bin/deploy --full`).
+- **`tests/`:** a flat pytest directory against the live cluster. `unit_tests/` holds the offline unit tests.
+- **CI:** GitHub Actions runs `run_python_checks`. No Makefile or justfile.
 - **Moved out:** the AKS tests (`tests-johnb00/`, including `test_4_8_5_upgrade.py` and `test_zac_zaakafhandelparameters.py`) now live in podiumd-infra `tests/`, selected with `TEST_ENV_NAME`.
 
 ## Test inventory (`tests/`)
@@ -39,19 +39,18 @@ All tests are API tests unless marked UI. All are read-only unless noted.
 ## Seeding (all at deploy time, none in pytest)
 
 - **Postgres:** initdb SQL plus background loops that run `fixtures/{openzaak,openklant,openarchiefbeheer}/*.sql`.
-- **Keycloak:** the vendored realm JSON is imported on startup (about 16 test users plus clients). PKCE is kept in step by `scripts/lib/manifests.py` and `scripts/lib/keycloak.py`.
+- **Keycloak:** the vendored realm JSON is imported on startup (about 16 test users plus clients). PKCE is kept in step by `src/podiumd_minikube/manifests.py` and `src/podiumd_minikube/keycloak.py`.
 - **Django superusers:** create-superuser Jobs for some apps, chart env vars for the others.
 - **Subchart `setup_configuration` Jobs:** objecten, objecttypen, opennotificaties, openformulieren.
 - **Custom Jobs:**
   - ZAC productaanvraag zaakafhandelparameters: Keycloak password-grant token, then GET-then-PUT.
   - The Open Formulieren productaanvraag form, created through `manage.py shell`.
-- **`scripts/seed-fixtures`:** `kubectl cp` plus `loaddata` of objecten/objecttypen demodata.
 - **PABC:** a guarded migration Job.
 - **Stubs:** WireMock for BAG, KvK, BRP and SmartDocuments.
 
 ## Framework and config
 
-- **Dependencies:** `tests/requirements.txt` has pytest>=8, requests and pytest-playwright. `pytest.ini` sets `-ra`. There are no markers.
+- **Dependencies:** `pyproject.toml` has pytest>=8 and requests. `tests/pytest.ini` sets `-ra`. There are no markers.
 - **`conftest.py`:**
   - Hardcodes the namespace `podiumd-minikube`.
   - Provides a `kubectl()` wrapper.
@@ -63,8 +62,8 @@ All tests are API tests unless marked UI. All are read-only unless noted.
 
 ## Version selection
 
-- **Pinning:** the gitignored `.podiumd-versions.yaml`, set with `scripts/set-podiumd-version`. `scripts/lib/dependency.py` syncs `charts/*.tgz`. There is one `values.yaml`.
-- **Runtime detection:** objecten classic vs merged "openobject" layout (`scripts/lib/chart.py`), and ZAC PKCE gated on the chart version.
+- **Pinning:** the gitignored `.podiumd-versions.yaml`, set with `podiumd-minikube set-podiumd-version`. `src/podiumd_minikube/dependency.py` syncs `charts/*.tgz`. There is one `values.yaml`.
+- **Runtime detection:** objecten classic vs merged "openobject" layout (`src/podiumd_minikube/chart.py`), and ZAC PKCE gated on the chart version.
 - **In the tests:** detected at runtime. Objecttypen tests skip on the merged layout, productaanvraag picks host and token by layout, and the ZAC PKCE test skips unless the experiment is on.
 
 ## Worth keeping
