@@ -7,6 +7,8 @@ import json
 from dataclasses import dataclass
 from dataclasses import field
 
+import pytest
+
 from podiumd_tests import cli
 from podiumd_tests.bootstrap import Context
 from podiumd_tests.bootstrap import bootstrap
@@ -228,6 +230,22 @@ def test_keycloak_user_gets_existing_roles_and_reports_missing_ones(
     assert ("PUT", f"{REALM}/users/u1/reset-password") in calls
     assert ("POST", f"{REALM}/users/u1/role-mappings/clients/c1") in calls
     assert ctx.notes == ["not in realm: Coordinator, group beheerders"]
+
+
+@pytest.mark.parametrize(("mapped", "present"), [([], False), ([{"name": "Behandelaar"}], True)])
+def test_keycloak_user_is_present_only_with_the_realms_wanted_roles(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    env_factory, fake_runner, profile_factory, fake_http, mapped, present
+):
+    ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
+    secret = stored({keycloak_password_key("admin"): "pw"})
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (0, secret)
+    answers = keycloak_answers(user_exists=True, has_group=True)
+    answers[f"GET {REALM}/users/u1/role-mappings/realm"] = (200, mapped)
+    answers[f"GET {REALM}/users/u1/groups"] = (200, [{"id": "g1", "name": "beheerders"}])
+    fake_http(answers)
+    # Coordinator and group "missing" are not in the realm, so they cannot be wanted.
+    user = KeycloakUser("admin", realm_roles=("Behandelaar", "Coordinator"), groups=("beheerders", "missing"))
+    assert user.is_present(ctx) is present
 
 
 def test_keycloak_user_remove_deletes_only_an_existing_user(env_factory, fake_runner, profile_factory, fake_http):

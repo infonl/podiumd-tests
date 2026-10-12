@@ -175,12 +175,21 @@ class KeycloakUser:
         return keycloak_password_key(self.key)
 
     def is_present(self, ctx: Context, /) -> bool:
-        """The user exists with the wanted attributes, and its password is in the credentials Secret."""
-        user = for_environment(ctx.env).user(self.username)
+        """The user exists with the wanted attributes, realm roles and groups that the realm has.
+
+        Its password must be in the credentials Secret. A role or group the realm gets later makes the step apply again.
+        """
+        admin = for_environment(ctx.env)
+        user = admin.user(self.username)
         if user is None or self.store_key not in ctx.store.read():
             return False
         attributes = section(user, "attributes")
-        return all(attributes.get(name) == values for name, values in self.attributes.items())
+        if any(attributes.get(name) != values for name, values in self.attributes.items()):
+            return False
+        user_id = str(user["id"])
+        roles = {str(r["name"]) for r in admin.realm_roles(self.realm_roles)}
+        groups = {g for g in self.groups if admin.group_id(g)}
+        return roles <= admin.user_realm_roles(user_id) and groups <= admin.user_groups(user_id)
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Create or update the user with a new password and the wanted roles and groups that exist."""
@@ -476,9 +485,17 @@ OAB_ROLES = {
 # The test admin: ZAC beheerder, PABC administrator, KISS beheerder and admin of the Django apps' SSO.
 ADMIN = KeycloakUser(
     "admin",
-    realm_roles=("Registreerders", "Behandelaar", "Coordinator", "Functioneel-beheerder", "beheerder_elk_domein"),
+    # beheerders: podiumd's pabc-dataset.json maps it to every ZAC role in all domains (ExternalsPodiumD).
+    realm_roles=(
+        "Registreerders",
+        "Behandelaar",
+        "Coordinator",
+        "Functioneel-beheerder",
+        "beheerder_elk_domein",
+        "beheerders",
+    ),
     client_roles=(("pabc", "administrator"), ("kiss", "Beheerder")),
-    groups=("beheerders-elk-domein",),
+    groups=("beheerders-elk-domein", "beheerders"),
 )
 KCC = KeycloakUser(
     "kcc",

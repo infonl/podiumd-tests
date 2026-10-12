@@ -135,6 +135,16 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
         roles = cast("list[JsonObject]", self._get("/roles"))
         return [r for r in roles if r.get("name") in names]
 
+    def user_realm_roles(self, user_id: str) -> set[str]:
+        """Names of the realm roles mapped directly to a user."""
+        return {
+            str(r.get("name")) for r in cast("list[JsonObject]", self._get(f"/users/{user_id}/role-mappings/realm"))
+        }
+
+    def user_groups(self, user_id: str) -> set[str]:
+        """Names of a user's groups."""
+        return {str(g.get("name")) for g in cast("list[JsonObject]", self._get(f"/users/{user_id}/groups"))}
+
     def add_realm_roles(self, user_id: str, roles: list[JsonObject]) -> None:
         """Map realm roles to a user."""
         if roles:
