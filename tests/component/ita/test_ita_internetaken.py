@@ -18,7 +18,7 @@ from podiumd_tests.bootstrap.steps import ITA_GROEP
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.json_data import entries
-from podiumd_tests.kcc import ITA_GROUP_ACCESS
+from podiumd_tests.kcc import expect_ita_group_access_bug
 from podiumd_tests.kcc import ita_detail_text
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.mailpit import forget_mails
@@ -180,7 +180,6 @@ def test_kiss_reads_itas_logboek(  # pylint: disable=too-many-arguments,too-many
 
 
 @pytest.mark.tc("ITA-035")
-@ITA_GROUP_ACCESS
 def test_contactverzoek_from_kiss_shows_in_full_in_ita(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     ita: requests.Session,
     urls: dict[str, str],
@@ -189,8 +188,11 @@ def test_contactverzoek_from_kiss_shows_in_full_in_ita(  # pylint: disable=too-m
     registry: ResourceRegistry,
     logboek_type: str,
     need_bootstrap: Callable[..., None],
+    request: pytest.FixtureRequest,
+    podiumd_env: Environment,
 ) -> None:
     """A contactverzoek as KISS registers it (klantcontact, klant, internetaak to a groep) shows in full in ITA."""
+    expect_ita_group_access_bug(request, podiumd_env)
     need_bootstrap("objecten-medewerker-kcc")
     groep = make_actor(openklant, registry, "organisatorische_eenheid", ITA_GROEP, "grp")
     onderwerp = registry.tagged("contactverzoek")

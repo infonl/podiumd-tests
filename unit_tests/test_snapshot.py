@@ -2,7 +2,10 @@
 
 import json
 
+import pytest
+
 from podiumd_tests.snapshot import SNAPSHOT
+from podiumd_tests.snapshot import component_version
 from podiumd_tests.snapshot import differences
 from podiumd_tests.snapshot import fingerprint
 from podiumd_tests.snapshot import latest
@@ -53,3 +56,19 @@ def test_latest_takes_the_newest_snapshot_of_the_environment(tmp_path):
         (tmp_path / "2026-10" / name / SNAPSHOT).write_text(json.dumps({"taken": taken}), encoding="utf-8")
     assert latest(tmp_path, "kees00") == {"taken": "new"}
     assert latest(tmp_path, "qa") is None
+
+
+@pytest.mark.parametrize(
+    ("image", "label", "version"),
+    [("ita.web:3.3.2", "3.3.4", (3, 3, 2)), ("ita.web@sha256:0bef", "3.3.4", (3, 3, 4)), ("ita.web:latest", "", None)],
+)
+def test_component_version_is_the_image_tag_else_the_helm_label(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    env_factory, profile_factory, fake_runner, image, label, version
+):
+    ita = {
+        "metadata": {"name": "ita-web", "labels": {"app.kubernetes.io/version": label}},
+        "spec": {"template": {"spec": {"containers": [{"image": f"ghcr.io/ita/{image}"}]}}},
+    }
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [ita]}))
+    env = env_factory(profile_factory(urls={"ita": "https://ita.example.test"}))
+    assert component_version(env, "ita") == version

@@ -18,6 +18,7 @@ from podiumd_tests.kube import metadata_name
 from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import today
+from podiumd_tests.snapshot import component_version
 
 if TYPE_CHECKING:
     import requests
@@ -69,15 +70,24 @@ def ita_detail_text(ita: requests.Session, ita_url: str, taak: JsonObject) -> st
     return json.dumps(expect_status(ita.get(f"{ita_url}/api/internetaken/{taak['nummer']}"), HTTPStatus.OK).json())
 
 
-# ITA 3.3.2's access guard takes Open Klant's deprecated toegewezenAanActor (a bare reference to the
-# first assigned actor) over the expanded actor with the same uuid: a groep assigned first is not seen
-# as a groep. Fixed in ITA 3.3.4 (Interne-Taak-Afhandeling/ITA#582).
-ITA_GROUP_ACCESS = pytest.mark.xfail(
-    strict=True,
-    raises=UnexpectedStatusError,
-    reason="ITA 3.3.2 refuses a groep member a contactverzoek assigned to the groep first (403: its guard reads"
-    " the deprecated toegewezenAanActor reference); fixed in ITA 3.3.4 (ITA#582)",
-)
+# ITA before 3.3.4 takes Open Klant's deprecated toegewezenAanActor (a bare reference to the first
+# assigned actor) over the expanded actor with the same uuid: a groep assigned first is not seen as a
+# groep (Interne-Taak-Afhandeling/ITA#582).
+ITA_GROUP_ACCESS_FIXED = (3, 3, 4)
+
+
+def expect_ita_group_access_bug(request: pytest.FixtureRequest, env: Environment) -> None:
+    """Mark the test a strict xfail when the deployed ITA is older than 3.3.4."""
+    version = component_version(env, "ita")
+    if version is not None and version < ITA_GROUP_ACCESS_FIXED:
+        request.applymarker(
+            pytest.mark.xfail(
+                strict=True,
+                raises=UnexpectedStatusError,
+                reason="ITA before 3.3.4 refuses a groep member a contactverzoek assigned to the groep first"
+                " (403: its guard reads the deprecated toegewezenAanActor reference; ITA#582)",
+            )
+        )
 
 
 def kiss_sync_cronjob(env: Environment, source: str) -> str:
