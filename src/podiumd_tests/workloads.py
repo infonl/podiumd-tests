@@ -120,7 +120,7 @@ def _job_log(kube: Kube, job: str) -> str:
     """The last lines a Job's container wrote; its previous run when it restarts."""
     for previous in ([], ["--previous"]):
         with contextlib.suppress(KubeError):
-            if log := kube.run("logs", f"job/{job}", "--tail=20", *previous):
+            if log := kube.run("logs", f"job/{job}", "--tail=60", *previous):
                 return f"log of job/{job}:\n{log}"
     return f"no log of job/{job}"
 

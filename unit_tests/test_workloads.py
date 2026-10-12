@@ -84,7 +84,7 @@ def test_run_cronjob_deletes_the_job_also_when_it_does_not_complete(fake_runner)
     assert [c[5:8] for c in fake_runner.calls] == [
         ["create", "job", "ptest-x"],
         ["wait", "--for=condition=complete", "job/ptest-x"],
-        ["logs", "job/ptest-x", "--tail=20"],
+        ["logs", "job/ptest-x", "--tail=60"],
         ["delete", "job", "ptest-x"],
     ]
 
