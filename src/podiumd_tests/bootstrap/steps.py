@@ -486,16 +486,9 @@ OAB_ROLES = {
 ADMIN = KeycloakUser(
     "admin",
     # beheerders: podiumd's pabc-dataset.json maps it to every ZAC role in all domains (ExternalsPodiumD).
-    realm_roles=(
-        "Registreerders",
-        "Behandelaar",
-        "Coordinator",
-        "Functioneel-beheerder",
-        "beheerder_elk_domein",
-        "beheerders",
-    ),
+    realm_roles=("Registreerders", "Behandelaar", "Coordinator", "Functioneel-beheerder", "beheerders"),
     client_roles=(("pabc", "administrator"), ("kiss", "Beheerder")),
-    groups=("beheerders-elk-domein", "beheerders"),
+    groups=("beheerders",),
 )
 KCC = KeycloakUser(
     "kcc",
