@@ -24,6 +24,17 @@ def test_k8s_secret_is_decoded(profile_factory, fake_runner, env_factory):
     assert env_factory(profile).credentials.get("pw") == "s3cret-value"
 
 
+def test_k8s_secret_reads_another_namespace_when_given(profile_factory, fake_runner, env_factory):
+    encoded = base64.b64encode(b"admin-pw").decode()
+    fake_runner.answers["--namespace monitoring get secret monitoring-grafana -o json"] = (
+        0,
+        json.dumps({"data": {"admin-password": encoded}}),
+    )
+    source = {"name": "monitoring-grafana", "key": "admin-password", "namespace": "monitoring"}
+    profile = profile_factory(secrets={"pw": {"k8s_secret": source}})
+    assert env_factory(profile).credentials.get("pw") == "admin-pw"
+
+
 def test_keyvault_uses_the_profile_vault(profile_factory, fake_runner, env_factory):
     fake_runner.answers["az keyvault secret show --vault-name my-kv --name user-pw"] = (0, "kv-value\n")
     profile = profile_factory(keyvault="my-kv", secrets={"pw": {"keyvault": {"secret": "user-pw"}}})

@@ -139,11 +139,11 @@ class Kube:
             timeout=timeout,
         )
 
-    def secret_value(self, name: str, key: str) -> str:
-        """Decoded value of one key of a Kubernetes secret."""
-        data = decode_secret_data(section(self.get_json("secret", name), "data"))
+    def secret_value(self, name: str, key: str, *, namespace: str | None = None) -> str:
+        """Decoded value of one key of a Kubernetes secret, in the profile namespace unless given."""
+        data = decode_secret_data(section(self.get_json("secret", name, namespace=namespace), "data"))
         if key not in data:
-            raise KubeError(self.command("get", "secret", name), f"no key {key!r}")
+            raise KubeError(self.command("get", "secret", name, namespace=namespace), f"no key {key!r}")
         return data[key]
 
 

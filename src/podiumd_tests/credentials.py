@@ -145,7 +145,7 @@ class SecretResolver:
             case "dev_default":
                 return opts["value"]
             case "k8s_secret":
-                return self._kube.secret_value(opts["name"], opts["key"])
+                return self._kube.secret_value(opts["name"], opts["key"], namespace=opts.get("namespace"))
             case "pod_env":
                 return self._kube.exec(opts["deployment"], "printenv", opts["var"])
             case "zgw_jwt_secret":

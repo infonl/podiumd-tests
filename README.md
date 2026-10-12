@@ -79,7 +79,7 @@ from, and the allowed tiers. Secrets are never stored here. They resolve in
 this order:
 
 1. environment variable `PODIUMD_TESTS_SECRET_<NAME>`;
-2. the source in the profile: `k8s_secret`, `pod_env`, `zgw_jwt_secret`
+2. the source in the profile: `k8s_secret` (optional `namespace`, default the profile's), `pod_env`, `zgw_jwt_secret`
    (from Open Zaak's database) or `keyvault`;
 3. `dev_default`, for minikube only.
 
