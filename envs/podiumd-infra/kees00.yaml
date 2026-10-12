@@ -1,6 +1,6 @@
 # ICATT podiumd-infra AKS environment kees00 (values/kees00/).
 estate: podiumd-infra
-chart_version: "4.9.0"
+chart_version: "4.9.4"
 allowed_tiers: [smoke, core, full, perf]
 kube:
   context: podiumd-kees00-aks
@@ -23,6 +23,9 @@ urls:
   opennotificaties: https://notificaties.kees00.pd.test-rig.nl
   omc: https://omc.kees00.pd.test-rig.nl
   grafana: https://grafana.kees00.pd.test-rig.nl
+  mailpit: https://mailpit.kees00.pd.test-rig.nl
+  openbeheer: https://openbeheer.kees00.pd.test-rig.nl
+  referentielijsten: https://referentielijsten.kees00.pd.test-rig.nl
 secrets:
   keycloak_admin_username:
     k8s_secret: {name: keycloak-podiumd-admin, key: username}
@@ -30,6 +33,11 @@ secrets:
     k8s_secret: {name: keycloak-podiumd-admin, key: password}
   keycloak_test_user_password:
     keyvault: {secret: keycloak-user-kees00-password}
+  # Exists once podiumd-infra deploys with grafana-deploy=true. The username
+  # (grafana-admin) has no Key Vault or podiumd-namespace source: set
+  # PODIUMD_TESTS_SECRET_GRAFANA_USERNAME=grafana-admin, or test_metrics skips.
+  grafana_password:
+    keyvault: {secret: grafana-admin-user-kees00-password}
 settings:
   # The owner allows bootstrap to change these (2026-10-10). The ZAC ones act on productaanvraag_zaaktype,
   # which needs kees00's ZAC zaakafhandelparameters (runtime data, not in its values).
