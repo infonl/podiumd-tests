@@ -41,6 +41,7 @@ HEADER_GAPS = {
     "openformulieren": "Open Formulieren sends no HSTS",
     "grafana": "Grafana sends no HSTS (its strict_transport_security setting is off)",
     "openbeheer": "Open Beheer 0.9.1 sends no HSTS and no nosniff on its frontend",
+    "omc": "OMC (NotifyNL) sends no HSTS and no nosniff",
 }
 
 
