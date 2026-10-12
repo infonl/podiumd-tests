@@ -849,7 +849,7 @@ STEPS: tuple[Step, ...] = (
         ("openinwoner",),
         "oi_cms_pages",
         "ptest_bootstrap_openinwoner_cms_pages_record",
-        {"pages": OI_PAGES, "contact_email": "noreply@example.invalid"},
+        {"pages": OI_PAGES, "author": f"{PREFIX}-cms@example.invalid", "contact_email": "noreply@example.invalid"},
         record=True,
         wiring=True,
     ),
