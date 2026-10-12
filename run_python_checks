@@ -11,7 +11,8 @@ Usage: run_python_checks [-h|--help]
 
 Runs ruff check, shellcheck, ruff format --check, jscpd, pymarkdown,
 vulture, bandit, pylint, basedpyright and pytest (unit_tests/ only),
-fastest first. Stops at the first failure.
+fastest first. Stops at the first failure. Upgrades the dev tools in
+.venv first when last upgraded over a day ago.
 EOF
 }
 
@@ -24,6 +25,14 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 
 if [[ -x .venv/bin/python3 ]]; then
     PATH="$PWD/.venv/bin:$PATH"
+    # CI installs the latest dev tools; upgrade .venv to them at most once a day
+    # and whenever pyproject.toml changes.
+    stamp=.venv/.dev-upgraded
+    if [[ ! -e "${stamp}" || pyproject.toml -nt "${stamp}" || -z "$(find "${stamp}" -mmin -1440)" ]]; then
+        echo "=== upgrading .venv dev tools ==="
+        python3 -m pip install -q -U --upgrade-strategy eager -e '.[dev]'
+        touch "${stamp}"
+    fi
 fi
 
 SRC=src/podiumd_tests
