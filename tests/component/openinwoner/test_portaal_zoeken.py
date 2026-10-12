@@ -130,10 +130,16 @@ def test_search_can_be_switched_off(http: requests.Session, urls: dict[str, str]
     def search_answers(status: HTTPStatus) -> bool:
         return http.get(search, params={"query": PASPOORT}).status_code == status
 
+    def form_shown() -> bool:
+        return 'id="search-form"' in expect_status(http.get(urls["openinwoner"] + "/"), HTTPStatus.OK).text
+
     old = set_site_configuration(podiumd_env, search_enabled=False)
     try:
-        wait_until(lambda: search_answers(HTTPStatus.NOT_FOUND), timeout=SOLO_TIMEOUT, description="search off")
-        assert 'id="search-form"' not in expect_status(http.get(urls["openinwoner"] + "/"), HTTPStatus.OK).text
+        wait_until(
+            lambda: search_answers(HTTPStatus.NOT_FOUND) and not form_shown(),
+            timeout=SOLO_TIMEOUT,
+            description="search off",
+        )
     finally:
         set_site_configuration(podiumd_env, **old)
         wait_until(lambda: search_answers(HTTPStatus.OK), timeout=SOLO_TIMEOUT, description="search back on")
