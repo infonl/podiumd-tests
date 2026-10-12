@@ -14,6 +14,7 @@ import pytest
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
 from podiumd_tests.responses import expect_status
+from podiumd_tests.zac import person_lookup
 
 if TYPE_CHECKING:
     import requests
@@ -24,10 +25,9 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "keycloak")]
 
 def test_person_lookup(zac: requests.Session, urls: dict[str, str]) -> None:
     """ZAC finds a BRP test-set person by BSN, with the name (TA reg-193)."""
-    found = expect_status(zac.put(urls["zac"] + "/rest/klanten/personen", json={"bsn": EREBOS}), HTTPStatus.OK)
-    personen = found.json()["resultaten"]
+    personen = person_lookup(zac, urls["zac"], EREBOS)
     assert [p["bsn"] for p in personen] == [EREBOS]
-    assert "Bultenaar" in personen[0]["naam"]
+    assert "Bultenaar" in str(personen[0]["naam"])
 
 
 @pytest.mark.tc("INT-004", "INT-005")
