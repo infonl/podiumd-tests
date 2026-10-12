@@ -17,6 +17,7 @@ access:
 urls:
   zac: https://zac.local
   keycloak: https://keycloak.local
+  keycloak-admin: https://keycloak-admin.local
   openzaak: https://openzaak.local
   openklant: https://openklant.local
   pabc: https://pabc.local
