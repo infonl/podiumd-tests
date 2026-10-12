@@ -13,6 +13,8 @@ from podiumd_tests.workloads import scaled
 from podiumd_tests.workloads import unhealthy_pods
 from podiumd_tests.workloads import unready_workloads
 
+WARMUP = {"name": "deploy-warmup", "labels": {"app": "deploy-warmup"}}
+
 
 def pod(name, phase="Running", *, ready=True, owner="ReplicaSet", deleting=False):
     metadata = {"name": name, "ownerReferences": [{"kind": owner, "name": f"{name}-owner"}]}
@@ -34,6 +36,7 @@ def test_unready_workloads():
         {"kind": "Deployment", "metadata": {"name": "zac"}, "spec": {"replicas": 1}, "status": {}},
         {"kind": "Deployment", "metadata": {"name": "off"}, "spec": {"replicas": 0}, "status": {}},
         {"kind": "StatefulSet", "metadata": {"name": "redis"}, "spec": {"replicas": 2}, "status": {"readyReplicas": 2}},
+        {"kind": "Deployment", "metadata": WARMUP, "spec": {"replicas": 4}, "status": {"readyReplicas": 3}},
     ]
     assert unready_workloads(items) == ["Deployment/zac 0/1"]
 
@@ -45,6 +48,7 @@ def test_unhealthy_pods_skips_job_pods_and_terminating_pods():
         pod("pending", phase="Pending"),
         pod("config-xyz", phase="Failed", owner="Job"),
         pod("old", phase="Failed", deleting=True),
+        {**pod("deploy-warmup-x", phase="Pending"), "metadata": WARMUP},
     ]
     assert unhealthy_pods(pods) == ["sidecar-down/app: not ready", "pending: phase Pending"]
 

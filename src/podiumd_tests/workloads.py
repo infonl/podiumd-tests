@@ -34,6 +34,9 @@ if TYPE_CHECKING:
 type Item = JsonObject
 
 GOOD_POD_PHASES = frozenset({"Running", "Succeeded"})
+# app labels of workloads that are no part of PodiumD. deploy-warmup: podiumd-infra's node pre-scale
+# placeholder during a deploy (scripts/prescale-warmup.sh), whose pause pods are meant to stay Pending.
+FOREIGN_APPS = frozenset({"deploy-warmup"})
 # Seconds a stopped or restarted component's root gets to answer.
 ROOT_TIMEOUT = 10.0
 
@@ -109,10 +112,16 @@ def run_cronjob(kube: Kube, cronjob: str, job: str, timeout: int = 300) -> None:
         kube.delete("job", job)
 
 
+def _foreign(item: Item) -> bool:
+    return section(section(item, "metadata"), "labels").get("app") in FOREIGN_APPS
+
+
 def unready_workloads(items: Sequence[Item]) -> list[str]:
     """Deployments and StatefulSets with fewer ready replicas than wanted, as "name ready/wanted"."""
     found: list[str] = []
     for item in items:
+        if _foreign(item):
+            continue
         replicas = section(item, "spec").get("replicas", 1)
         wanted = replicas if isinstance(replicas, int) else 1
         ready = _int(section(item, "status").get("readyReplicas"))
@@ -124,11 +133,11 @@ def unready_workloads(items: Sequence[Item]) -> list[str]:
 def unhealthy_pods(pods: Sequence[Item]) -> list[str]:
     """Long-running pods that are not Running with all containers ready, as "name: reason".
 
-    Pods of Jobs are left to failed_jobs; pods being deleted are ignored.
+    Pods of Jobs are left to failed_jobs; pods being deleted and FOREIGN_APPS are ignored.
     """
     found: list[str] = []
     for pod in pods:
-        if "Job" in _owner_kinds(pod) or section(pod, "metadata").get("deletionTimestamp"):
+        if "Job" in _owner_kinds(pod) or section(pod, "metadata").get("deletionTimestamp") or _foreign(pod):
             continue
         status = section(pod, "status")
         phase = str(status.get("phase", "Unknown"))
