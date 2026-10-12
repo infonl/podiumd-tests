@@ -44,9 +44,16 @@ def zac_session(env: Environment, username: str, password: str) -> requests.Sess
 
 
 def zaakafhandelparameters(http: requests.Session, zac_url: str, identificatie: str | None = None) -> list[JsonObject]:
-    """ZAC's zaakafhandelparameters of every version of the zaaktype, or of every zaaktype ZAC handles."""
+    """ZAC's zaakafhandelparameters of every version of the zaaktype, or of every zaaktype ZAC handles.
+
+    ZAC also lists its catalogus' zaaktypen without zaakafhandelparameters, with id null; those are left out.
+    """
     found = get_entries(http, f"{zac_url}/rest/zaakafhandelparameters")
-    return [p for p in found if identificatie in {None, section(p, "zaaktype").get("identificatie")}]
+    return [
+        p
+        for p in found
+        if p.get("id") is not None and identificatie in {None, section(p, "zaaktype").get("identificatie")}
+    ]
 
 
 def confirmation_sent(confirmation: JsonObject) -> bool:

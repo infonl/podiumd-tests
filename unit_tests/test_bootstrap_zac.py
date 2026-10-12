@@ -39,7 +39,11 @@ def _b64(text):
 
 
 def answers(confirmation):
-    parameters = {"zaaktype": {"identificatie": "zt-1", "uuid": UUID}, "automaticEmailConfirmation": confirmation}
+    parameters = {
+        "id": 2,
+        "zaaktype": {"identificatie": "zt-1", "uuid": UUID},
+        "automaticEmailConfirmation": confirmation,
+    }
     return {
         "GET /rest/zaakafhandelparameters": (200, [parameters]),
         f"GET /rest/zaakafhandelparameters/{UUID}": (200, parameters),
