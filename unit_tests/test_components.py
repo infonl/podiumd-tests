@@ -7,7 +7,7 @@ from podiumd_tests.components import deployed_components
 
 
 def test_deployment_aliases():
-    names = ["notificaties-celery", "openzaak", "podiumd-grafana", "kiss-frontend"]
+    names = ["notificaties-celery", "openzaak", "podiumd-minikube-grafana", "kiss-frontend"]
     assert deployed_components(names) == {"opennotificaties", "openzaak", "grafana", "kiss"}
 
 

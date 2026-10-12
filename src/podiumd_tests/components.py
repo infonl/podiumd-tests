@@ -39,7 +39,12 @@ COMPONENTS: dict[str, Component] = {
     "frankgateway": Component(("frankgateway",), ("frankgateway", "frank-gateway")),
     # podiumd's nginx in front of BRP, KvK and BAG (Frank!Gateway replaces it in newer charts).
     "api-proxy": Component(("api-proxy",), ("api-proxy",)),
-    "grafana": Component(("grafana", "podiumd-logs"), ("grafana", "podiumd-grafana")),
+    # monitoring-logging's Grafana is named <helm release>-grafana: release monitoring or monitoring-logging on
+    # the estates, podiumd-minikube on minikube.
+    "grafana": Component(
+        ("grafana", "podiumd-logs"),
+        ("grafana", "monitoring-grafana", "monitoring-logging-grafana", "podiumd-minikube-grafana"),
+    ),
     "mailpit": Component(("mailpit",), ("mailpit",)),
 }
 
