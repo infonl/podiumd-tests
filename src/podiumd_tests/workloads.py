@@ -23,6 +23,7 @@ from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from collections.abc import Generator
+    from collections.abc import Mapping
     from collections.abc import Sequence
 
     import requests
@@ -44,6 +45,13 @@ def pod_containers(workload: JsonObject, *, with_init: bool) -> list[JsonObject]
     return [*entries(pod.get("initContainers")), *found] if with_init else found
 
 
+def _main_deployment(env: Environment, deployments: Mapping[str, Item], component: str) -> Item | None:
+    try:
+        return deployments[env.deployment_for(component)]
+    except KubeError:  # the component has no main deployment
+        return None
+
+
 def component_versions(env: Environment, components: Sequence[str]) -> dict[str, tuple[int, ...]]:
     """Versions of the components' main deployments, e.g. {"ita": (3, 3, 4)}; unknown ones are left out.
 
@@ -52,9 +60,8 @@ def component_versions(env: Environment, components: Sequence[str]) -> dict[str,
     deployments = {metadata_name(d): d for d in env.items("deployments")}
     found: dict[str, tuple[int, ...]] = {}
     for component in components:
-        try:
-            workload = deployments[env.deployment_for(component)]
-        except KubeError:  # no main deployment
+        workload = _main_deployment(env, deployments, component)
+        if workload is None:
             continue
         tags = [str(c.get("image")).rpartition(":")[2] for c in pod_containers(workload, with_init=False)]
         label = str(section(section(workload, "metadata"), "labels").get("app.kubernetes.io/version", ""))
