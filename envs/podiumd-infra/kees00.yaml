@@ -42,6 +42,9 @@ secrets:
   # Signs the bootstrap's OMC abonnement token; read from OMC's own Secret.
   omc_jwt_secret:
     k8s_secret: {name: omc, key: OMC_AUTH_JWT_SECRET}
+  # The ZGW smoke tests sign as Open Formulieren's Open Zaak client (settings.zgw_client_id).
+  zgw_client_secret:
+    zgw_jwt_secret: {deployment: openzaak, client_id: formulier}
 settings:
   # The owner allows bootstrap to change these (2026-10-10). The ZAC ones act on productaanvraag_zaaktype,
   # which needs kees00's ZAC zaakafhandelparameters (runtime data, not in its values).
@@ -50,3 +53,4 @@ settings:
   kiss_kanalen: true
   # Open Formulieren's Open Zaak client in podiumd-infra's values is "formulier", not the default "open-formulieren".
   openformulieren_zgw_client_id: formulier
+  zgw_client_id: formulier
