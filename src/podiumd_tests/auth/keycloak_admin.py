@@ -89,6 +89,9 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
         if user_id is None:
             msg = f"user {username} not found after creating it"
             raise LookupError(msg)
+        # Keycloak adds the realm's default required actions on create, whatever the body says
+        # (PodiumD's realm makes CONFIGURE_TOTP one); clear them with an update.
+        self._send("PUT", f"/users/{user_id}", _user_body(username, attributes, name), HTTPStatus.NO_CONTENT)
         return user_id
 
     def save_user(
