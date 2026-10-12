@@ -20,18 +20,19 @@ from podiumd_tests.seed.opennotificaties import delete_abonnement
 
 if TYPE_CHECKING:
     from podiumd_tests.bootstrap import Context
+    from podiumd_tests.environment import Environment
 
 STORE_KEY = "ptest_bootstrap_omc_abonnement_record"
 VALIDITY = 365 * 24 * 3600
 RENEW_BEFORE = 7 * 24 * 3600
 
 
-def omc_token(ctx: Context, now: float) -> str:
+def omc_token(env: Environment, now: float) -> str:
     """A token OMC's Events/Listen accepts, valid for VALIDITY from now."""
-    deployment = ctx.env.deployment_for("omc")
+    deployment = env.deployment_for("omc")
 
     def setting(var: str) -> str:
-        return ctx.env.kube.exec(deployment, "printenv", var).strip()
+        return env.kube.exec(deployment, "printenv", var).strip()
 
     payload = {
         "iss": setting("OMC_AUTH_JWT_ISSUER"),
@@ -41,7 +42,7 @@ def omc_token(ctx: Context, now: float) -> str:
         "iat": int(now),
         "exp": int(now) + VALIDITY,
     }
-    return hs256_jwt(payload, ctx.env.credentials.get("omc_jwt_secret"))
+    return hs256_jwt(payload, env.credentials.get("omc_jwt_secret"))
 
 
 @dataclass(frozen=True)
@@ -69,7 +70,7 @@ class OmcAbonnement:
         now = time.time()
         body: dict[str, object] = {
             "callbackUrl": ctx.env.profile.urls["omc"] + "/Events/Listen",
-            "auth": f"Bearer {omc_token(ctx, now)}",
+            "auth": f"Bearer {omc_token(ctx.env, now)}",
             "kanalen": [{"naam": "zaken", "filters": {}}],
         }
         created = opennotificaties_client(ctx.env).post("abonnement", body)
