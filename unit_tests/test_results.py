@@ -22,6 +22,8 @@ JUNIT = """<?xml version="1.0" encoding="utf-8"?>
   <testcase classname="tests.smoke.test_up" name="test_err"><error message="fixture failed"/></testcase>
   <testcase classname="tests.smoke.test_up" name="test_skip"><skipped type="pytest.skip" message="requires: oab"/></testcase>
   <testcase classname="tests.smoke.test_up" name="test_known"><skipped type="pytest.xfail" message="TICKET-1"/></testcase>
+  <testcase classname="tests.smoke.test_up" name="test_fixed">
+    <properties><property name="xpass" value="TICKET-2"/></properties></testcase>
 </testsuite></testsuites>
 """
 
@@ -32,17 +34,13 @@ def test_run_dir_uses_utc_month_partition_and_underscores():
 
 
 def test_parse_junit_counts_every_outcome():
-    counts, failures = parse_junit(JUNIT)
-    assert (counts.passed, counts.failed, counts.errors, counts.skipped, counts.xfailed, counts.total) == (
-        1,
-        1,
-        1,
-        1,
-        1,
-        5,
-    )
-    assert [f.message for f in failures] == ["assert 500 == 200", "fixture failed"]
-    assert failures[0].test_id == "tests.smoke.test_up::test_bad"
+    counts, details = parse_junit(JUNIT)
+    found = (counts.passed, counts.failed, counts.errors, counts.skipped, counts.xfailed, counts.xpassed)
+    assert (*found, counts.total) == (1, 1, 1, 1, 1, 1, 6)
+    assert [f.message for f in details.failures] == ["assert 500 == 200", "fixture failed"]
+    assert details.failures[0].test_id == "tests.smoke.test_up::test_bad"
+    assert [(e.test_id, e.message) for e in details.xpassed] == [("tests.smoke.test_up::test_fixed", "TICKET-2")]
+    assert [e.message for e in details.xfailed + details.skipped] == ["TICKET-1", "requires: oab"]
 
 
 def test_write_run_redacts_secrets(tmp_path):
@@ -58,14 +56,18 @@ def test_write_run_redacts_secrets(tmp_path):
         selection=["--token=super-secret-token"],
         suite_commit="abc1234",
     )
-    counts, failures = parse_junit(JUNIT)
+    counts, details = parse_junit(JUNIT)
     info.counts = counts
-    write_run(LocalDirSink(tmp_path), "2026-10/run", info, failures, redactor)
+    info.versions = {"ita": "3.3.4"}
+    write_run(LocalDirSink(tmp_path), "2026-10/run", info, details, redactor)
     run_json = (tmp_path / "2026-10/run/run.json").read_text()
     summary = (tmp_path / "2026-10/run/summary.md").read_text()
     assert "super-secret-token" not in run_json + summary
     assert json.loads(run_json)["counts"]["failed"] == 1
-    assert "| 1 | 1 | 1 | 1 | 1 | 5 |" in summary
+    assert "| 1 | 1 | 1 | 1 | 1 | 1 | 6 |" in summary
+    assert "- Component versions: ita 3.3.4" in summary
+    assert "- TICKET-2 (1): `tests.smoke.test_up::test_fixed`" in summary
+    assert "- requires: oab (1): `tests.smoke.test_up::test_skip`" in summary
 
 
 def test_run_tag_marks_resources_of_a_run():

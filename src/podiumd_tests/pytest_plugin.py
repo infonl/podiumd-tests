@@ -55,6 +55,7 @@ from podiumd_tests.zac import zac_session
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from collections.abc import Generator
     from collections.abc import Iterator
     from collections.abc import Sequence
 
@@ -395,6 +396,18 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     for item in items:
         if item.get_closest_marker("destructive"):
             item.add_marker(pytest.mark.xdist_group("destructive"))
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_makereport(
+    item: pytest.Item, call: pytest.CallInfo[None]
+) -> Generator[None, pytest.TestReport, pytest.TestReport]:
+    """Record a non-strict xpass and its reason as junit property "xpass"; junit writes it as a plain pass."""
+    report = yield
+    if call.when == "call" and report.passed and hasattr(report, "wasxfail"):
+        # junit writes the properties of the teardown report, which copies the item's.
+        item.user_properties.append(("xpass", str(report.wasxfail)))
+    return report
 
 
 def pytest_runtest_setup(item: pytest.Item) -> None:

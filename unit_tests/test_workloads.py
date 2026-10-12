@@ -6,6 +6,7 @@ import pytest
 
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
+from podiumd_tests.workloads import component_versions
 from podiumd_tests.workloads import failed_jobs
 from podiumd_tests.workloads import run_cronjob
 from podiumd_tests.workloads import scaled
@@ -81,3 +82,16 @@ def test_run_cronjob_deletes_the_job_also_when_it_does_not_complete(fake_runner)
         ["wait", "--for=condition=complete", "job/ptest-x"],
         ["delete", "job", "ptest-x"],
     ]
+
+
+@pytest.mark.parametrize(
+    ("image", "label", "version"),
+    [("ita.web:3.3.2", "3.3.4", (3, 3, 2)), ("ita.web@sha256:0bef", "3.3.4", (3, 3, 4)), ("ita.web:latest", "", None)],
+)
+def test_component_versions_take_the_image_tag_else_the_helm_label(env_factory, fake_runner, image, label, version):
+    ita = {
+        "metadata": {"name": "ita-web", "labels": {"app.kubernetes.io/version": label}},
+        "spec": {"template": {"spec": {"containers": [{"image": f"ghcr.io/ita/{image}"}]}}},
+    }
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [ita]}))
+    assert component_versions(env_factory(), ["ita", "zac"]).get("ita") == version

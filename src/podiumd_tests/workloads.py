@@ -8,9 +8,12 @@ and only the latest Job of each CronJob counts, as older runs are history.
 
 from __future__ import annotations
 
+import re
+
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
+from podiumd_tests.components import deployed_components
 from podiumd_tests.json_data import JsonObject
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
@@ -39,6 +42,24 @@ def pod_containers(workload: JsonObject, *, with_init: bool) -> list[JsonObject]
     pod = section(section(section(workload, "spec"), "template"), "spec")
     found = entries(pod.get("containers"))
     return [*entries(pod.get("initContainers")), *found] if with_init else found
+
+
+def component_versions(env: Environment, components: Sequence[str]) -> dict[str, tuple[int, ...]]:
+    """Versions of the components' main deployments, e.g. {"ita": (3, 3, 4)}; unknown ones are left out.
+
+    The numeric image tag, else Helm's app.kubernetes.io/version label (podiumd-infra pins images by digest).
+    """
+    deployments = {metadata_name(d): d for d in env.items("deployments")}
+    deployed = deployed_components(list(deployments))
+    found: dict[str, tuple[int, ...]] = {}
+    for component in (c for c in components if c in deployed):
+        workload = deployments[env.deployment_for(component)]
+        tags = [str(c.get("image")).rpartition(":")[2] for c in pod_containers(workload, with_init=False)]
+        label = str(section(section(workload, "metadata"), "labels").get("app.kubernetes.io/version", ""))
+        version = next((v for v in [*tags, label] if re.fullmatch(r"\d+(\.\d+)+", v)), None)
+        if version:
+            found[component] = tuple(int(n) for n in version.split("."))
+    return found
 
 
 def _owner_kinds(item: Item) -> set[str]:

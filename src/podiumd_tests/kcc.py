@@ -18,7 +18,7 @@ from podiumd_tests.kube import metadata_name
 from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import today
-from podiumd_tests.snapshot import component_version
+from podiumd_tests.workloads import component_versions
 
 if TYPE_CHECKING:
     import requests
@@ -78,7 +78,7 @@ ITA_GROUP_ACCESS_FIXED = (3, 3, 4)
 
 def expect_ita_group_access_bug(request: pytest.FixtureRequest, env: Environment) -> None:
     """Mark the test a strict xfail when the deployed ITA is older than 3.3.4."""
-    version = component_version(env, "ita")
+    version = component_versions(env, ["ita"]).get("ita")
     if version is not None and version < ITA_GROUP_ACCESS_FIXED:
         request.applymarker(
             pytest.mark.xfail(

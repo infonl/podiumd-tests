@@ -32,6 +32,7 @@ from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.capabilities import CLUSTER
 from podiumd_tests.ci import group
 from podiumd_tests.ci import publish_summary
+from podiumd_tests.components import COMPONENTS
 from podiumd_tests.components import component_for_host
 from podiumd_tests.config import ESTATES
 from podiumd_tests.config import REPO_ROOT
@@ -49,6 +50,7 @@ from podiumd_tests.kube import KubeError
 from podiumd_tests.lock import LockBusyError
 from podiumd_tests.lock import held
 from podiumd_tests.process import ProcessError
+from podiumd_tests.results import Details
 from podiumd_tests.results import LocalDirSink
 from podiumd_tests.results import RunInfo
 from podiumd_tests.results import new_run_id
@@ -66,6 +68,7 @@ from podiumd_tests.sweep import format_swept
 from podiumd_tests.sweep import parse_age
 from podiumd_tests.sweep import sweep
 from podiumd_tests.tiers import TIERS
+from podiumd_tests.workloads import component_versions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -318,6 +321,15 @@ def selected_steps(names: list[str] | None) -> tuple[Step, ...]:
     return tuple(s for s in STEPS if s.name in names)
 
 
+def _versions(env: Environment) -> dict[str, str]:
+    """The deployed components' versions for run.json; none when the cluster is unreachable."""
+    try:
+        found = component_versions(env, sorted(COMPONENTS))
+    except KubeError:
+        return {}
+    return {name: ".".join(map(str, version)) for name, version in found.items()}
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     """Run a tier against an environment and record the results."""
     profile = _load(args)
@@ -341,6 +353,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         suite_commit=suite_commit(REPO_ROOT),
         chart_version=profile.chart_version,
         capabilities=sorted(env.capabilities.present),
+        versions=_versions(env),
     )
     sink = LocalDirSink(Path(args.results_dir))
     directory = run_dir(datetime.fromisoformat(info.started), profile.name, args.tier, info.run_id)
@@ -354,13 +367,13 @@ def cmd_run(args: argparse.Namespace) -> int:
     ):
         info.exit_code = int(pytest.main(info.selection))
     info.finished = now_iso()
-    failures = []
+    details = Details()
     if junit.exists():
         # pytest writes the failure texts as they are; mask secrets as write_run does.
         env.credentials.register_all()
         junit.write_text(env.redactor.redact(junit.read_text(encoding="utf-8")), encoding="utf-8")
-        info.counts, failures = parse_junit(junit.read_text(encoding="utf-8"))
-    write_run(sink, directory, info, failures, env.redactor)
+        info.counts, details = parse_junit(junit.read_text(encoding="utf-8"))
+    write_run(sink, directory, info, details, env.redactor)
     publish_summary(Path(sink.location(f"{directory}/summary.md")))
     print(f"results: {sink.location(directory)}")
     if info.exit_code in {pytest.ExitCode.OK, pytest.ExitCode.NO_TESTS_COLLECTED}:

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 
 from typing import TYPE_CHECKING
 from typing import cast
@@ -73,23 +72,6 @@ def images(env: Environment) -> dict[str, list[str]]:
         for w in env.items("deployments")
         if metadata_name(w) in names
     }
-
-
-def component_version(env: Environment, component: str) -> tuple[int, ...] | None:
-    """The version of the component's main deployment, e.g. (3, 3, 4); None when unknown.
-
-    The numeric image tag, else Helm's app.kubernetes.io/version label (podiumd-infra pins images by digest).
-    """
-    name = env.deployment_for(component) if component in env.profile.urls else None
-    for workload in env.items("deployments"):
-        if metadata_name(workload) != name:
-            continue
-        tags = [str(c.get("image")).rpartition(":")[2] for c in pod_containers(workload, with_init=False)]
-        label = str(section(section(workload, "metadata"), "labels").get("app.kubernetes.io/version", ""))
-        for candidate in [*tags, label]:
-            if re.fullmatch(r"\d+(\.\d+)+", candidate):
-                return tuple(int(n) for n in candidate.split("."))
-    return None
 
 
 def take(env: Environment) -> JsonObject:

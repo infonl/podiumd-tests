@@ -102,15 +102,26 @@ class Counts:
     errors: int = 0
     skipped: int = 0
     xfailed: int = 0
+    xpassed: int = 0
     total: int = 0
 
 
 @dataclass
-class Failure:
-    """One failed or errored test with the first line of its message."""
+class Entry:
+    """One test with the first line of its message or reason."""
 
     test_id: str
     message: str
+
+
+@dataclass
+class Details:
+    """The tests of one run that did not simply pass, per outcome."""
+
+    failures: list[Entry] = field(default_factory=list[Entry])
+    xfailed: list[Entry] = field(default_factory=list[Entry])
+    xpassed: list[Entry] = field(default_factory=list[Entry])
+    skipped: list[Entry] = field(default_factory=list[Entry])
 
 
 @dataclass
@@ -127,6 +138,8 @@ class RunInfo:  # pylint: disable=too-many-instance-attributes  # mirrors run.js
     suite_commit: str
     chart_version: str | None = None
     capabilities: list[str] = field(default_factory=list[str])
+    # Component versions read from the cluster, e.g. {"ita": "3.3.4"}.
+    versions: dict[str, str] = field(default_factory=dict[str, str])
     counts: Counts = field(default_factory=Counts)
 
 
@@ -140,36 +153,57 @@ def suite_commit(repo: Path) -> str:
         return "unknown"
 
 
-def parse_junit(xml_text: str) -> tuple[Counts, list[Failure]]:
-    """Counts and failures from a pytest junit.xml."""
+def _first_line(text: str | None) -> str:
+    return (text or "").partition("\n")[0][:300]
+
+
+def parse_junit(xml_text: str) -> tuple[Counts, Details]:
+    """Counts and the tests per outcome from a pytest junit.xml.
+
+    pytest writes a non-strict xpass as a pass; the pytest plugin adds the property "xpass" with its reason.
+    """
     counts = Counts()
-    failures: list[Failure] = []
+    details = Details()
     root = ET.fromstring(xml_text)  # nosec B314  # noqa: S314
     for case in root.iter("testcase"):
         counts.total += 1
         test_id = f"{case.get('classname', '')}::{case.get('name', '')}".strip(":")
-        failure = case.find("failure")
-        error = case.find("error")
+        problem = case.find("failure") if case.find("failure") is not None else case.find("error")
         skipped = case.find("skipped")
-        if failure is not None:
-            counts.failed += 1
-            failures.append(Failure(test_id, (failure.get("message") or "").splitlines()[0][:200]))
-        elif error is not None:
-            counts.errors += 1
-            failures.append(Failure(test_id, (error.get("message") or "").splitlines()[0][:200]))
-        elif skipped is not None:
-            if skipped.get("type") == "pytest.xfail":
-                counts.xfailed += 1
+        xpass = next((p.get("value") or "" for p in case.iter("property") if p.get("name") == "xpass"), None)
+        if problem is not None:
+            if problem.tag == "failure":
+                counts.failed += 1
             else:
-                counts.skipped += 1
+                counts.errors += 1
+            details.failures.append(Entry(test_id, _first_line(problem.get("message"))))
+        elif skipped is not None and skipped.get("type") == "pytest.xfail":
+            counts.xfailed += 1
+            details.xfailed.append(Entry(test_id, _first_line(skipped.get("message"))))
+        elif skipped is not None:
+            counts.skipped += 1
+            details.skipped.append(Entry(test_id, _first_line(skipped.get("message"))))
+        elif xpass is not None:
+            counts.xpassed += 1
+            details.xpassed.append(Entry(test_id, _first_line(xpass)))
         else:
             counts.passed += 1
-    return counts, failures
+    return counts, details
 
 
-def summary_markdown(info: RunInfo, failures: list[Failure]) -> str:
-    """Human-readable summary.md of one run."""
+def _by_message(entries: list[Entry]) -> list[str]:
+    """One line per distinct message, with its tests, most tests first."""
+    groups: dict[str, list[str]] = {}
+    for entry in entries:
+        groups.setdefault(entry.message or "no reason given", []).append(entry.test_id)
+    ordered = sorted(groups.items(), key=lambda item: -len(item[1]))
+    return [f"- {message} ({len(ids)}): " + ", ".join(f"`{i}`" for i in ids) for message, ids in ordered]
+
+
+def summary_markdown(info: RunInfo, details: Details) -> str:
+    """Human-readable summary.md of one run; results/README.md explains the outcomes."""
     c = info.counts
+    versions = ", ".join(f"{name} {version}" for name, version in sorted(info.versions.items())) or "unknown"
     lines = [
         f"# {info.env} {info.tier} {info.run_id}",
         "",
@@ -177,22 +211,32 @@ def summary_markdown(info: RunInfo, failures: list[Failure]) -> str:
         f"- Finished: {info.finished}",
         f"- Exit code: {info.exit_code}",
         f"- Chart version: {info.chart_version or 'unknown'}",
+        f"- Component versions: {versions}",
         f"- Suite commit: {info.suite_commit}",
+        "- What the outcomes mean: [results/README.md](../../README.md)",
         "",
-        "| Passed | Failed | Errors | Skipped | Xfailed | Total |",
-        "|---|---|---|---|---|---|",
-        f"| {c.passed} | {c.failed} | {c.errors} | {c.skipped} | {c.xfailed} | {c.total} |",
+        "| Passed | Failed | Errors | Skipped | XFailed | XPassed | Total |",
+        "|---|---|---|---|---|---|---|",
+        f"| {c.passed} | {c.failed} | {c.errors} | {c.skipped} | {c.xfailed} | {c.xpassed} | {c.total} |",
     ]
-    if failures:
-        lines += ["", "## Failures", ""]
-        lines += [f"- `{f.test_id}`: {f.message or 'no message'}" for f in failures]
+    if details.failures:
+        lines += ["", "## Failed and errors", ""]
+        lines += [f"- `{f.test_id}`: {f.message or 'no message'}" for f in details.failures]
+    sections = [
+        ("Known defects that did not show (XPassed)", details.xpassed),
+        ("Known defects (XFailed)", details.xfailed),
+        ("Skipped", details.skipped),
+    ]
+    for title, entries in sections:
+        if entries:
+            lines += ["", f"## {title}", "", *_by_message(entries)]
     return "\n".join(lines) + "\n"
 
 
-def write_run(sink: ResultsSink, directory: str, info: RunInfo, failures: list[Failure], redactor: Redactor) -> None:
+def write_run(sink: ResultsSink, directory: str, info: RunInfo, details: Details, redactor: Redactor) -> None:
     """Write run.json and summary.md; every text passes the redactor first."""
     sink.write_text(f"{directory}/run.json", redactor.redact(json.dumps(asdict(info), indent=2) + "\n"))
-    sink.write_text(f"{directory}/summary.md", redactor.redact(summary_markdown(info, failures)))
+    sink.write_text(f"{directory}/summary.md", redactor.redact(summary_markdown(info, details)))
 
 
 def now_iso() -> str:
