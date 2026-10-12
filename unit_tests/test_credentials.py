@@ -79,6 +79,12 @@ def test_dev_defaults_are_not_redacted_but_overrides_are(profile_factory, env_fa
     assert env.redactor.redact("keycloak-admin s3cret-override") == "keycloak-admin ***"
 
 
+def test_usernames_are_not_redacted(env_factory):
+    env = env_factory(environ={env_var_name("grafana_username"): "admin"})
+    env.credentials.get("grafana_username")
+    assert env.redactor.redact("keycloak-admin") == "keycloak-admin"
+
+
 def test_redactor_ignores_very_short_values():
     redactor = Redactor()
     redactor.add("ab")

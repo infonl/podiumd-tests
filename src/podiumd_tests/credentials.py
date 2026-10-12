@@ -84,8 +84,9 @@ class SecretResolver:
         """Value of a secret; SecretError if it cannot be resolved."""
         if name not in self._cache:
             value = self._resolve(name)
-            # Published dev defaults such as "admin" are no secret; masking them garbles ordinary text.
-            if not self._is_dev_default(name):
+            # Usernames and published dev defaults such as "admin" are no secret; masking them garbles
+            # ordinary text such as test ids ("keycloak-admin").
+            if not name.endswith("_username") and not self._is_dev_default(name):
                 self._redactor.add(value)
             self._cache[name] = value
         return self._cache[name]
