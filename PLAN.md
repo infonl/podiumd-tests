@@ -64,7 +64,7 @@ Research notes:
 | R19 | **Code quality: the same checks as podiumd.** Use the checks and settings of `helm-charts/charts/podiumd/bin/run_python_checks` and its `pyproject.toml`, unchanged (§8a). |
 | R20 | **Allowed scope per environment.** Each profile has an `allowed_tiers` setting, for example `[smoke]` for a gemeente environment that may only receive smoke tests, or `[smoke, core, full, perf]`. The CLI refuses `bootstrap`, `seed-volume` and every tier outside the list. It says why, and offers no override flag. Several ExternalsPodiumD environments are smoke-only; others run the full set. |
 | R21 | **Pipeline-neutral execution (§7a).** There is no pipeline-specific code in the suite. |
-| R22 | **Minimal toolset, reuse first.** Add no language, framework or library unless existing ones cannot do the job. Before writing new code, reuse the existing code: the stdlib, the libraries the source suites already use (`requests`, `PyYAML`, Playwright; ZGW JWTs are signed with the stdlib, as in MK, so no JWT library), and the MK, PI and EX helpers. A new dependency needs a one-line reason in `pyproject.toml`. That rules out, for example, `httpx` (use `requests`), `pydantic-settings` (use dataclasses plus `PyYAML`), `tenacity` (use a small `wait_until`), the `kubernetes` Python client (use the `kubectl` CLI; reasons in §8), `mypy` (use basedpyright, as in podiumd), pre-commit, and a separate HTML report plugin. |
+| R22 | **Minimal toolset, reuse first.** Add no language, framework or library unless existing ones cannot do the job. Before writing new code, reuse the existing code: the stdlib, the libraries the source suites already use (`requests`, `PyYAML`, Playwright; ZGW JWTs are signed with the stdlib, as in MK, so no JWT library), and the MK, PI and EX helpers. A new dependency needs a one-line reason in `pyproject.toml`. That rules out, for example, `httpx` (use `requests`), `pydantic-settings` (use dataclasses plus `PyYAML`), `tenacity` (use a small `wait_until`), the `kubernetes` Python client (use the `kubectl` CLI; reasons in §8), `mypy` (use basedpyright, as in podiumd), pre-commit, and Allure (a Java or Node CLI to build its HTML). The user chose pytest-html for a readable report per run (2026-10-12). |
 
 ## 3. Grouping
 
@@ -227,7 +227,7 @@ Layout rules:
 - **Timestamps:** UTC, and recorded in `run.json` as ISO 8601.
 
 - **Not committed by default:** run directories are in `.gitignore`, because this repository is public. Commit a chosen run with `git add -f`, for example a release baseline; only its text files (`run.json`, `junit.xml`, `summary.md`).
-- **Never committed:** `artifacts/` is large and binary. There is no HTML report: `summary.md` reads well on GitHub, and Playwright traces open in `playwright show-trace` (R22).
+- **Never committed:** `artifacts/` (a screenshot of each failed browser test; no Playwright traces, R8) and `report.html`, pytest-html's self-contained report of every test. `summary.md` reads well on GitHub.
 - **No secrets in results.** The HTTP logging layer redacts the `Authorization` and `Cookie` headers and the token fields, and `run.json` never contains credentials. A unit test guards this.
 - `run.json` turns the results into a compatibility record ("4.9.1 on ontw-icat: 212 pass, 3 xfail"). That partly replaces what TA's VERSION-NOTES.md does today.
 

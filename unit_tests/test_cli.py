@@ -65,6 +65,7 @@ def test_run_keeps_screenshots_of_failed_browser_tests_but_no_traces(tmp_path, p
     assert f"--output={tmp_path / 'artifacts'}" in selection
     assert "--screenshot=only-on-failure" in selection
     assert not any(a.startswith("--tracing") for a in selection)
+    assert f"--html={tmp_path / 'report.html'}" in selection
 
 
 @pytest.mark.parametrize(

@@ -7,13 +7,14 @@ results/<YYYY-MM>/<YYYYMMDD-HHMMSS>_<env>_<tier>_<runid>/
   run.json      # environment, chart version, component versions, capabilities, suite commit, counts
   junit.xml     # every test with its outcome and message (JUnit XML)
   summary.md    # counts, failures, known defects and skip reasons
+  report.html   # every test with outcome, duration, message and log (pytest-html); not committed
   perf/         # perf tier only
-  artifacts/    # traces and screenshots on failure; never committed
+  artifacts/    # a screenshot of each failed browser test; never committed
 ```
 
 ## Reading the results
 
-Start with `summary.md`; its counts match pytest's last line.
+Start with `summary.md` (its counts match pytest's last line), or open `report.html` in a browser to filter and read every test.
 
 | Outcome | Meaning | Action |
 |---|---|---|
@@ -26,9 +27,10 @@ Start with `summary.md`; its counts match pytest's last line.
 
 How to view a run:
 
+- `report.html`: a browser; one self-contained file with a filter per outcome and each test's message and log.
 - `summary.md`: any Markdown viewer, e.g. GitHub, an IDE or `less`; a pipeline publishes it on the job page.
 - `junit.xml`: an IDE's test viewer (PyCharm: Run > Import Tests from File) or a CI test report.
-- `artifacts/<test>/trace.zip`: `playwright show-trace <file>`.
+- `artifacts/<test>/`: the screenshot of a failed browser test. There are no Playwright traces: they record what a test types, test passwords included.
 - `run.json`: the run's facts as JSON, for comparing runs.
 
 `podiumd-tests` writes these files through a `ResultsSink`. The local directory sink is the only one for now, so the results can move to another repository or a static site later without code changes.

@@ -195,6 +195,7 @@ def pytest_selection(profile: Profile, tier_name: str, run_id: str, junit: Path,
     # A screenshot of each failed browser test in artifacts/<test-id>/. No Playwright traces:
     # they record what a test types, test passwords included (R8).
     selection += [f"--output={junit.parent / 'artifacts'}", "--screenshot=only-on-failure"]
+    selection += [f"--html={junit.parent / 'report.html'}", "--self-contained-html"]
     if args.keep_data:
         selection.append("--keep-data")
     workers = int(profile.settings.get("pytest_workers", DEFAULT_WORKERS))
@@ -368,10 +369,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         info.exit_code = int(pytest.main(info.selection))
     info.finished = now_iso()
     details = Details()
+    # pytest writes the failure texts as they are; mask secrets as write_run does.
+    env.credentials.register_all()
+    for written in (junit, junit.parent / "report.html"):
+        if written.exists():
+            written.write_text(env.redactor.redact(written.read_text(encoding="utf-8")), encoding="utf-8")
     if junit.exists():
-        # pytest writes the failure texts as they are; mask secrets as write_run does.
-        env.credentials.register_all()
-        junit.write_text(env.redactor.redact(junit.read_text(encoding="utf-8")), encoding="utf-8")
         info.counts, details = parse_junit(junit.read_text(encoding="utf-8"))
     write_run(sink, directory, info, details, env.redactor)
     publish_summary(Path(sink.location(f"{directory}/summary.md")))

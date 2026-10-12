@@ -12,6 +12,7 @@ dependencies = [
     "pytest",            # test runner for every tier
     "pytest-playwright", # UI tests; already used by podiumd-minikube and podiumd-infra
     "pytest-xdist",      # parallel component/integration runs (R10)
+    "pytest-html",       # report.html of each run
     "requests",          # HTTP; already used by podiumd-minikube and podiumd-infra
     "PyYAML",            # environment profiles, known_issues.yaml, perf.yaml
     "locust",            # perf tier, replaces k6 (PLAN.md §6)

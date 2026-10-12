@@ -13,10 +13,10 @@ import re
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
-from podiumd_tests.components import deployed_components
 from podiumd_tests.json_data import JsonObject
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.responses import root_answers
 from podiumd_tests.wait import wait_until
@@ -50,10 +50,12 @@ def component_versions(env: Environment, components: Sequence[str]) -> dict[str,
     The numeric image tag, else Helm's app.kubernetes.io/version label (podiumd-infra pins images by digest).
     """
     deployments = {metadata_name(d): d for d in env.items("deployments")}
-    deployed = deployed_components(list(deployments))
     found: dict[str, tuple[int, ...]] = {}
-    for component in (c for c in components if c in deployed):
-        workload = deployments[env.deployment_for(component)]
+    for component in components:
+        try:
+            workload = deployments[env.deployment_for(component)]
+        except KubeError:  # no main deployment
+            continue
         tags = [str(c.get("image")).rpartition(":")[2] for c in pod_containers(workload, with_init=False)]
         label = str(section(section(workload, "metadata"), "labels").get("app.kubernetes.io/version", ""))
         version = next((v for v in [*tags, label] if re.fullmatch(r"\d+(\.\d+)+", v)), None)
