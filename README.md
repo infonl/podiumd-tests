@@ -13,6 +13,13 @@ python3 -m venv .venv
 .venv/bin/playwright install chromium   # only for UI tests
 ```
 
+`pip install -e` is an editable install, so there is no build step. `.venv`
+points at `src/` (a `.pth` file in `site-packages`), so a change in `src/`
+takes effect at once. The `podiumd-tests` command is generated from
+`[project.scripts]` in `pyproject.toml`. Rerun the install after changing
+`pyproject.toml`; `./run_python_checks` does this itself, and also upgrades
+the dev tools once a day to match CI.
+
 You also need `kubectl` with a context for the environment, and `az` when the
 profile reads secrets from Azure Key Vault.
 
