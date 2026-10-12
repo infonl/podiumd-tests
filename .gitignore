@@ -10,3 +10,4 @@ results/**/*.html
 session_memory.json
 # IDE project files.
 .idea/
+.envrc
