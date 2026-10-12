@@ -8,6 +8,7 @@ and only the latest Job of each CronJob counts, as older runs are history.
 
 from __future__ import annotations
 
+import contextlib
 import re
 
 from contextlib import contextmanager
@@ -108,8 +109,20 @@ def run_cronjob(kube: Kube, cronjob: str, job: str, timeout: int = 300) -> None:
     kube.run("create", "job", job, f"--from=cronjob/{cronjob}")
     try:
         kube.run("wait", "--for=condition=complete", f"job/{job}", f"--timeout={timeout}s", timeout=timeout + 10)
+    except KubeError as error:
+        error.add_note(_job_log(kube, job))
+        raise
     finally:
         kube.delete("job", job)
+
+
+def _job_log(kube: Kube, job: str) -> str:
+    """The last lines a Job's container wrote; its previous run when it restarts."""
+    for previous in ([], ["--previous"]):
+        with contextlib.suppress(KubeError):
+            if log := kube.run("logs", f"job/{job}", "--tail=20", *previous):
+                return f"log of job/{job}:\n{log}"
+    return f"no log of job/{job}"
 
 
 def _foreign(item: Item) -> bool:

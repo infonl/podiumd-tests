@@ -78,12 +78,13 @@ def test_scaled_restores_the_replicas_also_when_the_block_fails(fake_runner):
 
 
 def test_run_cronjob_deletes_the_job_also_when_it_does_not_complete(fake_runner):
-    fake_runner.answers = {"wait": (1, "timed out"), "": (0, "")}
-    with pytest.raises(KubeError):
+    fake_runner.answers = {"wait": (1, "timed out"), "logs": (0, "Unauthorized"), "": (0, "")}
+    with pytest.raises(KubeError, match="log of job/ptest-x:\nUnauthorized"):
         run_cronjob(Kube("ctx", "podiumd", fake_runner), "contact-vac-sync", "ptest-x")
     assert [c[5:8] for c in fake_runner.calls] == [
         ["create", "job", "ptest-x"],
         ["wait", "--for=condition=complete", "job/ptest-x"],
+        ["logs", "job/ptest-x", "--tail=20"],
         ["delete", "job", "ptest-x"],
     ]
 
