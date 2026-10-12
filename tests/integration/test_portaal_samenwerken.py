@@ -66,11 +66,14 @@ def test_begeleider_starts_a_samenwerking(
     page.locator('input[name="first_name"]').fill("PodiumD")
     page.locator('input[name="last_name"]').fill(who)
     page.locator('input[name="email"]').fill(user_email(identity.username))
-    page.locator('form:has(input[name="email"]) [type="submit"]').click()
+    # Clearing the cookies before the POST's answer could log out before the form is saved.
+    with page.expect_navigation():
+        page.locator('form:has(input[name="email"]) [type="submit"]').click()
     page.context.clear_cookies()
 
     portal_login(page, podiumd_env, method, identity, CONTACTS)
-    page.locator('button[name="contact_approve"]').first.click()
+    with page.expect_navigation():
+        page.locator('button[name="contact_approve"]').first.click()
     page.context.clear_cookies()
 
     title = registry.tagged("samenwerking")
@@ -84,7 +87,8 @@ def test_begeleider_starts_a_samenwerking(
     # The begeleider's only contact, after the reset. The checkbox is hidden behind its label,
     # which is empty for a company: its account has no name.
     page.locator('input[name="plan_contacts"]').first.dispatch_event("click")
-    page.locator('form:has(input[name="title"]) [type="submit"]').click()
+    with page.expect_navigation():
+        page.locator('form:has(input[name="title"]) [type="submit"]').click()
     page.context.clear_cookies()
 
     portal_login(page, podiumd_env, method, identity, SAMENWERKEN)
