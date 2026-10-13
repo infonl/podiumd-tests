@@ -10,6 +10,6 @@ objecten.local works.
 Found by smoke test `tests/smoke/test_oidc.py::test_login_ends_on_the_keycloak_form[objecttypen]`
 (podiumd-tests ecd6704).
 
-Wanted, as ExternalsPodiumD will do it: either client `objecten` also allows
+Wanted: either client `objecten` also allows
 `https://objecttypen.local/*`, or the objecttypen.local alias sends admin and OIDC paths to
 objecten.local.
