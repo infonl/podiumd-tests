@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.bootstrap.omc import omc_token
+from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
     import requests
@@ -72,6 +73,5 @@ def listen(http: requests.Session, podiumd_env: Environment, body: dict[str, obj
 def test_notification_is_recognized(
     http: requests.Session, podiumd_env: Environment, urls: dict[str, str], root: tuple[str, ...]
 ) -> None:
-    """OMC processes the notification: no 206, which Open Notificaties would count as delivered."""
-    response = listen(http, podiumd_env, notification(urls, root))
-    assert response.status_code != HTTPStatus.PARTIAL_CONTENT, f"OMC rejected the notification: {response.text[:500]}"
+    """OMC processes the notification: 412, not the 206 that Open Notificaties would count as delivered."""
+    expect_status(listen(http, podiumd_env, notification(urls, root)), HTTPStatus.PRECONDITION_FAILED)
