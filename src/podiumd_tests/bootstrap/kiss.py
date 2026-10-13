@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from typing import cast
 
 from podiumd_tests.auth.keycloak import form_login
+from podiumd_tests.oidc import CHALLENGE
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 
@@ -48,7 +49,7 @@ class KissKanalen:
         http = ctx.env.session()
         form_login(
             http,
-            kiss + "/api/challenge?returnUrl=%2F",
+            kiss + CHALLENGE,
             self.admin.username,
             ctx.env.credentials.get(self.admin.store_key),
         )

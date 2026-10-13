@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from podiumd_tests.auth.keycloak import form_login
+from podiumd_tests.oidc import LOGIN_PATHS
 
 if TYPE_CHECKING:
     import requests
@@ -15,5 +16,5 @@ if TYPE_CHECKING:
 def openbeheer_session(env: Environment, username: str, password: str) -> requests.Session:
     """A session on Open Beheer's API, logged in through its OIDC login (cookie authentication)."""
     http = env.session()
-    form_login(http, env.profile.urls["openbeheer"] + "/auth/oidc/authenticate/?next=/", username, password)
+    form_login(http, env.profile.urls["openbeheer"] + LOGIN_PATHS["openbeheer"], username, password)
     return http

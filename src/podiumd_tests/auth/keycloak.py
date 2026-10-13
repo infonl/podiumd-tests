@@ -90,19 +90,25 @@ def password_grant(session: requests.Session, keycloak_url: str, realm: str, log
     return token
 
 
+def login_form_action(page_text: str) -> str | None:
+    """The URL Keycloak's login form posts to; None when the page has no login form."""
+    form = re.search(r'<form[^>]*id="kc-form-login"[^>]*>', page_text)
+    action = re.search(r'action="([^"]+)"', form[0]) if form else None
+    return html.unescape(action[1]) if action else None
+
+
 def form_login(http: requests.Session, start_url: str, username: str, password: str) -> requests.Response:
     """Log in through Keycloak's login form without a browser; start_url redirects there. The app's final response.
 
     For apps that accept only their own session (code flow), such as ZAC's REST API and KISS.
     """
     page = http.get(start_url)
-    form = re.search(r'<form[^>]*id="kc-form-login"[^>]*>', page.text)
-    action = re.search(r'action="([^"]+)"', form[0]) if form else None
+    action = login_form_action(page.text)
     if action is None:
         msg = f"no Keycloak login form at {page.url}"
         raise TokenError(msg)
     with one_login_at_a_time(username):
-        response = http.post(html.unescape(action[1]), data={"username": username, "password": password})
+        response = http.post(action, data={"username": username, "password": password})
     if 'id="kc-form-login"' in response.text:
         msg = f"Keycloak refused the login of {username!r}"
         raise TokenError(msg)

@@ -17,7 +17,13 @@ import pytest
 
 from podiumd_tests.auth.keycloak import discovery_url
 from podiumd_tests.auth.keycloak import realm_url
+from podiumd_tests.components import DJANGO_APPS
+from podiumd_tests.oidc import LOGIN_PATHS
+from podiumd_tests.oidc import NAVIGATE
+from podiumd_tests.oidc import keycloak_hosts
 from podiumd_tests.oidc import keycloak_login_realm
+from podiumd_tests.oidc import logs_in_through_keycloak
+from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
@@ -33,11 +39,14 @@ def test_keycloak_discovery(http: requests.Session, urls: dict[str, str]) -> Non
     assert str(response.json()["issuer"]).endswith(realm_url("", "master"))
 
 
-@pytest.mark.requires("zac", "keycloak")
-def test_zac_redirects_to_keycloak(http: requests.Session, urls: dict[str, str]) -> None:
-    """An anonymous visit to ZAC ends on the Keycloak login form, and that realm is published."""
-    realm = keycloak_login_realm(http.get(urls["zac"] + "/"), urls["keycloak"])
-    expect_status(http.get(discovery_url(urls["keycloak"], realm)), HTTPStatus.OK)
+@pytest.mark.requires("keycloak")
+@pytest.mark.parametrize("component", [requiring(c, c) for c in LOGIN_PATHS])
+def test_login_ends_on_the_keycloak_form(http: requests.Session, urls: dict[str, str], component: str) -> None:
+    """Starting the app's login ends on Keycloak's login form: Keycloak accepts its client, redirect URI and scopes."""
+    start, hosts = urls[component] + LOGIN_PATHS[component], keycloak_hosts(urls)
+    if component in DJANGO_APPS and not logs_in_through_keycloak(http, start, hosts):
+        pytest.skip(f"{component}'s admin does not log in through Keycloak")
+    keycloak_login_realm(http.get(start, headers=NAVIGATE), hosts)
 
 
 @pytest.mark.requires("openinwoner")
@@ -56,4 +65,4 @@ def test_portaal_login_page_offers_digid_and_eherkenning(http: requests.Session,
 @pytest.mark.parametrize("method", ["digid", "eherkenning"])
 def test_portaal_login_redirects_to_keycloak(http: requests.Session, urls: dict[str, str], method: str) -> None:
     """Starting a DigiD or eHerkenning login ends on the Keycloak login form (82 test 4, 05b and 99 first leg)."""
-    keycloak_login_realm(http.get(f"{urls['openinwoner']}/{method}-oidc/authenticate/?next=/"), urls["keycloak"])
+    keycloak_login_realm(http.get(f"{urls['openinwoner']}/{method}-oidc/authenticate/?next=/"), keycloak_hosts(urls))

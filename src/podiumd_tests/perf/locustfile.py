@@ -33,6 +33,7 @@ from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
 from podiumd_tests.kcc import vac_data
+from podiumd_tests.oidc import CHALLENGE
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
@@ -114,9 +115,7 @@ def _search_calls(env: Environment) -> dict[str, Call]:
         calls["zac_search"] = lambda _r: expect_status(zac.put(urls["zac"] + "/rest/zoeken/list", json=query), 200)
     if "kiss" in urls:
         kiss = env.session()
-        form_login(
-            kiss, urls["kiss"] + "/api/challenge?returnUrl=%2F", KCC.username, env.credentials.get(KCC.store_key)
-        )
+        form_login(kiss, urls["kiss"] + CHALLENGE, KCC.username, env.credentials.get(KCC.store_key))
         body = {"query": SEARCH_TERM, "page": 1, "filters": []}
         calls["kiss_search"] = lambda _r: expect_status(kiss.post(urls["kiss"] + "/api/search", json=body), 200)
     if "openinwoner" in urls:

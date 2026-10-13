@@ -13,6 +13,7 @@ import pytest
 from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.oidc import LOGIN_PATHS
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import ZAKEN
@@ -39,7 +40,7 @@ PRODUCTAANVRAAG_TIMEOUT = 120
 def zac_session(env: Environment, username: str, password: str) -> requests.Session:
     """A session on ZAC's REST API, logged in through Keycloak's form."""
     http = env.session()
-    form_login(http, env.profile.urls["zac"] + "/", username, password)
+    form_login(http, env.profile.urls["zac"] + LOGIN_PATHS["zac"], username, password)
     return http
 
 

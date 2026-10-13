@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 from playwright.sync_api import sync_playwright
 
 from podiumd_tests.auth.keycloak import one_login_at_a_time
+from podiumd_tests.oidc import CHALLENGE
 from podiumd_tests.responses import url_host
 
 if TYPE_CHECKING:
@@ -73,7 +74,7 @@ def challenge_login(page: Page, env: Environment, app_url: str, username: str, p
     The login must start as a page navigation: a fetch gets 401 and a Keycloak URL without
     `state`, and such a login never completes. Returns browser_session(page, env).
     """
-    page.goto(app_url + "/api/challenge?returnUrl=%2F")
+    page.goto(app_url + CHALLENGE)
     keycloak_login(page, username, password)
     page.wait_for_url(lambda url: url_host(url) == url_host(app_url) and "/signin-oidc" not in url)
     return browser_session(page, env)
