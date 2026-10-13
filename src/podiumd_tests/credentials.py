@@ -104,6 +104,12 @@ class SecretResolver:
         """True when the secret has a source: the profile, its env var, or the credentials Secret."""
         return name in self._profile.secrets or bool(self._environ.get(env_var_name(name))) or name in self._bootstrap()
 
+    def forget(self, *names: str) -> None:
+        """Drop these secrets and the credentials Secret's contents from the cache, after bootstrap changed them."""
+        self._stored = None
+        for name in names:
+            self._cache.pop(name, None)
+
     def _bootstrap(self) -> dict[str, str]:
         """Contents of the credentials Secret, read once; empty without cluster access."""
         if self._stored is None:

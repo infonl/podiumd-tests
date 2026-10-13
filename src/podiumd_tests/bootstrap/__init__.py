@@ -131,6 +131,7 @@ def bootstrap(env: Environment, steps: Sequence[Step], *, rotate: bool = False) 
         values = step.apply(ctx)
         if values:
             ctx.store.write(values)
+            ctx.env.credentials.forget(*values)
         return Outcome(step.name, "created", "; ".join([", ".join(sorted(values)), *ctx.notes]))
 
     return _each(env, steps, apply)
@@ -144,6 +145,7 @@ def unbootstrap(env: Environment, steps: Sequence[Step]) -> list[Outcome]:
         keys = step.remove(ctx)
         if keys:
             ctx.store.remove(*keys)
+            ctx.env.credentials.forget(*keys)
         return Outcome(step.name, "removed" if present else "absent")
 
     return _each(env, list(reversed(steps)), remove)

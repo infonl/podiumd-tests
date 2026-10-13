@@ -136,6 +136,16 @@ def test_resolver_falls_back_to_bootstrap_credentials(env_factory, fake_runner):
     assert not creds.configured("other")
 
 
+def test_resolver_sees_what_bootstrap_stored_after_forget(env_factory, fake_runner):
+    key = "get secret podiumd-tests-credentials --ignore-not-found"
+    fake_runner.answers[key] = (0, "")
+    creds = env_factory().credentials
+    assert not creds.configured("admin_password")
+    fake_runner.answers[key] = (0, stored({"admin_password": "new"}))
+    creds.forget("admin_password")
+    assert creds.get("admin_password") == "new"
+
+
 def test_cli_refuses_bootstrap_on_smoke_only_profiles(tmp_path, capsys):
     (tmp_path / "gemeente.yaml").write_text(
         "estate: externals\nallowed_tiers: [smoke]\nkube: {context: c, namespace: podiumd}\nurls: {}\n",
