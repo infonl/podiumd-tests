@@ -73,7 +73,11 @@ class ZacEmailConfirmation:
             return {}
         http, zac = self._session(ctx), ctx.env.profile.urls["zac"]
         record = self._record(ctx)
-        for found in zaakafhandelparameters(http, zac, identificatie):
+        versions = zaakafhandelparameters(http, zac, identificatie)
+        if not versions:
+            msg = f"ZAC has no zaakafhandelparameters for zaaktype {identificatie}: the environment owner sets them"
+            raise LookupError(msg)
+        for found in versions:
             uuid = str(section(found, "zaaktype")["uuid"])
             parameters = _parameters(http, zac, uuid)
             old = section(parameters, "automaticEmailConfirmation")

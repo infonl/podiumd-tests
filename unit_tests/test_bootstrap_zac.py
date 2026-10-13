@@ -74,6 +74,12 @@ def test_apply_leaves_a_confirmation_that_is_on(ctx, fake_http):
     assert not [s for s in sent if s.method == "PUT"]
 
 
+def test_apply_fails_without_zaakafhandelparameters(ctx, fake_http):
+    fake_http({"GET /rest/zaakafhandelparameters": (200, [{"id": None, "zaaktype": {"identificatie": "zt-1"}}])})
+    with pytest.raises(LookupError, match="no zaakafhandelparameters for zaaktype zt-1"):
+        ZacEmailConfirmation(ADMIN).apply(ctx())
+
+
 def test_remove_puts_the_old_value_back(ctx, fake_http):
     sent = fake_http(answers({**WANTED, "id": 1}))
     assert ZacEmailConfirmation(ADMIN).remove(ctx(record={UUID: OFF})) == (STORE_KEY,)
