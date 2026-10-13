@@ -36,7 +36,8 @@ if TYPE_CHECKING:
     Resolver = Callable[[str], object]
 
 Status = Literal["ok", "warn", "fail", "skip"]
-DNS_TIMEOUT = 5.0
+# glibc retries an unanswered DNS query after 5 s; leave room for one retry on a cold resolver cache.
+DNS_TIMEOUT = 12.0
 HTTP_TIMEOUT = (5, 10)  # connect, read
 DOWN_HINT = "environment down or DNS removed? (scheduled shutdown)"
 SYMBOLS: dict[Status, str] = {"ok": "✔", "warn": "!", "fail": "✘", "skip": "-"}
