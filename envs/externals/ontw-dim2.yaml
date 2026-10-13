@@ -1,8 +1,8 @@
 # SSC Twente ExternalsPodiumD environment ontw-dim2 (applications/gemeenten/dim2/ontw/).
-# Smoke only until the allowed tiers are decided (PLAN.md R20).
+# Every tier, chaos included (user, 2026-10-13; PLAN.md R20).
 estate: externals
 chart_version: "4.6.6"
-allowed_tiers: [smoke]
+allowed_tiers: [smoke, core, full, perf, chaos]
 kube:
   context: aks-blue-ontw-dim2
   namespace: podiumd

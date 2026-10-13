@@ -1,5 +1,5 @@
 # ExternalsPodiumD environment test-rott; drafted by `podiumd-tests env init` from the URLs its
-# Deployments configure (its HTTPRoutes are not readable with this role). Smoke only (PLAN.md R20).
+# Deployments configure (its HTTPRoutes are not readable with this role). Smoke only, always (PLAN.md R20).
 estate: externals
 allowed_tiers: [smoke]
 kube:
