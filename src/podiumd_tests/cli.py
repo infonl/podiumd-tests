@@ -68,6 +68,7 @@ from podiumd_tests.sweep import format_swept
 from podiumd_tests.sweep import parse_age
 from podiumd_tests.sweep import sweep
 from podiumd_tests.tiers import TIERS
+from podiumd_tests.workloads import chart_version
 from podiumd_tests.workloads import component_versions
 
 if TYPE_CHECKING:
@@ -331,6 +332,14 @@ def _versions(env: Environment) -> dict[str, str]:
     return {name: ".".join(map(str, version)) for name, version in found.items()}
 
 
+def _chart_version(env: Environment) -> str | None:
+    """The deployed podiumd chart's version; the profile's chart_version when the cluster cannot tell."""
+    try:
+        return chart_version(env) or env.profile.chart_version
+    except KubeError:
+        return env.profile.chart_version
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     """Run a tier against an environment and record the results."""
     profile = _load(args)
@@ -352,7 +361,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         exit_code=0,
         selection=[],
         suite_commit=suite_commit(REPO_ROOT),
-        chart_version=profile.chart_version,
+        chart_version=_chart_version(env),
         capabilities=sorted(env.capabilities.present),
         versions=_versions(env),
     )

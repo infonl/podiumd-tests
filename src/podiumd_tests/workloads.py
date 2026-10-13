@@ -75,6 +75,15 @@ def component_versions(env: Environment, components: Sequence[str]) -> dict[str,
     return found
 
 
+def chart_version(env: Environment) -> str | None:
+    """The podiumd chart's version: Helm's app.kubernetes.io/version label on podiumd's own ConfigMaps."""
+    for config_map in env.items("configmaps"):
+        labels = section(section(config_map, "metadata"), "labels")
+        if labels.get("app.kubernetes.io/name") == "podiumd" and labels.get("app.kubernetes.io/version"):
+            return str(labels["app.kubernetes.io/version"])
+    return None
+
+
 def _owner_kinds(item: Item) -> set[str]:
     return {str(o.get("kind")) for o in entries(section(item, "metadata").get("ownerReferences"))}
 

@@ -104,6 +104,7 @@ class Profile:  # pylint: disable=too-many-instance-attributes  # mirrors the YA
     keyvault: str | None = None
     # Subscription of the Key Vault; without it az uses its default subscription, which other sessions may switch.
     azure_subscription: str | None = None
+    # Reported only when the cluster cannot tell the deployed podiumd chart version.
     chart_version: str | None = None
     # Non-secret per-environment values, e.g. zgw_client_id.
     settings: dict[str, str] = field(default_factory=dict[str, str])

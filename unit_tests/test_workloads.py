@@ -6,6 +6,7 @@ import pytest
 
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
+from podiumd_tests.workloads import chart_version
 from podiumd_tests.workloads import component_versions
 from podiumd_tests.workloads import failed_jobs
 from podiumd_tests.workloads import run_cronjob
@@ -100,3 +101,12 @@ def test_component_versions_take_the_image_tag_else_the_helm_label(env_factory, 
     }
     fake_runner.answers["get deployments"] = (0, json.dumps({"items": [ita]}))
     assert component_versions(env_factory(), ["ita", "zac"]).get("ita") == version
+
+
+def test_chart_version_comes_from_podiumds_own_config_maps(env_factory, fake_runner):
+    other = {"metadata": {"labels": {"app.kubernetes.io/name": "openzaak", "app.kubernetes.io/version": "1.20.0"}}}
+    podiumd = {"metadata": {"labels": {"app.kubernetes.io/name": "podiumd", "app.kubernetes.io/version": "4.10.0"}}}
+    fake_runner.answers["get configmaps"] = (0, json.dumps({"items": [other, podiumd]}))
+    assert chart_version(env_factory()) == "4.10.0"
+    fake_runner.answers["get configmaps"] = (0, json.dumps({"items": [other]}))
+    assert chart_version(env_factory()) is None
