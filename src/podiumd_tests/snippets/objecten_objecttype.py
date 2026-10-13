@@ -1,10 +1,17 @@
-"""Read-only: the URL Objecten knows an objecttype by. Params: name. Returns {"url": ... or None}."""
+"""Read-only: an objecttype Objecten knows. Params: name.
+
+Returns {"url": ...} before Open Object (the objecttype in Objecttypen, through Objecten's service),
+{"uuid": ...} in Open Object, which serves the objecttype itself, or {} when Objecten has none.
+"""
+
+# include: _objecttypes
 
 
 def run(params):
-    from objects.core.models import ObjectType
-
-    object_type = ObjectType.objects.filter(_name=params["name"]).first()
+    object_type = objecten_objecttype(params["name"])
     if object_type is None:
-        return {"url": None}
-    return {"url": f"{object_type.service.api_root.rstrip('/')}/objecttypes/{object_type.uuid}"}
+        return {}
+    service = getattr(object_type, "service", None)
+    if service is None:
+        return {"uuid": str(object_type.uuid)}
+    return {"url": f"{service.api_root.rstrip('/')}/objecttypes/{object_type.uuid}"}

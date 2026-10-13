@@ -76,7 +76,7 @@ def _service(params, record):
 
 
 def _snapshot(config):
-    fields = config._meta.concrete_fields  # noqa: SLF001  # Django's documented model API
+    fields = config._meta.concrete_fields
     return {f.attname: getattr(config, f.attname) for f in fields if f.attname != "id"}
 
 

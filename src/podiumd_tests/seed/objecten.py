@@ -18,12 +18,17 @@ if TYPE_CHECKING:
 
 
 def objecttype_url(env: Environment, name: str) -> str:
-    """The URL Objecten knows an objecttype by (a registered ObjectType); LookupError when it has none."""
+    """The URL Objecten knows an objecttype by; LookupError when it has none.
+
+    Open Object serves its objecttypes on its own API.
+    """
     found = cast(
-        "dict[str, str | None]",
+        "dict[str, str]",
         run_snippet(env.kube, env.deployment_for("objecten"), "objecten_objecttype", {"name": name}),
     )
-    if not found["url"]:
+    if "uuid" in found:
+        return f"{env.profile.urls['objecten']}/api/v2/objecttypes/{found['uuid']}"
+    if "url" not in found:
         msg = f"Objecten has no objecttype {name}"
         raise LookupError(msg)
     return found["url"]

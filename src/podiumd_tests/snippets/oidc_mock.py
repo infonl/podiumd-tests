@@ -56,7 +56,7 @@ def _clients(params, clients, record):
         client = clients.get(identifier) or OIDCClient(identifier=identifier)
         if client.pk and identifier not in record["clients"]:
             # Every stored field except the key: what remove puts back.
-            fields = client._meta.concrete_fields  # noqa: SLF001  # Django's documented model API
+            fields = client._meta.concrete_fields
             record["clients"][identifier] = {f.attname: getattr(client, f.attname) for f in fields if f.attname != "id"}
         client.oidc_provider = provider
         client.oidc_rp_client_id = params["client_id"]

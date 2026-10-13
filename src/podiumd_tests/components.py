@@ -31,7 +31,8 @@ COMPONENTS: dict[str, Component] = {
     "openformulieren": Component(("formulier", "openformulieren", "openformulieren-nginx"), ("openformulieren",)),
     "openklant": Component(("openklant",), ("openklant",)),
     "objecten": Component(("objecten",), ("objecten",)),
-    "objecttypen": Component(("objecttypen",), ("objecttypen",)),
+    # Open Object (podiumd 4.10) serves the Objecttypen API from deployment objecten.
+    "objecttypen": Component(("objecttypen",), ("objecttypen", "objecten")),
     "opennotificaties": Component(("notificaties", "opennotificaties"), ("opennotificaties", "notificaties")),
     "omc": Component(("omc",), ("omc",)),
     "openbeheer": Component(("openbeheer",), ("openbeheer",)),

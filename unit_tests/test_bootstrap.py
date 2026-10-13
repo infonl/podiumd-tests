@@ -370,7 +370,7 @@ def test_snippet_notes_reach_the_outcome(env_factory, fake_runner, profile_facto
     env = cluster_env(env_factory, fake_runner, profile_factory, urls={"objecten": "https://objecten.example.test"})
     fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "objecten"}}]}))
     fake_runner.answers["exec -i deploy/objecten"] = snippet_answer({"present": False, "notes": ["no objecttype X"]})
-    step = SnippetStep("objecten-token", ("objecten",), "token_auth", "tok", {"module": "m", "object_types": ["X"]})
+    step = SnippetStep("objecten-token", ("objecten",), "token_auth", "tok", {"modules": ("m",), "object_types": ["X"]})
     outcome = bootstrap(env, [step])[0]
     assert outcome.action == "created"
     assert outcome.detail == "tok; no objecttype X"

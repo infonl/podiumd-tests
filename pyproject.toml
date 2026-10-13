@@ -163,6 +163,8 @@ check-typed-exception = true  # Enable additional checks for try-except-pass
 "unit_tests/**" = ["S101", "ARG001", "ARG005", "SLF001", "INP001", "PT018", "RUF059", "S603", "S607", "S106"]
 # infra/: scripts that run in the cluster from a ConfigMap, not a package (INP001).
 "infra/**" = ["INP001"]
+# Django snippets: names from their `# include:` lines (F821); Django's documented _meta API (SLF001).
+"src/podiumd_tests/snippets/*.py" = ["F821", "SLF001"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -208,7 +210,7 @@ sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 #   - Locust's hooks in perf/locustfile.py (wait_time, @task, @events listeners): called by Locust.
 [tool.vulture]
 # Django snippets: run() is called inside the component, not from here.
-exclude = ["*/snippets/[a-z]*.py"]
+exclude = ["*/snippets/*.py"]
 ignore_names = ["pytest_*", "test_*", "pytestmark", "__call__", "wait_until", "tagged", "wait_time"]
 ignore_decorators = ["@pytest.fixture", "@task", "@events.*.add_listener"]
 

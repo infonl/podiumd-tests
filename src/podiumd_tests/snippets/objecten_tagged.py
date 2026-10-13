@@ -6,15 +6,17 @@ object. Returns {"count": ...} afterwards; 0 when Objecten has no such objecttyp
 """
 
 
+# include: _objecttypes
+
+
 def run(params):
     import datetime as dt
 
     from django.db import transaction
     from objects.core.models import Object
     from objects.core.models import ObjectRecord
-    from objects.core.models import ObjectType
 
-    object_type = ObjectType.objects.filter(_name=params["name"]).first()
+    object_type = objecten_objecttype(params["name"])
     if object_type is None:
         return {"count": 0}
     marked = {f"data__{params['key']}__startswith": params["prefix"]}

@@ -18,22 +18,24 @@ SCHEMA = {
 }
 
 
+# include: _objecttypes
+
+
 def run(params):
     import datetime as dt
 
-    from objecttypes.core.models import ObjectType
-    from objecttypes.core.models import ObjectVersion
+    object_type_model, version_model = objecttype_models()
 
     if params["action"] == "remove":
-        ObjectType.objects.filter(name=params["name"]).delete()
+        object_type_model.objects.filter(name=params["name"]).delete()
         return {"uuid": None}
-    object_type = ObjectType.objects.filter(name=params["name"]).first()
+    object_type = object_type_model.objects.filter(name=params["name"]).first()
     if params["action"] == "status":
         return {"uuid": str(object_type.uuid) if object_type else None}
     if object_type is None:
-        object_type = ObjectType.objects.create(name=params["name"], name_plural=params["name"])
+        object_type = object_type_model.objects.create(name=params["name"], name_plural=params["name"])
         today = dt.datetime.now(tz=dt.UTC).date()
-        ObjectVersion.objects.create(
+        version_model.objects.create(
             object_type=object_type, version=1, json_schema=SCHEMA, status="published", published_at=today
         )
     return {"uuid": str(object_type.uuid)}

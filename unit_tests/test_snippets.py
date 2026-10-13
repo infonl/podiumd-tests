@@ -14,7 +14,7 @@ from podiumd_tests.kube import Kube
 SNIPPETS = sorted(
     p.name.removesuffix(".py")
     for p in resources.files("podiumd_tests.snippets").iterdir()
-    if p.name.endswith(".py") and p.name != "__init__.py"
+    if p.name.endswith(".py") and not p.name.startswith("_")
 )
 
 
@@ -24,6 +24,11 @@ def test_snippet_compiles_and_defines_run(name):
     functions = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
     assert "run" in functions
     assert [a.arg for a in functions["run"].args.args] == ["params"]
+
+
+def test_snippet_source_puts_its_includes_first():
+    source = snippet_source("token_auth")
+    assert source.index("def objecttype_models") < source.index("def run")
 
 
 def test_run_snippet_sends_code_and_params_over_stdin(fake_runner):

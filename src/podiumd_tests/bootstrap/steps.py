@@ -449,9 +449,9 @@ def openzaak_client_step(  # pylint: disable=too-many-arguments  # mirrors the s
     return SnippetStep(name, ("openzaak",), "zgw_client", store_key, params)
 
 
-def token_step(component: str, module: str, store_key: str, **extra: object) -> SnippetStep:
-    """A TokenAuth step; the token's identifier is its store key."""
-    params: dict[str, object] = {"module": module, "identifier": store_key, **extra}
+def token_step(component: str, modules: tuple[str, ...], store_key: str, **extra: object) -> SnippetStep:
+    """A TokenAuth step in the first of the token models modules the app has; the identifier is its store key."""
+    params: dict[str, object] = {"modules": modules, "identifier": store_key, **extra}
     return SnippetStep(f"{component}-token", (component,), "token_auth", store_key, params)
 
 
@@ -683,11 +683,17 @@ STEPS: tuple[Step, ...] = (
         NRC_STORE_KEY,
         {"client_id": NRC_CLIENT_ID, "scopes": {"nrc": ["notificaties.consumeren", "notificaties.publiceren"]}},
     ),
-    token_step("openklant", "openklant.components.token.models", OPENKLANT_STORE_KEY),
-    token_step("objecttypen", "objecttypes.token.models", OBJECTTYPEN_STORE_KEY),
+    token_step("openklant", ("openklant.components.token.models",), OPENKLANT_STORE_KEY),
+    token_step(
+        "objecttypen",
+        # Open Object (podiumd 4.10) serves the Objecttypen API with Objecten's tokens.
+        ("objecttypes.token.models", "objects.token.models"),
+        OBJECTTYPEN_STORE_KEY,
+        objecttypen_api=True,
+    ),
     token_step(
         "objecten",
-        "objects.token.models",
+        ("objects.token.models",),
         OBJECTEN_STORE_KEY,
         object_types=[PRODUCTAANVRAAG_OBJECTTYPE, *ITA_OBJECTTYPES, *KISS_OBJECTTYPES],
     ),
@@ -920,7 +926,7 @@ STEPS: tuple[Step, ...] = (
         ("openklant",),
         "token_auth",
         OPENKLANT_OPENINWONER_STORE_KEY,
-        {"module": "openklant.components.token.models", "identifier": OPENKLANT_OPENINWONER_STORE_KEY},
+        {"modules": ("openklant.components.token.models",), "identifier": OPENKLANT_OPENINWONER_STORE_KEY},
         wiring=True,
     ),
     SnippetStep(
