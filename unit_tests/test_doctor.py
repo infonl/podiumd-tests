@@ -55,13 +55,20 @@ def test_healthy_cluster_without_urls(profile_factory, fake_runner, env_factory)
             "get statefulsets": (0, json.dumps({"items": [workload("StatefulSet", "redis", 2, 1)]})),
         }
     )
-    checks = doctor.run_checks(env_factory(profile_factory(urls={})), which=which_all)
+    checks = doctor.run_checks(env_factory(profile_factory(urls={}, allowed_tiers=["smoke", "core"])), which=which_all)
     result = statuses(checks)
     assert result["kube API"] == "ok"
     assert result["lock"] == "ok"
     assert result["workloads podiumd"] == "warn"
     assert "StatefulSet/redis 1/2" in next(c.detail for c in checks if c.name == "workloads podiumd")
     assert not doctor.failed(checks)
+
+
+def test_smoke_only_profile_skips_the_lock(profile_factory, fake_runner, env_factory):
+    fake_runner.answers.update({"config get-contexts": (0, "ctx\n"), "get --raw /readyz": (0, "ok")})
+    checks = doctor.run_checks(env_factory(profile_factory(urls={})), which=which_all)
+    assert statuses(checks)["lock"] == "skip"
+    assert not any("lease" in call for call in fake_runner.calls)
 
 
 def test_format_shows_hints_for_failures_only():

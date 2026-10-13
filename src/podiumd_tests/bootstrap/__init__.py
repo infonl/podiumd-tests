@@ -84,7 +84,7 @@ class Outcome:
 
 def refusal(profile: Profile) -> str | None:
     """Why bootstrap may not run on this environment, or None (PLAN.md R20: smoke-only stays untouched)."""
-    if set(profile.allowed_tiers) <= {"smoke"}:
+    if profile.smoke_only:
         return f"{profile.name} is smoke-only (allowed_tiers: {', '.join(profile.allowed_tiers)}); bootstrap changes it"
     return None
 

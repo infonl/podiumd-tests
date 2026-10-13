@@ -112,6 +112,11 @@ class Profile:  # pylint: disable=too-many-instance-attributes  # mirrors the YA
     wiring: bool = False
     path: Path | None = None
 
+    @property
+    def smoke_only(self) -> bool:
+        """Only smoke runs are allowed: nothing writes to the environment, so nothing takes its lock."""
+        return set(self.allowed_tiers) <= {"smoke"}
+
     def allows(self, setting: str) -> bool:
         """Whether an opt-in setting that changes the owner's configuration is "true"."""
         return self.settings.get(setting, "").lower() == "true"  # settings are strings

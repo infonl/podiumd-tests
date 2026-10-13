@@ -94,6 +94,8 @@ def _cluster(env: Environment) -> list[Check]:
 
 
 def _lock(env: Environment) -> Check:
+    if env.profile.smoke_only:
+        return Check("lock", "skip", f"{env.profile.name} is smoke-only: no run takes the lock")
     try:
         current = lease_holder(env.kube)
     except KubeError as exc:
