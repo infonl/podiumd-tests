@@ -92,12 +92,19 @@ def _accounts(identities):
 
 def _delete_accounts(accounts):
     # Rendering a page for a logged-in account creates CMS static alias Versions with
-    # created_by that account, a protected foreign key: hand them over to a superuser.
+    # created_by that account, a protected, non-null foreign key: hand them over to another user,
+    # a superuser when there is one (with SSO-only admins there is none).
     from django.contrib.auth import get_user_model
     from djangocms_versioning.models import Version
 
-    superuser = get_user_model().objects.filter(is_superuser=True).first()
-    Version.objects.filter(created_by__in=accounts).update(created_by=superuser)
+    versions = Version.objects.filter(created_by__in=accounts)
+    if versions.exists():
+        others = get_user_model().objects.exclude(pk__in=accounts.values("pk"))
+        heir = others.order_by("-is_superuser", "-is_staff", "pk").first()
+        if heir is None:
+            msg = "no other Open Inwoner user to own the CMS versions of the test accounts"
+            raise LookupError(msg)
+        versions.update(created_by=heir)
     accounts.delete()
 
 
