@@ -47,6 +47,13 @@ def run_process(args: Sequence[str], timeout: int, stdin: str | None = None) -> 
     )
 
 
+def start_process(args: Sequence[str]) -> subprocess.Popen[str]:
+    """Start a fixed argv in the background, never through a shell; stdout and stderr share one pipe."""
+    return subprocess.Popen(  # nosec B603  # noqa: S603
+        list(args), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+    )
+
+
 def run_checked[E: ProcessError](
     runner: Runner, command: Sequence[str], timeout: int, error: type[E] = ProcessError, stdin: str | None = None
 ) -> str:

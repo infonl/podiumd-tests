@@ -29,8 +29,8 @@ if TYPE_CHECKING:
 
 pytestmark = pytest.mark.smoke
 
-# Mailpit is minikube's mail sink, api-proxy has no public host on the estates.
-NOT_PUBLIC = ("mailpit", "api-proxy")
+# Mailpit is minikube's mail sink; api-proxy and the Frank!Gateway outway have no public host on the estates.
+NOT_PUBLIC = ("mailpit", "api-proxy", "frankgateway")
 PUBLIC = sorted(set(COMPONENTS) - set(NOT_PUBLIC))
 FOREIGN_ORIGIN = "https://ptest-foreign.example.invalid"
 # Apps that send none or part of the headers themselves; xfail without strict, as an edge may add them.

@@ -1,7 +1,8 @@
 """What an environment can do, detected at runtime instead of from a release number (PLAN.md §5).
 
 A component is a capability when the profile has a URL for it and, when the
-cluster can be read, a deployment for it exists. "cluster" is a capability
+cluster can be read, a deployment for it exists. A URL on a Service's cluster
+DNS name needs the cluster too: the console reaches it through a port-forward. "cluster" is a capability
 too: the kube API can be read from this console. Tests declare their needs
 with @pytest.mark.requires("openzaak", ...) and skip with a reason otherwise.
 """
@@ -13,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from podiumd_tests.components import COMPONENTS
 from podiumd_tests.components import deployed_components
+from podiumd_tests.kube import cluster_service
 
 if TYPE_CHECKING:
     from podiumd_tests.config import Profile
@@ -47,7 +49,9 @@ def detect(profile: Profile, deployment_names: list[str] | None) -> Capabilities
     reasons = dict.fromkeys(COMPONENT_NAMES - configured, "no URL in profile")
     if deployment_names is None:
         reasons[CLUSTER] = f"kube API of context {profile.kube.context} not reachable from this console"
-        return Capabilities(frozenset(configured), reasons)
+        in_cluster = {c for c in configured if cluster_service(profile.urls[c])}
+        reasons.update(dict.fromkeys(in_cluster, "in-cluster URL, and the kube API is not reachable"))
+        return Capabilities(frozenset(configured - in_cluster), reasons)
     deployed = deployed_components(deployment_names)
     # Components without their own deployment (e.g. keycloak-admin) follow their URL only.
     for component in configured - deployed:

@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import tempfile
 
+from contextlib import ExitStack
+from contextlib import contextmanager
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit
+from urllib.parse import urlunsplit
 
 from podiumd_tests.capabilities import Capabilities
 from podiumd_tests.capabilities import detect
@@ -16,6 +20,7 @@ from podiumd_tests.credentials import SecretResolver
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
+from podiumd_tests.kube import cluster_service
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.process import Runner
 from podiumd_tests.process import run_process
@@ -23,6 +28,7 @@ from podiumd_tests.sessions import make_session
 from podiumd_tests.sessions import peer_certificate
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
     from collections.abc import Sequence
 
     import requests
@@ -87,6 +93,20 @@ class Environment:
     def session(self, *, cookies: bool = True) -> requests.Session:
         """HTTP session for the profile URLs; cookies=False for token APIs."""
         return make_session(self.profile.urls, self.ingress_ip(), cookies=cookies, verify=self.ca_file)
+
+    @contextmanager
+    def console_urls(self) -> Generator[dict[str, str]]:
+        """The profile URLs as this console reaches them: an in-cluster URL of a present component via port-forward."""
+        urls = dict(self.profile.urls)
+        with ExitStack() as forwards:
+            for component, url in self.profile.urls.items():
+                service = cluster_service(url)
+                if service is None or component not in self.capabilities.present:
+                    continue
+                name, namespace, port = service
+                local = forwards.enter_context(self.kube.port_forward(name, port, namespace=namespace))
+                urls[component] = urlunsplit(urlsplit(url)._replace(netloc=f"127.0.0.1:{local}"))
+            yield urls
 
     def items(self, kind: str, namespaces: Sequence[str] | None = None) -> list[dict[str, object]]:
         """Objects of one kind in the given namespaces, by default all of the environment's namespaces."""

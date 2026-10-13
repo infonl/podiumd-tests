@@ -143,10 +143,10 @@ def resolve_hosts(
     return {host: done.get(host, f"DNS lookup gave no answer within {timeout:g}s") for host in unique}
 
 
-def _url_check(session: requests.Session, component: str, url: str) -> Check:
+def _url_check(session: requests.Session, component: str, url: str, target: str) -> Check:
     name = f"url {component}"
     try:
-        response = get_root(session, url, HTTP_TIMEOUT)
+        response = get_root(session, target, HTTP_TIMEOUT)
     except requests.exceptions.SSLError as exc:
         return Check(name, "fail", f"{url}: TLS error: {exc}")
     except requests.exceptions.ConnectTimeout:
@@ -162,22 +162,30 @@ def _urls(env: Environment, resolve: Resolver) -> list[Check]:
         session = env.session()
     except KubeError as exc:
         return [Check("ingress IP", "fail", str(exc))]
+    try:
+        with env.console_urls() as console:
+            return _url_checks(env, session, console, resolve)
+    except KubeError as exc:
+        return [Check("port-forward", "fail", str(exc))]
+
+
+def _url_checks(env: Environment, session: requests.Session, console: dict[str, str], resolve: Resolver) -> list[Check]:
     urls = sorted(env.profile.urls.items())
     # In host-header mode the requests go to the ingress IP; the hosts need not resolve.
     dns_errors: dict[str, str] = {}
     if env.profile.access.mode == "direct":
-        dns_errors = resolve_hosts((url_host(u) for _, u in urls), resolve)
+        dns_errors = resolve_hosts((url_host(console[c]) for c, _ in urls), resolve)
     checks: dict[str, Check] = {}
     reachable: list[tuple[str, str]] = []
     for component, url in urls:
-        error = dns_errors.get(url_host(url), "")
+        error = dns_errors.get(url_host(console[component]), "")
         if error:
             checks[component] = Check(f"url {component}", "fail", f"{url}: {error}", DOWN_HINT)
         else:
             reachable.append((component, url))
     if reachable:
         with ThreadPoolExecutor(max_workers=min(len(reachable), 16)) as pool:
-            futures = {c: pool.submit(_url_check, session, c, u) for c, u in reachable}
+            futures = {c: pool.submit(_url_check, session, c, u, console[c]) for c, u in reachable}
             checks.update({c: f.result() for c, f in futures.items()})
     return [checks[component] for component, _ in urls]
 

@@ -1,7 +1,7 @@
 """Does the Frank!Gateway outway route the base registrations? Ported from TA smoke 192.
 
-The outway is often only reachable in the cluster; then the profile has no
-frankgateway URL and these tests skip.
+The outway has no ingress on the estates: the profile gives its in-cluster
+Service URL, reached through a port-forward.
 """
 
 from __future__ import annotations

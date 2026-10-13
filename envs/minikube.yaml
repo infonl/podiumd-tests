@@ -35,6 +35,8 @@ urls:
   mailpit: https://mailpit.local
   api-proxy: https://api-proxy.local
   omc: https://omc.local
+  # No ingress, as on ExternalsPodiumD: reached through a port-forward.
+  frankgateway: http://frankgateway-outway.podiumd-minikube.svc.cluster.local:9080
 secrets:
   # Well-known dev defaults of podiumd-minikube; the only place literals are allowed (PLAN.md R8).
   keycloak_admin_username:

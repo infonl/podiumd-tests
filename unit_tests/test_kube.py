@@ -1,14 +1,20 @@
 """Unit tests for the kubectl wrapper."""
 
+import io
 import json
 import subprocess
+
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
+from podiumd_tests.kube import cluster_service
 from podiumd_tests.kube import context_names
 from podiumd_tests.kube import django_value
+from podiumd_tests.kube import forwarded_port
 
 
 def test_every_command_has_context_and_namespace(fake_runner):
@@ -109,3 +115,31 @@ def test_logs_reads_a_deployments_recent_lines_of_one_container(fake_runner):
     fake_runner.answers["logs deployment/zac"] = (0, "line 1\nline 2\n")
     assert Kube("ctx", "podiumd", fake_runner).logs("zac", since="10m", container="zac") == "line 1\nline 2\n"
     assert fake_runner.calls[-1][-3:] == ["deployment/zac", "--since=10m", "--container=zac"]
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("http://frankgateway-outway.podiumd.svc.cluster.local:9080", ("frankgateway-outway", "podiumd", 9080)),
+        ("http://outway.podiumd.svc", ("outway", "podiumd", 80)),
+        ("https://outway.podiumd.svc.cluster.local", None),
+        ("https://zac.local", None),
+    ],
+)
+def test_cluster_service_only_for_http_on_a_service_name(url, expected):
+    assert cluster_service(url) == expected
+
+
+def fake_process(output):
+    return cast("subprocess.Popen[str]", SimpleNamespace(stdout=io.StringIO(output)))
+
+
+def test_forwarded_port_is_read_from_kubectl_output():
+    process = fake_process("Forwarding from 127.0.0.1:41235 -> 9080\nHandling connection\n")
+    assert forwarded_port(["kubectl"], process, 5) == 41235
+
+
+def test_forwarded_port_fails_with_kubectl_error_when_it_exits():
+    process = fake_process('error: services "outway" not found\n')
+    with pytest.raises(KubeError, match='services "outway" not found'):
+        forwarded_port(["kubectl"], process, 5)

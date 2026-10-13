@@ -122,9 +122,10 @@ def fixture_caps(podiumd_env: Environment) -> Capabilities:
 
 
 @pytest.fixture(scope="session", name="urls")
-def fixture_urls(podiumd_env: Environment) -> dict[str, str]:
-    """Base URL per component."""
-    return podiumd_env.profile.urls
+def fixture_urls(podiumd_env: Environment) -> Iterator[dict[str, str]]:
+    """Base URL per component, as this console reaches it."""
+    with podiumd_env.console_urls() as urls:
+        yield urls
 
 
 @pytest.fixture(scope="session", name="http")
