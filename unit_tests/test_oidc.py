@@ -61,3 +61,9 @@ def test_logs_in_through_keycloak(monkeypatch, response_factory, status, locatio
         logs_in_through_keycloak(requests.Session(), "https://openzaak.example.test/oidc/authenticate/", HOSTS)
         is expected
     )
+
+
+def test_logs_in_through_keycloak_fails_on_a_server_error(monkeypatch, response_factory):
+    monkeypatch.setattr(requests.Session, "get", lambda *_a, **_k: response_factory(status=502))
+    with pytest.raises(AssertionError, match="fails instead of answering its login"):
+        logs_in_through_keycloak(requests.Session(), "https://openzaak.example.test/oidc/authenticate/", HOSTS)

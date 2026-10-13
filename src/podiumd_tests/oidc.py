@@ -10,7 +10,10 @@ from urllib.parse import urlsplit
 
 from podiumd_tests.auth.keycloak import login_form_action
 from podiumd_tests.components import DJANGO_APPS
+from podiumd_tests.responses import UnexpectedStatusError
+from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
+from podiumd_tests.responses import is_server_error
 from podiumd_tests.responses import url_host
 
 if TYPE_CHECKING:
@@ -33,6 +36,9 @@ LOGIN_PATHS = {
     "pabc": CHALLENGE,
     "openbeheer": "/auth/oidc/authenticate/?next=/",
 }
+# An app with one replica busy with browser logins (Open Formulieren on kees00) can take longer than
+# the session's default timeout to send its login redirect.
+LOGIN_REDIRECT_TIMEOUT = 60
 # A browser page navigation: ITA and PABC answer any other request on CHALLENGE with 401.
 NAVIGATE = {"Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document"}
 
@@ -47,8 +53,14 @@ def keycloak_hosts(urls: Mapping[str, str]) -> frozenset[str]:
 
 
 def logs_in_through_keycloak(http: requests.Session, start_url: str, hosts: Collection[str]) -> bool:
-    """Whether the login at start_url redirects to Keycloak."""
-    response = http.get(start_url, allow_redirects=False)
+    """Whether the login at start_url redirects to Keycloak; UnexpectedStatusError for a server error.
+
+    A failing app must fail the test, not look like an app without a Keycloak login.
+    """
+    response = http.get(start_url, allow_redirects=False, timeout=LOGIN_REDIRECT_TIMEOUT)
+    if is_server_error(response):
+        msg = f"{describe(response)}: the app fails instead of answering its login"
+        raise UnexpectedStatusError(msg)
     return response.is_redirect and url_host(response.headers["Location"]) in hosts
 
 

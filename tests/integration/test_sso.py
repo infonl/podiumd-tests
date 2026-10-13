@@ -24,6 +24,7 @@ from podiumd_tests.oidc import keycloak_hosts
 from podiumd_tests.oidc import logs_in_through_keycloak
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import url_host
+from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.integration, pytest.mark.ui, pytest.mark.requires("keycloak")]
 
+BUSY_APP_TIMEOUT = 240
 # The logout control of the Django admins, in Dutch or English.
 LOGOUT = re.compile("Afmelden|Uitloggen|Log out", re.IGNORECASE)
 
@@ -48,10 +50,21 @@ def in_admin(url: str, app_url: str) -> bool:
 
 @pytest.fixture(scope="module", name="sso_admins")
 def fixture_sso_admins(http: requests.Session, urls: dict[str, str], podiumd_env: Environment) -> dict[str, str]:
-    """Admin URL per Django app whose admin logs in through Keycloak; asked once, not by every test at once."""
+    """Admin URL per Django app whose admin logs in through Keycloak; asked once, not by every test at once.
+
+    An app busy with the other workers' browser logins may time out (Open Formulieren on kees00: 504
+    after 60 s); it is asked again.
+    """
     hosts = keycloak_hosts(urls)
+
+    def through_keycloak(url: str) -> bool:
+        def probe() -> tuple[bool]:  # a tuple: False is an answer, not "not yet"
+            return (logs_in_through_keycloak(http, url + AUTHENTICATE, hosts),)
+
+        return wait_until(probe, timeout=BUSY_APP_TIMEOUT, interval=5, description=f"login redirect of {url}")[0]
+
     admins = {c: urls[podiumd_env.admin_of(c)] for c in DJANGO_APPS if c in urls}
-    return {c: url for c, url in admins.items() if logs_in_through_keycloak(http, url + AUTHENTICATE, hosts)}
+    return {c: url for c, url in admins.items() if through_keycloak(url)}
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
