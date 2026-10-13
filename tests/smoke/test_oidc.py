@@ -29,6 +29,8 @@ from podiumd_tests.responses import expect_status
 if TYPE_CHECKING:
     import requests
 
+    from podiumd_tests.environment import Environment
+
 pytestmark = pytest.mark.smoke
 
 
@@ -41,9 +43,11 @@ def test_keycloak_discovery(http: requests.Session, urls: dict[str, str]) -> Non
 
 @pytest.mark.requires("keycloak")
 @pytest.mark.parametrize("component", [requiring(c, c) for c in LOGIN_PATHS])
-def test_login_ends_on_the_keycloak_form(http: requests.Session, urls: dict[str, str], component: str) -> None:
+def test_login_ends_on_the_keycloak_form(
+    http: requests.Session, urls: dict[str, str], podiumd_env: Environment, component: str
+) -> None:
     """Starting the app's login ends on Keycloak's login form: Keycloak accepts its client, redirect URI and scopes."""
-    start, hosts = urls[component] + LOGIN_PATHS[component], keycloak_hosts(urls)
+    start, hosts = urls[podiumd_env.admin_of(component)] + LOGIN_PATHS[component], keycloak_hosts(urls)
     if component in DJANGO_APPS and not logs_in_through_keycloak(http, start, hosts):
         pytest.skip(f"{component}'s admin does not log in through Keycloak")
     keycloak_login_realm(http.get(start, headers=NAVIGATE), hosts)

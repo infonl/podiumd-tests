@@ -57,23 +57,23 @@ def test_one_login_opens_every_admin(  # pylint: disable=too-many-arguments,too-
     component: str,
 ) -> None:
     """After a Keycloak login at another app's admin, this app's admin needs no new login (TA smoke 92)."""
-    keycloak = urls["keycloak"]
-    hosts = keycloak_hosts(urls)
-    sso = [c for c in DJANGO_APPS if c in urls and logs_in_through_keycloak(http, urls[c] + AUTHENTICATE, hosts)]
+    keycloak, hosts = urls["keycloak"], keycloak_hosts(urls)
+    admins = {c: urls[podiumd_env.admin_of(c)] for c in DJANGO_APPS if c in urls}
+    sso = [c for c, url in admins.items() if logs_in_through_keycloak(http, url + AUTHENTICATE, hosts)]
     if component not in sso:
         pytest.skip(f"{component}'s admin does not log in through Keycloak")
-    others = [c for c in sso if c != component]
+    others = [c for c in sso if admins[c] != admins[component]]
     if not others:
         pytest.skip("no other app's admin logs in through Keycloak")
     need_bootstrap(ADMIN.name)
-    page.goto(urls[others[0]] + AUTHENTICATE)
+    page.goto(admins[others[0]] + AUTHENTICATE)
     keycloak_login(page, ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
-    page.wait_for_url(lambda url: url_host(url) == url_host(urls[others[0]]))
-    page.goto(urls[component] + AUTHENTICATE)
-    page.wait_for_url(lambda url: url_host(url) == url_host(urls[component]))
+    page.wait_for_url(lambda url: url_host(url) == url_host(admins[others[0]]))
+    page.goto(admins[component] + AUTHENTICATE)
+    page.wait_for_url(lambda url: url_host(url) == url_host(admins[component]))
     assert not page.url.startswith(realm_url(keycloak, realm_of(podiumd_env))), "Keycloak asked for a new login"
     # A failing OIDC callback also ends on the app's host, on an error page.
-    assert in_admin(page.url, urls[component]), f"the login did not reach {component}'s admin: {page.url}"
+    assert in_admin(page.url, admins[component]), f"the login did not reach {component}'s admin: {page.url}"
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
@@ -87,12 +87,13 @@ def test_admin_logout_returns_to_the_login(  # pylint: disable=too-many-argument
     component: str,
 ) -> None:
     """Logging out of the app's admin ends the session: the admin then asks for a login again."""
-    if not logs_in_through_keycloak(http, urls[component] + AUTHENTICATE, keycloak_hosts(urls)):
+    admin = urls[podiumd_env.admin_of(component)]
+    if not logs_in_through_keycloak(http, admin + AUTHENTICATE, keycloak_hosts(urls)):
         pytest.skip(f"{component}'s admin does not log in through Keycloak")
     need_bootstrap(ADMIN.name)
-    page.goto(urls[component] + AUTHENTICATE)
+    page.goto(admin + AUTHENTICATE)
     keycloak_login(page, ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
-    page.wait_for_url(lambda url: in_admin(url, urls[component]))
+    page.wait_for_url(lambda url: in_admin(url, admin))
     page.get_by_role("button", name=LOGOUT).or_(page.get_by_role("link", name=LOGOUT)).first.click()
-    page.goto(urls[component] + "/admin/")
+    page.goto(admin + "/admin/")
     assert "login" in page.url or url_host(page.url) == url_host(urls["keycloak"]), f"still in the admin: {page.url}"

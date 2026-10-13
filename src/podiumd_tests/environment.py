@@ -15,6 +15,7 @@ from urllib.parse import urlunsplit
 from podiumd_tests.capabilities import Capabilities
 from podiumd_tests.capabilities import detect
 from podiumd_tests.components import COMPONENTS
+from podiumd_tests.components import DJANGO_APPS
 from podiumd_tests.credentials import Redactor
 from podiumd_tests.credentials import SecretResolver
 from podiumd_tests.json_data import section
@@ -131,6 +132,19 @@ class Environment:
                 return prefix
         msg = f"no deployment for {component} (looked for {', '.join(COMPONENTS[component].deployment_prefixes)})"
         raise KubeError(self.kube.command("get", "deployments"), msg)
+
+    def admin_of(self, component: str) -> str:
+        """The Django app whose admin serves this one's: objecten for objecttypen on Open Object, else itself.
+
+        Open Object's Keycloak client accepts only objecten's host as redirect URI.
+        """
+        try:
+            mine = self.deployment_for(component)
+            return next(
+                (a for a in DJANGO_APPS if a in self.profile.urls and self.deployment_for(a) == mine), component
+            )
+        except KubeError:  # no cluster, or an app without deployment: the profile URL decides
+            return component
 
     @cached_property
     def capabilities(self) -> Capabilities:
