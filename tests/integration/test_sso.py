@@ -46,23 +46,29 @@ def in_admin(url: str, app_url: str) -> bool:
     return url_host(url) == url_host(app_url) and path.startswith("/admin") and not path.startswith("/admin/login")
 
 
+@pytest.fixture(scope="module", name="sso_admins")
+def fixture_sso_admins(http: requests.Session, urls: dict[str, str], podiumd_env: Environment) -> dict[str, str]:
+    """Admin URL per Django app whose admin logs in through Keycloak; asked once, not by every test at once."""
+    hosts = keycloak_hosts(urls)
+    admins = {c: urls[podiumd_env.admin_of(c)] for c in DJANGO_APPS if c in urls}
+    return {c: url for c, url in admins.items() if logs_in_through_keycloak(http, url + AUTHENTICATE, hosts)}
+
+
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
 @pytest.mark.tc("FB-005")
 def test_one_login_opens_every_admin(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
-    http: requests.Session,
     urls: dict[str, str],
     podiumd_env: Environment,
     need_bootstrap: Callable[..., None],
+    sso_admins: dict[str, str],
     component: str,
 ) -> None:
     """After a Keycloak login at another app's admin, this app's admin needs no new login (TA smoke 92)."""
-    keycloak, hosts = urls["keycloak"], keycloak_hosts(urls)
-    admins = {c: urls[podiumd_env.admin_of(c)] for c in DJANGO_APPS if c in urls}
-    sso = [c for c, url in admins.items() if logs_in_through_keycloak(http, url + AUTHENTICATE, hosts)]
-    if component not in sso:
+    keycloak, admins = urls["keycloak"], sso_admins
+    if component not in admins:
         pytest.skip(f"{component}'s admin does not log in through Keycloak")
-    others = [c for c in sso if admins[c] != admins[component]]
+    others = [c for c in admins if admins[c] != admins[component]]
     if not others:
         pytest.skip("no other app's admin logs in through Keycloak")
     need_bootstrap(ADMIN.name)
@@ -80,16 +86,16 @@ def test_one_login_opens_every_admin(  # pylint: disable=too-many-arguments,too-
 @pytest.mark.tc("FB-006")
 def test_admin_logout_returns_to_the_login(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
-    http: requests.Session,
     urls: dict[str, str],
     podiumd_env: Environment,
     need_bootstrap: Callable[..., None],
+    sso_admins: dict[str, str],
     component: str,
 ) -> None:
     """Logging out of the app's admin ends the session: the admin then asks for a login again."""
-    admin = urls[podiumd_env.admin_of(component)]
-    if not logs_in_through_keycloak(http, admin + AUTHENTICATE, keycloak_hosts(urls)):
+    if component not in sso_admins:
         pytest.skip(f"{component}'s admin does not log in through Keycloak")
+    admin = sso_admins[component]
     need_bootstrap(ADMIN.name)
     page.goto(admin + AUTHENTICATE)
     keycloak_login(page, ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
