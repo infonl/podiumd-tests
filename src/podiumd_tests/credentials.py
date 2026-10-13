@@ -164,6 +164,8 @@ class SecretResolver:
             raise SecretError(msg)
         command = ["az", "keyvault", "secret", "show", "--vault-name", vault, "--name", spec.options["secret"]]
         command += ["--query", "value", "--output", "tsv"]
+        if self._profile.azure_subscription:
+            command += ["--subscription", self._profile.azure_subscription]
         try:
             return run_checked(self._runner, command, 60)
         except ProcessError as exc:

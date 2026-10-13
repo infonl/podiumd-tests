@@ -7,6 +7,7 @@ kube:
   namespace: podiumd
   monitoring_namespace: monitoring
 keyvault: podiumd-kees00-kv
+azure_subscription: PodiumD-replica-PayAsYouGo
 urls:
   zac: https://zac.kees00.pd.test-rig.nl
   openzaak: https://openzaak.kees00.pd.test-rig.nl

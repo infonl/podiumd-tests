@@ -41,6 +41,14 @@ def test_keyvault_uses_the_profile_vault(profile_factory, fake_runner, env_facto
     assert env_factory(profile).credentials.get("pw") == "kv-value"
 
 
+def test_keyvault_uses_the_profile_subscription(profile_factory, fake_runner, env_factory):
+    fake_runner.answers["az keyvault secret show"] = (0, "kv-value\n")
+    secrets = {"pw": {"keyvault": {"secret": "user-pw"}}}
+    profile = profile_factory(keyvault="my-kv", azure_subscription="my-sub", secrets=secrets)
+    env_factory(profile).credentials.get("pw")
+    assert fake_runner.calls[-1][-2:] == ["--subscription", "my-sub"]
+
+
 def test_zgw_jwt_secret_runs_a_django_snippet_over_stdin(profile_factory, fake_runner, env_factory):
     fake_runner.answers["exec -i deploy/openzaak -- python /app/src/manage.py shell"] = (
         0,
