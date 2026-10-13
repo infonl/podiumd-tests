@@ -1,0 +1,25 @@
+# ExternalsPodiumD environment test-icat; drafted by `podiumd-tests env init` from the URLs its
+# Deployments configure (its HTTPRoutes are not readable with this role). Smoke only (PLAN.md R20).
+estate: externals
+allowed_tiers: [smoke]
+kube:
+  context: aks-blue-test-icat
+  namespace: podiumd
+  monitoring_namespace: monitoring
+urls:
+  grafana: https://test-podiumd-logs.datamigratie.icatt.nl
+  ita: https://test-ita.datamigratie.icatt.nl
+  keycloak: https://test-keycloak.datamigratie.icatt.nl
+  keycloak-admin: https://test-keycloak-admin.datamigratie.icatt.nl
+  kiss: https://test-contact.datamigratie.icatt.nl
+  objecten: https://test-objecten.datamigratie.icatt.nl
+  objecttypen: https://test-objecttypen.datamigratie.icatt.nl
+  openarchiefbeheer: https://test-abc.datamigratie.icatt.nl
+  openformulieren: https://test-formulier.datamigratie.icatt.nl
+  openinwoner: https://test-mijn.datamigratie.icatt.nl
+  openklant: https://test-openklant.datamigratie.icatt.nl
+  opennotificaties: https://test-notificaties.datamigratie.icatt.nl
+  openzaak: https://test-openzaak.datamigratie.icatt.nl
+  pabc: https://test-pabc.datamigratie.icatt.nl
+  zac: https://test-zac.datamigratie.icatt.nl
+secrets: {}

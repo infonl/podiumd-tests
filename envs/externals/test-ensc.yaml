@@ -1,0 +1,26 @@
+# ExternalsPodiumD environment test-ensc; drafted by `podiumd-tests env init` from the URLs its
+# Deployments configure (its HTTPRoutes are not readable with this role). Smoke only (PLAN.md R20).
+estate: externals
+allowed_tiers: [smoke]
+kube:
+  context: aks-blue-test-ensc
+  namespace: podiumd
+  monitoring_namespace: monitoring
+urls:
+  grafana: https://test-podiumd-logs.enschede.nl
+  ita: https://test-ita.enschede.nl
+  keycloak: https://test-keycloak.enschede.nl
+  keycloak-admin: https://test-keycloak-admin.enschede.nl
+  kiss: https://test-contact.enschede.nl
+  objecten: https://test-objecten.enschede.nl
+  objecttypen: https://test-objecttypen.enschede.nl
+  openarchiefbeheer: https://test-abc.enschede.nl
+  openbeheer: https://test-openbeheer.enschede.nl
+  openformulieren: https://test-formulier.enschede.nl
+  openinwoner: https://test-mijn.enschede.nl
+  openklant: https://test-openklant.enschede.nl
+  opennotificaties: https://test-notificaties.enschede.nl
+  openzaak: https://test-openzaak.enschede.nl
+  pabc: https://test-pabc.enschede.nl
+  zac: https://test-zac.enschede.nl
+secrets: {}

@@ -1,0 +1,25 @@
+# ExternalsPodiumD environment test-gene; drafted by `podiumd-tests env init` from the URLs its
+# Deployments configure (its HTTPRoutes are not readable with this role). Smoke only (PLAN.md R20).
+estate: externals
+allowed_tiers: [smoke]
+kube:
+  context: aks-blue-test-gene
+  namespace: podiumd
+  monitoring_namespace: monitoring
+urls:
+  grafana: https://test-podiumd-logs.sschosting.nl
+  ita: https://test-ita.sschosting.nl
+  keycloak: https://test-keycloak.sschosting.nl
+  keycloak-admin: https://test-keycloak-admin.sschosting.nl
+  kiss: https://test-contact.sschosting.nl
+  objecten: https://test-objecten.sschosting.nl
+  objecttypen: https://test-objecttypen.sschosting.nl
+  openarchiefbeheer: https://test-abc.sschosting.nl
+  openformulieren: https://test-formulier.sschosting.nl
+  openinwoner: https://test-mijn.sschosting.nl
+  openklant: https://test-openklant.sschosting.nl
+  opennotificaties: https://test-notificaties.sschosting.nl
+  openzaak: https://test-openzaak.sschosting.nl
+  pabc: https://test-pabc.sschosting.nl
+  zac: https://test-zac.sschosting.nl
+secrets: {}

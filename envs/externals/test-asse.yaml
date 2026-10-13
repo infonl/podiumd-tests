@@ -1,0 +1,26 @@
+# ExternalsPodiumD environment test-asse; drafted by `podiumd-tests env init` from the URLs its
+# Deployments configure (its HTTPRoutes are not readable with this role). Smoke only (PLAN.md R20).
+estate: externals
+allowed_tiers: [smoke]
+kube:
+  context: aks-blue-test-asse
+  namespace: podiumd
+  monitoring_namespace: monitoring
+urls:
+  grafana: https://test-podiumd-logs.assen.nl
+  ita: https://test-ita.assen.nl
+  keycloak: https://test-keycloak.assen.nl
+  keycloak-admin: https://test-keycloak-admin.assen.nl
+  kiss: https://test-contact.assen.nl
+  objecten: https://test-objecten.assen.nl
+  objecttypen: https://test-objecttypen.assen.nl
+  openarchiefbeheer: https://test-abc.assen.nl
+  openbeheer: https://test-openbeheer.assen.nl
+  openformulieren: https://test-formulier.assen.nl
+  openinwoner: https://test-mijn.assen.nl
+  openklant: https://test-openklant.assen.nl
+  opennotificaties: https://test-notificaties.assen.nl
+  openzaak: https://test-openzaak.assen.nl
+  pabc: https://test-pabc.assen.nl
+  zac: https://test-zac.assen.nl
+secrets: {}

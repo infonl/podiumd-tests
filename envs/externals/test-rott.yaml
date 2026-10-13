@@ -1,0 +1,23 @@
+# ExternalsPodiumD environment test-rott; drafted by `podiumd-tests env init` from the URLs its
+# Deployments configure (its HTTPRoutes are not readable with this role). Smoke only (PLAN.md R20).
+estate: externals
+allowed_tiers: [smoke]
+kube:
+  context: aks-blue-test-rott
+  namespace: podiumd
+  monitoring_namespace: monitoring
+urls:
+  grafana: https://test-podiumd-logs.rotterdam.nl
+  keycloak: https://test-keycloak.rotterdam.nl
+  keycloak-admin: https://test-keycloak-admin.rotterdam.nl
+  objecten: https://test-objecten.rotterdam.nl
+  objecttypen: https://test-objecttypen.rotterdam.nl
+  openarchiefbeheer: https://test-abc.rotterdam.nl
+  openbeheer: https://test-openbeheer.rotterdam.nl
+  # No DNS record for this host (2026-10-13); Deployments configure it. Ask Rotterdam.
+  openformulieren: https://test-formulier.rotterdam.nl
+  openklant: https://test-openklant.rotterdam.nl
+  opennotificaties: https://test-notificaties.rotterdam.nl
+  openzaak: https://test-openzaak.rotterdam.nl
+  referentielijsten: https://test-referentielijsten.rotterdam.nl
+secrets: {}
