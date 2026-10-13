@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 
 from contextlib import nullcontext
@@ -126,6 +127,21 @@ def ingress_hosts(kube: Kube) -> list[str]:
     return sorted(set(hosts))
 
 
+CONFIGURED_HOST = re.compile(r"https?://([a-z0-9-]+(?:\.[a-z0-9-]+){2,})")
+
+
+def configured_hosts(kube: Kube) -> list[str]:
+    """Hosts in the URLs that the namespace's Deployments and ConfigMaps configure.
+
+    For clusters whose routes this user may not list (Azure RBAC without Gateway API rights).
+    """
+    found: set[str] = set()
+    for kind in ("deployments", "configmaps"):
+        for item in kube.items(kind):
+            found.update(CONFIGURED_HOST.findall(json.dumps([item.get("spec"), item.get("data")])))
+    return sorted(h for h in found if ".svc" not in h)
+
+
 def draft_profile(estate: str, context: str, namespace: str, hosts: list[str], scheme: str) -> dict[str, object]:
     """Draft profile from the cluster's hosts; smoke-only until reviewed."""
     urls: dict[str, str] = {}
@@ -151,7 +167,10 @@ def cmd_env_init(args: argparse.Namespace) -> int:
     if target.exists() and not args.force:
         print(f"{target} exists; use --force to overwrite", file=sys.stderr)
         return EXIT_CONFIG
-    hosts = ingress_hosts(Kube(args.context, args.namespace))
+    kube = Kube(args.context, args.namespace)
+    hosts = ingress_hosts(kube)
+    if not any(component_for_host(h) for h in hosts):
+        hosts = configured_hosts(kube)
     draft = draft_profile(args.estate, args.context, args.namespace, hosts, args.scheme)
     header = "# Draft from `podiumd-tests env init`; review urls, add secrets and allowed_tiers.\n"
     target.parent.mkdir(parents=True, exist_ok=True)

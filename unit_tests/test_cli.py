@@ -53,6 +53,17 @@ def test_ingress_hosts_skip_a_missing_gateway_api(fake_runner, capsys):
     assert "skipping httproutes" in capsys.readouterr().err
 
 
+def test_configured_hosts_from_deployments_and_config_maps(fake_runner):
+    env = [{"name": "ALLOWED_HOSTS", "value": "openzaak.podiumd"}, {"name": "URL", "value": "https://test-zac.x.nl/"}]
+    deployments = {"items": [{"spec": {"template": {"spec": {"containers": [{"env": env}]}}}}]}
+    config_maps = {
+        "items": [{"data": {"a": "http://openzaak.podiumd.svc.cluster.local", "b": "https://test-mijn.x.nl"}}]
+    }
+    fake_runner.answers["get deployments"] = (0, json.dumps(deployments))
+    fake_runner.answers["get configmaps"] = (0, json.dumps(config_maps))
+    assert cli.configured_hosts(Kube("ctx", "ns", fake_runner)) == ["test-mijn.x.nl", "test-zac.x.nl"]
+
+
 def test_unknown_bootstrap_step_is_a_profile_error():
     with pytest.raises(ProfileError, match="unknown bootstrap steps: nope"):
         cli.selected_steps(["nope"])
