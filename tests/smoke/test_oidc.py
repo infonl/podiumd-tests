@@ -2,8 +2,7 @@
 
 Ported from TA/EX smoke 82 (portaal login config), 05a (DigiD link),
 99 test 1 (eHerkenning link), 81 (Keycloak realm) and the first leg of MK/PI
-test_login_flow.py. The realm is read from the redirect, not configured:
-minikube uses realm zaakafhandelcomponent for ZAC, the QA estates podiumd.
+test_login_flow.py. The realm is read from the redirect, not configured.
 """
 
 from __future__ import annotations

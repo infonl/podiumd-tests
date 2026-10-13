@@ -38,11 +38,12 @@ urls:
   # No ingress, as on ExternalsPodiumD: reached through a port-forward.
   frankgateway: http://frankgateway-outway.podiumd-minikube.svc.cluster.local:9080
 secrets:
-  # Well-known dev defaults of podiumd-minikube; the only place literals are allowed (PLAN.md R8).
+  # keycloak-operator's master admin, as on podiumd-infra.
   keycloak_admin_username:
-    dev_default: admin
+    k8s_secret: {name: keycloak-podiumd-admin, key: username}
   keycloak_admin_password:
-    dev_default: admin
+    k8s_secret: {name: keycloak-podiumd-admin, key: password}
+  # Well-known dev defaults of podiumd-minikube; the only place literals are allowed (PLAN.md R8).
   # Superuser of every Maykin app (podiumd-minikube create-superuser Jobs).
   django_admin_username:
     dev_default: admin
@@ -61,8 +62,6 @@ secrets:
     k8s_secret: {name: omc, key: OMC_AUTH_JWT_SECRET}
 settings:
   zgw_client_id: open-formulieren
-  # podiumd-minikube imports the ZAC realm only; the QA estates use realm podiumd (the default).
-  keycloak_realm: zaakafhandelcomponent
   # As in ExternalsPodiumD and podiumd-infra, Open Inwoner has no local superuser.
   django_admin_sso_only: openinwoner
   # The api-proxy adds KvK's test key and routes to KvK's test API.
