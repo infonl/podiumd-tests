@@ -16,8 +16,10 @@ from typing import Protocol
 
 import requests
 
+from podiumd_tests.auth.keycloak import TokenError
 from podiumd_tests.capabilities import CLUSTER
 from podiumd_tests.credential_store import CredentialStore
+from podiumd_tests.credentials import SecretError
 from podiumd_tests.process import ProcessError
 
 if TYPE_CHECKING:
@@ -100,7 +102,15 @@ def _each(env: Environment, steps: Sequence[Step], act: Callable[[Context, Step]
             continue
         try:
             outcomes.append(act(ctx, step))
-        except (ProcessError, AssertionError, LookupError, ValueError, requests.RequestException) as exc:
+        except (
+            ProcessError,
+            SecretError,
+            TokenError,
+            AssertionError,
+            LookupError,
+            ValueError,
+            requests.RequestException,
+        ) as exc:
             # One broken step must not stop the others, least of all during unbootstrap.
             outcomes.append(Outcome(step.name, "failed", str(exc)))
     return outcomes
