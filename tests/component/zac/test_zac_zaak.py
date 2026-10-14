@@ -128,6 +128,8 @@ def test_extension_moves_the_planned_and_final_dates(  # pylint: disable=too-man
 
 
 @pytest.mark.tc("ZAC-045", "ZAC-062")
+# ZAC updates its search index from Open Notificaties' notifications.
+@pytest.mark.requires("opennotificaties")
 def test_aborted_zaak_is_closed_and_listed_among_the_closed_zaken(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
 ) -> None:
