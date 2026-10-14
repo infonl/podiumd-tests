@@ -107,6 +107,11 @@ def cmd_env_show(args: argparse.Namespace) -> int:
     print(f"allowed tiers: {', '.join(profile.allowed_tiers)}")
     for component, url in sorted(profile.urls.items()):
         print(f"  {component:20} {url}")
+    print("secrets (a missing one skips its tests; PODIUMD_TESTS_SECRET_<NAME> overrides):")
+    for name, spec in sorted(profile.secrets.items()):
+        # dev_default's option is the value itself.
+        where = " ".join(f"{k}={v}" for k, v in sorted(spec.options.items()) if spec.source != "dev_default")
+        print(f"  {name:28} {spec.source} {where}".rstrip())
     return EXIT_OK
 
 

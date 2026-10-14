@@ -153,7 +153,8 @@ without cluster access), set `PODIUMD_TESTS_SECRET_<NAME>`.
   Without the Keycloak admin, bootstrap and the Keycloak and SSO tests do
   not run.
 
-`podiumd-tests env show <name>` prints a profile.
+`podiumd-tests env show <name>` prints a profile, with the source of each
+secret (never its value).
 
 ## PodiumD versions
 

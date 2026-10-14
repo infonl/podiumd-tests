@@ -108,3 +108,16 @@ def test_a_path_outside_the_tier_is_refused(tmp_path, profile_factory):
     args = argparse.Namespace(keep_data=False, pytest_args=["tests/integration/test_sso.py"])
     with pytest.raises(ProfileError, match=r"not in tier smoke: tests/integration/test_sso\.py"):
         cli.pytest_selection(profile_factory(), "smoke", "2610071230a3f1", tmp_path / "j.xml", args)
+
+
+def test_env_show_lists_where_each_secret_comes_from_but_no_value(tmp_path, capsys):
+    (tmp_path / "x.yaml").write_text(
+        "estate: minikube\nallowed_tiers: [smoke]\nkube: {context: minikube, namespace: podiumd}\nurls: {openzaak: https://openzaak.local}\n"
+        "secrets:\n  a_password: {k8s_secret: {name: s, key: k}}\n  b_password: {dev_default: hunter2}\n",
+        encoding="utf-8",
+    )
+    assert cli.main(["--envs-dir", str(tmp_path), "env", "show", "x"]) == 0
+    out = capsys.readouterr().out
+    assert "a_password                   k8s_secret key=k name=s\n" in out
+    assert "b_password                   dev_default\n" in out
+    assert "hunter2" not in out
