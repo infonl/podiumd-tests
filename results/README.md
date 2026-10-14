@@ -1,6 +1,6 @@
 # results
 
-This directory holds test-run results, one subdirectory per run. See PLAN.md §7 for the reasoning.
+This directory holds test-run results, one subdirectory per run.
 
 ```text
 results/<YYYY-MM>/<YYYYMMDD-HHMMSS>_<env>_<tier>_<runid>/

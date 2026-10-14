@@ -2,7 +2,7 @@
 
 Open Zaak → Open Notificaties → OMC (abonnement: bootstrap wiring omc-abonnement) → Open Klant
 (the inwoner's e-mail address) → Notify, here the mock server. TA's OMC specs check only
-OMC's API; this is the chain PLAN.md lists as OMC → notify mock.
+OMC's API; this test covers the whole chain.
 """
 
 from __future__ import annotations

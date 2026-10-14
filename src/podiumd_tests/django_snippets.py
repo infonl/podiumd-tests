@@ -1,4 +1,4 @@
-"""Run the Python snippets in podiumd_tests/snippets/ inside a Django component (PLAN.md §4 A).
+"""Run the Python snippets in podiumd_tests/snippets/ inside a Django component.
 
 Each snippet module defines run(params) -> JSON-serialisable result and imports
 the component's models inside it: they exist only in the component's image.

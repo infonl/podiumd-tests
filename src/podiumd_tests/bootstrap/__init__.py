@@ -1,4 +1,4 @@
-"""Environment bootstrap: test-only credentials and wiring, all named ptest-bootstrap-* (PLAN.md §4 A, §11a).
+"""Environment bootstrap: test-only credentials and wiring, all named ptest-bootstrap-*.
 
 Each Step is idempotent and reversible. `bootstrap` applies the steps whose
 capabilities the environment has, `unbootstrap` removes them in reverse
@@ -57,7 +57,7 @@ class Step(Protocol):
 
     @property
     def wiring(self) -> bool:
-        """True for platform wiring (PLAN.md §4 A2): skipped unless the profile allows wiring."""
+        """True for platform wiring: skipped unless the profile allows wiring."""
         ...
 
     def is_present(self, ctx: Context, /) -> bool:
@@ -83,7 +83,7 @@ class Outcome:
 
 
 def refusal(profile: Profile) -> str | None:
-    """Why bootstrap may not run on this environment, or None (PLAN.md R20: smoke-only stays untouched)."""
+    """Why bootstrap may not run on this environment, or None: smoke-only environments stay untouched."""
     if profile.smoke_only:
         return f"{profile.name} is smoke-only (allowed_tiers: {', '.join(profile.allowed_tiers)}); bootstrap changes it"
     return None

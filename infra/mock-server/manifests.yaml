@@ -1,4 +1,4 @@
-# podiumd-tests mock server (PLAN.md §4 A2). Applied and deleted by bootstrap step infra-mock-server;
+# podiumd-tests mock server. Applied and deleted by bootstrap step infra-mock-server;
 # the ConfigMap's server.py is filled in from infra/mock-server/server.py at apply time.
 apiVersion: v1
 kind: ConfigMap

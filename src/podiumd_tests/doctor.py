@@ -1,4 +1,4 @@
-"""Read-only preflight checks: can a run against this environment work? (PLAN.md R17, §8b)
+"""Read-only preflight checks: can a run against this environment work?
 
 Each check gives ok, warn, fail or skip (a check it depends on failed).
 Any fail means exit code 2.

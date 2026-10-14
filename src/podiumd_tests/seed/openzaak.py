@@ -1,4 +1,4 @@
-"""Open Zaak test data through the ZGW APIs; every factory registers its deleter (PLAN.md §4 B)."""
+"""Open Zaak test data through the ZGW APIs; every factory registers its deleter."""
 
 from __future__ import annotations
 

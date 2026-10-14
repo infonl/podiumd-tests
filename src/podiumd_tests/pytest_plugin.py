@@ -138,13 +138,13 @@ def fixture_http(podiumd_env: Environment) -> Iterator[requests.Session]:
 
 @pytest.fixture(scope="session", name="run_tag")
 def fixture_run_tag(request: pytest.FixtureRequest) -> str:
-    """Tag carried by every created resource (PLAN.md R9)."""
+    """Tag carried by every created resource."""
     return str(request.config.getoption("--podiumd-run-tag") or results.run_tag(results.new_run_id()))
 
 
 @pytest.fixture(scope="session", name="need_bootstrap")
 def fixture_need_bootstrap(request: pytest.FixtureRequest, podiumd_env: Environment) -> Callable[..., None]:
-    """need(*step_names): fail fast when those bootstrap steps are missing (PLAN.md §4 A).
+    """need(*step_names): fail fast when those bootstrap steps are missing.
 
     Each step is checked once per session. With --auto-bootstrap the missing ones are applied.
     """

@@ -1,4 +1,4 @@
-"""What an environment can do, detected at runtime instead of from a release number (PLAN.md §5).
+"""What an environment can do, detected at runtime instead of from a release number.
 
 A component is a capability when the profile has a URL for it and, when the
 cluster can be read, a deployment for it exists. A URL on a Service's cluster

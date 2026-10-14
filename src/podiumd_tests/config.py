@@ -2,7 +2,7 @@
 
 A profile holds everything non-secret about an environment: the kube
 context and namespace, the base URL per component, where each secret comes
-from, and which tiers may run there (PLAN.md R7, R20).
+from, and which tiers may run there.
 """
 
 from __future__ import annotations
@@ -106,7 +106,7 @@ class Profile:  # pylint: disable=too-many-instance-attributes  # mirrors the YA
     azure_subscription: str | None = None
     # Non-secret per-environment values, e.g. zgw_client_id.
     settings: dict[str, str] = field(default_factory=dict[str, str])
-    # May bootstrap apply platform wiring (PLAN.md §4 A2)? Default per estate: WIRING_BY_ESTATE.
+    # May bootstrap apply platform wiring? Default per estate: WIRING_BY_ESTATE.
     wiring: bool = False
     path: Path | None = None
 

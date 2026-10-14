@@ -1,4 +1,4 @@
-"""Open Notificaties test data; every factory registers its deleter (PLAN.md §4 B)."""
+"""Open Notificaties test data; every factory registers its deleter."""
 
 from __future__ import annotations
 

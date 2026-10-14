@@ -1,4 +1,4 @@
-"""Polling with a deadline instead of fixed sleeps (PLAN.md R11)."""
+"""Polling with a deadline instead of fixed sleeps."""
 
 from __future__ import annotations
 

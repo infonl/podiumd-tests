@@ -1,5 +1,5 @@
 # SSC Twente ExternalsPodiumD environment ontw-mayk (applications/gemeenten/mayk/ontw/).
-# Every tier, chaos included (user, 2026-10-13; PLAN.md R20).
+# Every tier, chaos included (user, 2026-10-13).
 estate: externals
 allowed_tiers: [smoke, core, full, perf, chaos]
 kube:

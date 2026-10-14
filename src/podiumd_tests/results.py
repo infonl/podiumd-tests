@@ -1,4 +1,4 @@
-"""Run results under results/<YYYY-MM>/<timestamp>_<env>_<tier>_<runid>/ (PLAN.md §7).
+"""Run results under results/<YYYY-MM>/<timestamp>_<env>_<tier>_<runid>/.
 
 All writing goes through a ResultsSink, so another storage needs no caller changes.
 """
@@ -83,7 +83,7 @@ def run_started(run_id: str) -> datetime | None:
 
 
 def run_tag(run_id: str) -> str:
-    """Tag carried by every resource a run creates (PLAN.md R9); sweep finds leftovers by it."""
+    """Tag carried by every resource a run creates; sweep finds leftovers by it."""
     return f"{TAG_PREFIX}{run_id}"
 
 

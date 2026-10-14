@@ -77,7 +77,7 @@ def test_person_unknown_to_kiss_is_found_in_the_brp(kiss: requests.Session, urls
     """KISS finds a person by BSN through its Haal Centraal BRP proxy.
 
     KISS rewrites the request body and keeps its Content-Length, so the JSON must be compact, as
-    KISS's own frontend sends it (PLAN §13).
+    KISS's own frontend sends it.
     """
     query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": [EREBOS], "fields": ["naam"]}
     found = kiss.post(

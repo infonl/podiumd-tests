@@ -1,4 +1,4 @@
-"""Tier presets: what `podiumd-tests run --tier X` selects (PLAN.md §3)."""
+"""Tier presets: what `podiumd-tests run --tier X` selects."""
 
 from __future__ import annotations
 

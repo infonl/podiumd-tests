@@ -1,7 +1,7 @@
 """Find and delete what test runs left behind: objects carrying a run tag older than a cutoff.
 
 Tests clean up after themselves; this catches what an interrupted run or a failed cleanup
-left (PLAN.md §4). Bootstrap objects (ptest-bootstrap-*) are never touched. Finders run in
+left. Bootstrap objects (ptest-bootstrap-*) are never touched. Finders run in
 order: objects that refer to others go first.
 """
 

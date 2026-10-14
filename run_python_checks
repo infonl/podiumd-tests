@@ -2,7 +2,7 @@
 #
 # Runs the code quality checks, fastest first, stopping at the first failure.
 # Adapted from dimpact-samenwerking/helm-charts charts/podiumd/bin/run_python_checks
-# (same tools, same settings) for this repo's src/ layout. See PLAN.md §8a.
+# (same tools, same settings) for this repo's src/ layout.
 set -euo pipefail
 
 usage() {

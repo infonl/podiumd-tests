@@ -1,4 +1,4 @@
-"""Objecten test data; every factory registers its deleter (PLAN.md §4 B)."""
+"""Objecten test data; every factory registers its deleter."""
 
 from __future__ import annotations
 

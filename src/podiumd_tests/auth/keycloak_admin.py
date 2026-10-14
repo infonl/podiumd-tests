@@ -1,4 +1,4 @@
-"""Keycloak admin REST API: the calls bootstrap needs for test users (PLAN.md §4 A1)."""
+"""Keycloak admin REST API: the calls bootstrap needs for test users."""
 
 from __future__ import annotations
 

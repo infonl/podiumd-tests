@@ -3,7 +3,7 @@
 The draaiboek is TA's test-catalog/cases.yaml (the Excel "Testscript PodiumD 4.6", 546 cases, class
 A automatable, B with a mock, C manual, N placeholder). A case is linked to TA specs by the catalog's
 poc_dekking and by the draaiboek rows TA's specs cite ("Portaal r54"); MIGRATION.md then says where
-each TA spec went. podiumd-tests' own tests name their cases with @pytest.mark.tc("OF-001") (PLAN R15).
+each TA spec went. podiumd-tests' own tests name their cases with @pytest.mark.tc("OF-001").
 Run: python -m podiumd_tests.draaiboek <path to TA test-automation>.
 """
 

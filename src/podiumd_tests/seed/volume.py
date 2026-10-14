@@ -1,4 +1,4 @@
-"""Volume data for the perf tier (PLAN.md §4 C): many objects per component, kept between runs.
+"""Volume data for the perf tier: many objects per component, kept between runs.
 
 Ported from TA seed-test-data. Everything carries VOLUME_TAG, which is no run tag: sweep leaves
 it, unseed-volume deletes it. Seeding tops up to the target count, so a rerun only adds what is

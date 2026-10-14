@@ -433,7 +433,7 @@ def openzaak_client_step(  # pylint: disable=too-many-arguments  # mirrors the s
     components: dict[str, tuple[str, ...]] | None = None,
     catalogi_scopes: tuple[str, ...] = CATALOGI_SCOPES,
 ) -> SnippetStep:
-    """A ZGW client in Open Zaak with rights on the test catalogus only (PLAN.md §11a)."""
+    """A ZGW client in Open Zaak with rights on the test catalogus only."""
     params: dict[str, object] = {
         "client_id": client_id,
         "scopes": {"ztc": list(catalogi_scopes)},
@@ -661,7 +661,7 @@ def openinwoner_account(user: KeycloakUser) -> dict[str, str]:
 
 
 STEPS: tuple[Step, ...] = (
-    # podiumd-tests' own infra (infra/), for the integration chains (PLAN.md §4 phase 4).
+    # podiumd-tests' own infra (infra/), for the integration chains.
     MockServer(),
     openzaak_client_step("openzaak-client", ZGW_CLIENT_ID, ZGW_STORE_KEY, owns_catalogus=True),
     # TA's restricted Open Formulieren client: vertrouwelijkheid openbaar at most, no deletes.
@@ -719,7 +719,7 @@ STEPS: tuple[Step, ...] = (
             "besluittype": TEST_BESLUITTYPE,
         },
     ),
-    # Platform wiring (PLAN.md §4 A2).
+    # Platform wiring.
     OmcAbonnement(),
     SnippetStep(
         "openzaak-of-autorisatie",

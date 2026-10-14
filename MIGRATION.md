@@ -2,7 +2,7 @@
 
 One row per source test file. Decision: **port** (carry over), **merge** (fold into another or a parametrized test),
 **drop** (dead, Hetzner/KIND leftover, duplicate), **replace** (by a CLI command), or **todo** (not triaged yet).
-See PLAN.md §10. Generated 2026-10-05 from the source repositories; edit the Decision and Notes columns by hand.
+Generated 2026-10-05 from the source repositories; edit the Decision and Notes columns by hand.
 
 Sources:
 

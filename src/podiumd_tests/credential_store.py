@@ -1,4 +1,4 @@
-"""The credentials bootstrap creates, kept in one Secret in the environment's namespace (PLAN.md §11a).
+"""The credentials bootstrap creates, kept in one Secret in the environment's namespace.
 
 Only this Secret holds them: never the repository, never a local file. The
 SecretResolver reads it as the last source, so tests use bootstrap

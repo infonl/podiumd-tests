@@ -1,4 +1,4 @@
-"""Cleanup of created resources (PLAN.md §4B).
+"""Cleanup of created resources.
 
 Factories register a deleter for everything they create. On teardown the
 registry deletes in reverse order (LIFO), also when the test failed, and
@@ -33,7 +33,7 @@ class ResourceRegistry:
         self._entries: list[_Entry] = []
 
     def tagged(self, name: str) -> str:
-        """A name carrying the run tag, so sweep can find leftovers (PLAN.md R9, R15)."""
+        """A name carrying the run tag, so sweep can find leftovers."""
         return f"{self.run_tag}-{name}"
 
     def add(self, description: str, delete: Callable[[], object]) -> None:

@@ -1,4 +1,4 @@
-"""Secret resolution (PLAN.md R8): env var first, then the source in the profile.
+"""Secret resolution: env var first, then the source in the profile.
 
 Secrets are never stored in the repository. Every resolved value is
 registered with the Redactor, so it never ends up in output or results.

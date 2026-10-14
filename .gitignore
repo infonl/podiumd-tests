@@ -3,7 +3,7 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
-# Results: commit a chosen run with `git add -f`, never its artifacts/ (PLAN.md §7).
+# Results: commit a chosen run with `git add -f`, never its artifacts/.
 results/*/*/
 results/**/artifacts/
 results/**/*.html

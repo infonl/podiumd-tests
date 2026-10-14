@@ -7,7 +7,7 @@ name = "podiumd-tests"
 version = "0.1.0"
 description = "Smoke, component, integration and perf tests for PodiumD environments"
 requires-python = ">=3.12"
-# Every dependency needs a reason (PLAN.md R22).
+# Every dependency needs a reason.
 dependencies = [
     "pytest",            # test runner for every tier
     "pytest-playwright", # UI tests; already used by podiumd-minikube and podiumd-infra
@@ -15,7 +15,7 @@ dependencies = [
     "pytest-html",       # report.html of each run
     "requests",          # HTTP; already used by podiumd-minikube and podiumd-infra
     "PyYAML",            # environment profiles, perf.yaml
-    "locust",            # perf tier, replaces k6 (PLAN.md §6)
+    "locust",            # perf tier, replaces k6
     "axe-playwright-python", # ships axe-core for the WCAG scans (TA 172)
 ]
 

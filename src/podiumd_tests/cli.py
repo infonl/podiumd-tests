@@ -233,7 +233,7 @@ def _bootstrap_env(args: argparse.Namespace) -> Environment | int:
 
 
 def cmd_bootstrap(args: argparse.Namespace) -> int:
-    """Create the test-only credentials and wiring (PLAN.md §4 A)."""
+    """Create the test-only credentials and wiring."""
     reason = refusal(_load(args))
     if reason:
         print(f"refused: {reason}", file=sys.stderr)
@@ -294,7 +294,7 @@ def _volume_env(args: argparse.Namespace) -> Environment | int:
 
 
 def cmd_seed_volume(args: argparse.Namespace) -> int:
-    """Top the environment's volume data up to the scale's counts (PLAN.md §4 C)."""
+    """Top the environment's volume data up to the scale's counts."""
     env = _volume_env(args)
     if isinstance(env, int):
         return env

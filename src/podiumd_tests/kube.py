@@ -1,4 +1,4 @@
-"""Thin typed wrapper around the kubectl CLI (PLAN.md §8: why not the Python client).
+"""Thin typed wrapper around the kubectl CLI.
 
 Every call passes --context and --namespace explicitly, so the current
 kubectl context never matters. The command line is kept in errors, so a

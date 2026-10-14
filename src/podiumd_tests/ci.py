@@ -1,4 +1,4 @@
-"""Log groups and the job summary on a CI runner (GitHub Actions, Azure DevOps); nothing elsewhere (PLAN.md §7a)."""
+"""Log groups and the job summary on a CI runner (GitHub Actions, Azure DevOps); nothing elsewhere."""
 
 from __future__ import annotations
 

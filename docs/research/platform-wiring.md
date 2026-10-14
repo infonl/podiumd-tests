@@ -22,7 +22,7 @@ never removes. It is not test data and not a test credential.
 | W10 | OF ZGW registration backend, OZ autorisaties for open-formulieren (`max_va=openbaar`) | Partly; per-form backends and test-tailored autorisaties are seed-only |
 | W11 | OAB ZGW services, OAB role users | Partly |
 | W12 | Objecten/Objecttypen for the ITA chain | Mostly yes (`create-required-objecttypen` job) |
-| W13 | OZ catalogus `TEST`, zaaktype `TEST-FORMULIER` | No; the chart has `zaaktype-voor-e2e-testen` (test data, see §4 B of PLAN.md) |
+| W13 | OZ catalogus `TEST`, zaaktype `TEST-FORMULIER` | No; the chart has `zaaktype-voor-e2e-testen` (test data) |
 | W14 | OK2 TokenAuth `seeder` | Test credential |
 
 TA also overwrites the OZ JWT secrets of the real clients `open-formulieren`,

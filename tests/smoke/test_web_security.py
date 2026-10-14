@@ -1,6 +1,6 @@
 """Security baseline of every public host: headers, session cookies, CORS and the TLS certificate.
 
-Neither estate's edge adds security headers, so each app must send its own (PLAN §13).
+Neither estate's edge adds security headers, so each app must send its own.
 """
 
 from __future__ import annotations

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 PREFIX = "ptest-bootstrap"
 # The suite's own ZGW client in Open Zaak, and its test catalogus: the client may only touch
-# zaken, documenten and besluiten of zaaktypen in that catalogus (PLAN.md §11a).
+# zaken, documenten and besluiten of zaaktypen in that catalogus.
 ZGW_CLIENT_ID = "ptest-bootstrap-zgw"
 ZGW_STORE_KEY = "ptest_bootstrap_zgw_secret"
 ZGW_OPENBAAR_CLIENT_ID = "ptest-bootstrap-zgw-openbaar"

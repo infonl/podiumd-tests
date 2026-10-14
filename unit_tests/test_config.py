@@ -74,7 +74,7 @@ def test_every_committed_profile_loads(name):
     profile = load_profile(name, default_envs_dir())
     assert profile.urls
     if profile.estate == "externals" and not (name.startswith("ontw-") or name == "test-dimp"):
-        # PLAN.md R20: the gemeenten's test and acc environments only ever run smoke.
+        # The gemeenten's test and acc environments only ever run smoke.
         assert profile.allowed_tiers == ("smoke",)
 
 

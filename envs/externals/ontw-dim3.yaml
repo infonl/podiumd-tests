@@ -1,5 +1,5 @@
 # SSC Twente ExternalsPodiumD environment ontw-dim3 (applications/gemeenten/dim3/ontw/).
-# Every tier, chaos included (user, 2026-10-13; PLAN.md R20).
+# Every tier, chaos included (user, 2026-10-13).
 estate: externals
 allowed_tiers: [smoke, core, full, perf, chaos]
 kube:

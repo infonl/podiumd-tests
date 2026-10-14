@@ -20,6 +20,7 @@ Write comments, docstrings, `--help` texts, skip reasons and error messages mini
 - Errors and skip reasons: the fact, the object and the fix in one line ("bootstrap missing on kees00 (openzaak-client): run `podiumd-tests bootstrap --env kees00`").
 - Exact terms: name the real object, field, command or limit; no "some", "various", "etc.", hedges or filler.
 - Same term for the same thing everywhere (one word, one meaning).
+- Never reference PLAN.md outside the agent files (CLAUDE.md, `.claude/`): it is for the AI agent only, not for people (user, 2026-10-14). Docs, code, comments and profiles state the fact themselves.
 - Before committing, reread each new comment and help text and cut every word that does not change the meaning.
 
 Related: [[reuse-existing-logic]], [[feedback-commits]].

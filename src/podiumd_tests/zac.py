@@ -114,7 +114,7 @@ def send_with_person(
 ) -> requests.Response:
     """send(the person's BetrokkeneIdentificatie); once more with a fresh lookup when ZAC answers 410.
 
-    ZAC 5.4.5 keeps handing out a temporaryPersonId it forgot 12 h after its last read (PLAN §13);
+    ZAC 5.4.5 keeps handing out a temporaryPersonId it forgot 12 h after its last read;
     the 410 clears it, as for a user who tries again.
     """
 

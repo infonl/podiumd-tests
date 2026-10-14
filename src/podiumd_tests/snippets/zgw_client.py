@@ -2,7 +2,7 @@
 
 Actions: status, apply (replaces the client), remove. Params: action, client_id,
 secret (apply only), scopes ({component: [scope, ...]}, plain autorisaties), and in
-Open Zaak optionally catalogus, rights limited to the test catalogus (PLAN.md §11a):
+Open Zaak optionally catalogus, rights limited to the test catalogus:
 {domein, rsin, owns (creates the catalogus; on remove deletes it with all its zaken),
 components ({component: [scope prefix, ...]}), exclude (scope words left out), max_va}; and
 optionally zaaktypen, Zaken API rights on every version of zaaktypen the environment owns:
