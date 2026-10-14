@@ -215,7 +215,8 @@ def uploaded_document(  # pylint: disable=too-many-arguments  # fixtures and two
         "bestandsnaam": name,
         "formaat": formaat,
         "informatieobjectTypeUUID": str(types[0]["uuid"]),
-        "vertrouwelijkheidaanduiding": "openbaar",
+        # ZAC's enum constant; ZAC 5.9 refuses the API value "openbaar" (500).
+        "vertrouwelijkheidaanduiding": "OPENBAAR",
         "status": status,
         "taal": "dut",
         # ZAC parses the format its UI sends: date, hours and minutes, offset.
