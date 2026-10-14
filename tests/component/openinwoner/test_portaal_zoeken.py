@@ -62,6 +62,8 @@ def fixture_categories(
 def hits(http: requests.Session, urls: dict[str, str], **params: str) -> list[str]:
     """The names of the test's products on the results page of a search."""
     html = expect_status(http.get(urls["openinwoner"] + "/search/", params=params), HTTPStatus.OK).text
+    # Shown when Elasticsearch refuses the query, e.g. an index created without Open Inwoner's mapping.
+    assert "zoekfunctie is tijdelijk niet beschikbaar" not in html, "Open Inwoner's search failed (search error)"
     return sorted(set(re.findall(rf"(?:Paspoort|Grofvuil) \w+{SUFFIX}", html)))
 
 
