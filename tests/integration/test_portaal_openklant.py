@@ -130,7 +130,8 @@ def test_question_shows_in_mijn_vragen(  # pylint: disable=too-many-arguments,to
 
 
 @pytest.mark.tc("OI-023")
-# The begeleider finds the inwoner by this e-mail address (test_portaal_samenwerken).
+# The begeleider finds the inwoner by this e-mail address: with the module's group, the same xdist group
+# as test_portaal_samenwerken.
 @pytest.mark.xdist_group("openinwoner-begeleider")
 def test_profile_email_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,

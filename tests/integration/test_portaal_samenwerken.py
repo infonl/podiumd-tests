@@ -35,8 +35,11 @@ pytestmark = [
     pytest.mark.integration,
     pytest.mark.ui,
     pytest.mark.requires("openinwoner", "keycloak", "cluster"),
-    # Every case resets the one begeleider's plans and contacts.
+    # Every case resets the one begeleider's plans and contacts, and finds the inwoner by the e-mail
+    # address test_profile_email_reaches_open_klant changes. xdist joins a test's group names, so the
+    # two groups here make the same group as that test's module group plus its own.
     pytest.mark.xdist_group("openinwoner-begeleider"),
+    pytest.mark.xdist_group("openinwoner-vragen"),
 ]
 
 CONTACTS = "/mijn-profiel/contacts/"
