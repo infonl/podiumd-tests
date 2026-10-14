@@ -6,7 +6,12 @@ secret, used as both SHA-IN and SHA-OUT passphrase. Open Formulieren never calls
 
 
 def run(params):
-    from openforms.payments.contrib.ogone.models import OgoneMerchant
+    try:
+        from openforms.payments.contrib.ogone.models import OgoneMerchant
+    except ImportError:
+        # Open Formulieren 4.0 removed the Ogone plugin (only its migrations are left): there is
+        # no merchant to create, so the step has nothing to do.
+        return {"present": params["action"] != "remove"}
 
     merchants = OgoneMerchant.objects.filter(label=params["label"])
     if params["action"] == "status":

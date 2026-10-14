@@ -98,13 +98,15 @@ def _status(params, forms):
 
 def _payment(params, slug):
     """The Form fields of a form that asks for a payment."""
-    from openforms.payments.contrib.ogone.models import OgoneMerchant
     from openforms.products.models import Product
 
     payment = params.get("payment")
     if not payment:
         return {}
     if payment["backend"] == "ogone-legacy":
+        # Open Formulieren 4.0 removed the Ogone plugin: import it only for an Ogone form.
+        from openforms.payments.contrib.ogone.models import OgoneMerchant
+
         options = {"merchant_id": OgoneMerchant.objects.get(label=payment["merchant"]).pk}
     else:
         options = {"merchant": payment["merchant"], "variant": "", "descriptor_template": ""}
