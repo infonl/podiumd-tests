@@ -79,9 +79,14 @@ def zaak_body(parameters: JsonObject, **fields: object) -> JsonObject:
 
 
 def create_zaak(http: requests.Session, zac_url: str, parameters: JsonObject, **fields: object) -> JsonObject:
-    """A zaak started in ZAC (zaak_body)."""
+    """A zaak started in ZAC (zaak_body), as ZAC shows it."""
     response = http.post(f"{zac_url}/rest/zaken/zaak", json=zaak_body(parameters, **fields))
-    return cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
+    created = cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
+    if "uuid" in created:
+        return created
+    # ZAC 5.9 answers only the identificatie.
+    found = http.get(f"{zac_url}/rest/zaken/zaak/id/{created['identificatie']}")
+    return cast("JsonObject", expect_status(found, HTTPStatus.OK).json())
 
 
 def read_zaak(http: requests.Session, zac_url: str, uuid: str) -> JsonObject:

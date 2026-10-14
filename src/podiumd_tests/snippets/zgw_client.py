@@ -45,12 +45,16 @@ def run(params):
 
 
 def _zaaktype_rights_present(applicaties, zaaktypen_params):
+    from openzaak.components.catalogi.models import ZaakType
     from vng_api_common.authorizations.models import Autorisatie
 
     rights = Autorisatie.objects.filter(applicatie__in=applicaties)
-    # A right on another Open Zaak URL (e.g. http before the switch to https) is stale.
-    prefix = zaaktypen_params["base_url"].rstrip("/") + "/"
-    if not rights.filter(component="zrc", zaaktype__startswith=prefix).exists():
+    # Every published version needs its right: a zaaktype published after bootstrap has none. A right
+    # on another Open Zaak URL (e.g. http before the switch to https) is stale.
+    base = zaaktypen_params["base_url"].rstrip("/")
+    versions = ZaakType.objects.filter(identificatie__in=zaaktypen_params["identificaties"], concept=False)
+    granted = set(rights.filter(component="zrc").values_list("zaaktype", flat=True))
+    if not versions.exists() or any(base + z.get_absolute_api_url() not in granted for z in versions):
         return False
     return not zaaktypen_params.get("document_scopes") or rights.filter(component="drc").exists()
 
