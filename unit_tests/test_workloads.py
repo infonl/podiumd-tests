@@ -92,15 +92,31 @@ def test_run_cronjob_deletes_the_job_also_when_it_does_not_complete(fake_runner)
 
 @pytest.mark.parametrize(
     ("image", "label", "version"),
-    [("ita.web:3.3.2", "3.3.4", (3, 3, 2)), ("ita.web@sha256:0bef", "3.3.4", (3, 3, 4)), ("ita.web:latest", "", None)],
+    [
+        ("ita.web:3.3.2", "3.3.4", (3, 3, 2)),
+        ("ita.web:3.3.2@sha256:0bef", "3.3.4", (3, 3, 2)),
+        ("ita.web@sha256:0bef", "3.3.4", (3, 3, 4)),
+        ("ita.web:latest", "", None),
+    ],
 )
 def test_component_versions_take_the_image_tag_else_the_helm_label(env_factory, fake_runner, image, label, version):
     ita = {
         "metadata": {"name": "ita-web", "labels": {"app.kubernetes.io/version": label}},
-        "spec": {"template": {"spec": {"containers": [{"image": f"ghcr.io/ita/{image}"}]}}},
+        "spec": {"template": {"spec": {"containers": [{"image": f"registry:5000/ita/{image}"}]}}},
     }
     fake_runner.answers["get deployments"] = (0, json.dumps({"items": [ita]}))
     assert component_versions(env_factory(), ["ita", "zac"]).get("ita") == version
+
+
+def test_component_versions_read_release_of_an_image_pinned_by_digest(env_factory, fake_runner):
+    """A digest-only image: its own RELEASE wins over the sub-chart's appVersion label."""
+    ita = {
+        "metadata": {"name": "ita-web", "labels": {"app.kubernetes.io/version": "3.3.2"}},
+        "spec": {"template": {"spec": {"containers": [{"image": "ghcr.io/ita/ita.web@sha256:0bef"}]}}},
+    }
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [ita]}))
+    fake_runner.answers["printenv RELEASE"] = (0, "3.3.4\n")
+    assert component_versions(env_factory(), ["ita"]).get("ita") == (3, 3, 4)
 
 
 def test_chart_version_comes_from_podiumds_own_config_maps(env_factory, fake_runner):

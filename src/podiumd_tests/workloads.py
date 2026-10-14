@@ -59,7 +59,9 @@ def _main_deployment(env: Environment, deployments: Mapping[str, Item], componen
 def component_versions(env: Environment, components: Sequence[str]) -> dict[str, tuple[int, ...]]:
     """Versions of the components' main deployments, e.g. {"ita": (3, 3, 4)}; unknown ones are left out.
 
-    The numeric image tag, else Helm's app.kubernetes.io/version label (podiumd-infra pins images by digest).
+    The numeric image tag; for an image pinned by digest only (podiumd-infra), the image's own
+    RELEASE variable (Maykin images set it); else Helm's app.kubernetes.io/version label, which
+    is the sub-chart's appVersion and can lag behind the image.
     """
     deployments = {metadata_name(d): d for d in env.items("deployments")}
     found: dict[str, tuple[int, ...]] = {}
@@ -67,12 +69,30 @@ def component_versions(env: Environment, components: Sequence[str]) -> dict[str,
         workload = _main_deployment(env, deployments, component)
         if workload is None:
             continue
-        tags = [str(c.get("image")).rpartition(":")[2] for c in pod_containers(workload, with_init=False)]
+        images = [str(c.get("image")) for c in pod_containers(workload, with_init=False)]
+        # "repo:4.0.2@sha256:..." -> "4.0.2"; "repo@sha256:..." has no tag.
+        tags = [
+            i.partition("@")[0].rpartition(":")[2] if ":" in i.partition("@")[0].rpartition("/")[2] else ""
+            for i in images
+        ]
+        release = "" if any(_is_version(t) for t in tags) else _image_release(env, metadata_name(workload))
         label = str(section(section(workload, "metadata"), "labels").get("app.kubernetes.io/version", ""))
-        version = next((v for v in [*tags, label] if re.fullmatch(r"\d+(\.\d+)+", v)), None)
+        version = next((v for v in [*tags, release, label] if _is_version(v)), None)
         if version:
             found[component] = tuple(int(n) for n in version.split("."))
     return found
+
+
+def _is_version(value: str) -> bool:
+    return re.fullmatch(r"\d+(\.\d+)+", value) is not None
+
+
+def _image_release(env: Environment, deployment: str) -> str:
+    """The RELEASE variable of a deployment's image, or "" when the pod cannot tell."""
+    try:
+        return env.kube.exec(deployment, "printenv", "RELEASE", timeout=30).strip()
+    except KubeError:
+        return ""
 
 
 def chart_version(env: Environment) -> str | None:
