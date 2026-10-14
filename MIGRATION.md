@@ -274,6 +274,7 @@ them as out of scope with this reason.
 | ARCH-008, ARCH-014 | legal check, no system behaviour |
 | OI-016, OI-070 | DigiD machtigen, which Open Inwoner 2.4.3 does not support |
 | OF-074 | a gemeente's own TSA |
+| ZAC-004, FB-013, FB-014 | upgrade acceptance: needs the state from before the upgrade, which belongs to the deploy process, not to podiumd-tests |
 | OFA-001, OFA-003, OFA-005, OFA-006, OFA-011 | Office add-in, outside PodiumD |
 | FB-001, FB-002, ZAC-001 | AD login, which no estate has |
 | ABC-003 | traceable selection, not in Open Archiefbeheer 2.0.0 |

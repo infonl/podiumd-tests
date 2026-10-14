@@ -48,7 +48,7 @@ def test_tc_markers_of_functions_and_modules_are_found(tmp_path):
 def test_out_of_scope_reads_the_draaiboek_reasons():
     reasons = out_of_scope()
     assert reasons["OI-022"] == reasons["KI-021"] == "eSuite, outside PodiumD"
-    assert "ZAC-004" not in reasons
+    assert "ARCH-011" not in reasons
 
 
 def test_a_reason_makes_an_uncovered_case_out_of_scope_but_never_hides_a_test():

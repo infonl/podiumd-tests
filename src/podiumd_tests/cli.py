@@ -23,7 +23,6 @@ import pytest
 import yaml
 
 from podiumd_tests import doctor
-from podiumd_tests import snapshot
 from podiumd_tests.bootstrap import bootstrap
 from podiumd_tests.bootstrap import failed
 from podiumd_tests.bootstrap import format_outcomes
@@ -190,20 +189,6 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     if args.json:
         Path(args.json).write_text(json.dumps([asdict(c) for c in checks], indent=2) + "\n", encoding="utf-8")
     return EXIT_CONFIG if doctor.failed(checks) else EXIT_OK
-
-
-def cmd_snapshot(args: argparse.Namespace) -> int:
-    """Record the snapshot that the full tier compares with after a release."""
-    env = Environment(_load(args))
-    if not _preflight_ok(env, args):
-        return EXIT_CONFIG
-    taken = snapshot.take(env)
-    directory = run_dir(datetime.fromisoformat(str(taken["taken"])), env.profile.name, "snapshot", new_run_id())
-    sink = LocalDirSink(Path(args.results_dir))
-    sink.write_text(f"{directory}/{snapshot.SNAPSHOT}", json.dumps(taken, indent=1, sort_keys=True) + "\n")
-    counts = ", ".join(f"{len(section(taken, name))} {name}" for name in snapshot.COMPARED)
-    print(f"{counts}: {sink.location(directory)}")
-    return EXIT_OK
 
 
 def pytest_selection(profile: Profile, tier_name: str, run_id: str, junit: Path, args: argparse.Namespace) -> list[str]:
@@ -449,14 +434,6 @@ def _add_results_dir(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _add_snapshot_command(add_parser: Callable[..., argparse.ArgumentParser]) -> None:
-    snap = add_parser("snapshot", help="record zaaktypen and the oldest zaken to compare after a release")
-    _add_env(snap)
-    _add_results_dir(snap)
-    snap.add_argument("--skip-doctor", action="store_true")
-    snap.set_defaults(func=cmd_snapshot)
-
-
 def build_parser() -> argparse.ArgumentParser:
     """The argument parser of `podiumd-tests`."""
     parser = argparse.ArgumentParser(
@@ -511,8 +488,6 @@ def build_parser() -> argparse.ArgumentParser:
     swp.add_argument("--dry-run", action="store_true", help="list what would be deleted")
     swp.add_argument("--skip-doctor", action="store_true")
     swp.set_defaults(func=cmd_sweep)
-
-    _add_snapshot_command(commands.add_parser)
 
     run = commands.add_parser("run", help="run a tier against an environment")
     _add_env(run)
