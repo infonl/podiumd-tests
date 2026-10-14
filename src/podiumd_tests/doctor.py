@@ -18,6 +18,7 @@ from typing import Literal
 
 import requests
 
+from podiumd_tests.components import deployed_components
 from podiumd_tests.credentials import SecretError
 from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import context_names
@@ -175,9 +176,12 @@ def _url_checks(env: Environment, session: requests.Session, console: dict[str, 
         dns_errors = resolve_hosts((url_host(console[c]) for c, _ in urls), resolve)
     checks: dict[str, Check] = {}
     reachable: list[tuple[str, str]] = []
+    absent = _not_deployed(env)
     for component, url in urls:
         error = dns_errors.get(url_host(console[component]), "")
-        if error:
+        if component in absent:
+            checks[component] = Check(f"url {component}", "skip", absent[component])
+        elif error:
             checks[component] = Check(f"url {component}", "fail", f"{url}: {error}", DOWN_HINT)
         else:
             reachable.append((component, url))
@@ -188,11 +192,24 @@ def _url_checks(env: Environment, session: requests.Session, console: dict[str, 
     return [checks[component] for component, _ in urls]
 
 
+def _not_deployed(env: Environment) -> dict[str, str]:
+    """Components with a URL in the profile but no deployment: their checks skip, as their tests do."""
+    reasons = env.capabilities.reasons
+    return {c: reasons[c] for c in env.profile.urls if c in reasons and c not in env.capabilities.present}
+
+
 def _secrets(env: Environment, *, cluster_ok: bool) -> list[Check]:
     checks: list[Check] = []
+    absent = _not_deployed(env) if cluster_ok else {}
     for name in env.credentials.names:
-        if not cluster_ok and env.profile.secrets[name].needs_cluster:
+        spec = env.profile.secrets[name]
+        if not cluster_ok and spec.needs_cluster:
             checks.append(Check(f"secret {name}", "skip", "no cluster"))
+            continue
+        # The deployment or Secret it is read from names its component (contact-web: kiss, omc: omc).
+        owners = deployed_components([spec.options.get("deployment") or spec.options.get("name") or ""])
+        if owners & absent.keys():
+            checks.append(Check(f"secret {name}", "skip", absent[min(owners & absent.keys())]))
             continue
         try:
             env.credentials.get(name)

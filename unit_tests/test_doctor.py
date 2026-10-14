@@ -109,3 +109,21 @@ def test_unresolvable_hosts_fail_without_http(profile_factory, fake_runner, env_
     assert result["url openzaak"] == "fail"
     assert result["url keycloak-admin"] == "fail"
     assert all("DNS lookup failed" in c.detail for c in checks if c.name.startswith("url ")), checks
+
+
+def test_checks_of_a_component_that_is_not_deployed_skip(profile_factory, fake_runner, env_factory):
+    fake_runner.answers.update(
+        {
+            "config get-contexts": (0, "ctx\n"),
+            "get --raw /readyz": (0, "ok"),
+            "get namespace podiumd": (0, "namespace/podiumd"),
+            "get deployments": (0, json.dumps({"items": [workload("Deployment", "openzaak", 1, 1)]})),
+            "get statefulsets": (0, json.dumps({"items": []})),
+        }
+    )
+    profile = profile_factory(
+        urls={"omc": "https://omc.example.test"},
+        secrets={"omc_jwt_secret": {"k8s_secret": {"name": "omc", "key": "k"}}},
+    )
+    result = statuses(doctor.run_checks(env_factory(profile), which=which_all))
+    assert {result["url omc"], result["secret omc_jwt_secret"]} == {"skip"}
