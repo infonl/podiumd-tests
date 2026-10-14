@@ -1,7 +1,7 @@
 """BAG adressen through the api-proxy, as Open Formulieren and Open Inwoner look them up.
 
 Ported from podiumd-minikube test_api_proxy.py. Dam 1, Amsterdam is in the BAG and in
-podiumd-minikube's WireMock stubs.
+podiumd-minikube's BAG mock.
 """
 
 from __future__ import annotations

@@ -729,9 +729,7 @@ STEPS: tuple[Step, ...] = (
         {"domein": TEST_CATALOGUS_DOMEIN, "rsin": TEST_CATALOGUS_RSIN},
         record=True,
         wiring=True,
-        context_params=lambda ctx: {
-            "client_id": ctx.env.profile.settings.get("openformulieren_zgw_client_id", "open-formulieren")
-        },
+        context_params=lambda ctx: {"client_id": ctx.env.profile.settings.get("zgw_client_id", "formulier")},
     ),
     SnippetStep(
         "openformulieren-zgw-group",

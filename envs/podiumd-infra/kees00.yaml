@@ -52,6 +52,4 @@ settings:
   zac_email_confirmation: true
   zac_besluittype: true
   kiss_kanalen: true
-  # Open Formulieren's Open Zaak client in podiumd-infra's values is "formulier", not the default "open-formulieren".
-  openformulieren_zgw_client_id: formulier
   zgw_client_id: formulier

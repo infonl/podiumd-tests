@@ -17,9 +17,9 @@ def test_parses_a_valid_profile(profile_factory):
     profile = profile_factory(
         secrets={"token": {"k8s_secret": {"name": "s", "key": "k"}}},
         access={"mode": "host-header", "ingress_service": {"namespace": "traefik", "name": "traefik"}},
-        settings={"zgw_client_id": "open-formulieren"},
+        settings={"zgw_client_id": "formulier"},
     )
-    assert profile.settings == {"zgw_client_id": "open-formulieren"}
+    assert profile.settings == {"zgw_client_id": "formulier"}
     assert profile.urls["openzaak"] == "https://openzaak.example.test"
     assert profile.secrets["token"].options == {"name": "s", "key": "k"}
     assert profile.secrets["token"].needs_cluster

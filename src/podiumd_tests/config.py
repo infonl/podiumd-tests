@@ -101,7 +101,7 @@ class Profile:  # pylint: disable=too-many-instance-attributes  # mirrors the YA
     allowed_tiers: tuple[str, ...]
     secrets: dict[str, SecretSpec]
     access: Access = Access()
-    # Non-secret per-environment values, e.g. zgw_client_id.
+    # Non-secret per-environment values, e.g. zgw_client_id (Open Formulieren's Open Zaak client).
     settings: dict[str, str] = field(default_factory=dict[str, str])
     # May bootstrap apply platform wiring? Default per estate: WIRING_BY_ESTATE.
     wiring: bool = False
