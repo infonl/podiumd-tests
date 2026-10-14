@@ -195,7 +195,19 @@ def pytest_selection(profile: Profile, tier_name: str, run_id: str, junit: Path,
     """The pytest arguments of a run: the tier's paths and markers, the run tag and the results files."""
     tier = TIERS[tier_name]
     paths = [str(REPO_ROOT / p) for p in tier.paths if (REPO_ROOT / p).is_dir()]
-    selection = [*paths, "-m", tier.marker_expression, f"--podiumd-env={profile.name}", f"--junitxml={junit}"]
+    given = [a for a in args.pytest_args if not a.startswith("-") and (REPO_ROOT / a.split("::")[0]).exists()]
+    outside = [a for a in given if not any((REPO_ROOT / a).resolve().is_relative_to(p) for p in paths)]
+    if outside:
+        msg = f"not in tier {tier_name}: {', '.join(outside)} (its paths: {', '.join(tier.paths)})"
+        raise ProfileError(msg)
+    # Paths after -- narrow the tier; pytest would otherwise run them and the tier's paths.
+    selection = [
+        *([] if given else paths),
+        "-m",
+        tier.marker_expression,
+        f"--podiumd-env={profile.name}",
+        f"--junitxml={junit}",
+    ]
     selection.append(f"--podiumd-run-tag={run_tag(run_id)}")
     # A screenshot of each failed browser test in artifacts/<test-id>/. No Playwright traces:
     # they record what a test types, test passwords included (R8).

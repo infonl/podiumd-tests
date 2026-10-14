@@ -95,3 +95,16 @@ def test_parallel_tiers_run_on_xdist_workers(tmp_path, profile_factory, tier, se
     )
     found = selection[selection.index("-n") + 1] if "-n" in selection else None
     assert found == workers
+
+
+def test_a_path_after_dashes_narrows_the_tier(tmp_path, profile_factory):
+    args = argparse.Namespace(keep_data=False, pytest_args=["tests/integration/test_sso.py", "-k", "zac"])
+    selection = cli.pytest_selection(profile_factory(), "full", "2610071230a3f1", tmp_path / "j.xml", args)
+    assert not any(a.endswith(("tests/smoke", "tests/component", "tests/integration")) for a in selection)
+    assert selection[-3:] == ["tests/integration/test_sso.py", "-k", "zac"]
+
+
+def test_a_path_outside_the_tier_is_refused(tmp_path, profile_factory):
+    args = argparse.Namespace(keep_data=False, pytest_args=["tests/integration/test_sso.py"])
+    with pytest.raises(ProfileError, match=r"not in tier smoke: tests/integration/test_sso\.py"):
+        cli.pytest_selection(profile_factory(), "smoke", "2610071230a3f1", tmp_path / "j.xml", args)
