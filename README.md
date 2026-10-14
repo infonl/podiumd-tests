@@ -83,6 +83,16 @@ this order:
    (from Open Zaak's database) or `keyvault`;
 3. `dev_default`, for minikube only.
 
+## PodiumD versions
+
+The suite runs against any PodiumD release; there is no list of supported
+versions and no test branches on a version number. Tests depend on what an
+environment has (`@pytest.mark.requires`, detection of each component's
+layout), so a missing component skips its tests and an unknown layout fails a
+test. A known product bug is a strict xfail without a version range: the
+release that fixes it fails the test, and the xfail is removed. Each run
+records the chart version and image tags read from the cluster (PLAN.md §5).
+
 ## Development
 
 ```bash
