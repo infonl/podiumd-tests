@@ -155,12 +155,16 @@ def test_profile_email_reaches_open_klant(  # pylint: disable=too-many-arguments
     page.locator('input[name="email_addresses-0-value"]').first.fill(adres)
     page.get_by_role("button", name="Sla wijzigingen op").first.click()
     page.wait_for_url(lambda url: "/mijn-profiel/edit/" not in url)
-    adressen = [
-        str(a.get("adres"))
-        for partij in partijen_of(openklant, bsn)
-        for a in openklant.list("digitaleadressen", {"verstrektDoorPartij__uuid": partij.rsplit("/", 1)[-1]})
-    ]
-    assert adres in adressen
+
+    def stored() -> bool:
+        return any(
+            a.get("adres") == adres
+            for partij in partijen_of(openklant, bsn)
+            for a in openklant.list("digitaleadressen", {"verstrektDoorPartij__uuid": partij.rsplit("/", 1)[-1]})
+        )
+
+    # Open Inwoner sends the address to Open Klant asynchronously.
+    wait_until(stored, timeout=60, description=f"digitaal adres {adres} in Open Klant")
 
 
 def test_company_question_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
