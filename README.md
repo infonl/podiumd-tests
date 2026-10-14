@@ -132,13 +132,25 @@ Cleanup has two layers:
 
 `envs/**/<name>.yaml` holds everything non-secret about an environment: kube
 context and namespace, the base URL per component, where each secret comes
-from, and the allowed tiers. Secrets are never stored here. They resolve in
-this order:
+from, and the allowed tiers. Secrets are never stored here.
 
-1. environment variable `PODIUMD_TESTS_SECRET_<NAME>`;
-2. the source in the profile: `k8s_secret` (optional `namespace`, default the profile's), `pod_env`, `zgw_jwt_secret`
-   (from Open Zaak's database) or `keyvault`;
-3. `dev_default`, for minikube only.
+### Secrets
+
+You set no secret by hand: the profile names where each one is read, and a
+test whose secret is missing skips. Bootstrap's own credentials come from the
+Secret `podiumd-tests-credentials`. To override a secret (e.g. in a pipeline
+without cluster access), set `PODIUMD_TESTS_SECRET_<NAME>`.
+
+- **minikube:** all from the cluster (Keycloak admin, Open Zaak's ZGW
+  secret, PABC API key, KISS logboek token, OMC JWT secret); Django admin
+  `admin`/`admin`.
+- **podiumd-infra:** Keycloak admin and OMC JWT secret from the cluster, Open
+  Zaak's ZGW secret from its database; on kees00 also Grafana's admin.
+  Django admins log in through SSO.
+- **ExternalsPodiumD:** only the PABC API key, read from the cluster (ontw-*
+  and test-dimp, except ontw-dim2 and ontw-dim3).
+  Without the Keycloak admin, bootstrap and the Keycloak and SSO tests do
+  not run.
 
 `podiumd-tests env show <name>` prints a profile.
 
