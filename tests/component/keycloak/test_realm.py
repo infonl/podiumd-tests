@@ -17,6 +17,7 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.responses import url_host
 from podiumd_tests.security import policy_breaking_passwords
 from podiumd_tests.security import realm_policy_gaps
+from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     import requests
@@ -78,7 +79,8 @@ def test_password_guessing_locks_the_user_out(
     for _ in range(int(str(admin.representation()["failureFactor"]))):
         with pytest.raises(TokenError):
             form_login(podiumd_env.session(), login, username, "ptest-wrong-password")
-    assert admin.brute_force_status(user_id)["disabled"] is True
+    # Keycloak counts failed logins asynchronously: the lock can follow the last login by a moment.
+    wait_until(lambda: admin.brute_force_status(user_id)["disabled"] is True, timeout=15, description="the lockout")
     with pytest.raises(TokenError):
         form_login(podiumd_env.session(), login, username, password)
 
