@@ -17,7 +17,6 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.responses import url_host
 from podiumd_tests.security import policy_breaking_passwords
 from podiumd_tests.security import realm_policy_gaps
-from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     import requests
@@ -69,19 +68,22 @@ def test_password_guessing_locks_the_user_out(
     username, password = registry.tagged("lockout"), admin.new_password()
     user_id = admin.create_user(username, password, {})
     registry.add(f"keycloak user {username}", lambda: admin.delete_user(user_id))
-    # Keycloak's own account client: its auth URL shows the login form without an app in between.
+    # The realm's admin console client shows the login form without an app in between; it exists in every
+    # realm, where the account client may be disabled. It requires PKCE (challenge: RFC 7636's example).
+    console = urls.get("keycloak-admin") or urls["keycloak"]
     query = {
-        "client_id": "account",
+        "client_id": "security-admin-console",
         "response_type": "code",
-        "redirect_uri": realm_url(urls["keycloak"], realm, "/account/"),
+        "redirect_uri": f"{console}/admin/{realm}/console/",
+        "code_challenge": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+        "code_challenge_method": "S256",
     }
     login = realm_url(urls["keycloak"], realm, "/protocol/openid-connect/auth?" + urlencode(query))
     for _ in range(int(str(admin.representation()["failureFactor"]))):
-        with pytest.raises(TokenError):
+        with pytest.raises(TokenError, match="refused the login"):
             form_login(podiumd_env.session(), login, username, "ptest-wrong-password")
-    # Keycloak counts failed logins asynchronously: the lock can follow the last login by a moment.
-    wait_until(lambda: admin.brute_force_status(user_id)["disabled"] is True, timeout=15, description="the lockout")
-    with pytest.raises(TokenError):
+    assert admin.brute_force_status(user_id)["disabled"] is True
+    with pytest.raises(TokenError, match="refused the login"):
         form_login(podiumd_env.session(), login, username, password)
 
 
