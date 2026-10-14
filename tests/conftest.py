@@ -8,9 +8,12 @@ from typing import cast
 import pytest
 
 from podiumd_tests.browser import context_args
+from podiumd_tests.browser import guard_navigation
 from podiumd_tests.browser import launch_args
 
 if TYPE_CHECKING:
+    from playwright.sync_api import Page
+
     from podiumd_tests.environment import Environment
 
 pytest_plugins = ["podiumd_tests.pytest_plugin"]
@@ -30,3 +33,9 @@ def browser_type_launch_args(
 def browser_context_args(browser_context_args: dict[str, object], podiumd_env: Environment) -> dict[str, object]:
     """Every page starts with the profile's TLS settings, in Dutch."""
     return {**browser_context_args, **context_args(podiumd_env), "locale": "nl-NL"}
+
+
+@pytest.fixture
+def page(page: Page) -> Page:
+    """pytest-playwright's page; a host network change does not abort its goto or reload."""
+    return guard_navigation(page)

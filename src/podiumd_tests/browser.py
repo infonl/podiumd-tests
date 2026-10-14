@@ -7,9 +7,14 @@ certificate checks; the HTTP tests verify those certificates.
 
 from __future__ import annotations
 
-from contextlib import contextmanager
-from typing import TYPE_CHECKING
+import warnings
 
+from contextlib import contextmanager
+from itertools import count
+from typing import TYPE_CHECKING
+from typing import Any
+
+from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 
 from podiumd_tests.auth.keycloak import one_login_at_a_time
@@ -17,13 +22,50 @@ from podiumd_tests.oidc import CHALLENGE
 from podiumd_tests.responses import url_host
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from collections.abc import Generator
 
     import requests
 
     from playwright.sync_api import Page
+    from playwright.sync_api import Response
 
     from podiumd_tests.environment import Environment
+
+
+# Chromium aborts a navigation when a host network interface changes (VPN, Wi-Fi, a Docker container).
+NETWORK_CHANGED = "net::ERR_NETWORK_CHANGED"
+NETWORK_RETRIES = 2
+NETWORK_PAUSE_MS = 1000
+
+
+def retry_network_change[T](page: Page, navigate: Callable[[], T], what: str) -> T:
+    """Run a navigation; repeat it up to NETWORK_RETRIES times when a host network change aborted it."""
+    for attempt in count(1):
+        try:
+            return navigate()
+        except PlaywrightError as exc:
+            if NETWORK_CHANGED not in exc.message or attempt > NETWORK_RETRIES:
+                raise
+            warnings.warn(f"{what}: {NETWORK_CHANGED}, retry {attempt} of {NETWORK_RETRIES}", stacklevel=2)
+            page.wait_for_timeout(NETWORK_PAUSE_MS)
+    raise AssertionError  # unreachable: count() never ends
+
+
+def guard_navigation(page: Page) -> Page:
+    """The page, whose goto and reload are repeated when a host network change aborted them."""
+    goto, reload = page.goto, page.reload
+
+    def retried_goto(url: str, **kwargs: Any) -> Response | None:
+        return retry_network_change(page, lambda: goto(url, **kwargs), f"goto {url}")
+
+    def retried_reload(**kwargs: Any) -> Response | None:
+        return retry_network_change(page, lambda: reload(**kwargs), f"reload {page.url}")
+
+    # Instance attributes over the bound methods: every caller of page.goto gets the retry.
+    setattr(page, "goto", retried_goto)  # noqa: B010
+    setattr(page, "reload", retried_reload)  # noqa: B010
+    return page
 
 
 def launch_args(env: Environment) -> list[str]:
@@ -46,18 +88,22 @@ def headless_page(env: Environment) -> Generator[Page]:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(args=launch_args(env))
         try:
-            yield browser.new_context(**context_args(env)).new_page()  # pyright: ignore[reportArgumentType]
+            yield guard_navigation(browser.new_context(**context_args(env)).new_page())  # pyright: ignore[reportArgumentType]
         finally:
             browser.close()
 
 
 def keycloak_login(page: Page, username: str, password: str) -> None:
     """Fill and submit the Keycloak login form the page shows."""
-    page.locator("#username").fill(username)
-    page.locator("#password").fill(password)
-    # Keycloak checks the login during the form's POST, the navigation the click starts.
-    with one_login_at_a_time(username), page.expect_navigation():
-        page.locator("#kc-login").click()
+
+    def submit() -> None:
+        page.locator("#username").fill(username)
+        page.locator("#password").fill(password)
+        # Keycloak checks the login during the form's POST, the navigation the click starts.
+        with one_login_at_a_time(username), page.expect_navigation():
+            page.locator("#kc-login").click()
+
+    retry_network_change(page, submit, f"Keycloak login of {username}")
 
 
 def redirect_login(page: Page, env: Environment, app_url: str, username: str, password: str) -> requests.Session:
