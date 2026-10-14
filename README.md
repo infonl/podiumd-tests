@@ -62,7 +62,11 @@ podiumd-tests run --env kees00 --tier smoke   # results in results/<YYYY-MM>/<ru
    cluster, every URL and every secret are reachable. `run` and `bootstrap` run
    it first themselves (`--skip-doctor` skips it).
 3. **Bootstrap.** After an install or reinstall, run
-   `podiumd-tests bootstrap --env <name>` once (see [Bootstrap](#bootstrap-and-cleanup)).
+   `podiumd-tests bootstrap --env <name>` once. It adds test users, API
+   clients, a test catalogus and test forms to the environment, and on
+   minikube and podiumd-infra also wires test logins (DigiD and eHerkenning
+   through a mock) into the platform's configuration. All of it stays until
+   `unbootstrap` (see [Bootstrap and cleanup](#bootstrap-and-cleanup)).
 4. **Run.** `podiumd-tests run --env <name> --tier <tier>`; start with `smoke`,
    then `core` or `full` (see [Tiers](#tiers)). Extra pytest arguments go after
    `--`, e.g. one file:
