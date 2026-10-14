@@ -158,7 +158,7 @@ Decided 2026-10-06, after mapping which source tests need which configuration (`
 
    Tests declare `@requires("oab", "frankgateway")`.
 2. **Compat adapters, one place per divergence.** For example `compat/objecten.py` and `compat/keycloak.py`. Tests contain no version branches.
-3. **No release-aware code and no supported-versions gate.** A product bug is a strict xfail whose reason names the bug, without a version range: once a release fixes it, the test fails there and the xfail goes. An unknown shape fails a test, which asks for a compat adapter. The run report takes the chart version from the cluster (podiumd's ConfigMap label), never from the profile.
+3. **No release-aware code and no supported-versions gate.** A product bug is a strict xfail whose reason names the bug: once a release fixes it, the test fails there and the xfail goes. When the fixed component version is known, the xfail applies only below it, by the component's image tag (`kcc.expect_ita_group_access_bug`), never by chart version. An unknown shape fails a test, which asks for a compat adapter. The run report takes the chart version from the cluster (podiumd's ConfigMap label), never from the profile.
 4. New chart features are gated on a capability, never on a version number.
 5. UI tests select by role or test-id, or use regexes that match both NL and EN labels.
 

@@ -89,8 +89,9 @@ The suite runs against any PodiumD release; there is no list of supported
 versions and no test branches on a version number. Tests depend on what an
 environment has (`@pytest.mark.requires`, detection of each component's
 layout), so a missing component skips its tests and an unknown layout fails a
-test. A known product bug is a strict xfail without a version range: the
-release that fixes it fails the test, and the xfail is removed. Each run
+test. A known product bug is a strict xfail: a release that fixes it fails the
+test, and the xfail is removed. Only when the fix's component version is known
+does the xfail apply below that version (`expect_ita_group_access_bug`). Each run
 records the chart version and image tags read from the cluster (PLAN.md §5).
 
 ## Development
