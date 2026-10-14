@@ -8,7 +8,7 @@
 #       with: {env: kees00, tier: smoke, aks-resource-group: rg-podiumd-kees00, aks-name: podiumd-kees00-aks}
 #       secrets: {azure-client-id: ..., azure-tenant-id: ..., azure-subscription-id: ...}
 #
-# The profile (envs/**/<env>.yaml) names the kube context; secrets come from the cluster and Key Vault
+# The profile (envs/**/<env>.yaml) names the kube context; secrets come from the cluster
 # as on a console. Results are the job's artifact, and summary.md its step summary.
 name: run
 

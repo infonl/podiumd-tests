@@ -6,7 +6,6 @@ kube:
   context: aks-blue-test-dimp
   namespace: podiumd
   monitoring_namespace: monitoring
-keyvault: kv-test-dimp
 urls:
   zac: https://test-zac.dimpact.nl
   openzaak: https://test-openzaak.dimpact.nl

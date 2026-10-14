@@ -35,20 +35,6 @@ def test_k8s_secret_reads_another_namespace_when_given(profile_factory, fake_run
     assert env_factory(profile).credentials.get("pw") == "admin-pw"
 
 
-def test_keyvault_uses_the_profile_vault(profile_factory, fake_runner, env_factory):
-    fake_runner.answers["az keyvault secret show --vault-name my-kv --name user-pw"] = (0, "kv-value\n")
-    profile = profile_factory(keyvault="my-kv", secrets={"pw": {"keyvault": {"secret": "user-pw"}}})
-    assert env_factory(profile).credentials.get("pw") == "kv-value"
-
-
-def test_keyvault_uses_the_profile_subscription(profile_factory, fake_runner, env_factory):
-    fake_runner.answers["az keyvault secret show"] = (0, "kv-value\n")
-    secrets = {"pw": {"keyvault": {"secret": "user-pw"}}}
-    profile = profile_factory(keyvault="my-kv", azure_subscription="my-sub", secrets=secrets)
-    env_factory(profile).credentials.get("pw")
-    assert fake_runner.calls[-1][-2:] == ["--subscription", "my-sub"]
-
-
 def test_zgw_jwt_secret_runs_a_django_snippet_over_stdin(profile_factory, fake_runner, env_factory):
     fake_runner.answers["exec -i deploy/openzaak -- python /app/src/manage.py shell"] = (
         0,
@@ -97,15 +83,6 @@ def test_redactor_ignores_very_short_values():
     redactor = Redactor()
     redactor.add("ab")
     assert redactor.redact("abc") == "abc"
-
-
-def test_keyvault_without_az_names_the_secret(profile_factory, env_factory):
-    def runner(args, _timeout, _stdin=None):
-        raise FileNotFoundError(args[0])
-
-    profile = profile_factory(keyvault="my-kv", secrets={"pw": {"keyvault": {"secret": "user-pw"}}})
-    with pytest.raises(SecretError, match=r"secret 'pw' \(keyvault\): az keyvault .*: az not found on PATH"):
-        env_factory(profile, runner=runner).credentials.get("pw")
 
 
 def test_optional_secrets_come_from_profile_or_env_var(profile_factory, env_factory):

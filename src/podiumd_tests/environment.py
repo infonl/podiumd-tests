@@ -47,7 +47,7 @@ class Environment:
         self.profile = profile
         self.kube = Kube(profile.kube.context, profile.kube.namespace, runner)
         self.redactor = Redactor()
-        self.credentials = SecretResolver(profile, self.kube, self.redactor, runner, environ)
+        self.credentials = SecretResolver(profile, self.kube, self.redactor, environ)
 
     @property
     def namespaces(self) -> list[str]:

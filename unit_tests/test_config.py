@@ -79,9 +79,8 @@ def test_every_committed_profile_loads(name):
 
 
 def test_only_cluster_sources_need_the_cluster(profile_factory):
-    profile = profile_factory(
-        keyvault="kv", secrets={"a": {"keyvault": {"secret": "x"}}, "b": {"pod_env": {"deployment": "d", "var": "V"}}}
-    )
+    secrets = {"a": {"dev_default": "x"}, "b": {"pod_env": {"deployment": "d", "var": "V"}}}
+    profile = profile_factory(estate="minikube", secrets=secrets)
     assert not profile.secrets["a"].needs_cluster
     assert profile.secrets["b"].needs_cluster
 

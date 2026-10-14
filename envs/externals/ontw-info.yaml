@@ -6,7 +6,6 @@ kube:
   context: aks-blue-ontw-info
   namespace: podiumd
   monitoring_namespace: monitoring
-keyvault: kv-ontw-info
 urls:
   zac: https://ontw-zac.dimpact.info.nl
   openzaak: https://ontw-openzaak.dimpact.info.nl

@@ -6,7 +6,6 @@ kube:
   context: podiumd-jimme00-aks
   namespace: podiumd
   monitoring_namespace: monitoring
-keyvault: podiumd-jimme00-kv
 urls:
   zac: https://zac.jimme00.pd.test-rig.nl
   openzaak: https://openzaak.jimme00.pd.test-rig.nl
@@ -29,5 +28,3 @@ secrets:
     k8s_secret: {name: keycloak-podiumd-admin, key: username}
   keycloak_admin_password:
     k8s_secret: {name: keycloak-podiumd-admin, key: password}
-  keycloak_test_user_password:
-    keyvault: {secret: keycloak-user-jimme00-password}

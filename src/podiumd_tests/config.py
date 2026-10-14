@@ -28,7 +28,7 @@ MAIL_STAYS_INTERNAL_BY_ESTATE = {"minikube": True, "podiumd-infra": True, "exter
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # Secret sources that read the cluster; without kube access they cannot resolve.
 CLUSTER_SECRET_SOURCES = ("k8s_secret", "pod_env", "zgw_jwt_secret")
-SECRET_SOURCES = (*CLUSTER_SECRET_SOURCES, "keyvault", "dev_default")
+SECRET_SOURCES = (*CLUSTER_SECRET_SOURCES, "dev_default")
 
 AccessMode = Literal["direct", "host-header"]
 
@@ -101,9 +101,6 @@ class Profile:  # pylint: disable=too-many-instance-attributes  # mirrors the YA
     allowed_tiers: tuple[str, ...]
     secrets: dict[str, SecretSpec]
     access: Access = Access()
-    keyvault: str | None = None
-    # Subscription of the Key Vault; without it az uses its default subscription, which other sessions may switch.
-    azure_subscription: str | None = None
     # Non-secret per-environment values, e.g. zgw_client_id.
     settings: dict[str, str] = field(default_factory=dict[str, str])
     # May bootstrap apply platform wiring? Default per estate: WIRING_BY_ESTATE.
@@ -269,8 +266,6 @@ def parse_profile(raw: object, *, name: str, path: Path | None = None) -> Profil
         allowed_tiers=tiers,
         secrets=secrets,
         access=_parse_access(data.get("access"), f"{where}.access"),
-        keyvault=_optional_text(data, "keyvault", where),
-        azure_subscription=_optional_text(data, "azure_subscription", where),
         settings={str(k): str(v) for k, v in _mapping(data.get("settings") or {}, f"{where}.settings").items()},
         wiring=_wiring(data.get("bootstrap"), estate, f"{where}.bootstrap"),
         path=path,

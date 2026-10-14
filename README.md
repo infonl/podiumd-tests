@@ -20,7 +20,8 @@ You need:
 
 - Python 3.12 or newer;
 - `kubectl` with a context for the environment;
-- `az`, logged in, when the profile reads secrets from Azure Key Vault;
+- for AKS environments: `az` (logged in) and `kubelogin`, to get and use the
+  kube context;
 - network access to the environment's URLs (for ExternalsPodiumD: the VPN, and
   `KUBECONFIG` including the cluster's kubeconfig).
 

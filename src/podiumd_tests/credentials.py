@@ -16,10 +16,6 @@ from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
-from podiumd_tests.process import ProcessError
-from podiumd_tests.process import Runner
-from podiumd_tests.process import run_checked
-from podiumd_tests.process import run_process
 
 if TYPE_CHECKING:
     from podiumd_tests.config import Profile
@@ -64,13 +60,11 @@ class SecretResolver:
         profile: Profile,
         kube: Kube,
         redactor: Redactor,
-        runner: Runner = run_process,
         environ: dict[str, str] | None = None,
     ) -> None:
         self._profile = profile
         self._kube = kube
         self._redactor = redactor
-        self._runner = runner
         self._environ = dict(os.environ) if environ is None else environ
         self._cache: dict[str, str] = {}
         self._stored: dict[str, str] | None = None
@@ -157,23 +151,6 @@ class SecretResolver:
                 return self._kube.exec(opts["deployment"], "printenv", opts["var"])
             case "zgw_jwt_secret":
                 return str(run_snippet(self._kube, opts["deployment"], "jwt_secret", {"client_id": opts["client_id"]}))
-            case "keyvault":
-                return self._from_keyvault(spec)
             case _:
                 msg = f"secret {spec.name!r}: unknown source {spec.source!r}"
                 raise SecretError(msg)
-
-    def _from_keyvault(self, spec: SecretSpec) -> str:
-        vault = spec.options.get("vault") or self._profile.keyvault
-        if not vault:
-            msg = f"secret {spec.name!r}: no Key Vault configured in profile {self._profile.name}"
-            raise SecretError(msg)
-        command = ["az", "keyvault", "secret", "show", "--vault-name", vault, "--name", spec.options["secret"]]
-        command += ["--query", "value", "--output", "tsv"]
-        if self._profile.azure_subscription:
-            command += ["--subscription", self._profile.azure_subscription]
-        try:
-            return run_checked(self._runner, command, 60)
-        except ProcessError as exc:
-            msg = f"secret {spec.name!r} (keyvault): {exc}"
-            raise SecretError(msg) from exc

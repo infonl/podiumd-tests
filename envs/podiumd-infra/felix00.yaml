@@ -6,7 +6,6 @@ kube:
   context: podiumd-felix00-aks
   namespace: podiumd
   monitoring_namespace: monitoring
-keyvault: podiumd-felix00-kv
 urls:
   zac: https://zac.felix00.pd.test-rig.nl
   openzaak: https://openzaak.felix00.pd.test-rig.nl
@@ -25,5 +24,3 @@ secrets:
   # Legacy Bitnami Keycloak (keycloak.enabled); its admin username is in no Secret.
   keycloak_admin_password:
     k8s_secret: {name: keycloak, key: admin-password}
-  keycloak_test_user_password:
-    keyvault: {secret: keycloak-user-felix00-password}

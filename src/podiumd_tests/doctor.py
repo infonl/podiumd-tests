@@ -53,14 +53,9 @@ class Check:
     hint: str = ""
 
 
-def _tools(env: Environment, which: Callable[[str], str | None]) -> list[Check]:
-    needed = ["kubectl"]
-    if any(s.source == "keyvault" for s in env.profile.secrets.values()):
-        needed.append("az")
-    return [
-        Check(f"tool {tool}", "ok", path) if (path := which(tool)) else Check(f"tool {tool}", "fail", "not on PATH")
-        for tool in needed
-    ]
+def _kubectl(which: Callable[[str], str | None]) -> Check:
+    path = which("kubectl")
+    return Check("tool kubectl", "ok", path) if path else Check("tool kubectl", "fail", "not on PATH")
 
 
 def _cluster(env: Environment) -> list[Check]:
@@ -222,7 +217,7 @@ def run_checks(
 ) -> list[Check]:
     """Run all preflight checks; dependent checks are skipped after a failure."""
     checks = [Check("profile", "ok", str(env.profile.path or env.profile.name))]
-    checks += _tools(env, which)
+    checks.append(_kubectl(which))
     if any(c.status == "fail" and c.name == "tool kubectl" for c in checks):
         return [*checks, Check("cluster", "skip", "kubectl missing")]
     cluster = _cluster(env)
