@@ -228,7 +228,7 @@ Sources:
 
 | Test | Target | Phase | Decision | Notes |
 |---|---|---|---|---|
-| `test_4_8_5_upgrade.py` | component (deployment hygiene) + known_issues | 3 | drop | Pinned images of one environment's 4.8.5 upgrade. |
+| `test_4_8_5_upgrade.py` | component (deployment hygiene) | 3 | drop | Pinned images of one environment's 4.8.5 upgrade. |
 | `test_browser.py` | smoke, marker `ui` | 1/5 | merge | same test in MK and PI: merge into one environment-neutral test |
 | `test_database.py` | component, marker `cluster` | 3 | port | `tests/component/platform/test_django_apps.py`, through each app's own Django connection. |
 | `test_django_admin_login.py` | component, marker `cluster` | 3 | port | `tests/component/platform/test_django_apps.py`; skips where admin login is SSO. |

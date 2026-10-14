@@ -1,6 +1,5 @@
 # ICATT podiumd-infra AKS environment kees00 (values/kees00/).
 estate: podiumd-infra
-chart_version: "4.9.4"
 allowed_tiers: [smoke, core, full, perf]
 kube:
   context: podiumd-kees00-aks

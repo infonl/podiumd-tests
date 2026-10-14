@@ -8,7 +8,7 @@ Goal: one Python/pytest suite, to become `github.com/infonl/podiumd-tests`. It r
 |---|---|---|---|---|
 | TA | `icatt-menselijk-digitaal/podiumd-testautomation` | Playwright TS, bash, k6 | ~450 tests, a folder per release | main body: component, integration, UI, perf |
 | MK | `infonl/podiumd-minikube/tests` | pytest | 13 files | infra and wiring checks, productaanvraag chain, minikube access mode |
-| PI | `icatt-menselijk-digitaal/podiumd-infra/tests` | pytest | 14 files | the AKS port of MK. Also adds `test_zac_zaakafhandelparameters.py` and `test_4_8_5_upgrade.py` (image pins, securityContext; becomes a version-neutral "deployment hygiene" component test plus `known_issues`), and the Key Vault test-user recipe |
+| PI | `icatt-menselijk-digitaal/podiumd-infra/tests` | pytest | 14 files | the AKS port of MK. Also adds `test_zac_zaakafhandelparameters.py` and `test_4_8_5_upgrade.py` (image pins, securityContext; becomes a version-neutral "deployment hygiene" component test), and the Key Vault test-user recipe |
 | EX | `scctwente/ExternalsPodiumD/smoke-tests` | Playwright TS | ~15 smoke specs | the TA smoke specs adapted to the gemeente environments. Also adds `lib/urls.ts` (host and alias helpers), the `generate-env.sh` logic (in-cluster JWT signing, PABC key from pod env), `seed-identities.sh` / `unseed-identities.sh` |
 
 The overlap is large: the smoke specs exist in TA and EX, and the infra checks exist in MK and PI. `MIGRATION.md` keeps one row per source test (§10).
@@ -46,7 +46,7 @@ Research notes:
 | R1 | Python 3.12+ and pytest only. Playwright-python for UI. Locust for perf (§6). No bash or TS in the test logic. External CLIs are limited to what the environments already need: `kubectl`, `helm` and `az`, called through `subprocess`. |
 | R2 | Tests are self-contained. Fixtures seed, the test runs, finalizers clean up, and cleanup runs on failure too. |
 | R3 | Tests are grouped `smoke`, `component`, `integration`, plus a separate `perf` (§3). |
-| R4 | No folder per release. Use capability detection, compat adapters and `known_issues.yaml` (§5). |
+| R4 | No folder per release. Use capability detection and compat adapters (§5). |
 | R5 | **Self-sufficient repo.** Everything the tests need lives here: the env bootstrap, mocks, the mock server, mail sink manifests and test identities. The suite never depends on changes to the podiumd helm charts, podiumd-infra or ExternalsPodiumD. It only reads the deployed environment. |
 | R6 | **Console-first.** `podiumd-tests run --env kees00 smoke` works from a laptop with kubectl and az set up. CI-ready from day one: no interactive prompts, everything set through config or env vars, exit codes, JUnit output. Pipeline wiring comes later (phase 7). |
 | R7 | **Environment profiles.** One YAML per environment holds per-component base URLs, the kube context and namespace(s), the secret sources and any overrides. A `podiumd-tests env init` command generates a draft from the cluster's ingress and HTTPRoute objects. |
@@ -158,7 +158,7 @@ Decided 2026-10-06, after mapping which source tests need which configuration (`
 
    Tests declare `@requires("oab", "frankgateway")`.
 2. **Compat adapters, one place per divergence.** For example `compat/objecten.py` and `compat/keycloak.py`. Tests contain no version branches.
-3. **`known_issues.yaml` is the only release-aware file.** Each entry holds a test id, a PodiumD version range (`>=4.8.4,<4.9.1`), a reason and a ticket. It becomes a strict xfail. The chart version comes from the profile or from `helm list` / annotations.
+3. **No release-aware code and no supported-versions gate.** A product bug is a strict xfail whose reason names the bug, without a version range: once a release fixes it, the test fails there and the xfail goes. An unknown shape fails a test, which asks for a compat adapter. The run report takes the chart version from the cluster (podiumd's ConfigMap label), never from the profile.
 4. New chart features are gated on a capability, never on a version number.
 5. UI tests select by role or test-id, or use regexes that match both NL and EN labels.
 
@@ -276,7 +276,7 @@ podiumd-tests/
     minikube.yaml
     podiumd-infra/<env>.yaml          # kees00, jim01, ...
     externals/<stage>-<g>.yaml        # ontw-icat, ontw-dimp, ...
-  known_issues.yaml  perf.yaml
+  perf.yaml
   infra/<piece>/             # mock-server, mailpit, alertmanager route: manifests per piece
   results/                  # one directory per run (§7)
   src/podiumd_tests/
@@ -285,7 +285,7 @@ podiumd-tests/
     config.py  credentials.py   # profile + secret resolution chain (env → cluster → Key Vault)
     components.py  capabilities.py  environment.py  tiers.py
     process.py  kube.py  sessions.py  wait.py  results.py   # module names avoid shadowing the stdlib (secrets, http)
-    pytest_plugin.py        # fixtures (caps, registry, clients, browser_session), markers, known_issues → xfail
+    pytest_plugin.py        # fixtures (caps, registry, clients, browser_session), markers
     auth/    zgw_jwt.py keycloak.py oidc_flow.py django_admin.py browser_session.py
     clients/ openzaak opennotificaties openklant objecten objecttypen zac kiss ita pabc
              openformulieren openinwoner oab omc frankgateway mailpit mock_server grafana

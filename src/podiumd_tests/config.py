@@ -104,8 +104,6 @@ class Profile:  # pylint: disable=too-many-instance-attributes  # mirrors the YA
     keyvault: str | None = None
     # Subscription of the Key Vault; without it az uses its default subscription, which other sessions may switch.
     azure_subscription: str | None = None
-    # Reported only when the cluster cannot tell the deployed podiumd chart version.
-    chart_version: str | None = None
     # Non-secret per-environment values, e.g. zgw_client_id.
     settings: dict[str, str] = field(default_factory=dict[str, str])
     # May bootstrap apply platform wiring (PLAN.md §4 A2)? Default per estate: WIRING_BY_ESTATE.
@@ -273,7 +271,6 @@ def parse_profile(raw: object, *, name: str, path: Path | None = None) -> Profil
         access=_parse_access(data.get("access"), f"{where}.access"),
         keyvault=_optional_text(data, "keyvault", where),
         azure_subscription=_optional_text(data, "azure_subscription", where),
-        chart_version=_optional_text(data, "chart_version", where),
         settings={str(k): str(v) for k, v in _mapping(data.get("settings") or {}, f"{where}.settings").items()},
         wiring=_wiring(data.get("bootstrap"), estate, f"{where}.bootstrap"),
         path=path,

@@ -1,6 +1,5 @@
 # ICATT podiumd-infra AKS environment bas00 (values/bas00/).
 estate: podiumd-infra
-chart_version: "4.7.5"
 allowed_tiers: [smoke, core, full, perf]
 kube:
   context: podiumd-bas00-aks

@@ -352,11 +352,11 @@ def _versions(env: Environment) -> dict[str, str]:
 
 
 def _chart_version(env: Environment) -> str | None:
-    """The deployed podiumd chart's version; the profile's chart_version when the cluster cannot tell."""
+    """The deployed podiumd chart's version; none when the cluster is unreachable."""
     try:
-        return chart_version(env) or env.profile.chart_version
+        return chart_version(env)
     except KubeError:
-        return env.profile.chart_version
+        return None
 
 
 def cmd_run(args: argparse.Namespace) -> int:
