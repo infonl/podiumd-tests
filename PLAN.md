@@ -453,7 +453,7 @@ None open. A new profile defaults to `allowed_tiers: [smoke]`.
 
 ## 13. Open work
 
-Updated 2026-10-10. The detail lives where it is kept up to date: blocked ports as `todo` rows in `MIGRATION.md` (`grep '| todo |' MIGRATION.md`), product bugs as strict xfails whose reason names the bug (a fix makes the test fail, so it gets noticed).
+Updated 2026-10-14. The detail lives where it is kept up to date: blocked ports as `todo` rows in `MIGRATION.md` (`grep '| todo |' MIGRATION.md`), product bugs as strict xfails whose reason names the bug (a fix makes the test fail, so it gets noticed).
 
 **Blocked ports (waiting for an environment):**
 
@@ -484,6 +484,9 @@ Updated 2026-10-10. The detail lives where it is kept up to date: blocked ports 
 | Open Formulieren 3.5.5, 3.5.8 | with `wait_for_payment_to_register` on, its payment status update skips itself: the zaak of a paid form stays `betalingsindicatie: nog_niet` | `test_zaak_of_a_paid_form_is_marked_paid` |
 | Open Formulieren 3.5.5, 3.5.8 | not a bug: the ZGW pre-registration creates the zaak when the form is completed, before the payment, so an unpaid form leaves a zaak (the draaiboek expects none, OF-022) | `test_unpaid_form_leaves_no_zaak` |
 | ZAC 5.4.5 | mail goes straight to SMTP (MailService.sendMail): during an SMTP outage ZAC logs "Failed to send mail" and drops it, no queue, no retry; the draaiboek expects a queue | `test_zac_mail_is_sent_after_a_mail_outage` |
+| ZAC 5.9.1 | not a bug: `POST /rest/zaken/zaak` answers only the identificatie (5.4.5: the whole zaak) | `zac.create_zaak` reads the zaak by identificatie |
+| ZAC 5.9.1 | the document upload takes `vertrouwelijkheidaanduiding` only as ZAC's enum constant (`OPENBAAR`); the API value `openbaar` answers 500 (RESTEasy `valueOf` on the multipart field) | `uploaded_document` sends `OPENBAAR` |
+| ZAC 5.9.1, podiumd chart | ZAC finds the behandelaar roltype only by omschrijving `Behandelaar` (ZAC 82d2d9d74, #6767); the chart's `zaaktype-voor-e2e-testen` had `Behandelaar e2e`, so every zaak start answered 404; fixed in helm-charts PR #577 (a new zaaktype version) | the ZAC zaak tests |
 | KISS | its Haal Centraal BRP proxy rewrites the JSON body but keeps the client's Content-Length: a request with whitespace in its JSON answers 500 ("Content-Length promised …"); KISS's own frontend sends compact JSON | `test_person_unknown_to_kiss_is_found_in_the_brp` sends compact JSON |
 | ITA 3.3.2 | its access guard reads Open Klant's deprecated `toegewezenAanActor` (a bare reference) over the expanded actor: a groep member gets 403 on a contactverzoek assigned to the groep first; fixed in ITA 3.3.4 (ITA#582) | `test_contactverzoek_from_kiss_shows_in_full_in_ita` |
 | mozilla-django-oidc-db 2.0.1 | it migrates the deprecated flat group fields (make_users_staff, groups_claim) into `options.group_settings` but reads `options.groups_settings` at login: KeyError, the admin's OIDC callback answers 500 (Open Inwoner on minikube; found by podiumd-minikube) | `test_one_login_opens_every_admin[openinwoner]` |
