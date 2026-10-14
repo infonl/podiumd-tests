@@ -42,9 +42,19 @@ def kcc_login(page: Page, env: Environment, component: str) -> requests.Session:
 
 
 def kiss_register(kiss: requests.Session, kiss_url: str) -> dict[str, str]:
-    """The header that sends a KISS proxy call to its default register (KISS has one per systeem)."""
+    """The header that sends a KISS proxy call to its default register (KISS has one per systeem).
+
+    Skips unless that register is Open Klant 2: KISS proxies klantinteracties only for such a
+    register. An OpenKlant1 register goes through the podiumd-adapter to the e-Suite (most SSC
+    environments and johnb00), so its klantcontacten never reach Open Klant.
+    """
     systemen = entries(expect_status(kiss.get(kiss_url + "/api/environment/registers"), 200).json()["systemen"])
     default = next(s for s in systemen if s.get("isDefault"))
+    if default.get("registryVersion") != "OpenKlant2":
+        pytest.skip(
+            f"KISS's default register {default.get('identifier')} is {default.get('registryVersion')}, "
+            "not OpenKlant2: its klantcontacten go through the podiumd-adapter to the e-Suite"
+        )
     return {"systemIdentifier": str(default["identifier"])}
 
 
