@@ -212,10 +212,6 @@ def test_company_profile_shows_kvk_names(  # pylint: disable=too-many-arguments,
     need_bootstrap: Callable[..., None],
 ) -> None:
     """The company's profile shows its KvK number, its name and the vestiging's trade name from KvK (TA reg-118, reg-146)."""
-    if not podiumd_env.profile.settings.get("openinwoner_kvk_api_root"):
-        pytest.skip(
-            f"profile {podiumd_env.profile.name} has no settings.openinwoner_kvk_api_root: Open Inwoner has no KvK API"
-        )
     need_bootstrap(BEDRIJF.name, "openinwoner-kvk")
     kvk, vestiging = BEDRIJF.attributes["kvk"][0], BEDRIJF.attributes["vestigingsnummer"][0]
     naam = expect_status(kvk_basisprofiel(http, urls["api-proxy"], kvk), HTTPStatus.OK).json()["naam"]

@@ -55,5 +55,3 @@ settings:
   zac_besluittype: true
   kiss_kanalen: true
   zgw_client_id: formulier
-  # The api-proxy adds KvK's test key and routes to KvK's test API.
-  openinwoner_kvk_api_root: http://api-proxy/api/
