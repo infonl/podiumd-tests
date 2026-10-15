@@ -14,8 +14,7 @@ urls:
   kiss: https://contact.johnb00.pd.test-rig.nl
   ita: https://internetaakafhandeling.johnb00.pd.test-rig.nl
   openinwoner: https://portaal.johnb00.pd.test-rig.nl
-  # openbeheer: https://openbeheer.johnb00.pd.test-rig.nl - left out until the podiumd-tls certificate
-  # covers it (it serves a self-signed certificate now).
+  openbeheer: https://openbeheer.johnb00.pd.test-rig.nl
   openformulieren: https://formulier.johnb00.pd.test-rig.nl
   openklant: https://openklant.johnb00.pd.test-rig.nl
   objecten: https://objecten.johnb00.pd.test-rig.nl
