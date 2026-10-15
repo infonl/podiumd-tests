@@ -14,6 +14,7 @@ from urllib.parse import urlunsplit
 
 from podiumd_tests.capabilities import Capabilities
 from podiumd_tests.capabilities import detect
+from podiumd_tests.cilium import detect_network
 from podiumd_tests.components import COMPONENTS
 from podiumd_tests.components import DJANGO_APPS
 from podiumd_tests.credentials import Redactor
@@ -152,5 +153,5 @@ class Environment:
         try:
             names: list[str] | None = self.deployment_names
         except KubeError:
-            names = None
-        return detect(self.profile, names)
+            return detect(self.profile, None)
+        return detect(self.profile, names, detect_network(self.kube))

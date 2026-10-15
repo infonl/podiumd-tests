@@ -3,7 +3,8 @@
 A component is a capability when the profile has a URL for it and, when the
 cluster can be read, a deployment for it exists. A URL on a Service's cluster
 DNS name needs the cluster too: the console reaches it through a port-forward. "cluster" is a capability
-too: the kube API can be read from this console. Tests declare their needs
+too: the kube API can be read from this console; so are "cilium" and "hubble" when the
+cluster runs them. Tests declare their needs
 with @pytest.mark.requires("openzaak", ...) and skip with a reason otherwise.
 """
 
@@ -12,6 +13,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from podiumd_tests.cilium import CILIUM
+from podiumd_tests.cilium import HUBBLE
 from podiumd_tests.components import COMPONENTS
 from podiumd_tests.components import deployed_components
 from podiumd_tests.kube import cluster_service
@@ -22,6 +25,7 @@ if TYPE_CHECKING:
 COMPONENT_NAMES = frozenset(COMPONENTS)
 COMPONENTS_WITH_DEPLOYMENT = frozenset(n for n, c in COMPONENTS.items() if c.deployment_prefixes)
 CLUSTER = "cluster"
+NETWORK = (CILIUM, HUBBLE)
 
 
 @dataclass(frozen=True)
@@ -43,12 +47,20 @@ class Capabilities:
         return "requires: " + ", ".join(f"{n} ({self.reasons.get(n, 'not detected')})" for n in absent)
 
 
-def detect(profile: Profile, deployment_names: list[str] | None) -> Capabilities:
-    """Capabilities of an environment; with deployment_names=None (cluster unreadable) the profile alone decides."""
+def detect(
+    profile: Profile,
+    deployment_names: list[str] | None,
+    network: tuple[frozenset[str], dict[str, str]] = (frozenset(), {}),
+) -> Capabilities:
+    """Capabilities of an environment; with deployment_names=None (cluster unreadable) the profile alone decides.
+
+    network: the cluster's network capabilities and the reasons for the absent ones (cilium.detect_network).
+    """
     configured = set(profile.urls)
     reasons = dict.fromkeys(COMPONENT_NAMES - configured, "no URL in profile")
     if deployment_names is None:
         reasons[CLUSTER] = f"kube API of context {profile.kube.context} not reachable from this console"
+        reasons.update(dict.fromkeys(NETWORK, "kube API not reachable"))
         in_cluster = {c for c in configured if cluster_service(profile.urls[c])}
         reasons.update(dict.fromkeys(in_cluster, "in-cluster URL, and the kube API is not reachable"))
         return Capabilities(frozenset(configured - in_cluster), reasons)
@@ -59,4 +71,6 @@ def detect(profile: Profile, deployment_names: list[str] | None) -> Capabilities
             reasons[component] = f"no deployment in namespace {profile.kube.namespace}"
     present = {c for c in configured if c in deployed or c not in COMPONENTS_WITH_DEPLOYMENT}
     present.add(CLUSTER)
+    present |= network[0]
+    reasons.update(network[1])
     return Capabilities(frozenset(present), reasons)

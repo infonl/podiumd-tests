@@ -18,6 +18,9 @@ from typing import Literal
 
 import requests
 
+from podiumd_tests.cilium import CILIUM
+from podiumd_tests.cilium import HUBBLE
+from podiumd_tests.cilium import agent_pods
 from podiumd_tests.components import deployed_components
 from podiumd_tests.credentials import SecretError
 from podiumd_tests.kube import KubeError
@@ -27,6 +30,7 @@ from podiumd_tests.lock import lease_holder
 from podiumd_tests.responses import get_root
 from podiumd_tests.responses import is_server_error
 from podiumd_tests.responses import url_host
+from podiumd_tests.workloads import unhealthy_pods
 from podiumd_tests.workloads import unready_workloads
 
 if TYPE_CHECKING:
@@ -253,6 +257,18 @@ def _capabilities(env: Environment) -> Check:
     return Check("capabilities", "ok", detail)
 
 
+def _cilium(env: Environment) -> Check:
+    caps = env.capabilities
+    if CILIUM not in caps.present:
+        return Check("cilium", "skip", caps.reasons.get(CILIUM, ""))
+    agents = agent_pods(env.kube)
+    problems = unhealthy_pods(agents)
+    if problems:
+        return Check("cilium", "warn", "; ".join(problems), "pod traffic on those nodes may fail")
+    hubble = "Hubble relay present" if HUBBLE in caps.present else "no Hubble"
+    return Check("cilium", "ok", f"{len(agents)} agents ready; {hubble}")
+
+
 def run_checks(
     env: Environment, which: Callable[[str], str | None] = shutil.which, resolve: Resolver = _getaddrinfo
 ) -> list[Check]:
@@ -272,6 +288,8 @@ def run_checks(
     checks += _secrets(env, cluster_ok=cluster_ok)
     # Without cluster access the capabilities come from the profile alone (and "cluster" is absent).
     checks.append(_capabilities(env))
+    if cluster_ok:
+        checks.append(_cilium(env))
     return [Check(c.name, c.status, env.redactor.redact(c.detail), c.hint) for c in checks]
 
 
