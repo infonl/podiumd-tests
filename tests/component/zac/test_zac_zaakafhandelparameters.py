@@ -16,6 +16,7 @@ from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import CATALOGI
+from podiumd_tests.zac import inrichtingscheck_problems
 from podiumd_tests.zac import zaakafhandelparameters
 
 if TYPE_CHECKING:
@@ -52,10 +53,8 @@ def test_handled_zaaktypen_pass_zacs_inrichtingscheck(zac: requests.Session, url
     handled = {section(p, "zaaktype").get("identificatie") for p in zaakafhandelparameters(zac, urls["zac"])}
     checks = get_entries(zac, f"{urls['zac']}/rest/health-check/zaaktypes")
     failing = {
-        str(section(c, "zaaktype").get("identificatie")): sorted(
-            k for k, v in c.items() if v is False and k != "valide"
-        )
+        str(section(c, "zaaktype").get("identificatie")): problems
         for c in checks
-        if section(c, "zaaktype").get("identificatie") in handled and not c.get("valide")
+        if section(c, "zaaktype").get("identificatie") in handled and (problems := inrichtingscheck_problems(c))
     }
     assert not failing, f"ZAC's inrichtingscheck fails: {failing}"

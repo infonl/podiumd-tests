@@ -57,6 +57,29 @@ def zaakafhandelparameters(http: requests.Session, zac_url: str, identificatie: 
     ]
 
 
+# Fields of ZAC's inrichtingscheck that its verdict valide does not require.
+NOT_REQUIRED_FOR_VALIDE = {
+    "valide",
+    "heeftWaarschuwingen",
+    "besluittypeAanwezig",
+    "isZaakspecifiekeAutorisatieEigenschapAanwezig",
+    "isZaakspecifiekeAutorisatieRoltypeAanwezig",
+}
+
+
+def inrichtingscheck_problems(check: JsonObject) -> list[str]:
+    """The fields of ZAC's inrichtingscheck of one zaaktype that make it invalid, and its warnings."""
+    problems = [k for k, v in check.items() if v is False and k not in NOT_REQUIRED_FOR_VALIDE]
+    problems += [f"{k}={v}" for k, v in check.items() if k.startswith("aantal") and v != 1]
+    if check.get("resultaattypesMetVerplichtBesluit") and not check.get("besluittypeAanwezig"):
+        problems.append("besluittypeAanwezig")
+    if check.get("heeftWaarschuwingen"):
+        problems.append("heeftWaarschuwingen")
+    if not problems and not check.get("valide"):
+        problems.append("valide")
+    return sorted(problems)
+
+
 def confirmation_sent(confirmation: JsonObject) -> bool:
     """ZAC sends this automaticEmailConfirmation: enabled, with a template and a sender."""
     return bool(confirmation.get("enabled") and confirmation.get("templateName") and confirmation.get("emailSender"))
