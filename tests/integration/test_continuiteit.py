@@ -163,7 +163,7 @@ def test_without_objecten_the_portal_kiss_and_zac_work(  # pylint: disable=too-m
 @pytest.mark.xfail(
     strict=True,
     raises=WaitTimeoutError,
-    reason="Open Formulieren 3.5.5 and 4.0.2 queue mail with django_yubin but schedules no retry_emails: a mail that fails"
+    reason="Open Formulieren 3.5.5 and 4.0.2 queue mail with django_yubin but schedule no retry_emails: a mail that fails"
     " during an SMTP outage stays failed and is never sent; not yet reported upstream",
 )
 def test_form_mail_is_sent_after_a_mail_outage(
