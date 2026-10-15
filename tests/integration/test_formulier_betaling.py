@@ -39,6 +39,7 @@ from podiumd_tests.payments import worldline_return_url
 from podiumd_tests.payments import worldline_webhook
 from podiumd_tests.responses import expect_status
 from podiumd_tests.wait import wait_until
+from podiumd_tests.workloads import component_versions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -53,6 +54,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.requires("openformulieren", "
 REGISTRATION_TIMEOUT = 90
 PRICE = "12.50"
 OGONE, WORLDLINE = "ogone-legacy", "worldline"
+OGONE_REMOVED = (4,)
 MERCHANTS = {OGONE: OGONE_MERCHANT, WORLDLINE: WORLDLINE_MERCHANT}
 STEPS = {OGONE: "openformulieren-ogone", WORLDLINE: "openformulieren-worldline"}
 # What the provider reports per outcome: Ogone's return URL and STATUS, Worldline's payment status.
@@ -147,6 +149,9 @@ def fixture_payment_form(
     if not podiumd_env.profile.allows("of_wait_for_payment"):
         pytest.skip("profile setting of_wait_for_payment is off: Open Formulieren registers before the payment")
     backend = str(request.param)
+    version = component_versions(podiumd_env, ["openformulieren"]).get("openformulieren")
+    if backend == OGONE and version is not None and version >= OGONE_REMOVED:
+        pytest.skip("Open Formulieren 4.0 removed the Ogone (legacy) payment plugin")
     need_bootstrap(
         "openformulieren-zgw-group", "openzaak-of-autorisatie", "openformulieren-payment-wait", STEPS[backend]
     )
@@ -265,7 +270,7 @@ def test_uncertain_payment_registers_once_the_provider_confirms_it(
     reason="Open Formulieren's (3.5.5, 3.5.8) ZGW registration creates the zaak when the form is completed, before the"
     " payment (pre-registration), also with wait_for_payment_to_register; the draaiboek expects no zaak",
 )
-@pytest.mark.parametrize("payment_form", [pytest.param(OGONE, id=OGONE)], indirect=True)
+@pytest.mark.parametrize("payment_form", [OGONE, WORLDLINE], indirect=True)
 @pytest.mark.tc("OF-022")
 def test_unpaid_form_leaves_no_zaak(
     podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, payment_form: tuple[str, str]
@@ -281,7 +286,7 @@ def test_unpaid_form_leaves_no_zaak(
     " (update_submission_payment_status), so the pre-registered zaak stays betalingsindicatie nog_niet after"
     " the payment; not yet reported upstream",
 )
-@pytest.mark.parametrize("payment_form", [pytest.param(OGONE, id=OGONE)], indirect=True)
+@pytest.mark.parametrize("payment_form", [OGONE, WORLDLINE], indirect=True)
 @pytest.mark.tc("OF-024")
 def test_zaak_of_a_paid_form_is_marked_paid(
     podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, payment_form: tuple[str, str]
