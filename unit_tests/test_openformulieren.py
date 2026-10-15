@@ -5,6 +5,7 @@ import json
 import pytest
 import requests
 
+from podiumd_tests.openformulieren import download_report
 from podiumd_tests.openformulieren import submit
 from podiumd_tests.openformulieren import wait_for_registration
 from podiumd_tests.seed.registry import ResourceRegistry
@@ -68,3 +69,13 @@ def test_failed_registration_in_open_formulieren_names_the_error(env, fake_runne
     fake_runner.answers["exec -i deploy/openformulieren"] = (0, f"PTEST_VALUE={json.dumps(value)}\n")
     with pytest.raises(AssertionError, match="registration of submission s1 failed: HTTPError: 400"):
         wait_for_registration(env, "s1", timeout=0)
+
+
+def test_failed_report_download_says_what_the_web_pod_has(fake_http, env, fake_runner):
+    fake_http({"GET /submissions/pdf/3/t/download": (404, {})})
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "openformulieren"}}]}))
+    value = {"report": True, "file": "submission-reports/2026/10/15/r.pdf", "on_disk": False}
+    fake_runner.answers["exec -i deploy/openformulieren"] = (0, f"PTEST_VALUE={json.dumps(value)}\n")
+    status = {"submission": "s1", "reportDownloadUrl": f"{OF}/submissions/pdf/3/t/download"}
+    with pytest.raises(AssertionError, match=r"HTTP 404; Open Formulieren web pod: .*'on_disk': False"):
+        download_report(env, requests.Session(), status)

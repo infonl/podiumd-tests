@@ -5,7 +5,6 @@ Ported from TA interaction 32 and 76, and regression 152.
 
 from __future__ import annotations
 
-from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
@@ -14,11 +13,11 @@ from podiumd_tests.bootstrap.names import TEST_FORM
 from podiumd_tests.bootstrap.steps import NAW_DATA
 from podiumd_tests.bootstrap.steps import ZGW_REGISTRATION
 from podiumd_tests.json_data import section
+from podiumd_tests.openformulieren import download_report
 from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import registered_zaak
 from podiumd_tests.openformulieren import submit
 from podiumd_tests.openformulieren import wait_for_registration
-from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
 
 if TYPE_CHECKING:
@@ -66,8 +65,7 @@ def test_submission_creates_a_zaak_with_the_form_pdf(  # pylint: disable=too-man
     assert openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": str(zaak["url"])})
     rollen = openzaak.list(f"{ZAKEN}/rollen", {"zaak": str(zaak["url"])})
     assert [section(r, "betrokkeneIdentificatie").get("geslachtsnaam") for r in rollen] == [NAW_DATA["achternaam"]]
-    report = expect_status(session.get(str(status["reportDownloadUrl"])), HTTPStatus.OK)
-    assert report.content.startswith(b"%PDF")
+    assert download_report(podiumd_env, session, status).startswith(b"%PDF")
 
 
 @pytest.mark.xfail(

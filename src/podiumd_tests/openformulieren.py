@@ -95,6 +95,17 @@ def wait_for_registration(env: Environment, submission: str, *, timeout: float) 
         raise AssertionError(msg)
 
 
+def download_report(env: Environment, http: requests.Session, status: JsonObject) -> bytes:
+    """The submission's PDF report through the inwoner's download link; a failure says what the web pod has."""
+    response = http.get(str(status["reportDownloadUrl"]))
+    if response.status_code != HTTPStatus.OK:
+        params: dict[str, object] = {"uuid": str(status["submission"]), "action": "report"}
+        found = run_snippet(env.kube, env.deployment_for("openformulieren"), "openformulieren_submission", params)
+        msg = f"report download: HTTP {response.status_code}; Open Formulieren web pod: {found}"
+        raise AssertionError(msg)
+    return response.content
+
+
 def registration_state(env: Environment, submission: str) -> dict[str, str]:
     """Open Formulieren's registration status of the submission (pending, in_progress, success, failed) and error."""
     params: dict[str, object] = {"uuid": submission, "action": "registration"}
