@@ -327,8 +327,14 @@ def test_question_about_a_zaak_reaches_open_klant(  # pylint: disable=too-many-a
     )
     vraag = registry.tagged("zaakvraag")
     open_status_page(page, podiumd_env, zaak)
-    page.locator('#contact-form textarea[name="question"]').fill(vraag)
-    page.locator("#submit_contact").click()
+    # htmx loads the form after the page (status/content/); typing before that settles leaves the button disabled.
+    question = page.locator('#contact-form textarea[name="question"]')
+    question.wait_for()
+    page.wait_for_load_state("networkidle")
+    question.fill(vraag)
+    submit = page.locator("#submit_contact")
+    expect(submit).not_to_have_class(re.compile(r"button--disabled"))
+    submit.click()
     found = wait_until(klantcontacten, timeout=30, description=f"klantcontact about zaak {zaak['uuid']}")
     # Open Inwoner appends "Case number: <identificatie>" to the question.
     inhoud = [str(openklant.get(k).get("inhoud")) for k in found]
