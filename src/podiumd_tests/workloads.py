@@ -12,6 +12,7 @@ import contextlib
 import re
 
 from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from podiumd_tests.json_data import JsonObject
@@ -192,6 +193,54 @@ def unhealthy_pods(pods: Sequence[Item]) -> list[str]:
         containers = entries(status.get("containerStatuses"))
         found.extend(f"{name}/{c.get('name', '?')}: not ready" for c in containers if not c.get("ready"))
     return found
+
+
+@dataclass(frozen=True)
+class ClusterState:
+    """The long-running pods of the environment by uid, and the cluster's nodes."""
+
+    pods: dict[str, Item]
+    nodes: frozenset[str]
+
+
+def cluster_state(env: Environment) -> ClusterState:
+    """The pods (not of Jobs) and nodes now, to compare with a later state."""
+    pods = {
+        str(section(p, "metadata").get("uid")): p for p in entries(env.items("pods")) if "Job" not in _owner_kinds(p)
+    }
+    return ClusterState(pods, frozenset(metadata_name(n) for n in env.kube.items("nodes")))
+
+
+def disruptions(before: ClusterState, after: ClusterState) -> list[str]:
+    """Nodes and pods that came or went between two states, and containers that restarted, one line each."""
+    found = [f"node {n} removed" for n in sorted(before.nodes - after.nodes)]
+    found += [f"node {n} added" for n in sorted(after.nodes - before.nodes)]
+    found += [f"pod {_where(p)} gone" for uid, p in before.pods.items() if uid not in after.pods]
+    found += [
+        f"pod {_where(p)} started {section(p, 'metadata').get('creationTimestamp')}"
+        for uid, p in after.pods.items()
+        if uid not in before.pods
+    ]
+    for uid, pod in after.pods.items():
+        earlier = {
+            str(c.get("name")): c for c in entries(section(before.pods.get(uid, {}), "status").get("containerStatuses"))
+        }
+        for container in entries(section(pod, "status").get("containerStatuses")):
+            name = str(container.get("name"))
+            if name not in earlier:
+                continue
+            restarts = _int(container.get("restartCount")) - _int(earlier[name].get("restartCount"))
+            if restarts > 0:
+                last = section(section(container, "lastState"), "terminated")
+                found.append(
+                    f"container {metadata_name(pod)}/{name} restarted {restarts}x"
+                    f" (last: {last.get('reason', '?')} at {last.get('finishedAt', '?')})"
+                )
+    return found
+
+
+def _where(pod: Item) -> str:
+    return f"{metadata_name(pod)} on {section(pod, 'spec').get('nodeName', '?')}"
 
 
 def _job_failed(job: Item) -> bool:

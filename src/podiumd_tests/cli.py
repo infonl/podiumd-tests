@@ -71,8 +71,11 @@ from podiumd_tests.sweep import format_swept
 from podiumd_tests.sweep import parse_age
 from podiumd_tests.sweep import sweep
 from podiumd_tests.tiers import TIERS
+from podiumd_tests.workloads import ClusterState
 from podiumd_tests.workloads import chart_version
+from podiumd_tests.workloads import cluster_state
 from podiumd_tests.workloads import component_versions
+from podiumd_tests.workloads import disruptions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -396,6 +399,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     info.selection = pytest_selection(profile, args.tier, info.run_id, junit, args)
     # Smoke only reads; every other tier writes to the environment and takes its lock.
     drops = junit.parent / "cilium-drops.jsonl"
+    before = _cluster_state(env)
     with (
         group(f"pytest {args.tier}"),
         nullcontext() if args.tier == "smoke" else held(env, f"run {args.tier} {profile.name}"),
@@ -412,12 +416,24 @@ def cmd_run(args: argparse.Namespace) -> int:
     if junit.exists():
         info.counts, details = parse_junit(junit.read_text(encoding="utf-8"))
     details.policy_drops = describe_drops(env.kube, drops)
+    after = _cluster_state(env)
+    if before and after:
+        details.disruptions = disruptions(before, after)
     write_run(sink, directory, info, details, env.redactor)
     publish_summary(Path(sink.location(f"{directory}/summary.md")))
     print(f"results: {sink.location(directory)}")
     if info.exit_code in {pytest.ExitCode.OK, pytest.ExitCode.NO_TESTS_COLLECTED}:
         return EXIT_OK
     return EXIT_TESTS_FAILED if info.exit_code == pytest.ExitCode.TESTS_FAILED else EXIT_CONFIG
+
+
+def _cluster_state(env: Environment) -> ClusterState | None:
+    if CLUSTER not in env.capabilities.present:
+        return None
+    try:
+        return cluster_state(env)
+    except KubeError:
+        return None
 
 
 def _add_volume_commands(add_parser: Callable[..., argparse.ArgumentParser]) -> None:

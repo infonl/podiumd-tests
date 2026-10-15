@@ -6,8 +6,10 @@ import pytest
 
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
+from podiumd_tests.workloads import ClusterState
 from podiumd_tests.workloads import chart_version
 from podiumd_tests.workloads import component_versions
+from podiumd_tests.workloads import disruptions
 from podiumd_tests.workloads import failed_jobs
 from podiumd_tests.workloads import run_cronjob
 from podiumd_tests.workloads import scaled
@@ -126,3 +128,38 @@ def test_chart_version_comes_from_podiumds_own_config_maps(env_factory, fake_run
     assert chart_version(env_factory()) == "4.10.0"
     fake_runner.answers["get configmaps"] = (0, json.dumps({"items": [other]}))
     assert chart_version(env_factory()) is None
+
+
+def placed_pod(uid, name, *, node="n1", restarts=0, created="2026-10-15T09:51:00Z"):
+    container = {
+        "name": "app",
+        "restartCount": restarts,
+        "lastState": {"terminated": {"reason": "OOMKilled", "finishedAt": "2026-10-15T09:52:00Z"}} if restarts else {},
+    }
+    return {
+        "metadata": {"uid": uid, "name": name, "creationTimestamp": created},
+        "spec": {"nodeName": node},
+        "status": {"containerStatuses": [container]},
+    }
+
+
+def test_disruptions_name_moved_pods_restarts_and_nodes():
+    before = ClusterState({"a": placed_pod("a", "keycloak-0"), "b": placed_pod("b", "zac-1")}, frozenset({"n1", "n2"}))
+    after = ClusterState(
+        {
+            "c": placed_pod("c", "keycloak-0", node="n1", created="2026-10-15T09:52:10Z"),
+            "b": placed_pod("b", "zac-1", restarts=1),
+        },
+        frozenset({"n1"}),
+    )
+    assert disruptions(before, after) == [
+        "node n2 removed",
+        "pod keycloak-0 on n1 gone",
+        "pod keycloak-0 on n1 started 2026-10-15T09:52:10Z",
+        "container zac-1/app restarted 1x (last: OOMKilled at 2026-10-15T09:52:00Z)",
+    ]
+
+
+def test_an_unchanged_cluster_has_no_disruptions():
+    state = ClusterState({"a": placed_pod("a", "zac-1")}, frozenset({"n1"}))
+    assert disruptions(state, state) == []

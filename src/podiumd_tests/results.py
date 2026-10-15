@@ -122,6 +122,8 @@ class Details:
     xfailed: list[Entry] = field(default_factory=list[Entry])
     xpassed: list[Entry] = field(default_factory=list[Entry])
     skipped: list[Entry] = field(default_factory=list[Entry])
+    # Pods and nodes that came, went or restarted during the run (workloads.disruptions).
+    disruptions: list[str] = field(default_factory=list[str])
     # Packets a Cilium network policy denied during the run (cilium.describe_drops).
     policy_drops: list[str] = field(default_factory=list[str])
 
@@ -224,6 +226,9 @@ def summary_markdown(info: RunInfo, details: Details) -> str:
         "|---|---|---|---|---|---|---|",
         f"| {c.passed} | {c.failed} | {c.errors} | {c.skipped} | {c.xfailed} | {c.xpassed} | {c.total} |",
     ]
+    if details.disruptions:
+        lines += ["", "## Pods replaced or restarted during the run", ""]
+        lines += [f"- {d}" for d in details.disruptions]
     if details.failures:
         lines += ["", "## Failed and errors", ""]
         lines += [f"- `{f.test_id}`: {f.message or 'no message'}" for f in details.failures]
