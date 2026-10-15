@@ -4,7 +4,9 @@ import json
 
 from podiumd_tests import doctor
 from podiumd_tests.capabilities import detect
+from podiumd_tests.cilium import describe_drops
 from podiumd_tests.cilium import detect_network
+from podiumd_tests.cilium import policy_drop
 from podiumd_tests.kube import Kube
 
 
@@ -59,3 +61,29 @@ def test_doctor_warns_about_an_unready_agent(fake_runner, env_factory, profile_f
     checks = doctor.run_checks(env_factory(profile_factory(urls={})), which=lambda tool: f"/usr/bin/{tool}")
     cilium = next(c for c in checks if c.name == "cilium")
     assert (cilium.status, cilium.detail) == ("warn", "cilium-b/cilium-agent: not ready")
+
+
+def drop(reason, src="10.0.0.1", dst="10.0.0.2", port="7800"):
+    summary = {"l3": {"src": src, "dst": dst}, "l4": {"src": "38500", "dst": port}}
+    return {"type": "drop", "reason": reason, "summary": summary}
+
+
+def test_onlypolicy_drops_are_kept():
+    assert policy_drop(json.dumps(drop("Policy denied"))) == drop("Policy denied")
+    assert policy_drop(json.dumps(drop("Unsupported L3 protocol"))) is None
+    assert policy_drop('time=2026-10-15T13:19:42Z level=info msg="Initializing dissection cache..."') is None
+
+
+def test_drops_name_the_pods_and_count_retries(tmp_path, fake_runner):
+    pod = {"metadata": {"name": "openzaak-1", "namespace": "podiumd"}, "status": {"podIP": "10.0.0.1"}}
+    fake_runner.answers["get pods -o json --all-namespaces"] = items(pod)
+    path = tmp_path / "cilium-drops.jsonl"
+    lines = [{"time": f"t{i}", **drop("Policy denied")} for i in range(3)]
+    path.write_text("".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8")
+    assert describe_drops(Kube("ctx", "podiumd", fake_runner), path) == [
+        "t0 podiumd/openzaak-1 -> 10.0.0.2:7800 Policy denied (3x)"
+    ]
+
+
+def test_no_recording_means_no_drops(tmp_path, fake_runner):
+    assert describe_drops(Kube("ctx", "podiumd", fake_runner), tmp_path / "absent.jsonl") == []

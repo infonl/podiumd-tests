@@ -9,6 +9,7 @@ results/<YYYY-MM>/<YYYYMMDD-HHMMSS>_<env>_<tier>_<runid>/
   summary.md    # counts, failures, known defects and skip reasons
   report.html   # every test with outcome, duration, message and log (pytest-html); not committed
   perf/         # perf tier only
+  cilium-drops.jsonl  # clusters with Cilium only: each packet a network policy denied during the run
   artifacts/    # a screenshot of each failed browser test; never committed
 ```
 

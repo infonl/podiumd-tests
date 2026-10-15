@@ -122,6 +122,8 @@ class Details:
     xfailed: list[Entry] = field(default_factory=list[Entry])
     xpassed: list[Entry] = field(default_factory=list[Entry])
     skipped: list[Entry] = field(default_factory=list[Entry])
+    # Packets a Cilium network policy denied during the run (cilium.describe_drops).
+    policy_drops: list[str] = field(default_factory=list[str])
 
 
 @dataclass
@@ -200,6 +202,9 @@ def _by_message(entries: list[Entry]) -> list[str]:
     return [f"- {message} ({len(ids)}): " + ", ".join(f"`{i}`" for i in ids) for message, ids in ordered]
 
 
+MAX_POLICY_DROPS = 50
+
+
 def summary_markdown(info: RunInfo, details: Details) -> str:
     """Human-readable summary.md of one run; results/README.md explains the outcomes."""
     c = info.counts
@@ -230,6 +235,11 @@ def summary_markdown(info: RunInfo, details: Details) -> str:
     for title, entries in sections:
         if entries:
             lines += ["", f"## {title}", "", *_by_message(entries)]
+    if details.policy_drops:
+        shown = details.policy_drops[:MAX_POLICY_DROPS]
+        lines += ["", "## Packets a network policy denied (Cilium)", "", *(f"- {d}" for d in shown)]
+        if len(details.policy_drops) > len(shown):
+            lines.append(f"- {len(details.policy_drops) - len(shown)} more in cilium-drops.jsonl")
     return "\n".join(lines) + "\n"
 
 
