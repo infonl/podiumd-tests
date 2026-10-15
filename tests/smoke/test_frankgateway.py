@@ -23,7 +23,7 @@ ROUTES = {
     "brp": "/haalcentraal/api/brp/personen",
     "bag": "/lvbag/individuelebevragingen/v2/adressen",
     "kvk-basisprofiel": "/api/v1/basisprofielen/68750110",
-    "kvk-vestiging": "/api/v1/vestigingsprofielen/000037171195",
+    "kvk-vestiging": "/api/v1/vestigingsprofielen/000037178598",
     "kvk-zoeken": "/api/v2/zoeken?naam=test",
 }
 
