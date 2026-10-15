@@ -28,7 +28,6 @@ from podiumd_tests.kcc import kcc_login
 from podiumd_tests.mailpit import forget_mails
 from podiumd_tests.openinwoner import ask_anonymously
 from podiumd_tests.openinwoner import portal_login
-from podiumd_tests.openinwoner import set_account
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import clean_up_logboek
 from podiumd_tests.seed.objecten import objecttype_url
@@ -127,45 +126,6 @@ def test_question_shows_in_mijn_vragen(  # pylint: disable=too-many-arguments,to
     expect(card).to_contain_text("Onbeantwoord")
     bsn = INWONER.attributes["bsn"][0]
     assert asked_by(openklant, vraag) & set(partijen_of(openklant, bsn)), "the question is not the inwoner's"
-
-
-@pytest.mark.tc("OI-023")
-# The begeleider finds the inwoner by this e-mail address: with the module's group, the same xdist group
-# as test_portaal_samenwerken.
-@pytest.mark.xdist_group("openinwoner-begeleider")
-def test_profile_email_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
-    page: Page,
-    podiumd_env: Environment,
-    openklant: ApiClient,
-    registry: ResourceRegistry,
-    need_bootstrap: Callable[..., None],
-) -> None:
-    """An e-mail address saved in the profile becomes a digitaal adres of the inwoner's partij (TA reg-179)."""
-    need_bootstrap(INWONER.name, *PORTAL_WIRING)
-    bsn = INWONER.attributes["bsn"][0]
-    adres = f"{registry.tagged('profiel')}@example.invalid"
-    # The partij may predate the test (an earlier login made it); its new adres goes anyway. The
-    # account keeps the address and every later login sends it again: set it back, after the adres
-    # is gone (cleanup runs last-added first).
-    registry.add(f"e-mail of account {bsn}", lambda: set_account(podiumd_env, bsn, email=user_email(INWONER.username)))
-    registry.add(
-        f"digitaal adres {adres}",
-        lambda: [openklant.delete(str(a["url"])) for a in openklant.list("digitaleadressen", {"adres": adres})],
-    )
-    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-profiel/edit/")
-    page.locator('input[name="email_addresses-0-value"]').first.fill(adres)
-    page.get_by_role("button", name="Sla wijzigingen op").first.click()
-    page.wait_for_url(lambda url: "/mijn-profiel/edit/" not in url)
-
-    def stored() -> bool:
-        return any(
-            a.get("adres") == adres
-            for partij in partijen_of(openklant, bsn)
-            for a in openklant.list("digitaleadressen", {"verstrektDoorPartij__uuid": partij.rsplit("/", 1)[-1]})
-        )
-
-    # Open Inwoner sends the address to Open Klant asynchronously.
-    wait_until(stored, timeout=60, description=f"digitaal adres {adres} in Open Klant")
 
 
 def test_company_question_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures

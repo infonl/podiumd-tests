@@ -15,13 +15,16 @@ import pytest
 
 from playwright.sync_api import expect
 
+from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.basisregistraties import kvk_basisprofiel
 from podiumd_tests.basisregistraties import kvk_vestigingsprofiel
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.openinwoner import set_account
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openklant import partijen_of
 from podiumd_tests.seed.openzaak import today
+from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -30,6 +33,7 @@ if TYPE_CHECKING:
 
     from playwright.sync_api import Page
 
+    from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -153,6 +157,48 @@ def test_disabled_account_cannot_log_in(  # pylint: disable=too-many-arguments,t
     portal_login(page, podiumd_env, "digid", INWONER2, "/mijn-profiel/")
     page.goto(portal + "/mijn-profiel/")
     assert "/accounts/login/" in page.url
+
+
+@pytest.mark.tc("OI-023")
+@pytest.mark.core
+@pytest.mark.requires("openklant")
+# The second inwoner: logins of other tests (the inwoner logs in everywhere) would sync the changed address
+# back between this test's cleanup steps; only this group logs in as inwoner2.
+@pytest.mark.xdist_group("inwoner2")
+def test_profile_email_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """An e-mail address saved in the profile becomes a digitaal adres of the inwoner's partij (TA reg-179)."""
+    need_bootstrap(INWONER2.name, "openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-openklant")
+    bsn = INWONER2.attributes["bsn"][0]
+    adres = f"{registry.tagged('profiel')}@example.invalid"
+    # The partij may predate the test (an earlier login made it); its new adres goes anyway. The
+    # account keeps the address and every later login sends it again: set it back, after the adres
+    # is gone (cleanup runs last-added first).
+    registry.add(f"e-mail of account {bsn}", lambda: set_account(podiumd_env, bsn, email=user_email(INWONER2.username)))
+    registry.add(
+        f"digitaal adres {adres}",
+        lambda: [openklant.delete(str(a["url"])) for a in openklant.list("digitaleadressen", {"adres": adres})],
+    )
+    page.context.clear_cookies()
+    portal_login(page, podiumd_env, "digid", INWONER2, "/mijn-profiel/edit/")
+    page.locator('input[name="email_addresses-0-value"]').first.fill(adres)
+    page.get_by_role("button", name="Sla wijzigingen op").first.click()
+    page.wait_for_url(lambda url: "/mijn-profiel/edit/" not in url)
+
+    def stored() -> bool:
+        return any(
+            a.get("adres") == adres
+            for partij in partijen_of(openklant, bsn)
+            for a in openklant.list("digitaleadressen", {"verstrektDoorPartij__uuid": partij.rsplit("/", 1)[-1]})
+        )
+
+    # Open Inwoner sends the address to Open Klant asynchronously.
+    wait_until(stored, timeout=60, description=f"digitaal adres {adres} in Open Klant")
 
 
 @pytest.mark.requires("api-proxy")
