@@ -22,6 +22,7 @@ from podiumd_tests.components import deployed_components
 from podiumd_tests.credentials import SecretError
 from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import context_names
+from podiumd_tests.kube import refresh_context
 from podiumd_tests.lock import lease_holder
 from podiumd_tests.responses import get_root
 from podiumd_tests.responses import is_server_error
@@ -67,16 +68,19 @@ def _cluster(env: Environment) -> list[Check]:
         known = context_names(env.kube.runner)
     except KubeError as exc:
         return [Check("kube context", "fail", str(exc))]
-    if context not in known:
+    refreshed = _refresh(env) if context not in known else ""
+    if context not in known and not refreshed:
         hint = "add it with `az aks get-credentials` or `minikube start`; without it cluster tests skip"
         return [Check("kube context", no_access, f"{context} not in kubeconfig", hint)]
     checks = [Check("kube context", "ok", context)]
-    try:
-        env.kube.api_reachable()
-    except KubeError as exc:
-        checks.append(Check("kube API", no_access, str(exc), "cluster stopped or deleted? (scheduled shutdown)"))
+    unreachable = _api_error(env)
+    # A new cluster (fresh install, minikube restart) has a new API address under the same context name.
+    if unreachable and not refreshed and (refreshed := _refresh(env)):
+        unreachable = _api_error(env)
+    if unreachable:
+        checks.append(Check("kube API", no_access, unreachable, "cluster stopped or deleted? (scheduled shutdown)"))
         return checks
-    checks.append(Check("kube API", "ok", "readyz"))
+    checks.append(Check("kube API", "ok", f"readyz; context rewritten by {refreshed}" if refreshed else "readyz"))
     checks.append(_lock(env))
     for namespace in env.namespaces:
         try:
@@ -87,6 +91,26 @@ def _cluster(env: Environment) -> list[Check]:
         checks.append(Check(f"namespace {namespace}", "ok"))
         checks.append(_workloads(env, namespace))
     return checks
+
+
+def _refresh(env: Environment) -> str:
+    """Rewrite the profile's context from its cluster; the command run, or "" when there is none or it failed."""
+    command = env.profile.context_refresh
+    if command is None:
+        return ""
+    try:
+        refresh_context(command, env.kube.runner)
+    except KubeError:
+        return ""
+    return " ".join(command[:3])
+
+
+def _api_error(env: Environment) -> str:
+    try:
+        env.kube.api_reachable()
+    except KubeError as exc:
+        return str(exc)
+    return ""
 
 
 def _lock(env: Environment) -> Check:

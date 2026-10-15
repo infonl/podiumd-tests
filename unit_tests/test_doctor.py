@@ -2,6 +2,7 @@
 
 import json
 import socket
+import subprocess
 import time
 
 from podiumd_tests import doctor
@@ -127,3 +128,58 @@ def test_checks_of_a_component_that_is_not_deployed_skip(profile_factory, fake_r
     )
     result = statuses(doctor.run_checks(env_factory(profile), which=which_all))
     assert {result["url omc"], result["secret omc_jwt_secret"]} == {"skip"}
+
+
+AKS = {"subscription": "sub", "resource_group": "rg", "name": "aks"}
+
+
+def test_moved_aks_api_is_found_by_rewriting_the_context(profile_factory, fake_runner, env_factory):
+    fake_runner.answers.update(
+        {
+            "config get-contexts": (0, "ctx\n"),
+            "config current-context": (0, "other\n"),
+            "az aks get-credentials": (0, ""),
+            "config use-context other": (0, ""),
+        }
+    )
+    fake_runner.answers["get --raw /readyz"] = (0, "ok")
+
+    def runner(args, timeout, stdin=None):
+        if "/readyz" in args and not any(c[:2] == ["az", "aks"] for c in fake_runner.calls):
+            return subprocess.CompletedProcess(list(args), 1, "", "dial tcp: lookup old.azmk8s.io: no such host")
+        return fake_runner(args, timeout, stdin)
+
+    profile = profile_factory(urls={}, kube={"context": "ctx", "namespace": "podiumd", "aks": AKS})
+    checks = doctor.run_checks(env_factory(profile, runner=runner), which=which_all)
+    api = next(c for c in checks if c.name == "kube API")
+    assert (api.status, api.detail) == ("ok", "readyz; context rewritten by az aks get-credentials")
+    az = next(c for c in fake_runner.calls if c[:2] == ["az", "aks"])
+    assert az[3:] == [
+        "--subscription",
+        "sub",
+        "--resource-group",
+        "rg",
+        "--name",
+        "aks",
+        "--context",
+        "ctx",
+        "--overwrite-existing",
+    ]
+    assert ["kubectl", "config", "use-context", "other"] in fake_runner.calls
+
+
+def test_unreachable_api_without_a_refresh_command_only_reports(profile_factory, fake_runner, env_factory):
+    fake_runner.answers["config get-contexts"] = (0, "ctx\n")
+    checks = doctor.run_checks(env_factory(profile_factory(urls={})), which=which_all)
+    assert statuses(checks)["kube API"] == "warn"
+    assert not any(c[0] in {"az", "minikube"} for c in fake_runner.calls)
+
+
+def test_missing_minikube_context_is_rewritten_by_minikube(profile_factory, fake_runner, env_factory):
+    fake_runner.answers.update(
+        {"config get-contexts": (0, "other\n"), "minikube update-context": (0, ""), "get --raw /readyz": (0, "ok")}
+    )
+    profile = profile_factory(urls={}, estate="minikube", kube={"context": "minikube", "namespace": "podiumd"})
+    checks = doctor.run_checks(env_factory(profile), which=which_all)
+    assert statuses(checks)["kube context"] == "ok"
+    assert ["minikube", "update-context", "--profile", "minikube"] in fake_runner.calls

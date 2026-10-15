@@ -38,12 +38,22 @@ class ProfileError(Exception):
 
 
 @dataclass(frozen=True)
+class AksCluster:
+    """The Azure AKS cluster behind a kube context."""
+
+    subscription: str
+    resource_group: str
+    name: str
+
+
+@dataclass(frozen=True)
 class KubeSettings:
     """kubectl context and namespaces of an environment."""
 
     context: str
     namespace: str
     monitoring_namespace: str | None = None
+    aks: AksCluster | None = None
 
 
 @dataclass(frozen=True)
@@ -112,6 +122,18 @@ class Profile:  # pylint: disable=too-many-instance-attributes  # mirrors the YA
         """Only smoke runs are allowed: nothing writes to the environment, so nothing takes its lock."""
         return set(self.allowed_tiers) <= {"smoke"}
 
+    @property
+    def context_refresh(self) -> list[str] | None:
+        """The command that writes kube.context into the kubeconfig from the cluster, if known."""
+        context = self.kube.context
+        aks = self.kube.aks
+        if aks:
+            cluster = ["--subscription", aks.subscription, "--resource-group", aks.resource_group, "--name", aks.name]
+            return ["az", "aks", "get-credentials", *cluster, "--context", context, "--overwrite-existing"]
+        if self.estate == "minikube":
+            return ["minikube", "update-context", "--profile", context]
+        return None
+
     def allows(self, setting: str) -> bool:
         """Whether an opt-in setting that changes the owner's configuration is "true"."""
         return self.settings.get(setting, "").lower() == "true"  # settings are strings
@@ -168,6 +190,13 @@ def _required_text(data: dict[str, object], key: str, where: str) -> str:
         msg = f"{where}: missing {key}"
         raise ProfileError(msg)
     return value
+
+
+def _parse_aks(value: object, where: str) -> AksCluster | None:
+    if value is None:
+        return None
+    data = _mapping(value, where)
+    return AksCluster(*(_required_text(data, k, where) for k in ("subscription", "resource_group", "name")))
 
 
 def _parse_urls(value: object, where: str) -> dict[str, str]:
@@ -244,6 +273,7 @@ def parse_profile(raw: object, *, name: str, path: Path | None = None) -> Profil
         context=_required_text(kube_map, "context", f"{where}.kube"),
         namespace=_required_text(kube_map, "namespace", f"{where}.kube"),
         monitoring_namespace=_optional_text(kube_map, "monitoring_namespace", f"{where}.kube"),
+        aks=_parse_aks(kube_map.get("aks"), f"{where}.kube.aks"),
     )
     tiers_raw = data.get("allowed_tiers")
     if not isinstance(tiers_raw, list) or not tiers_raw:

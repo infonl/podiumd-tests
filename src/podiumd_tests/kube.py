@@ -235,6 +235,17 @@ def metadata_name(item: Mapping[str, object]) -> str:
     return str(section(item, "metadata").get("name", ""))
 
 
+def refresh_context(command: Sequence[str], runner: Runner = run_process) -> None:
+    """Run a command that rewrites a context in the kubeconfig; the current context stays."""
+    try:
+        current = run_checked(runner, ["kubectl", "config", "current-context"], DEFAULT_TIMEOUT, KubeError).strip()
+    except KubeError:  # a kubeconfig without current context
+        current = ""
+    run_checked(runner, list(command), 120, KubeError)
+    if current:
+        run_checked(runner, ["kubectl", "config", "use-context", current], DEFAULT_TIMEOUT, KubeError)
+
+
 def context_names(runner: Runner = run_process) -> list[str]:
     """Contexts in the user's kubeconfig."""
     output = run_checked(runner, ["kubectl", "config", "get-contexts", "-o", "name"], DEFAULT_TIMEOUT, KubeError)

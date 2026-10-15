@@ -21,7 +21,8 @@ You need:
 - Python 3.12 or newer;
 - `kubectl` with a context for the environment;
 - for AKS environments: `az` (logged in) and `kubelogin`, to get and use the
-  kube context;
+  kube context; with the profile's `kube.aks`, doctor rewrites the context
+  when the cluster's API address changed;
 - network access to the environment's URLs (for ExternalsPodiumD: the VPN, and
   `KUBECONFIG` including the cluster's kubeconfig).
 
