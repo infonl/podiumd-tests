@@ -64,7 +64,7 @@ def listen(http: requests.Session, podiumd_env: Environment, body: dict[str, obj
             id="as-opennotificaties",
             marks=pytest.mark.xfail(
                 strict=True,
-                reason="OMC 1.17.19 rejects the 'source' root property of Open Notificaties 1.16.2"
+                reason="OMC 1.17.19 and 2.3.1 reject the 'source' root property of Open Notificaties 1.16.2"
                 " notifications (206, inner 422); not yet reported upstream",
             ),
         ),
