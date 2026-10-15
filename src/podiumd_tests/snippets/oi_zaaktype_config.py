@@ -1,11 +1,15 @@
 """Open Inwoner's configuration of the test zaaktype: contact form and document upload on.
 
 Only the suite's own zaaktype, instead of TA's zgw_import_data of every catalogus. The URLs
-come from the Catalogi API of the API group (wiring W4). Actions: status, apply, remove.
+come from the Catalogi API of the API group (wiring W4). Every other API group whose Catalogi
+API has the same catalogus gets the same configuration: Mijn zaken lists a zaak once per group,
+so a group without it shows the zaak without contact form or upload. Actions: status, apply, remove.
 Params: action, group (ZGWApiGroupConfig name), domein, rsin, identificatie, iot_omschrijving,
 record ({"created": [[model, pk]], "changed": [[model, pk, {field: old value}]]}), which remove
 undoes.
 """
+
+import contextlib
 
 ENABLED = {"zaaktype": {"contact_form_enabled": True}, "iot": {"document_upload_enabled": True}}
 
@@ -20,12 +24,22 @@ def run(params):
         _remove(models, record)
         return {"present": False}
     group = ZGWApiGroupConfig.objects.get(name=params["group"])
-    catalogus, zaaktype, iot = _types(build_client(group.ztc_service), params)
-    found = _found(models, catalogus, zaaktype, iot)
+    targets = [(group, _types(build_client(group.ztc_service), params))]
+    for other in ZGWApiGroupConfig.objects.exclude(pk=group.pk):
+        # A group without the test catalogus (LookupError) or unreachable (requests errors are OSErrors).
+        with contextlib.suppress(LookupError, OSError):
+            targets.append((other, _types(build_client(other.ztc_service), params)))
     if params["action"] == "status":
-        return {"present": _present(found, zaaktype)}
+        return {"present": all(_present(_found(models, *types), types[1]) for _, types in targets)}
     record.setdefault("created", [])
     record.setdefault("changed", [])
+    for target, (catalogus, zaaktype, iot) in targets:
+        _apply(models, record, target, catalogus, zaaktype, iot)
+    return {"present": True, "record": record}
+
+
+def _apply(models, record, group, catalogus, zaaktype, iot):
+    found = _found(models, catalogus, zaaktype, iot)
     if found["catalogus"] is None:
         found["catalogus"] = _create(
             models,
@@ -63,7 +77,6 @@ def run(params):
         found["iot"],
         {**ENABLED["iot"], "zaaktype_uuids": sorted({*_value(found["iot"], "zaaktype_uuids"), zaaktype["uuid"]})},
     )
-    return {"present": True, "record": record}
 
 
 def _models():
