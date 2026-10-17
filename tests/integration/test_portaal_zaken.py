@@ -27,6 +27,7 @@ from podiumd_tests.openinwoner import upload_document
 from podiumd_tests.openinwoner import virus_scan_enabled
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openklant import delete_klantcontact_tree
+from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import clean_up_new_documents
 from podiumd_tests.seed.openzaak import link_document
@@ -350,10 +351,20 @@ def test_zaak_started_in_zac_shows_in_mijn_zaken(  # pylint: disable=too-many-ar
     podiumd_env: Environment,
     zac: requests.Session,
     urls: dict[str, str],
+    openzaak: ApiClient,
+    zac_parameters: JsonObject,
     zac_zaak: Callable[..., JsonObject],
     need_bootstrap: Callable[..., None],
 ) -> None:
-    """A zaak started in ZAC with the inwoner as initiator is listed in the inwoner's Mijn zaken."""
+    """A zaak started in ZAC with the inwoner as initiator is listed in the inwoner's Mijn zaken.
+
+    Open Inwoner lists only zaken of an extern zaaktype, so an intern zaaktype in ZAC skips.
+    """
+    zaaktype = openzaak.get(f"{CATALOGI}/zaaktypen/{section(zac_parameters, 'zaaktype')['uuid']}")
+    if zaaktype.get("indicatieInternOfExtern") != "extern":
+        pytest.skip(
+            f"ZAC's zaaktype {zaaktype.get('identificatie')} is intern: Open Inwoner lists only extern zaaktypen"
+        )
     need_bootstrap(INWONER.name, *WIRING)
     zaak = zac_zaak()
 
