@@ -164,22 +164,24 @@ def test_betrokkenen_with_the_same_and_different_roles_are_listed(
     """A person in two roles and a company in one of them are all listed with the zaak."""
     zaak = zac_zaak()
     zaaktype = section(zac_parameters, "zaaktype")["uuid"]
+    # By name prefix: a zaaktype may say "Belanghebbende e2e", and several share a generic role.
+    available = entries(zac.get(f"{urls['zac']}/rest/klanten/roltype/{zaaktype}/betrokkene").json())
     roltypen = {
-        r["naam"]: r["uuid"]
-        for r in entries(zac.get(f"{urls['zac']}/rest/klanten/roltype/{zaaktype}/betrokkene").json())
+        rol: next(r for r in available if str(r["naam"]).lower().startswith(rol))
+        for rol in ("belanghebbende", "contactpersoon")
     }
     company = {
         "type": "VN",
         "kvkNummer": BEDRIJF.attributes["kvk"][0],
         "vestigingsnummer": BEDRIJF.attributes["vestigingsnummer"][0],
     }
-    wanted = [("Belanghebbende", "persoon"), ("Contactpersoon", "persoon"), ("Belanghebbende", "bedrijf")]
+    wanted = [("belanghebbende", "persoon"), ("contactpersoon", "persoon"), ("belanghebbende", "bedrijf")]
     for rol, who in wanted:
 
         def add(identificatie: JsonObject, rol: str = rol) -> requests.Response:
             body = {
                 "zaakUUID": zaak["uuid"],
-                "roltypeUUID": roltypen[rol],
+                "roltypeUUID": roltypen[rol]["uuid"],
                 "roltoelichting": "test",
                 "betrokkeneIdentificatie": identificatie,
             }
@@ -188,7 +190,7 @@ def test_betrokkenen_with_the_same_and_different_roles_are_listed(
         response = send_with_person(zac, urls["zac"], EREBOS, add) if who == "persoon" else add(company)
         expect_status(response, HTTPStatus.OK)
     listed = get_entries(zac, f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}/betrokkene")
-    assert sorted(str(b.get("roltype")) for b in listed) == sorted(r for r, _ in wanted)
+    assert sorted(str(b.get("roltype")) for b in listed) == sorted(str(roltypen[r]["naam"]) for r, _ in wanted)
 
 
 def uploaded_document(  # pylint: disable=too-many-arguments  # fixtures and two choices
