@@ -118,7 +118,7 @@ def read_zaak(http: requests.Session, zac_url: str, uuid: str) -> JsonObject:
 
 
 # ZAC's brp-rechten.rego allows the person lookup only with PABC application role brp_zoeken; podiumd's
-# files/pabc-dataset.json has none, so a PABC seeded from it refuses the lookup (reported to helm-charts).
+# files/pabc-dataset.json had none before helm-charts #609, so a PABC seeded from an older one refuses the lookup.
 BRP_ZOEKEN_MISSING = (
     "ZAC refuses the person lookup (403): podiumd's pabc-dataset.json maps no PABC application role brp_zoeken"
 )
