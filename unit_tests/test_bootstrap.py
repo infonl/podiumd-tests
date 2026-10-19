@@ -10,22 +10,30 @@ from dataclasses import field
 import pytest
 
 from podiumd_tests import cli
+from podiumd_tests.auth.keycloak_admin import KeycloakAdmin
 from podiumd_tests.bootstrap import Context
 from podiumd_tests.bootstrap import bootstrap
 from podiumd_tests.bootstrap import check
 from podiumd_tests.bootstrap import failed
 from podiumd_tests.bootstrap import refusal
 from podiumd_tests.bootstrap import unbootstrap
+from podiumd_tests.bootstrap.names import OBJECTEN_STORE_KEY
+from podiumd_tests.bootstrap.names import OPENKLANT_OPENINWONER_STORE_KEY
 from podiumd_tests.bootstrap.names import OPENKLANT_STORE_KEY
 from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.oidc_mock import KEYCLOAK_STORE_KEY
 from podiumd_tests.bootstrap.oidc_mock import KeycloakOidcMock
+from podiumd_tests.bootstrap.oidc_mock import oidc_params
+from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.bootstrap.steps import STEPS
+from podiumd_tests.bootstrap.steps import ItaMedewerker
 from podiumd_tests.bootstrap.steps import KeycloakUser
 from podiumd_tests.bootstrap.steps import OpenInwonerPartijen
 from podiumd_tests.bootstrap.steps import OpenKlantActor
 from podiumd_tests.bootstrap.steps import SnippetStep
 from podiumd_tests.bootstrap.steps import keycloak_password_key
+from podiumd_tests.bootstrap.steps import openformulieren_params
+from podiumd_tests.bootstrap.steps import openinwoner_openklant_params
 from podiumd_tests.bootstrap.steps import productaanvraag_zaaktypen
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.credentials import env_var_name
@@ -265,6 +273,127 @@ def test_keycloak_user_remove_deletes_only_an_existing_user(env_factory, fake_ru
     assert all(r.method != "DELETE" for r in sent)
 
 
+@pytest.mark.parametrize(
+    ("stored_keys", "attributes"),
+    [((), {}), ((keycloak_password_key("kcc"),), {"samaccountname": ["someone-else"]})],
+    ids=["no-password-stored", "other-attribute"],
+)
+def test_keycloak_user_is_absent_without_its_password_or_attributes(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    env_factory, fake_runner, profile_factory, fake_http, stored_keys, attributes
+):
+    ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
+    secret = stored(dict.fromkeys(stored_keys, "pw"))
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (0, secret)
+    answers = keycloak_answers(user_exists=True, has_group=True)
+    answers[f"GET {REALM}/users"] = (200, [{"id": "u1", "attributes": attributes}])
+    fake_http(answers)
+    assert KCC.is_present(ctx) is False
+
+
+def test_keycloak_user_joins_existing_groups_and_reports_missing_client_roles(
+    env_factory, fake_runner, profile_factory, fake_http
+):
+    ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
+    answers = keycloak_answers(user_exists=True, has_group=True)
+    answers[f"GET {REALM}/clients"] = (200, [])
+    sent = fake_http(answers)
+    KeycloakUser("admin", client_roles=(("pabc", "administrator"),), groups=("beheerders",)).apply(ctx)
+    assert ("PUT", f"{REALM}/users/u1/groups/g1") in [(r.method, r.url.removeprefix(KC)) for r in sent]
+    assert ctx.notes == ["not in realm: pabc:administrator"]
+
+
+def test_keycloak_user_remove_deletes_an_existing_user(env_factory, fake_runner, profile_factory, fake_http):
+    ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
+    sent = fake_http(keycloak_answers(user_exists=True, has_group=True))
+    KeycloakUser("kcc").remove(ctx)
+    assert [r.url.removeprefix(KC) for r in sent if r.method == "DELETE"] == [f"{REALM}/users/u1"]
+
+
+def test_step_names():
+    assert [KCC.name, ItaMedewerker(KCC).name, OpenKlantActor("kcc").name] == [
+        "keycloak-user-kcc",
+        "objecten-medewerker-kcc",
+        "openklant-actor-kcc",
+    ]
+
+
+OBJ = "https://obj.example.test"
+
+
+def objecten_ctx(env_factory, fake_runner, profile_factory, values):
+    env = cluster_env(env_factory, fake_runner, profile_factory, urls={"objecten": OBJ})
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (0, stored(values))
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "objecten"}}]}))
+    fake_runner.answers["exec -i deploy/objecten"] = snippet_answer({"uuid": "ot1"})
+    return Context(env, CredentialStore(env.kube))
+
+
+def test_ita_medewerker_recreates_the_users_medewerker_object(env_factory, fake_runner, profile_factory, fake_http):
+    ctx = objecten_ctx(env_factory, fake_runner, profile_factory, {OBJECTEN_STORE_KEY: "tok"})
+    sent = fake_http(
+        {
+            "GET /api/v2/objects": (200, [{"url": f"{OBJ}/api/v2/objects/o1"}]),
+            "DELETE /api/v2/objects/o1": (204, None),
+            "POST /api/v2/objects": (201, {"url": f"{OBJ}/api/v2/objects/o2"}),
+        }
+    )
+    step = ItaMedewerker(KCC)
+    assert step.is_present(ctx)
+    assert step.apply(ctx) == {}
+    assert [r.method for r in sent] == ["GET", "GET", "DELETE", "POST"]
+    assert "identificatie__exact__ptest-bootstrap-kcc" in sent[0].url
+    body = json.loads(sent[-1].body)
+    assert body["type"] == f"{OBJ}/api/v2/objecttypes/ot1"
+    assert body["record"]["data"]["groepen"] == [{"groepsnaam": "ptest-bootstrap-groep"}]
+
+
+def test_steps_without_their_token_stored_find_and_remove_nothing(env_factory, fake_runner, profile_factory, fake_http):
+    ctx = objecten_ctx(env_factory, fake_runner, profile_factory, {})
+    sent = fake_http()
+    assert not ItaMedewerker(KCC).is_present(ctx)
+    assert not OpenKlantActor("kcc").is_present(ctx)
+    for step in (ItaMedewerker(KCC), OpenKlantActor("kcc"), OpenInwonerPartijen()):
+        assert step.remove(ctx) == ()
+    assert OpenInwonerPartijen().is_present(ctx)
+    assert OpenInwonerPartijen().apply(ctx) == {}
+    assert sent == []
+
+
+def test_a_step_without_store_key_stores_nothing(env_factory, fake_runner, profile_factory):
+    ctx = objecten_ctx(env_factory, fake_runner, profile_factory, {})
+    fake_runner.answers["exec -i deploy/objecten"] = snippet_answer({})
+    assert SnippetStep("x", ("objecten",), "token_auth", None).apply(ctx) == {}
+    assert snippet_params(fake_runner.stdins[-1]) == {"action": "apply"}
+
+
+def test_openformulieren_params_prefer_the_internal_open_zaak_url(env_factory, fake_runner, profile_factory):
+    settings = {"openzaak_internal_url": "http://openzaak.podiumd.svc.cluster.local:8000"}
+    env = cluster_env(env_factory, fake_runner, profile_factory, settings=settings)
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (0, stored({ZGW_STORE_KEY: "s"}))
+    assert openformulieren_params(Context(env, CredentialStore(env.kube))) == {
+        "secret": "s",
+        "openzaak_url": "http://openzaak.podiumd.svc.cluster.local:8000",
+    }
+
+
+@pytest.mark.parametrize("actoren", [[{"uuid": "a1"}], []])
+def test_openinwoner_openklant_params_send_questions_to_the_kcc_actor(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    env_factory, fake_runner, profile_factory, fake_http, actoren
+):
+    env = cluster_env(env_factory, fake_runner, profile_factory, urls={"openklant": OK})
+    values = {OPENKLANT_STORE_KEY: "tok", OPENKLANT_OPENINWONER_STORE_KEY: "oi-tok"}
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (0, stored(values))
+    fake_http({f"GET {ACTOREN}": (200, actoren)})
+    ctx = Context(env, CredentialStore(env.kube))
+    if not actoren:
+        with pytest.raises(LookupError, match="run bootstrap step openklant-actor-kcc first"):
+            openinwoner_openklant_params(ctx)
+        return
+    params = openinwoner_openklant_params(ctx)
+    assert (params["api_root"], params["token"]) == (f"{OK}/klantinteracties/api/v1/", "oi-tok")
+    assert section(params, "config")["mijn_vragen_actor"] == "a1"
+
+
 def test_wiring_steps_skip_unless_the_profile_allows_wiring(env_factory, fake_runner, profile_factory):
     env = cluster_env(env_factory, fake_runner, profile_factory, estate="externals", allowed_tiers=["smoke", "full"])
     step = FakeStep(wiring=True)
@@ -458,6 +587,82 @@ def test_oidc_mock_remove_undoes_the_record(env_factory, fake_runner, profile_fa
     deletes = sorted(r.url.removeprefix(KC + REALM) for r in sent if r.method == "DELETE")
     assert deletes == ["/client-scopes/s-eh/protocol-mappers/models/m2", "/clients/c1/optional-client-scopes/s-bsn"]
     assert any(r.method == "PUT" and r.url.endswith("/clients/c1") for r in sent)
+
+
+EHERKENNING_MAPPERS = [
+    {"id": f"m{i}", "name": n} for i, n in enumerate(("kvk-claim", "vestigingsnr-claim", "namequalifier-claim"))
+]
+CLIENT_SCOPES = [{"name": "bsn"}, {"name": "eherkenning"}]
+
+
+@pytest.mark.parametrize(
+    ("changes", "present"),
+    [
+        ({}, True),
+        ({f"GET {REALM}/client-scopes/s-eh/protocol-mappers/models": (200, EHERKENNING_MAPPERS[:1])}, False),
+        ({f"GET {REALM}/clients/c1/optional-client-scopes": (200, CLIENT_SCOPES[:1])}, False),
+        ({f"GET {REALM}/clients": (200, [{"id": "c1", "clientId": "openinwoner", "redirectUris": []}])}, False),
+    ],
+    ids=["complete", "mapper-missing", "scope-not-attached", "redirect-missing"],
+)
+def test_oidc_mock_is_present(env_factory, fake_runner, profile_factory, fake_http, changes, present):
+    ctx = oidc_mock_ctx(env_factory, fake_runner, profile_factory)
+    answers = oidc_mock_answers(EHERKENNING_MAPPERS)
+    answers[f"GET {REALM}/clients"] = (200, [{"id": "c1", "clientId": "openinwoner", "redirectUris": [f"{OI}/*"]}])
+    answers[f"GET {REALM}/clients/c1/optional-client-scopes"] = (200, CLIENT_SCOPES)
+    fake_http(answers | changes)
+    assert KeycloakOidcMock().is_present(ctx) is present
+
+
+def test_oidc_mock_creates_missing_scopes_and_notes_a_missing_client(
+    env_factory, fake_runner, profile_factory, fake_http, monkeypatch
+):
+    ctx = oidc_mock_ctx(env_factory, fake_runner, profile_factory)
+    answers = oidc_mock_answers(EHERKENNING_MAPPERS)
+    answers[f"GET {REALM}/client-scopes"] = (200, [{"id": "s-bsn", "name": "bsn"}])
+    answers[f"GET {REALM}/clients"] = (200, [])
+    fake_http(answers)
+    created = []
+    monkeypatch.setattr(KeycloakAdmin, "create_client_scope", lambda _self, scope: created.append(scope) or "s-eh")
+    record = json.loads(KeycloakOidcMock().apply(ctx)[KEYCLOAK_STORE_KEY])
+    assert [c["name"] for c in created] == ["eherkenning"]
+    assert (record["scopes"], record["mappers"]) == (["eherkenning"], {})
+    assert ctx.notes == ["realm podiumd has no client openinwoner"]
+
+
+def test_oidc_mock_remove_deletes_created_scopes_and_skips_a_deleted_client(
+    env_factory, fake_runner, profile_factory, fake_http
+):
+    ctx = oidc_mock_ctx(env_factory, fake_runner, profile_factory)
+    record = {"scopes": ["bsn"], "attached": {"openinwoner": ["bsn"]}}
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (
+        0,
+        stored({KEYCLOAK_STORE_KEY: json.dumps(record)}),
+    )
+    answers = oidc_mock_answers(EHERKENNING_MAPPERS)
+    answers[f"GET {REALM}/clients"] = (200, [])
+    answers[f"DELETE {REALM}/client-scopes/s-bsn"] = (204, None)
+    sent = fake_http(answers)
+    KeycloakOidcMock().remove(ctx)
+    assert [r.url.removeprefix(KC + REALM) for r in sent if r.method == "DELETE"] == ["/client-scopes/s-bsn"]
+
+
+@pytest.mark.parametrize("clients", [[{"id": "c1"}], []])
+def test_oidc_params_carry_the_client_secret(env_factory, fake_runner, profile_factory, fake_http, clients):
+    ctx = oidc_mock_ctx(env_factory, fake_runner, profile_factory)
+    answers = oidc_mock_answers(EHERKENNING_MAPPERS)
+    answers[f"GET {REALM}/clients"] = (200, clients)
+    answers[f"GET {REALM}/clients/c1/client-secret"] = (200, {"value": "s3cret"})
+    fake_http(answers)
+    if not clients:
+        with pytest.raises(LookupError, match="realm podiumd has no client openinwoner"):
+            oidc_params("openinwoner")(ctx)
+        return
+    assert oidc_params("openinwoner")(ctx) == {
+        "endpoint": f"{KC}/realms/podiumd/protocol/openid-connect",
+        "client_id": "openinwoner",
+        "secret": "s3cret",
+    }
 
 
 def test_an_opt_in_step_does_nothing_unless_the_profile_allows_it(env_factory, fake_runner, profile_factory):

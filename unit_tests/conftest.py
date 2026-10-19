@@ -4,11 +4,14 @@ import json
 import subprocess
 
 from collections.abc import Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 import pytest
 import requests
 
+from playwright.sync_api import Error as PlaywrightError
 from requests.adapters import HTTPAdapter
 
 from podiumd_tests.config import parse_profile
@@ -116,3 +119,153 @@ def fake_http(monkeypatch, response_factory):
         return sent
 
     return install
+
+
+class FakeLocator:
+    """A Playwright locator that records its actions on the FakePage; key names what it locates."""
+
+    def __init__(self, page, key):
+        self.page = page
+        self.key = key
+
+    @property
+    def first(self):
+        return self
+
+    def locator(self, selector):
+        return FakeLocator(self.page, f"{self.key} {selector}")
+
+    def get_by_role(self, role, name):
+        return FakeLocator(self.page, f"{self.key} {role}:{name}")
+
+    def fill(self, value):
+        self.page.actions.append(("fill", self.key, value))
+
+    def click(self):
+        self.page.actions.append(("click", self.key))
+
+    def select_option(self, label):
+        self.page.actions.append(("select", self.key, label))
+
+    def set_input_files(self, files):
+        self.page.actions.append(("files", self.key, files))
+
+    def inner_text(self):
+        return self.page.texts[self.key]
+
+    def input_value(self):
+        return self.page.texts[self.key]
+
+    def count(self):
+        return int(self.is_visible())
+
+    def is_visible(self):
+        return self.key in self.page.texts
+
+
+class FakePage:  # pylint: disable=too-many-instance-attributes  # one per Page feature the helpers use
+    """A Playwright page without a browser: goto sets url; wait_for_url moves to the next of landings.
+
+    texts maps the keys of the visible elements to their text; each goto raises the next of errors first.
+    """
+
+    def __init__(self, url="about:blank", texts=None, landings=(), evaluated=(), cookies=(), errors=()):
+        self.url = url
+        self.errors = list(errors)
+        self.texts = texts or {}
+        self.landings = list(landings)
+        self.evaluated = list(evaluated)
+        self.actions = []
+        self.waits = []
+        self.context = SimpleNamespace(cookies=lambda: list(cookies))
+
+    def locator(self, selector):
+        return FakeLocator(self, selector)
+
+    def get_by_role(self, role, name):
+        return FakeLocator(self, f"{role}:{name}")
+
+    def get_by_label(self, label):
+        return FakeLocator(self, f"label:{label}")
+
+    def goto(self, url, **_kw):
+        if self.errors:
+            raise PlaywrightError(self.errors.pop(0))
+        self.actions.append(("goto", url))
+        self.url = url
+        return url
+
+    def reload(self, **_kw):
+        if self.errors:
+            raise PlaywrightError(self.errors.pop(0))
+        self.actions.append(("reload", self.url))
+
+    def wait_for_url(self, target):
+        self.waits.append(target)
+        if self.landings:
+            self.url = self.landings.pop(0)
+
+    def wait_for_timeout(self, ms):
+        self.actions.append(("pause", ms))
+
+    def evaluate(self, script, arg=None):
+        self.actions.append(("evaluate", script, arg))
+        return self.evaluated.pop(0) if self.evaluated else None
+
+    @contextmanager
+    def expect_navigation(self):
+        yield
+
+    @contextmanager
+    def expect_response(self, predicate):
+        self.waits.append(predicate)
+        yield
+
+
+@pytest.fixture
+def fake_page():
+    return FakePage
+
+
+class FakeCredentials:
+    """Answers every secret key with "pw-<key>"."""
+
+    @staticmethod
+    def get(key):
+        return f"pw-{key}"
+
+
+@pytest.fixture
+def page_env(monkeypatch, profile_factory):
+    """An Environment stand-in for the page helpers: profile URLs per component, fake credentials, no cluster.
+
+    deployment_for answers the component name; run_snippet of the modules in snippet_modules
+    records (deployment, snippet, params) in env.snippets and answers env.snippet_result.
+    """
+
+    def build(*snippet_modules, ca_bundle=None):
+        urls = {
+            c: f"https://{c}.example.test"
+            for c in ("openinwoner", "openarchiefbeheer", "openbeheer", "kiss", "ita", "pabc")
+        }
+        access = {"ca_bundle": ca_bundle} if ca_bundle else {}
+        env = SimpleNamespace(
+            profile=profile_factory(urls=urls, access=access),
+            credentials=FakeCredentials(),
+            kube=None,
+            snippets=[],
+            snippet_result=None,
+            deployment_for=lambda component: component,
+            session=requests.Session,
+            ingress_ip=lambda: None,
+        )
+
+        def run_snippet(_kube, deployment, name, params):
+            env.snippets.append((deployment, name, params))
+            return env.snippet_result
+
+        for module in snippet_modules:
+            monkeypatch.setattr(module, "run_snippet", run_snippet)
+        return env
+
+    return build

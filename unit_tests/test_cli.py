@@ -3,11 +3,24 @@
 import argparse
 import json
 
+from contextlib import contextmanager
+from dataclasses import dataclass
+from dataclasses import field
+from pathlib import Path
+
 import pytest
+import yaml
 
 from podiumd_tests import cli
+from podiumd_tests.bootstrap import Outcome
+from podiumd_tests.capabilities import CLUSTER
+from podiumd_tests.capabilities import Capabilities
 from podiumd_tests.config import ProfileError
+from podiumd_tests.doctor import Check
 from podiumd_tests.kube import Kube
+from podiumd_tests.lock import LockBusyError
+from podiumd_tests.process import ProcessError
+from podiumd_tests.sweep import Swept
 
 
 def test_draft_profile_keeps_the_first_host_per_component_and_smoke_only():
@@ -121,3 +134,239 @@ def test_env_show_lists_where_each_secret_comes_from_but_no_value(tmp_path, caps
     assert "a_password                   k8s_secret key=k name=s\n" in out
     assert "b_password                   dev_default\n" in out
     assert "hunter2" not in out
+
+
+PROFILE = (
+    "estate: externals\nallowed_tiers: [{tiers}]\nkube: {{context: c, namespace: podiumd}}\nurls: {{}}\n"
+    "secrets: {{a_password: {{k8s_secret: {{name: s, key: k}}}}}}\n"
+)
+
+
+@pytest.fixture
+def envs(tmp_path):
+    """Writes profile e.yaml with the given allowed tiers; returns the CLI's leading arguments."""
+
+    def write(tiers="smoke, full, perf"):
+        (tmp_path / "e.yaml").write_text(PROFILE.format(tiers=tiers), encoding="utf-8")
+        return ["--envs-dir", str(tmp_path)]
+
+    return write
+
+
+@dataclass
+class Offline:
+    present: frozenset[str] = frozenset()
+    checks: list[Check] = field(default_factory=lambda: [Check("kubectl", "ok")])
+    locks: list[str] = field(default_factory=list[str])
+
+
+@pytest.fixture
+def offline(monkeypatch, env_factory):
+    """Commands get an Environment on fake_runner with the given capabilities, and record the locks they take."""
+    state = Offline()
+
+    def environment(profile):
+        env = env_factory(profile, environ={"PODIUMD_TESTS_SECRET_A_PASSWORD": "s3cr3t"})
+        env.capabilities = Capabilities(state.present, {CLUSTER: "kubectl failed"})
+        return env
+
+    @contextmanager
+    def held(_env, what):
+        state.locks.append(what)
+        yield
+
+    monkeypatch.setattr(cli, "Environment", environment)
+    monkeypatch.setattr(cli, "held", held)
+    monkeypatch.setattr(cli.doctor, "run_checks", lambda _env: state.checks)
+    return state
+
+
+def test_env_init_writes_a_draft_and_names_the_unmapped_hosts(tmp_path, monkeypatch, fake_runner, capsys):
+    routes = {"items": [{"spec": {"hostnames": ["ontw-zac.x.nl", "wiki.x.nl"]}}]}
+    fake_runner.answers["get ingresses"] = (0, json.dumps({"items": []}))
+    fake_runner.answers["get httproutes"] = (0, json.dumps(routes))
+    monkeypatch.setattr(cli, "Kube", lambda context, namespace: Kube(context, namespace, fake_runner))
+    argv = ["--envs-dir", str(tmp_path), "env", "init", "ontw", "--estate", "externals", "--context", "aks"]
+    assert cli.main(argv) == cli.EXIT_OK
+    written = yaml.safe_load((tmp_path / "externals" / "ontw.yaml").read_text(encoding="utf-8"))
+    assert written["urls"] == {"zac": "https://ontw-zac.x.nl"}
+    assert written["kube"] == {"context": "aks", "namespace": "podiumd"}
+    assert "hosts not mapped to a component: wiki.x.nl" in capsys.readouterr().out
+    assert cli.main(argv) == cli.EXIT_CONFIG
+    assert "use --force to overwrite" in capsys.readouterr().err
+
+
+def test_env_init_falls_back_to_configured_hosts_and_writes_minikube_profiles_at_the_top(
+    tmp_path, monkeypatch, fake_runner
+):
+    fake_runner.answers["get ingresses"] = (0, json.dumps({"items": []}))
+    fake_runner.answers["get httproutes"] = (0, json.dumps({"items": []}))
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": []}))
+    fake_runner.answers["get configmaps"] = (0, json.dumps({"items": [{"data": {"u": "https://zac.mk.local"}}]}))
+    monkeypatch.setattr(cli, "Kube", lambda context, namespace: Kube(context, namespace, fake_runner))
+    argv = ["--envs-dir", str(tmp_path), "env", "init", "mk", "--estate", "minikube", "--context", "minikube"]
+    assert cli.main([*argv, "--scheme", "http"]) == cli.EXIT_OK
+    written = yaml.safe_load((tmp_path / "mk.yaml").read_text(encoding="utf-8"))
+    assert written["urls"] == {"zac": "http://zac.mk.local"}
+
+
+def test_doctor_writes_the_checks_as_json_and_fails_on_a_failed_check(envs, offline, tmp_path, capsys):
+    offline.checks = [Check("kubectl", "ok"), Check("cluster", "fail", "no access", "az login")]
+    target = tmp_path / "checks.json"
+    assert cli.main([*envs(), "doctor", "--env", "e", "--json", str(target)]) == cli.EXIT_CONFIG
+    assert json.loads(target.read_text(encoding="utf-8"))[1] == {
+        "name": "cluster",
+        "status": "fail",
+        "detail": "no access",
+        "hint": "az login",
+    }
+    assert "hint: az login" in capsys.readouterr().out
+
+
+def test_bootstrap_refuses_a_smoke_only_environment(envs, offline, capsys):
+    assert cli.main([*envs("smoke"), "bootstrap", "--env", "e"]) == cli.EXIT_NOT_ALLOWED
+    assert "refused: e is smoke-only" in capsys.readouterr().err
+
+
+def test_bootstrap_stops_on_a_failed_preflight_and_without_cluster_access(envs, offline, capsys):
+    offline.checks = [Check("cluster", "fail", "no access")]
+    assert cli.main([*envs(), "bootstrap", "--env", "e"]) == cli.EXIT_CONFIG
+    assert "no access" in capsys.readouterr().err
+    assert cli.main([*envs(), "unbootstrap", "--env", "e", "--skip-doctor"]) == cli.EXIT_CONFIG
+    assert "bootstrap needs kubectl access to e: requires: cluster (kubectl failed)" in capsys.readouterr().err
+    assert offline.locks == []
+
+
+def test_bootstrap_runs_the_selected_steps_under_the_lock(envs, offline, monkeypatch, capsys):
+    offline.present = frozenset({CLUSTER})
+    calls = []
+
+    def fake_bootstrap(_env, steps, *, rotate):
+        calls.append(([s.name for s in steps], rotate))
+        return [Outcome("openklant-token", "created")]
+
+    monkeypatch.setattr(cli, "bootstrap", fake_bootstrap)
+    argv = [*envs(), "bootstrap", "--env", "e", "--step", "openklant-token", "--rotate"]
+    assert cli.main(argv) == cli.EXIT_OK
+    assert calls == [(["openklant-token"], True)]
+    assert offline.locks == ["bootstrap e"]
+    assert "created  openklant-token" in capsys.readouterr().out
+
+
+def test_unbootstrap_exits_with_config_code_when_a_step_fails(envs, offline, monkeypatch):
+    offline.present = frozenset({CLUSTER})
+    monkeypatch.setattr(cli, "unbootstrap", lambda _env, _steps: [Outcome("openklant-token", "failed", "403")])
+    assert cli.main([*envs(), "unbootstrap", "--env", "e"]) == cli.EXIT_CONFIG
+    assert offline.locks == ["unbootstrap e"]
+
+
+def test_sweep_rejects_a_bad_age_and_a_smoke_only_environment(envs, offline, capsys):
+    assert cli.main([*envs(), "sweep", "--env", "e", "--older-than", "soon"]) == cli.EXIT_CONFIG
+    assert "--older-than:" in capsys.readouterr().err
+    assert cli.main([*envs("smoke"), "sweep", "--env", "e"]) == cli.EXIT_NOT_ALLOWED
+    offline.checks = [Check("cluster", "fail")]
+    assert cli.main([*envs(), "sweep", "--env", "e"]) == cli.EXIT_CONFIG
+
+
+def test_sweep_locks_only_when_it_deletes(envs, offline, monkeypatch, capsys):
+    runs = []
+
+    def fake_sweep(_env, _cutoff, *, dry_run):
+        runs.append(dry_run)
+        return [Swept("zaken", "z1", "found" if dry_run else "failed")]
+
+    monkeypatch.setattr(cli, "sweep", fake_sweep)
+    assert cli.main([*envs(), "sweep", "--env", "e", "--dry-run"]) == cli.EXIT_OK
+    assert offline.locks == []
+    assert cli.main([*envs(), "sweep", "--env", "e"]) == cli.EXIT_CONFIG
+    assert offline.locks == ["sweep e"]
+    assert runs == [True, False]
+    assert "failed   zaken" in capsys.readouterr().out
+
+
+def test_volume_commands_need_the_perf_tier(envs, offline, capsys):
+    assert cli.main([*envs("smoke, full"), "seed-volume", "--env", "e"]) == cli.EXIT_NOT_ALLOWED
+    assert "does not allow tier perf" in capsys.readouterr().err
+    offline.checks = [Check("cluster", "fail")]
+    assert cli.main([*envs(), "unseed-volume", "--env", "e"]) == cli.EXIT_CONFIG
+
+
+def test_volume_commands_seed_and_unseed_under_the_lock(envs, offline, monkeypatch, capsys):
+    scaled = []
+
+    @contextmanager
+    def faster(_env, replicas):
+        scaled.append(replicas)
+        yield
+
+    monkeypatch.setattr(cli, "faster", faster)
+    monkeypatch.setattr(cli, "seed", lambda _env, scale, parallel: {f"{scale}/{parallel}": 1})
+    monkeypatch.setattr(cli, "unseed", lambda _env: {"unseeded": 2})
+    monkeypatch.setattr(cli, "format_seeded", lambda counts: f"counts {counts}")
+    argv = [*envs(), "seed-volume", "--env", "e", "--scale", "perf", "--parallel", "2", "--scale-cluster", "3"]
+    assert cli.main(argv) == cli.EXIT_OK
+    assert cli.main([*envs(), "unseed-volume", "--env", "e"]) == cli.EXIT_OK
+    assert scaled == [3]
+    assert offline.locks == ["seed-volume e", "unseed-volume e"]
+    assert capsys.readouterr().out == "counts {'perf/2': 1}\ncounts {'unseeded': 2}\n"
+
+
+def test_run_stops_on_a_failed_preflight(envs, offline, tmp_path, monkeypatch):
+    offline.checks = [Check("cluster", "fail")]
+    monkeypatch.setattr(cli.pytest, "main", lambda _args: pytest.fail("pytest must not run"))
+    assert cli.main([*envs(), "run", "--env", "e", "--results-dir", str(tmp_path / "r")]) == cli.EXIT_CONFIG
+
+
+JUNIT = (
+    '<testsuites><testsuite name="pytest" tests="1" failures="1">'
+    '<testcase classname="tests.smoke.test_a" name="test_a"><failure message="token s3cr3t">s3cr3t</failure>'
+    "</testcase></testsuite></testsuites>"
+)
+
+
+@pytest.mark.parametrize(
+    ("exit_code", "expected"),
+    [
+        (pytest.ExitCode.TESTS_FAILED, cli.EXIT_TESTS_FAILED),
+        (pytest.ExitCode.NO_TESTS_COLLECTED, cli.EXIT_OK),
+        (pytest.ExitCode.USAGE_ERROR, cli.EXIT_CONFIG),
+    ],
+)
+def test_run_records_redacted_results_under_the_lock(envs, offline, tmp_path, monkeypatch, exit_code, expected):
+    results = tmp_path / "r"
+    offline.present = frozenset({CLUSTER})
+
+    def fake_pytest(args):
+        junit = Path(next(a for a in args if a.startswith("--junitxml=")).removeprefix("--junitxml="))
+        junit.write_text(JUNIT, encoding="utf-8")
+        return exit_code
+
+    monkeypatch.setattr(cli.pytest, "main", fake_pytest)
+    monkeypatch.setattr(cli, "publish_summary", lambda _summary: None)
+    assert cli.main([*envs(), "run", "--env", "e", "--tier", "full", "--results-dir", str(results), "--", "-x"]) == (
+        expected
+    )
+    assert offline.locks == ["run full e"]
+    (run,) = results.glob("*/*/run.json")
+    info = json.loads(run.read_text(encoding="utf-8"))
+    assert info["selection"][-1] == "-x"
+    assert info["versions"] == {}
+    assert info["chart_version"] is None
+    junit = (run.parent / "junit.xml").read_text(encoding="utf-8")
+    assert "s3cr3t" not in junit
+
+
+@pytest.mark.parametrize(
+    ("error", "code", "prefix"),
+    [
+        (ProcessError(["kubectl"], "boom"), cli.EXIT_CONFIG, "error: "),
+        (LockBusyError("held by podiumd-minikube"), cli.EXIT_BUSY, "busy: "),
+    ],
+)
+def test_main_turns_process_and_lock_errors_into_exit_codes(envs, monkeypatch, capsys, error, code, prefix):
+    def fail(_args):
+        raise error
+
+    monkeypatch.setattr(cli, "cmd_doctor", fail)
+    assert cli.main([*envs(), "doctor", "--env", "e"]) == code
+    assert capsys.readouterr().err.startswith(prefix)

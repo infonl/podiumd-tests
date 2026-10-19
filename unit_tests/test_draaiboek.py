@@ -1,5 +1,8 @@
 """Unit tests for linking draaiboek cases to TA specs and their MIGRATION.md decisions."""
 
+import yaml
+
+from podiumd_tests import draaiboek
 from podiumd_tests.draaiboek import cited
 from podiumd_tests.draaiboek import marked
 from podiumd_tests.draaiboek import migration
@@ -59,3 +62,29 @@ def test_a_reason_makes_an_uncovered_case_out_of_scope_but_never_hides_a_test():
     )
     assert report_row(case, set(), DECISIONS, set(), "")[0] == "not covered"
     assert report_row(case, set(), DECISIONS, {"tests/test_x.py::test_a"}, "unclear")[0] == "covered"
+
+
+def test_main_writes_the_report_with_totals_per_class(tmp_path, monkeypatch, capsys):
+    ta = tmp_path / "ta"
+    (ta / "test-catalog").mkdir(parents=True)
+    (ta / "tests").mkdir()
+    (ta / "tests" / "b.spec.ts").write_text('test("ZAC r7", () => {});\n', encoding="utf-8")
+    case = {"sheet": "Functionele tests ZAC", "sub": "Zaak | aanmaken", "proces": "", "poc_dekking": []}
+    cases = [
+        {**case, "test_id": "ZAC-1", "klasse": "A", "excel_rij": 7},
+        {**case, "test_id": "ZAC-2", "klasse": "A", "excel_rij": 8, "poc_dekking": ["a.spec.ts:3"]},
+        {**case, "test_id": "ZAC-3", "klasse": "C", "excel_rij": 9},
+    ]
+    (ta / "test-catalog" / "cases.yaml").write_text(yaml.safe_dump({"cases": cases}), encoding="utf-8")
+    repo = tmp_path / "repo"
+    (repo / "docs").mkdir(parents=True)
+    (repo / "tests").mkdir()
+    monkeypatch.setattr(draaiboek, "REPO_ROOT", repo)
+    monkeypatch.setattr(draaiboek, "migration", lambda: DECISIONS)
+    monkeypatch.setattr(draaiboek, "out_of_scope", dict)
+    draaiboek.main(ta)
+    report = (repo / "docs" / "draaiboek-coverage.md").read_text(encoding="utf-8")
+    assert "| A | 1 | 1 | 0 | 0 | 0 |" in report
+    assert "| C | 0 | 0 | 0 | 0 | 1 |" in report
+    assert "| ZAC-1 | A | blocked | Zaak / aanmaken |  |" in report
+    assert capsys.readouterr().out.strip() == str(repo / "docs" / "draaiboek-coverage.md")

@@ -2,6 +2,7 @@
 
 import json
 
+from podiumd_tests import cilium
 from podiumd_tests import doctor
 from podiumd_tests.capabilities import detect
 from podiumd_tests.cilium import describe_drops
@@ -71,6 +72,7 @@ def drop(reason, src="10.0.0.1", dst="10.0.0.2", port="7800"):
 def test_onlypolicy_drops_are_kept():
     assert policy_drop(json.dumps(drop("Policy denied"))) == drop("Policy denied")
     assert policy_drop(json.dumps(drop("Unsupported L3 protocol"))) is None
+    assert policy_drop("{not json") is None
     assert policy_drop('time=2026-10-15T13:19:42Z level=info msg="Initializing dissection cache..."') is None
 
 
@@ -87,3 +89,34 @@ def test_drops_name_the_pods_and_count_retries(tmp_path, fake_runner):
 
 def test_no_recording_means_no_drops(tmp_path, fake_runner):
     assert describe_drops(Kube("ctx", "podiumd", fake_runner), tmp_path / "absent.jsonl") == []
+
+
+def test_an_empty_recording_means_no_drops(tmp_path, fake_runner):
+    path = tmp_path / "cilium-drops.jsonl"
+    path.write_text("\n", encoding="utf-8")
+    assert describe_drops(Kube("ctx", "podiumd", fake_runner), path) == []
+
+
+class FakeMonitor:
+    def __init__(self, lines):
+        self.stdout = lines
+        self.terminated = False
+
+    def terminate(self):
+        self.terminated = True
+
+
+def test_recorded_drops_writes_policy_drops_of_every_agent(tmp_path, fake_runner, monkeypatch):
+    fake_runner.answers["get pods -l k8s-app=cilium"] = items(agent("cilium-a"), agent("cilium-b"))
+    monitors = {
+        "cilium-a": FakeMonitor([json.dumps(drop("Policy denied")) + "\n", "chatter\n"]),
+        "cilium-b": FakeMonitor([json.dumps(drop("Unsupported L3 protocol")) + "\n"]),
+    }
+    monkeypatch.setattr(cilium, "start_process", lambda command: monitors[command[command.index("exec") + 1]])
+    path = tmp_path / "cilium-drops.jsonl"
+    with cilium.recorded_drops(Kube("ctx", "podiumd", fake_runner), path):
+        pass
+    recorded = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    assert [r["reason"] for r in recorded] == ["Policy denied"]
+    assert "time" in recorded[0]
+    assert all(m.terminated for m in monitors.values())
