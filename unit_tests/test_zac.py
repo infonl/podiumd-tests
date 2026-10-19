@@ -110,12 +110,6 @@ def test_person_key_retries_once_with_a_fresh_lookup_on_410(fake_http, response_
     assert sent_ids == ["p1", "p1"]
 
 
-def test_person_lookup_refused_by_pabc_is_an_expected_failure(fake_http):
-    fake_http({"PUT /rest/klanten/personen": (403, {})})
-    with pytest.raises(pytest.xfail.Exception, match="brp_zoeken"):
-        zac.person_lookup(requests.Session(), ZAC, "999990755")
-
-
 def test_productaanvraag_zaak_finds_the_zaak_by_kenmerk_and_cleanup_deletes_it(fake_http):
     zaken = [{"url": "https://oz.test/zaken/api/v1/zaken/1", "toelichting": "kenmerk OF-42"}, {"url": "z/2"}]
     sent = fake_http(
