@@ -52,6 +52,23 @@ def test_login_ends_on_the_keycloak_form(
     keycloak_login_realm(http.get(start, headers=NAVIGATE), hosts)
 
 
+@pytest.mark.requires("keycloak", "objecttypen")
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="[podiumd-chart-5] podiumd 4.10.0: Keycloak client objecten accepts only the objecten host as redirect URI,"
+    " so the admin login on the objecttypen host answers 400; not yet reported upstream",
+)
+def test_admin_login_on_the_objecttypen_host_ends_on_the_keycloak_form(
+    http: requests.Session, urls: dict[str, str], podiumd_env: Environment
+) -> None:
+    """On Open Object the objecttypen host still starts the admin login."""
+    if podiumd_env.admin_of("objecttypen") == "objecttypen":
+        pytest.skip("objecttypen has its own admin")
+    start = urls["objecttypen"] + LOGIN_PATHS["objecttypen"]
+    keycloak_login_realm(http.get(start, headers=NAVIGATE), keycloak_hosts(urls))
+
+
 @pytest.mark.requires("openinwoner")
 @pytest.mark.tc("ARCH-019")
 def test_portaal_login_page_offers_digid_and_eherkenning(http: requests.Session, urls: dict[str, str]) -> None:
