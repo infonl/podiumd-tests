@@ -21,6 +21,10 @@ urls:
   objecttypen: https://objecttypen.johnb00.pd.test-rig.nl
   opennotificaties: https://notificaties.johnb00.pd.test-rig.nl
   mailpit: https://mailpit.johnb00.pd.test-rig.nl
+  # No ingress: reached through a port-forward. Open Inwoner reaches KvK through the outway
+  # (chart openinwoner.kvk, helm-charts #604); the tests compare against the api-proxy.
+  api-proxy: http://api-proxy.podiumd.svc.cluster.local
+  frankgateway: http://frankgateway-outway.podiumd.svc.cluster.local:9080
 settings:
   # podiumd's e2e zaaktype. ZAC's zaakafhandelparameters for it are runtime data, seeded on
   # 2026-10-13 with productaanvraagtype productaanvraag-e2e-test (podiumd-infra seed script).
