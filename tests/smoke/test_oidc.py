@@ -53,8 +53,9 @@ def test_login_ends_on_the_keycloak_form(
 
 
 @pytest.mark.requires("keycloak", "objecttypen")
+# Not strict: an edge may redirect the login to the objecten host (podiumd-infra loginRedirectHost).
 @pytest.mark.xfail(
-    strict=True,
+    strict=False,
     raises=AssertionError,
     reason="[podiumd-chart-5] podiumd 4.10.0: Keycloak client objecten accepts only the objecten host as redirect URI,"
     " so the admin login on the objecttypen host answers 400; not yet reported upstream",
