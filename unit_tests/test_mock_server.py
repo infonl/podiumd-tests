@@ -98,5 +98,20 @@ def test_mock_server_refuses_without_authorization_and_answers_notify():
     assert notify._status({"authorization": "ApiKey-v1 k", "body": {}}) == 201  # pylint: disable=protected-access
 
 
+def test_notify_notification_is_recorded_with_an_id_and_answers_a_get():
+    handler = mock_server_handler("/notify/v2/notifications/sms")
+    sent = []
+    handler._json = lambda status, body: sent.append((status, body))  # pylint: disable=protected-access
+    handler._notify_created("0" * 8 + "-0000-0000-0000-" + "0" * 12, {"template_id": "t", "phone_number": "0612345678"})  # pylint: disable=protected-access
+    status, body = sent[0]
+    assert status == 201
+    assert body["content"]["subject"] == "ptest sms t"
+    handler.path = f"/v2/notifications/{body['id']}"
+    handler.do_GET()
+    assert sent[1][0] == 200
+    assert sent[1][1]["phone_number"] == "0612345678"
+    assert sent[1][1]["status"] == "delivered"
+
+
 def test_fail_first_callback_path(env_factory):
     assert "/fail-first/" in Callback.new(env_factory(), "ptest-x", fail_first=True).path

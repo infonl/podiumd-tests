@@ -10,6 +10,7 @@ from podiumd_tests.bootstrap import Context
 from podiumd_tests.bootstrap.omc import STORE_KEY
 from podiumd_tests.bootstrap.omc import VALIDITY
 from podiumd_tests.bootstrap.omc import OmcAbonnement
+from podiumd_tests.bootstrap.omc import notify_mock_missing
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.credentials import env_var_name
 
@@ -71,3 +72,17 @@ def test_remove_without_record_only_drops_the_key(ctx, fake_http):
     sent = fake_http()
     assert OmcAbonnement().remove(ctx()) == (STORE_KEY,)
     assert sent == []
+
+
+@pytest.mark.parametrize(
+    ("base", "missing"),
+    [
+        ("http://ptest-bootstrap-mock-server.podiumd/notify", False),
+        ("https://api.notifynl.nl", True),
+    ],
+)
+def test_notify_mock_missing(ctx, fake_runner, base, missing):
+    context = ctx()
+    fake_runner.answers["printenv NOTIFY_API_BASEURL"] = (0, base + "\n")
+    reason = notify_mock_missing(context.env) or ""
+    assert ("https://api.notifynl.nl" in reason) is missing

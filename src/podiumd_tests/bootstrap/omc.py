@@ -16,6 +16,8 @@ from typing import cast
 
 from podiumd_tests.auth.zgw_jwt import hs256_jwt
 from podiumd_tests.clients.platform import opennotificaties_client
+from podiumd_tests.mock_server import mock_server_root
+from podiumd_tests.responses import url_host
 from podiumd_tests.seed.opennotificaties import delete_abonnement
 
 if TYPE_CHECKING:
@@ -27,18 +29,26 @@ VALIDITY = 365 * 24 * 3600
 RENEW_BEFORE = 7 * 24 * 3600
 
 
+def omc_setting(env: Environment, var: str) -> str:
+    """An environment variable of the OMC pod, e.g. NOTIFY_API_BASEURL."""
+    return env.kube.exec(env.deployment_for("omc"), "printenv", var).strip()
+
+
+def notify_mock_missing(env: Environment) -> str | None:
+    """Skip reason when OMC's Notify base URL is not the mock server, else None."""
+    base = omc_setting(env, "NOTIFY_API_BASEURL")
+    if url_host(base) == url_host(mock_server_root(env)):
+        return None
+    return f"OMC's Notify base URL is {base}, not the mock server {mock_server_root(env)}"
+
+
 def omc_token(env: Environment, now: float) -> str:
-    """A token OMC's Events/Listen accepts, valid for VALIDITY from now."""
-    deployment = env.deployment_for("omc")
-
-    def setting(var: str) -> str:
-        return env.kube.exec(deployment, "printenv", var).strip()
-
+    """A token OMC's Events/Listen and Notify/Confirm accept, valid for VALIDITY from now."""
     payload = {
-        "iss": setting("OMC_AUTH_JWT_ISSUER"),
-        "aud": setting("OMC_AUTH_JWT_AUDIENCE"),
-        "userId": setting("OMC_AUTH_JWT_USERID"),
-        "userName": setting("OMC_AUTH_JWT_USERNAME"),
+        "iss": omc_setting(env, "OMC_AUTH_JWT_ISSUER"),
+        "aud": omc_setting(env, "OMC_AUTH_JWT_AUDIENCE"),
+        "userId": omc_setting(env, "OMC_AUTH_JWT_USERID"),
+        "userName": omc_setting(env, "OMC_AUTH_JWT_USERNAME"),
         "iat": int(now),
         "exp": int(now) + VALIDITY,
     }

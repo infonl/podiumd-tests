@@ -110,12 +110,12 @@ def make_digitaal_adres(
     adres: str,
     betrokkene: JsonObject | None = None,
 ) -> JsonObject:
-    """An e-mail address of a partij (its standard address), of a klantcontact's betrokkene, or of no one."""
+    """An e-mail address, or a telefoonnummer when adres has no @, of a partij (standard address) or betrokkene."""
     body: dict[str, object] = {
         "verstrektDoorBetrokkene": ref(betrokkene) if betrokkene else None,
         "verstrektDoorPartij": ref(partij) if partij else None,
         "adres": adres,
-        "soortDigitaalAdres": "email",
+        "soortDigitaalAdres": "email" if "@" in adres else "telefoonnummer",
         "omschrijving": registry.tagged("adres"),
         "isStandaardAdres": partij is not None,
     }

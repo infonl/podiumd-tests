@@ -35,6 +35,7 @@ CHECKOUTS_DIR = "/data/worldline"
 # The mock server's Notify (NotifyNL) API. OMC's Notify client keeps only the host of its base URL
 # (podiumd-minikube sets <mock server>/notify), so the path has no /notify prefix.
 NOTIFY_EMAIL = "/v2/notifications/email"
+NOTIFY_SMS = "/v2/notifications/sms"
 ROLLOUT_TIMEOUT = 180
 
 

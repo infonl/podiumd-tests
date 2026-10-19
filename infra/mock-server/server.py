@@ -3,7 +3,8 @@
 A POST with an Authorization header gets 204; one without gets 403. Open Notificaties checks
 both when an abonnement is created: it refuses a callback that accepts requests without auth.
 It also stands in for Notify (NotifyNL): a POST to .../v2/notifications/email or /sms gets
-the 201 and notification JSON a Notify client expects. On a path with /fail-first/ the first
+the 201 and notification JSON a Notify client expects, and the entry records the notification's
+"id"; GET .../v2/notifications/<id> answers with that notification. On a path with /fail-first/ the first
 notification (not Open Notificaties' kanaal "test" check) gets 500, to test redelivery.
 Each recorded entry carries the status it got.
 
@@ -31,6 +32,8 @@ FAILED_ONCE: set[str] = set()
 RECEIVED = Path(os.environ.get("RECEIVED_FILE", "/data/received.jsonl"))
 CHECKOUTS = Path(os.environ.get("CHECKOUTS_DIR", "/data/worldline"))
 HOSTED_CHECKOUT = re.compile(r"^/v2/[^/]+/hostedcheckouts(?:/([0-9a-f]+))?$")
+NOTIFICATION = re.compile(r"/v2/notifications/([0-9a-f-]{36})$")
+NOTIFICATIONS: dict[str, dict] = {}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -52,6 +55,8 @@ class Handler(BaseHTTPRequestHandler):
             "authorization": self.headers.get("Authorization"),
             "body": parsed,
         }
+        if "/v2/notifications/" in self.path:
+            entry["id"] = str(uuid.uuid4())
         try:
             # One write per request under a lock: parallel requests never interleave lines.
             with WRITE_LOCK, RECEIVED.open("a", encoding="utf-8") as handle:
@@ -63,7 +68,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         if entry["status"] == 201:
-            self._notify_created(parsed if isinstance(parsed, dict) else {})
+            self._notify_created(entry["id"], parsed if isinstance(parsed, dict) else {})
         else:
             self.send_response(entry["status"])
             self.end_headers()
@@ -81,21 +86,32 @@ class Handler(BaseHTTPRequestHandler):
             return 500
         return 204
 
-    def _notify_created(self, request):
+    def _notify_created(self, notification_id, request):
         template = request.get("template_id")
-        notification = {
-            "id": str(uuid.uuid4()),
+        kind = "sms" if self.path.endswith("/sms") else "email"
+        subject = f"ptest {kind} {template}"
+        NOTIFICATIONS[notification_id] = {
+            "id": notification_id,
             "reference": request.get("reference"),
-            "uri": f"{self.path}/{uuid.uuid4()}",
+            "email_address": request.get("email_address"),
+            "phone_number": request.get("phone_number"),
+            "type": kind,
+            "status": "delivered",
             "template": {"id": template, "version": 1, "uri": f"/v2/template/{template}"},
-            "content": {"body": "", "subject": "", "from_email": "", "from_number": ""},
+            "body": subject,
+            "subject": subject,
+            "created_at": time.strftime("%Y-%m-%dT%H:%M:%S.000000Z", time.gmtime()),
         }
-        payload = json.dumps(notification).encode()
-        self.send_response(201)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(payload)))
-        self.end_headers()
-        self.wfile.write(payload)
+        self._json(
+            201,
+            {
+                "id": notification_id,
+                "reference": request.get("reference"),
+                "uri": f"{self.path}/{notification_id}",
+                "template": NOTIFICATIONS[notification_id]["template"],
+                "content": {"body": subject, "subject": subject, "from_email": "", "from_number": ""},
+            },
+        )
 
     def _json(self, status, body):
         payload = json.dumps(body).encode()
@@ -128,6 +144,10 @@ class Handler(BaseHTTPRequestHandler):
         return {"status": "PAYMENT_CREATED", "createdPaymentOutput": {"payment": payment}}
 
     def do_GET(self):  # http.server's method name
+        notification = NOTIFICATION.search(self.path)
+        if notification and notification[1] in NOTIFICATIONS:
+            self._json(200, NOTIFICATIONS[notification[1]])
+            return
         found = HOSTED_CHECKOUT.match(self.path)
         if found and found[1] and (CHECKOUTS / f"{found[1]}.json").exists():
             self._json(200, self._checkout_status(found[1]))
