@@ -21,6 +21,7 @@ urls:
   objecttypen: https://objecttypen.johnb00.pd.test-rig.nl
   opennotificaties: https://notificaties.johnb00.pd.test-rig.nl
   mailpit: https://mailpit.johnb00.pd.test-rig.nl
+  grafana: https://grafana.johnb00.pd.test-rig.nl
   # No ingress: reached through a port-forward. Open Inwoner reaches KvK through the outway
   # (chart openinwoner.kvk, helm-charts #604); the tests compare against the api-proxy.
   api-proxy: http://api-proxy.podiumd.svc.cluster.local
@@ -39,3 +40,10 @@ secrets:
     k8s_secret: {name: keycloak-podiumd-admin, key: username}
   keycloak_admin_password:
     k8s_secret: {name: keycloak-podiumd-admin, key: password}
+  # Grafana's own admin (basic auth), from the monitoring stack setup-grafana-monitoring.sh deploys
+  # (monitoring-logging 1.0.19, 2026-10-20). grafana-admin in Key Vault is a Keycloak SSO user and
+  # cannot log in with basic auth.
+  grafana_username:
+    k8s_secret: {name: monitoring-grafana, key: admin-user, namespace: monitoring}
+  grafana_password:
+    k8s_secret: {name: monitoring-grafana, key: admin-password, namespace: monitoring}
