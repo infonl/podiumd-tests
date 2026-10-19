@@ -32,8 +32,9 @@ INFRA = REPO_ROOT / "infra" / "mock-server"
 RECEIVED_FILE = "/data/received.jsonl"
 # Where the mock server keeps the Worldline checkouts it plays.
 CHECKOUTS_DIR = "/data/worldline"
-# The mock server's Notify (NotifyNL) API: OMC's Notify base URL is the mock server's /notify.
-NOTIFY_EMAIL = "/notify/v2/notifications/email"
+# The mock server's Notify (NotifyNL) API. OMC's Notify client keeps only the host of its base URL
+# (podiumd-minikube sets <mock server>/notify), so the path has no /notify prefix.
+NOTIFY_EMAIL = "/v2/notifications/email"
 ROLLOUT_TIMEOUT = 180
 
 

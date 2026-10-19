@@ -37,11 +37,6 @@ pytestmark = [pytest.mark.integration, pytest.mark.requires("omc", "openzaak", "
 MAIL_TIMEOUT = 120
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="[omc-1] OMC 1.17.19 and 2.3.1 reject the 'source' root property of Open Notificaties 1.16.2 notifications"
-    " (206, inner 422), so it sends no mail; not yet reported upstream",
-)
 def test_new_zaak_mails_the_initiator(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     podiumd_env: Environment,
     need_bootstrap: Callable[..., None],
