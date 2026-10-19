@@ -24,15 +24,16 @@ Two variants, each deployed on a fresh install:
 
 A report that fails on the base and passes on base + open fixes is "fixed by PR" with its number.
 
-The merge for variant 2, with the branches of the round in their order:
+The merge for variant 2, with the head commits of the round's branches in their order (branches move,
+commits do not):
 
 ```bash
 git clone https://github.com/Dimpact-Samenwerking/helm-charts.git && cd helm-charts
 git checkout -B verify <base commit>
-for b in <branch> ...; do
-    git merge --no-edit "origin/$b" || {
+for h in <head commit> ...; do
+    git merge --no-edit "$h" || {
         u=$(git diff --name-only --diff-filter=U)
-        if grep -qvE '^charts/podiumd/(README\.md|docs/)' <<<"$u"; then echo "conflict in $b"; exit 1; fi
+        if grep -qvE '^charts/podiumd/(README\.md|docs/)' <<<"$u"; then echo "conflict in $h"; exit 1; fi
         for f in $u; do git checkout --ours -- "$f" 2>/dev/null && git add "$f" || git rm -q "$f"; done
         git commit --no-edit
     }
@@ -41,7 +42,7 @@ git rev-parse HEAD:charts/podiumd   # must equal the chart tree recorded for the
 ```
 
 Commit hashes differ per merge (author and date); the tree hash of `charts/podiumd` does not, so the
-round records that.
+round records that, plus the merge commit pushed for the installs.
 
 ## Environments
 
