@@ -1,8 +1,8 @@
 # Bug report verification
 
 How the known defects found by this suite are re-checked against a PodiumD version and ranked, so that
-anyone can repeat the check. The reports themselves are kept outside git; this document holds only the
-method.
+anyone can repeat the check. The reports are in the private repository infonl/podiumd-known-issues; this
+document holds only the method.
 
 ## Scope
 
