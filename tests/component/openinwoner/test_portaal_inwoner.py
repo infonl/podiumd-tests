@@ -212,7 +212,7 @@ def test_company_profile_shows_kvk_names(  # pylint: disable=too-many-arguments,
     need_bootstrap: Callable[..., None],
 ) -> None:
     """The company's profile shows its KvK number, its name and the vestiging's trade name from KvK (TA reg-118, reg-146)."""
-    need_bootstrap(BEDRIJF.name, "openinwoner-kvk")
+    need_bootstrap(BEDRIJF.name)
     kvk, vestiging = BEDRIJF.attributes["kvk"][0], BEDRIJF.attributes["vestigingsnummer"][0]
     naam = expect_status(kvk_basisprofiel(http, urls["api-proxy"], kvk), HTTPStatus.OK).json()["naam"]
     profiel = expect_status(kvk_vestigingsprofiel(http, urls["api-proxy"], vestiging), HTTPStatus.OK).json()
