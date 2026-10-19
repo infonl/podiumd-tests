@@ -26,6 +26,8 @@ Start with `summary.md` (its counts match pytest's last line), or open `report.h
 | XFailed | A known product defect showed again; the reason names it. | None; report it upstream if not done. |
 | XPassed | A known defect did not show this time. | A strict xfail that passes counts as Failed: the defect is fixed, so update the test. A non-strict one is a race that sometimes passes. |
 
+The table "Known defects" at the top of `summary.md` has one row per bug report id (the `[id]` that starts a known-defect reason): "still fails" when every test of the report XFailed, "did not show" when a test XPassed. A report that did not show is a candidate fix: check the defect and update the test.
+
 How to view a run:
 
 - `report.html`: a browser; one self-contained file with a filter per outcome and each test's message and log.

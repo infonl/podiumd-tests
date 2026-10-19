@@ -8,8 +8,11 @@ from datetime import timedelta
 from datetime import timezone
 
 from podiumd_tests.credentials import Redactor
+from podiumd_tests.results import Details
+from podiumd_tests.results import Entry
 from podiumd_tests.results import LocalDirSink
 from podiumd_tests.results import RunInfo
+from podiumd_tests.results import known_defects
 from podiumd_tests.results import parse_junit
 from podiumd_tests.results import run_dir
 from podiumd_tests.results import run_tag
@@ -43,6 +46,26 @@ def test_parse_junit_counts_every_outcome():
     assert [e.message for e in details.xfailed + details.skipped] == ["TICKET-1", "requires: oab"]
 
 
+def test_known_defects_lists_reports_whose_defect_did_not_show_first():
+    details = Details(
+        xfailed=[
+            Entry("t1", "[open-zaak-1] Open Zaak answers 500"),
+            Entry("t2", "[kiss-1] KISS 500"),
+            Entry("t3", "[kiss-1] KISS 500"),
+            Entry("t4", "untagged reason"),
+        ],
+        xpassed=[Entry("t5", "[kiss-1] KISS 500")],
+        failures=[Entry("t6", "[XPASS(strict)] [zac-4] ZAC unready"), Entry("t7", "assert 500 == 200")],
+    )
+    assert known_defects(details) == [
+        "| kiss-1 | **did not show in 1 of 3 tests** | 3 |",
+        "| zac-4 | **did not show** | 1 |",
+        "| no report id | still fails | 1 |",
+        "| open-zaak-1 | still fails | 1 |",
+    ]
+    assert known_defects(Details()) == []
+
+
 def test_write_run_redacts_secrets(tmp_path):
     redactor = Redactor()
     redactor.add("super-secret-token")
@@ -67,6 +90,7 @@ def test_write_run_redacts_secrets(tmp_path):
     assert "| 1 | 1 | 1 | 1 | 1 | 1 | 6 |" in summary
     assert "- Component versions: ita 3.3.4" in summary
     assert "- TICKET-2 (1): `tests.smoke.test_up::test_fixed`" in summary
+    assert "| no report id | **did not show in 1 of 2 tests** | 2 |" in summary
     assert "- requires: oab (1): `tests.smoke.test_up::test_skip`" in summary
 
 

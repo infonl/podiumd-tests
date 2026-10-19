@@ -205,6 +205,29 @@ def _by_message(entries: list[Entry]) -> list[str]:
 
 
 MAX_POLICY_DROPS = 50
+# Known-defect reasons start with their bug report id, e.g. "[open-zaak-1] ...".
+REPORT_ID = re.compile(r"^\[([a-z0-9-]+)\]")
+STRICT_XPASS = "[XPASS(strict)] "
+
+
+def known_defects(details: Details) -> list[str]:
+    """Table rows per bug report: whether its tests still fail; reports whose defect did not show first."""
+    shown: dict[str, list[bool]] = {}
+    xpassed = [*details.xpassed, *(f for f in details.failures if f.message.startswith(STRICT_XPASS))]
+    for entries, failed in ((details.xfailed, True), (xpassed, False)):
+        for entry in entries:
+            match = REPORT_ID.match(entry.message.removeprefix(STRICT_XPASS))
+            shown.setdefault(match.group(1) if match else "no report id", []).append(failed)
+
+    def result(outcomes: list[bool]) -> str:
+        if all(outcomes):
+            return "still fails"
+        if not any(outcomes):
+            return "**did not show**"
+        return f"**did not show in {outcomes.count(False)} of {len(outcomes)} tests**"
+
+    ordered = sorted(shown.items(), key=lambda item: (all(item[1]), item[0]))
+    return [f"| {report} | {result(outcomes)} | {len(outcomes)} |" for report, outcomes in ordered]
 
 
 def summary_markdown(info: RunInfo, details: Details) -> str:
@@ -226,6 +249,8 @@ def summary_markdown(info: RunInfo, details: Details) -> str:
         "|---|---|---|---|---|---|---|",
         f"| {c.passed} | {c.failed} | {c.errors} | {c.skipped} | {c.xfailed} | {c.xpassed} | {c.total} |",
     ]
+    if rows := known_defects(details):
+        lines += ["", "## Known defects", "", "| Report | Result | Tests |", "|---|---|---|", *rows]
     if details.disruptions:
         lines += ["", "## Pods replaced or restarted during the run", ""]
         lines += [f"- {d}" for d in details.disruptions]
