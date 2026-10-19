@@ -21,6 +21,7 @@ from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
+from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import CATALOGI
@@ -65,6 +66,24 @@ def test_new_zaak_keeps_the_chosen_fields(
     chosen = {"startdatum": startdatum, "communicatiekanaal": "E-mail", "toelichting": toelichting}
     assert {k: zaak.get(k) for k in chosen} == chosen
     assert section(zaak, "zaaktype")["uuid"] == section(zac_parameters, "zaaktype")["uuid"]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-2] ZAC 5.4.5 and 5.9.1 answer 500 to a zaak without startdatum (NullPointerException in"
+    " calculateDoorlooptijden); not yet reported upstream",
+)
+def test_zaak_without_startdatum_is_refused_or_starts_today(zac_zaak: Callable[..., JsonObject]) -> None:
+    """ZAC refuses a zaak without startdatum with 400, or starts it today."""
+    refused, zaak = "", {}
+    try:
+        zaak = zac_zaak(startdatum=None)
+    except UnexpectedStatusError as error:
+        refused = str(error)
+    if refused:
+        assert ": HTTP 400," in refused, refused
+    else:
+        assert zaak.get("startdatum") == date.today().isoformat()  # noqa: DTZ011  # ZAC's dates are local dates
 
 
 @pytest.mark.tc("ZAC-029", "ZAC-030", "ZAC-031")
