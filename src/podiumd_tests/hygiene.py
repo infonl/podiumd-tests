@@ -1,4 +1,4 @@
-"""Deployment hygiene of a workload: Kubernetes' Pod Security Standard "baseline", pinned images, resource requests.
+"""Deployment hygiene of a workload: Pod Security Standard "baseline", pinned images, requests, disruption budgets.
 
 Only the baseline level: most of PodiumD's charts do not meet "restricted" (allowPrivilegeEscalation,
 seccompProfile), and estates may leave out memory limits on purpose.
@@ -15,6 +15,8 @@ from podiumd_tests.kube import metadata_name
 from podiumd_tests.workloads import pod_containers
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from podiumd_tests.json_data import JsonObject
 
 # Capabilities the baseline level allows a container to add.
@@ -75,4 +77,29 @@ def missing_requests(workload: JsonObject) -> list[str]:
         missing = [r for r in ("cpu", "memory") if not asked.get(r)]
         if missing:
             found.append(f"{metadata_name(workload)}/{container.get('name')}: no {' or '.join(missing)} request")
+    return found
+
+
+def _namespace(item: JsonObject) -> object:
+    return section(item, "metadata").get("namespace")
+
+
+def without_disruption_budget(workloads: Sequence[JsonObject], budgets: Sequence[JsonObject]) -> list[str]:
+    """Names of the workloads with more than one replica whose pods no PodDisruptionBudget selects.
+
+    A budget selects by its matchLabels only; matchExpressions are not evaluated.
+    """
+    found: list[str] = []
+    for workload in workloads:
+        replicas = section(workload, "spec").get("replicas", 1)
+        if not isinstance(replicas, int) or replicas < 2:  # a budget needs a second replica
+            continue
+        labels = section(section(section(section(workload, "spec"), "template"), "metadata"), "labels")
+        selected = any(
+            _namespace(b) == _namespace(workload)
+            and section(section(section(b, "spec"), "selector"), "matchLabels").items() <= labels.items()
+            for b in budgets
+        )
+        if not selected:
+            found.append(metadata_name(workload))
     return found

@@ -11,6 +11,9 @@ import pytest
 from podiumd_tests.hygiene import baseline_violations
 from podiumd_tests.hygiene import missing_requests
 from podiumd_tests.hygiene import unpinned_images
+from podiumd_tests.hygiene import without_disruption_budget
+from podiumd_tests.json_data import section
+from podiumd_tests.kube import metadata_name
 from podiumd_tests.workloads import failed_jobs
 from podiumd_tests.workloads import unhealthy_pods
 from podiumd_tests.workloads import unready_workloads
@@ -61,3 +64,17 @@ def test_containers_request_cpu_and_memory(podiumd_env: Environment) -> None:
     if known:
         warnings.warn(f"[podiumd-chart-3] known containers without requests: {known}", stacklevel=1)
     assert not set(found) - set(known), sorted(set(found) - set(known))
+
+
+@pytest.mark.requires("keycloak")
+@pytest.mark.xfail(
+    strict=True,
+    reason="[podiumd-chart-7] podiumd 4.10.0 runs 2 Keycloak instances without a PodDisruptionBudget"
+    " (opt-in in helm-charts #597), so a node drain can stop both",
+)
+def test_keycloak_instances_have_a_disruption_budget(podiumd_env: Environment) -> None:
+    """Keycloak's instances have a PodDisruptionBudget, so a node drain keeps one running."""
+    keycloak = [w for w in podiumd_env.workloads() if metadata_name(w) == "keycloak"]
+    if not keycloak or all(section(w, "spec").get("replicas", 1) == 1 for w in keycloak):
+        pytest.skip("Keycloak runs one instance")
+    assert not without_disruption_budget(keycloak, podiumd_env.items("poddisruptionbudgets"))
