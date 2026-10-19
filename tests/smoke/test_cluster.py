@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import warnings
-
 from typing import TYPE_CHECKING
 
 import pytest
@@ -22,9 +20,6 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
 
 pytestmark = [pytest.mark.smoke, pytest.mark.cluster, pytest.mark.requires("cluster")]
-
-# The podiumd chart gives these containers `resources: {}`.
-KNOWN_WITHOUT_REQUESTS = ("openbeheer/openbeheer", "referentielijsten/referentielijsten")
 
 
 def test_workloads_ready(podiumd_env: Environment) -> None:
@@ -58,12 +53,9 @@ def test_images_are_pinned(podiumd_env: Environment) -> None:
 
 
 def test_containers_request_cpu_and_memory(podiumd_env: Environment) -> None:
-    """Every container requests CPU and memory, so the scheduler places it by size; KNOWN_WITHOUT_REQUESTS warn."""
+    """Every container requests CPU and memory, so the scheduler places it by size."""
     found = [m for w in podiumd_env.workloads() for m in missing_requests(w)]
-    known = [m for m in found if m.split(":", 1)[0] in KNOWN_WITHOUT_REQUESTS]
-    if known:
-        warnings.warn(f"[podiumd-chart-3] known containers without requests: {known}", stacklevel=1)
-    assert not set(found) - set(known), sorted(set(found) - set(known))
+    assert not found, sorted(set(found))
 
 
 @pytest.mark.requires("keycloak")

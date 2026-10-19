@@ -495,7 +495,7 @@ Updated 2026-10-14. The detail lives where it is kept up to date: blocked ports 
 | Open Inwoner | no "did you mean" on a search without hits, as the draaiboek asks (OI-097); only the autocomplete is fuzzy | `test_no_results_suggest_what_was_meant` |
 | mozilla-django-oidc | an unconfigured admin login answers 500 (`ImproperlyConfigured`) instead of refusing | none: every estate configures it |
 | PABC, ITA, Open Archiefbeheer, Open Formulieren, Open Beheer, Grafana | no HSTS on their own responses (PABC, ITA, Open Archiefbeheer and Open Beheer also no nosniff; PABC no frame protection); neither estate's edge adds security headers. ZAC sends neither either; its chart's nginx adds them | `test_security_headers` (xfail per app) |
-| podiumd chart | Open Beheer's and Referentielijsten's main containers have `resources: {}` (no CPU or memory request) | `test_containers_request_cpu_and_memory` warns (`KNOWN_WITHOUT_REQUESTS`) |
+| podiumd chart | Open Beheer's and Referentielijsten's main containers had `resources: {}` (no CPU or memory request); fixed in podiumd 4.10.0 (helm-charts #591, #615) | `test_containers_request_cpu_and_memory` |
 
 **Configuration finding for the estates:** KISS's Objecten token has no rights on Activiteitenlog, so KISS shows none of ITA's activities (`test_kiss_reads_itas_logboek`, the same in ExternalsPodiumD, podiumd-infra and minikube).
 
