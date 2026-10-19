@@ -348,11 +348,14 @@ def test_ita_mail_is_sent_after_a_mail_outage(  # pylint: disable=too-many-argum
             openklant.delete(str(a["url"])) for a in openklant.list("actoren", {"actoridentificatorObjectId": groep})
         ],
     )
-    taak = make_internetaak(openklant, registry, make_klantcontact(openklant, registry), [])
+    klantcontact = make_klantcontact(openklant, registry)
+    taak = make_internetaak(openklant, registry, klantcontact, [])
     clean_up_logboek(objecten, registry, objecttype_url(podiumd_env, "Activiteitenlog"), str(taak["uuid"]))
     forget_mails(podiumd_env, registry, f'to:"{adres}"')
     expect_status(ita.post(f"{ita_url}/api/internetaken/{taak['uuid']}/aan-mij-toewijzen", json={}), 200, 201, 204)
     with component_down(podiumd_env, http, "mailpit"):
         forward = ita.post(f"{ita_url}/api/internetaken/{taak['uuid']}/forward", json={"groep": groep})
         expect_status(forward, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    assert received(mailpit, registry, timeout=RETRY_TIMEOUT, to=adres)
+    # CronJob ita-nieuw-cv-notify mails the same address and body as "Nieuw contactverzoek - <nummer>".
+    subject = f"Contactverzoek Doorgestuurd - {klantcontact['nummer']}"
+    assert received(mailpit, registry, timeout=RETRY_TIMEOUT, to=adres, subject=subject)
