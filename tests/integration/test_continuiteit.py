@@ -44,6 +44,7 @@ from podiumd_tests.wait import WaitTimeoutError
 from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import ROOT_TIMEOUT
 from podiumd_tests.workloads import component_down
+from podiumd_tests.workloads import readiness_window
 from podiumd_tests.workloads import unready_workloads
 from podiumd_tests.zac import PRODUCTAANVRAAG_TIMEOUT
 from podiumd_tests.zac import productaanvraag_zaak
@@ -75,8 +76,8 @@ QUESTION_SUBJECT = "Algemene vraag"
 FETCH_RETRY_TIMEOUT_MS = 180_000
 # Time a failed mail gets to be sent again after the outage.
 RETRY_TIMEOUT = 8 * 60
-# Time a readiness probe gets to take a pod out of its Service: several failed probes.
-READINESS_WINDOW = 120
+# Time the kubelet and the endpoints controller get on top of the failed probes.
+READINESS_MARGIN = 30
 STOPPED = ("openzaak", "openformulieren", "openklant", "opennotificaties", "openinwoner", "ita", "kiss", "zac", "omc")
 
 
@@ -102,13 +103,14 @@ def test_stopped_component_harms_no_other(
 def test_zac_stays_ready_without_pabc(http: requests.Session, podiumd_env: Environment) -> None:
     """While PABC is stopped ZAC stays ready: a downstream outage does not take ZAC out of its Service."""
     zac = podiumd_env.deployment_for("zac")
+    window = readiness_window(podiumd_env.kube.get_json("deployment", zac)) + READINESS_MARGIN
 
     def zac_unready() -> bool:
         return bool(unready_workloads([podiumd_env.kube.get_json("deployment", zac)]))
 
     with component_down(podiumd_env, http, "pabc"):
         try:
-            left = wait_until(zac_unready, timeout=READINESS_WINDOW, description="ZAC unready")
+            left = wait_until(zac_unready, timeout=window, description="ZAC unready")
         except WaitTimeoutError:
             left = False
     wait_until(lambda: not zac_unready(), timeout=300, description="ZAC ready again")
