@@ -202,6 +202,13 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return EXIT_CONFIG if doctor.failed(checks) else EXIT_OK
 
 
+def _defines_test(node_id: str) -> bool:
+    """Whether the node id's file defines its test function; pytest on xdist runs nothing for an unknown one."""
+    name = node_id.split("::")[-1].split("[")[0]
+    source = (REPO_ROOT / node_id.split("::")[0]).read_text(encoding="utf-8")
+    return re.search(rf"^\s*(?:async\s+)?def {re.escape(name)}\(", source, re.MULTILINE) is not None
+
+
 def pytest_selection(profile: Profile, tier_name: str, run_id: str, junit: Path, args: argparse.Namespace) -> list[str]:
     """The pytest arguments of a run: the tier's paths and markers, the run tag and the results files."""
     tier = TIERS[tier_name]
@@ -210,6 +217,12 @@ def pytest_selection(profile: Profile, tier_name: str, run_id: str, junit: Path,
     outside = [a for a in given if not any((REPO_ROOT / a).resolve().is_relative_to(p) for p in paths)]
     if outside:
         msg = f"not in tier {tier_name}: {', '.join(outside)} (its paths: {', '.join(tier.paths)})"
+        raise ProfileError(msg)
+    unknown = [a for a in given if "::" in a and not _defines_test(a)]
+    if unknown:
+        msg = (
+            f"no such test: {', '.join(unknown)} (a node id names a test function, without the report's @group suffix)"
+        )
         raise ProfileError(msg)
     # Paths after -- narrow the tier; pytest would otherwise run them and the tier's paths.
     selection = [

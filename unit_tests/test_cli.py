@@ -117,6 +117,25 @@ def test_a_path_after_dashes_narrows_the_tier(tmp_path, profile_factory):
     assert selection[-3:] == ["tests/integration/test_sso.py", "-k", "zac"]
 
 
+def test_a_node_id_narrows_the_tier(tmp_path, profile_factory):
+    node = "tests/integration/test_continuiteit.py::test_stopped_component_harms_no_other[zac]"
+    args = argparse.Namespace(keep_data=False, pytest_args=[node])
+    assert cli.pytest_selection(profile_factory(), "full", "2610071230a3f1", tmp_path / "j.xml", args)[-1] == node
+
+
+@pytest.mark.parametrize(
+    "node",
+    [
+        "tests/integration/test_continuiteit.py::test_does_not_exist",
+        "tests/integration/test_continuiteit.py::test_zac_stays_ready_without_pabc@destructive",
+    ],
+)
+def test_an_unknown_node_id_is_refused(tmp_path, profile_factory, node):
+    args = argparse.Namespace(keep_data=False, pytest_args=[node])
+    with pytest.raises(ProfileError, match=r"no such test: "):
+        cli.pytest_selection(profile_factory(), "full", "2610071230a3f1", tmp_path / "j.xml", args)
+
+
 def test_a_path_outside_the_tier_is_refused(tmp_path, profile_factory):
     args = argparse.Namespace(keep_data=False, pytest_args=["tests/integration/test_sso.py"])
     with pytest.raises(ProfileError, match=r"not in tier smoke: tests/integration/test_sso\.py"):
