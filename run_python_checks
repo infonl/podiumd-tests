@@ -10,7 +10,8 @@ usage() {
 Usage: run_python_checks [-h|--help]
 
 Runs ruff check, shellcheck, ruff format --check, jscpd, pymarkdown,
-vulture, bandit, pylint, basedpyright and pytest (unit_tests/ only),
+vulture, bandit, pylint, basedpyright and pytest (unit_tests/ only, with
+coverage threshold from pyproject.toml),
 fastest first. Stops at the first failure. Upgrades the dev tools in
 .venv first when last upgraded over a day ago.
 EOF
@@ -140,7 +141,8 @@ fi
 echo "=== basedpyright (type checking) ==="
 basedpyright "$SRC" "${TEST_DIRS[@]}"
 
-echo "=== pytest (unit_tests) ==="
-python3 -m pytest -q unit_tests
+# Coverage source and threshold: [tool.coverage] in pyproject.toml.
+echo "=== pytest (unit_tests, with coverage) ==="
+python3 -m pytest -q --cov --cov-report=term-missing:skip-covered unit_tests
 
 echo "=== all checks passed ==="

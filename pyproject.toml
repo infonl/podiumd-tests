@@ -28,6 +28,7 @@ dev = [
     "vulture",
     "isort",
     "pytest",
+    "pytest-cov",        # coverage of the unit tests (run_python_checks)
     "bandit",
     "basedpyright",
     "jscpd",
@@ -64,6 +65,14 @@ markers = [
     "requires(*capabilities): skip unless the environment has these capabilities",
     "tc(*ids): draaiboek test case ids",
 ]
+
+[tool.coverage.run]
+source = ["src/podiumd_tests"]
+# Same excludes as the static checks: snippets run inside the components, the locustfile under Locust.
+omit = ["*/snippets/*.py", "*/perf/locustfile.py"]
+
+[tool.coverage.report]
+fail_under = 95
 
 # Tool settings below are copied from podiumd charts/podiumd/bin/pyproject.toml.
 # Deviations are marked "podiumd-tests:".
