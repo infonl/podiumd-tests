@@ -59,10 +59,11 @@ def test_containers_request_cpu_and_memory(podiumd_env: Environment) -> None:
 
 
 @pytest.mark.requires("keycloak")
+# Not strict: an estate that sets keycloak.podDisruptionBudget.enabled passes.
 @pytest.mark.xfail(
-    strict=True,
-    reason="[podiumd-chart-7] podiumd 4.10.0 runs 2 Keycloak instances without a PodDisruptionBudget"
-    " (opt-in in helm-charts #597), so a node drain can stop both",
+    strict=False,
+    reason="[podiumd-chart-7] podiumd 4.10.0's Keycloak PodDisruptionBudget is off by default"
+    " (keycloak.podDisruptionBudget.enabled), so a node drain can stop both instances",
 )
 def test_keycloak_instances_have_a_disruption_budget(podiumd_env: Environment) -> None:
     """Keycloak's instances have a PodDisruptionBudget, so a node drain keeps one running."""
