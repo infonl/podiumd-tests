@@ -163,7 +163,7 @@ def test_without_objecten_the_portal_kiss_and_zac_work(  # pylint: disable=too-m
 @pytest.mark.xfail(
     strict=True,
     raises=WaitTimeoutError,
-    reason="Open Formulieren 3.5.5 and 4.0.2 queue mail with django_yubin but schedule no retry_emails: a mail that fails"
+    reason="[open-formulieren-2] Open Formulieren 3.5.5 and 4.0.2 queue mail with django_yubin but schedule no retry_emails: a mail that fails"
     " during an SMTP outage stays failed and is never sent; not yet reported upstream",
 )
 def test_form_mail_is_sent_after_a_mail_outage(
@@ -186,7 +186,7 @@ def test_form_mail_is_sent_after_a_mail_outage(
 @pytest.mark.xfail(
     strict=True,
     raises=WaitTimeoutError,
-    reason="ZAC 5.4.5 and 5.9.1 send mail directly over SMTP: during an outage it logs 'Failed to send mail' and drops it,"
+    reason="[zac-3] ZAC 5.4.5 and 5.9.1 send mail directly over SMTP: during an outage it logs 'Failed to send mail' and drops it,"
     " without a queue or a retry; not yet reported upstream",
 )
 def test_zac_mail_is_sent_after_a_mail_outage(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
@@ -290,7 +290,7 @@ def test_portal_mail_waits_in_the_queue_during_a_mail_outage(  # pylint: disable
 @pytest.mark.xfail(
     strict=True,
     raises=WaitTimeoutError,
-    reason="ITA 3.3.2 and 3.3.4 send mail straight over SMTP: during an outage it logs the SmtpException, still answers 200"
+    reason="[ita-1] ITA 3.3.2 and 3.3.4 send mail straight over SMTP: during an outage it logs the SmtpException, still answers 200"
     " and drops the mail, without a queue or a retry; not yet reported upstream",
 )
 def test_ita_mail_is_sent_after_a_mail_outage(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures

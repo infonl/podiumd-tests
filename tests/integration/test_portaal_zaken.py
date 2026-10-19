@@ -71,7 +71,7 @@ WHO = [
         "bedrijf",
         marks=pytest.mark.xfail(
             strict=True,
-            reason="Open Inwoner 2.4.3: with fetch_eherkenning_zaken_with_openzaak_120_params Mijn zaken lists"
+            reason="[open-inwoner-2] Open Inwoner 2.4.3: with fetch_eherkenning_zaken_with_openzaak_120_params Mijn zaken lists"
             " a zaak by nietNatuurlijkPersoon.vestigingsNummer, but its detail accepts only a vestiging rol"
             " (fetch_roles_for_zaak_and_vestigingsnummer) and answers 404; not yet reported upstream",
         ),

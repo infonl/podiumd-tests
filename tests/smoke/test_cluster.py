@@ -59,5 +59,5 @@ def test_containers_request_cpu_and_memory(podiumd_env: Environment) -> None:
     found = [m for w in podiumd_env.workloads() for m in missing_requests(w)]
     known = [m for m in found if m.split(":", 1)[0] in KNOWN_WITHOUT_REQUESTS]
     if known:
-        warnings.warn(f"known containers without requests: {known}", stacklevel=1)
+        warnings.warn(f"[podiumd-chart-3] known containers without requests: {known}", stacklevel=1)
     assert not set(found) - set(known), sorted(set(found) - set(known))

@@ -157,7 +157,7 @@ def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(  # pylint: 
 @pytest.mark.requires("kiss", "objecten", "cluster")
 @pytest.mark.xfail(
     strict=True,
-    reason="reference configuration (ExternalsPodiumD, podiumd-infra, minikube): KISS's Objecten token"
+    reason="[kiss-2] reference configuration (ExternalsPodiumD, podiumd-infra, minikube): KISS's Objecten token"
     " (LOGBOEK_TOKEN) has no permission on Activiteitenlog, only ITA's has; Objecten answers 200 with"
     " an empty list, so KISS shows none of ITA's activities",
 )

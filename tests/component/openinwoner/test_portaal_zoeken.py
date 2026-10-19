@@ -114,7 +114,7 @@ def test_feedback_on_a_search_is_stored(
 @pytest.mark.usefixtures("categories")
 @pytest.mark.xfail(
     strict=True,
-    reason="Open Inwoner offers no 'did you mean': a search without hits shows fixed tips only; its"
+    reason="[open-inwoner-3] Open Inwoner offers no 'did you mean': a search without hits shows fixed tips only; its"
     " fuzzy matching lives in the autocomplete, not on the results page",
 )
 def test_no_results_suggest_what_was_meant(http: requests.Session, urls: dict[str, str]) -> None:

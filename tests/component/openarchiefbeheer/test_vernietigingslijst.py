@@ -78,13 +78,13 @@ PERMISSIONS = {
 RESPONSE_RACE = pytest.mark.xfail(
     strict=False,
     raises=WaitTimeoutError,
-    reason="Open Archiefbeheer 2.0.0 queues process_review_response inside the request's transaction"
+    reason="[open-archiefbeheer-1] Open Archiefbeheer 2.0.0 queues process_review_response inside the request's transaction"
     " (destruction/api/serializers.py: .delay without on_commit); a quick worker finds no ReviewResponse"
     " (DoesNotExist) and the list stays changes_requested; open-archiefbeheer#1103 (symptom only)",
 )
 REVIEWER_RENAMES = pytest.mark.xfail(
     strict=True,
-    reason="Open Archiefbeheer: the reviewer, while the list is assigned to it, can rename (PATCH) the list;"
+    reason="[open-archiefbeheer-2] Open Archiefbeheer: the reviewer, while the list is assigned to it, can rename (PATCH) the list;"
     " the draaiboek leaves changes to the record manager; not yet reported",
 )
 
@@ -317,7 +317,7 @@ def test_record_manager_takes_the_proposals_over(
 @pytest.mark.tc("ABC-012")
 @pytest.mark.xfail(
     strict=True,
-    reason="Open Archiefbeheer: a review response cannot empty the archiefactiedatum ('Dit veld mag niet leeg"
+    reason="[open-archiefbeheer-3] Open Archiefbeheer: a review response cannot empty the archiefactiedatum ('Dit veld mag niet leeg"
     " zijn'), so a proposal to keep a zaak forever cannot be taken over as the draaiboek asks; not yet reported",
 )
 def test_keeping_forever_empties_the_archiefactiedatum(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
@@ -555,7 +555,7 @@ def fixture_archive_config(podiumd_env: Environment) -> Iterator[Callable[..., N
 # The destruction never completes on Open Zaak 1.29.3.
 DESTRUCTION_FAILS = pytest.mark.xfail(
     strict=True,
-    reason="Open Zaak 1.29.3 answers 500 on DELETE of a zaak with a resultaat although it deletes it"
+    reason="[open-archiefbeheer-4] Open Zaak 1.29.3 answers 500 on DELETE of a zaak with a resultaat although it deletes it"
     " (test_closed_zaak_delete_answers_204); Open Archiefbeheer marks the item failed, so the list"
     " never reaches deleted and files no report; open-zaak#2484",
 )

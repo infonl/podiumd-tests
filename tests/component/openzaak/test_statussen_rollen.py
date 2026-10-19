@@ -58,7 +58,7 @@ def test_zaak_closes_with_resultaat_and_eindstatus(
 
 @pytest.mark.xfail(
     strict=True,
-    reason="Open Zaak 1.29.3: DELETE of a zaak with a resultaat answers 500 although it deletes the zaak "
+    reason="[open-zaak-1] Open Zaak 1.29.3: DELETE of a zaak with a resultaat answers 500 although it deletes the zaak "
     "(vng_api_common etag recalculated for the deleted resultaat); open-zaak#2484, fixed in 1.31.0",
 )
 def test_closed_zaak_delete_answers_204(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
@@ -103,7 +103,7 @@ def test_zaak_found_by_initiator_bsn(openzaak: ApiClient, registry: ResourceRegi
 
 @pytest.mark.xfail(
     strict=True,
-    reason="Open Zaak 1.29.3: _zoek ignores an unknown filter (e.g. inpBsn__in, which TA reg-56 relied on) and returns "
+    reason="[open-zaak-2] Open Zaak 1.29.3: _zoek ignores an unknown filter (e.g. inpBsn__in, which TA reg-56 relied on) and returns "
     "all zaken, where GET /zaken answers 400; not yet reported upstream",
 )
 def test_zoek_refuses_an_unknown_filter(openzaak: ApiClient) -> None:

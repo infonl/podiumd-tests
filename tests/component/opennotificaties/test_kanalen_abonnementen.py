@@ -66,7 +66,7 @@ def test_abonnement_calls_its_callback_with_its_auth(
 
 @pytest.mark.xfail(
     strict=True,
-    reason="Open Notificaties: an unreachable callback URL makes POST /abonnement answer 500 "
+    reason="[open-notificaties-1] Open Notificaties: an unreachable callback URL makes POST /abonnement answer 500 "
     "(requests ConnectionError in nrc/api/validators.py) instead of a 400; not yet reported upstream",
 )
 def test_abonnement_with_an_unreachable_callback_is_refused(

@@ -35,12 +35,12 @@ PUBLIC = sorted(set(COMPONENTS) - set(NOT_PUBLIC))
 FOREIGN_ORIGIN = "https://ptest-foreign.example.invalid"
 # Apps that send none or part of the headers themselves; xfail without strict, as an edge may add them.
 HEADER_GAPS = {
-    "pabc": "PABC sends no HSTS, nosniff or frame protection",
-    "ita": "ITA sends no HSTS and no nosniff",
-    "openarchiefbeheer": "Open Archiefbeheer sends no HSTS and no nosniff",
-    "openformulieren": "Open Formulieren sends no HSTS",
-    "grafana": "Grafana sends no HSTS (its strict_transport_security setting is off)",
-    "openbeheer": "Open Beheer 0.9.1 sends no HSTS and no nosniff on its frontend",
+    "pabc": "[pabc-1] PABC sends no HSTS, nosniff or frame protection",
+    "ita": "[ita-2] ITA sends no HSTS and no nosniff",
+    "openarchiefbeheer": "[open-archiefbeheer-5] Open Archiefbeheer sends no HSTS and no nosniff",
+    "openformulieren": "[open-formulieren-3] Open Formulieren sends no HSTS",
+    "grafana": "[podiumd-chart-1] Grafana sends no HSTS (its strict_transport_security setting is off)",
+    "openbeheer": "[open-beheer-1] Open Beheer 0.9.1 sends no HSTS and no nosniff on its frontend",
     "omc": "OMC (NotifyNL) sends no HSTS and no nosniff",
 }
 

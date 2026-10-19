@@ -71,7 +71,7 @@ def test_submission_creates_a_zaak_with_the_form_pdf(  # pylint: disable=too-man
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,
-    reason="Open Formulieren (3.5.5, 3.5.8, 4.0.2) registers an anonymous submission without name fields with an initiator rol"
+    reason="[open-formulieren-1] Open Formulieren (3.5.5, 3.5.8, 4.0.2) registers an anonymous submission without name fields with an initiator rol"
     " without betrokkeneIdentificatie, which Open Zaak 1.29.3 refuses (400 invalid-betrokkene); the zaak and PDF"
     " exist, the registration fails; not yet reported upstream",
 )

@@ -267,7 +267,7 @@ def test_uncertain_payment_registers_once_the_provider_confirms_it(
 
 @pytest.mark.xfail(
     strict=True,
-    reason="Open Formulieren's (3.5.5, 3.5.8, 4.0.2) ZGW registration creates the zaak when the form is completed, before the"
+    reason="[open-formulieren-5] Open Formulieren's (3.5.5, 3.5.8, 4.0.2) ZGW registration creates the zaak when the form is completed, before the"
     " payment (pre-registration), also with wait_for_payment_to_register; the draaiboek expects no zaak",
 )
 @pytest.mark.parametrize("payment_form", [OGONE, WORLDLINE], indirect=True)
@@ -282,7 +282,7 @@ def test_unpaid_form_leaves_no_zaak(
 
 @pytest.mark.xfail(
     strict=True,
-    reason="with wait_for_payment_to_register on, Open Formulieren (3.5.5, 3.5.8, 4.0.2) skips its payment status update"
+    reason="[open-formulieren-4] with wait_for_payment_to_register on, Open Formulieren (3.5.5, 3.5.8, 4.0.2) skips its payment status update"
     " (update_submission_payment_status), so the pre-registered zaak stays betalingsindicatie nog_niet after"
     " the payment; not yet reported upstream",
 )

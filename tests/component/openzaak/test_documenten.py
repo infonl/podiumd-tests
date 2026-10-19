@@ -90,7 +90,7 @@ def test_document_integriteit_and_ondertekening(
 
 
 AUDITTRAIL_BUG = (
-    "Open Zaak 1.29.3: audittrail endpoints check the component 'audittrails' (AuditTrail's app label), "
+    "[open-zaak-3] Open Zaak 1.29.3: audittrail endpoints check the component 'audittrails' (AuditTrail's app label), "
     "so only clients with heeft_alle_autorisaties can read them; not yet reported upstream"
 )
 
