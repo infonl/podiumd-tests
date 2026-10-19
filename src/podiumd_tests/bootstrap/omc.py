@@ -11,6 +11,7 @@ import json
 import time
 
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
@@ -22,6 +23,7 @@ from podiumd_tests.seed.opennotificaties import delete_abonnement
 
 if TYPE_CHECKING:
     from podiumd_tests.bootstrap import Context
+    from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
 
 STORE_KEY = "ptest_bootstrap_omc_abonnement_record"
@@ -40,6 +42,14 @@ def notify_mock_missing(env: Environment) -> str | None:
     if url_host(base) == url_host(mock_server_root(env)):
         return None
     return f"OMC's Notify base URL is {base}, not the mock server {mock_server_root(env)}"
+
+
+def omc_actor_missing(env: Environment, openklant: ApiClient) -> str | None:
+    """Skip reason when Open Klant has no actor OMC_ACTOR_ID, which OMC links to each klantcontact it registers."""
+    actor = omc_setting(env, "OMC_ACTOR_ID")
+    if openklant.request("GET", f"actoren/{actor}", HTTPStatus.OK, HTTPStatus.NOT_FOUND).ok:
+        return None
+    return f"Open Klant has no actor {actor} (OMC_ACTOR_ID): the environment owner creates it"
 
 
 def omc_token(env: Environment, now: float) -> str:

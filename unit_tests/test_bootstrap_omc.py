@@ -5,12 +5,15 @@ import json
 import time
 
 import pytest
+import requests
 
 from podiumd_tests.bootstrap import Context
 from podiumd_tests.bootstrap.omc import STORE_KEY
 from podiumd_tests.bootstrap.omc import VALIDITY
 from podiumd_tests.bootstrap.omc import OmcAbonnement
 from podiumd_tests.bootstrap.omc import notify_mock_missing
+from podiumd_tests.bootstrap.omc import omc_actor_missing
+from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.credentials import env_var_name
 
@@ -86,3 +89,13 @@ def test_notify_mock_missing(ctx, fake_runner, base, missing):
     fake_runner.answers["printenv NOTIFY_API_BASEURL"] = (0, base + "\n")
     reason = notify_mock_missing(context.env) or ""
     assert ("https://api.notifynl.nl" in reason) is missing
+
+
+@pytest.mark.parametrize(("status", "missing"), [(200, False), (404, True)])
+def test_omc_actor_missing(ctx, fake_runner, fake_http, status, missing):
+    context = ctx()
+    fake_runner.answers["printenv OMC_ACTOR_ID"] = (0, "a1\n")
+    fake_http({"GET /klantinteracties/api/v1/actoren/a1": (status, {})})
+    openklant = ApiClient(requests.Session(), "https://ok.example.test/klantinteracties/api/v1", {})
+    reason = omc_actor_missing(context.env, openklant) or ""
+    assert ("a1" in reason) is missing

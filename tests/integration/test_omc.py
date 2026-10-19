@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.bootstrap.omc import notify_mock_missing
+from podiumd_tests.bootstrap.omc import omc_actor_missing
 from podiumd_tests.bootstrap.omc import omc_setting
 from podiumd_tests.bootstrap.omc import omc_token
 from podiumd_tests.json_data import section
@@ -95,8 +96,8 @@ def notify_request(env: Environment, channel: tuple[str, str], adres: str, templ
 
 
 def email_address(registry: ResourceRegistry) -> str:
-    """A tagged address no one reads."""
-    return f"{registry.tagged('omc')}@example.invalid"
+    """A tagged address of this test only, which no one reads."""
+    return f"{registry.tagged(f'omc-{uuid.uuid4().hex[:8]}')}@example.invalid"
 
 
 def test_new_zaak_mails_the_initiator(
@@ -152,7 +153,8 @@ def test_initiator_with_only_a_phone_number_gets_an_sms(
     inwoner_zaak: Callable[[tuple[str, str], str], JsonObject],
 ) -> None:
     """An initiator whose only digitaal adres is a telefoonnummer gets the zaak-created SMS."""
-    adres = f"06{uuid.uuid4().int % 10**8:08d}"
+    # In international form: OMC sends a national 06 number as +316.
+    adres = f"+316{uuid.uuid4().int % 10**8:08d}"
     make_status(openzaak, inwoner_zaak(SMS, adres), str(parts.statustypen[0]["url"]))
     notify_request(podiumd_env, SMS, adres, "NOTIFY_TEMPLATEID_SMS_ZAAKCREATE")
 
@@ -167,6 +169,8 @@ def test_delivery_receipt_becomes_a_klantcontact(  # pylint: disable=too-many-ar
     inwoner_zaak: Callable[[tuple[str, str], str], JsonObject],
 ) -> None:
     """Notify's delivery receipt for OMC's mail makes OMC register a klantcontact about the zaak in Open Klant."""
+    if reason := omc_actor_missing(podiumd_env, openklant):
+        pytest.skip(reason)
     adres = email_address(registry)
     zaak = inwoner_zaak(EMAIL, adres)
     about = {"onderwerpobjectidentificatorObjectId": str(zaak["uuid"])}
