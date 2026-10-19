@@ -1,31 +1,5 @@
 # Requests for podiumd-infra
 
-## kees00: OMC sends Notify requests to podiumd-tests' Notify mock
-
-podiumd-tests' OMC tests (`tests/integration/test_omc.py`) check that OMC mails or texts the initiator of a zaak and
-that a delivery receipt becomes a klantcontact in Open Klant. They run only where OMC's Notify base URL is the
-mock server that `podiumd-tests bootstrap` deploys (step `infra-mock-server`); elsewhere they skip. On kees00 OMC
-posts to `https://api.notifynl.nl`, so the tests skip there.
-
-Set in kees00's podiumd values, as podiumd-minikube does (`values.yaml`, section omc):
-
-```yaml
-omc:
-  settings:
-    notify:
-      api:
-        baseUrl: http://ptest-bootstrap-mock-server.<namespace>/notify
-        key: <any key in NotifyNL's format name-serviceId-secret>
-```
-
-- The mock accepts any key; OMC's Notify client refuses one that is not in the format above.
-- OMC keeps only the host of the base URL; the `/notify` path is not used.
-- The template ids stay as they are (the chart defaults, the same as ExternalsPodiumD icat ontw).
-- The mock server exists after `podiumd-tests bootstrap --env kees00`; before that OMC's Notify calls fail.
-
-Done when `podiumd-tests run --env kees00 --tier full -- tests/integration/test_omc.py` runs the tests instead of
-skipping them.
-
 ## kees00: Open Klant has the actor that OMC_ACTOR_ID names
 
 After a delivery receipt (`POST /Notify/Confirm`) OMC registers a klantcontact in Open Klant and then links its
@@ -36,3 +10,32 @@ the receipt with 500. podiumd-tests' `test_delivery_receipt_becomes_a_klantconta
 Either create an actor in Open Klant and set `omc.settings.omc.actor.id` to its uuid, or create the actor with that
 uuid (Open Klant's API assigns uuids itself, so this needs Open Klant's Django shell or admin), for example a
 `geautomatiseerde_actor` named "OMC".
+
+## kees00: Open Zaak knows OMC's API client
+
+OMC reads the zaak and its status from Open Zaak with a ZGW token issued as `omc`
+(`omc.settings.zgw.auth.jwt.issuer`, secret `omc.settings.zgw.auth.jwt.secret`). On kees00 Open Zaak answers
+403 "Client identifier bestaat niet" (2026-10-19), so OMC answers every notification with 412 and sends nothing.
+
+Add to Open Zaak's configuration, as podiumd-minikube and ExternalsPodiumD do:
+
+```yaml
+openzaak:
+  configuration:
+    data: # setup_configuration
+      vng_api_common_credentials:
+        items:
+          - identifier: omc
+            secret: <omc.settings.zgw.auth.jwt.secret>
+      vng_api_common_applicaties:
+        items:
+          - uuid: 746c65d7-b88e-4043-a1c0-15451004fbfa
+            client_ids: [omc]
+            heeft_alle_autorisaties: true
+            label: OMC
+```
+
+OMC also reads Open Klant, Objecten and Objecttypen with tokens of identifier `omc`
+(`omc.settings.zgw.auth.key.*`); check that those token auths exist too.
+
+Done when `podiumd-tests run --env kees00 --tier full -- tests/integration/test_omc.py` passes.
