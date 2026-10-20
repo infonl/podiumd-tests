@@ -113,6 +113,19 @@ def test_objects_api_registrations_are_valid(podiumd_env: Environment) -> None:
     assert [f"{b['form']}/{b['backend']}: {b['errors']}" for b in backends if b["errors"]] == []
 
 
+@pytest.mark.requires("cluster")
+def test_objects_api_groups_read(podiumd_env: Environment) -> None:
+    """Every Objects API group, used by a form or not, lists objects and objecttypes with its own Services."""
+    groups = cast(
+        "list[dict[str, object]]",
+        run_snippet(
+            podiumd_env.kube, podiumd_env.deployment_for("openformulieren"), "openformulieren_objects_groups", {}
+        ),
+    )
+    assert groups, "no Objects API group in Open Formulieren"
+    assert [f"{g['group']}: {g['errors']}" for g in groups if g["errors"]] == []
+
+
 @pytest.mark.tc("INT-003")
 def test_address_search_reaches_pdok(
     http: requests.Session,
