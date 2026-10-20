@@ -73,6 +73,13 @@ def test_dev_defaults_are_not_redacted_but_overrides_are(profile_factory, env_fa
     assert env.redactor.redact("keycloak-admin s3cret-override") == "keycloak-admin ***"
 
 
+def test_a_secret_equal_to_a_dev_default_is_not_redacted(profile_factory, env_factory):
+    profile = profile_factory(estate="minikube", secrets={"user": {"dev_default": "admin"}})
+    env = env_factory(profile, {env_var_name("keycloak_admin_password"): "admin"})
+    env.credentials.get("keycloak_admin_password")
+    assert env.redactor.redact("test_admin_login") == "test_admin_login"
+
+
 def test_usernames_are_not_redacted(env_factory):
     env = env_factory(environ={env_var_name("grafana_username"): "admin"})
     env.credentials.get("grafana_username")

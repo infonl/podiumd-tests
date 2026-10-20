@@ -78,9 +78,9 @@ class SecretResolver:
         """Value of a secret; SecretError if it cannot be resolved."""
         if name not in self._cache:
             value = self._resolve(name)
-            # Usernames and published dev defaults such as "admin" are no secret; masking them garbles
-            # ordinary text such as test ids ("keycloak-admin").
-            if not name.endswith("_username") and not self._is_dev_default(name):
+            # Usernames and published dev defaults such as "admin" are no secret, also when another source
+            # returns that value (minikube's Keycloak admin password); masking them garbles test ids.
+            if not name.endswith("_username") and not self._is_dev_default(name) and value not in self._dev_defaults():
                 self._redactor.add(value)
             self._cache[name] = value
         return self._cache[name]
@@ -120,6 +120,9 @@ class SecretResolver:
     def _is_dev_default(self, name: str) -> bool:
         spec = self._profile.secrets.get(name)
         return spec is not None and spec.source == "dev_default" and not self._environ.get(env_var_name(name))
+
+    def _dev_defaults(self) -> set[str]:
+        return {s.options["value"] for s in self._profile.secrets.values() if s.source == "dev_default"}
 
     def _resolve(self, name: str) -> str:
         override = self._environ.get(env_var_name(name))
