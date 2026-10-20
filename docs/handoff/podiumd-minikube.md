@@ -9,8 +9,9 @@ podiumd-infra (kees00) and ExternalsPodiumD (dim1, dim3, dimp, info, icat and ma
 identity provider `accp-dimp-oidc` (`keycloak-oidc`) federates logins to Dimpact's acceptance Keycloak
 (`https://acc-keycloak.dimpact.nl/realms/podiumd`), and mapper `admin-mapper`
 (`oidc-hardcoded-role-idp-mapper`, `syncMode: FORCE`, role `admin`) gives those users the master realm's
-`admin` role. minikube sets none of these, so its deploys never import an identity provider or an admin-role
-mapper.
+`admin` role. In the podiumd realm, mapper `oidc-hardcoded-group-idp-mapper` (`syncMode: FORCE`) puts them in
+group `/administrators`. minikube sets none of these, so its deploys never import an identity provider or an
+admin-role mapper.
 
 That path broke kees00's deploy on 2026-10-20: Keycloak 26.8 (CVE-2026-12388) refuses the mapper with 403
 unless the identity provider has `config.allowAdminRoleMapping: "true"`, and `keycloak-import-master-realm`
@@ -23,7 +24,8 @@ Requested, as for the DigiD and eHerkenning mocks:
    standing in for the acceptance Keycloak.
 2. In `keycloak.config`: `adminIdentityProviders` with an identity provider for that realm, with
    `allowAdminRoleMapping: "true"`; `adminIdentityProviderMappers` with the same `admin-mapper` as the
-   estates; `realmIdentityProviders` for the podiumd realm, as the estates have it.
+   estates; `realmIdentityProviders` for the podiumd realm with the group mapper to `/administrators`, as the estates
+   have it.
 3. Tell podiumd-tests: the identity provider alias, the realm, and the Secret name and key of the test user's
    password. podiumd-tests then adds a test: a Keycloak admin console login through that identity provider
    gets the master `admin` role.
