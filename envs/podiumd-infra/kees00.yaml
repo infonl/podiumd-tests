@@ -27,8 +27,13 @@ urls:
   openbeheer: https://openbeheer.kees00.pd.test-rig.nl
   referentielijsten: https://referentielijsten.kees00.pd.test-rig.nl
   openarchiefbeheer: https://abc.kees00.pd.test-rig.nl
+  openvtb: https://openvtb.kees00.pd.test-rig.nl
+  zaakbrug: https://zaakbrug.kees00.pd.test-rig.nl
   # No ingress: reached through a port-forward.
   api-proxy: http://api-proxy.podiumd.svc.cluster.local
+  frankgateway: http://frankgateway-outway.podiumd.svc.cluster.local:9080
+  # Off the public edge until known issue zgw-office-addin-1 is fixed.
+  zgw-office-addin: http://zgw-office-addin-frontend.podiumd.svc.cluster.local
 secrets:
   keycloak_admin_username:
     k8s_secret: {name: keycloak-podiumd-admin, key: username}
