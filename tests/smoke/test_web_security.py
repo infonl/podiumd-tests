@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.components import COMPONENTS
+from podiumd_tests.components import HOSTED
 from podiumd_tests.kube import cluster_service
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import describe
@@ -32,7 +32,7 @@ pytestmark = pytest.mark.smoke
 
 # Mailpit is minikube's mail sink; api-proxy and the Frank!Gateway outway have no public host on the estates.
 NOT_PUBLIC = ("mailpit", "api-proxy", "frankgateway")
-PUBLIC = sorted(set(COMPONENTS) - set(NOT_PUBLIC))
+PUBLIC = sorted(set(HOSTED) - set(NOT_PUBLIC))
 FOREIGN_ORIGIN = "https://ptest-foreign.example.invalid"
 # Apps that send none or part of the headers themselves; xfail without strict, as an edge may add them.
 HEADER_GAPS = {

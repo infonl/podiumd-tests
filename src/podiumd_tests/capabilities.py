@@ -16,13 +16,13 @@ from typing import TYPE_CHECKING
 from podiumd_tests.cilium import CILIUM
 from podiumd_tests.cilium import HUBBLE
 from podiumd_tests.components import COMPONENTS
+from podiumd_tests.components import HOSTED
 from podiumd_tests.components import deployed_components
 from podiumd_tests.kube import cluster_service
 
 if TYPE_CHECKING:
     from podiumd_tests.config import Profile
 
-COMPONENT_NAMES = frozenset(COMPONENTS)
 COMPONENTS_WITH_DEPLOYMENT = frozenset(n for n, c in COMPONENTS.items() if c.deployment_prefixes)
 CLUSTER = "cluster"
 NETWORK = (CILIUM, HUBBLE)
@@ -57,7 +57,7 @@ def detect(
     network: the cluster's network capabilities and the reasons for the absent ones (cilium.detect_network).
     """
     configured = set(profile.urls)
-    reasons = dict.fromkeys(COMPONENT_NAMES - configured, "no URL in profile")
+    reasons = dict.fromkeys(set(HOSTED) - configured, "no URL in profile")
     if deployment_names is None:
         reasons[CLUSTER] = f"kube API of context {profile.kube.context} not reachable from this console"
         reasons.update(dict.fromkeys(NETWORK, "kube API not reachable"))

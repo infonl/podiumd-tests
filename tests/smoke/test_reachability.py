@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.components import COMPONENTS
 from podiumd_tests.components import DJANGO_APPS
+from podiumd_tests.components import HOSTED
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
@@ -28,7 +28,7 @@ pytestmark = pytest.mark.smoke
 MAX_SECONDS = 5.0
 
 
-@pytest.mark.parametrize("component", [requiring(c, c) for c in sorted(COMPONENTS)])
+@pytest.mark.parametrize("component", [requiring(c, c) for c in sorted(HOSTED)])
 def test_root_answers(http: requests.Session, urls: dict[str, str], component: str) -> None:
     """The root of each component answers without a server error, within 5 s (81).
 

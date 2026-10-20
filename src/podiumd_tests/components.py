@@ -72,6 +72,9 @@ COMPONENTS: dict[str, Component] = {
     "clamav": Component((), ("clamav",), monitored=True),
 }
 
+# Components with a host of their own: the URL-based checks (reachability, web security) and profile URLs cover these.
+HOSTED = tuple(name for name, component in COMPONENTS.items() if component.host_aliases)
+
 # Components that are Django apps: they have /admin/, `manage.py shell` and Django's mail settings.
 DJANGO_APPS = (
     "openzaak",
