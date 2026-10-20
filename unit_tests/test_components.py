@@ -35,3 +35,8 @@ def test_kiss_deployed_under_its_chart_name_contact():
 def test_new_410_components_by_deployment():
     names = ["openvtb", "podiumd-zaakbrug", "zgw-office-addin-frontend", "zgw-office-addin-backend"]
     assert deployed_components(names) == {"openvtb", "zaakbrug", "zgw-office-addin"}
+
+
+def test_components_without_url_by_workload():
+    names = ["elastic-operator", "redis-ha", "clamav", "podiumd-minikube-openbao"]
+    assert deployed_components(names) == {"eck-operator", "redis", "clamav", "openbao"}

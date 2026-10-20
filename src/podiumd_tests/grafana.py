@@ -8,12 +8,15 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
+from podiumd_tests.components import COMPONENTS
+from podiumd_tests.components import deployed_components
 from podiumd_tests.json_data import JsonObject
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from collections.abc import Sequence
 
     import requests
@@ -95,6 +98,30 @@ def monitors_without_targets(monitors: Sequence[str], targets_response: JsonObje
     """Monitors, as "<scrape pool prefix>/<namespace>/<name>", without an active target in a /api/v1/targets body."""
     pools = {str(t.get("scrapePool")) for t in _active_targets(targets_response)}
     return [m for m in monitors if not any(p.startswith(f"{m}/") for p in pools)]
+
+
+def otel_jobs_query(components: Iterable[str]) -> str:
+    """PromQL for the jobs of the components' OTEL services; remote write sets job to [<namespace>/]<service.name>."""
+    services = sorted(COMPONENTS[c].otel_service for c in components if COMPONENTS[c].otel_service)
+    return f'group by (job) ({{job=~"(.+/)?({"|".join(services)})"}})'
+
+
+def without_metrics(
+    components: Iterable[str], targets_response: JsonObject, otel_response: JsonObject
+) -> tuple[list[str], list[str]]:
+    """Monitored and OTEL components without series, from a /api/v1/targets body and an otel_jobs_query result.
+
+    A monitored component needs a ServiceMonitor or PodMonitor named like one of its workloads with a target up.
+    """
+    pools = [str(t.get("scrapePool")).split("/") for t in _active_targets(targets_response) if t.get("health") == "up"]
+    up = deployed_components([p[2] for p in pools if len(p) > 2 and p[0] in MONITOR_POOLS.values()])
+    results = entries(section(otel_response, "data").get("result"))
+    jobs = {str(section(r, "metric").get("job")).rpartition("/")[2] for r in results}
+    ordered = sorted(components)
+    return (
+        [c for c in ordered if COMPONENTS[c].monitored and c not in up],
+        [c for c in ordered if COMPONENTS[c].otel_service and COMPONENTS[c].otel_service not in jobs],
+    )
 
 
 def pods_in_loki(query_response: JsonObject) -> set[tuple[str, str]]:

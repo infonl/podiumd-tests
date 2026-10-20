@@ -12,9 +12,11 @@ from podiumd_tests.grafana import GrafanaError
 from podiumd_tests.grafana import down_targets
 from podiumd_tests.grafana import grafana_auth
 from podiumd_tests.grafana import monitors_without_targets
+from podiumd_tests.grafana import otel_jobs_query
 from podiumd_tests.grafana import pods_in_loki
 from podiumd_tests.grafana import running_pods_not_in_loki
 from podiumd_tests.grafana import target_count
+from podiumd_tests.grafana import without_metrics
 from podiumd_tests.responses import UnexpectedStatusError
 
 DATASOURCES = [
@@ -99,6 +101,27 @@ def test_monitor_without_active_target_is_reported():
     body = {"data": {"activeTargets": [{"scrapePool": "serviceMonitor/ns/keycloak/0", "health": "up"}]}}
     monitors = ["serviceMonitor/ns/keycloak", "podMonitor/ns/traefik", "serviceMonitor/ns/keycloak-operator"]
     assert monitors_without_targets(monitors, body) == ["podMonitor/ns/traefik", "serviceMonitor/ns/keycloak-operator"]
+
+
+def test_otel_jobs_query_uses_the_otel_service_names():
+    query = otel_jobs_query(["openformulieren", "keycloak", "objecten"])
+    assert query == 'group by (job) ({job=~"(.+/)?(openforms|openobject)"})'
+
+
+def test_without_metrics():
+    targets = {
+        "data": {
+            "activeTargets": [
+                {"scrapePool": "serviceMonitor/ns/keycloak/0", "health": "up"},
+                {"scrapePool": "podMonitor/ns/redis-ha/0", "health": "down"},
+                {"scrapePool": "serviceMonitor/ns/frankgateway-outway/0", "health": "up"},
+                {"scrapePool": "kubernetes-pods", "health": "up"},
+            ]
+        }
+    }
+    otel = {"data": {"result": [{"metric": {"job": "openzaak"}}, {"metric": {"job": "podiumd/openforms"}}]}}
+    components = ["keycloak", "redis", "frankgateway", "clamav", "openzaak", "openformulieren", "openvtb", "zac"]
+    assert without_metrics(components, targets, otel) == (["clamav", "redis"], ["openvtb"])
 
 
 def pod(name, phase="Running", created="2026-10-20T08:00:00Z"):

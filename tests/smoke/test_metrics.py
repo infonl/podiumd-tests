@@ -16,14 +16,18 @@ from typing import cast
 
 import pytest
 
+from podiumd_tests.components import COMPONENTS
+from podiumd_tests.components import deployed_components
 from podiumd_tests.grafana import MONITOR_POOLS
 from podiumd_tests.grafana import Grafana
 from podiumd_tests.grafana import down_targets
 from podiumd_tests.grafana import grafana_auth
 from podiumd_tests.grafana import monitors_without_targets
+from podiumd_tests.grafana import otel_jobs_query
 from podiumd_tests.grafana import pods_in_loki
 from podiumd_tests.grafana import running_pods_not_in_loki
 from podiumd_tests.grafana import target_count
+from podiumd_tests.grafana import without_metrics
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.responses import REFUSED
@@ -48,6 +52,17 @@ EMPTY_MONITORS = {
         " (helm-charts #481)",
     ),
 }
+# Known components without metrics: they xfail instead of fail.
+METRICS_GAPS = {
+    "eck-operator": "[podiumd-chart-15] eck-operator 3.x ignores config.metricsPort, so the operator exposes no"
+    " metrics; set config.metrics.port",
+    **dict.fromkeys(
+        ("openarchiefbeheer", "referentielijsten", "openvtb", "frankgateway", "openbao"),
+        "[podiumd-chart-19] podiumd 4.10.0's values-enable-observability.yaml enables no metrics for Open"
+        " Archiefbeheer, Referentielijsten, Open VTB, Frank!Gateway and OpenBao (helm-charts #625)",
+    ),
+}
+OTEL_OFF = "no app sends OTEL metrics: settings.otel is disabled for all Maykin apps"
 
 
 @pytest.fixture(scope="module", name="grafana")
@@ -107,6 +122,28 @@ def test_every_monitor_has_scrape_targets(grafana: Grafana, podiumd_env: Environ
     assert not unknown, f"monitors without scrape targets: {unknown}"
     if known:
         pytest.xfail("; ".join(sorted(known)))
+
+
+@pytest.mark.cluster
+@pytest.mark.requires("cluster")
+def test_every_component_reports_metrics(grafana: Grafana, podiumd_env: Environment) -> None:
+    """Every deployed component has series in Prometheus: a monitor target that is up, or OTEL remote write."""
+    if not grafana.uid("prometheus"):
+        pytest.skip("no prometheus datasource")
+    if not any(podiumd_env.items(kind) for kind in MONITOR_POOLS):
+        pytest.skip("no ServiceMonitor or PodMonitor in the environment's namespaces")
+    deployed = deployed_components(podiumd_env.workload_names)
+    otel_apps = [c for c in deployed if COMPONENTS[c].otel_service]
+    otel = grafana.proxy("prometheus", "/api/v1/query", {"query": otel_jobs_query(otel_apps)}) if otel_apps else {}
+    no_monitor, no_otel = without_metrics(deployed, grafana.proxy("prometheus", "/api/v1/targets"), otel)
+    otel_off = bool(otel_apps) and len(no_otel) == len(otel_apps)
+    missing = no_monitor + ([] if otel_off else no_otel)
+    unknown = [c for c in missing if c not in METRICS_GAPS]
+    assert not unknown, f"components without metrics in Prometheus: {unknown}"
+    if missing:
+        pytest.xfail("; ".join(sorted({METRICS_GAPS[c] for c in missing}) + ([OTEL_OFF] if otel_off else [])))
+    if otel_off:
+        pytest.skip(OTEL_OFF)
 
 
 @pytest.mark.cluster
