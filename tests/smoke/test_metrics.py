@@ -40,7 +40,7 @@ pytestmark = [pytest.mark.smoke, pytest.mark.requires("grafana")]
 # Known monitors without targets, by name suffix: they xfail instead of fail.
 EMPTY_MONITORS = {
     "-traefik": "[podiumd-chart-14] monitoring-logging 1.0.18 renders a Traefik PodMonitor by default, but the edge"
-    " is NGINX Gateway Fabric; not yet reported upstream",
+    " is NGINX Gateway Fabric; fixed in monitoring-logging 1.0.19 (helm-charts #622)",
 }
 
 
