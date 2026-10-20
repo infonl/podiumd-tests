@@ -16,6 +16,7 @@ from podiumd_tests.auth.keycloak_admin import for_environment
 
 if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
+    from podiumd_tests.json_data import JsonObject
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("keycloak-admin")]
 
@@ -24,10 +25,10 @@ ROLE_MAPPER = "oidc-hardcoded-role-idp-mapper"
 ADMIN_ROLES = frozenset({"admin"})
 
 
-def _grants_admin(mapper: dict[str, object]) -> bool:
+def _grants_admin(mapper: JsonObject) -> bool:
     config = mapper.get("config") or {}
     role = str(config.get("role", "")) if isinstance(config, dict) else ""
-    return mapper.get("identityProviderMapper") == ROLE_MAPPER and role.split(".")[-1] in ADMIN_ROLES
+    return mapper.get("identityProviderMapper") == ROLE_MAPPER and role.rsplit(".", maxsplit=1)[-1] in ADMIN_ROLES
 
 
 def test_admin_role_identity_provider_allows_admin_role_mapping(podiumd_env: Environment) -> None:

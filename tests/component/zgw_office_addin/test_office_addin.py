@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -14,9 +16,16 @@ from podiumd_tests.office_addin import UNREPLACED_URL
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openzaak import delete_documents_of
+from podiumd_tests.seed.openzaak import make_zaak
+from podiumd_tests.seed.openzaak import zaaktype_parts
 
 if TYPE_CHECKING:
     import requests
+
+    from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("zgw-office-addin")]
 
@@ -41,4 +50,35 @@ def test_backend_refuses_an_unsigned_token(http: requests.Session, urls: dict[st
         f"{urls['zgw-office-addin']}{BACKEND}/zaken/ptest-unknown",
         headers={"Authorization": f"Bearer {unsigned_jwt({'preferred_username': 'ptest-forged', 'name': 'ptest'})}"},
     )
+    assert response.status_code in REFUSED, describe(response)
+
+
+@pytest.mark.requires("openzaak")
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="[zgw-office-addin-1] reported privately")
+def test_backend_refuses_a_document_upload_with_an_unsigned_token(
+    http: requests.Session,
+    urls: dict[str, str],
+    openzaak: ApiClient,
+    test_zaaktype: JsonObject,
+    registry: ResourceRegistry,
+) -> None:
+    """A document upload with an unsigned token should be refused; the add-in accepts it (write path of the finding)."""
+    zaak = make_zaak(openzaak, registry, str(test_zaaktype["url"]))
+    iot = zaaktype_parts(openzaak, test_zaaktype).informatieobjecttype
+    body = {
+        "titel": "ptest.txt",
+        "inhoud": base64.b64encode(b"ptest").decode(),
+        "informatieobjecttype": iot,
+        "vertrouwelijkheidaanduiding": "openbaar",
+        "status": "definitief",
+        "creatiedatum": "2026-01-10",
+        "auteur": "ptest",
+    }
+    token = unsigned_jwt({"preferred_username": "ptest-forged", "name": "ptest"})
+    response = http.post(
+        f"{urls['zgw-office-addin']}{BACKEND}/zaken/{zaak['identificatie']}/documenten",
+        json=body,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    registry.add(f"documents of {zaak['identificatie']}", lambda: delete_documents_of(openzaak, str(zaak["url"])))
     assert response.status_code in REFUSED, describe(response)

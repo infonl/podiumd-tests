@@ -15,6 +15,7 @@ from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.zaakbrug import ZDS
 from podiumd_tests.zaakbrug import creeer_zaak
+from podiumd_tests.zaakbrug import geef_zaak_details
 from podiumd_tests.zaakbrug import genereer_zaak_identificatie
 from podiumd_tests.zaakbrug import is_bevestiging
 from podiumd_tests.zaakbrug import soap_action
@@ -66,3 +67,29 @@ def test_creeer_zaak_reaches_open_zaak(
     registry.add(f"zaakbrug zaak {zaak}", lambda: delete_zaak(openzaak, str(found[0]["url"])))
     rollen = openzaak.list(f"{ZAKEN}/rollen", {"zaak": str(found[0]["url"])})
     assert any(r.get("betrokkeneType") == "natuurlijk_persoon" for r in rollen), "no initiator rol"
+
+
+@pytest.mark.requires("openzaak")
+def test_geef_zaak_details_reads_a_created_zaak(
+    http: requests.Session, urls: dict[str, str], openzaak: ApiClient, registry: ResourceRegistry
+) -> None:
+    """geefZaakdetails_Lv01 reads back a zaak created through creeerZaak (La01 carries its identificatie)."""
+    now = datetime.now(UTC)
+    base = urls["zaakbrug"] + ZDS
+    zaak = zaak_identificatie(
+        _post(http, base + "/VrijBericht", genereer_zaak_identificatie(now), "genereerZaakIdentificatie_Di02")
+    )
+    assert zaak
+    assert is_bevestiging(
+        _post(
+            http,
+            base + "/OntvangAsynchroon",
+            creeer_zaak(now, zaak, ZAAKBRUG_ZAAKTYPE, INITIATOR_BSN),
+            "creeerZaak_Lk01",
+        )
+    )
+    found = openzaak.list(f"{ZAKEN}/zaken", {"identificatie": zaak, "bronorganisatie": ZAAKBRUG_BRONORGANISATIE})
+    assert found
+    registry.add(f"zaakbrug zaak {zaak}", lambda: delete_zaak(openzaak, str(found[0]["url"])))
+    answer = _post(http, base + "/BeantwoordVraag", geef_zaak_details(now, zaak), "geefZaakdetails_Lv01")
+    assert zaak_identificatie(answer) == zaak

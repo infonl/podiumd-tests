@@ -192,6 +192,20 @@ def fixture_openvtb_verzoeken(podiumd_env: Environment, need_bootstrap: Callable
     return openvtb_client(podiumd_env, "verzoeken")
 
 
+@pytest.fixture(scope="session", name="openvtb_taken")
+def fixture_openvtb_taken(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
+    """Open VTB's taken API with the suite's own token (bootstrap step openvtb-token)."""
+    need_bootstrap("openvtb-token")
+    return openvtb_client(podiumd_env, "taken")
+
+
+@pytest.fixture(scope="session", name="openvtb_berichten")
+def fixture_openvtb_berichten(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
+    """Open VTB's berichten API with the suite's own token (bootstrap step openvtb-token)."""
+    need_bootstrap("openvtb-token")
+    return openvtb_client(podiumd_env, "berichten")
+
+
 @pytest.fixture(scope="session", name="objecten")
 def fixture_objecten(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Objecten API with the suite's own token (bootstrap step objecten-token)."""

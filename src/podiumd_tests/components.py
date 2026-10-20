@@ -64,7 +64,6 @@ DJANGO_APPS = (
     "objecten",
     "objecttypen",
     "opennotificaties",
-    "openvtb",
 )
 
 

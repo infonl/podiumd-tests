@@ -73,10 +73,34 @@ def creeer_zaak(now: datetime, zaak: str, zaaktype_code: str, bsn: str, gemeente
 </ZKN:heeftAlsInitiator></ZKN:object></ZKN:zakLk01></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
 
 
+def geef_zaak_details(now: datetime, zaak: str, gemeentecode: str = GEMEENTECODE) -> str:
+    """A geefZaakdetails_Lv01 envelope for the BeantwoordVraag endpoint: read one zaak by identificatie."""
+    stuurgegevens = _stuurgegevens("Lv01", now, gemeentecode, rest="<StUF:entiteittype>ZAK</StUF:entiteittype>")
+    return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
+ xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<SOAP-ENV:Body><ZKN:zakLv01>
+{stuurgegevens}
+<ZKN:parameters><StUF:sortering>0</StUF:sortering>
+<StUF:indicatorVervolgvraag>false</StUF:indicatorVervolgvraag></ZKN:parameters>
+<ZKN:gelijk StUF:entiteittype="ZAK"><ZKN:identificatie>{zaak}</ZKN:identificatie></ZKN:gelijk>
+<ZKN:scope><ZKN:object StUF:entiteittype="ZAK"><ZKN:identificatie xsi:nil="true"/>
+<ZKN:omschrijving xsi:nil="true"/>
+<ZKN:isVan StUF:entiteittype="ZAKZKT"><ZKN:gerelateerde StUF:entiteittype="ZKT">
+<ZKN:code xsi:nil="true"/></ZKN:gerelateerde></ZKN:isVan></ZKN:object></ZKN:scope>
+</ZKN:zakLv01></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
+
+
 def zaak_identificatie(answer: str) -> str | None:
-    """The zaak identificatie in a ZDS answer, or None."""
-    found = ET.fromstring(answer).find(f".//{{{ZKN}}}zaak/{{{ZKN}}}identificatie")  # noqa: S314  # nosec B314
-    return found.text if found is not None else None
+    """The zaak identificatie in a ZDS answer, or None.
+
+    genereerZaakIdentificatie answers it under zaak/identificatie; geefZaakdetails (La01) under object/identificatie.
+    """
+    root = ET.fromstring(answer)  # noqa: S314  # nosec B314  # ZaakBrug's own answer
+    for path in (f".//{{{ZKN}}}zaak/{{{ZKN}}}identificatie", f".//{{{ZKN}}}object/{{{ZKN}}}identificatie"):
+        found = root.find(path)
+        if found is not None and found.text:
+            return found.text
+    return None
 
 
 def is_bevestiging(answer: str) -> bool:
