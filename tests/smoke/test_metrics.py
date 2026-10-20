@@ -62,7 +62,10 @@ METRICS_GAPS = {
         " Archiefbeheer, Referentielijsten, Open VTB, Frank!Gateway and OpenBao (helm-charts #625)",
     ),
 }
-OTEL_OFF = "no app sends OTEL metrics: settings.otel is disabled for all Maykin apps"
+OTEL_OFF = (
+    "no app sends OTEL metrics: settings.otel is disabled for all Maykin apps"
+    " (minikube: `podiumd-minikube deploy --full --otel`)"
+)
 
 
 @pytest.fixture(scope="module", name="grafana")
