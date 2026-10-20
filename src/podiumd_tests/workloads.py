@@ -86,22 +86,29 @@ def component_versions(env: Environment, components: Sequence[str]) -> dict[str,
         workload = _main_deployment(env, deployments, component)
         if workload is None:
             continue
-        images = [str(c.get("image")) for c in pod_containers(workload, with_init=False)]
-        # "repo:4.0.2@sha256:..." -> "4.0.2"; "repo@sha256:..." has no tag.
-        tags = [
-            i.partition("@")[0].rpartition(":")[2] if ":" in i.partition("@")[0].rpartition("/")[2] else ""
-            for i in images
-        ]
-        release = "" if any(_is_version(t) for t in tags) else _image_release(env, metadata_name(workload))
-        label = str(section(section(workload, "metadata"), "labels").get("app.kubernetes.io/version", ""))
-        version = next((v for v in [*tags, release, label] if _is_version(v)), None)
+        version = image_version(workload)
+        if version is None:
+            label = str(section(section(workload, "metadata"), "labels").get("app.kubernetes.io/version", ""))
+            version = _version(_image_release(env, metadata_name(workload))) or _version(label)
         if version:
-            found[component] = tuple(int(n) for n in version.split("."))
+            found[component] = version
     return found
 
 
-def _is_version(value: str) -> bool:
-    return re.fullmatch(r"\d+(\.\d+)+", value) is not None
+def image_version(workload: JsonObject) -> tuple[int, ...] | None:
+    """The first version image tag of the workload's containers: "repo:v0.27.0@sha256:..." -> (0, 27, 0)."""
+    for container in pod_containers(workload, with_init=False):
+        name = str(container.get("image")).partition("@")[0]
+        # "repo@sha256:..." has no tag; a ":" before the last "/" is a registry port.
+        tag = name.rpartition(":")[2] if ":" in name.rpartition("/")[2] else ""
+        version = _version(tag.removeprefix("v"))
+        if version:
+            return version
+    return None
+
+
+def _version(value: str) -> tuple[int, ...] | None:
+    return tuple(int(n) for n in value.split(".")) if re.fullmatch(r"\d+(\.\d+)+", value) else None
 
 
 def _image_release(env: Environment, deployment: str) -> str:

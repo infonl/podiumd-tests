@@ -108,6 +108,7 @@ def test_run_cronjob_deletes_the_job_also_when_it_does_not_complete(fake_runner)
         ("ita.web:3.3.2", "3.3.4", (3, 3, 2)),
         ("ita.web:3.3.2@sha256:0bef", "3.3.4", (3, 3, 2)),
         ("ita.web@sha256:0bef", "3.3.4", (3, 3, 4)),
+        ("ita.web:v3.3.2", "3.3.4", (3, 3, 2)),
         ("ita.web:latest", "", None),
     ],
 )
