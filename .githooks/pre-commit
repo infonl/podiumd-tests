@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+#
+# Refuses a commit unless ./run_python_checks passes. Enable once per clone:
+#   git config core.hooksPath .githooks
+# The checks read the working tree, so unstaged changes count too.
+set -euo pipefail
+
+top=$(git rev-parse --show-toplevel)
+# A linked worktree without its own .venv would run the tools of another checkout's .venv,
+# whose editable install then points here.
+if [[ "$(git rev-parse --git-dir)" != "$(git rev-parse --git-common-dir)" && ! -x "${top}/.venv/bin/python3" ]]; then
+    echo "pre-commit: no .venv in worktree ${top}: create one (python3 -m venv .venv && .venv/bin/pip install -e '.[dev]')" >&2
+    exit 1
+fi
+exec "${top}/run_python_checks"

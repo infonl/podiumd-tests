@@ -183,6 +183,7 @@ rights (SCC Twente), run the container image from a machine that has access.
 
 ```bash
 ./run_python_checks   # ruff, shellcheck, jscpd, pymarkdown, vulture, bandit, pylint, basedpyright, pytest
+git config core.hooksPath .githooks   # once per clone: commits run the checks first
 ```
 
 A bare `pytest` runs only the offline unit tests in `unit_tests/`. The
