@@ -38,6 +38,14 @@ def _stuurgegevens(berichtcode: str, now: datetime, gemeentecode: str, *, rest: 
 {rest}</ZKN:stuurgegevens>"""
 
 
+def _isvan_zaaktype(code: str, verwerkingssoort: str) -> str:
+    """The isVan reference to a zaaktype by its code, shared by creeerZaak and voegZaakdocumentToe."""
+    return f"""<ZKN:isVan StUF:entiteittype="ZAKZKT" StUF:verwerkingssoort="{verwerkingssoort}">
+<ZKN:gerelateerde StUF:entiteittype="ZKT" StUF:verwerkingssoort="{verwerkingssoort}">
+<ZKN:omschrijving>podiumd-tests</ZKN:omschrijving><ZKN:code>{code}</ZKN:code>
+<ZKN:ingangsdatumObject xsi:nil="true" StUF:noValue="geenWaarde"/></ZKN:gerelateerde></ZKN:isVan>"""
+
+
 def genereer_zaak_identificatie(now: datetime, gemeentecode: str = GEMEENTECODE) -> str:
     """A genereerZaakIdentificatie_Di02 envelope, for the VrijBericht endpoint."""
     stuurgegevens = _stuurgegevens(
@@ -46,6 +54,22 @@ def genereer_zaak_identificatie(now: datetime, gemeentecode: str = GEMEENTECODE)
     return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
  xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}"><SOAP-ENV:Body><ZKN:genereerZaakIdentificatie_Di02>
 {stuurgegevens}</ZKN:genereerZaakIdentificatie_Di02></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
+
+
+def genereer_document_identificatie(now: datetime, gemeentecode: str = GEMEENTECODE) -> str:
+    """A genereerDocumentIdentificatie_Di02 envelope, for the VrijBericht endpoint."""
+    stuurgegevens = _stuurgegevens(
+        "Di02", now, gemeentecode, rest="<StUF:functie>genereerDocumentidentificatie</StUF:functie>"
+    )
+    return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
+ xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}"><SOAP-ENV:Body><ZKN:genereerDocumentIdentificatie_Di02>
+{stuurgegevens}</ZKN:genereerDocumentIdentificatie_Di02></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
+
+
+def document_identificatie(answer: str) -> str | None:
+    """The document identificatie in a genereerDocumentIdentificatie answer, or None."""
+    found = ET.fromstring(answer).find(f".//{{{ZKN}}}document/{{{ZKN}}}identificatie")  # noqa: S314  # nosec B314
+    return found.text if found is not None else None
 
 
 def creeer_zaak(now: datetime, zaak: str, zaaktype_code: str, bsn: str, gemeentecode: str = GEMEENTECODE) -> str:
@@ -63,10 +87,7 @@ def creeer_zaak(now: datetime, zaak: str, zaaktype_code: str, bsn: str, gemeente
 <ZKN:object StUF:sleutelVerzendend="{zaak}" StUF:entiteittype="ZAK" StUF:verwerkingssoort="T">
 <ZKN:identificatie>{zaak}</ZKN:identificatie><ZKN:omschrijving>podiumd-tests ZaakBrug</ZKN:omschrijving>
 <ZKN:startdatum>{now:%Y%m%d}</ZKN:startdatum><ZKN:registratiedatum>{now:%Y%m%d}</ZKN:registratiedatum>
-<ZKN:isVan StUF:entiteittype="ZAKZKT" StUF:verwerkingssoort="T">
-<ZKN:gerelateerde StUF:entiteittype="ZKT" StUF:verwerkingssoort="T">
-<ZKN:omschrijving>podiumd-tests</ZKN:omschrijving><ZKN:code>{zaaktype_code}</ZKN:code>
-<ZKN:ingangsdatumObject xsi:nil="true" StUF:noValue="geenWaarde"/></ZKN:gerelateerde></ZKN:isVan>
+{_isvan_zaaktype(zaaktype_code, "T")}
 <ZKN:heeftAlsInitiator StUF:entiteittype="ZAKBTRINI" StUF:verwerkingssoort="T"><ZKN:gerelateerde>
 <ZKN:natuurlijkPersoon StUF:entiteittype="NPS" StUF:verwerkingssoort="T"><BG:inp.bsn>{bsn}</BG:inp.bsn>
 <BG:geslachtsnaam>Ptest</BG:geslachtsnaam></ZKN:natuurlijkPersoon></ZKN:gerelateerde>
@@ -88,6 +109,40 @@ def geef_zaak_details(now: datetime, zaak: str, gemeentecode: str = GEMEENTECODE
 <ZKN:isVan StUF:entiteittype="ZAKZKT"><ZKN:gerelateerde StUF:entiteittype="ZKT">
 <ZKN:code xsi:nil="true"/></ZKN:gerelateerde></ZKN:isVan></ZKN:object></ZKN:scope>
 </ZKN:zakLv01></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
+
+
+def voeg_zaakdocument_toe(
+    now: datetime,
+    zaak: str,
+    zaaktype_code: str,
+    document: str,
+    documenttype: str,
+    inhoud_base64: str,
+    gemeentecode: str = GEMEENTECODE,
+) -> str:
+    """A voegZaakdocumentToe_Lk01 envelope: attach one document to a zaak.
+
+    documenttype is the informatieobjecttype omschrijving of the zaaktype; inhoud_base64 the file content.
+    """
+    stuurgegevens = _stuurgegevens("Lk01", now, gemeentecode, rest="<StUF:entiteittype>EDC</StUF:entiteittype>")
+    return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
+ xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}" xmlns:xmime="http://www.w3.org/2005/05/xmlmime"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><SOAP-ENV:Body><ZKN:edcLk01>
+{stuurgegevens}
+<ZKN:parameters><StUF:mutatiesoort>T</StUF:mutatiesoort>
+<StUF:indicatorOvername>V</StUF:indicatorOvername></ZKN:parameters>
+<ZKN:object StUF:entiteittype="EDC" StUF:verwerkingssoort="T">
+<ZKN:identificatie>{document}</ZKN:identificatie><ZKN:dct.omschrijving>{documenttype}</ZKN:dct.omschrijving>
+<ZKN:creatiedatum>{now:%Y%m%d}</ZKN:creatiedatum><ZKN:titel>podiumd-tests document</ZKN:titel>
+<ZKN:formaat>pdf</ZKN:formaat><ZKN:taal>nld</ZKN:taal>
+<ZKN:versie xsi:nil="true" StUF:noValue="geenWaarde"/><ZKN:status>In bewerking</ZKN:status>
+<ZKN:vertrouwelijkAanduiding>OPENBAAR</ZKN:vertrouwelijkAanduiding><ZKN:auteur>ptest</ZKN:auteur>
+<ZKN:inhoud xmime:contentType="application/pdf" StUF:bestandsnaam="ptest.pdf">{inhoud_base64}</ZKN:inhoud>
+<ZKN:isRelevantVoor StUF:entiteittype="EDCZAK" StUF:verwerkingssoort="T">
+<ZKN:gerelateerde StUF:entiteittype="ZAK" StUF:verwerkingssoort="I">
+<ZKN:identificatie>{zaak}</ZKN:identificatie><ZKN:omschrijving>podiumd-tests</ZKN:omschrijving>
+{_isvan_zaaktype(zaaktype_code, "I")}
+</ZKN:gerelateerde></ZKN:isRelevantVoor></ZKN:object></ZKN:edcLk01></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
 
 
 def zaak_identificatie(answer: str) -> str | None:

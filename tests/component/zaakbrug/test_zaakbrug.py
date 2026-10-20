@@ -9,16 +9,20 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.names import ZAAKBRUG_IOT
 from podiumd_tests.bootstrap.names import ZAAKBRUG_ZAAKTYPE
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.zaakbrug import ZDS
 from podiumd_tests.zaakbrug import creeer_zaak
+from podiumd_tests.zaakbrug import document_identificatie
 from podiumd_tests.zaakbrug import geef_zaak_details
+from podiumd_tests.zaakbrug import genereer_document_identificatie
 from podiumd_tests.zaakbrug import genereer_zaak_identificatie
 from podiumd_tests.zaakbrug import is_bevestiging
 from podiumd_tests.zaakbrug import soap_action
+from podiumd_tests.zaakbrug import voeg_zaakdocument_toe
 from podiumd_tests.zaakbrug import zaak_identificatie
 
 if TYPE_CHECKING:
@@ -93,3 +97,38 @@ def test_geef_zaak_details_reads_a_created_zaak(
     registry.add(f"zaakbrug zaak {zaak}", lambda: delete_zaak(openzaak, str(found[0]["url"])))
     answer = _post(http, base + "/BeantwoordVraag", geef_zaak_details(now, zaak), "geefZaakdetails_Lv01")
     assert zaak_identificatie(answer) == zaak
+
+
+@pytest.mark.requires("openzaak")
+def test_voeg_zaakdocument_toe_attaches_a_document(
+    http: requests.Session, urls: dict[str, str], openzaak: ApiClient, registry: ResourceRegistry
+) -> None:
+    """voegZaakdocumentToe_Lk01 attaches a document to a ZaakBrug zaak: Open Zaak links it as a zaakdocument."""
+    import base64  # only this test builds a document body
+
+    now = datetime.now(UTC)
+    base = urls["zaakbrug"] + ZDS
+    zaak = zaak_identificatie(
+        _post(http, base + "/VrijBericht", genereer_zaak_identificatie(now), "genereerZaakIdentificatie_Di02")
+    )
+    assert zaak
+    assert is_bevestiging(
+        _post(
+            http,
+            base + "/OntvangAsynchroon",
+            creeer_zaak(now, zaak, ZAAKBRUG_ZAAKTYPE, INITIATOR_BSN),
+            "creeerZaak_Lk01",
+        )
+    )
+    found = openzaak.list(f"{ZAKEN}/zaken", {"identificatie": zaak, "bronorganisatie": ZAAKBRUG_BRONORGANISATIE})
+    assert found
+    registry.add(f"zaakbrug zaak {zaak}", lambda: delete_zaak(openzaak, str(found[0]["url"]), with_documents=True))
+    document = document_identificatie(
+        _post(http, base + "/VrijBericht", genereer_document_identificatie(now), "genereerDocumentIdentificatie_Di02")
+    )
+    assert document
+    pdf = base64.b64encode(b"%PDF-1.4 ptest").decode()
+    envelope = voeg_zaakdocument_toe(now, zaak, ZAAKBRUG_ZAAKTYPE, document, ZAAKBRUG_IOT, pdf)
+    assert is_bevestiging(_post(http, base + "/OntvangAsynchroon", envelope, "voegZaakdocumentToe_Lk01"))
+    links = openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": str(found[0]["url"])})
+    assert links, f"no zaakinformatieobject on {zaak} after voegZaakdocumentToe"
