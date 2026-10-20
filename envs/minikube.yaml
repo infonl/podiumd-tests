@@ -65,8 +65,8 @@ secrets:
     k8s_secret: {name: omc, key: OMC_AUTH_JWT_SECRET}
 settings:
   zgw_client_id: formulier
-  # As in ExternalsPodiumD and podiumd-infra, Open Inwoner has no local superuser.
-  django_admin_sso_only: openinwoner
+  # No local superuser: Open Inwoner as in ExternalsPodiumD and podiumd-infra; Open VTB (podiumd-minikube creates none).
+  django_admin_sso_only: openinwoner,openvtb
   # podiumd-minikube's opt-in clamav profile (clamd with the EICAR signature only).
   clamav: "clamav:3310"
   # podiumd's e2e zaaktype (create_required_catalogi_job), as ExternalsPodiumD; ZAC's zaakafhandelparameters

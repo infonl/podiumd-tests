@@ -24,7 +24,10 @@ def soap_action(message: str) -> dict[str, str]:
 
 
 def genereer_zaak_identificatie(now: datetime, gemeentecode: str = GEMEENTECODE) -> str:
-    """A genereerZaakIdentificatie_Di02 envelope, for the VrijBericht endpoint."""
+    """A genereerZaakIdentificatie_Di02 envelope, for the VrijBericht endpoint.
+
+    StUF's tijdstipBericht has hundredths of a second: 16 digits; more fails ZaakBrug's XML validation.
+    """
     return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
  xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}"><SOAP-ENV:Body><ZKN:genereerZaakIdentificatie_Di02>
 <ZKN:stuurgegevens><StUF:berichtcode>Di02</StUF:berichtcode>
@@ -33,7 +36,7 @@ def genereer_zaak_identificatie(now: datetime, gemeentecode: str = GEMEENTECODE)
 <StUF:ontvanger><StUF:organisatie>{gemeentecode}</StUF:organisatie>
 <StUF:applicatie>CDR</StUF:applicatie></StUF:ontvanger>
 <StUF:referentienummer>{uuid.uuid4()}</StUF:referentienummer>
-<StUF:tijdstipBericht>{now:%Y%m%d%H%M%S%f}</StUF:tijdstipBericht>
+<StUF:tijdstipBericht>{now:%Y%m%d%H%M%S}{now.microsecond // 10000:02d}</StUF:tijdstipBericht>
 <StUF:functie>genereerZaakidentificatie</StUF:functie></ZKN:stuurgegevens>
 </ZKN:genereerZaakIdentificatie_Di02></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
 

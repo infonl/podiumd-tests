@@ -30,6 +30,7 @@ def test_manifest_points_to_the_public_host(http: requests.Session, urls: dict[s
     assert UNREPLACED_URL not in text
 
 
+@pytest.mark.xfail(strict=True, raises=AssertionError, reason="[zgw-office-addin-1] reported privately")
 def test_backend_refuses_an_unsigned_token(http: requests.Session, urls: dict[str, str]) -> None:
     """A token without signature gets no zaak lookup: 401 or 403, not 404 (looked up) or 5xx."""
     response = http.get(

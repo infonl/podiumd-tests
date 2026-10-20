@@ -15,4 +15,6 @@ def test_zds_answer_gives_the_zaak_identificatie():
     )
     assert zaak_identificatie(answer) == "ZK2026-00001"
     assert zaak_identificatie("<Envelope/>") is None
-    assert "<StUF:organisatie>1900</StUF:organisatie>" in genereer_zaak_identificatie(datetime(2026, 1, 1, tzinfo=UTC))
+    envelope = genereer_zaak_identificatie(datetime(2026, 1, 2, 3, 4, 5, 670000, tzinfo=UTC))
+    assert "<StUF:organisatie>1900</StUF:organisatie>" in envelope
+    assert "<StUF:tijdstipBericht>2026010203040567</StUF:tijdstipBericht>" in envelope
