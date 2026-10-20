@@ -41,6 +41,12 @@ pytestmark = [pytest.mark.smoke, pytest.mark.requires("grafana")]
 EMPTY_MONITORS = {
     "-traefik": "[podiumd-chart-14] monitoring-logging 1.0.18 renders a Traefik PodMonitor by default, but the edge"
     " is NGINX Gateway Fabric; fixed in monitoring-logging 1.0.19 (helm-charts #622)",
+    **dict.fromkeys(
+        ("-kube-controller-manager", "-kube-etcd", "-kube-scheduler", "-kube-proxy"),
+        "[podiumd-chart-18] kube-prometheus-stack's control-plane and kube-proxy monitors have no targets on AKS"
+        " (managed control plane; Cilium without kube-proxy); off by default in monitoring-logging 1.0.19"
+        " (helm-charts #481)",
+    ),
 }
 
 
