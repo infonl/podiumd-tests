@@ -24,6 +24,10 @@ pytestmark = pytest.mark.smoke
 HEALTH = [
     ("kiss", "/healthz"),
     ("kiss", "/api/healthcheck"),
+    ("openvtb", "/_healthz/"),
+    ("zaakbrug", "/iaf/api/server/health"),
+    ("zgw-office-addin", "/health"),
+    ("zgw-office-addin", "/proxy/health"),
 ]
 
 # (component, method, path, extra headers)
@@ -36,6 +40,10 @@ ANONYMOUS = [
     ("opennotificaties", "GET", "/api/v1/kanaal", {}),
     ("ita", "GET", "/api/kanalen", {}),
     ("omc", "POST", "/Events/Listen", {}),
+    ("openvtb", "GET", "/verzoeken/api/v1/verzoeken", {}),
+    ("openvtb", "GET", "/taken/api/v1/externetaken", {}),
+    ("openvtb", "GET", "/berichten/api/v1/berichten", {}),
+    ("zgw-office-addin", "GET", "/proxy/zaken/ptest-unknown", {}),
     ("pabc", "POST", "/api/v1/application-roles-per-entity-type", {}),
     ("pabc", "POST", "/api/v1/application-roles-per-entity-type", {"X-API-KEY": "ptest-wrong-key"}),
 ]

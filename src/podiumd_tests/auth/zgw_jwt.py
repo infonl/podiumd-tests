@@ -1,4 +1,4 @@
-"""HS256 JWTs, and ZGW API tokens signed with the client's shared secret.
+"""HS256 and unsigned JWTs, and ZGW API tokens signed with the client's shared secret.
 
 Ported from podiumd-minikube tests/test_productaanvraag_flow.py (_zgw_jwt).
 Stdlib only: no JWT library dependency.
@@ -37,6 +37,12 @@ def hs256_jwt(payload: Mapping[str, object], secret: str, header: Mapping[str, o
     signing_input = _b64url(json.dumps(full_header).encode()) + b"." + _b64url(json.dumps(payload).encode())
     signature = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
     return (signing_input + b"." + _b64url(signature)).decode()
+
+
+def unsigned_jwt(payload: Mapping[str, object]) -> str:
+    """A JWT with this payload, alg none and an empty signature."""
+    header = json.dumps({"typ": "JWT", "alg": "none"}).encode()
+    return (_b64url(header) + b"." + _b64url(json.dumps(payload).encode()) + b".").decode()
 
 
 def zgw_jwt(client_id: str, secret: str, *, issued_at: int | None = None, user: str | None = None) -> str:

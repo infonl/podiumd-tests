@@ -37,6 +37,11 @@ COMPONENTS: dict[str, Component] = {
     "omc": Component(("omc",), ("omc",)),
     "openbeheer": Component(("openbeheer",), ("openbeheer",)),
     "referentielijsten": Component(("referentielijsten",), ("referentielijsten",)),
+    "openvtb": Component(("openvtb",), ("openvtb",)),
+    # The sub-chart names its deployment <helm release>-zaakbrug.
+    "zaakbrug": Component(("zaakbrug",), ("zaakbrug", "podiumd-zaakbrug")),
+    # ExternalsPodiumD's host is <stage>-office-addin.<domain>.
+    "zgw-office-addin": Component(("office-addin", "zgw-office-addin"), ("zgw-office-addin",)),
     "frankgateway": Component(("frankgateway",), ("frankgateway", "frank-gateway")),
     # podiumd's nginx in front of BRP, KvK and BAG (Frank!Gateway replaces it in newer charts).
     "api-proxy": Component(("api-proxy",), ("api-proxy",)),
@@ -59,6 +64,7 @@ DJANGO_APPS = (
     "objecten",
     "objecttypen",
     "opennotificaties",
+    "openvtb",
 )
 
 

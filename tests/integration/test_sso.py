@@ -19,7 +19,7 @@ from podiumd_tests.auth.keycloak_admin import realm_of
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.browser import keycloak_login
 from podiumd_tests.components import DJANGO_APPS
-from podiumd_tests.oidc import AUTHENTICATE
+from podiumd_tests.oidc import LOGIN_PATHS
 from podiumd_tests.oidc import keycloak_hosts
 from podiumd_tests.oidc import logs_in_through_keycloak
 from podiumd_tests.pytest_plugin import requiring
@@ -57,14 +57,14 @@ def fixture_sso_admins(http: requests.Session, urls: dict[str, str], podiumd_env
     """
     hosts = keycloak_hosts(urls)
 
-    def through_keycloak(url: str) -> bool:
+    def through_keycloak(component: str, url: str) -> bool:
         def probe() -> tuple[bool]:  # a tuple: False is an answer, not "not yet"
-            return (logs_in_through_keycloak(http, url + AUTHENTICATE, hosts),)
+            return (logs_in_through_keycloak(http, url + LOGIN_PATHS[component], hosts),)
 
         return wait_until(probe, timeout=BUSY_APP_TIMEOUT, interval=5, description=f"login redirect of {url}")[0]
 
     admins = {c: urls[podiumd_env.admin_of(c)] for c in DJANGO_APPS if c in urls}
-    return {c: url for c, url in admins.items() if through_keycloak(url)}
+    return {c: url for c, url in admins.items() if through_keycloak(c, url)}
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
@@ -85,10 +85,10 @@ def test_one_login_opens_every_admin(  # pylint: disable=too-many-arguments,too-
     if not others:
         pytest.skip("no other app's admin logs in through Keycloak")
     need_bootstrap(ADMIN.name)
-    page.goto(admins[others[0]] + AUTHENTICATE)
+    page.goto(admins[others[0]] + LOGIN_PATHS[others[0]])
     keycloak_login(page, ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
     page.wait_for_url(lambda url: url_host(url) == url_host(admins[others[0]]))
-    page.goto(admins[component] + AUTHENTICATE)
+    page.goto(admins[component] + LOGIN_PATHS[component])
     page.wait_for_url(lambda url: url_host(url) == url_host(admins[component]))
     assert not page.url.startswith(realm_url(keycloak, realm_of(podiumd_env))), "Keycloak asked for a new login"
     # A failing OIDC callback also ends on the app's host, on an error page.
@@ -110,7 +110,7 @@ def test_admin_logout_returns_to_the_login(  # pylint: disable=too-many-argument
         pytest.skip(f"{component}'s admin does not log in through Keycloak")
     admin = sso_admins[component]
     need_bootstrap(ADMIN.name)
-    page.goto(admin + AUTHENTICATE)
+    page.goto(admin + LOGIN_PATHS[component])
     keycloak_login(page, ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
     page.wait_for_url(lambda url: in_admin(url, admin))
     page.get_by_role("button", name=LOGOUT).or_(page.get_by_role("link", name=LOGOUT)).first.click()

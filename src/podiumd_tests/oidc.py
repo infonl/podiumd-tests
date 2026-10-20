@@ -35,6 +35,8 @@ LOGIN_PATHS = {
     "ita": CHALLENGE,
     "pabc": CHALLENGE,
     "openbeheer": "/auth/oidc/authenticate/?next=/",
+    "openvtb": "/auth/oidc/authenticate/?next=/admin/",
+    "zaakbrug": "/iaf/gui",
 }
 # An app with one replica busy with browser logins (Open Formulieren on kees00) can take longer than
 # the session's default timeout to send its login redirect.

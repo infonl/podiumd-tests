@@ -14,6 +14,7 @@ from podiumd_tests.auth.keycloak import discovery_url
 from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.auth.keycloak import password_grant
 from podiumd_tests.auth.keycloak import realm_url
+from podiumd_tests.auth.zgw_jwt import unsigned_jwt
 from podiumd_tests.auth.zgw_jwt import zgw_headers
 from podiumd_tests.auth.zgw_jwt import zgw_jwt
 from podiumd_tests.seed.registry import CleanupError
@@ -37,6 +38,13 @@ def test_zgw_jwt_is_a_valid_hs256_token():
         "user_id": "zac",
         "user_representation": "zac",
     }
+
+
+def test_unsigned_jwt_has_alg_none_and_no_signature():
+    header, payload, signature = unsigned_jwt({"name": "x"}).split(".")
+    assert json.loads(b64decode(header))["alg"] == "none"
+    assert json.loads(b64decode(payload)) == {"name": "x"}
+    assert signature == ""
 
 
 def test_zgw_jwt_user_becomes_the_user_representation():
