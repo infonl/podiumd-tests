@@ -87,6 +87,10 @@ DJANGO_APPS = (
     "opennotificaties",
 )
 
+# Components with `manage.py shell` and zgw_consumers Services: DJANGO_APPS and apps left out of its admin, OIDC
+# and mail checks.
+ZGW_CONSUMER_APPS = (*DJANGO_APPS, "openbeheer", "referentielijsten", "openvtb")
+
 
 def _component_for_label(label: str) -> str | None:
     for name, component in COMPONENTS.items():

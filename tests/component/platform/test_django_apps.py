@@ -1,9 +1,9 @@
-"""The Maykin apps: their database, and the local admin login.
+"""The Maykin apps: their database, their zgw_consumers Services, and the local admin login.
 
 Ported from podiumd-minikube and podiumd-infra test_database.py (portable: through each app's own
 Django connection, not a postgres pod) and test_django_admin_login.py. Not ported: MK's check of
-its own seeded zac_client secret (fixture data of podiumd-minikube). The API reachability is PI
-test_zgw_service_reachability.py, also for external APIs such as the VNG selectielijst.
+its own seeded zac_client secret (fixture data of podiumd-minikube). The Service checks extend PI
+test_zgw_service_reachability.py with each Service's credentials.
 """
 
 from __future__ import annotations
@@ -16,8 +16,10 @@ import pytest
 from podiumd_tests.auth.django_admin import admin_login
 from podiumd_tests.auth.django_admin import is_logged_in
 from podiumd_tests.components import DJANGO_APPS
+from podiumd_tests.components import ZGW_CONSUMER_APPS
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.pytest_plugin import requiring
+from podiumd_tests.zgw_services import service_problems
 
 if TYPE_CHECKING:
     from podiumd_tests.credentials import SecretResolver
@@ -44,14 +46,10 @@ def test_database(podiumd_env: Environment, component: str) -> None:
 
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
-@pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
-def test_zgw_services_answer(podiumd_env: Environment, component: str) -> None:
-    """Every API the app has configured (zgw_consumers Service) answers it without a server error (PI)."""
-    services = cast(
-        "list[dict[str, str]]",
-        run_snippet(podiumd_env.kube, podiumd_env.deployment_for(component), "zgw_services", {}),
-    )
-    assert [f"{s['slug']} {s['api_root']}: {s['outcome']}" for s in services if s["outcome"] != "ok"] == []
+@pytest.mark.parametrize("component", [requiring(c, c) for c in ZGW_CONSUMER_APPS])
+def test_zgw_services_authenticate(podiumd_env: Environment, component: str) -> None:
+    """Every API the app has configured (zgw_consumers Service) lists with the Service's own credentials (PI)."""
+    assert service_problems(podiumd_env, component) == []
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
