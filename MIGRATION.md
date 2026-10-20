@@ -243,6 +243,7 @@ Sources:
 | `test_reachability.py` | smoke | 1 | merge | same test in MK and PI: merge into one environment-neutral test |
 | `test_zac_zaakafhandelparameters.py` | component (zac) | 3 | port | `tests/component/zac/test_zac_zaakafhandelparameters.py`, for the profile's `productaanvraag_zaaktype`. |
 | `test_zgw_service_reachability.py` | integration, marker `cluster` | 4 | merge | same test in MK and PI: one environment-neutral test in `test_django_apps.py`. |
+| `test_cni.py` | smoke, gated on the cilium capability | - | port | `tests/smoke/test_cilium.py`: no kube-proxy DaemonSet and Cilium ready; cilium-config enforces kube-proxy-replacement, k8s-networkpolicy, no l7-proxy, no Hubble; routing-mode native and ipam delegated-plugin on AKS only. |
 
 ## EX
 
