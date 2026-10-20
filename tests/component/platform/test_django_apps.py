@@ -19,6 +19,8 @@ from podiumd_tests.components import DJANGO_APPS
 from podiumd_tests.components import ZGW_CONSUMER_APPS
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.pytest_plugin import requiring
+from podiumd_tests.zgw_services import SERVICE_REFERENCES
+from podiumd_tests.zgw_services import reference_problems
 from podiumd_tests.zgw_services import service_problems
 
 if TYPE_CHECKING:
@@ -50,6 +52,14 @@ def test_database(podiumd_env: Environment, component: str) -> None:
 def test_zgw_services_authenticate(podiumd_env: Environment, component: str) -> None:
     """Every API the app has configured (zgw_consumers Service) lists with the Service's own credentials (PI)."""
     assert service_problems(podiumd_env, component) == []
+
+
+@pytest.mark.cluster
+@pytest.mark.requires("cluster")
+@pytest.mark.parametrize("component", [requiring(c, c) for c in SERVICE_REFERENCES])
+def test_config_references_services(podiumd_env: Environment, component: str) -> None:
+    """The app's config fields that PodiumD sets reference a Service in every row."""
+    assert reference_problems(podiumd_env, component) == []
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])

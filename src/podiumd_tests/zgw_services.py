@@ -1,7 +1,8 @@
-"""The zgw_consumers Services of the Django apps, called with their own credentials."""
+"""The zgw_consumers Services of the Django apps: their credentials, and the config fields that reference them."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
@@ -27,6 +28,60 @@ LIST_PATHS = {
     "opennotificaties": "kanaal",
     "objecten": "objects",
     "objecttypen": "objecttypes",
+}
+
+
+@dataclass(frozen=True)
+class ServiceReference:
+    """A config field that must reference a Service in every row of its model; an FK, so the Service exists.
+
+    An empty field means the rows are Services themselves, selected by where.
+    """
+
+    model: str
+    field: str = ""
+    where: tuple[tuple[str, str], ...] = ()
+
+    def __str__(self) -> str:
+        return (
+            f"{self.model}.{self.field}"
+            if self.field
+            else f"{self.model} " + " ".join(f"{k}={v}" for k, v in self.where)
+        )
+
+
+NOTIFICATIONS = ServiceReference("notifications_api_common.NotificationsConfig", "notifications_api_service")
+OF_ZGW_GROUP = "zgw_apis.ZGWApiGroupConfig"
+OI_ZGW_GROUP = "openzaak.ZGWApiGroupConfig"
+
+# Per app, the Service references PodiumD configures.
+SERVICE_REFERENCES: dict[str, tuple[ServiceReference, ...]] = {
+    "openzaak": (NOTIFICATIONS, ServiceReference("selectielijst.ReferentieLijstConfig", "service")),
+    "openklant": (NOTIFICATIONS,),
+    "openformulieren": (
+        ServiceReference("objects_api.ObjectsAPIGroupConfig", "objects_service"),
+        ServiceReference("objects_api.ObjectsAPIGroupConfig", "objecttypes_service"),
+        ServiceReference(OF_ZGW_GROUP, "zrc_service"),
+        ServiceReference(OF_ZGW_GROUP, "drc_service"),
+        ServiceReference(OF_ZGW_GROUP, "ztc_service"),
+    ),
+    "openinwoner": (
+        ServiceReference(OI_ZGW_GROUP, "zrc_service"),
+        ServiceReference(OI_ZGW_GROUP, "drc_service"),
+        ServiceReference(OI_ZGW_GROUP, "ztc_service"),
+    ),
+    "openarchiefbeheer": (ServiceReference("config.APIConfig", "selectielijst_api_service"),),
+    "objecten": (NOTIFICATIONS,),
+    "opennotificaties": (
+        NOTIFICATIONS,
+        ServiceReference("authorizations.AuthorizationsConfig", "authorizations_api_service"),
+    ),
+    "openbeheer": (
+        ServiceReference("config.APIConfig", "selectielijst_api_service"),
+        ServiceReference("config.APIConfig", "objecttypen_api_service"),
+        # Open Beheer offers every Catalogi API Service.
+        ServiceReference("zgw_consumers.Service", where=(("api_type", "ztc"),)),
+    ),
 }
 
 
@@ -65,3 +120,22 @@ def service_problems(env: Environment, component: str) -> list[str]:
     paths = {str(s["uuid"]): list_path(str(s["api_root"])) for s in _services(env, component, {})}
     probed = _services(env, component, {uuid: path or "" for uuid, path in paths.items()})
     return [p for s in probed if (p := service_problem(s, paths[str(s["uuid"])])) is not None]
+
+
+def reference_problems(env: Environment, component: str) -> list[str]:
+    """The component's SERVICE_REFERENCES without rows or with an unset field; [] when all are set."""
+    references = SERVICE_REFERENCES[component]
+    params: dict[str, object] = {
+        "references": [{"model": r.model, "field": r.field, "where": dict(r.where)} for r in references]
+    }
+    found = cast(
+        "list[list[str | None]]",
+        run_snippet(env.kube, env.deployment_for(component), "zgw_service_references", params),
+    )
+    problems: list[str] = []
+    for reference, rows in zip(references, found, strict=True):
+        if not rows:
+            problems.append(f"{reference}: no rows")
+        elif None in rows:
+            problems.append(f"{reference}: unset in {rows.count(None)} of {len(rows)} rows")
+    return problems

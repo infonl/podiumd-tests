@@ -3,7 +3,10 @@
 import pytest
 
 from podiumd_tests import zgw_services
+from podiumd_tests.zgw_services import SERVICE_REFERENCES
+from podiumd_tests.zgw_services import ServiceReference
 from podiumd_tests.zgw_services import list_path
+from podiumd_tests.zgw_services import reference_problems
 from podiumd_tests.zgw_services import service_problem
 from podiumd_tests.zgw_services import service_problems
 
@@ -55,3 +58,23 @@ def test_service_problems_probe_each_service_on_its_list_path(page_env):
         ("openformulieren", "zgw_services", {"probes": {}}),
         ("openformulieren", "zgw_services", {"probes": {"u1": "statussen"}}),
     ]
+
+
+def test_reference_problems_name_missing_rows_and_unset_fields(page_env, monkeypatch):
+    references = (
+        ServiceReference("config.APIConfig", "objecttypen_api_service"),
+        ServiceReference("objects_api.ObjectsAPIGroupConfig", "objects_service"),
+        ServiceReference("zgw_consumers.Service", where=(("api_type", "ztc"),)),
+    )
+    monkeypatch.setitem(SERVICE_REFERENCES, "openbeheer", references)
+    env = page_env(zgw_services)
+    env.snippet_result = [["objecttypen"], [None, "objecten"], []]
+    assert reference_problems(env, "openbeheer") == [
+        "objects_api.ObjectsAPIGroupConfig.objects_service: unset in 1 of 2 rows",
+        "zgw_consumers.Service api_type=ztc: no rows",
+    ]
+    assert env.snippets[0][2]["references"][2] == {
+        "model": "zgw_consumers.Service",
+        "field": "",
+        "where": {"api_type": "ztc"},
+    }
