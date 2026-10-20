@@ -4,12 +4,10 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from typing import TYPE_CHECKING
-from urllib.parse import urlsplit
 
 import pytest
 
 from podiumd_tests.auth.zgw_jwt import unsigned_jwt
-from podiumd_tests.kube import cluster_service
 from podiumd_tests.office_addin import BACKEND
 from podiumd_tests.office_addin import MANIFESTS
 from podiumd_tests.office_addin import UNREPLACED_URL
@@ -24,14 +22,16 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("zgw-office-addin")]
 
 
 @pytest.mark.parametrize("manifest", MANIFESTS)
-def test_manifest_points_to_the_public_host(http: requests.Session, urls: dict[str, str], manifest: str) -> None:
-    """The manifest loads the add-in over https (common.frontendUrl), from the profile's host when it is public."""
-    url = urls["zgw-office-addin"]
-    text = expect_status(http.get(url + manifest), HTTPStatus.OK).text
+def test_manifest_points_to_an_https_host(http: requests.Session, urls: dict[str, str], manifest: str) -> None:
+    """The frontend's start script replaced localhost:3000 with common.frontendUrl, an https host.
+
+    The manifest carries frontendUrl whatever host fetched it, so a port-forwarded fetch cannot check which host;
+    it checks that no placeholder is left and the add-in loads over https.
+    """
+    text = expect_status(http.get(urls["zgw-office-addin"] + manifest), HTTPStatus.OK).text
     assert UNREPLACED_URL not in text
+    assert "localhost" not in text
     assert "https://" in text
-    if not cluster_service(url):
-        assert f"https://{urlsplit(url).netloc}/" in text
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason="[zgw-office-addin-1] reported privately")
