@@ -1,5 +1,5 @@
 <!-- pyml disable-next-line first-line-heading -->
-> **Frozen since YYYY-MM-DD: these tests are no longer maintained.** They moved to
+> **Frozen since 2026-10-20: these tests are no longer maintained.** They moved to
 > [infonl/podiumd-tests](https://github.com/infonl/podiumd-tests), which runs the same checks,
 > and more, against every PodiumD estate.
 >
