@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import io
 import secrets
+import warnings
 import zipfile
 
 from datetime import UTC
@@ -32,6 +33,8 @@ from podiumd_tests.oab import API
 from podiumd_tests.oab import cache_zaken
 from podiumd_tests.oab import destroy_now
 from podiumd_tests.oab import login
+from podiumd_tests.oab import process_review_response
+from podiumd_tests.oab import queues_review_response_on_commit
 from podiumd_tests.oab import set_archive_config
 from podiumd_tests.oab import ui_login
 from podiumd_tests.responses import REFUSED
@@ -74,14 +77,6 @@ PERMISSIONS = {
 }
 
 
-# Only the timeout of a list stuck after a response is excused; any other failure still fails.
-RESPONSE_RACE = pytest.mark.xfail(
-    strict=False,
-    raises=WaitTimeoutError,
-    reason="[open-archiefbeheer-1] Open Archiefbeheer 2.0.0 queues process_review_response inside the request's transaction"
-    " (destruction/api/serializers.py: .delay without on_commit); a quick worker finds no ReviewResponse"
-    " (DoesNotExist) and the list stays changes_requested; open-archiefbeheer#1103 (symptom only)",
-)
 REVIEWER_RENAMES = pytest.mark.xfail(
     strict=True,
     reason="[open-archiefbeheer-2] Open Archiefbeheer: the reviewer, while the list is assigned to it, can rename (PATCH) the list;"
@@ -214,20 +209,34 @@ TAKE_OVER: dict[str, object] = {
 }
 
 
-def respond(
-    oab: Callable[[str], requests.Session], api: str, review_pk: int, actions: dict[str, dict[str, object]]
+def respond(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # one flow
+    oab: Callable[[str], requests.Session],
+    api: str,
+    env: Environment,
+    lijst: str,
+    review_pk: int,
+    actions: dict[str, dict[str, object]],
+    wanted: str,
 ) -> None:
-    """The record manager answers the review's items: zaak URL -> KEEP or TAKE_OVER."""
+    """The record manager answers the review's items (zaak URL -> KEEP or TAKE_OVER); the list then gets status wanted.
+
+    OAB processes the response in a background task. When the worker dropped it ([open-archiefbeheer-1]), the test
+    processes it and warns, so the flow is still checked.
+    """
     items = rows(oab("recordmanager").get(api + "/review-items/", params={"item-review-review": str(review_pk)}))
     zaak_of = {item["pk"]: section(section(item, "destructionListItem"), "zaak").get("url") for item in items}
     responses = [{"reviewItem": pk, **actions[str(url)]} for pk, url in zaak_of.items()]
     body = {"review": review_pk, "comment": "podiumd-tests", "itemsResponses": responses}
     expect_status(oab("recordmanager").post(api + "/review-responses/", json=body), HTTPStatus.CREATED)
-
-
-def wait_for_status(oab: Callable[[str], requests.Session], api: str, lijst: str, wanted: str) -> None:
-    """Wait until the list has the status; OAB processes review responses in a background task."""
-    wait_until(lambda: status(oab, api, lijst) == wanted, timeout=60, description=f"list {lijst} {wanted}")
+    try:
+        wait_until(lambda: status(oab, api, lijst) == wanted, timeout=60, description=f"list {lijst} {wanted}")
+    except WaitTimeoutError:
+        if not process_review_response(env, lijst):
+            raise
+        warnings.warn(
+            f"[open-archiefbeheer-1] list {lijst}: the test processed the dropped review response", stacklevel=2
+        )
+        assert status(oab, api, lijst) == wanted
 
 
 def make_final(oab: Callable[[str], requests.Session], api: str, lijst: str) -> requests.Response:
@@ -289,28 +298,59 @@ def test_rejected_list_goes_back_to_the_record_manager(
     )
 
 
-@RESPONSE_RACE
+@pytest.mark.xfail(
+    strict=True,
+    reason="[open-archiefbeheer-1] Open Archiefbeheer 2.0.0 queues process_review_response inside the request's transaction"
+    " (destruction/api/serializers.py: .delay without on_commit); a quick worker finds no ReviewResponse (DoesNotExist)"
+    " and the list stays changes_requested; open-archiefbeheer#1103",
+)
+def test_review_response_is_queued_after_its_commit(podiumd_env: Environment) -> None:
+    """ReviewResponseSerializer.create queues its task with transaction.on_commit, so the worker finds the response."""
+    assert queues_review_response_on_commit(podiumd_env)
+
+
 @pytest.mark.tc("ABC-015")
 def test_record_manager_response_sends_the_list_back_to_review(
-    oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
+    oab: Callable[[str], requests.Session],
+    api: str,
+    zaak: JsonObject,
+    registry: ResourceRegistry,
+    podiumd_env: Environment,
 ) -> None:
     """The record manager declines the reviewer's proposal: the list goes back to the reviewer unchanged (TA 168, 169)."""
     lijst = new_list(oab, api, zaak, registry)
-    respond(oab, api, reject(oab, api, "reviewer", lijst, [zaak]), {str(zaak["url"]): KEEP})
-    wait_for_status(oab, api, lijst, "ready_to_review")
+    respond(
+        oab,
+        api,
+        podiumd_env,
+        lijst,
+        reject(oab, api, "reviewer", lijst, [zaak]),
+        {str(zaak["url"]): KEEP},
+        "ready_to_review",
+    )
     assert zaken_on(oab, api, lijst) == [zaak["url"]]
 
 
-@RESPONSE_RACE
 @pytest.mark.tc("ABC-013")
 def test_record_manager_takes_the_proposals_over(
-    oab: Callable[[str], requests.Session], api: str, closed_zaak: Callable[[], JsonObject], registry: ResourceRegistry
+    oab: Callable[[str], requests.Session],
+    api: str,
+    closed_zaak: Callable[[], JsonObject],
+    registry: ResourceRegistry,
+    podiumd_env: Environment,
 ) -> None:
     """The record manager agrees to the reviewer's proposal: that zaak leaves the list, which goes back to review."""
     kept, stays = closed_zaak(), closed_zaak()
     lijst = new_list(oab, api, [kept, stays], registry)
-    respond(oab, api, reject(oab, api, "reviewer", lijst, [kept]), {str(kept["url"]): TAKE_OVER})
-    wait_for_status(oab, api, lijst, "ready_to_review")
+    respond(
+        oab,
+        api,
+        podiumd_env,
+        lijst,
+        reject(oab, api, "reviewer", lijst, [kept]),
+        {str(kept["url"]): TAKE_OVER},
+        "ready_to_review",
+    )
     assert zaken_on(oab, api, lijst) == [stays["url"]]
 
 
@@ -326,20 +366,31 @@ def test_keeping_forever_empties_the_archiefactiedatum(  # pylint: disable=too-m
     closed_zaak: Callable[[], JsonObject],
     openzaak: ApiClient,
     registry: ResourceRegistry,
+    podiumd_env: Environment,
 ) -> None:
     """Agreeing to keep a zaak forever leaves its archiefactiedatum empty in Open Zaak."""
     forever, stays = closed_zaak(), closed_zaak()
     lijst = new_list(oab, api, [forever, stays], registry)
     forever_action = {**TAKE_OVER, "actionZaak": {"archiefactiedatum": None}}
-    respond(oab, api, reject(oab, api, "reviewer", lijst, [forever]), {str(forever["url"]): forever_action})
-    wait_for_status(oab, api, lijst, "ready_to_review")
+    respond(
+        oab,
+        api,
+        podiumd_env,
+        lijst,
+        reject(oab, api, "reviewer", lijst, [forever]),
+        {str(forever["url"]): forever_action},
+        "ready_to_review",
+    )
     assert openzaak.get(str(forever["url"])).get("archiefactiedatum") is None
 
 
-@RESPONSE_RACE
 @pytest.mark.tc("ABC-019", "ABC-022")
 def test_archivist_rejection_goes_back_and_returns_to_the_archivist(
-    oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
+    oab: Callable[[str], requests.Session],
+    api: str,
+    zaak: JsonObject,
+    registry: ResourceRegistry,
+    podiumd_env: Environment,
 ) -> None:
     """The archivist's rejection goes back to the record manager; declined, the list returns to the archivist unchanged."""
     lijst = new_list(oab, api, zaak, registry)
@@ -347,15 +398,17 @@ def test_archivist_rejection_goes_back_and_returns_to_the_archivist(
     expect_status(make_final(oab, api, lijst), HTTPStatus.CREATED, HTTPStatus.OK)
     rejection = reject(oab, api, "archivist", lijst, [zaak])
     assert status(oab, api, lijst) == "changes_requested"
-    respond(oab, api, rejection, {str(zaak["url"]): KEEP})
-    wait_for_status(oab, api, lijst, "ready_for_archivist")
+    respond(oab, api, podiumd_env, lijst, rejection, {str(zaak["url"]): KEEP}, "ready_for_archivist")
     assert zaken_on(oab, api, lijst) == [zaak["url"]]
 
 
-@RESPONSE_RACE
 @pytest.mark.tc("ABC-020", "ABC-021")
 def test_record_manager_takes_some_archivist_proposals_over(
-    oab: Callable[[str], requests.Session], api: str, closed_zaak: Callable[[], JsonObject], registry: ResourceRegistry
+    oab: Callable[[str], requests.Session],
+    api: str,
+    closed_zaak: Callable[[], JsonObject],
+    registry: ResourceRegistry,
+    podiumd_env: Environment,
 ) -> None:
     """Agreeing to one of the archivist's two proposals: that zaak leaves, the list returns to the archivist."""
     taken, declined, stays = closed_zaak(), closed_zaak(), closed_zaak()
@@ -363,8 +416,15 @@ def test_record_manager_takes_some_archivist_proposals_over(
     review(oab, api, "reviewer", lijst, decision="accepted")
     expect_status(make_final(oab, api, lijst), HTTPStatus.CREATED, HTTPStatus.OK)
     rejection = reject(oab, api, "archivist", lijst, [taken, declined])
-    respond(oab, api, rejection, {str(taken["url"]): TAKE_OVER, str(declined["url"]): KEEP})
-    wait_for_status(oab, api, lijst, "ready_for_archivist")
+    respond(
+        oab,
+        api,
+        podiumd_env,
+        lijst,
+        rejection,
+        {str(taken["url"]): TAKE_OVER, str(declined["url"]): KEEP},
+        "ready_for_archivist",
+    )
     assert sorted(map(str, zaken_on(oab, api, lijst))) == sorted([str(declined["url"]), str(stays["url"])])
 
 
