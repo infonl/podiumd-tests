@@ -100,3 +100,24 @@ enough.
 One item may be a chart defect rather than a minikube choice: the service-link collision that broke Solr and the
 Open Notificaties worker (`manifests.py:127-143`). Please check whether the colliding Service names also exist in
 an estate's namespace; if so, report it to helm-charts.
+
+## Open Object 4: the Objecttypen Services of Objecten and Open Beheer send an unknown token
+
+`test_zgw_services_authenticate` (`tests/component/platform/test_django_apps.py`) calls each zgw_consumers
+Service with its own credentials. On minikube (helm-charts `feature/podiumd-4.10.0` 8e286297, podiumd-minikube
+e043dba) two Services get 401:
+
+- objecten: `objecttypen-api https://objecttypen.local/api/v2/objecttypes (api_key): 401`
+- openbeheer: `objecttypen-service https://objecttypen.local/api/v2/objecttypes (api_key): 401`
+
+With Open Object 4 the objecten app serves `objecttypen.local`, so only objecten's `token.TokenAuth` table
+counts. Objecten's own Service sends `objectenToObjecttypenToken` and Open Beheer's sends
+`objecttypenOpenbeheerToken`; neither is in that table (it has `objectenOpenbeheerToken`).
+`manifests.fixup_merged_objecten` maps Open Formulieren to its objecten token but misses these two.
+
+Requested:
+
+1. In `fixup_merged_objecten`, one table: each client's Objecttypen Service sends that client's objecten token
+   (Open Formulieren `objectenFormulierToken`, Open Beheer `objectenOpenbeheerToken`), and Open Object gets a
+   token for objecten's own `objecttypen-api` Service.
+2. Tell podiumd-tests after the deploy; it reruns `test_zgw_services_authenticate` on minikube.
