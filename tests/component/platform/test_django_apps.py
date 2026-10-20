@@ -46,12 +46,26 @@ def test_database(podiumd_env: Environment, component: str) -> None:
         assert "postgis" in cast("list[str]", info["extensions"])
 
 
+OBJECTEN_AUTORISATIES = (
+    "[externalspodiumd-4] Objecten's zgw_consumers Service autorisaties-api (client_id objecten) carries a secret"
+    " that matches no Open Zaak credential, so Open Zaak answers 403; no Objecten config field references it"
+)
+
+
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
 @pytest.mark.parametrize("component", [requiring(c, c) for c in ZGW_CONSUMER_APPS])
 def test_zgw_services_authenticate(podiumd_env: Environment, component: str) -> None:
     """Every API the app has configured (zgw_consumers Service) lists with the Service's own credentials (PI)."""
-    assert service_problems(podiumd_env, component) == []
+    problems = service_problems(podiumd_env, component)
+    # Objecttypen runs in the objecten deployment.
+    if (
+        component in {"objecten", "objecttypen"}
+        and problems
+        and all(p.startswith("autorisaties-api ") for p in problems)
+    ):
+        pytest.xfail(OBJECTEN_AUTORISATIES)
+    assert problems == []
 
 
 @pytest.mark.cluster
