@@ -94,7 +94,8 @@ def list_path(api_root: str) -> str | None:
 
 
 def _services(env: Environment, component: str, probes: dict[str, str]) -> list[dict[str, object]]:
-    found = run_snippet(env.kube, env.deployment_for(component), "zgw_services", {"probes": probes})
+    used = [dict(r.where) for r in SERVICE_REFERENCES.get(component, ()) if not r.field]
+    found = run_snippet(env.kube, env.deployment_for(component), "zgw_services", {"probes": probes, "used": used})
     return cast("list[dict[str, object]]", found)
 
 
@@ -116,10 +117,13 @@ def service_problem(service: Mapping[str, object], path: str | None) -> str | No
 
 
 def service_problems(env: Environment, component: str) -> list[str]:
-    """Why the component's Services fail service_problem; [] when all pass."""
-    paths = {str(s["uuid"]): list_path(str(s["api_root"])) for s in _services(env, component, {})}
+    """Why the component's referenced Services fail service_problem; [] when all pass.
+
+    A Service that no config field references is never called, so its credentials are not asserted.
+    """
+    paths = {str(s["uuid"]): list_path(str(s["api_root"])) for s in _services(env, component, {}) if s["referenced"]}
     probed = _services(env, component, {uuid: path or "" for uuid, path in paths.items()})
-    return [p for s in probed if (p := service_problem(s, paths[str(s["uuid"])])) is not None]
+    return [p for s in probed if str(s["uuid"]) in paths and (p := service_problem(s, paths[str(s["uuid"])]))]
 
 
 def reference_problems(env: Environment, component: str) -> list[str]:

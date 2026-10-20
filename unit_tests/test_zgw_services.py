@@ -27,8 +27,15 @@ def test_list_path_by_api_path_else_host(api_root, path):
     assert list_path(api_root) == path
 
 
-def service(api_root, status, auth_type="zgw"):
-    return {"uuid": "u1", "name": "s1", "api_root": api_root, "auth_type": auth_type, "status": status}
+def service(api_root, status, auth_type="zgw", uuid="u1", *, referenced=True):
+    return {
+        "uuid": uuid,
+        "name": "s1",
+        "api_root": api_root,
+        "auth_type": auth_type,
+        "referenced": referenced,
+        "status": status,
+    }
 
 
 @pytest.mark.parametrize(
@@ -48,16 +55,24 @@ def test_service_problem(api_root, path, status, problem):
     assert found == problem if problem is None else problem in str(found)
 
 
-def test_service_problems_probe_each_service_on_its_list_path(page_env):
+def test_service_problems_probe_each_referenced_service_on_its_list_path(page_env):
     env = page_env(zgw_services)
-    env.snippet_result = [service("https://openzaak.local/zaken/api/v1/", 403)]
+    unused = service("https://openzaak.local/autorisaties/api/v1/", 403, uuid="u2", referenced=False)
+    env.snippet_result = [service("https://openzaak.local/zaken/api/v1/", 403), unused]
     assert service_problems(env, "openformulieren") == [
         "s1 https://openzaak.local/zaken/api/v1/statussen (zgw): 403, expected 2xx with its credentials"
     ]
     assert env.snippets == [
-        ("openformulieren", "zgw_services", {"probes": {}}),
-        ("openformulieren", "zgw_services", {"probes": {"u1": "statussen"}}),
+        ("openformulieren", "zgw_services", {"probes": {}, "used": []}),
+        ("openformulieren", "zgw_services", {"probes": {"u1": "statussen"}, "used": []}),
     ]
+
+
+def test_services_used_by_type_count_as_referenced(page_env):
+    env = page_env(zgw_services)
+    env.snippet_result = []
+    service_problems(env, "openbeheer")
+    assert env.snippets[0][2]["used"] == [{"api_type": "ztc"}]
 
 
 def test_reference_problems_name_missing_rows_and_unset_fields(page_env, monkeypatch):
