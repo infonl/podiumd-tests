@@ -124,8 +124,6 @@ class Details:
     skipped: list[Entry] = field(default_factory=list[Entry])
     # Pods and nodes that came, went or restarted during the run (workloads.disruptions).
     disruptions: list[str] = field(default_factory=list[str])
-    # Packets a Cilium network policy denied during the run (cilium.describe_drops).
-    policy_drops: list[str] = field(default_factory=list[str])
 
 
 @dataclass
@@ -204,7 +202,6 @@ def _by_message(entries: list[Entry]) -> list[str]:
     return [f"- {message} ({len(ids)}): " + ", ".join(f"`{i}`" for i in ids) for message, ids in ordered]
 
 
-MAX_POLICY_DROPS = 50
 # Known-defect reasons start with their bug report id, e.g. "[open-zaak-1] ...".
 REPORT_ID = re.compile(r"^\[([a-z0-9-]+)\]")
 STRICT_XPASS = "[XPASS(strict)] "
@@ -265,11 +262,6 @@ def summary_markdown(info: RunInfo, details: Details) -> str:
     for title, entries in sections:
         if entries:
             lines += ["", f"## {title}", "", *_by_message(entries)]
-    if details.policy_drops:
-        shown = details.policy_drops[:MAX_POLICY_DROPS]
-        lines += ["", "## Packets a network policy denied (Cilium)", "", *(f"- {d}" for d in shown)]
-        if len(details.policy_drops) > len(shown):
-            lines.append(f"- {len(details.policy_drops) - len(shown)} more in cilium-drops.jsonl")
     return "\n".join(lines) + "\n"
 
 

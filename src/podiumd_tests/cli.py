@@ -32,9 +32,6 @@ from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.capabilities import CLUSTER
 from podiumd_tests.ci import group
 from podiumd_tests.ci import publish_summary
-from podiumd_tests.cilium import CILIUM
-from podiumd_tests.cilium import describe_drops
-from podiumd_tests.cilium import recorded_drops
 from podiumd_tests.components import COMPONENTS
 from podiumd_tests.components import component_for_host
 from podiumd_tests.config import ESTATES
@@ -410,13 +407,12 @@ def cmd_run(args: argparse.Namespace) -> int:
     junit = Path(sink.location(f"{directory}/junit.xml"))
     junit.parent.mkdir(parents=True, exist_ok=True)
     info.selection = pytest_selection(profile, args.tier, info.run_id, junit, args)
-    # Smoke only reads; every other tier writes to the environment and takes its lock.
-    drops = junit.parent / "cilium-drops.jsonl"
+    # Smoke only reads; every other tier writes to the environment and takes its lock. Policy drops are
+    # recorded by the tests that expect them (tests/component/platform/test_network_policy.py), not the run.
     before = _cluster_state(env)
     with (
         group(f"pytest {args.tier}"),
         nullcontext() if args.tier == "smoke" else held(env, f"run {args.tier} {profile.name}"),
-        recorded_drops(env.kube, drops) if CILIUM in env.capabilities.present else nullcontext(),
     ):
         info.exit_code = int(pytest.main(info.selection))
     info.finished = now_iso()
@@ -428,7 +424,6 @@ def cmd_run(args: argparse.Namespace) -> int:
             written.write_text(env.redactor.redact(written.read_text(encoding="utf-8")), encoding="utf-8")
     if junit.exists():
         info.counts, details = parse_junit(junit.read_text(encoding="utf-8"))
-    details.policy_drops = describe_drops(env.kube, drops)
     after = _cluster_state(env)
     if before and after:
         details.disruptions = disruptions(before, after)
