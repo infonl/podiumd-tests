@@ -92,7 +92,10 @@ def policy_breaking_passwords(policy: str) -> dict[str, str]:
 
 
 def missing_security_headers(response: requests.Response) -> list[str]:
-    """The baseline headers the response lacks: HSTS and nosniff always, frame protection on an HTML page."""
+    """The baseline headers the response lacks: HSTS and nosniff always, frame protection on an HTML page.
+
+    A redirect's HTML body is never rendered, so it cannot be framed: frame protection applies to 2xx only.
+    """
     headers = {k.lower(): v for k, v in response.headers.items()}
     missing: list[str] = []
     if response.url.startswith("https://") and "strict-transport-security" not in headers:
@@ -100,7 +103,7 @@ def missing_security_headers(response: requests.Response) -> list[str]:
     # An app and its nginx may each send it: "nosniff, nosniff".
     if {v.strip().lower() for v in headers.get("x-content-type-options", "").split(",")} != {"nosniff"}:
         missing.append("X-Content-Type-Options: nosniff")
-    html = headers.get("content-type", "").startswith("text/html")
+    html = response.ok and not response.is_redirect and headers.get("content-type", "").startswith("text/html")
     framed = "x-frame-options" in headers or "frame-ancestors" in headers.get("content-security-policy", "")
     if html and not framed:
         missing.append("X-Frame-Options or CSP frame-ancestors")
