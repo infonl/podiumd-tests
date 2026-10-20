@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from datetime import timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
@@ -12,11 +14,18 @@ from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     import requests
 
     from podiumd_tests.credentials import SecretResolver
 
 type Json = dict[str, object]
+
+# kubectl kind of a Prometheus Operator monitor and the scrape pool prefix Prometheus gives its targets.
+MONITOR_POOLS = {"servicemonitors": "serviceMonitor", "podmonitors": "podMonitor"}
+# A younger pod may not have been collected by Alloy yet.
+MIN_POD_AGE = timedelta(minutes=10)
 
 
 class GrafanaError(AssertionError):
@@ -80,3 +89,28 @@ def down_targets(targets_response: JsonObject) -> list[str]:
 def target_count(targets_response: JsonObject) -> int:
     """Number of active scrape targets in a /api/v1/targets body."""
     return len(_active_targets(targets_response))
+
+
+def monitors_without_targets(monitors: Sequence[str], targets_response: JsonObject) -> list[str]:
+    """Monitors, as "<scrape pool prefix>/<namespace>/<name>", without an active target in a /api/v1/targets body."""
+    pools = {str(t.get("scrapePool")) for t in _active_targets(targets_response)}
+    return [m for m in monitors if not any(p.startswith(f"{m}/") for p in pools)]
+
+
+def pods_in_loki(query_response: JsonObject) -> set[tuple[str, str]]:
+    """(namespace, pod) of each series in a Loki `sum by (namespace, pod)` query result."""
+    metrics = (section(r, "metric") for r in entries(section(query_response, "data").get("result")))
+    return {(str(m.get("namespace")), str(m.get("pod"))) for m in metrics}
+
+
+def running_pods_not_in_loki(
+    pods: Sequence[JsonObject], in_loki: set[tuple[str, str]], now: datetime
+) -> list[JsonObject]:
+    """Running pods older than MIN_POD_AGE that have no log lines in Loki."""
+    return [
+        p
+        for p in pods
+        if section(p, "status").get("phase") == "Running"
+        and now - datetime.fromisoformat(str(section(p, "metadata").get("creationTimestamp"))) >= MIN_POD_AGE
+        and (str(section(p, "metadata").get("namespace")), str(section(p, "metadata").get("name"))) not in in_loki
+    ]

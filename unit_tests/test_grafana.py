@@ -1,5 +1,8 @@
 """Unit tests for the Grafana client."""
 
+from datetime import UTC
+from datetime import datetime
+
 import pytest
 import requests
 
@@ -8,6 +11,9 @@ from podiumd_tests.grafana import Grafana
 from podiumd_tests.grafana import GrafanaError
 from podiumd_tests.grafana import down_targets
 from podiumd_tests.grafana import grafana_auth
+from podiumd_tests.grafana import monitors_without_targets
+from podiumd_tests.grafana import pods_in_loki
+from podiumd_tests.grafana import running_pods_not_in_loki
 from podiumd_tests.grafana import target_count
 from podiumd_tests.responses import UnexpectedStatusError
 
@@ -87,3 +93,20 @@ def test_grafana_auth_needs_both_secrets(env_factory):
     assert grafana_auth(env_factory(environ=only_user).credentials) is None
     both = {**only_user, env_var_name("grafana_password"): "pw-1234"}
     assert grafana_auth(env_factory(environ=both).credentials) == ("viewer", "pw-1234")
+
+
+def test_monitor_without_active_target_is_reported():
+    body = {"data": {"activeTargets": [{"scrapePool": "serviceMonitor/ns/keycloak/0", "health": "up"}]}}
+    monitors = ["serviceMonitor/ns/keycloak", "podMonitor/ns/traefik", "serviceMonitor/ns/keycloak-operator"]
+    assert monitors_without_targets(monitors, body) == ["podMonitor/ns/traefik", "serviceMonitor/ns/keycloak-operator"]
+
+
+def pod(name, phase="Running", created="2026-10-20T08:00:00Z"):
+    return {"metadata": {"namespace": "ns", "name": name, "creationTimestamp": created}, "status": {"phase": phase}}
+
+
+def test_running_pods_not_in_loki_skips_young_and_finished_pods():
+    body = {"data": {"result": [{"metric": {"namespace": "ns", "pod": "logged"}, "value": [0, "3"]}]}}
+    pods = [pod("logged"), pod("silent"), pod("young", created="2026-10-20T08:55:00Z"), pod("done", phase="Succeeded")]
+    now = datetime(2026, 10, 20, 9, 0, tzinfo=UTC)
+    assert running_pods_not_in_loki(pods, pods_in_loki(body), now) == [pods[1]]
