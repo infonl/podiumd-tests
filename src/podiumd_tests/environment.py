@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import tempfile
 
 from contextlib import ExitStack
@@ -126,6 +127,14 @@ class Environment:
         """Names of all deployments in the environment's namespaces; read once."""
         return [metadata_name(d) for d in self.items("deployments")]
 
+    @cached_property
+    def workload_names(self) -> list[str]:
+        """Names of all Deployments and, where listable, StatefulSets (e.g. OpenBao); for capability detection."""
+        names = list(self.deployment_names)
+        with contextlib.suppress(KubeError):
+            names += [metadata_name(s) for s in self.items("statefulsets")]
+        return names
+
     def deployment_for(self, component: str) -> str:
         """The main deployment of a component, e.g. "notificaties" for opennotificaties on podiumd-infra."""
         for prefix in COMPONENTS[component].deployment_prefixes:
@@ -151,7 +160,7 @@ class Environment:
     def capabilities(self) -> Capabilities:
         """Capabilities detected from profile and cluster; profile only when the cluster is unreachable."""
         try:
-            names: list[str] | None = self.deployment_names
+            names: list[str] | None = self.workload_names
         except KubeError:
             return detect(self.profile, None)
         return detect(self.profile, names, detect_network(self.kube))

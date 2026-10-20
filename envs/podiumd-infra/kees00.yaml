@@ -34,6 +34,7 @@ urls:
   frankgateway: http://frankgateway-outway.podiumd.svc.cluster.local:9080
   # Off the public edge until known issue zgw-office-addin-1 is fixed.
   zgw-office-addin: http://zgw-office-addin-frontend.podiumd.svc.cluster.local
+  openbao: https://openbao.kees00.pd.test-rig.nl
 secrets:
   keycloak_admin_username:
     k8s_secret: {name: keycloak-podiumd-admin, key: username}
