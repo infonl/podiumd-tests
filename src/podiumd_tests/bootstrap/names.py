@@ -52,5 +52,6 @@ ITA_OBJECTTYPES = ("Afdeling", "Groep", "Medewerker", "Activiteitenlog")
 # Objecttypes KISS indexes for its search (its elastic-sync jobs vac and kennisbank).
 KISS_OBJECTTYPES = ("VAC", "Kennisartikel")
 OPENKLANT_STORE_KEY = "ptest_bootstrap_openklant_token"
+OPENVTB_STORE_KEY = "ptest_bootstrap_openvtb_token"
 # Open Inwoner's token in Open Klant (wiring W6).
 OPENKLANT_OPENINWONER_STORE_KEY = "ptest_bootstrap_openklant_openinwoner_token"

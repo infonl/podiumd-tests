@@ -36,6 +36,7 @@ from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.clients.platform import objecttypen_client
 from podiumd_tests.clients.platform import openklant_client
 from podiumd_tests.clients.platform import opennotificaties_client
+from podiumd_tests.clients.platform import openvtb_client
 from podiumd_tests.clients.platform import openzaak_client
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
@@ -182,6 +183,13 @@ def fixture_openklant(podiumd_env: Environment, need_bootstrap: Callable[..., No
     """Open Klant klantinteracties API with the suite's own token (bootstrap step openklant-token)."""
     need_bootstrap("openklant-token")
     return openklant_client(podiumd_env)
+
+
+@pytest.fixture(scope="session", name="openvtb_verzoeken")
+def fixture_openvtb_verzoeken(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
+    """Open VTB's verzoeken API with the suite's own token (bootstrap step openvtb-token)."""
+    need_bootstrap("openvtb-token")
+    return openvtb_client(podiumd_env, "verzoeken")
 
 
 @pytest.fixture(scope="session", name="objecten")

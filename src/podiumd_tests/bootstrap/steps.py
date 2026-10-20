@@ -27,6 +27,7 @@ from podiumd_tests.bootstrap.names import OGONE_MERCHANT
 from podiumd_tests.bootstrap.names import OGONE_STORE_KEY
 from podiumd_tests.bootstrap.names import OPENKLANT_OPENINWONER_STORE_KEY
 from podiumd_tests.bootstrap.names import OPENKLANT_STORE_KEY
+from podiumd_tests.bootstrap.names import OPENVTB_STORE_KEY
 from podiumd_tests.bootstrap.names import PREFIX
 from podiumd_tests.bootstrap.names import PRODUCTAANVRAAG_OBJECTTYPE
 from podiumd_tests.bootstrap.names import TEST_BESLUITTYPE
@@ -684,6 +685,7 @@ STEPS: tuple[Step, ...] = (
         {"client_id": NRC_CLIENT_ID, "scopes": {"nrc": ["notificaties.consumeren", "notificaties.publiceren"]}},
     ),
     token_step("openklant", ("openklant.components.token.models",), OPENKLANT_STORE_KEY),
+    SnippetStep("openvtb-token", ("openvtb",), "openvtb_token", OPENVTB_STORE_KEY, {"username": f"{PREFIX}-openvtb"}),
     token_step(
         "objecttypen",
         # Open Object (podiumd 4.10) serves the Objecttypen API with Objecten's tokens.

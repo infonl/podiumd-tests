@@ -14,6 +14,7 @@ from podiumd_tests.bootstrap.names import NRC_STORE_KEY
 from podiumd_tests.bootstrap.names import OBJECTEN_STORE_KEY
 from podiumd_tests.bootstrap.names import OBJECTTYPEN_STORE_KEY
 from podiumd_tests.bootstrap.names import OPENKLANT_STORE_KEY
+from podiumd_tests.bootstrap.names import OPENVTB_STORE_KEY
 from podiumd_tests.clients.api import ApiClient
 
 if TYPE_CHECKING:
@@ -49,6 +50,13 @@ def openklant_client(env: Environment) -> ApiClient:
     """Open Klant's klantinteracties API with the suite's own token."""
     token = env.credentials.get(OPENKLANT_STORE_KEY)
     url = env.profile.urls["openklant"] + "/klantinteracties/api/v1"
+    return ApiClient(env.session(cookies=False), url, {"Authorization": f"Token {token}"})
+
+
+def openvtb_client(env: Environment, component: str) -> ApiClient:
+    """One of Open VTB's APIs (verzoeken, taken, berichten) with the suite's own DRF token."""
+    token = env.credentials.get(OPENVTB_STORE_KEY)
+    url = f"{env.profile.urls['openvtb']}/{component}/api/v1"
     return ApiClient(env.session(cookies=False), url, {"Authorization": f"Token {token}"})
 
 
