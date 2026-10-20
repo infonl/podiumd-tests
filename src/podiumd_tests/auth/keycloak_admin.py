@@ -173,6 +173,11 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
         found = next((r for r in roles if r.get("name") == role), None)
         return (uuid, found) if found else None
 
+    def user_client_roles(self, user_id: str, client_uuid: str) -> set[str]:
+        """Names of one client's roles mapped directly to a user."""
+        path = f"/users/{user_id}/role-mappings/clients/{client_uuid}"
+        return {str(r.get("name")) for r in cast("list[JsonObject]", self._get(path))}
+
     def add_client_role(self, user_id: str, client_uuid: str, role: JsonObject) -> None:
         """Map one client role to a user."""
         self._send("POST", f"/users/{user_id}/role-mappings/clients/{client_uuid}", [role])

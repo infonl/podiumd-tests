@@ -280,6 +280,23 @@ def test_keycloak_user_is_present_only_with_the_realms_wanted_roles(  # pylint: 
     assert user.is_present(ctx) is present
 
 
+@pytest.mark.parametrize(("mapped", "present"), [([], False), ([{"name": "administrator"}], True)])
+def test_keycloak_user_is_present_only_with_the_realms_wanted_client_roles(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    env_factory, fake_runner, profile_factory, fake_http, mapped, present
+):
+    # A client role the realm gets later (a redeploy that imports roles) makes the step apply again.
+    ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
+    secret = stored({keycloak_password_key("admin"): "pw"})
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (0, secret)
+    answers = keycloak_answers(user_exists=True, has_group=True)
+    answers[f"GET {REALM}/users/u1/role-mappings/realm"] = (200, [])
+    answers[f"GET {REALM}/users/u1/groups"] = (200, [])
+    answers[f"GET {REALM}/users/u1/role-mappings/clients/c1"] = (200, mapped)
+    fake_http(answers)
+    user = KeycloakUser("admin", client_roles=(("pabc", "administrator"), ("pabc", "missing")))
+    assert user.is_present(ctx) is present
+
+
 def test_keycloak_user_remove_deletes_only_an_existing_user(env_factory, fake_runner, profile_factory, fake_http):
     ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
     sent = fake_http(keycloak_answers(user_exists=False, has_group=True))

@@ -179,7 +179,7 @@ class KeycloakUser:
         return keycloak_password_key(self.key)
 
     def is_present(self, ctx: Context, /) -> bool:
-        """The user exists with the wanted attributes, realm roles and groups that the realm has.
+        """The user exists with the wanted attributes, roles and groups that the realm has.
 
         Its password must be in the credentials Secret. A role or group the realm gets later makes the step apply again.
         """
@@ -193,7 +193,10 @@ class KeycloakUser:
         user_id = str(user["id"])
         roles = {str(r["name"]) for r in admin.realm_roles(self.realm_roles)}
         groups = {g for g in self.groups if admin.group_id(g)}
-        return roles <= admin.user_realm_roles(user_id) and groups <= admin.user_groups(user_id)
+        if not (roles <= admin.user_realm_roles(user_id) and groups <= admin.user_groups(user_id)):
+            return False
+        client_roles = filter(None, (admin.client_role(c, r) for c, r in self.client_roles))
+        return all(str(role["name"]) in admin.user_client_roles(user_id, uuid) for uuid, role in client_roles)
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Create or update the user with a new password and the wanted roles and groups that exist.
