@@ -130,6 +130,14 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
         """Delete a user."""
         self._send("DELETE", f"/users/{user_id}", None)
 
+    def identity_providers(self) -> list[JsonObject]:
+        """The realm's identity providers (brokering)."""
+        return cast("list[JsonObject]", self._get("/identity-provider/instances"))
+
+    def identity_provider_mappers(self, alias: str) -> list[JsonObject]:
+        """The mappers of one identity provider."""
+        return cast("list[JsonObject]", self._get(f"/identity-provider/instances/{alias}/mappers"))
+
     def realm_roles(self, names: tuple[str, ...]) -> list[JsonObject]:
         """The realm roles with these names that exist."""
         roles = cast("list[JsonObject]", self._get("/roles"))
