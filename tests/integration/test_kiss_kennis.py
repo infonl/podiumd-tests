@@ -22,6 +22,7 @@ from podiumd_tests.kcc import vac_data
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
+from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import run_cronjob
 
 if TYPE_CHECKING:
@@ -65,8 +66,13 @@ def test_object_is_found_in_kiss_search(  # pylint: disable=too-many-arguments,t
     make_object(objecten, registry, objecttype_url(podiumd_env, objecttype), data(titel))
     run_cronjob(podiumd_env.kube, cronjob, titel)
     kiss = kcc_login(page, podiumd_env, "kiss")
-    response = kiss.post(
-        podiumd_env.profile.urls["kiss"] + "/api/search", json={"query": titel, "page": 1, "filters": []}
-    )
-    hits = entries(section(expect_status(response, HTTPStatus.OK).json(), "hits").get("hits"))
-    assert any(titel in str(hit.get("_source")) for hit in hits), [hit.get("_index") for hit in hits]
+
+    def found() -> bool:
+        response = kiss.post(
+            podiumd_env.profile.urls["kiss"] + "/api/search", json={"query": titel, "page": 1, "filters": []}
+        )
+        hits = entries(section(expect_status(response, HTTPStatus.OK).json(), "hits").get("hits"))
+        return any(titel in str(hit.get("_source")) for hit in hits)
+
+    # Elasticsearch shows new documents only after its next index refresh, which lags under load.
+    wait_until(found, timeout=60, description=f"KISS search finds {titel}")
