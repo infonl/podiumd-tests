@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import os
 import threading
 
 from contextlib import contextmanager
@@ -67,34 +68,37 @@ def recorded_drops(kube: Kube, path: Path) -> Generator[None]:
     """Write the packets a policy denied to path, one JSON object per line, while the context is open.
 
     cilium-dbg monitor events carry no time; each line gets "time", when it was read.
+
+    kubectl exec leaves the remote cilium-dbg monitor running when the local client stops, because the
+    monitor writes only on a drop and so never sees the closed stdout: a quiet run would leak one process
+    per node. Two best-effort stops: the monitor runs on a pty (kubectl exec -t), so killing the local
+    kubectl hangs up the pty (SIGHUP); and a pkill afterwards, where the image has it. A run with drops
+    self-clears (the monitor hits EPIPE on the next write). The distroless AKS agent image honours neither
+    the hangup nor has pkill, so a quiet run there retains the monitor until the agent recycles (it
+    reinstalls often); its cilium-dbg should exit on EPIPE/SIGHUP (upstream).
     """
-    commands = [
-        kube.command("exec", metadata_name(p), "-c", "cilium-agent", "--", *MONITOR, namespace=NAMESPACE)
-        for p in agent_pods(kube)
-    ]
-    processes = [start_process(c) for c in commands]
+    pods = agent_pods(kube)
+    monitors = [start_monitor(kube, metadata_name(p)) for p in pods]
     lock = threading.Lock()
     with path.open("w", encoding="utf-8") as out:
 
-        def copy(process: subprocess.Popen[str]) -> None:
-            for line in process.stdout or ():
+        def copy(monitor: Monitor) -> None:
+            for line in monitor.lines():
                 event = policy_drop(line)
                 if event is not None:
                     with lock:
                         out.write(json.dumps({"time": datetime.now(UTC).isoformat(timespec="seconds"), **event}) + "\n")
                         out.flush()
 
-        threads = [threading.Thread(target=copy, args=(p,), daemon=True) for p in processes]
+        threads = [threading.Thread(target=copy, args=(m,), daemon=True) for m in monitors]
         for thread in threads:
             thread.start()
         try:
             yield
         finally:
-            for process in processes:
-                process.terminate()
-            # terminate() stops the local kubectl exec, but the remote cilium-dbg monitor keeps running: it
-            # writes only on a drop, so it never sees the closed pipe. Kill it in its pod; only ours match.
-            for pod in agent_pods(kube):
+            for monitor in monitors:
+                monitor.stop()
+            for pod in pods:
                 with contextlib.suppress(KubeError):
                     kube.run(
                         "exec",
@@ -112,6 +116,36 @@ def recorded_drops(kube: Kube, path: Path) -> Generator[None]:
 
 
 MONITOR = ("cilium-dbg", "monitor", "--type", "drop", "--json")
+
+
+class Monitor:
+    """A cilium-dbg monitor on one agent pod, read over a pty so the remote gets SIGHUP when kubectl stops."""
+
+    def __init__(self, process: subprocess.Popen[str], master: int) -> None:
+        self._process = process
+        self._master = master  # the pty master; lines() owns and closes it
+
+    def lines(self) -> Generator[str]:
+        """The monitor's output lines until it stops; killing kubectl closes the pty and ends the stream."""
+        with contextlib.suppress(OSError), os.fdopen(self._master, encoding="utf-8", errors="replace") as reader:
+            yield from reader
+
+    def stop(self) -> None:
+        """Kill the local kubectl; with -t the exec stream closes, so the remote monitor gets SIGHUP.
+
+        Only lines() closes the pty master, when kubectl's death ends the stream: closing it here too would
+        double-close the fd. kill (not terminate) so a kubectl that ignores SIGTERM still drops the stream.
+        """
+        self._process.kill()
+
+
+def start_monitor(kube: Kube, pod: str) -> Monitor:
+    """Start cilium-dbg monitor in an agent pod on a pty (kubectl exec -t), reading its drops."""
+    master, slave = os.openpty()
+    command = kube.command("exec", "-i", "-t", pod, "-c", "cilium-agent", "--", *MONITOR, namespace=NAMESPACE)
+    process = start_process(command, stdin=slave, stdout=slave, stderr=slave)
+    os.close(slave)
+    return Monitor(process, master)
 
 
 def policy_drop(line: str) -> JsonObject | None:

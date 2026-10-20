@@ -99,11 +99,14 @@ def test_an_empty_recording_means_no_drops(tmp_path, fake_runner):
 
 class FakeMonitor:
     def __init__(self, lines):
-        self.stdout = lines
-        self.terminated = False
+        self._lines = lines
+        self.stopped = False
 
-    def terminate(self):
-        self.terminated = True
+    def lines(self):
+        yield from self._lines
+
+    def stop(self):
+        self.stopped = True
 
 
 def test_recorded_drops_writes_policy_drops_of_every_agent(tmp_path, fake_runner, monkeypatch):
@@ -112,14 +115,14 @@ def test_recorded_drops_writes_policy_drops_of_every_agent(tmp_path, fake_runner
         "cilium-a": FakeMonitor([json.dumps(drop("Policy denied")) + "\n", "chatter\n"]),
         "cilium-b": FakeMonitor([json.dumps(drop("Unsupported L3 protocol")) + "\n"]),
     }
-    monkeypatch.setattr(cilium, "start_process", lambda command: monitors[command[command.index("exec") + 1]])
+    monkeypatch.setattr(cilium, "start_monitor", lambda _kube, pod: monitors[pod])
     path = tmp_path / "cilium-drops.jsonl"
     with cilium.recorded_drops(Kube("ctx", "podiumd", fake_runner), path):
         pass
     recorded = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
     assert [r["reason"] for r in recorded] == ["Policy denied"]
     assert "time" in recorded[0]
-    assert all(m.terminated for m in monitors.values())
-    # the remote monitor outlives the local kubectl exec, so it is killed in its pod
+    # the pty is hung up (stop) and the remote monitor killed as a fallback, per agent
+    assert all(m.stopped for m in monitors.values())
     pkills = [c for c in fake_runner.calls if "pkill" in c]
     assert {c[c.index("exec") + 1] for c in pkills} == {"cilium-a", "cilium-b"}

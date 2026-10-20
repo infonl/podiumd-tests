@@ -47,10 +47,19 @@ def run_process(args: Sequence[str], timeout: int, stdin: str | None = None) -> 
     )
 
 
-def start_process(args: Sequence[str]) -> subprocess.Popen[str]:
-    """Start a fixed argv in the background, never through a shell; stdout and stderr share one pipe."""
+def start_process(
+    args: Sequence[str], stdin: int | None = None, stdout: int | None = None, stderr: int | None = None
+) -> subprocess.Popen[str]:
+    """Start a fixed argv in the background, never through a shell.
+
+    By default stdin is closed and stdout and stderr share one pipe; pass fds (e.g. a pty) to redirect them.
+    """
     return subprocess.Popen(  # nosec B603  # noqa: S603
-        list(args), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+        list(args),
+        stdin=subprocess.DEVNULL if stdin is None else stdin,
+        stdout=subprocess.PIPE if stdout is None else stdout,
+        stderr=subprocess.STDOUT if stderr is None else stderr,
+        text=True,
     )
 
 
