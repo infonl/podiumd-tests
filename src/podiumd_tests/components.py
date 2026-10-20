@@ -42,7 +42,7 @@ COMPONENTS: dict[str, Component] = {
     "zaakbrug": Component(("zaakbrug",), ("zaakbrug", "podiumd-zaakbrug")),
     # ExternalsPodiumD's host is <stage>-office-addin.<domain>.
     "zgw-office-addin": Component(("office-addin", "zgw-office-addin"), ("zgw-office-addin",)),
-    "frankgateway": Component(("frankgateway",), ("frankgateway", "frank-gateway")),
+    "frankgateway": Component(("frankgateway",), ("frankgateway-outway", "frankgateway", "frank-gateway")),
     # podiumd's nginx in front of BRP, KvK and BAG (Frank!Gateway replaces it in newer charts).
     "api-proxy": Component(("api-proxy",), ("api-proxy",)),
     # monitoring-logging's Grafana is named <helm release>-grafana: release monitoring or monitoring-logging on

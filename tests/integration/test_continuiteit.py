@@ -46,6 +46,7 @@ from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import ROOT_TIMEOUT
 from podiumd_tests.workloads import component_down
 from podiumd_tests.workloads import readiness_window
+from podiumd_tests.workloads import scaled
 from podiumd_tests.workloads import unready_workloads
 from podiumd_tests.zac import PRODUCTAANVRAAG_TIMEOUT
 from podiumd_tests.zac import productaanvraag_zaak
@@ -96,6 +97,23 @@ def test_stopped_component_harms_no_other(
     ]
     with component_down(podiumd_env, http, component):
         assert [c for c in others if not root_answers(http, urls[c], ROOT_TIMEOUT)] == []
+
+
+@pytest.mark.requires("frankgateway", "openzaak", "openinwoner")
+def test_frankgateway_outage_does_not_cascade(
+    http: requests.Session, urls: dict[str, str], podiumd_env: Environment
+) -> None:
+    """While the Frank!Gateway outway is down the apps' roots still answer: a gateway outage does not cascade.
+
+    The outway has no public host; the suite reaches it through a port-forward that a pod replacement breaks, so
+    the outway's own recovery is confirmed by the rollout (scaled), not by re-reading its URL. The apps route
+    BRP/KvK/BAG through the outway, but their roots do not depend on it.
+    """
+    apps = [
+        c for c in sorted(urls) if c in COMPONENTS and c != "frankgateway" and root_answers(http, urls[c], ROOT_TIMEOUT)
+    ]
+    with scaled(podiumd_env.kube, podiumd_env.deployment_for("frankgateway"), 0):
+        assert [c for c in apps if not root_answers(http, urls[c], ROOT_TIMEOUT)] == []
 
 
 @pytest.mark.requires("pabc", "zac")
