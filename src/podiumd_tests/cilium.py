@@ -5,6 +5,7 @@ A plain install and Microsoft's AKS build both run the agent as DaemonSet cilium
 
 from __future__ import annotations
 
+import contextlib
 import json
 import threading
 
@@ -91,6 +92,21 @@ def recorded_drops(kube: Kube, path: Path) -> Generator[None]:
         finally:
             for process in processes:
                 process.terminate()
+            # terminate() stops the local kubectl exec, but the remote cilium-dbg monitor keeps running: it
+            # writes only on a drop, so it never sees the closed pipe. Kill it in its pod; only ours match.
+            for pod in agent_pods(kube):
+                with contextlib.suppress(KubeError):
+                    kube.run(
+                        "exec",
+                        metadata_name(pod),
+                        "-c",
+                        "cilium-agent",
+                        "--",
+                        "pkill",
+                        "-f",
+                        " ".join(MONITOR),
+                        namespace=NAMESPACE,
+                    )
             for thread in threads:
                 thread.join(5)
 

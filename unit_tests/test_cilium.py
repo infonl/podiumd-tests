@@ -120,3 +120,6 @@ def test_recorded_drops_writes_policy_drops_of_every_agent(tmp_path, fake_runner
     assert [r["reason"] for r in recorded] == ["Policy denied"]
     assert "time" in recorded[0]
     assert all(m.terminated for m in monitors.values())
+    # the remote monitor outlives the local kubectl exec, so it is killed in its pod
+    pkills = [c for c in fake_runner.calls if "pkill" in c]
+    assert {c[c.index("exec") + 1] for c in pkills} == {"cilium-a", "cilium-b"}
