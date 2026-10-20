@@ -6,6 +6,7 @@ import uuid
 import xml.etree.ElementTree as ET  # nosec B405  # parses ZaakBrug's own answer
 
 from typing import TYPE_CHECKING
+from typing import NamedTuple
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -16,6 +17,19 @@ STUF = "http://www.egem.nl/StUF/StUF0301"
 ZKN = "http://www.egem.nl/StUF/sector/zkn/0310"
 # ZaakBrug's default organisation (zaakbrug.globals.organizations).
 GEMEENTECODE = "1900"
+# The mutation parameters shared by the Lk01 messages (creeerZaak, voegZaakdocumentToe).
+MUTATIE = (
+    "<ZKN:parameters><StUF:mutatiesoort>T</StUF:mutatiesoort>\n"
+    "<StUF:indicatorOvername>V</StUF:indicatorOvername></ZKN:parameters>"
+)
+
+
+class Document(NamedTuple):
+    """A document for voegZaakdocumentToe: its identificatie, its informatieobjecttype omschrijving, its content."""
+
+    identificatie: str
+    documenttype: str
+    inhoud_base64: str
 
 
 def soap_action(message: str) -> dict[str, str]:
@@ -82,8 +96,7 @@ def creeer_zaak(now: datetime, zaak: str, zaaktype_code: str, bsn: str, gemeente
  xmlns:BG="http://www.egem.nl/StUF/sector/bg/0310" xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}"
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><SOAP-ENV:Body><ZKN:zakLk01>
 {stuurgegevens}
-<ZKN:parameters><StUF:mutatiesoort>T</StUF:mutatiesoort>
-<StUF:indicatorOvername>V</StUF:indicatorOvername></ZKN:parameters>
+{MUTATIE}
 <ZKN:object StUF:sleutelVerzendend="{zaak}" StUF:entiteittype="ZAK" StUF:verwerkingssoort="T">
 <ZKN:identificatie>{zaak}</ZKN:identificatie><ZKN:omschrijving>podiumd-tests ZaakBrug</ZKN:omschrijving>
 <ZKN:startdatum>{now:%Y%m%d}</ZKN:startdatum><ZKN:registratiedatum>{now:%Y%m%d}</ZKN:registratiedatum>
@@ -112,32 +125,23 @@ def geef_zaak_details(now: datetime, zaak: str, gemeentecode: str = GEMEENTECODE
 
 
 def voeg_zaakdocument_toe(
-    now: datetime,
-    zaak: str,
-    zaaktype_code: str,
-    document: str,
-    documenttype: str,
-    inhoud_base64: str,
-    gemeentecode: str = GEMEENTECODE,
+    now: datetime, zaak: str, zaaktype_code: str, document: Document, gemeentecode: str = GEMEENTECODE
 ) -> str:
-    """A voegZaakdocumentToe_Lk01 envelope: attach one document to a zaak.
-
-    documenttype is the informatieobjecttype omschrijving of the zaaktype; inhoud_base64 the file content.
-    """
+    """A voegZaakdocumentToe_Lk01 envelope: attach one document to a zaak."""
     stuurgegevens = _stuurgegevens("Lk01", now, gemeentecode, rest="<StUF:entiteittype>EDC</StUF:entiteittype>")
     return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
  xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}" xmlns:xmime="http://www.w3.org/2005/05/xmlmime"
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><SOAP-ENV:Body><ZKN:edcLk01>
 {stuurgegevens}
-<ZKN:parameters><StUF:mutatiesoort>T</StUF:mutatiesoort>
-<StUF:indicatorOvername>V</StUF:indicatorOvername></ZKN:parameters>
+{MUTATIE}
 <ZKN:object StUF:entiteittype="EDC" StUF:verwerkingssoort="T">
-<ZKN:identificatie>{document}</ZKN:identificatie><ZKN:dct.omschrijving>{documenttype}</ZKN:dct.omschrijving>
+<ZKN:identificatie>{document.identificatie}</ZKN:identificatie>
+<ZKN:dct.omschrijving>{document.documenttype}</ZKN:dct.omschrijving>
 <ZKN:creatiedatum>{now:%Y%m%d}</ZKN:creatiedatum><ZKN:titel>podiumd-tests document</ZKN:titel>
 <ZKN:formaat>pdf</ZKN:formaat><ZKN:taal>nld</ZKN:taal>
 <ZKN:versie xsi:nil="true" StUF:noValue="geenWaarde"/><ZKN:status>In bewerking</ZKN:status>
 <ZKN:vertrouwelijkAanduiding>OPENBAAR</ZKN:vertrouwelijkAanduiding><ZKN:auteur>ptest</ZKN:auteur>
-<ZKN:inhoud xmime:contentType="application/pdf" StUF:bestandsnaam="ptest.pdf">{inhoud_base64}</ZKN:inhoud>
+<ZKN:inhoud xmime:contentType="application/pdf" StUF:bestandsnaam="ptest.pdf">{document.inhoud_base64}</ZKN:inhoud>
 <ZKN:isRelevantVoor StUF:entiteittype="EDCZAK" StUF:verwerkingssoort="T">
 <ZKN:gerelateerde StUF:entiteittype="ZAK" StUF:verwerkingssoort="I">
 <ZKN:identificatie>{zaak}</ZKN:identificatie><ZKN:omschrijving>podiumd-tests</ZKN:omschrijving>

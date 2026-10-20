@@ -15,6 +15,7 @@ from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.zaakbrug import ZDS
+from podiumd_tests.zaakbrug import Document
 from podiumd_tests.zaakbrug import creeer_zaak
 from podiumd_tests.zaakbrug import document_identificatie
 from podiumd_tests.zaakbrug import geef_zaak_details
@@ -128,7 +129,7 @@ def test_voeg_zaakdocument_toe_attaches_a_document(
     )
     assert document
     pdf = base64.b64encode(b"%PDF-1.4 ptest").decode()
-    envelope = voeg_zaakdocument_toe(now, zaak, ZAAKBRUG_ZAAKTYPE, document, ZAAKBRUG_IOT, pdf)
+    envelope = voeg_zaakdocument_toe(now, zaak, ZAAKBRUG_ZAAKTYPE, Document(document, ZAAKBRUG_IOT, pdf))
     assert is_bevestiging(_post(http, base + "/OntvangAsynchroon", envelope, "voegZaakdocumentToe_Lk01"))
     links = openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": str(found[0]["url"])})
     assert links, f"no zaakinformatieobject on {zaak} after voegZaakdocumentToe"
