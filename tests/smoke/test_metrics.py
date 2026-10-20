@@ -122,6 +122,8 @@ def test_every_monitor_has_scrape_targets(grafana: Grafana, podiumd_env: Environ
     assert not unknown, f"monitors without scrape targets: {unknown}"
     if known:
         pytest.xfail("; ".join(sorted(known)))
+    # Under --runxfail pytest.xfail returns, so the known gaps fail with their symptom.
+    assert not missing, f"monitors without scrape targets: {missing}"
 
 
 @pytest.mark.cluster
@@ -142,6 +144,7 @@ def test_every_component_reports_metrics(grafana: Grafana, podiumd_env: Environm
     assert not unknown, f"components without metrics in Prometheus: {unknown}"
     if missing:
         pytest.xfail("; ".join(sorted({METRICS_GAPS[c] for c in missing}) + ([OTEL_OFF] if otel_off else [])))
+    assert not missing, f"components without metrics in Prometheus: {missing}"
     if otel_off:
         pytest.skip(OTEL_OFF)
 
