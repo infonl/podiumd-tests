@@ -104,11 +104,13 @@ an estate's namespace; if so, report it to helm-charts.
 ## Open Object 4: the Objecttypen Services of Objecten and Open Beheer send an unknown token
 
 `test_zgw_services_authenticate` (`tests/component/platform/test_django_apps.py`) calls each zgw_consumers
-Service with its own credentials. On minikube (helm-charts `feature/podiumd-4.10.0` 8e286297, podiumd-minikube
-e043dba) two Services get 401:
+Service that the app's config references, with its own credentials. On minikube (helm-charts
+`feature/podiumd-4.10.0` 8e286297, podiumd-minikube e043dba) Open Beheer's gets 401:
 
-- objecten: `objecttypen-api https://objecttypen.local/api/v2/objecttypes (api_key): 401`
 - openbeheer: `objecttypen-service https://objecttypen.local/api/v2/objecttypes (api_key): 401`
+
+Objecten's own `objecttypen-api` also gets 401, but no Objecten config field references it, so the test does
+not assert it.
 
 With Open Object 4 the objecten app serves `objecttypen.local`, so only objecten's `token.TokenAuth` table
 counts. Objecten's own Service sends `objectenToObjecttypenToken` and Open Beheer's sends
