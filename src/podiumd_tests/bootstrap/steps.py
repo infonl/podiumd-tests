@@ -38,6 +38,9 @@ from podiumd_tests.bootstrap.names import TEST_IOT
 from podiumd_tests.bootstrap.names import TEST_ZAAKTYPE
 from podiumd_tests.bootstrap.names import WORLDLINE_MERCHANT
 from podiumd_tests.bootstrap.names import WORLDLINE_STORE_KEY
+from podiumd_tests.bootstrap.names import ZAAKBRUG_BESLUITTYPE
+from podiumd_tests.bootstrap.names import ZAAKBRUG_IOT
+from podiumd_tests.bootstrap.names import ZAAKBRUG_ZAAKTYPE
 from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_COMPONENTS
 from podiumd_tests.bootstrap.names import ZGW_NOAUTH_CLIENT_ID
@@ -719,6 +722,21 @@ STEPS: tuple[Step, ...] = (
             "identificatie": TEST_ZAAKTYPE,
             "iot_omschrijving": TEST_IOT,
             "besluittype": TEST_BESLUITTYPE,
+        },
+    ),
+    # A short-identificatie published zaaktype for ZaakBrug's ZDS (StUF code is at most 10 chars); only where
+    # ZaakBrug runs. Same snippet, so unbootstrap deletes it and its zaken as for the klacht zaaktype.
+    SnippetStep(
+        "openzaak-zaaktype-zaakbrug",
+        ("openzaak", "zaakbrug"),
+        "openzaak_zaaktype",
+        None,
+        {
+            "domein": TEST_CATALOGUS_DOMEIN,
+            "rsin": TEST_CATALOGUS_RSIN,
+            "identificatie": ZAAKBRUG_ZAAKTYPE,
+            "iot_omschrijving": ZAAKBRUG_IOT,
+            "besluittype": ZAAKBRUG_BESLUITTYPE,
         },
     ),
     # Platform wiring.

@@ -23,25 +23,63 @@ def soap_action(message: str) -> dict[str, str]:
     return {"Content-Type": "text/xml; charset=utf-8", "SOAPAction": f"{ZKN}/{message}"}
 
 
-def genereer_zaak_identificatie(now: datetime, gemeentecode: str = GEMEENTECODE) -> str:
-    """A genereerZaakIdentificatie_Di02 envelope, for the VrijBericht endpoint.
+def _stuurgegevens(berichtcode: str, now: datetime, gemeentecode: str, *, rest: str) -> str:
+    """The StUF stuurgegevens shared by the ZDS messages; rest adds elements after the standard ones.
 
-    StUF's tijdstipBericht has hundredths of a second: 16 digits; more fails ZaakBrug's XML validation.
+    tijdstipBericht has 16 digits (hundredths of a second); more fails ZaakBrug's XML validation.
     """
-    return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
- xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}"><SOAP-ENV:Body><ZKN:genereerZaakIdentificatie_Di02>
-<ZKN:stuurgegevens><StUF:berichtcode>Di02</StUF:berichtcode>
+    return f"""<ZKN:stuurgegevens><StUF:berichtcode>{berichtcode}</StUF:berichtcode>
 <StUF:zender><StUF:organisatie>{gemeentecode}</StUF:organisatie>
 <StUF:applicatie>ptest</StUF:applicatie></StUF:zender>
 <StUF:ontvanger><StUF:organisatie>{gemeentecode}</StUF:organisatie>
 <StUF:applicatie>CDR</StUF:applicatie></StUF:ontvanger>
 <StUF:referentienummer>{uuid.uuid4()}</StUF:referentienummer>
 <StUF:tijdstipBericht>{now:%Y%m%d%H%M%S}{now.microsecond // 10000:02d}</StUF:tijdstipBericht>
-<StUF:functie>genereerZaakidentificatie</StUF:functie></ZKN:stuurgegevens>
-</ZKN:genereerZaakIdentificatie_Di02></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
+{rest}</ZKN:stuurgegevens>"""
+
+
+def genereer_zaak_identificatie(now: datetime, gemeentecode: str = GEMEENTECODE) -> str:
+    """A genereerZaakIdentificatie_Di02 envelope, for the VrijBericht endpoint."""
+    stuurgegevens = _stuurgegevens(
+        "Di02", now, gemeentecode, rest="<StUF:functie>genereerZaakidentificatie</StUF:functie>"
+    )
+    return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
+ xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}"><SOAP-ENV:Body><ZKN:genereerZaakIdentificatie_Di02>
+{stuurgegevens}</ZKN:genereerZaakIdentificatie_Di02></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
+
+
+def creeer_zaak(now: datetime, zaak: str, zaaktype_code: str, bsn: str, gemeentecode: str = GEMEENTECODE) -> str:
+    """A creeerZaak_Lk01 envelope for the OntvangAsynchroon endpoint: one zaak of zaaktype_code with an initiator.
+
+    zaaktype_code is the zaaktype identificatie and is at most 10 characters (the StUF code limit).
+    """
+    stuurgegevens = _stuurgegevens("Lk01", now, gemeentecode, rest="<StUF:entiteittype>ZAK</StUF:entiteittype>")
+    return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
+ xmlns:BG="http://www.egem.nl/StUF/sector/bg/0310" xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><SOAP-ENV:Body><ZKN:zakLk01>
+{stuurgegevens}
+<ZKN:parameters><StUF:mutatiesoort>T</StUF:mutatiesoort>
+<StUF:indicatorOvername>V</StUF:indicatorOvername></ZKN:parameters>
+<ZKN:object StUF:sleutelVerzendend="{zaak}" StUF:entiteittype="ZAK" StUF:verwerkingssoort="T">
+<ZKN:identificatie>{zaak}</ZKN:identificatie><ZKN:omschrijving>podiumd-tests ZaakBrug</ZKN:omschrijving>
+<ZKN:startdatum>{now:%Y%m%d}</ZKN:startdatum><ZKN:registratiedatum>{now:%Y%m%d}</ZKN:registratiedatum>
+<ZKN:isVan StUF:entiteittype="ZAKZKT" StUF:verwerkingssoort="T">
+<ZKN:gerelateerde StUF:entiteittype="ZKT" StUF:verwerkingssoort="T">
+<ZKN:omschrijving>podiumd-tests</ZKN:omschrijving><ZKN:code>{zaaktype_code}</ZKN:code>
+<ZKN:ingangsdatumObject xsi:nil="true" StUF:noValue="geenWaarde"/></ZKN:gerelateerde></ZKN:isVan>
+<ZKN:heeftAlsInitiator StUF:entiteittype="ZAKBTRINI" StUF:verwerkingssoort="T"><ZKN:gerelateerde>
+<ZKN:natuurlijkPersoon StUF:entiteittype="NPS" StUF:verwerkingssoort="T"><BG:inp.bsn>{bsn}</BG:inp.bsn>
+<BG:geslachtsnaam>Ptest</BG:geslachtsnaam></ZKN:natuurlijkPersoon></ZKN:gerelateerde>
+</ZKN:heeftAlsInitiator></ZKN:object></ZKN:zakLk01></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
 
 
 def zaak_identificatie(answer: str) -> str | None:
     """The zaak identificatie in a ZDS answer, or None."""
     found = ET.fromstring(answer).find(f".//{{{ZKN}}}zaak/{{{ZKN}}}identificatie")  # noqa: S314  # nosec B314
     return found.text if found is not None else None
+
+
+def is_bevestiging(answer: str) -> bool:
+    """True when the ZDS answer is a Bv03 confirmation (not an Fo03 fault)."""
+    code = ET.fromstring(answer).find(f".//{{{STUF}}}berichtcode")  # noqa: S314  # nosec B314  # ZaakBrug's own answer
+    return code is not None and code.text == "Bv03"

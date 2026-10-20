@@ -28,6 +28,10 @@ NRC_STORE_KEY = "ptest_bootstrap_nrc_secret"
 TEST_ZAAKTYPE = "ptest-bootstrap-klacht"
 TEST_IOT = "ptest-bootstrap-bijlage"
 TEST_BESLUITTYPE = "ptest-bootstrap-besluit"
+# ZaakBrug drives ZDS, whose StUF zaaktype code is at most 10 characters; the klacht id (22) is too long.
+ZAAKBRUG_ZAAKTYPE = "ZBTESTPT"
+ZAAKBRUG_IOT = "ptest-bootstrap-zb-bijlage"
+ZAAKBRUG_BESLUITTYPE = "ptest-bootstrap-zb-besluit"
 TEST_FORM = "ptest-bootstrap-klacht"
 # The Ogone merchant of the payment tests in Open Formulieren; the tests play Ogone with its passphrase.
 OGONE_MERCHANT = "ptest-bootstrap-ogone"
