@@ -29,6 +29,7 @@ from podiumd_tests.openformulieren import submit
 from podiumd_tests.openinwoner import ask_anonymously
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.pytest_plugin import requiring
+from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import is_server_error
 from podiumd_tests.responses import root_answers
@@ -70,6 +71,9 @@ INWONER, _, _ = IDENTITIES
 # Open Inwoner's logins (W1), pages (W5) and zaken (W4).
 WIRING = ("openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-zgw-group")
 REGISTRATION_TIMEOUT = 90
+# ZAC's call to a down Open Klant: on Cilium the zero-endpoint Service black-holes the connection, so ZAC
+# answers 500 only after its own upstream timeout, longer than the session's default 15 s.
+DOWN_COMPONENT_TIMEOUT = 60
 # The subject of the contact form questions (bootstrap openinwoner-openklant).
 QUESTION_SUBJECT = "Algemene vraag"
 # Open Inwoner's Mijn zaken retries its fetch of the zaken before it shows the failure.
@@ -250,10 +254,12 @@ def test_zac_mail_is_sent_after_a_mail_outage(  # pylint: disable=too-many-argum
 def test_without_open_klant_a_zaak_with_a_person_cannot_be_opened(
     http: requests.Session, podiumd_env: Environment, zac: requests.Session, zac_zaak: Callable[..., JsonObject]
 ) -> None:
-    """Without Open Klant ZAC cannot open a zaak whose initiator is a person: it shows its error message and stays up.
+    """Without Open Klant ZAC cannot open a zaak whose initiator is a person, and ZAC itself stays up.
 
-    ZAC reads the initiator's contact details from Open Klant; its message is the generic "Er heeft zich
-    helaas een technische fout voorgedaan." Once Open Klant is back the zaak opens again.
+    ZAC reads the initiator's contact details from Open Klant. Its own answer is 500 with the generic message
+    "msg.error.server.generic"; on Cilium the zero-endpoint Open Klant Service black-holes the connection, so
+    ZAC's upstream call hangs and the edge may answer 504 before ZAC's 500. Either way the zaak does not open.
+    Once Open Klant is back the zaak opens again.
     """
     zaak = zac_zaak()
     zac_url = podiumd_env.profile.urls["zac"]
@@ -264,9 +270,10 @@ def test_without_open_klant_a_zaak_with_a_person_cannot_be_opened(
 
     expect_status(send_with_person(zac, zac_url, EREBOS, make_initiator), HTTPStatus.OK)
     with component_down(podiumd_env, http, "openklant"):
-        opened = zac.get(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}")
-        assert opened.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
-        assert opened.json().get("message") == "msg.error.server.generic"
+        opened = zac.get(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}", timeout=DOWN_COMPONENT_TIMEOUT)
+        assert opened.status_code in (HTTPStatus.INTERNAL_SERVER_ERROR, HTTPStatus.GATEWAY_TIMEOUT), describe(opened)
+        if opened.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:
+            assert opened.json().get("message") == "msg.error.server.generic"
         assert root_answers(zac, zac_url, ROOT_TIMEOUT), "ZAC itself fails without Open Klant"
     assert read_zaak(zac, zac_url, str(zaak["uuid"]))["identificatie"] == zaak["identificatie"]
 
