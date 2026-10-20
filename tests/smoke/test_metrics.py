@@ -37,6 +37,12 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.smoke, pytest.mark.requires("grafana")]
 
+# Known monitors without targets, by name suffix: they xfail instead of fail.
+EMPTY_MONITORS = {
+    "-traefik": "[podiumd-chart-14] monitoring-logging 1.0.18 renders a Traefik PodMonitor by default, but the edge"
+    " is NGINX Gateway Fabric; not yet reported upstream",
+}
+
 
 @pytest.fixture(scope="module", name="grafana")
 def fixture_grafana(http: requests.Session, urls: dict[str, str], credentials: SecretResolver) -> Grafana:
@@ -90,7 +96,11 @@ def test_every_monitor_has_scrape_targets(grafana: Grafana, podiumd_env: Environ
     if not monitors:
         pytest.skip("no ServiceMonitor or PodMonitor in the environment's namespaces")
     missing = monitors_without_targets(monitors, grafana.proxy("prometheus", "/api/v1/targets"))
-    assert not missing, f"monitors without scrape targets: {missing}"
+    known = {reason for m in missing for suffix, reason in EMPTY_MONITORS.items() if m.endswith(suffix)}
+    unknown = [m for m in missing if not any(m.endswith(suffix) for suffix in EMPTY_MONITORS)]
+    assert not unknown, f"monitors without scrape targets: {unknown}"
+    if known:
+        pytest.xfail("; ".join(sorted(known)))
 
 
 @pytest.mark.cluster
