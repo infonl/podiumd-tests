@@ -250,6 +250,20 @@ def test_keycloak_user_gets_existing_roles_and_reports_missing_ones(
     assert ctx.notes == ["not in realm: Coordinator, group beheerders"]
 
 
+def test_keycloak_user_fails_when_the_realm_has_none_of_its_roles(env_factory, fake_runner, profile_factory, fake_http):
+    # A realm imported with skipRoles/skipGroups has no roles, client roles or groups: the user gets nothing.
+    ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
+    answers = keycloak_answers(user_exists=True, has_group=False)
+    answers[f"GET {REALM}/roles"] = (200, [])
+    answers[f"GET {REALM}/clients/c1/roles"] = (200, [])
+    fake_http(answers)
+    user = KeycloakUser(
+        "admin", realm_roles=("Behandelaar",), client_roles=(("pabc", "administrator"),), groups=("beheerders",)
+    )
+    with pytest.raises(ValueError, match="skipRoles/skipGroups"):
+        user.apply(ctx)
+
+
 @pytest.mark.parametrize(("mapped", "present"), [([], False), ([{"name": "Behandelaar"}], True)])
 def test_keycloak_user_is_present_only_with_the_realms_wanted_roles(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     env_factory, fake_runner, profile_factory, fake_http, mapped, present

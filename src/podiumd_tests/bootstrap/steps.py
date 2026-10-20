@@ -196,25 +196,41 @@ class KeycloakUser:
         return roles <= admin.user_realm_roles(user_id) and groups <= admin.user_groups(user_id)
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
-        """Create or update the user with a new password and the wanted roles and groups that exist."""
+        """Create or update the user with a new password and the wanted roles and groups that exist.
+
+        A realm imported with keycloak.config.skipRoles/skipGroups true has none of the import's roles or
+        groups, so a user that should have rights would get none. Partly missing roles are a note (4.10's realm
+        drops some by design); a user that wants roles and gets none fails the step, naming the likely cause.
+        """
         admin = for_environment(ctx.env)
         password = admin.new_password()
         user = admin.save_user(self.username, password, self.attributes)
         realm_roles = admin.realm_roles(self.realm_roles)
         admin.add_realm_roles(user, realm_roles)
+        assigned = len(realm_roles)
         missing = sorted(set(self.realm_roles) - {str(r["name"]) for r in realm_roles})
         for client, role in self.client_roles:
             found = admin.client_role(client, role)
             if found:
                 admin.add_client_role(user, *found)
+                assigned += 1
             else:
                 missing.append(f"{client}:{role}")
         for group in self.groups:
             group_id = admin.group_id(group)
             if group_id:
                 admin.join_group(user, group_id)
+                assigned += 1
             else:
                 missing.append(f"group {group}")
+        wanted = self.realm_roles or self.client_roles or self.groups
+        if wanted and not assigned:
+            msg = (
+                f"{self.username} wants roles or groups but the realm has none of them ({', '.join(missing)}): "
+                "the realm was imported with skipRoles/skipGroups; redeploy with the roles imported "
+                "(minikube: `deploy --import-roles`) or seed them"
+            )
+            raise ValueError(msg)
         if missing:
             ctx.notes.append("not in realm: " + ", ".join(missing))
         return {self.store_key: password}
