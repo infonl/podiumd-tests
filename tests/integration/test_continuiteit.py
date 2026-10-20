@@ -257,10 +257,9 @@ def test_without_open_klant_a_zaak_with_a_person_cannot_be_opened(
     """Without Open Klant ZAC cannot open a zaak whose initiator is a person, and ZAC itself stays up.
 
     ZAC reads the initiator's contact details from Open Klant through the edge (openklant.local). Its own answer
-    is 500 with the generic message "msg.error.server.generic". On a Cilium + NGF estate the edge keeps routing to
-    the terminated pod's IP until it reloads its upstreams; a SYN to that now-unowned IP is dropped, so the call
-    hangs ~30-60 s and the edge answers 504 before ZAC's 500. Either way the zaak does not open. Once Open Klant is
-    back the zaak opens again.
+    is 500 with the generic message "msg.error.server.generic". When Open Klant is scaled down, ZAC's call may
+    instead hang until the edge's read timeout and return 504 (observed on minikube; the exact cause is not
+    established). Either outcome means the zaak does not open. Once Open Klant is back the zaak opens again.
     """
     zaak = zac_zaak()
     zac_url = podiumd_env.profile.urls["zac"]
