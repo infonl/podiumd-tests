@@ -149,13 +149,20 @@ def test_every_component_reports_metrics(grafana: Grafana, podiumd_env: Environm
         pytest.skip(OTEL_OFF)
 
 
+# Long enough for a quiet pod to log once, short enough to show that shipping stopped.
+LOG_WINDOW = "15m"
+
+
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
 def test_every_pod_logs_to_loki(grafana: Grafana, podiumd_env: Environment) -> None:
-    """Every running pod that wrote log lines in the last 24 h has log lines in Loki."""
+    """Every running pod that wrote log lines in the last LOG_WINDOW has log lines of that window in Loki.
+
+    A short window catches log shipping that stopped; with 24 h, earlier lines hid it.
+    """
     if not grafana.uid("loki"):
         pytest.skip("no loki datasource (metrics without logging)")
-    query = f'sum by (namespace, pod) (count_over_time({{namespace=~"{"|".join(podiumd_env.namespaces)}"}}[24h]))'
+    query = f'sum by (namespace, pod) (count_over_time({{namespace=~"{"|".join(podiumd_env.namespaces)}"}}[{LOG_WINDOW}]))'
     in_loki = pods_in_loki(grafana.proxy("loki", "/loki/api/v1/query", {"query": query}))
     candidates = running_pods_not_in_loki(podiumd_env.items("pods"), in_loki, datetime.now(UTC))
     missing = [
@@ -165,7 +172,7 @@ def test_every_pod_logs_to_loki(grafana: Grafana, podiumd_env: Environment) -> N
             "logs",
             f"pod/{metadata_name(p)}",
             "--all-containers",
-            "--since=24h",
+            f"--since={LOG_WINDOW}",
             "--tail=1",
             namespace=str(section(p, "metadata").get("namespace")),
         ).strip()
