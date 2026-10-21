@@ -37,6 +37,8 @@ from podiumd_tests.seed.volume import counts
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from _pytest.mark import ParameterSet
+
     from podiumd_tests.environment import Environment
     from podiumd_tests.perf.stats import EndpointStats
 
@@ -64,6 +66,8 @@ def fixture_stats(
 ) -> dict[str, EndpointStats]:
     """The stats of one Locust run against the environment."""
     need_bootstrap("openzaak-client", "openklant-token", "objecten-token", "openzaak-zaaktype", ADMIN.name, KCC.name)
+    if "zac" in podiumd_env.profile.urls:
+        need_bootstrap("openzaak-client-productaanvraag")
     directory = perf_dir
     users = str(request.config.getoption("--perf-users"))
     duration = str(request.config.getoption("--perf-duration"))
@@ -81,13 +85,35 @@ def fixture_stats(
     return read_stats((directory / STATS).read_text(encoding="utf-8"))
 
 
-@pytest.mark.source(
+TA_K6 = pytest.mark.source(
     "TA perf/api-perf.js",
     "API performance with k6: read-only traffic per API group, with p95/p99 response times per API.",
 )
-@pytest.mark.parametrize("endpoint", [requiring(c, e, test_id=e) for e, c in ENDPOINTS.items()])
+OZ_BENCHMARK = pytest.mark.source(
+    "upstream open-zaak/open-zaak performance_test/",
+    "Open Zaak's own benchmark: documents and zaken lists at a deep page, also for a client with few zaaktypen.",
+)
+MADE_HERE = pytest.mark.source(
+    "podiumd-tests", "Writes and the searches users type in ZAC, KISS and the portal, under the same load."
+)
+SOURCES = {
+    **dict.fromkeys(("oz_zaken", "oz_zaaktypen", "ok2_partijen", "brp_persoon", "kc_discovery"), TA_K6),
+    **dict.fromkeys(("oz_documenten_ordered", "oz_zaken_one_zaaktype"), OZ_BENCHMARK),
+}
+
+
+def endpoint_params() -> list[ParameterSet]:
+    """One param per endpoint, requiring its component and naming its source."""
+    params = [requiring(c, e, test_id=e) for e, c in ENDPOINTS.items()]
+    return [
+        pytest.param(*p.values, id=p.id, marks=[*p.marks, SOURCES.get(e, MADE_HERE)])
+        for p, e in zip(params, ENDPOINTS, strict=True)
+    ]
+
+
+@pytest.mark.parametrize("endpoint", endpoint_params())
 def test_endpoint_meets_its_threshold(stats: dict[str, EndpointStats], endpoint: str) -> None:
-    """The endpoint's p95 and failure ratio stay within perf.yaml (TA perf/api-perf.js)."""
+    """The endpoint's p95 and failure ratio stay within perf.yaml."""
     assert endpoint in stats, f"Locust made no {endpoint} requests"
     assert violations(stats[endpoint], thresholds(REPO_ROOT / "perf.yaml", endpoint)) == []
 

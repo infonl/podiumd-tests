@@ -23,6 +23,8 @@ from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import brp_personen
 from podiumd_tests.bootstrap.names import TEST_ZAAKTYPE
 from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
+from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_CLIENT_ID
+from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_STORE_KEY
 from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import KCC
@@ -41,6 +43,7 @@ from podiumd_tests.seed.openklant import make_klantcontact
 from podiumd_tests.seed.openklant import random_bsn
 from podiumd_tests.seed.openzaak import BSN_FILTER
 from podiumd_tests.seed.openzaak import CATALOGI
+from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.registry import ResourceRegistry
@@ -52,8 +55,13 @@ if TYPE_CHECKING:
 
     from locust.env import Environment as LocustEnvironment
 
+    from podiumd_tests.clients.api import ApiClient
+
 # A word the volume corpus, KISS's kennisbank and the portal's products all use.
 SEARCH_TERM = "aanvraag"
+# Open Zaak's performance_test reads documents and zaken at page 34 of 100.
+PAGE_SIZE = 100
+DEEP_PAGE = 34
 type Call = Callable[[ResourceRegistry], object]
 
 
@@ -70,16 +78,31 @@ def _environment(environment: LocustEnvironment, **_kwargs: object) -> None:
     ApiUser.run_tag = environment.parsed_options.podiumd_run_tag
 
 
+def _deep_page(openzaak: ApiClient, path: str) -> str:
+    """The page Open Zaak's own benchmark reads (34 of 100), or the last one when there are fewer."""
+    count = int(str(openzaak.get(path, {"pageSize": str(PAGE_SIZE)})["count"]))
+    return str(max(1, min(DEEP_PAGE, -(-count // PAGE_SIZE))))
+
+
 def _openzaak_calls(env: Environment) -> dict[str, Call]:
     openzaak = openzaak_client(env, ZGW_CLIENT_ID, ZGW_STORE_KEY, "perf")
     zaaktype = str(openzaak.list(f"{CATALOGI}/zaaktypen", {"identificatie": TEST_ZAAKTYPE})[0]["url"])
-    return {
+    documenten = f"{DOCUMENTEN}/enkelvoudiginformatieobjecten"
+    ordered = {"pageSize": str(PAGE_SIZE), "ordering": "-auteur", "page": _deep_page(openzaak, documenten)}
+    calls: dict[str, Call] = {
         "oz_zaken": lambda _r: openzaak.request("GET", f"{ZAKEN}/zaken", 200, params={"pageSize": "20"}),
         "oz_zaaktypen": lambda _r: openzaak.request("GET", f"{CATALOGI}/zaaktypen", 200),
         "oz_zaak_create": lambda registry: make_zaak(openzaak, registry, zaaktype),
         # Mijn zaken: the zaken of one inwoner, a join over every zaak's rollen.
         "oz_zaken_by_bsn": lambda _r: openzaak.request("GET", f"{ZAKEN}/zaken", 200, params={BSN_FILTER: random_bsn()}),
+        "oz_documenten_ordered": lambda _r: openzaak.request("GET", documenten, 200, params=ordered),
     }
+    if "zac" in env.profile.urls:
+        # A client with rights on one zaaktype, as every PodiumD app has: Open Zaak filters by its autorisaties.
+        limited = openzaak_client(env, ZGW_PRODUCTAANVRAAG_CLIENT_ID, ZGW_PRODUCTAANVRAAG_STORE_KEY, "perf")
+        page = {"pageSize": "20"}
+        calls["oz_zaken_one_zaaktype"] = lambda _r: limited.request("GET", f"{ZAKEN}/zaken", 200, params=page)
+    return calls
 
 
 def _openklant_calls(env: Environment) -> dict[str, Call]:

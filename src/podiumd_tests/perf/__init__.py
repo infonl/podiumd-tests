@@ -21,4 +21,8 @@ ENDPOINTS = {
     "zac_search": "zac",
     "kiss_search": "kiss",
     "oi_search": "openinwoner",
+    # Open Zaak's performance_test (open-zaak/open-zaak): documents at a deep page with ordering, and zaken for a
+    # client with rights on one zaaktype (bootstrap step openzaak-client-productaanvraag, which needs ZAC).
+    "oz_documenten_ordered": "openzaak",
+    "oz_zaken_one_zaaktype": "zac",
 }
