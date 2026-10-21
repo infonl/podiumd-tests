@@ -49,6 +49,7 @@ HEADER_GAPS = {
     "grafana": "[podiumd-chart-1] Grafana sends no HSTS (its strict_transport_security setting is off)",
     "openbeheer": "[open-beheer-1] Open Beheer 0.9.1 sends no HSTS and no nosniff on its frontend",
     "omc": "OMC (NotifyNL) sends no HSTS and no nosniff",
+    "openbao": "[podiumd-chart-23] podiumd sets no custom_response_headers for OpenBao's listener: no nosniff",
 }
 
 
