@@ -9,7 +9,6 @@ import socket
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
-from pathlib import Path
 
 import pytest
 
@@ -75,9 +74,13 @@ def test_a_held_lock_file_refuses_and_names_its_holder(tmp_path, profile_factory
     assert lock.exists()
 
 
+# Above any pid: Linux's pid_max is at most 2**22 (PID_MAX_LIMIT), macOS's highest pid is 99998.
+DEAD_PID = 2**22 + 1
+
+
 def dead_pid():
-    """A pid above the kernel's highest, so no process has it."""
-    return int(Path("/proc/sys/kernel/pid_max").read_text(encoding="utf-8")) + 1
+    """A pid no process can have, on Linux and macOS alike."""
+    return DEAD_PID
 
 
 def test_a_lock_of_a_dead_run_of_this_host_is_stale():

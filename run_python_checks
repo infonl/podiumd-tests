@@ -46,8 +46,10 @@ wait "$!"
 # Shell scripts: sh/bash/dash/ksh shebang, or *.sh.
 mapfile -t shell_scripts < <(
     find . -path ./.venv -prune -o -path ./.git -prune -o -path ./results -prune -o -path ./.claude/worktrees -prune \
-        -o -path '*/__pycache__' -prune -o -type f -print0 |
-        xargs -0 awk 'FNR == 1 && (/^#!.*[\/ ](ba|da|k)?sh([ \t]|$)/ || FILENAME ~ /\.sh$/) {print FILENAME} {nextfile}' |
+        -o -path '*/__pycache__' -prune -o -path ./.ruff_cache -prune -o -path ./.pytest_cache -prune \
+        -o -type f -print0 |
+        # LC_ALL=C: BSD awk (macOS) stops on bytes that are not valid UTF-8; only the shebang matters here.
+        LC_ALL=C xargs -0 awk 'FNR == 1 && (/^#!.*[\/ ](ba|da|k)?sh([ \t]|$)/ || FILENAME ~ /\.sh$/) {print FILENAME} {nextfile}' |
         sort
 )
 wait "$!"
@@ -87,8 +89,10 @@ pymarkdown -d md013,md014 -s 'plugins.md024.siblings_only=$!True' -s 'extensions
 
 # vulture does not link TypedDict fields to string-key reads (row["app"]),
 # so all TypedDict fields go into a generated whitelist.
-typeddict_whitelist=$(mktemp --suffix=.py)
-trap 'rm -f "$typeddict_whitelist"' EXIT
+# A directory, not mktemp --suffix: BSD mktemp (macOS) has no --suffix.
+whitelist_dir=$(mktemp -d)
+typeddict_whitelist="$whitelist_dir/typeddict_whitelist.py"
+trap 'rm -rf "$whitelist_dir"' EXIT
 python3 - "$SRC" > "$typeddict_whitelist" <<'PY'
 import ast
 import pathlib

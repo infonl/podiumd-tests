@@ -96,7 +96,10 @@ def not_allowed(ctx: Context, step: Step) -> str | None:
     as skipped, so a test that needs it skips with the reason; unbootstrap still removes what an earlier run set.
     """
     reason = getattr(step, "not_allowed", None)
-    return reason(ctx) if callable(reason) else None
+    if not callable(reason):
+        return None
+    found = reason(ctx)
+    return str(found) if found else None
 
 
 def _each(env: Environment, steps: Sequence[Step], act: Callable[[Context, Step], Outcome]) -> list[Outcome]:
