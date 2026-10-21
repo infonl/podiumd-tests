@@ -102,7 +102,11 @@ Done 2026-10-21, verified on minikube: 1 and 2 (cfd2671), 3 (84ff644; known issu
 | 7 | Open Archiefbeheer: a zaak deleted in Open Zaak while on a list does not break review and processing; reassign the reviewer, also after changes were requested; delete a new list, refused past status new (features `list_review`, `list_reassign`, `list_delete`, issue 841) | `test_vernietigingslijst.py` | the module's list fixtures and OAB users, `oab.login`, `delete_zaak` |
 | 8 | Open Inwoner: a repeat DigiD and eHerkenning login reuses the account, one User per BSN or KvK (`test_oidc_login_e2e.py`) | `test_portaal_login.py` | `portal_login`, snippet `oi_account` (read) |
 
-### Phase 2: KISS and ITA scenarios (largest gain; mostly API through the BFFs, browser where the UI is the behaviour)
+### Phase 2: KISS and ITA scenarios
+
+Done 2026-10-21, verified on minikube: 11 and 12 (6d70c35), 9, 14, 15 and 16 (c7c2bf0). Not ported: 10's form
+prefill and 13 (UI only; their API paths are covered), 17 (the reminder needs a contactverzoek past its deadline).
+ (largest gain; mostly API through the BFFs, browser where the UI is the behaviour)
 
 | # | Tests (upstream source) | Reuses | New |
 | --- | --- | --- | --- |
@@ -117,6 +121,9 @@ Done 2026-10-21, verified on minikube: 1 and 2 (cfd2671), 3 (84ff644; known issu
 | 17 | ITA daily reminder mail for an expired contactverzoek: medewerker, afdeling, aggregated, no personal data in the body (`DagelijkseHerinneringScenarios`) | Mailpit, CronJob trigger as `kiss_sync_cronjob` | a contactverzoek past its afhandeltermijn (needs a back-dated klantcontact; check what ITA reads); chaos or destructive marker if the trigger mails others |
 
 ### Phase 3: browser checks and smaller additions
+
+Done 2026-10-21, verified on minikube: 18 without the related types (see its commit), 19 (cc07fc4), 20 (ae71d6f),
+21 (2e08549), 22 (55ff808).
 
 | # | Tests (upstream source) | Reuses |
 | --- | --- | --- |
