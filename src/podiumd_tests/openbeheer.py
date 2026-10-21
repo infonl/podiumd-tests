@@ -14,7 +14,12 @@ if TYPE_CHECKING:
 
 
 def openbeheer_session(env: Environment, username: str, password: str) -> requests.Session:
-    """A session on Open Beheer's API, logged in through its OIDC login (cookie authentication)."""
+    """A session on Open Beheer's API, logged in through its OIDC login (cookie authentication).
+
+    Its writes need Django's CSRF token and a Referer of Open Beheer itself, which the session sends.
+    """
     http = env.session()
-    form_login(http, env.profile.urls["openbeheer"] + LOGIN_PATHS["openbeheer"], username, password)
+    base_url = env.profile.urls["openbeheer"]
+    form_login(http, base_url + LOGIN_PATHS["openbeheer"], username, password)
+    http.headers.update({"X-CSRFToken": http.cookies.get("csrftoken") or "", "Referer": base_url + "/"})
     return http

@@ -10,6 +10,7 @@ import pytest
 from podiumd_tests.bootstrap.names import TEST_ZAAKTYPE
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
 from podiumd_tests.openbeheer import openbeheer_session
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import describe
@@ -20,8 +21,10 @@ if TYPE_CHECKING:
 
     import requests
 
+    from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("openbeheer", "keycloak")]
 
@@ -97,3 +100,44 @@ def test_zaaktypen_filter_on_a_catalogus_from_its_choices(
     """A catalogus value from catalogi/choices filters the zaaktypen list to that catalogus's zaaktypen."""
     query = {"catalogus": str(test_zaaktype["catalogus"]), "identificatie": TEST_ZAAKTYPE}
     assert TEST_ZAAKTYPE in zaaktype_ids(openbeheer, catalogi_service, **query)
+
+
+@pytest.mark.requires("openzaak")
+@pytest.mark.source(
+    "upstream maykinmedia/open-beheer backend/src/openbeheer/zaaktype/tests/e2e/test_22_create_zaaktype.py",
+    "A beheerder creates a zaaktype from the Basis template with an identificatie and omschrijving.",
+)
+@pytest.mark.source(
+    "upstream maykinmedia/open-beheer backend/src/openbeheer/zaaktype/tests/e2e/test_24_edit_zaaktype.py",
+    "A beheerder edits a zaaktype's fields.",
+)
+def test_beheerder_creates_and_changes_a_concept_zaaktype_from_the_template(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    openbeheer: requests.Session,
+    urls: dict[str, str],
+    catalogi_service: str,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    test_zaaktype: JsonObject,
+) -> None:
+    """From the Basis template Open Beheer makes a concept zaaktype in Open Zaak, and a change reaches Open Zaak too.
+
+    The template leaves omschrijvingGeneriek empty, which the beheerder fills in (Open Zaak requires it).
+    """
+    templates = expect_status(openbeheer.get(urls["openbeheer"] + "/api/v1/template/zaaktype/"), HTTPStatus.OK)
+    basis = next(t for t in entries(templates.json().get("results")) if t.get("naam") == "Basis")
+    naam = registry.tagged("zaaktype")
+    body = {
+        **{k: v for k, v in section(basis, "waarden").items() if k != "_expand"},
+        "catalogus": test_zaaktype["catalogus"],
+        "identificatie": naam,
+        "omschrijving": naam,
+        "omschrijvingGeneriek": "podiumd-tests",
+    }
+    created = expect_status(openbeheer.post(f"{catalogi_service}/zaaktypen/", json=body), HTTPStatus.CREATED).json()
+    url = str(created["url"])
+    registry.add(f"concept zaaktype {naam}", lambda: openzaak.delete(url))
+    assert (openzaak.get(url)["omschrijving"], openzaak.get(url)["concept"]) == (naam, True)
+    changed = f"{naam}-gewijzigd"
+    patch = openbeheer.patch(f"{catalogi_service}/zaaktypen/{created['uuid']}/", json={"omschrijving": changed})
+    expect_status(patch, HTTPStatus.OK)
+    assert openzaak.get(url)["omschrijving"] == changed
