@@ -18,7 +18,11 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
     from podiumd_tests.seed.registry import ResourceRegistry
 
-pytestmark = [pytest.mark.integration, pytest.mark.requires("openformulieren", "mailpit", "cluster")]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.requires("openformulieren", "mailpit", "cluster"),
+    pytest.mark.source("draaiboek OF-067", "Form data is removed after a successful registration."),
+]
 
 TIMEOUT = 90
 LIMIT_DAYS = 1

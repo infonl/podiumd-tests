@@ -17,7 +17,14 @@ from podiumd_tests.kube import metadata_name
 if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
 
-pytestmark = [pytest.mark.smoke, pytest.mark.requires("cilium")]
+pytestmark = [
+    pytest.mark.smoke,
+    pytest.mark.requires("cilium"),
+    pytest.mark.source(
+        "PI test_cni.py",
+        "Cilium is the node's CNI dataplane and service proxy, configured as ExternalsPodiumD's clusters.",
+    ),
+]
 
 KUBE_SYSTEM = "kube-system"
 # Keys every Cilium estate sets; routing-mode and ipam are infrastructure-specific (checked on AKS only).

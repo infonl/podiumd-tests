@@ -28,7 +28,13 @@ if TYPE_CHECKING:
 
     from podiumd_tests.environment import Environment
 
-pytestmark = pytest.mark.smoke
+pytestmark = [
+    pytest.mark.smoke,
+    pytest.mark.source(
+        "podiumd-tests",
+        "Security baseline of every public host: security headers, secure session cookies, no foreign CORS, valid TLS.",
+    ),
+]
 
 # Mailpit is minikube's mail sink; api-proxy and the Frank!Gateway outway have no public host on the estates.
 NOT_PUBLIC = ("mailpit", "api-proxy", "frankgateway")

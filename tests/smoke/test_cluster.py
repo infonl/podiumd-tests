@@ -22,42 +22,90 @@ if TYPE_CHECKING:
 pytestmark = [pytest.mark.smoke, pytest.mark.cluster, pytest.mark.requires("cluster")]
 
 
+@pytest.mark.source(
+    "MK test_pods.py",
+    "Pod health after every deploy: every pod Running with all containers Ready, or Succeeded for one-shot Jobs.",
+)
+@pytest.mark.source(
+    "PI test_pods.py",
+    "Pod health checks adapted from podiumd-minikube for a real podiumd-infra estate's pod set.",
+)
+@pytest.mark.source(
+    "TA smoke/00-environment-preflight.spec.ts",
+    "Preflight that detects dead infrastructure before the suite runs; 00f checks the ZAC pod is 2/2 Ready.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/00-environment-preflight.spec.ts",
+    "Preflight that detects dead infrastructure before the suite runs; 00f checks the ZAC pod is 2/2 Ready.",
+)
 def test_workloads_ready(podiumd_env: Environment) -> None:
     """Every Deployment and StatefulSet has all wanted replicas ready."""
     not_ready = unready_workloads(podiumd_env.workloads())
     assert not not_ready, f"not ready: {not_ready}"
 
 
+@pytest.mark.source(
+    "MK test_pods.py",
+    "Pod health after every deploy: every pod Running with all containers Ready, or Succeeded for one-shot Jobs.",
+)
+@pytest.mark.source(
+    "PI test_pods.py",
+    "Pod health checks adapted from podiumd-minikube for a real podiumd-infra estate's pod set.",
+)
 def test_pods_healthy(podiumd_env: Environment) -> None:
     """Every long-running pod is Running with all containers ready (catches a stuck 1/2 sidecar)."""
     unhealthy = unhealthy_pods(podiumd_env.items("pods"))
     assert not unhealthy, f"unhealthy pods: {unhealthy}"
 
 
+@pytest.mark.source(
+    "MK test_pods.py",
+    "Pod health after every deploy: every pod Running with all containers Ready, or Succeeded for one-shot Jobs.",
+)
+@pytest.mark.source(
+    "PI test_pods.py",
+    "Pod health checks adapted from podiumd-minikube for a real podiumd-infra estate's pod set.",
+)
 def test_jobs_succeeded(podiumd_env: Environment) -> None:
     """No setup Job failed, and the latest run of each CronJob did not fail."""
     failed = failed_jobs(podiumd_env.items("jobs"))
     assert not failed, f"failed jobs: {failed}"
 
 
+@pytest.mark.source(
+    "podiumd-tests",
+    "Pod templates meet the Kubernetes Pod Security Standard baseline: no host access, privileged or capabilities.",
+)
 def test_pods_meet_the_baseline_security_standard(podiumd_env: Environment) -> None:
     """No pod template uses host namespaces, host paths or ports, privileged mode or extra capabilities."""
     found = [v for w in podiumd_env.workloads() for v in baseline_violations(w)]
     assert not found, found
 
 
+@pytest.mark.source(
+    "podiumd-tests",
+    "Flags images without a tag or tagged latest, so a restart cannot change what runs.",
+)
 def test_images_are_pinned(podiumd_env: Environment) -> None:
     """Every image has a tag other than latest, or a digest, so a restart cannot change what runs."""
     found = [i for w in podiumd_env.workloads() for i in unpinned_images(w)]
     assert not found, found
 
 
+@pytest.mark.source(
+    "podiumd-tests",
+    "Flags containers without a CPU or memory request, so the scheduler places them by size.",
+)
 def test_containers_request_cpu_and_memory(podiumd_env: Environment) -> None:
     """Every container requests CPU and memory, so the scheduler places it by size."""
     found = [m for w in podiumd_env.workloads() for m in missing_requests(w)]
     assert not found, sorted(set(found))
 
 
+@pytest.mark.source(
+    "podiumd-tests",
+    "Keycloak with more than one replica needs a PodDisruptionBudget, so a node drain keeps one instance running.",
+)
 @pytest.mark.requires("keycloak")
 # Not strict: an estate that sets keycloak.podDisruptionBudget.enabled passes.
 @pytest.mark.xfail(

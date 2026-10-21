@@ -22,7 +22,14 @@ from podiumd_tests.workloads import image_version
 if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
 
-pytestmark = [pytest.mark.component, pytest.mark.requires("cluster")]
+pytestmark = [
+    pytest.mark.component,
+    pytest.mark.requires("cluster"),
+    pytest.mark.source(
+        "podiumd-tests",
+        "helm upgrade never applies CRDs; a forgotten apply or an old schema stays invisible until an operator or CR write fails.",
+    ),
+]
 
 # Operator Deployment name -> the API group whose CRDs it owns.
 OPERATOR_GROUPS = {

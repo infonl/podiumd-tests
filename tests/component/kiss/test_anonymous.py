@@ -22,6 +22,10 @@ if TYPE_CHECKING:
 pytestmark = [pytest.mark.component, pytest.mark.requires("kiss")]
 
 
+@pytest.mark.source(
+    "TA regression/100-kiss-frontend-basis.spec.ts",
+    "Checks KISS's frontend and the BFF routes a KCC employee meets, such as /api/me, without a login.",
+)
 def test_challenge_redirects_to_keycloak(http: requests.Session, urls: dict[str, str]) -> None:
     """The login challenge redirects to the Keycloak auth endpoint (TA reg-100)."""
     response = http.get(urls["kiss"] + "/api/challenge", params={"returnUrl": "/"}, allow_redirects=False)
@@ -32,6 +36,10 @@ def test_challenge_redirects_to_keycloak(http: requests.Session, urls: dict[str,
 
 
 @pytest.mark.parametrize("path", ["/api/me", "/contactmomenten", "/contactverzoeken"])
+@pytest.mark.source(
+    "TA regression/100-kiss-frontend-basis.spec.ts",
+    "Checks KISS's frontend and the BFF routes a KCC employee meets, such as /api/me, without a login.",
+)
 def test_pages_without_login(http: requests.Session, urls: dict[str, str], path: str) -> None:
     """Anonymous /api/me and the SPA routes give no server error (TA reg-100)."""
     response = http.get(urls["kiss"] + path)
@@ -39,6 +47,10 @@ def test_pages_without_login(http: requests.Session, urls: dict[str, str], path:
 
 
 @pytest.mark.parametrize(("method", "path"), [("GET", "/api/search/sources"), ("POST", "/api/search")])
+@pytest.mark.source(
+    "TA regression/147-kiss-contentbronnen.spec.ts",
+    "Checks KISS's search endpoints for its content sources are reachable and protected by its auth policy.",
+)
 def test_search_needs_a_login(http: requests.Session, urls: dict[str, str], method: str, path: str) -> None:
     """KISS's search answers no anonymous call: it is refused or sent to the Keycloak login (TA reg-147)."""
     body = {"query": "a", "page": 1, "filters": []} if method == "POST" else None

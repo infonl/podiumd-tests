@@ -30,6 +30,13 @@ def title(html: str) -> str:
     return found.group(1).strip() if found else ""
 
 
+@pytest.mark.source(
+    "TA regression/83-portaal-anonieme-pagina-bereikbaarheid.spec.ts",
+    "The welkom homepage is reachable for an anonymous user.",
+)
+@pytest.mark.source(
+    "TA smoke/04-portaal-homepage.spec.ts", "The portal homepage loads without errors and renders Dutch content."
+)
 def test_homepage_is_the_portal(
     http: requests.Session, urls: dict[str, str], need_bootstrap: Callable[..., None]
 ) -> None:
@@ -40,11 +47,19 @@ def test_homepage_is_the_portal(
     assert re.search("welkom|podiumd", title(html), re.IGNORECASE), title(html)
 
 
+@pytest.mark.source(
+    "TA regression/83-portaal-anonieme-pagina-bereikbaarheid.spec.ts",
+    "A page that does not exist answers 404, not 500.",
+)
 def test_unknown_page_is_404(http: requests.Session, urls: dict[str, str]) -> None:
     """An unknown CMS path answers 404, not an error (TA reg-83)."""
     expect_status(http.get(urls["openinwoner"] + "/pages/ptest-bestaat-niet/"), HTTPStatus.NOT_FOUND)
 
 
+@pytest.mark.source(
+    "TA regression/110-portaal-anoniem-en-mobile.spec.ts",
+    "A user who is not logged in can submit a contact request on /contactformulier/.",
+)
 def test_contact_form_is_open_to_everyone(
     http: requests.Session, urls: dict[str, str], need_bootstrap: Callable[..., None]
 ) -> None:
@@ -59,6 +74,10 @@ def test_contact_form_is_open_to_everyone(
 
 
 @pytest.mark.parametrize("body", [{}, {"kanaal": "test"}], ids=["empty", "test-kanaal"])
+@pytest.mark.source(
+    "TA regression/65-oi-cache-webhook.spec.ts",
+    "Open Inwoner's zaken notifications webhook exists and refuses calls without the subscription's auth.",
+)
 def test_zaken_webhook_refuses_unauthenticated_calls(
     http: requests.Session, urls: dict[str, str], body: dict[str, str]
 ) -> None:

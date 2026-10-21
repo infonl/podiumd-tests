@@ -61,6 +61,10 @@ def notified(callback: Callback, match: Callable[[JsonObject], bool], descriptio
     return section(callback.wait_for(match, timeout=DELIVERY_TIMEOUT, description=description), "body")
 
 
+@pytest.mark.source(
+    "TA regression/25-abonnement-filter.spec.ts",
+    "Only the subscriber whose abonnement filter matches the vertrouwelijkheidaanduiding gets the callback.",
+)
 def test_kenmerk_filter_selects_the_subscriber(
     openzaak: ApiClient,
     opennotificaties: ApiClient,
@@ -82,6 +86,13 @@ def test_kenmerk_filter_selects_the_subscriber(
 
 
 @pytest.mark.core
+@pytest.mark.source(
+    "TA regression/19-notificaties-e2e.spec.ts",
+    "A zaak created in Open Zaak is published through Open Notificaties and reaches the webhook receiver.",
+)
+@pytest.mark.source(
+    "TA regression/26-multi-subscriber.spec.ts", "One zaak event reaches two independent subscribers on kanaal zaken."
+)
 def test_every_subscriber_gets_the_notification(
     openzaak: ApiClient,
     opennotificaties: ApiClient,
@@ -102,6 +113,23 @@ def test_every_subscriber_gets_the_notification(
     assert section(first, "kenmerken")["zaaktype"] == test_zaaktype["url"]
 
 
+@pytest.mark.source(
+    "TA regression/27-status-event-keten.spec.ts",
+    "A subscriber on kanaal zaken gets both the zaak-create and the status-create event.",
+)
+@pytest.mark.source(
+    "TA regression/30-rol-event.spec.ts", "Adding a rol to a zaak publishes a rol-create event on kanaal zaken."
+)
+@pytest.mark.source(
+    "TA regression/33-zaak-update-event.spec.ts", "A PATCH on a zaak publishes a partial_update event on kanaal zaken."
+)
+@pytest.mark.source(
+    "TA regression/34-zio-events.spec.ts",
+    "Linking a document to a zaak publishes a zaakinformatieobject-create event on kanaal zaken.",
+)
+@pytest.mark.source(
+    "TA regression/46-rol-delete-event.spec.ts", "Deleting a rol publishes a destroy event on kanaal zaken."
+)
 def test_zaak_changes_are_notified_with_their_resource(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     openzaak: ApiClient,
     opennotificaties: ApiClient,
@@ -129,6 +157,9 @@ def test_zaak_changes_are_notified_with_their_resource(  # pylint: disable=too-m
         assert notification["resourceUrl"] == url
 
 
+@pytest.mark.source(
+    "TA regression/34-zio-events.spec.ts", "Creating a document publishes an event on kanaal documenten."
+)
 def test_document_is_notified_on_kanaal_documenten(
     openzaak: ApiClient,
     opennotificaties: ApiClient,
@@ -144,6 +175,10 @@ def test_document_is_notified_on_kanaal_documenten(
 
 
 @pytest.mark.requires("openklant")
+@pytest.mark.source(
+    "TA regression/37-ok2-partij-events.spec.ts",
+    "Creating and changing a partij in Open Klant publish events on kanaal partijen.",
+)
 def test_partij_changes_are_notified(
     openklant: ApiClient, opennotificaties: ApiClient, registry: ResourceRegistry, callback: Callback
 ) -> None:
@@ -156,6 +191,10 @@ def test_partij_changes_are_notified(
 
 
 @pytest.mark.requires("openklant")
+@pytest.mark.source(
+    "TA regression/45-internetaak-event.spec.ts",
+    "Creating an internetaak and changing its status publish events on kanaal internetaken.",
+)
 def test_internetaak_changes_are_notified(
     openklant: ApiClient, opennotificaties: ApiClient, registry: ResourceRegistry, callback: Callback
 ) -> None:
@@ -167,6 +206,10 @@ def test_internetaak_changes_are_notified(
         notified(callback, event("internetaken", "internetaak", actie, taak["url"]), f"internetaak {actie}")
 
 
+@pytest.mark.source(
+    "TA regression/42-notif-retry.spec.ts",
+    "Open Notificaties retries delivery to a subscriber that first answers 500, so the event arrives eventually.",
+)
 def test_failed_delivery_is_retried(
     openzaak: ApiClient,
     opennotificaties: ApiClient,

@@ -26,7 +26,15 @@ if TYPE_CHECKING:
 
     from podiumd_tests.environment import Environment
 
-pytestmark = [pytest.mark.component, pytest.mark.core, pytest.mark.requires("omc", "cluster")]
+pytestmark = [
+    pytest.mark.component,
+    pytest.mark.core,
+    pytest.mark.requires("omc", "cluster"),
+    pytest.mark.source(
+        "podiumd-tests",
+        "OMC answers 206 to a notification it cannot process, which Open Notificaties counts as delivered.",
+    ),
+]
 
 
 def notification(urls: dict[str, str], root: tuple[str, ...]) -> dict[str, object]:

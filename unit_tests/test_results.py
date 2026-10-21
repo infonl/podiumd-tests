@@ -16,6 +16,7 @@ from podiumd_tests.results import known_defects
 from podiumd_tests.results import parse_junit
 from podiumd_tests.results import run_dir
 from podiumd_tests.results import run_tag
+from podiumd_tests.results import summary_markdown
 from podiumd_tests.results import write_run
 
 JUNIT = """<?xml version="1.0" encoding="utf-8"?>
@@ -24,7 +25,9 @@ JUNIT = """<?xml version="1.0" encoding="utf-8"?>
   <testcase classname="tests.smoke.test_up" name="test_bad"><failure message="assert 500 == 200&#10;more"/></testcase>
   <testcase classname="tests.smoke.test_up" name="test_err"><error message="fixture failed"/></testcase>
   <testcase classname="tests.smoke.test_up" name="test_skip"><skipped type="pytest.skip" message="requires: oab"/></testcase>
-  <testcase classname="tests.smoke.test_up" name="test_known"><skipped type="pytest.xfail" message="TICKET-1"/></testcase>
+  <testcase classname="tests.smoke.test_up" name="test_known">
+    <properties><property name="source" value="TA regression/1-x.spec.ts: why"/></properties>
+    <skipped type="pytest.xfail" message="TICKET-1"/></testcase>
   <testcase classname="tests.smoke.test_up" name="test_fixed">
     <properties><property name="xpass" value="TICKET-2"/></properties></testcase>
 </testsuite></testsuites>
@@ -44,6 +47,7 @@ def test_parse_junit_counts_every_outcome():
     assert details.failures[0].test_id == "tests.smoke.test_up::test_bad"
     assert [(e.test_id, e.message) for e in details.xpassed] == [("tests.smoke.test_up::test_fixed", "TICKET-2")]
     assert [e.message for e in details.xfailed + details.skipped] == ["TICKET-1", "requires: oab"]
+    assert details.xfailed[0].sources == ["TA regression/1-x.spec.ts: why"]
 
 
 def test_known_defects_lists_reports_whose_defect_did_not_show_first():
@@ -96,3 +100,9 @@ def test_write_run_redacts_secrets(tmp_path):
 
 def test_run_tag_marks_resources_of_a_run():
     assert run_tag("a1b2c3") == "ptest-a1b2c3"
+
+
+def test_summary_lists_the_sources_of_known_defect_tests():
+    details = Details(xfailed=[Entry("t1", "[kiss-1] KISS 500", ["TA regression/1-x.spec.ts: why"])])
+    info = RunInfo("r", "e", "full", "s", "f", 0, [], "c")
+    assert "- `t1`: TA regression/1-x.spec.ts: why" in summary_markdown(info, details)

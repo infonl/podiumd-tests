@@ -49,6 +49,8 @@ from podiumd_tests.seed.openzaak import ZaaktypeParts
 from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.openzaak import zaaktype_parts
 from podiumd_tests.seed.registry import ResourceRegistry
+from podiumd_tests.sources import source_problems
+from podiumd_tests.sources import sources
 from podiumd_tests.zac import confirmation_on
 from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import user_groups
@@ -422,10 +424,17 @@ def fixture_zac_zaak(
 
 @pytest.hookimpl(tryfirst=True)  # before xdist reads the groups
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    """Put the destructive tests in one xdist group: each disturbs state the others use."""
+    """Put the destructive tests in one xdist group; record each test's sources as junit property "source".
+
+    A test without a valid source marker stops the run.
+    """
+    problems = [p for item in items for p in source_problems(item)]
+    if problems:
+        raise pytest.UsageError("\n".join(problems))
     for item in items:
         if item.get_closest_marker("destructive"):
             item.add_marker(pytest.mark.xdist_group("destructive"))
+        item.user_properties += [("source", s) for s in sources(item)]
 
 
 @pytest.hookimpl(wrapper=True)

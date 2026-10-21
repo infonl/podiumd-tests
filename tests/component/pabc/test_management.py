@@ -47,17 +47,29 @@ def names(items: list[JsonObject]) -> list[str]:
     return [str(i.get("name") or "").lower() for i in items]
 
 
+@pytest.mark.source(
+    "TA regression/67-pabc-functional-roles.spec.ts",
+    "PABC has the functional roles seeded, and the base roles ZAC and KISS expect.",
+)
 def test_functional_roles_are_configured(pabc: requests.Session, urls: dict[str, str]) -> None:
     """PABC has at least one functional role (TA reg-67)."""
     assert get_entries(pabc, urls["pabc"] + "/api/v1/functional-roles")
 
 
+@pytest.mark.source(
+    "TA regression/67-pabc-functional-roles.spec.ts",
+    "PABC has the functional roles seeded, and the base roles ZAC and KISS expect.",
+)
 def test_application_roles_include_a_handling_role(pabc: requests.Session, urls: dict[str, str]) -> None:
     """The application roles include ZAC's behandelaar or KISS's KCC role (TA reg-67)."""
     found = names(get_entries(pabc, urls["pabc"] + "/api/v1/application-roles"))
     assert any(word in n for n in found for word in ("behandelaar", "kcc", "medewerker")), found
 
 
+@pytest.mark.source(
+    "TA regression/68-pabc-decision.spec.ts",
+    "PABC's decision endpoint maps functional roles to application roles per entity type, the core of PBAC.",
+)
 def test_known_functional_roles_get_application_roles(
     pabc: requests.Session, http: requests.Session, urls: dict[str, str], pabc_api_key: str
 ) -> None:
@@ -69,6 +81,10 @@ def test_known_functional_roles_get_application_roles(
         assert isinstance(result.get("applicationRoles"), list), result
 
 
+@pytest.mark.source(
+    "TA regression/69-pabc-domains-entity-types.spec.ts",
+    "PABC's domains and entity types answer and are consistent, with no orphaned references.",
+)
 def test_entity_types_have_unique_ids(pabc: requests.Session, urls: dict[str, str]) -> None:
     """Domains answer, and no entity type was seeded twice (TA reg-69)."""
     get_entries(pabc, urls["pabc"] + "/api/v1/domains")
@@ -76,12 +92,20 @@ def test_entity_types_have_unique_ids(pabc: requests.Session, urls: dict[str, st
     assert len(ids) == len(set(ids)), f"duplicate entity type ids: {sorted(ids)}"
 
 
+@pytest.mark.source(
+    "TA regression/71-pabc-zac-integration-coherence.spec.ts",
+    "ZAC must be registered in PABC, else every ZAC login gets no roles.",
+)
 def test_zac_is_a_registered_application(pabc: requests.Session, urls: dict[str, str]) -> None:
     """ZAC, PABC's first consumer, is a registered application (TA reg-71)."""
     found = names(get_entries(pabc, urls["pabc"] + "/api/v1/applications"))
     assert any("zac" in n or "zaakafhandel" in n for n in found), found
 
 
+@pytest.mark.source(
+    "TA smoke/66-pabc-health.spec.ts",
+    "PABC, which gives ZAC its PBAC decisions, is reachable and enforces its API key.",
+)
 def test_app_version_is_shown_after_login(pabc: requests.Session, urls: dict[str, str]) -> None:
     """PABC tells a logged-in user its version and revision (TA smoke 66)."""
     version = expect_status(pabc.get(urls["pabc"] + "/api/app-version"), HTTPStatus.OK).json()

@@ -112,6 +112,8 @@ class Entry:
 
     test_id: str
     message: str
+    # The test's sources, "origin: reason" (marker source).
+    sources: list[str] = field(default_factory=list[str])
 
 
 @dataclass
@@ -173,21 +175,22 @@ def parse_junit(xml_text: str) -> tuple[Counts, Details]:
         problem = case.find("failure") if case.find("failure") is not None else case.find("error")
         skipped = case.find("skipped")
         xpass = next((p.get("value") or "" for p in case.iter("property") if p.get("name") == "xpass"), None)
+        found = [p.get("value") or "" for p in case.iter("property") if p.get("name") == "source"]
         if problem is not None:
             if problem.tag == "failure":
                 counts.failed += 1
             else:
                 counts.errors += 1
-            details.failures.append(Entry(test_id, _first_line(problem.get("message"))))
+            details.failures.append(Entry(test_id, _first_line(problem.get("message")), found))
         elif skipped is not None and skipped.get("type") == "pytest.xfail":
             counts.xfailed += 1
-            details.xfailed.append(Entry(test_id, _first_line(skipped.get("message"))))
+            details.xfailed.append(Entry(test_id, _first_line(skipped.get("message")), found))
         elif skipped is not None:
             counts.skipped += 1
             details.skipped.append(Entry(test_id, _first_line(skipped.get("message"))))
         elif xpass is not None:
             counts.xpassed += 1
-            details.xpassed.append(Entry(test_id, _first_line(xpass)))
+            details.xpassed.append(Entry(test_id, _first_line(xpass), found))
         else:
             counts.passed += 1
     return counts, details
@@ -262,6 +265,9 @@ def summary_markdown(info: RunInfo, details: Details) -> str:
     for title, entries in sections:
         if entries:
             lines += ["", f"## {title}", "", *_by_message(entries)]
+    if sourced := [e for e in [*details.xpassed, *details.xfailed, *details.failures] if e.sources]:
+        lines += ["", "## Sources of the failed and known-defect tests", ""]
+        lines += [f"- `{e.test_id}`: " + "; ".join(e.sources) for e in sourced]
     return "\n".join(lines) + "\n"
 
 

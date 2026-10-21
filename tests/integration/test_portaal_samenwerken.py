@@ -37,6 +37,8 @@ pytestmark = [
     pytest.mark.requires("openinwoner", "keycloak", "cluster"),
     # Every case resets the one begeleider's plans and contacts.
     pytest.mark.xdist_group("openinwoner-begeleider"),
+    pytest.mark.source("draaiboek OI-089", "From the portal a gemeente can seek collaboration with a citizen."),
+    pytest.mark.source("draaiboek OI-090", "From the portal a gemeente can seek collaboration with a company."),
 ]
 
 CONTACTS = "/mijn-profiel/contacts/"

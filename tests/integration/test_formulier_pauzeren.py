@@ -28,7 +28,14 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
     from podiumd_tests.seed.registry import ResourceRegistry
 
-pytestmark = [pytest.mark.integration, pytest.mark.requires("openformulieren", "mailpit", "cluster")]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.requires("openformulieren", "mailpit", "cluster"),
+    pytest.mark.source(
+        "TA regression/154-omc-cosign-direct.spec.ts",
+        "Checks that a created Open Formulieren submission has a resume URL, for completing it later.",
+    ),
+]
 
 
 @pytest.mark.tc("INT-009")

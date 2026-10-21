@@ -81,6 +81,10 @@ def fixture_stats(
     return read_stats((directory / STATS).read_text(encoding="utf-8"))
 
 
+@pytest.mark.source(
+    "TA perf/api-perf.js",
+    "API performance with k6: read-only traffic per API group, with p95/p99 response times per API.",
+)
 @pytest.mark.parametrize("endpoint", [requiring(c, e, test_id=e) for e, c in ENDPOINTS.items()])
 def test_endpoint_meets_its_threshold(stats: dict[str, EndpointStats], endpoint: str) -> None:
     """The endpoint's p95 and failure ratio stay within perf.yaml (TA perf/api-perf.js)."""
@@ -88,6 +92,10 @@ def test_endpoint_meets_its_threshold(stats: dict[str, EndpointStats], endpoint:
     assert violations(stats[endpoint], thresholds(REPO_ROOT / "perf.yaml", endpoint)) == []
 
 
+@pytest.mark.source(
+    "podiumd-tests",
+    "Perf shows change over time per environment, also where its absolute numbers mean little (minikube).",
+)
 @pytest.mark.parametrize("endpoint", [requiring(c, e, test_id=e) for e, c in ENDPOINTS.items()])
 def test_endpoint_is_not_slower_than_before(stats: dict[str, EndpointStats], perf_dir: Path, endpoint: str) -> None:
     """The endpoint's p95 is no slowdown (stats.slowdown_limit) against its median over the earlier comparable runs."""

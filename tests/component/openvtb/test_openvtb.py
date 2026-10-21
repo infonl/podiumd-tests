@@ -15,6 +15,10 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("openvtb", "cluster")]
 
 
 @pytest.mark.core
+@pytest.mark.source(
+    "podiumd-tests",
+    "Open VTB's API authenticates with a per-user token; a verzoektype is created, read and deleted with the suite's token.",
+)
 def test_verzoektype_roundtrip(openvtb_verzoeken: ApiClient, registry: ResourceRegistry) -> None:
     """A verzoektype created with a token reads back by url and is gone after DELETE (204)."""
     naam = registry.tagged("verzoektype")
@@ -27,6 +31,7 @@ def test_verzoektype_roundtrip(openvtb_verzoeken: ApiClient, registry: ResourceR
 
 
 @pytest.mark.core
+@pytest.mark.source("podiumd-tests", "Component coverage of Open VTB 4.10 taken: a url-taak round trip.")
 def test_urltaak_roundtrip(openvtb_taken: ApiClient, registry: ResourceRegistry) -> None:
     """A url-taak created with a token reads back by url and is gone after DELETE (204)."""
     titel = registry.tagged("urltaak")
@@ -45,6 +50,9 @@ def test_urltaak_roundtrip(openvtb_taken: ApiClient, registry: ResourceRegistry)
     openvtb_taken.request("GET", url, 404)
 
 
+@pytest.mark.source(
+    "podiumd-tests", "Component coverage of Open VTB 4.10 berichten: a bericht created against a berichttype."
+)
 def test_bericht_needs_a_berichttype(
     openvtb_berichten: ApiClient, podiumd_env: Environment, registry: ResourceRegistry
 ) -> None:

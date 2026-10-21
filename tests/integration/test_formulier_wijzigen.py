@@ -32,7 +32,15 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
     from podiumd_tests.seed.registry import ResourceRegistry
 
-pytestmark = [pytest.mark.integration, pytest.mark.requires("openformulieren", "openzaak", "cluster")]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.requires("openformulieren", "openzaak", "cluster"),
+    pytest.mark.source(
+        "draaiboek OF-073", "An existing form can be changed and still results in zaken in ZAC when submitted again."
+    ),
+    pytest.mark.source("draaiboek OF-068", "Variable mappings are available and work."),
+    pytest.mark.source("draaiboek FB-009", "An existing form can be edited."),
+]
 
 TIMEOUT = 90
 OMSCHRIJVING = {"type": "textfield", "key": "omschrijving", "label": "Omschrijving"}

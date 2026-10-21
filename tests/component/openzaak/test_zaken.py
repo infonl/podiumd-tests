@@ -30,6 +30,10 @@ if TYPE_CHECKING:
 pytestmark = [pytest.mark.component, pytest.mark.requires("openzaak")]
 
 
+@pytest.mark.source(
+    "TA interaction/02-zaak-creatie.spec.ts",
+    "Create a zaak through the ZGW Zaken API as Open Formulieren does and find it back by its identificatie.",
+)
 @pytest.mark.core
 def test_zaak_lifecycle(openzaak: ApiClient, registry: ResourceRegistry, test_zaaktype: JsonObject) -> None:
     """A zaak reads back with an identificatie, accepts a PATCH and is gone after DELETE."""
@@ -43,6 +47,10 @@ def test_zaak_lifecycle(openzaak: ApiClient, registry: ResourceRegistry, test_za
     openzaak.request("GET", url, 404)
 
 
+@pytest.mark.source(
+    "TA regression/38-concurrency-uniqueness.spec.ts",
+    "Under concurrent creates with one bronorganisatie and identificatie, Open Zaak keeps exactly one zaak.",
+)
 def test_identificatie_is_unique_under_concurrent_creates(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
@@ -75,6 +83,13 @@ def relations(zaak: JsonObject) -> list[tuple[object, object]]:
     return [(r["url"], r["aardRelatie"]) for r in entries(zaak["relevanteAndereZaken"])]
 
 
+@pytest.mark.source(
+    "TA regression/28-gerelateerde-zaken.spec.ts", "A hoofdzaak refers to its deelzaken through relevanteAndereZaken."
+)
+@pytest.mark.source(
+    "TA regression/59-zaak-relatie-keten.spec.ts",
+    "Zaak relations chain three levels deep: hoofdzaak, deelzaken and a sub-deelzaak.",
+)
 def test_relevante_andere_zaken(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """A zaak refers to two vervolgzaken, one of which refers to a third (TA reg-28, 59)."""
     hoofd, a, b, b1 = (make_zaak(openzaak, registry, parts.zaaktype) for _ in range(4))
@@ -87,6 +102,10 @@ def test_relevante_andere_zaken(openzaak: ApiClient, registry: ResourceRegistry,
         openzaak.patch(str(zaak["url"]), {"relevanteAndereZaken": []})
 
 
+@pytest.mark.source(
+    "TA regression/36-zaakobject-koppeling.spec.ts",
+    "A zaak refers to an external registration, such as a BAG address, through a zaakobject.",
+)
 def test_zaakobject_adres(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """An address zaakobject is found through the zaak (TA reg-36)."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
@@ -111,6 +130,10 @@ def test_zaakobject_adres(openzaak: ApiClient, registry: ResourceRegistry, parts
     assert [section(z, "objectIdentificatie").get("postcode") for z in found] == ["2511DN"]
 
 
+@pytest.mark.source(
+    "TA regression/52-zaak-geometrie.spec.ts",
+    "Location-bound zaken carry a GeoJSON zaakgeometrie that can be read and updated.",
+)
 def test_zaakgeometrie_and_zoek_within(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """A zaak with a point is found by _zoek within a polygon around it, after moving it there (TA reg-52)."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype, zaakgeometrie={"type": "Point", "coordinates": [4.31, 52.075]})
@@ -123,6 +146,13 @@ def test_zaakgeometrie_and_zoek_within(openzaak: ApiClient, registry: ResourceRe
     assert str(zaak["url"]) in {str(z["url"]) for z in entries(zoek["results"])}
 
 
+@pytest.mark.source(
+    "TA regression/43-pagineren-filtering.spec.ts",
+    "ZAC, the portal and KISS must page and filter the zaken list of a municipality with thousands of zaken.",
+)
+@pytest.mark.source(
+    "TA regression/55-multi-zaaktype.spec.ts", "Zaken lists filter on one zaaktype, as ZAC work lists and KISS do."
+)
 def test_zaken_by_zaaktype_across_pages(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """All new zaken of the zaaktype are listed, following every page (TA reg-43, 55)."""
     created = {str(make_zaak(openzaak, registry, parts.zaaktype)["url"]) for _ in range(3)}

@@ -68,6 +68,14 @@ def hits(http: requests.Session, urls: dict[str, str], **params: str) -> list[st
 
 
 @pytest.mark.parametrize("query", ["informatie", "ptest-xyzzy-geen-resultaat"])
+@pytest.mark.source(
+    "TA interaction/107-portaal-zoeken.spec.ts",
+    "The portal search page answers and renders its search form, also for a query without matches.",
+)
+@pytest.mark.source(
+    "TA regression/161-portaal-low-prio-coverage.spec.ts",
+    "Search accepts a query on information content; a query without matches shows a follow-up message with tips.",
+)
 def test_search_answers(http: requests.Session, urls: dict[str, str], query: str) -> None:
     """Search answers with its form; a query without hits says so (TA int-107, reg-161c/d)."""
     html = expect_status(http.get(urls["openinwoner"] + "/search/", params={"query": query}), HTTPStatus.OK).text
@@ -79,12 +87,15 @@ def test_search_answers(http: requests.Session, urls: dict[str, str], query: str
 @pytest.mark.tc("OI-092")
 @pytest.mark.usefixtures("categories")
 @pytest.mark.parametrize("query", [PASPOORT, KEYWORD], ids=["name", "keyword"])
+@pytest.mark.source("draaiboek OI-092", "Portal search can search on products.")
 def test_search_finds_a_product(http: requests.Session, urls: dict[str, str], query: str) -> None:
     """A product is found by a word of its name and by its keyword, and only that product."""
     assert hits(http, urls, query=query) == [f"Paspoort {PASPOORT}"]
 
 
 @pytest.mark.tc("OI-093", "OI-095")
+@pytest.mark.source("draaiboek OI-093", "Portal search can search on onderwerpen.")
+@pytest.mark.source("draaiboek OI-095", "Portal search results can be filtered.")
 def test_results_filter_on_onderwerp(http: requests.Session, urls: dict[str, str], categories: dict[str, str]) -> None:
     """Both products match; filtering on an onderwerp (category) keeps only that onderwerp's product."""
     assert hits(http, urls, query=BOTH) == [f"Grofvuil {GROFVUIL}", f"Paspoort {PASPOORT}"]
@@ -93,6 +104,7 @@ def test_results_filter_on_onderwerp(http: requests.Session, urls: dict[str, str
 
 
 @pytest.mark.tc("OI-094")
+@pytest.mark.source("draaiboek OI-094", "Feedback can be given on a portal search.")
 def test_feedback_on_a_search_is_stored(
     http: requests.Session, urls: dict[str, str], podiumd_env: Environment, run_tag: str, categories: dict[str, str]
 ) -> None:
@@ -117,6 +129,7 @@ def test_feedback_on_a_search_is_stored(
     reason="[open-inwoner-3] Open Inwoner offers no 'did you mean': a search without hits shows fixed tips only; its"
     " fuzzy matching lives in the autocomplete, not on the results page",
 )
+@pytest.mark.source("draaiboek OI-097", "Without results for a search, the portal suggests what was probably meant.")
 def test_no_results_suggest_what_was_meant(http: requests.Session, urls: dict[str, str]) -> None:
     """A misspelt search without hits suggests the product that was probably meant."""
     html = expect_status(http.get(urls["openinwoner"] + "/search/", params={"query": "Pasport"}), HTTPStatus.OK).text
@@ -125,6 +138,13 @@ def test_no_results_suggest_what_was_meant(http: requests.Session, urls: dict[st
 
 
 @pytest.mark.tc("OI-098", "OI-099")
+@pytest.mark.source(
+    "draaiboek OI-098", "After search is switched off in the admin, the end user cannot use the search function."
+)
+@pytest.mark.source(
+    "draaiboek OI-099",
+    "After search is switched off in the admin, the end user cannot use direct links to overview pages.",
+)
 def test_search_can_be_switched_off(http: requests.Session, urls: dict[str, str], podiumd_env: Environment) -> None:
     """With search switched off in the admin, the search page and links to it answer 404, and the form is gone."""
     search = urls["openinwoner"] + "/search/"

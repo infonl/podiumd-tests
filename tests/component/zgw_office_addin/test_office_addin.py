@@ -30,6 +30,9 @@ if TYPE_CHECKING:
 pytestmark = [pytest.mark.component, pytest.mark.requires("zgw-office-addin")]
 
 
+@pytest.mark.source(
+    "podiumd-tests", "PodiumD 4.10 adds the ZGW Office add-in: its manifests must point to the public https host."
+)
 @pytest.mark.parametrize("manifest", MANIFESTS)
 def test_manifest_points_to_an_https_host(http: requests.Session, urls: dict[str, str], manifest: str) -> None:
     """The frontend's start script replaced localhost:3000 with common.frontendUrl, an https host.
@@ -43,6 +46,7 @@ def test_manifest_points_to_an_https_host(http: requests.Session, urls: dict[str
     assert "https://" in text
 
 
+@pytest.mark.source("podiumd-tests", "Checks that the Office add-in backend refuses a token without a signature.")
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason="[zgw-office-addin-1] reported privately")
 def test_backend_refuses_an_unsigned_token(http: requests.Session, urls: dict[str, str]) -> None:
     """A token without signature gets no zaak lookup: 401 or 403, not 404 (looked up) or 5xx."""
@@ -53,6 +57,9 @@ def test_backend_refuses_an_unsigned_token(http: requests.Session, urls: dict[st
     assert response.status_code in REFUSED, describe(response)
 
 
+@pytest.mark.source(
+    "podiumd-tests", "Checks that the Office add-in backend refuses a document upload with a token without a signature."
+)
 @pytest.mark.requires("openzaak")
 @pytest.mark.xfail(strict=True, raises=AssertionError, reason="[zgw-office-addin-1] reported privately")
 def test_backend_refuses_a_document_upload_with_an_unsigned_token(

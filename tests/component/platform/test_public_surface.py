@@ -35,6 +35,10 @@ NIL = "00000000-0000-0000-0000-000000000000"
 LOGIN = re.compile(r"login|auth|signin|oidc", re.IGNORECASE)
 
 
+@pytest.mark.source(
+    "TA regression/177-pen-admin-niet-publiek.spec.ts",
+    "Admin functionality is not available anonymously: Django and Keycloak admin refuse an anonymous request.",
+)
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
 def test_django_admin_is_not_public(http: requests.Session, urls: dict[str, str], component: str) -> None:
     """Anonymous /admin/ ends on a login page, never on the admin itself (TA reg-177)."""
@@ -45,6 +49,10 @@ def test_django_admin_is_not_public(http: requests.Session, urls: dict[str, str]
     assert response.status_code in REFUSED, describe(response)
 
 
+@pytest.mark.source(
+    "TA regression/177-pen-admin-niet-publiek.spec.ts",
+    "Admin functionality is not available anonymously: Django and Keycloak admin refuse an anonymous request.",
+)
 @pytest.mark.requires("keycloak")
 def test_keycloak_admin_api_is_not_public(
     http: requests.Session, urls: dict[str, str], podiumd_env: Environment
@@ -55,6 +63,10 @@ def test_keycloak_admin_api_is_not_public(
     assert response.status_code in REFUSED, describe(response)
 
 
+@pytest.mark.source(
+    "TA regression/121-continuiteit-graceful-degradation.spec.ts",
+    "Components answer invalid requests with a clean 4xx, not a crash, a 500 or incomplete data.",
+)
 @pytest.mark.requires("openzaak")
 def test_openzaak_unknown_zaak_and_bad_ordering(openzaak: ApiClient) -> None:
     """An unknown zaak is a 404 and an unknown ordering field a 400, not a server error (TA reg-121)."""
@@ -65,12 +77,24 @@ def test_openzaak_unknown_zaak_and_bad_ordering(openzaak: ApiClient) -> None:
     assert not is_server_error(response), describe(response)
 
 
+@pytest.mark.source(
+    "TA regression/121-continuiteit-graceful-degradation.spec.ts",
+    "Components answer invalid requests with a clean 4xx, not a crash, a 500 or incomplete data.",
+)
 @pytest.mark.requires("openklant")
 def test_openklant_unknown_partij(openklant: ApiClient) -> None:
     """An unknown partij is a 404 (TA reg-121)."""
     openklant.request("GET", f"partijen/{NIL}", HTTPStatus.NOT_FOUND)
 
 
+@pytest.mark.source(
+    "TA regression/120-of-payment-infrastructure.spec.ts",
+    "Open Formulieren's payment plugins, return route and payment webhooks exist.",
+)
+@pytest.mark.source(
+    "TA regression/121-continuiteit-graceful-degradation.spec.ts",
+    "Components answer invalid requests with a clean 4xx, not a crash, a 500 or incomplete data.",
+)
 @pytest.mark.requires("openformulieren")
 @pytest.mark.parametrize(
     ("method", "path"),

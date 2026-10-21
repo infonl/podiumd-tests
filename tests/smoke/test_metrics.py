@@ -82,12 +82,44 @@ def fixture_grafana(http: requests.Session, urls: dict[str, str], credentials: S
     return grafana
 
 
+@pytest.mark.source(
+    "MK test_metrics.py",
+    "Metrics profile: Grafana's provisioned datasources and Prometheus' scrape targets are healthy, not just Running.",
+)
+@pytest.mark.source(
+    "MK test_monitoring_logging.py",
+    "monitoring-logging stack: Grafana datasources, healthy Prometheus scrape targets and Loki pod logs.",
+)
+@pytest.mark.source(
+    "PI test_metrics.py",
+    "Metrics checks adapted from podiumd-minikube: Grafana datasources provisioned, Prometheus scrape targets healthy.",
+)
+@pytest.mark.source(
+    "PI test_monitoring_logging.py",
+    "monitoring-logging checks adapted from podiumd-minikube: Grafana datasources, scrape targets and Loki pod logs.",
+)
 def test_prometheus_datasource_provisioned(grafana: Grafana) -> None:
     """Grafana has a Prometheus datasource."""
     kinds = sorted({str(d.get("type")) for d in grafana.datasources})
     assert grafana.uid("prometheus"), f"no prometheus datasource; types: {kinds}"
 
 
+@pytest.mark.source(
+    "MK test_metrics.py",
+    "Metrics profile: Grafana's provisioned datasources and Prometheus' scrape targets are healthy, not just Running.",
+)
+@pytest.mark.source(
+    "MK test_monitoring_logging.py",
+    "monitoring-logging stack: Grafana datasources, healthy Prometheus scrape targets and Loki pod logs.",
+)
+@pytest.mark.source(
+    "PI test_metrics.py",
+    "Metrics checks adapted from podiumd-minikube: Grafana datasources provisioned, Prometheus scrape targets healthy.",
+)
+@pytest.mark.source(
+    "PI test_monitoring_logging.py",
+    "monitoring-logging checks adapted from podiumd-minikube: Grafana datasources, scrape targets and Loki pod logs.",
+)
 def test_prometheus_scrape_targets_up(grafana: Grafana) -> None:
     """Prometheus has scrape targets, and all of them are up."""
     if not grafana.uid("prometheus"):
@@ -98,6 +130,14 @@ def test_prometheus_scrape_targets_up(grafana: Grafana) -> None:
     assert not down, f"scrape targets down: {down}"
 
 
+@pytest.mark.source(
+    "MK test_monitoring_logging.py",
+    "monitoring-logging stack: Alloy discovers and forwards the namespace's pod logs to Loki.",
+)
+@pytest.mark.source(
+    "PI test_monitoring_logging.py",
+    "monitoring-logging checks adapted from podiumd-minikube: Loki has the namespace's pod logs.",
+)
 def test_loki_has_pod_logs(grafana: Grafana, podiumd_env: Environment) -> None:
     """Loki has recent log streams of the application namespace (Alloy forwards them)."""
     if not grafana.uid("loki"):
@@ -108,6 +148,10 @@ def test_loki_has_pod_logs(grafana: Grafana, podiumd_env: Environment) -> None:
     assert cast("dict[str, object]", body["data"])["result"], f"no log streams for {query}: is Alloy forwarding logs?"
 
 
+@pytest.mark.source(
+    "podiumd-tests",
+    "Scrape-target checks missed a ServiceMonitor or PodMonitor that Prometheus never selects or that matches no pod.",
+)
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
 def test_every_monitor_has_scrape_targets(grafana: Grafana, podiumd_env: Environment) -> None:
@@ -131,6 +175,10 @@ def test_every_monitor_has_scrape_targets(grafana: Grafana, podiumd_env: Environ
     assert not missing, f"monitors without scrape targets: {missing}"
 
 
+@pytest.mark.source(
+    "podiumd-tests",
+    "Every deployed component must report series in Prometheus, through a monitor target or OTEL remote write.",
+)
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
 def test_every_component_reports_metrics(grafana: Grafana, podiumd_env: Environment) -> None:
@@ -158,6 +206,10 @@ def test_every_component_reports_metrics(grafana: Grafana, podiumd_env: Environm
 LOG_WINDOW = "15m"
 
 
+@pytest.mark.source(
+    "podiumd-tests",
+    "A namespace-wide Loki check missed single pods whose logs are not shipped; each logging pod needs a Loki stream.",
+)
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
 def test_every_pod_logs_to_loki(grafana: Grafana, podiumd_env: Environment) -> None:

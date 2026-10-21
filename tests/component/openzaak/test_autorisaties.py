@@ -34,6 +34,14 @@ if TYPE_CHECKING:
 pytestmark = [pytest.mark.component, pytest.mark.requires("openzaak")]
 
 
+@pytest.mark.source(
+    "TA regression/13-va-filter-cross-component.spec.ts",
+    "A zaakvertrouwelijke zaak made by ZAC must not be visible to an application with maximum vertrouwelijkheid openbaar.",
+)
+@pytest.mark.source(
+    "TA regression/23-va-escalatie.spec.ts",
+    "An application with maximum vertrouwelijkheid openbaar may never write or read above that level.",
+)
 @pytest.mark.core
 def test_zaakvertrouwelijke_zaak_is_hidden_from_an_openbaar_client(
     openzaak: ApiClient, openzaak_openbaar: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
@@ -47,6 +55,10 @@ def test_zaakvertrouwelijke_zaak_is_hidden_from_an_openbaar_client(
     openzaak_openbaar.request("GET", str(zaak["url"]), *REFUSED, 404)
 
 
+@pytest.mark.source(
+    "TA regression/17-document-va-handhaving.spec.ts",
+    "A vertrouwelijk document must not be readable by an application with maximum vertrouwelijkheid openbaar.",
+)
 def test_vertrouwelijk_document_is_hidden_from_an_openbaar_client(
     openzaak: ApiClient, openzaak_openbaar: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
@@ -61,6 +73,10 @@ def test_vertrouwelijk_document_is_hidden_from_an_openbaar_client(
     openzaak_openbaar.request("GET", str(document["url"]), *REFUSED, 404)
 
 
+@pytest.mark.source(
+    "TA regression/23-va-escalatie.spec.ts",
+    "An application with maximum vertrouwelijkheid openbaar may never write or read above that level.",
+)
 def test_openbaar_client_cannot_create_above_its_level(
     openzaak_openbaar: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
@@ -86,6 +102,7 @@ def test_openbaar_client_cannot_create_above_its_level(
     openzaak_openbaar.request("POST", f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", 400, *REFUSED, json=document)
 
 
+@pytest.mark.source("podiumd-tests", "Checks that a client without zaken.verwijderen cannot delete a zaak.")
 def test_openbaar_client_cannot_delete(
     openzaak: ApiClient, openzaak_openbaar: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
@@ -94,6 +111,10 @@ def test_openbaar_client_cannot_delete(
     openzaak_openbaar.request("DELETE", str(zaak["url"]), *REFUSED)
 
 
+@pytest.mark.source(
+    "TA regression/22-negative-auth.spec.ts",
+    "Open Zaak refuses expired tokens, unknown clients and applications without autorisaties.",
+)
 @pytest.mark.parametrize(
     "token",
     [
@@ -108,6 +129,10 @@ def test_bad_tokens_are_refused(openzaak: ApiClient, zgw_secret: str, token: Cal
     assert response.status_code in REFUSED, response.status_code
 
 
+@pytest.mark.source(
+    "TA regression/22-negative-auth.spec.ts",
+    "Open Zaak refuses expired tokens, unknown clients and applications without autorisaties.",
+)
 def test_client_without_autorisaties(
     openzaak_noauth: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:

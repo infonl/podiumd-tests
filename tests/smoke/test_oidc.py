@@ -33,6 +33,14 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.smoke
 
 
+@pytest.mark.source(
+    "TA smoke/81-continuiteit-pings.spec.ts",
+    "Continuity pings: every PodiumD component, Keycloak's realm included, answers through its ingress within 5 s.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/81-continuiteit-pings.spec.ts",
+    "Continuity pings: every PodiumD component, Keycloak's realm included, answers through its ingress within 5 s.",
+)
 @pytest.mark.requires("keycloak")
 def test_keycloak_discovery(http: requests.Session, urls: dict[str, str]) -> None:
     """The master realm publishes its OIDC configuration."""
@@ -40,6 +48,18 @@ def test_keycloak_discovery(http: requests.Session, urls: dict[str, str]) -> Non
     assert str(response.json()["issuer"]).endswith(realm_url("", "master"))
 
 
+@pytest.mark.source(
+    "MK test_login_flow.py",
+    "End-to-end OIDC login through ZAC, replaying the browser's redirects: ZAC, Keycloak and PABC are wired together.",
+)
+@pytest.mark.source(
+    "PI test_login_flow.py",
+    "End-to-end OIDC login through ZAC adapted from podiumd-minikube, following real redirects to real hostnames.",
+)
+@pytest.mark.source(
+    "podiumd-tests",
+    "Every app's login: a Keycloak scope fault in KISS and ITA passed while only ZAC and Open Inwoner were checked.",
+)
 @pytest.mark.requires("keycloak")
 @pytest.mark.parametrize("component", [requiring(c, c) for c in LOGIN_PATHS])
 def test_login_ends_on_the_keycloak_form(
@@ -52,6 +72,10 @@ def test_login_ends_on_the_keycloak_form(
     keycloak_login_realm(http.get(start, headers=NAVIGATE), hosts)
 
 
+@pytest.mark.source(
+    "podiumd-tests",
+    "On Open Object the objecttypen host must start the admin login too; the other login test uses the objecten host.",
+)
 @pytest.mark.requires("keycloak", "objecttypen")
 # Not strict: an edge may redirect the login to the objecten host (podiumd-infra loginRedirectHost).
 @pytest.mark.xfail(
@@ -70,6 +94,30 @@ def test_admin_login_on_the_objecttypen_host_ends_on_the_keycloak_form(
     keycloak_login_realm(http.get(start, headers=NAVIGATE), keycloak_hosts(urls))
 
 
+@pytest.mark.source(
+    "TA smoke/82-portaal-login-config.spec.ts",
+    "Portal login page exposes the expected login routes: DigiD OIDC, 'Log in met DigiD' and the Keycloak redirect.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/82-portaal-login-config.spec.ts",
+    "Portal login page exposes the expected login routes: DigiD OIDC, 'Log in met DigiD' and the Keycloak redirect.",
+)
+@pytest.mark.source(
+    "TA smoke/05-portaal-digid-login.spec.ts",
+    "Portal login route and DigiD OIDC flow: the login page shows a DigiD button and the login goes through Keycloak.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/05-portaal-digid-login.spec.ts",
+    "Portal login route and DigiD OIDC flow: the login page shows a DigiD button and the login goes through Keycloak.",
+)
+@pytest.mark.source(
+    "TA smoke/99-portaal-eherkenning-login.spec.ts",
+    "Portal eHerkenning OIDC login via the Keycloak mock: the login page shows the eHerkenning button.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/99-portaal-eherkenning-login.spec.ts",
+    "Portal eHerkenning OIDC login via the Keycloak mock: the login page shows the eHerkenning button.",
+)
 @pytest.mark.requires("openinwoner")
 @pytest.mark.tc("ARCH-019")
 def test_portaal_login_page_offers_digid_and_eherkenning(http: requests.Session, urls: dict[str, str]) -> None:
@@ -82,6 +130,30 @@ def test_portaal_login_page_offers_digid_and_eherkenning(http: requests.Session,
     assert re.search(r"Log in met DigiD", html, re.IGNORECASE), "no 'Log in met DigiD' text"
 
 
+@pytest.mark.source(
+    "TA smoke/82-portaal-login-config.spec.ts",
+    "Portal login page exposes the expected login routes: DigiD OIDC, 'Log in met DigiD' and the Keycloak redirect.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/82-portaal-login-config.spec.ts",
+    "Portal login page exposes the expected login routes: DigiD OIDC, 'Log in met DigiD' and the Keycloak redirect.",
+)
+@pytest.mark.source(
+    "TA smoke/05-portaal-digid-login.spec.ts",
+    "Portal login route and DigiD OIDC flow: the login page shows a DigiD button and the login goes through Keycloak.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/05-portaal-digid-login.spec.ts",
+    "Portal login route and DigiD OIDC flow: the login page shows a DigiD button and the login goes through Keycloak.",
+)
+@pytest.mark.source(
+    "TA smoke/99-portaal-eherkenning-login.spec.ts",
+    "Portal eHerkenning OIDC login via the Keycloak mock: the login page shows the eHerkenning button.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/99-portaal-eherkenning-login.spec.ts",
+    "Portal eHerkenning OIDC login via the Keycloak mock: the login page shows the eHerkenning button.",
+)
 @pytest.mark.requires("openinwoner", "keycloak")
 @pytest.mark.parametrize("method", ["digid", "eherkenning"])
 def test_portaal_login_redirects_to_keycloak(http: requests.Session, urls: dict[str, str], method: str) -> None:

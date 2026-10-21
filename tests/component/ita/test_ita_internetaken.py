@@ -81,6 +81,10 @@ def claim(ita: requests.Session, urls: dict[str, str], taak: JsonObject) -> None
     expect_status(response, HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.NO_CONTENT)
 
 
+@pytest.mark.source(
+    "TA regression/77-ita-afdelingen-groepen.spec.ts",
+    "Checks ITA's afdelingen and groepen answer, and catches a seed that fills only one of them.",
+)
 def test_afdelingen_and_groepen_are_seeded_together(ita: requests.Session, urls: dict[str, str]) -> None:
     """Afdelingen and groepen both answer, and are both empty or both filled (TA reg-77)."""
     afdelingen = get_entries(ita, urls["ita"] + "/api/afdelingen")
@@ -89,6 +93,14 @@ def test_afdelingen_and_groepen_are_seeded_together(ita: requests.Session, urls:
 
 
 @pytest.mark.tc("ITA-024")
+@pytest.mark.source(
+    "TA interaction/74-ita-claim-flow.spec.ts",
+    "Checks a KCC employee can claim an open internetaak in ITA, which assigns it to their own actor.",
+)
+@pytest.mark.source(
+    "TA regression/73-ita-assigned-list.spec.ts",
+    "Checks ITA's assigned-to-me list, the werkbak where a KCC employee sees their daily work.",
+)
 def test_claimed_internetaak_is_on_my_list(
     ita: requests.Session, urls: dict[str, str], openklant: ApiClient, taak: JsonObject
 ) -> None:
@@ -99,6 +111,10 @@ def test_claimed_internetaak_is_on_my_list(
     assert taak["uuid"] in {str(t.get("uuid")) for t in mine}
 
 
+@pytest.mark.source(
+    "TA interaction/180-ita-contactmoment-afsluiten.spec.ts",
+    "Checks a KCC employee can register a contactmoment on an internetaak in ITA and close it.",
+)
 def test_answering_an_internetaak_registers_a_klantcontact(
     ita: requests.Session, urls: dict[str, str], openklant: ApiClient, registry: ResourceRegistry, taak: JsonObject
 ) -> None:
@@ -118,12 +134,20 @@ def test_answering_an_internetaak_registers_a_klantcontact(
     assert [k["indicatieContactGelukt"] for k in found] == [False]
 
 
+@pytest.mark.source(
+    "TA smoke/72-ita-health-kanalen.spec.ts",
+    "Checks ITA's kanalen endpoint answers and enforces login; without it no KCC employee can use ITA.",
+)
 def test_kanalen_answer_the_kcc_user(ita: requests.Session, urls: dict[str, str]) -> None:
     """With a login, ITA lists its kanalen (TA smoke 72; anonymous it refuses, test_api_health)."""
     assert isinstance(expect_status(ita.get(urls["ita"] + "/api/kanalen"), HTTPStatus.OK).json(), list)
 
 
 @pytest.mark.parametrize("soort", ["Afdeling", "Groep"])
+@pytest.mark.source(
+    "TA regression/184-ita-doorsturen-mutatie.spec.ts",
+    "Checks forwarding a contactverzoek in ITA to an afdeling or a groep assigns it there.",
+)
 def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     ita: requests.Session,
     urls: dict[str, str],
@@ -161,6 +185,10 @@ def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(  # pylint: 
     " (LOGBOEK_TOKEN) has no permission on Activiteitenlog, only ITA's has; Objecten answers 200 with"
     " an empty list, so KISS shows none of ITA's activities",
 )
+@pytest.mark.source(
+    "podiumd-tests",
+    "KISS reads the Activiteitenlog entries ITA writes with its own Objecten token, so that token needs read access.",
+)
 def test_kiss_reads_itas_logboek(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     ita: requests.Session,
     urls: dict[str, str],
@@ -180,6 +208,10 @@ def test_kiss_reads_itas_logboek(  # pylint: disable=too-many-arguments,too-many
 
 
 @pytest.mark.tc("ITA-035")
+@pytest.mark.source(
+    "draaiboek ITA-035",
+    "A contactverzoek submitted through Contact shows all its recorded information on ITA's detail page.",
+)
 def test_contactverzoek_from_kiss_shows_in_full_in_ita(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     ita: requests.Session,
     urls: dict[str, str],

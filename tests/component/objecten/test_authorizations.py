@@ -27,7 +27,14 @@ if TYPE_CHECKING:
 
     from podiumd_tests.environment import Environment
 
-pytestmark = [pytest.mark.component, pytest.mark.requires("objecten", "cluster")]
+pytestmark = [
+    pytest.mark.component,
+    pytest.mark.requires("objecten", "cluster"),
+    pytest.mark.source(
+        "podiumd-tests",
+        "Checks that an Objecten token permitted on one objecttype is refused creating an object of another.",
+    ),
+]
 
 OBJECTEN_TOKEN_MODULE = "objects.token.models"  # noqa: S105  # a module path, not a password
 PERMITTED, UNPERMITTED = KISS_OBJECTTYPES[0], ITA_OBJECTTYPES[0]

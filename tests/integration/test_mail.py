@@ -24,7 +24,18 @@ if TYPE_CHECKING:
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
-pytestmark = [pytest.mark.integration, pytest.mark.requires("cluster", "mailpit")]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.requires("cluster", "mailpit"),
+    pytest.mark.source(
+        "MK test_mailpit.py",
+        "Verifies Mailpit receives mail sent by a real component and that its API and web UI show it.",
+    ),
+    pytest.mark.source(
+        "PI test_mailpit.py",
+        "Verifies Mailpit receives mail sent by a real component (openzaak) and that its web UI shows it.",
+    ),
+]
 
 DELIVERY_TIMEOUT = 30
 

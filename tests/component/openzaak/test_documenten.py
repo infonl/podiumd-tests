@@ -46,6 +46,10 @@ def new_version(openzaak: ApiClient, document: JsonObject, inhoud: str, **fields
     return updated
 
 
+@pytest.mark.source(
+    "TA interaction/03-document-koppeling.spec.ts",
+    "A document is linked to a zaak in two steps, EnkelvoudigInformatieObject and ZaakInformatieObject, as ZGW prescribes.",
+)
 @pytest.mark.core
 def test_document_linked_to_zaak(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """A document linked to a zaak shows in the zaak's zaakinformatieobjecten (TA int-03)."""
@@ -56,6 +60,17 @@ def test_document_linked_to_zaak(openzaak: ApiClient, registry: ResourceRegistry
     assert [z["informatieobject"] for z in entries(linked)] == [document["url"]]
 
 
+@pytest.mark.source(
+    "TA regression/64-document-lifecycle.spec.ts",
+    "Document lifecycle: upload, sign, make definitief, add version 2 and unlock.",
+)
+@pytest.mark.source(
+    "TA regression/49-document-download.spec.ts", "A document upload stores the content and its download metadata."
+)
+@pytest.mark.source(
+    "TA regression/51-document-crud-edges.spec.ts",
+    "Document edge cases: gebruiksrecht, concept to definitief, ondertekening and integriteit.",
+)
 def test_document_versions_and_definitief(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
@@ -77,6 +92,10 @@ def test_document_versions_and_definitief(
     assert (newer["versie"], newer["bestandsomvang"]) == (3, len(b"versie drie"))
 
 
+@pytest.mark.source(
+    "TA regression/51-document-crud-edges.spec.ts",
+    "Document edge cases: gebruiksrecht, concept to definitief, ondertekening and integriteit.",
+)
 def test_document_integriteit_and_ondertekening(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
@@ -95,6 +114,10 @@ AUDITTRAIL_BUG = (
 )
 
 
+@pytest.mark.source(
+    "TA regression/64-document-lifecycle.spec.ts",
+    "Document lifecycle: upload, sign, make definitief, add version 2 and unlock.",
+)
 @pytest.mark.xfail(strict=True, reason=AUDITTRAIL_BUG)
 def test_document_audittrail_with_catalogus_rights(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts

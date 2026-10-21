@@ -17,7 +17,14 @@ from podiumd_tests.responses import describe
 if TYPE_CHECKING:
     import requests
 
-pytestmark = [pytest.mark.component, pytest.mark.requires("pabc")]
+pytestmark = [
+    pytest.mark.component,
+    pytest.mark.requires("pabc"),
+    pytest.mark.source(
+        "TA regression/68-pabc-decision.spec.ts",
+        "PABC's decision endpoint maps functional roles to application roles per entity type, the core of PBAC.",
+    ),
+]
 
 
 def test_unknown_functional_role_gets_no_application_roles(

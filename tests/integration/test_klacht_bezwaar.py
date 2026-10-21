@@ -20,7 +20,14 @@ if TYPE_CHECKING:
     from podiumd_tests.seed.openzaak import ZaaktypeParts
     from podiumd_tests.seed.registry import ResourceRegistry
 
-pytestmark = [pytest.mark.integration, pytest.mark.requires("openzaak")]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.requires("openzaak"),
+    pytest.mark.source(
+        "TA regression/63-klacht-bezwaar-keten.spec.ts",
+        "A klacht gets statussen and a besluit; the inwoner's bezwaar is a new zaak related to the original klacht.",
+    ),
+]
 
 
 def test_bezwaar_is_a_zaak_about_the_klacht(

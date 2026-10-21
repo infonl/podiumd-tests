@@ -67,6 +67,36 @@ pytestmark = [
     pytest.mark.requires("openarchiefbeheer", "openzaak", "cluster"),
 ]
 
+INT_142 = pytest.mark.source(
+    "TA interaction/142-oab-vernietigingslijst.spec.ts",
+    "OAB's vernietigingslijst flow: the API enforces auth, a list is made and a reviewer accepts it.",
+)
+INT_168 = pytest.mark.source(
+    "TA interaction/168-oab-archivist-flow.spec.ts",
+    "OAB's archivist review: the archivist accepts the list or rejects it back to the record manager.",
+)
+REG_143 = pytest.mark.source(
+    "TA regression/143-oab-vernietigingsflow.spec.ts",
+    "OAB's full vernietigingslijst flow of draaiboek cases ABC-001 to ABC-012.",
+)
+REG_166 = pytest.mark.source(
+    "TA regression/166-oab-medebeoordelaar.spec.ts",
+    "OAB's co-reviewer: opens the list, cannot change it, and gives feedback that reaches the reviewer.",
+)
+REG_169 = pytest.mark.source(
+    "TA regression/169-oab-process-review-flow.spec.ts",
+    "OAB's record manager handles a reviewer's rejection: agrees with all, some or none of the proposals.",
+)
+REG_170 = pytest.mark.source(
+    "TA regression/170-oab-destruction-execute.spec.ts",
+    "OAB's record manager starts the destruction, after which a report is made.",
+)
+REG_171 = pytest.mark.source(
+    "TA regression/171-oab-short-procedure.spec.ts",
+    "OAB's short procedure: the full process with the archivist skipped.",
+)
+
+
 # What each role may do (whoami role flags).
 PERMISSIONS = {
     "recordmanager": {"canStartDestruction": True, "canReviewDestruction": False},
@@ -251,12 +281,16 @@ def review(oab: Callable[[str], requests.Session], api: str, role: str, lijst: s
     return expect_status(oab(role).post(api + "/destruction-list-reviews/", json=body), HTTPStatus.CREATED).json()
 
 
+@INT_142
 def test_anonymous_lists_are_refused(http: requests.Session, api: str) -> None:
     """Without a session the vernietigingslijsten are refused (TA int-142)."""
     expect_status(http.get(api + "/destruction-lists/"), *REFUSED)
 
 
 @pytest.mark.parametrize("role", sorted(OAB_ROLES))
+@INT_142
+@REG_143
+@REG_166
 def test_role_permissions(oab: Callable[[str], requests.Session], api: str, role: str) -> None:
     """Each role's test user has exactly its role's permissions (TA int-142, reg-143 ABC-006/012, reg-166 ABC-036/037)."""
     me = expect_status(oab(role).get(api + "/whoami/"), HTTPStatus.OK).json()
@@ -265,6 +299,9 @@ def test_role_permissions(oab: Callable[[str], requests.Session], api: str, role
 
 @pytest.mark.core
 @pytest.mark.tc("ABC-008", "ABC-018", "ABC-023")
+@INT_142
+@REG_143
+@INT_168
 def test_list_goes_through_both_reviews(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
 ) -> None:
@@ -280,6 +317,8 @@ def test_list_goes_through_both_reviews(
 
 
 @pytest.mark.tc("ABC-009", "ABC-016")
+@REG_143
+@REG_169
 def test_rejected_list_goes_back_to_the_record_manager(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
 ) -> None:
@@ -304,12 +343,17 @@ def test_rejected_list_goes_back_to_the_record_manager(
     " (destruction/api/serializers.py: .delay without on_commit); a quick worker finds no ReviewResponse (DoesNotExist)"
     " and the list stays changes_requested; open-archiefbeheer#1103",
 )
+@pytest.mark.source(
+    "podiumd-tests", "OAB queues the review response task before its commit, so the worker can miss the response."
+)
 def test_review_response_is_queued_after_its_commit(podiumd_env: Environment) -> None:
     """ReviewResponseSerializer.create queues its task with transaction.on_commit, so the worker finds the response."""
     assert queues_review_response_on_commit(podiumd_env)
 
 
 @pytest.mark.tc("ABC-015")
+@INT_168
+@REG_169
 def test_record_manager_response_sends_the_list_back_to_review(
     oab: Callable[[str], requests.Session],
     api: str,
@@ -332,6 +376,10 @@ def test_record_manager_response_sends_the_list_back_to_review(
 
 
 @pytest.mark.tc("ABC-013")
+@pytest.mark.source(
+    "draaiboek ABC-013",
+    "The record manager can agree with all of the reviewer's proposals; the list goes back for review.",
+)
 def test_record_manager_takes_the_proposals_over(
     oab: Callable[[str], requests.Session],
     api: str,
@@ -360,6 +408,9 @@ def test_record_manager_takes_the_proposals_over(
     reason="[open-archiefbeheer-3] Open Archiefbeheer: a review response cannot empty the archiefactiedatum ('Dit veld mag niet leeg"
     " zijn'), so a proposal to keep a zaak forever cannot be taken over as the draaiboek asks; not yet reported",
 )
+@pytest.mark.source(
+    "draaiboek ABC-012", "A proposal to keep a zaak forever must be able to leave its archiefactiedatum empty."
+)
 def test_keeping_forever_empties_the_archiefactiedatum(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     oab: Callable[[str], requests.Session],
     api: str,
@@ -385,6 +436,9 @@ def test_keeping_forever_empties_the_archiefactiedatum(  # pylint: disable=too-m
 
 
 @pytest.mark.tc("ABC-019", "ABC-022")
+@pytest.mark.source(
+    "draaiboek ABC-019", "The archivist can reject the list; it goes back to the record manager with change requests."
+)
 def test_archivist_rejection_goes_back_and_returns_to_the_archivist(
     oab: Callable[[str], requests.Session],
     api: str,
@@ -403,6 +457,10 @@ def test_archivist_rejection_goes_back_and_returns_to_the_archivist(
 
 
 @pytest.mark.tc("ABC-020", "ABC-021")
+@pytest.mark.source(
+    "draaiboek ABC-021",
+    "The record manager can agree with some of the archivist's proposals; the list returns to the archivist.",
+)
 def test_record_manager_takes_some_archivist_proposals_over(
     oab: Callable[[str], requests.Session],
     api: str,
@@ -429,6 +487,10 @@ def test_record_manager_takes_some_archivist_proposals_over(
 
 
 @pytest.mark.tc("ABC-004")
+@pytest.mark.source(
+    "draaiboek ABC-004",
+    "A saved list not yet offered for review can be edited by the record manager, also to add zaken.",
+)
 def test_record_manager_adds_zaken_before_review(
     oab: Callable[[str], requests.Session], api: str, closed_zaak: Callable[[], JsonObject], registry: ResourceRegistry
 ) -> None:
@@ -442,6 +504,7 @@ def test_record_manager_adds_zaken_before_review(
 
 @pytest.mark.tc("ABC-006", "ABC-017", "ABC-026")
 @pytest.mark.parametrize("role", [pytest.param("reviewer", marks=REVIEWER_RENAMES), "archivist", "coreviewer"])
+@pytest.mark.source("draaiboek ABC-006", "A reviewer cannot change the list itself; that is the record manager's work.")
 def test_only_the_record_manager_changes_the_list(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry, role: str
 ) -> None:
@@ -455,6 +518,7 @@ def test_only_the_record_manager_changes_the_list(
 
 
 @pytest.mark.tc("ABC-031")
+@pytest.mark.source("draaiboek ABC-031", "The reviewer may forward a list whether or not the co-reviewer has reacted.")
 def test_reviewer_forwards_without_the_coreviewer(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
 ) -> None:
@@ -467,6 +531,7 @@ def test_reviewer_forwards_without_the_coreviewer(
 
 @pytest.mark.ui
 @pytest.mark.tc("ABC-002")
+@REG_143
 def test_record_manager_creates_a_list_in_the_ui(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -503,6 +568,7 @@ def test_record_manager_creates_a_list_in_the_ui(  # pylint: disable=too-many-ar
 
 @pytest.mark.ui
 @pytest.mark.tc("ABC-009", "ABC-010")
+@REG_143
 def test_record_manager_sees_the_proposals_in_the_ui(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -526,6 +592,7 @@ def test_record_manager_sees_the_proposals_in_the_ui(  # pylint: disable=too-man
 @pytest.mark.tc("ABC-025", "ABC-027", "ABC-028", "ABC-030")
 @pytest.mark.ui
 @pytest.mark.tc("ABC-005")
+@pytest.mark.source("draaiboek ABC-005", "A new list can be assigned to a reviewer, who can then open the site.")
 def test_reviewer_finds_the_assigned_list_in_the_ui(
     page: Page,
     podiumd_env: Environment,
@@ -550,6 +617,7 @@ def assign_coreviewer(oab: Callable[[str], requests.Session], api: str, lijst: s
     expect_status(put, HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.NO_CONTENT)
 
 
+@REG_166
 def test_coreviewer_feedback_reaches_the_reviewer(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
 ) -> None:
@@ -585,6 +653,7 @@ def queue(oab: Callable[[str], requests.Session], api: str, lijst: str) -> JsonO
 
 
 @pytest.mark.tc("ABC-024")
+@REG_170
 def test_destruction_waits_and_can_be_aborted(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
 ) -> None:
@@ -675,6 +744,7 @@ def report_config(parts: ZaaktypeParts) -> dict[str, object]:
 @pytest.mark.destructive
 @DESTRUCTION_FAILS
 @pytest.mark.tc("ABC-032", "ABC-033")
+@REG_170
 def test_destruction_deletes_the_zaak_and_leaves_a_report(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     podiumd_env: Environment,
     oab: Callable[[str], requests.Session],
@@ -695,6 +765,7 @@ def test_destruction_deletes_the_zaak_and_leaves_a_report(  # pylint: disable=to
 
 @pytest.mark.destructive
 @pytest.mark.tc("ABC-038")
+@REG_171
 def test_short_procedure_skips_the_archivist(
     oab: Callable[[str], requests.Session],
     api: str,
@@ -711,6 +782,9 @@ def test_short_procedure_skips_the_archivist(
 
 @pytest.mark.destructive
 @pytest.mark.tc("ABC-034", "ABC-035")
+@pytest.mark.source(
+    "draaiboek ABC-034", "A functioneel beheerder chooses in OAB's settings which zaaktypen take the short procedure."
+)
 def test_beheerder_sets_the_short_procedure_zaaktypen(
     oab: Callable[[str], requests.Session], api: str, registry: ResourceRegistry
 ) -> None:
@@ -731,6 +805,10 @@ def test_beheerder_sets_the_short_procedure_zaaktypen(
 
 @pytest.mark.destructive
 @pytest.mark.tc("ABC-036")
+@pytest.mark.source(
+    "draaiboek ABC-036",
+    "Zaaktypen with the short procedure can only follow it; the route through the archivist is closed.",
+)
 def test_short_procedure_list_cannot_go_to_the_archivist(
     oab: Callable[[str], requests.Session],
     api: str,
@@ -751,6 +829,10 @@ def test_short_procedure_list_cannot_go_to_the_archivist(
 @pytest.mark.destructive
 @DESTRUCTION_FAILS
 @pytest.mark.tc("ABC-039", "ABC-040", "ABC-041")
+@pytest.mark.source(
+    "draaiboek ABC-039",
+    "After a short-procedure destruction a report is made that can be exported for the destruction statement.",
+)
 def test_short_procedure_destruction_leaves_a_report(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     podiumd_env: Environment,
     oab: Callable[[str], requests.Session],

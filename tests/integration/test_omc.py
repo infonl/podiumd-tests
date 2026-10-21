@@ -49,7 +49,14 @@ if TYPE_CHECKING:
     from podiumd_tests.seed.openzaak import ZaaktypeParts
     from podiumd_tests.seed.registry import ResourceRegistry
 
-pytestmark = [pytest.mark.integration, pytest.mark.requires("omc", "openzaak", "openklant", "opennotificaties")]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.requires("omc", "openzaak", "openklant", "opennotificaties"),
+    pytest.mark.source(
+        "podiumd-tests",
+        "TA's OMC specs check only OMC's API; these cover the chain from a zaak status through OMC and Notify back to Open Klant.",
+    ),
+]
 
 # Open Zaak, Open Notificaties and OMC each hand the event on in a background task.
 MAIL_TIMEOUT = 120

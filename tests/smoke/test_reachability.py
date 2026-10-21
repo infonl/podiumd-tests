@@ -28,6 +28,22 @@ pytestmark = pytest.mark.smoke
 MAX_SECONDS = 5.0
 
 
+@pytest.mark.source(
+    "TA smoke/81-continuiteit-pings.spec.ts",
+    "Continuity pings: every PodiumD component is reachable through its ingress and answers within 5 s.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/81-continuiteit-pings.spec.ts",
+    "Continuity pings: every PodiumD component is reachable through its ingress and answers within 5 s.",
+)
+@pytest.mark.source(
+    "MK test_reachability.py",
+    "External reachability via the edge, replaying the Host-header curl checks of the chart's manual verification.",
+)
+@pytest.mark.source(
+    "PI test_reachability.py",
+    "External reachability over real HTTPS with real DNS and certificates, adapted from podiumd-minikube.",
+)
 @pytest.mark.parametrize("component", [requiring(c, c) for c in sorted(HOSTED)])
 def test_root_answers(http: requests.Session, urls: dict[str, str], component: str) -> None:
     """The root of each component answers without a server error, within 5 s (81).
@@ -39,6 +55,30 @@ def test_root_answers(http: requests.Session, urls: dict[str, str], component: s
     assert response.elapsed.total_seconds() < MAX_SECONDS
 
 
+@pytest.mark.source(
+    "MK test_reachability.py",
+    "External reachability via the edge, including the Open Formulieren admin login page, as its root answers 403.",
+)
+@pytest.mark.source(
+    "PI test_reachability.py",
+    "External reachability over real HTTPS, including the Open Formulieren admin login page, as its root answers 403.",
+)
+@pytest.mark.source(
+    "TA smoke/00-environment-preflight.spec.ts",
+    "Preflight that detects dead infrastructure; 00h and 00l check the Open Formulieren and Open Archiefbeheer admin.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/00-environment-preflight.spec.ts",
+    "Preflight that detects dead infrastructure; 00h and 00l check the Open Formulieren and Open Archiefbeheer admin.",
+)
+@pytest.mark.source(
+    "TA smoke/81-continuiteit-pings.spec.ts",
+    "Continuity pings: every PodiumD component is reachable through its ingress and answers within 5 s.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/81-continuiteit-pings.spec.ts",
+    "Continuity pings: every PodiumD component is reachable through its ingress and answers within 5 s.",
+)
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
 def test_django_admin_login_page(http: requests.Session, urls: dict[str, str], component: str) -> None:
     """The admin login page renders (MK/PI admin login reachable, 00h, 00l, 81)."""

@@ -26,6 +26,36 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("api-proxy")]
 
+REG_07 = pytest.mark.source(
+    "TA regression/07-brp-persoon-zoeken.spec.ts",
+    "Checks the BRP implements the Haal Centraal lookup by BSN, as KISS's person search uses it.",
+)
+REG_11 = pytest.mark.source(
+    "TA regression/11-of-brp-prefill.spec.ts",
+    "Documents that Open Formulieren's BRP prefill calls Haal Centraal V1 while the BRP serves V2 only.",
+)
+REG_40 = pytest.mark.source(
+    "TA regression/40-brp-zoek-criteria.spec.ts",
+    "Covers the other BRP searches KISS uses: surname and birth date, several BSNs, an invalid BSN.",
+)
+REG_80 = pytest.mark.source(
+    "TA regression/80-brp-kvk-prefill-foutpaden.spec.ts",
+    "Covers BRP and KvK prefill error paths: malformed BSN or KvK number, empty parameters.",
+)
+REG_119 = pytest.mark.source(
+    "TA regression/119-infra-quick-wins.spec.ts",
+    "Covers BRP search by postcode and huisnummer, and an anonymous requester who is not in the BRP.",
+)
+REG_121 = pytest.mark.source(
+    "TA regression/121-continuiteit-graceful-degradation.spec.ts",
+    "Checks a component answers a clean error, not a crash or a hang, when its upstream fails.",
+)
+REG_150 = pytest.mark.source(
+    "TA regression/150-of-prefill-foutpaden.spec.ts",
+    "Checks that BRP and KvK calls fail gracefully on invalid input: a 4xx, never a 500.",
+)
+
+
 KIERKEGAARD = "999990020"
 NAAM = ["burgerservicenummer", "naam.voornamen", "naam.geslachtsnaam"]
 
@@ -37,6 +67,8 @@ def personen(http: requests.Session, urls: dict[str, str], query: Mapping[str, o
     return entries(body["personen"])
 
 
+@REG_07
+@REG_11
 def test_person_by_bsn(http: requests.Session, urls: dict[str, str]) -> None:
     """A test-set BSN gives that person with a name (TA reg-07, reg-11)."""
     found = personen(
@@ -47,12 +79,15 @@ def test_person_by_bsn(http: requests.Session, urls: dict[str, str]) -> None:
     ]
 
 
+@REG_07
+@REG_119
 def test_unknown_bsn_finds_no_one(http: requests.Session, urls: dict[str, str]) -> None:
     """A BSN outside the test set gives an empty list, not an error (TA reg-07)."""
     query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": ["123456789"], "fields": NAAM[:1]}
     assert personen(http, urls, query) == []
 
 
+@REG_40
 def test_several_bsns_at_once(http: requests.Session, urls: dict[str, str]) -> None:
     """One query returns every known BSN it asks for (TA reg-40d)."""
     query = {
@@ -67,6 +102,7 @@ def test_several_bsns_at_once(http: requests.Session, urls: dict[str, str]) -> N
     ("geslachtsnaam", "geboortedatum", "expected"),
     [("Kierkegaard", "1931-07-06", [KIERKEGAARD]), ("Janssen", "1900-01-01", [])],
 )
+@REG_40
 def test_search_by_name_and_birth_date(
     http: requests.Session, urls: dict[str, str], geslachtsnaam: str, geboortedatum: str, expected: list[str]
 ) -> None:
@@ -80,6 +116,7 @@ def test_search_by_name_and_birth_date(
     assert [p["burgerservicenummer"] for p in personen(http, urls, query)] == expected
 
 
+@REG_119
 def test_search_by_postcode_and_huisnummer(http: requests.Session, urls: dict[str, str]) -> None:
     """Searching by postcode and huisnummer finds the residents of that address, and no one at an unknown one (TA reg-119)."""
     query = {"type": "ZoekMetPostcodeEnHuisnummer", "fields": NAAM[:1]}
@@ -93,12 +130,16 @@ def test_search_by_postcode_and_huisnummer(http: requests.Session, urls: dict[st
     [{}, {"type": "OnbekendType"}, {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": ["abc"]}],
     ids=["empty", "unknown-type", "invalid-bsn"],
 )
+@REG_40
+@REG_80
+@REG_121
 def test_invalid_query_is_refused(http: requests.Session, urls: dict[str, str], query: Mapping[str, object]) -> None:
     """An invalid query answers 400 or 422, never 5xx (TA reg-40c, reg-80, reg-121)."""
     response = brp_personen(http, urls["api-proxy"], query)
     expect_status(response, HTTPStatus.BAD_REQUEST, HTTPStatus.UNPROCESSABLE_ENTITY)
 
 
+@REG_150
 def test_bsn_failing_the_eleven_test_finds_no_one(http: requests.Session, urls: dict[str, str]) -> None:
     """A BSN that fails the eleven-test is refused, or finds no one; never 5xx (TA reg-150)."""
     query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": ["123456789"]}
@@ -108,6 +149,7 @@ def test_bsn_failing_the_eleven_test_finds_no_one(http: requests.Session, urls: 
         assert response.json()["personen"] == []
 
 
+@REG_11
 def test_v1_lookup_is_not_offered(http: requests.Session, urls: dict[str, str]) -> None:
     """The BRP serves Haal Centraal V2 only: the V1 path answers 405 (TA reg-11, finding 14)."""
     v1 = urls["api-proxy"] + BRP_PERSONEN.replace("personen", f"ingeschrevenpersonen/{EREBOS}")

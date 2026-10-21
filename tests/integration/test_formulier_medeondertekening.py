@@ -37,6 +37,17 @@ pytestmark = [
     pytest.mark.integration,
     pytest.mark.ui,
     pytest.mark.requires("openformulieren", "mailpit", "keycloak", "cluster"),
+    pytest.mark.source("draaiboek OF-011, OF-043", "A co-signer can be appointed."),
+    pytest.mark.source(
+        "draaiboek OF-012, OF-044",
+        "Appointing a co-signer sends an e-mail with clear instructions to the given address.",
+    ),
+    pytest.mark.source(
+        "draaiboek OF-045", "Appointing a co-signer also offers the co-signer to log in directly and co-sign."
+    ),
+    pytest.mark.source(
+        "draaiboek OF-046", "Choosing to co-sign sends a code to the co-signer's e-mail address to continue signing."
+    ),
 ]
 
 _, COSIGNER, _ = IDENTITIES

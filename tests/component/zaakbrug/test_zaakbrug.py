@@ -32,7 +32,14 @@ if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.seed.registry import ResourceRegistry
 
-pytestmark = [pytest.mark.component, pytest.mark.requires("zaakbrug")]
+pytestmark = [
+    pytest.mark.component,
+    pytest.mark.requires("zaakbrug"),
+    pytest.mark.source(
+        "podiumd-tests",
+        "PodiumD 4.10 adds ZaakBrug: ZDS 1.2 messages answer through its translate endpoints and reach Open Zaak.",
+    ),
+]
 
 # ZaakBrug maps gemeentecode 1900 to this RSIN (zaakbrug.globals.organizations); the zaak's bronorganisatie.
 ZAAKBRUG_BRONORGANISATIE = "823288444"

@@ -43,6 +43,10 @@ def fixture_form(http: requests.Session, urls: dict[str, str], need_bootstrap: C
 
 
 @pytest.mark.core
+@pytest.mark.source(
+    "TA regression/75-of-zaaktype-matching.spec.ts",
+    "Checks that the form configuration stays intact between deploys: the form is active and its step has the expected field.",
+)
 def test_test_form_takes_submissions(http: requests.Session, form: JsonObject) -> None:
     """The form is active, out of maintenance and has its one step with the klacht field (TA reg-75)."""
     assert (form["active"], form["maintenanceMode"], form["submissionAllowed"]) == (True, False, "yes")
@@ -53,6 +57,10 @@ def test_test_form_takes_submissions(http: requests.Session, form: JsonObject) -
     assert "klacht_omschrijving" in keys
 
 
+@pytest.mark.source(
+    "TA regression/75-of-zaaktype-matching.spec.ts",
+    "Checks that the form's login configuration is consistent: public, or authenticated with login options.",
+)
 def test_login_options_fit_login_required(form: JsonObject) -> None:
     """A form that requires a login offers one; the test form offers DigiD without requiring it (TA reg-75)."""
     options = [str(o.get("identifier")) for o in entries(form["loginOptions"])]
@@ -60,6 +68,14 @@ def test_login_options_fit_login_required(form: JsonObject) -> None:
     assert "digid_oidc" in options
 
 
+@pytest.mark.source(
+    "TA regression/79-of-form-cosign-config.spec.ts",
+    "Checks that Open Formulieren serves the form's cosign, confirmation mail and required-field feature flags.",
+)
+@pytest.mark.source(
+    "TA regression/153-of-features-direct.spec.ts",
+    "Checks that the form exposes its cosignLoginOptions, so the co-signer feature is present.",
+)
 def test_form_publishes_its_settings(form: JsonObject) -> None:
     """The SDK gets the settings it renders with: cosign, confirmation mail, asterisks, pausing (TA reg-79, reg-153)."""
     assert isinstance(form["cosignLoginOptions"], list)
@@ -80,6 +96,10 @@ def test_form_publishes_its_settings(form: JsonObject) -> None:
     ],
 )
 @pytest.mark.tc("INT-017")
+@pytest.mark.source(
+    "TA regression/178-blacklist-upload.spec.ts",
+    "An uploaded file with a blacklisted or invalid format is refused with a message.",
+)
 def test_upload_of_a_false_file_is_refused(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     http: requests.Session,
     urls: dict[str, str],
@@ -100,6 +120,10 @@ def test_upload_of_a_false_file_is_refused(  # pylint: disable=too-many-argument
 
 
 @pytest.mark.requires("cluster")
+@pytest.mark.source(
+    "MK test_productaanvraag_flow.py",
+    "Validates the form's Objects API registration backend against the live Catalogi and Objecttypen APIs.",
+)
 def test_objects_api_registrations_are_valid(podiumd_env: Environment) -> None:
     """Every active form's Objects API registration resolves its objecttype and types (MK test_productaanvraag_flow.py)."""
     backends = cast(
@@ -114,6 +138,10 @@ def test_objects_api_registrations_are_valid(podiumd_env: Environment) -> None:
 
 
 @pytest.mark.requires("cluster")
+@pytest.mark.source(
+    "podiumd-tests",
+    "An Objects API group no form uses yet can still hold a Service with a wrong token; every group must read with its own Services.",
+)
 def test_objects_api_groups_read(podiumd_env: Environment) -> None:
     """Every Objects API group, used by a form or not, lists objects and objecttypes with its own Services."""
     groups = cast(
@@ -127,6 +155,7 @@ def test_objects_api_groups_read(podiumd_env: Environment) -> None:
 
 
 @pytest.mark.tc("INT-003")
+@pytest.mark.source("draaiboek INT-003", "Integratieteam link check of PDOK.")
 def test_address_search_reaches_pdok(
     http: requests.Session,
     urls: dict[str, str],

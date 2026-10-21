@@ -49,12 +49,80 @@ ANONYMOUS = [
 ]
 
 
+@pytest.mark.source(
+    "TA smoke/06-kiss-bff-healthz.spec.ts",
+    "KISS BFF smoke test: /healthz returns 200, a precondition for every KISS case.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/06-kiss-bff-healthz.spec.ts",
+    "KISS BFF smoke test: /healthz returns 200, a precondition for every KISS case.",
+)
+@pytest.mark.source(
+    "TA smoke/00-environment-preflight.spec.ts",
+    "Preflight that detects dead infrastructure; 00j checks the KISS frontend is reachable and its healthcheck OK.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/00-environment-preflight.spec.ts",
+    "Preflight that detects dead infrastructure; 00j checks the KISS frontend is reachable and its healthcheck OK.",
+)
+@pytest.mark.source(
+    "MK test_kiss_ita.py",
+    "KISS and ITA: health, unauthenticated API and their objecttypes.",
+)
+@pytest.mark.source(
+    "podiumd-tests",
+    "PodiumD 4.10 adds Open VTB, ZaakBrug and the ZGW Office add-in, whose health endpoints are checked.",
+)
 @pytest.mark.parametrize(("component", "path"), [requiring(c, c, p, test_id=f"{c}{p}") for c, p in HEALTH])
 def test_health_endpoint(http: requests.Session, urls: dict[str, str], component: str, path: str) -> None:
     """The component's own health endpoint reports healthy."""
     expect_status(http.get(urls[component] + path), HTTPStatus.OK)
 
 
+@pytest.mark.source(
+    "TA smoke/66-pabc-health.spec.ts",
+    "PABC health and auth enforcement: PABC refuses a request without or with a wrong X-API-KEY (fail-closed).",
+)
+@pytest.mark.source(
+    "EX tests/smoke/66-pabc-health.spec.ts",
+    "PABC health and auth enforcement: PABC refuses a request without or with a wrong X-API-KEY (fail-closed).",
+)
+@pytest.mark.source(
+    "TA smoke/72-ita-health-kanalen.spec.ts",
+    "ITA health and kanalen endpoint: ITA refuses a request without a logged-in session.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/72-ita-health-kanalen.spec.ts",
+    "ITA health and kanalen endpoint: ITA refuses a request without a logged-in session.",
+)
+@pytest.mark.source(
+    "TA smoke/79-omc-health.spec.ts",
+    "NotifyNL OMC health and auth: OMC refuses /Events/Listen without a valid token.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/79-omc-health.spec.ts",
+    "NotifyNL OMC health and auth: OMC refuses /Events/Listen without a valid token.",
+)
+@pytest.mark.source(
+    "TA smoke/00-environment-preflight.spec.ts",
+    "Preflight that detects dead infrastructure; 00k checks the OK2 Klantinteracties API is reachable.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/00-environment-preflight.spec.ts",
+    "Preflight that detects dead infrastructure; 00k checks the OK2 Klantinteracties API is reachable.",
+)
+@pytest.mark.source(
+    "MK test_kiss_ita.py",
+    "KISS and ITA: health, unauthenticated API and their objecttypes.",
+)
+@pytest.mark.source(
+    "MK test_omc.py",
+    "OMC as ExternalsPodiumD's smoke test 79-omc-health checks it: /Events/Listen requires a token.",
+)
+@pytest.mark.source(
+    "podiumd-tests",
+    "PodiumD 4.10 adds Open VTB and the ZGW Office add-in, whose APIs must refuse anonymous calls.",
+)
 @pytest.mark.parametrize(
     ("component", "method", "path", "headers"),
     [requiring(c, c, m, p, h, test_id=f"{c}{p}{'-wrong-key' if h else ''}") for c, m, p, h in ANONYMOUS],

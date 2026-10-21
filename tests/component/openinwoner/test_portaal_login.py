@@ -33,6 +33,14 @@ FAILED = re.compile(r"/(accounts/login|login/failure)/")
 @pytest.mark.parametrize(
     ("method", "user"), [("digid", INWONER), ("eherkenning", BEDRIJF)], ids=["digid", "eherkenning"]
 )
+@pytest.mark.source(
+    "EX tests/smoke/05-portaal-digid-login.spec.ts",
+    "An inwoner logs in through the Keycloak DigiD-OIDC mock and lands on a logged-in page.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/99-portaal-eherkenning-login.spec.ts",
+    "The test company logs in through the Keycloak eHerkenning-OIDC mock and gets a session.",
+)
 def test_login_through_the_keycloak_mock_starts_a_session(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -48,6 +56,10 @@ def test_login_through_the_keycloak_mock_starts_a_session(  # pylint: disable=to
     assert "open_inwoner_sessionid" in cookies, "no Open Inwoner session cookie"
 
 
+@pytest.mark.source(
+    "TA regression/84-portaal-ingelogd-sessie.spec.ts",
+    "After a DigiD login the session opens Mijn zaken, and logging out ends it.",
+)
 def test_logout_ends_the_session(page: Page, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> None:
     """Logged in, Mijn zaken opens; after logging out it asks for a login again (TA reg-84)."""
     need_bootstrap(INWONER.name, "openinwoner-oidc-mock", "openinwoner-cms-pages")

@@ -33,6 +33,10 @@ def urls(objects: list[JsonObject]) -> set[str]:
     return {str(o["url"]) for o in objects}
 
 
+@pytest.mark.source(
+    "TA regression/15-status-transitions.spec.ts",
+    "A zaak moves through its statussen from Ingediend to Afgehandeld, as ZAC and behandelaars use them.",
+)
 @pytest.mark.core
 def test_statussen_in_order(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """A new zaak has no status; after two statussen the zaak points at the second (TA reg-15)."""
@@ -44,6 +48,9 @@ def test_statussen_in_order(openzaak: ApiClient, registry: ResourceRegistry, par
     assert len(openzaak.list(f"{ZAKEN}/statussen", {"zaak": str(zaak["url"])})) == 2
 
 
+@pytest.mark.source(
+    "TA regression/39-zaak-lifecycle-close.spec.ts", "A zaak closes with an einddatum and an archiefnominatie."
+)
 def test_zaak_closes_with_resultaat_and_eindstatus(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
@@ -56,6 +63,7 @@ def test_zaak_closes_with_resultaat_and_eindstatus(
     assert closed["archiefactiedatum"]
 
 
+@pytest.mark.source("podiumd-tests", "Deleting a zaak with a resultaat must answer 204; Open Zaak 1.29.3 answers 500.")
 @pytest.mark.xfail(
     strict=True,
     reason="[open-zaak-1] Open Zaak 1.29.3: DELETE of a zaak with a resultaat answers 500 although it deletes the zaak "
@@ -70,6 +78,9 @@ def test_closed_zaak_delete_answers_204(openzaak: ApiClient, registry: ResourceR
     openzaak.request("DELETE", str(zaak["url"]), 204)
 
 
+@pytest.mark.source(
+    "TA regression/39-zaak-lifecycle-close.spec.ts", "A zaak closes with an einddatum and an archiefnominatie."
+)
 def test_archiefnominatie_can_be_set_and_filtered(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
@@ -85,6 +96,17 @@ def test_archiefnominatie_can_be_set_and_filtered(
     assert str(zaak["url"]) in urls(found)
 
 
+@pytest.mark.source(
+    "TA interaction/10-cross-component-zaak-portaal.spec.ts",
+    "The portal and KISS find a resident's zaken through Open Zaak's initiator BSN rol filter.",
+)
+@pytest.mark.source(
+    "TA regression/50-zaak-zoeken.spec.ts",
+    "Open Zaak's _zoek endpoint finds a zaak by the initiator's BSN, as KISS uses it.",
+)
+@pytest.mark.source(
+    "TA regression/56-zaak-rel-batch.spec.ts", "KISS finds the zaken of a batch of BSNs with one _zoek call."
+)
 @pytest.mark.core
 def test_zaak_found_by_initiator_bsn(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """Each initiator's BSN finds only its zaak, by list filter and _zoek; another finds none (TA int-10, reg-50, 56)."""
@@ -101,6 +123,9 @@ def test_zaak_found_by_initiator_bsn(openzaak: ApiClient, registry: ResourceRegi
     assert openzaak.list(f"{ZAKEN}/zaken", {BSN_FILTER: random_bsn()}) == []
 
 
+@pytest.mark.source(
+    "TA regression/56-zaak-rel-batch.spec.ts", "KISS finds the zaken of a batch of BSNs with one _zoek call."
+)
 @pytest.mark.xfail(
     strict=True,
     reason="[open-zaak-2] Open Zaak 1.29.3: _zoek ignores an unknown filter (e.g. inpBsn__in, which TA reg-56 relied on) and returns "
@@ -111,6 +136,10 @@ def test_zoek_refuses_an_unknown_filter(openzaak: ApiClient) -> None:
     openzaak.request("POST", f"{ZAKEN}/zaken/_zoek", 400, json={f"{BSN_FILTER}__in": [random_bsn()]})
 
 
+@pytest.mark.source(
+    "TA regression/41-multi-rollen-zaak.spec.ts",
+    "A zaak has several rollen at once and is found through each rol type.",
+)
 def test_rollen_of_two_kinds(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """A burger initiator and a medewerker belanghebbende: both listed, both filters find the zaak (TA reg-41)."""
     bsn = random_bsn()
@@ -135,6 +164,10 @@ def test_rollen_of_two_kinds(openzaak: ApiClient, registry: ResourceRegistry, pa
     assert urls(by_medewerker) == {str(zaak["url"])}
 
 
+@pytest.mark.source(
+    "TA regression/16-bedrijf-aanvraag-kvk.spec.ts",
+    "A company files a request: the zaak with a niet-natuurlijk persoon rol is found by its KvK number.",
+)
 def test_rol_of_a_company(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """A niet-natuurlijk persoon with a KvK number finds the zaak (TA reg-16)."""
     kvk = random_kvk_nummer()
@@ -152,6 +185,9 @@ def test_rol_of_a_company(openzaak: ApiClient, registry: ResourceRegistry, parts
     assert urls(found) == {str(zaak["url"])}
 
 
+@pytest.mark.source(
+    "TA regression/122-gemachtigde-flow.spec.ts", "A rol stores indicatieMachtiging for the portal's gemachtigde flow."
+)
 @pytest.mark.parametrize("machtiging", ["gemachtigde", "machtiginggever"])
 def test_rol_indicatie_machtiging(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts, machtiging: str

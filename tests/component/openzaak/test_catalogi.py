@@ -22,6 +22,14 @@ if TYPE_CHECKING:
 pytestmark = [pytest.mark.component, pytest.mark.requires("openzaak")]
 
 
+@pytest.mark.source(
+    "TA regression/60-seed-data-health.spec.ts",
+    "Health check of the bootstrap seed data: catalogus, published zaaktype, statustypen and initiator roltype.",
+)
+@pytest.mark.source(
+    "TA regression/90-fb-oz-catalogi-integriteit.spec.ts",
+    "Detects that a chart upgrade or seed error breaks no zaaktype, statustype or informatieobjecttype in the catalogi.",
+)
 def test_test_zaaktype_is_published_and_complete(test_zaaktype: JsonObject, parts: ZaaktypeParts) -> None:
     """The bootstrap zaaktype is published, with ordered statustypen ending in an eindstatus and the roles tests use (TA reg-60, 90)."""
     assert test_zaaktype["concept"] is False
@@ -31,6 +39,10 @@ def test_test_zaaktype_is_published_and_complete(test_zaaktype: JsonObject, part
     assert {"initiator", "behandelaar", "belanghebbende"} <= set(parts.roltypen)
 
 
+@pytest.mark.source(
+    "TA regression/167-fb-zaaktype-crud-api.spec.ts",
+    "Functional management can create, version and delete zaaktypen through the Catalogi API.",
+)
 def test_concept_zaaktype_crud(openzaak: ApiClient, registry: ResourceRegistry, test_zaaktype: JsonObject) -> None:
     """A new zaaktype is a concept, is found with status=concept, and can be deleted (TA reg-167)."""
     concept = make_concept_zaaktype(openzaak, registry, str(test_zaaktype["catalogus"]))
@@ -43,6 +55,14 @@ def test_concept_zaaktype_crud(openzaak: ApiClient, registry: ResourceRegistry, 
     openzaak.request("GET", str(concept["url"]), 404)
 
 
+@pytest.mark.source(
+    "TA regression/167-fb-zaaktype-crud-api.spec.ts",
+    "Functional management can create, version and delete zaaktypen through the Catalogi API.",
+)
+@pytest.mark.source(
+    "TA regression/173-fb-zaaktype-versie-isolatie.spec.ts",
+    "Zaken created under an old zaaktype version stay unchanged when a new version is added.",
+)
 def test_zaaktype_versions(openzaak: ApiClient, registry: ResourceRegistry, test_zaaktype: JsonObject) -> None:
     """Two versions with one identificatie and adjacent validity are both kept (TA reg-167, 173)."""
     catalogus = str(test_zaaktype["catalogus"])

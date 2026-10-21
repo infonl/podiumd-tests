@@ -34,6 +34,10 @@ REFUSED = {HTTPStatus.BAD_REQUEST, HTTPStatus.FORBIDDEN, HTTPStatus.UNAUTHORIZED
 METRICS_PORT_NAME = "metrics"
 
 
+@pytest.mark.source(
+    "podiumd-tests",
+    "Checks that OpenBao serves its metrics on the API listener only with a token (helm-charts request).",
+)
 @pytest.mark.parametrize("query", ["", "?format=prometheus"])
 def test_metrics_need_a_token(http: requests.Session, urls: dict[str, str], query: str) -> None:
     """Without a token the metrics endpoint is refused, not 200 with metrics."""
@@ -64,6 +68,10 @@ def fixture_metrics_url(podiumd_env: Environment) -> Generator[str]:
         yield f"http://127.0.0.1:{local}"
 
 
+@pytest.mark.source(
+    "podiumd-tests",
+    "OpenBao's metrics-only listener (helm-charts #625) serves Prometheus metrics without a token and nothing else.",
+)
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
 def test_metrics_listener_serves_prometheus_metrics_without_a_token(http: requests.Session, metrics_url: str) -> None:
@@ -73,6 +81,10 @@ def test_metrics_listener_serves_prometheus_metrics_without_a_token(http: reques
     assert "# TYPE " in response.text, f"no Prometheus metrics: {response.text[:200]!r}"
 
 
+@pytest.mark.source(
+    "podiumd-tests",
+    "OpenBao's metrics-only listener (helm-charts #625) serves Prometheus metrics without a token and nothing else.",
+)
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
 @pytest.mark.parametrize("path", ["/v1/sys/seal-status", "/v1/sys/mounts", "/v1/secret/data/x", "/ui/"])

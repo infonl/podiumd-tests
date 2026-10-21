@@ -111,6 +111,10 @@ def ask_in_mijn_vragen(page: Page, podiumd_env: Environment, vraag: str) -> Loca
 
 
 @pytest.mark.tc("OI-031")
+@pytest.mark.source(
+    "TA interaction/182-keten-contactformulier-mijn-vragen.spec.ts",
+    "An inwoner asks a question through the portal's contact form and sees it in Mijn vragen.",
+)
 def test_question_shows_in_mijn_vragen(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -128,6 +132,13 @@ def test_question_shows_in_mijn_vragen(  # pylint: disable=too-many-arguments,to
     assert asked_by(openklant, vraag) & set(partijen_of(openklant, bsn)), "the question is not the inwoner's"
 
 
+@pytest.mark.source(
+    "TA regression/109-portaal-vraag-stellen-bedrijf.spec.ts",
+    "A company logged in with eHerkenning can ask the gemeente a question through the portal's contact form.",
+)
+@pytest.mark.source(
+    "TA regression/108-probe-contactform.spec.ts", "Probes the portal's contact form page for a logged-in user."
+)
 def test_company_question_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -149,6 +160,10 @@ def test_company_question_reaches_open_klant(  # pylint: disable=too-many-argume
 
 
 @pytest.mark.tc("OI-038", "OI-079")
+@pytest.mark.source(
+    "draaiboek OI-038, OI-079",
+    "A user can submit a contact request anonymously (not logged in); it is registered in the source system.",
+)
 def test_anonymous_question_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -169,6 +184,9 @@ def test_anonymous_question_reaches_open_klant(  # pylint: disable=too-many-argu
 
 
 @pytest.mark.tc("OI-040", "OI-081")
+@pytest.mark.source(
+    "draaiboek OI-040, OI-081", "Since PodiumD 3.3.0: more than 25 contactmomenten are shown correctly."
+)
 def test_mijn_vragen_shows_more_than_one_page_of_questions(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -200,6 +218,10 @@ def test_mijn_vragen_shows_more_than_one_page_of_questions(  # pylint: disable=t
 
 
 @pytest.mark.requires("ita", "objecten")
+@pytest.mark.source(
+    "TA interaction/181-keten-ita-contactmoment-portaal-beantwoord.spec.ts",
+    "A contactmoment the KCC registers in ITA shows the inwoner's question as answered, with the answer, in Mijn vragen.",
+)
 def test_question_answered_in_ita_shows_as_answered(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -253,6 +275,7 @@ def test_question_answered_in_ita_shows_as_answered(  # pylint: disable=too-many
 
 @pytest.mark.tc("ZAC-067")
 @pytest.mark.requires("zac")
+@pytest.mark.source("draaiboek ZAC-067", "The portal can submit contact requests, and they arrive in ZAC.")
 def test_question_from_the_portal_shows_in_zac(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -282,6 +305,10 @@ def test_question_from_the_portal_shows_in_zac(  # pylint: disable=too-many-argu
 
 @pytest.mark.tc("ITA-030")
 @pytest.mark.requires("ita", "objecten")
+@pytest.mark.source(
+    "draaiboek ITA-030",
+    "A contact request submitted through the portal shows all recorded information on its detail page in ITA.",
+)
 def test_question_from_the_portal_shows_in_full_in_ita(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,

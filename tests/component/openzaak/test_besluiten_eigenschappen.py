@@ -22,6 +22,9 @@ if TYPE_CHECKING:
 pytestmark = [pytest.mark.component, pytest.mark.requires("openzaak")]
 
 
+@pytest.mark.source(
+    "TA regression/29-besluit-op-zaak.spec.ts", "A besluit records a formal decision on a zaak in the Besluiten API."
+)
 def test_besluit_on_a_zaak(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """A besluit of the zaak's besluittype reads back and is found by besluittype and zaak (TA reg-29)."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
@@ -35,6 +38,10 @@ def test_besluit_on_a_zaak(openzaak: ApiClient, registry: ResourceRegistry, part
     assert [b["url"] for b in openzaak.list(f"{BESLUITEN}/besluiten", {"zaak": str(zaak["url"])})] == [besluit["url"]]
 
 
+@pytest.mark.source(
+    "TA regression/24-zaakeigenschappen.spec.ts",
+    "Open Formulieren passes form fields to a zaak as zaakeigenschappen, which ZAC and the portal show.",
+)
 def test_zaakeigenschap(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """A value for eigenschap kenteken is stored on the zaak (TA reg-24)."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype)

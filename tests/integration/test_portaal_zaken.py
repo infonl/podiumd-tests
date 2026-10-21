@@ -104,6 +104,7 @@ def log_in(page: Page, podiumd_env: Environment, who: str = "inwoner") -> None:
 # Search can be switched off by test_portaal_zoeken; it runs on the same worker.
 @pytest.mark.xdist_group("openinwoner-search")
 @pytest.mark.tc("OI-091")
+@pytest.mark.source("draaiboek OI-091", "The portal can be searched on zaaknummer.")
 def test_search_on_a_zaaknummer_opens_the_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -148,6 +149,25 @@ PHONES = {
         *(pytest.param(name, marks=pytest.mark.browser_context_args(**args)) for name, args in PHONES.items()),
     ],
 )
+@pytest.mark.source(
+    "TA interaction/21-portaal-mijn-zaken-ui.spec.ts",
+    "A logged-in inwoner sees their own zaak on the portal's Mijn zaken.",
+)
+@pytest.mark.source(
+    "TA regression/95-portaal-filtering.spec.ts",
+    "Mijn zaken and its content endpoint load for a DigiD-logged-in inwoner.",
+)
+@pytest.mark.source(
+    "TA regression/61-mobile-mijn-zaken.spec.ts",
+    "Mijn zaken renders correctly on mobile viewports (iPhone 13, Pixel 5).",
+)
+@pytest.mark.source(
+    "TA regression/110-portaal-anoniem-en-mobile.spec.ts", "A citizen can use the zaken overview in the mobile view."
+)
+@pytest.mark.source(
+    "TA interaction/10-cross-component-zaak-portaal.spec.ts",
+    "A zaak with the inwoner's BSN as initiator is found by the rol filter the portal uses.",
+)
 def test_inwoners_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -166,6 +186,10 @@ def test_inwoners_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,t
     assert overflow <= 0, f"{screen}: page {overflow}px wider than the screen"
 
 
+@pytest.mark.source(
+    "TA interaction/141-bedrijf-eherkenning-mijn-zaken.spec.ts",
+    "After an eHerkenning login a company sees its zaak in Mijn zaken.",
+)
 def test_bedrijfs_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -183,6 +207,10 @@ def test_bedrijfs_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,t
 
 @pytest.mark.tc("OI-014", "OI-068")
 @pytest.mark.parametrize("who", WHO)
+@pytest.mark.source(
+    "draaiboek OI-014, OI-068",
+    "Every zaak shown in the portal has the correct status, exactly matching its status in ZAC.",
+)
 def test_zaak_shows_its_current_status(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -202,6 +230,14 @@ def test_zaak_shows_its_current_status(  # pylint: disable=too-many-arguments,to
     expect(page.locator("main")).to_contain_text(str(current["omschrijving"]), timeout=LIST_TIMEOUT_MS)
 
 
+@pytest.mark.source(
+    "TA regression/143-portaal-document-download.spec.ts",
+    "An inwoner downloads a document of their own zaak, proving the download works end to end.",
+)
+@pytest.mark.source(
+    "TA interaction/31-document-portaal-ui.spec.ts",
+    "Documents of a zaak are visible to the logged-in inwoner on the zaak's detail page.",
+)
 def test_zaak_document_can_be_downloaded(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -227,6 +263,14 @@ def test_zaak_document_can_be_downloaded(  # pylint: disable=too-many-arguments,
 
 
 @pytest.mark.core
+@pytest.mark.source(
+    "TA interaction/162-portaal-document-upload-e2e.spec.ts",
+    "An inwoner uploads a file in the portal and the document appears on the zaak in Open Zaak.",
+)
+@pytest.mark.source(
+    "TA interaction/111-portaal-documenten-uploaden.spec.ts",
+    "Documents can be uploaded from the portal's zaak detail page.",
+)
 def test_uploaded_document_reaches_the_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -249,6 +293,10 @@ def test_uploaded_document_reaches_the_zaak(  # pylint: disable=too-many-argumen
 @pytest.mark.requires("cluster")
 @pytest.mark.tc("OI-010", "OI-064")
 @pytest.mark.parametrize("who", WHO)
+@pytest.mark.source(
+    "TA regression/123-portaal-clamav-eicar-rejectie.spec.ts",
+    "The portal refuses harmful uploads through ClamAV's virus scan.",
+)
 def test_infected_upload_is_refused(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -272,6 +320,10 @@ def test_infected_upload_is_refused(  # pylint: disable=too-many-arguments,too-m
 
 
 @pytest.mark.tc("INT-018")
+@pytest.mark.source(
+    "TA regression/178-blacklist-upload.spec.ts",
+    "Uploading a file with a blacklisted extension in the portal is refused with a message.",
+)
 def test_refused_file_type_cannot_be_uploaded(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -305,6 +357,10 @@ def documents_of(openzaak: ApiClient, zaak: JsonObject) -> list[str]:
 
 
 @pytest.mark.core
+@pytest.mark.source(
+    "TA interaction/164-portaal-vraag-stellen-vanuit-zaak.spec.ts",
+    "A question asked from the zaak detail page lands in Open Klant as a contactmoment linked to the zaak.",
+)
 def test_question_about_a_zaak_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -346,6 +402,7 @@ def test_question_about_a_zaak_reaches_open_klant(  # pylint: disable=too-many-a
 
 @pytest.mark.tc("ZAC-066")
 @pytest.mark.requires("zac")
+@pytest.mark.source("draaiboek ZAC-066", "The portal shows zaken from ZAC correctly.")
 def test_zaak_started_in_zac_shows_in_mijn_zaken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,

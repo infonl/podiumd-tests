@@ -24,7 +24,14 @@ if TYPE_CHECKING:
 
     from playwright.sync_api import Page
 
-pytestmark = [pytest.mark.component, pytest.mark.ui]
+pytestmark = [
+    pytest.mark.component,
+    pytest.mark.ui,
+    pytest.mark.source(
+        "TA regression/172-architectuur-wcag-axe.spec.ts",
+        "The public pages pass an automatic WCAG 2.1 AA scan with axe-core.",
+    ),
+]
 
 
 @pytest.mark.parametrize(

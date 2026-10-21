@@ -22,7 +22,13 @@ if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
 
-pytestmark = [pytest.mark.component, pytest.mark.requires("objecttypen")]
+pytestmark = [
+    pytest.mark.component,
+    pytest.mark.requires("objecttypen"),
+    pytest.mark.source(
+        "MK test_kiss_ita.py", "Checks the objecttypes KISS and ITA work with are published in Objecttypen."
+    ),
+]
 
 
 @pytest.mark.parametrize(

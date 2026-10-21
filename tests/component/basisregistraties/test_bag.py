@@ -17,7 +17,14 @@ from podiumd_tests.responses import expect_status
 if TYPE_CHECKING:
     import requests
 
-pytestmark = [pytest.mark.component, pytest.mark.requires("api-proxy")]
+pytestmark = [
+    pytest.mark.component,
+    pytest.mark.requires("api-proxy"),
+    pytest.mark.source(
+        "MK test_api_proxy.py",
+        "Checks the api-proxy serves BRP, KvK and BAG on the paths ExternalsPodiumD's apps call.",
+    ),
+]
 
 DAM_1 = "0363200003761447"
 

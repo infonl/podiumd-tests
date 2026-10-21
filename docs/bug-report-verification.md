@@ -74,6 +74,9 @@ podiumd-tests run --env <env> --tier full -- --runxfail <node ids>  # every know
 - `--runxfail` runs known-defect tests as plain tests, so the failure message shows whether the test
   fails with the reported symptom and not for an unrelated reason.
 - A report without a test is checked with the command in its text (`curl`, `kubectl`, `helm template`).
+- A report's "Found by" names the test, its source and the source's reason for the test: the test's
+  `@pytest.mark.source(origin, reason)`, listed per test in `summary.md` ("Sources of the failed and
+  known-defect tests"). Creating or updating a report copies them.
 - Upstream: the issue tracker and the newest release of the product decide "fixed upstream" with the version.
 
 ## Outcome per report

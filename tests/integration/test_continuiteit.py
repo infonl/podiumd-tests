@@ -84,6 +84,18 @@ STOPPED = ("openzaak", "openformulieren", "openklant", "opennotificaties", "open
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in STOPPED])
 @pytest.mark.tc("CONT-003", "CONT-004", "CONT-007", "CONT-012", "CONT-016", "CONT-020")
+@pytest.mark.source(
+    "TA regression/124-cluster-pod-recovery-multi.spec.ts",
+    "Validates per component that it is reachable, fails while scaled to 0, and recovers once scaled back up.",
+)
+@pytest.mark.source(
+    "TA regression/144-continuiteit-component-stop.spec.ts",
+    "Really stops a component, checks how the other services behave, and starts it again.",
+)
+@pytest.mark.source(
+    "TA regression/89-cluster-pod-recovery.spec.ts",
+    "Validates that scaling a deployment to 0 stops its pod, scaling back up starts it, and the service is reachable again.",
+)
 def test_stopped_component_harms_no_other(
     http: requests.Session, urls: dict[str, str], podiumd_env: Environment, component: str
 ) -> None:
@@ -96,6 +108,9 @@ def test_stopped_component_harms_no_other(
 
 
 @pytest.mark.requires("frankgateway", "openzaak", "openinwoner")
+@pytest.mark.source(
+    "podiumd-tests", "Checks that a Frank!Gateway outway outage does not cascade: the apps' roots still answer."
+)
 def test_frankgateway_outage_does_not_cascade(
     http: requests.Session, urls: dict[str, str], podiumd_env: Environment
 ) -> None:
@@ -120,6 +135,12 @@ def form_starts(podiumd_env: Environment, http: requests.Session, registry: Reso
 
 @pytest.mark.requires("openzaak", "openformulieren", "openinwoner", "zac", "keycloak")
 @pytest.mark.tc("CONT-025", "CONT-026", "CONT-028")
+@pytest.mark.source("draaiboek CONT-025", "With Open Zaak unavailable, Open Formulieren works undisturbed.")
+@pytest.mark.source(
+    "draaiboek CONT-026",
+    "With Open Zaak unavailable, the portal shows no zaken but a user-friendly message that the zaaksysteem is down.",
+)
+@pytest.mark.source("draaiboek CONT-028", "With Open Zaak unavailable, ZAC cannot start handling a new zaak.")
 def test_without_open_zaak_the_apps_say_so(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     http: requests.Session,
@@ -149,6 +170,8 @@ def test_without_open_zaak_the_apps_say_so(  # pylint: disable=too-many-argument
 @pytest.mark.parametrize("component", [requiring(c, c) for c in ("openklant", "opennotificaties")])
 @pytest.mark.requires("openformulieren")
 @pytest.mark.tc("CONT-031", "CONT-036")
+@pytest.mark.source("draaiboek CONT-031", "With Open Klant unavailable, Open Formulieren works undisturbed.")
+@pytest.mark.source("draaiboek CONT-036", "With Open Notificaties unavailable, Open Formulieren works undisturbed.")
 def test_forms_start_without_open_klant_or_open_notificaties(
     http: requests.Session,
     podiumd_env: Environment,
@@ -164,6 +187,18 @@ def test_forms_start_without_open_klant_or_open_notificaties(
 
 @pytest.mark.requires("objecten", "openinwoner", "kiss", "zac", "keycloak")
 @pytest.mark.tc("CONT-042", "CONT-043", "CONT-044")
+@pytest.mark.source(
+    "draaiboek CONT-042",
+    "With Objecten unavailable, a field that searches Objecten fails but the portal keeps working.",
+)
+@pytest.mark.source(
+    "draaiboek CONT-043",
+    "With Objecten unavailable, a field that searches Objecten fails but the Contact (KISS) keeps working.",
+)
+@pytest.mark.source(
+    "draaiboek CONT-044",
+    "With Objecten unavailable, a field that searches Objecten fails but the zaak handling (ZAC) keeps working.",
+)
 def test_without_objecten_the_portal_kiss_and_zac_work(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     http: requests.Session,
@@ -188,6 +223,10 @@ def test_without_objecten_the_portal_kiss_and_zac_work(  # pylint: disable=too-m
     reason="[open-formulieren-2] Open Formulieren 3.5.5 and 4.0.2 queue mail with django_yubin but schedule no retry_emails: a mail that fails"
     " during an SMTP outage stays failed and is never sent; not yet reported upstream",
 )
+@pytest.mark.source(
+    "draaiboek CONT-062",
+    "With the mail server unavailable, Open Formulieren's mail is queued and sent once the outage is over.",
+)
 def test_form_mail_is_sent_after_a_mail_outage(
     http: requests.Session, podiumd_env: Environment, mailpit: ApiClient, registry: ResourceRegistry
 ) -> None:
@@ -210,6 +249,9 @@ def test_form_mail_is_sent_after_a_mail_outage(
     raises=WaitTimeoutError,
     reason="[zac-3] ZAC 5.4.5 and 5.9.1 send mail directly over SMTP: during an outage it logs 'Failed to send mail' and drops it,"
     " without a queue or a retry; PZ-13091",
+)
+@pytest.mark.source(
+    "draaiboek CONT-061", "With the mail server unavailable, ZAC's mail is queued and sent once the outage is over."
 )
 def test_zac_mail_is_sent_after_a_mail_outage(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     http: requests.Session,
@@ -242,6 +284,10 @@ def test_zac_mail_is_sent_after_a_mail_outage(  # pylint: disable=too-many-argum
 
 @pytest.mark.requires("openklant", "zac", "keycloak")
 @pytest.mark.tc("CONT-034")
+@pytest.mark.source(
+    "draaiboek CONT-034",
+    "With Open Klant unavailable, a zaak cannot be handled and the employee sees a user-friendly error message.",
+)
 def test_without_open_klant_a_zaak_with_a_person_cannot_be_opened(
     http: requests.Session, podiumd_env: Environment, zac: requests.Session, zac_zaak: Callable[..., JsonObject]
 ) -> None:
@@ -271,6 +317,10 @@ def test_without_open_klant_a_zaak_with_a_person_cannot_be_opened(
 
 @pytest.mark.requires("openinwoner", "openklant", "mailpit")
 @pytest.mark.tc("CONT-063")
+@pytest.mark.source(
+    "draaiboek CONT-063",
+    "With the mail server unavailable, the portal's mail is queued and sent once the outage is over.",
+)
 def test_portal_mail_waits_in_the_queue_during_a_mail_outage(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     http: requests.Session,
@@ -317,6 +367,10 @@ def test_portal_mail_waits_in_the_queue_during_a_mail_outage(  # pylint: disable
     raises=WaitTimeoutError,
     reason="[ita-1] ITA 3.3.2 and 3.3.4 send mail straight over SMTP: during an outage it logs the SmtpException, still answers 200"
     " and drops the mail, without a queue or a retry; not yet reported upstream",
+)
+@pytest.mark.source(
+    "draaiboek CONT-064",
+    "With the mail server unavailable, Contact's (ITA) mail is queued and sent once the outage is over.",
 )
 def test_ita_mail_is_sent_after_a_mail_outage(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,

@@ -21,7 +21,14 @@ if TYPE_CHECKING:
 
     from podiumd_tests.environment import Environment
 
-pytestmark = [pytest.mark.component, pytest.mark.requires("cilium", "cluster")]
+pytestmark = [
+    pytest.mark.component,
+    pytest.mark.requires("cilium", "cluster"),
+    pytest.mark.source(
+        "podiumd-tests",
+        "Checks that the ingress allow-lists of the network policy block a pod that is not on the list.",
+    ),
+]
 
 # A pod not on any backend allow-list (it has nc); a protected backend and its port.
 ATTACKER = "ptest-bootstrap-mock-server"

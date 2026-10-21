@@ -48,6 +48,12 @@ def fixture_keycloak_admin(podiumd_env: Environment) -> KeycloakAdmin:
 
 
 @pytest.mark.requires("pabc")
+@pytest.mark.source(
+    "MK test_pkce.py", "Verifies PKCE for every Keycloak client that podiumd-minikube wires an OIDC login for."
+)
+@pytest.mark.source(
+    "PI test_pkce.py", "Guards that no Keycloak client starts requiring PKCE without a verified app-side capability."
+)
 def test_pabc_challenge_sends_a_pkce_code_challenge(http: requests.Session, urls: dict[str, str]) -> None:
     """PABC's login challenge points at Keycloak with client pabc and an S256 code challenge."""
     response = http.get(urls["pabc"] + "/api/challenge", params={"returnUrl": "/"}, allow_redirects=False)
@@ -60,6 +66,12 @@ def test_pabc_challenge_sends_a_pkce_code_challenge(http: requests.Session, urls
 
 
 @pytest.mark.parametrize("client_id", NO_PKCE_REQUIRED)
+@pytest.mark.source(
+    "MK test_pkce.py", "Verifies PKCE for every Keycloak client that podiumd-minikube wires an OIDC login for."
+)
+@pytest.mark.source(
+    "PI test_pkce.py", "Guards that no Keycloak client starts requiring PKCE without a verified app-side capability."
+)
 def test_client_does_not_require_pkce(keycloak_admin: KeycloakAdmin, client_id: str) -> None:
     """The client leaves pkce.code.challenge.method empty: its app sends no challenge, or the chart does not require one."""
     client = keycloak_admin.client(client_id)
@@ -83,6 +95,9 @@ def zac_login_query(http: requests.Session, urls: dict[str, str]) -> dict[str, l
 
 
 @pytest.mark.requires("zac")
+@pytest.mark.source(
+    "podiumd-tests", "helm-charts #629 turns ZAC's PKCE on by default; ZAC and its Keycloak client must agree on it."
+)
 def test_zac_login_sends_an_s256_code_challenge(http: requests.Session, urls: dict[str, str]) -> None:
     """ZAC's login redirect to Keycloak carries an S256 code challenge (PKCE)."""
     query = zac_login_query(http, urls)
@@ -93,6 +108,9 @@ def test_zac_login_sends_an_s256_code_challenge(http: requests.Session, urls: di
 
 
 @pytest.mark.requires("zac")
+@pytest.mark.source(
+    "podiumd-tests", "helm-charts #629 turns ZAC's PKCE on by default; ZAC and its Keycloak client must agree on it."
+)
 def test_zac_client_and_zac_agree_on_pkce(
     http: requests.Session, urls: dict[str, str], keycloak_admin: KeycloakAdmin
 ) -> None:

@@ -48,6 +48,10 @@ def fixture_kiss(page: Page, podiumd_env: Environment, need_bootstrap: Callable[
 
 
 @pytest.mark.tc("KI-002")
+@pytest.mark.source(
+    "TA smoke/113-kiss-kcc-login-flow.spec.ts",
+    "Checks the KCC employee's login on KISS and that the BFF routes answer after it.",
+)
 def test_kcc_user_is_a_klantcontactmedewerker(kiss: requests.Session, urls: dict[str, str]) -> None:
     """KISS knows the logged-in user as a klantcontactmedewerker (TA smoke 113)."""
     me = expect_status(kiss.get(urls["kiss"] + "/api/me"), HTTPStatus.OK).json()
@@ -56,6 +60,14 @@ def test_kcc_user_is_a_klantcontactmedewerker(kiss: requests.Session, urls: dict
 
 
 @pytest.mark.tc("KI-001")
+@pytest.mark.source(
+    "TA smoke/06-kiss-bff-healthz.spec.ts",
+    "KISS smoke test: the BFF answers and the homepage renders; a precondition for every KISS case.",
+)
+@pytest.mark.source(
+    "TA regression/100-kiss-frontend-basis.spec.ts",
+    "Checks KISS's frontend and the BFF routes a KCC employee meets, such as /api/me, without a login.",
+)
 def test_kiss_renders_for_the_kcc_user(kiss: requests.Session, page: Page, urls: dict[str, str]) -> None:
     """After the login KISS's single-page app renders its search and navigation (TA smoke 06, reg-100)."""
     del kiss  # logs the page in
@@ -64,6 +76,10 @@ def test_kiss_renders_for_the_kcc_user(kiss: requests.Session, page: Page, urls:
     expect(page.get_by_role("link", name="Uitloggen")).to_be_visible()
 
 
+@pytest.mark.source(
+    "TA regression/12-kiss-bff-kcc-flow.spec.ts",
+    "A KCC employee logs in through Keycloak and registers a klantcontact in Open Klant through KISS's BFF.",
+)
 def test_klantcontact_through_kiss(
     kiss: requests.Session, urls: dict[str, str], openklant: ApiClient, registry: ResourceRegistry
 ) -> None:
@@ -73,6 +89,7 @@ def test_klantcontact_through_kiss(
 
 
 @pytest.mark.tc("KI-007")
+@pytest.mark.source("draaiboek KI-007", "A person not known in Contact can be found through Haal Centraal.")
 def test_person_unknown_to_kiss_is_found_in_the_brp(kiss: requests.Session, urls: dict[str, str]) -> None:
     """KISS finds a person by BSN through its Haal Centraal BRP proxy.
 
@@ -90,6 +107,7 @@ def test_person_unknown_to_kiss_is_found_in_the_brp(kiss: requests.Session, urls
 
 
 @pytest.mark.tc("KI-013")
+@pytest.mark.source("draaiboek KI-013", "A company not known in Contact can be found through KvK.")
 def test_company_unknown_to_kiss_is_found_in_the_kvk(kiss: requests.Session, urls: dict[str, str]) -> None:
     """KISS finds a company by KvK number through its KvK proxy."""
     found = expect_status(kiss.get(urls["kiss"] + "/api/kvk/v2/zoeken", params={"kvkNummer": KVK_TEST_NUMMER}), 200)
@@ -98,6 +116,9 @@ def test_company_unknown_to_kiss_is_found_in_the_kvk(kiss: requests.Session, url
 
 @pytest.mark.tc("KI-053", "KI-054", "KI-055")
 @pytest.mark.parametrize("kanaal", KANALEN)
+@pytest.mark.source("draaiboek KI-053", "A contact on kanaal Balie arrives exactly as registered.")
+@pytest.mark.source("draaiboek KI-054", "A contact on kanaal Telefoon arrives exactly as registered.")
+@pytest.mark.source("draaiboek KI-055", "A contact on kanaal Internet arrives exactly as registered.")
 def test_klantcontact_keeps_the_kanaal_chosen_in_kiss(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     kiss: requests.Session,
     urls: dict[str, str],

@@ -18,7 +18,14 @@ if TYPE_CHECKING:
     from podiumd_tests.seed.openzaak import ZaaktypeParts
     from podiumd_tests.seed.registry import ResourceRegistry
 
-pytestmark = [pytest.mark.component, pytest.mark.requires("openzaak")]
+pytestmark = [
+    pytest.mark.component,
+    pytest.mark.requires("openzaak"),
+    pytest.mark.source(
+        "TA regression/44-validation-edge-cases.spec.ts",
+        "Open Zaak rejects common invalid payloads: too long, wrong enum, unknown zaaktype, missing field, bad date, short RSIN.",
+    ),
+]
 
 
 @pytest.mark.parametrize(

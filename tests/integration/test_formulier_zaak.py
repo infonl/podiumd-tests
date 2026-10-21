@@ -25,7 +25,21 @@ if TYPE_CHECKING:
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
-pytestmark = [pytest.mark.integration, pytest.mark.requires("openformulieren", "openzaak")]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.requires("openformulieren", "openzaak"),
+    pytest.mark.source(
+        "TA interaction/76-of-submission-end-to-end.spec.ts",
+        "A form filled in by a citizen leads to a zaak in Open Zaak, end to end.",
+    ),
+    pytest.mark.source(
+        "TA interaction/32-of-submission-ui.spec.ts",
+        "Checks the form API, its zaaktype link, the ZGW registration backend and creating a submission.",
+    ),
+    pytest.mark.source(
+        "TA regression/152-of-retention-en-pdf.spec.ts", "A PDF of the submitted form is available to the citizen."
+    ),
+]
 
 # Open Formulieren registers in a Celery task after _complete.
 REGISTRATION_TIMEOUT = 90

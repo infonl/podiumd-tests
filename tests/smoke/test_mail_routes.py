@@ -17,7 +17,15 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
     from podiumd_tests.mail_routes import MailRoute
 
-pytestmark = [pytest.mark.smoke, pytest.mark.cluster, pytest.mark.requires("cluster")]
+pytestmark = [
+    pytest.mark.smoke,
+    pytest.mark.cluster,
+    pytest.mark.requires("cluster"),
+    pytest.mark.source(
+        "podiumd-tests",
+        "Minikube and QA send mail only inside the cluster: every SMTP host is a cluster Service or no server.",
+    ),
+]
 
 
 @pytest.fixture(scope="module", name="internal")

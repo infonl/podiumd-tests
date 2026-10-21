@@ -40,6 +40,10 @@ pytestmark = [
     pytest.mark.requires("kiss", "objecten", "keycloak", "cluster"),
     # Each sync rewrites its whole index.
     pytest.mark.xdist_group("kiss-sync"),
+    pytest.mark.source(
+        "TA regression/190-kiss-contentbronnen-gevuld.spec.ts",
+        "Checks that KISS's content indices actually contain documents, not only that the endpoint answers.",
+    ),
 ]
 
 

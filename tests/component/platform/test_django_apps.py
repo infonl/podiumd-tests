@@ -33,6 +33,11 @@ pytestmark = pytest.mark.component
 SPATIAL = frozenset({"openzaak", "objecten"})
 
 
+@pytest.mark.source("MK test_database.py", "The shared Postgres has the databases and extensions the apps need.")
+@pytest.mark.source(
+    "PI test_database.py",
+    "Postgres checks through each app's own Django connection, as the environments have no Postgres pod.",
+)
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
@@ -46,6 +51,14 @@ def test_database(podiumd_env: Environment, component: str) -> None:
         assert "postgis" in cast("list[str]", info["extensions"])
 
 
+@pytest.mark.source(
+    "PI test_zgw_service_reachability.py",
+    "Every zgw_consumers Service seeded into an app's database has a reachable api_root from inside the cluster.",
+)
+@pytest.mark.source(
+    "MK test_zgw_service_reachability.py",
+    "The api_roots each app's zgw_consumers Services get answer from inside that app's pod.",
+)
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
 @pytest.mark.parametrize("component", [requiring(c, c) for c in ZGW_CONSUMER_APPS])
@@ -54,6 +67,10 @@ def test_zgw_services_authenticate(podiumd_env: Environment, component: str) -> 
     assert service_problems(podiumd_env, component) == []
 
 
+@pytest.mark.source(
+    "podiumd-tests",
+    "A config row left without its zgw_consumers Service, as after the Objecten 4 migration, breaks the app silently.",
+)
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
 @pytest.mark.parametrize("component", [requiring(c, c) for c in SERVICE_REFERENCES])
@@ -62,6 +79,7 @@ def test_config_references_services(podiumd_env: Environment, component: str) ->
     assert reference_problems(podiumd_env, component) == []
 
 
+@pytest.mark.source("MK test_django_admin_login.py", "The superuser logs in to the Django admin of each Maykin app.")
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
 def test_django_admin_login(podiumd_env: Environment, credentials: SecretResolver, component: str) -> None:
     """The app's superuser logs in to the admin (MK test_django_admin_login.py); environments with SSO only skip."""

@@ -33,12 +33,20 @@ def fixture_openbeheer(podiumd_env: Environment, need_bootstrap: Callable[..., N
     return openbeheer_session(podiumd_env, ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
 
 
+@pytest.mark.source(
+    "podiumd-tests",
+    "Covers Open Beheer: it refuses anonymous API calls, knows the Keycloak user and manages Open Zaak's catalogi.",
+)
 def test_api_needs_a_login(http: requests.Session, urls: dict[str, str]) -> None:
     """Without a session the API refuses to say who is logged in."""
     response = http.get(urls["openbeheer"] + "/api/v1/whoami/")
     assert response.status_code in REFUSED, describe(response)
 
 
+@pytest.mark.source(
+    "podiumd-tests",
+    "Covers Open Beheer: it refuses anonymous API calls, knows the Keycloak user and manages Open Zaak's catalogi.",
+)
 def test_keycloak_login_is_the_admin(openbeheer: requests.Session, urls: dict[str, str]) -> None:
     """After the Keycloak login Open Beheer knows the user by its Keycloak username."""
     whoami = expect_status(openbeheer.get(urls["openbeheer"] + "/api/v1/whoami/"), HTTPStatus.OK).json()
@@ -60,6 +68,10 @@ def zaaktype_ids(openbeheer: requests.Session, catalogi_service: str, **query: s
 
 
 @pytest.mark.requires("openzaak")
+@pytest.mark.source(
+    "podiumd-tests",
+    "Covers Open Beheer: it refuses anonymous API calls, knows the Keycloak user and manages Open Zaak's catalogi.",
+)
 def test_open_zaaks_zaaktypen_are_managed(
     openbeheer: requests.Session, catalogi_service: str, test_zaaktype: JsonObject
 ) -> None:
@@ -74,6 +86,10 @@ def test_open_zaaks_zaaktypen_are_managed(
     strict=True,
     reason="[open-beheer-2] Open Beheer 0.9.1: the zaaktypen filter catalogus takes the catalogus UUID while"
     " catalogi/choices offers its URL, so the list is empty; not yet reported upstream",
+)
+@pytest.mark.source(
+    "podiumd-tests",
+    "Pins Open Beheer's known defect: a catalogus from catalogi/choices filters the zaaktypen to nothing.",
 )
 def test_zaaktypen_filter_on_a_catalogus_from_its_choices(
     openbeheer: requests.Session, catalogi_service: str, test_zaaktype: JsonObject

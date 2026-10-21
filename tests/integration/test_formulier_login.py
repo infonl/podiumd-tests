@@ -77,6 +77,10 @@ def submit_after_login(  # pylint: disable=too-many-arguments,too-many-positiona
 
 
 @pytest.mark.tc("ARCH-019")
+@pytest.mark.source(
+    "TA regression/183-of-digid-zaak-rol.spec.ts",
+    "A DigiD-logged-in inwoner's form registers a zaak with a BSN initiator role and the form's PDF report as document.",
+)
 def test_digid_submission_has_the_inwoner_as_initiator(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -91,6 +95,14 @@ def test_digid_submission_has_the_inwoner_as_initiator(  # pylint: disable=too-m
     assert [section(r, "betrokkeneIdentificatie").get("inpBsn") for r in initiators] == [INWONER.attributes["bsn"][0]]
 
 
+@pytest.mark.source(
+    "TA regression/158-of-eherkenning-vestiging.spec.ts",
+    "An eHerkenning submission is attributed to the vestiging within the KvK entity.",
+)
+@pytest.mark.source(
+    "TA regression/159-of-zaak-keten.spec.ts",
+    "A completed eHerkenning submission creates a zaak in Open Zaak with the company's KvK as initiator.",
+)
 def test_eherkenning_submission_has_the_vestiging_as_initiator(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,

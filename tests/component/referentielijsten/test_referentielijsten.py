@@ -18,7 +18,14 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
     from podiumd_tests.seed.registry import ResourceRegistry
 
-pytestmark = [pytest.mark.component, pytest.mark.requires("referentielijsten")]
+pytestmark = [
+    pytest.mark.component,
+    pytest.mark.requires("referentielijsten"),
+    pytest.mark.source(
+        "podiumd-tests",
+        "Referentielijsten is a read-only API: it refuses writes and lists a tabel with exactly its items.",
+    ),
+]
 
 
 def test_api_cannot_be_written(http: requests.Session, urls: dict[str, str]) -> None:

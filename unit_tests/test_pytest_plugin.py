@@ -11,6 +11,8 @@ pytest_plugins = ["pytester"]
 INNER_CONFTEST = """
 import subprocess
 
+import pytest
+
 from podiumd_tests.config import parse_profile
 from podiumd_tests.environment import Environment
 from podiumd_tests.pytest_plugin import ENVIRONMENT_KEY
@@ -33,6 +35,11 @@ def pytest_configure(config):
         name="inner",
     )
     config.stash[ENVIRONMENT_KEY] = Environment(profile, no_cluster, environ={})
+
+
+def pytest_itemcollected(item):
+    if not item.get_closest_marker("source"):
+        item.add_marker(pytest.mark.source("podiumd-tests", "inner test of a unit test"))
 """
 
 INNER_TESTS = """
@@ -137,7 +144,10 @@ def test_environment_comes_from_the_profile_named_by_option(pytester):
         encoding="utf-8",
     )
     pytester.makeconftest('pytest_plugins = ["podiumd_tests.pytest_plugin"]')
-    pytester.makepyfile("def test_env(podiumd_env):\n    assert podiumd_env.profile.name == 'x'\n")
+    pytester.makepyfile(
+        "import pytest\n\n\n@pytest.mark.source('podiumd-tests', 'x')\n"
+        "def test_env(podiumd_env):\n    assert podiumd_env.profile.name == 'x'\n"
+    )
     envs_dir = f"--podiumd-envs-dir={pytester.path / 'envs'}"
     pytester.runpytest_inprocess(*INNER_ARGS, "--podiumd-env=x", envs_dir).assert_outcomes(passed=1)
     result = pytester.runpytest_inprocess(*INNER_ARGS, envs_dir)
@@ -320,3 +330,40 @@ def test_zac_parameters_skip_without_parameters_in_zac(pytester, monkeypatch):
     result = pytester.runpytest_inprocess(*INNER_ARGS, "-rs")
     result.assert_outcomes(skipped=1)
     result.stdout.fnmatch_lines(["*ZAC has no zaakafhandelparameters for ZT-PA*"])
+
+
+def test_tests_without_a_valid_source_stop_the_run(pytester):
+    pytester.makeconftest(INNER_CONFTEST)
+    pytester.makepyfile(
+        """
+import pytest
+
+
+@pytest.mark.source("somewhere", "a reason")
+def test_unknown_origin():
+    pass
+"""
+    )
+    result = pytester.runpytest_inprocess(*INNER_ARGS)
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*source origin 'somewhere' starts with none of TA, MK*"])
+
+
+def test_sources_become_junit_properties(pytester):
+    pytester.makeconftest(INNER_CONFTEST)
+    pytester.makepyfile(
+        """
+import pytest
+
+pytestmark = pytest.mark.source("TA regression/1-x.spec.ts", "the module's reason")
+
+
+@pytest.mark.source("ZAC features/1-login.feature", "the test's reason")
+def test_sourced(request):
+    assert [v for k, v in request.node.user_properties if k == "source"] == [
+        "ZAC features/1-login.feature: the test's reason",
+        "TA regression/1-x.spec.ts: the module's reason",
+    ]
+"""
+    )
+    pytester.runpytest_inprocess(*INNER_ARGS).assert_outcomes(passed=1)

@@ -60,6 +60,10 @@ def heading(page: Page) -> str:
 
 
 @pytest.mark.core
+@pytest.mark.source(
+    "TA interaction/105-portaal-profiel-edit.spec.ts",
+    "Contact details (e-mail, phone number) can be changed on the profile edit page after a DigiD login.",
+)
 def test_profile_can_be_edited(page: Page, portal: str) -> None:
     """The profile edit form offers e-mail addresses and phone numbers (TA int-105, as formsets in this Open Inwoner)."""
     page.goto(portal + "/mijn-profiel/edit/")
@@ -69,6 +73,14 @@ def test_profile_can_be_edited(page: Page, portal: str) -> None:
 
 
 @pytest.mark.tc("OI-048")
+@pytest.mark.source(
+    "TA regression/165-portaal-notif-save.spec.ts",
+    "Switching off the zaak notification preference is saved and persists after a reload.",
+)
+@pytest.mark.source(
+    "TA regression/106-portaal-notificatievoorkeur.spec.ts",
+    "The notification preferences page offers the zaak notification toggles and a save button.",
+)
 def test_notification_setting_is_saved(page: Page, portal: str) -> None:
     """Switching the zaak notifications setting persists, and switching back too (TA reg-106, reg-165)."""
     page.goto(portal + "/mijn-profiel/notificaties/")
@@ -85,6 +97,10 @@ def test_notification_setting_is_saved(page: Page, portal: str) -> None:
         assert page.locator('input[name="cases_notifications"]').is_checked() == wanted
 
 
+@pytest.mark.source(
+    "TA regression/117-portaal-contactmomenten-paginatie.spec.ts",
+    "The contactmomenten overview and its pagination (?page=2) are reachable after a DigiD login.",
+)
 def test_mijn_vragen_answers(page: Page, portal: str) -> None:
     """The Mijn vragen list and its second page render without an error (TA reg-117)."""
     for path in ("/mijn-zaken/contactmomenten/", "/mijn-zaken/contactmomenten/?page=2"):
@@ -105,6 +121,18 @@ def test_mijn_vragen_answers(page: Page, portal: str) -> None:
     ],
 )
 @pytest.mark.tc("OI-029")
+@pytest.mark.source(
+    "TA regression/163-portaal-menu-kop-consistency.spec.ts",
+    "A menu item's text matches the heading of the page it links to.",
+)
+@pytest.mark.source(
+    "TA regression/96-portaal-profiel-navigatie.spec.ts",
+    "The mijn-profiel page is reachable after a DigiD login and shows the inwoner's data.",
+)
+@pytest.mark.source(
+    "TA interaction/108-portaal-vraag-stellen-inwoner.spec.ts",
+    "An inwoner can ask the municipality a question on the contact form page titled Contactformulier.",
+)
 def test_page_heading_matches_its_menu_item(page: Page, portal: str, path: str, words: str) -> None:
     """Each page's heading names what its menu item promises (TA reg-163, reg-96, int-108)."""
     page.goto(portal + path)
@@ -112,6 +140,10 @@ def test_page_heading_matches_its_menu_item(page: Page, portal: str, path: str, 
 
 
 @pytest.mark.xdist_group("inwoner2")
+@pytest.mark.source(
+    "TA regression/114-portaal-multi-user-digid.spec.ts",
+    "After logging out of DigiD, logging in with another DigiD account gives the second inwoner's own session.",
+)
 def test_second_inwoner_sees_own_profile(
     page: Page, podiumd_env: Environment, portal: str, need_bootstrap: Callable[..., None]
 ) -> None:
@@ -140,6 +172,11 @@ def test_second_inwoner_sees_own_profile(
         ),
     ],
 )
+@pytest.mark.source(
+    "TA regression/160-portaal-deactivated-on-pseudo-blokkade.spec.ts",
+    "Records that deactivated_on set in the admin does not block a DigiD login.",
+)
+@pytest.mark.source("podiumd-tests", "An account set to is_active=False in the admin cannot log in with DigiD.")
 def test_disabled_account_cannot_log_in(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -165,6 +202,10 @@ def test_disabled_account_cannot_log_in(  # pylint: disable=too-many-arguments,t
 # The second inwoner: logins of other tests (the inwoner logs in everywhere) would sync the changed address
 # back between this test's cleanup steps; only this group logs in as inwoner2.
 @pytest.mark.xdist_group("inwoner2")
+@pytest.mark.source(
+    "TA regression/179-portaal-profiel-naar-openklant.spec.ts",
+    "An e-mail address changed in the portal profile lands as a DigitaalAdres in Open Klant.",
+)
 def test_profile_email_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -203,6 +244,18 @@ def test_profile_email_reaches_open_klant(  # pylint: disable=too-many-arguments
 
 @pytest.mark.requires("api-proxy")
 @pytest.mark.tc("OI-083")
+@pytest.mark.source(
+    "TA regression/118-portaal-vestigingsnaam-bedrijf.spec.ts",
+    "The company profile shows the vestiging's name after an eHerkenning login.",
+)
+@pytest.mark.source(
+    "TA regression/146-portaal-uitbreiding.spec.ts",
+    "The company profile shows the vestigingsnummer and the trade name from KvK.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/99-portaal-eherkenning-login.spec.ts",
+    "After the eHerkenning login the test company's user has its KvK number set.",
+)
 def test_company_profile_shows_kvk_names(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,

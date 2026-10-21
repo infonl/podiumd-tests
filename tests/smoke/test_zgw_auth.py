@@ -38,6 +38,14 @@ def _get(http: requests.Session, url: str, token: str) -> requests.Response:
     return http.get(url, headers=zgw_headers(token))
 
 
+@pytest.mark.source(
+    "TA smoke/01-zgw-auth.spec.ts",
+    "ZGW authentication: the Open Zaak Catalogi API is reachable with a ZGW JWT (HS256, user_id, user_representation).",
+)
+@pytest.mark.source(
+    "EX tests/smoke/01-zgw-auth.spec.ts",
+    "ZGW authentication: the Open Zaak Catalogi API is reachable with a ZGW JWT (HS256, user_id, user_representation).",
+)
 @pytest.mark.parametrize("path", ["/catalogi/api/v1/catalogussen", "/catalogi/api/v1/zaaktypen"])
 def test_jwt_is_accepted(
     http: requests.Session, urls: dict[str, str], credentials: SecretResolver, client_id: str, path: str
@@ -50,6 +58,14 @@ def test_jwt_is_accepted(
     assert isinstance(body["count"], int)
 
 
+@pytest.mark.source(
+    "TA regression/22-negative-auth.spec.ts",
+    "Negative auth on Open Zaak's ZGW endpoints: a JWT with a manipulated signature is refused (22b).",
+)
+@pytest.mark.source(
+    "TA regression/121-continuiteit-graceful-degradation.spec.ts",
+    "Continuity graceful degradation: Open Zaak answers an invalid token with 401/403, not a crash.",
+)
 @pytest.mark.parametrize("wrong", ["secret", "not-a-jwt"])
 def test_bad_token_is_refused(http: requests.Session, urls: dict[str, str], client_id: str, wrong: str) -> None:
     """A token with a wrong signature, or one that is no JWT, is refused (TA reg-121, 22b)."""

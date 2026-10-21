@@ -33,6 +33,14 @@ pytestmark = [
 ]
 
 
+@pytest.mark.source(
+    "MK test_productaanvraag_flow.py",
+    "A form submission through the Objects API and Open Notificaties makes ZAC create a zaak, with no manual step.",
+)
+@pytest.mark.source(
+    "PI test_productaanvraag_flow.py",
+    "A productaanvraag object makes ZAC create a zaak through the environment's standard chart wiring.",
+)
 def test_productaanvraag_becomes_a_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     objecten: ApiClient,
     openzaak_productaanvraag: ApiClient,
@@ -49,6 +57,10 @@ def test_productaanvraag_becomes_a_zaak(  # pylint: disable=too-many-arguments,t
 @pytest.mark.tc("OF-002")
 @pytest.mark.requires("openklant", "mailpit", "keycloak")
 @pytest.mark.usefixtures("ontvangstbevestiging")
+@pytest.mark.source(
+    "draaiboek OF-002",
+    "A form leads to a zaak in ZAC, which automatically sends a receipt confirmation with the zaaknummer.",
+)
 def test_zac_mails_the_initiator_an_ontvangstbevestiging(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     podiumd_env: Environment,
     objecten: ApiClient,
@@ -70,6 +82,7 @@ def test_zac_mails_the_initiator_an_ontvangstbevestiging(  # pylint: disable=too
 
 @pytest.mark.tc("FB-008")
 @pytest.mark.requires("openformulieren")
+@pytest.mark.source("draaiboek FB-008", "A new form can be set up that links to ZAC.")
 def test_new_form_becomes_a_zac_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     podiumd_env: Environment,
     http: requests.Session,
