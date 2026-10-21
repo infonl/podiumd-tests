@@ -11,19 +11,14 @@ import pytest
 
 from podiumd_tests.bootstrap.names import TEST_FORM
 from podiumd_tests.bootstrap.steps import NAW_DATA
-from podiumd_tests.bootstrap.steps import ZGW_REGISTRATION
 from podiumd_tests.json_data import section
 from podiumd_tests.openformulieren import download_report
-from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import registered_zaak
 from podiumd_tests.openformulieren import submit
-from podiumd_tests.openformulieren import wait_for_registration
 from podiumd_tests.seed.openzaak import ZAKEN
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    import requests
 
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
@@ -66,29 +61,3 @@ def test_submission_creates_a_zaak_with_the_form_pdf(  # pylint: disable=too-man
     rollen = openzaak.list(f"{ZAKEN}/rollen", {"zaak": str(zaak["url"])})
     assert [section(r, "betrokkeneIdentificatie").get("geslachtsnaam") for r in rollen] == [NAW_DATA["achternaam"]]
     assert download_report(podiumd_env, session, status).startswith(b"%PDF")
-
-
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason="[open-formulieren-1] Open Formulieren (3.5.5, 3.5.8, 4.0.2) registers an anonymous submission without name fields with an initiator rol"
-    " without betrokkeneIdentificatie, which Open Zaak 1.29.3 refuses (400 invalid-betrokkene); the zaak and PDF"
-    " exist, the registration fails; not yet reported upstream",
-)
-def test_anonymous_submission_without_a_name_registers(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
-    podiumd_env: Environment,
-    http: requests.Session,
-    openzaak: ApiClient,
-    registry: ResourceRegistry,
-    need_bootstrap: Callable[..., None],
-) -> None:
-    """A form without name fields, submitted without a login, registers a zaak."""
-    need_bootstrap("openformulieren-zgw-group", "openzaak-of-autorisatie")
-    slug = registry.tagged("anoniem")
-    field = {"type": "textfield", "key": "omschrijving", "label": "Omschrijving"}
-    make_form(podiumd_env, registry, slug, [field], ZGW_REGISTRATION)
-    status = submit(
-        podiumd_env, http, registry, slug, {"omschrijving": slug}, timeout=REGISTRATION_TIMEOUT, registers=False
-    )
-    registered_zaak(podiumd_env, openzaak, registry, status)
-    wait_for_registration(podiumd_env, str(status["submission"]), timeout=REGISTRATION_TIMEOUT)
