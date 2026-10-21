@@ -17,6 +17,9 @@ from podiumd_tests.bootstrap import check
 from podiumd_tests.bootstrap import failed
 from podiumd_tests.bootstrap import refusal
 from podiumd_tests.bootstrap import unbootstrap
+from podiumd_tests.bootstrap.keycloak import KeycloakRoles
+from podiumd_tests.bootstrap.keycloak import KeycloakUser
+from podiumd_tests.bootstrap.keycloak import keycloak_password_key
 from podiumd_tests.bootstrap.names import OBJECTEN_STORE_KEY
 from podiumd_tests.bootstrap.names import OPENKLANT_OPENINWONER_STORE_KEY
 from podiumd_tests.bootstrap.names import OPENKLANT_STORE_KEY
@@ -27,11 +30,9 @@ from podiumd_tests.bootstrap.oidc_mock import oidc_params
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.bootstrap.steps import ItaMedewerker
-from podiumd_tests.bootstrap.steps import KeycloakUser
 from podiumd_tests.bootstrap.steps import OpenInwonerPartijen
 from podiumd_tests.bootstrap.steps import OpenKlantActor
 from podiumd_tests.bootstrap.steps import SnippetStep
-from podiumd_tests.bootstrap.steps import keycloak_password_key
 from podiumd_tests.bootstrap.steps import openformulieren_params
 from podiumd_tests.bootstrap.steps import openinwoner_openklant_params
 from podiumd_tests.bootstrap.steps import productaanvraag_zaaktypen
@@ -338,6 +339,45 @@ def test_keycloak_user_remove_deletes_an_existing_user(env_factory, fake_runner,
     sent = fake_http(keycloak_answers(user_exists=True, has_group=True))
     KeycloakUser("kcc").remove(ctx)
     assert [r.url.removeprefix(KC) for r in sent if r.method == "DELETE"] == [f"{REALM}/users/u1"]
+
+
+ROLE_USERS = (
+    KeycloakUser("admin", realm_roles=("Behandelaar", "Coordinator"), client_roles=(("pabc", "administrator"),)),
+    KeycloakUser("kcc", client_roles=(("pabc", "missing"),)),
+)
+
+
+def test_keycloak_roles_creates_the_missing_roles_and_records_them(
+    env_factory, fake_runner, profile_factory, fake_http
+):
+    ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
+    answers = keycloak_answers(user_exists=True, has_group=True)
+    answers[f"POST {REALM}/roles"] = (201, None)
+    answers[f"POST {REALM}/clients/c1/roles"] = (201, None)
+    sent = fake_http(answers)
+    step = KeycloakRoles(ROLE_USERS)
+    assert step.is_present(ctx) is False
+    values = step.apply(ctx)
+    assert json.loads(values[step.store_key]) == ["Coordinator", "pabc:missing"]
+    created = [(r.url.removeprefix(KC), json.loads(r.body)) for r in sent if r.method == "POST" and "/roles" in r.url]
+    assert created == [(f"{REALM}/roles", {"name": "Coordinator"}), (f"{REALM}/clients/c1/roles", {"name": "missing"})]
+
+
+def test_keycloak_roles_remove_deletes_only_the_recorded_roles(env_factory, fake_runner, profile_factory, fake_http):
+    ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
+    step = KeycloakRoles(ROLE_USERS)
+    record = json.dumps(["Coordinator", "pabc:missing", "gone:role"])
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (
+        0,
+        stored({step.store_key: record}),
+    )
+    answers = keycloak_answers(user_exists=True, has_group=True)
+    answers[f"GET {REALM}/clients"] = (200, [])
+    answers[f"DELETE {REALM}/roles/Coordinator"] = (204, None)
+    sent = fake_http(answers)
+    assert step.remove(ctx) == (step.store_key,)
+    # The clients are gone, so their roles went with them.
+    assert [r.url.removeprefix(KC) for r in sent if r.method == "DELETE"] == [f"{REALM}/roles/Coordinator"]
 
 
 def test_step_names():

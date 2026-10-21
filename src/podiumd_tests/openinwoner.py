@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from playwright.sync_api import Locator
     from playwright.sync_api import Page
 
-    from podiumd_tests.bootstrap.steps import KeycloakUser
+    from podiumd_tests.bootstrap.keycloak import KeycloakUser
     from podiumd_tests.environment import Environment
 
 INWONER, _, BEDRIJF = IDENTITIES

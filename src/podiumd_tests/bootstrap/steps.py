@@ -11,9 +11,10 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
-from podiumd_tests.auth.keycloak_admin import for_environment
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.basisregistraties import EREBOS
+from podiumd_tests.bootstrap.keycloak import KeycloakRoles
+from podiumd_tests.bootstrap.keycloak import KeycloakUser
 from podiumd_tests.bootstrap.kiss import KissKanalen
 from podiumd_tests.bootstrap.names import CATALOGI_SCOPES
 from podiumd_tests.bootstrap.names import ITA_OBJECTTYPES
@@ -58,7 +59,6 @@ from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.clients.platform import openklant_client
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
-from podiumd_tests.json_data import section
 from podiumd_tests.mock_server import MockServer
 from podiumd_tests.mock_server import mock_server_root
 from podiumd_tests.payments import OGONE_ENDPOINT
@@ -146,105 +146,6 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
         """Delete the objects, or undo what the stored record lists."""
         self._run(ctx, "remove", **({"record": self._stored_record(ctx)} if self.record else {}))
         return () if self.store_key is None else (self.store_key,)
-
-
-@dataclass(frozen=True)
-class KeycloakUser:
-    """Test user ptest-bootstrap-<key> with a random password, and the wanted roles the realm has.
-
-    Admin calls go through auth.keycloak_admin.for_environment.
-    """
-
-    key: str
-    realm_roles: tuple[str, ...] = ()
-    client_roles: tuple[tuple[str, str], ...] = ()
-    groups: tuple[str, ...] = ()
-    attributes: dict[str, list[str]] = field(default_factory=dict[str, list[str]])
-    requires: tuple[str, ...] = ("keycloak",)
-    wiring: bool = False
-
-    @property
-    def name(self) -> str:
-        """Step name."""
-        return f"keycloak-user-{self.key}"
-
-    @property
-    def username(self) -> str:
-        """The user's name in Keycloak."""
-        return f"{PREFIX}-{self.key}"
-
-    @property
-    def store_key(self) -> str:
-        """Key of the password in the credentials Secret."""
-        return keycloak_password_key(self.key)
-
-    def is_present(self, ctx: Context, /) -> bool:
-        """The user exists with the wanted attributes, roles and groups that the realm has.
-
-        Its password must be in the credentials Secret. A role or group the realm gets later makes the step apply again.
-        """
-        admin = for_environment(ctx.env)
-        user = admin.user(self.username)
-        if user is None or self.store_key not in ctx.store.read():
-            return False
-        attributes = section(user, "attributes")
-        if any(attributes.get(name) != values for name, values in self.attributes.items()):
-            return False
-        user_id = str(user["id"])
-        roles = {str(r["name"]) for r in admin.realm_roles(self.realm_roles)}
-        groups = {g for g in self.groups if admin.group_id(g)}
-        if not (roles <= admin.user_realm_roles(user_id) and groups <= admin.user_groups(user_id)):
-            return False
-        client_roles = filter(None, (admin.client_role(c, r) for c, r in self.client_roles))
-        return all(str(role["name"]) in admin.user_client_roles(user_id, uuid) for uuid, role in client_roles)
-
-    def apply(self, ctx: Context, /) -> dict[str, str]:
-        """Create or update the user with a new password and the wanted roles and groups that exist.
-
-        A realm imported with keycloak.config.skipRoles/skipGroups true has none of the import's roles or
-        groups, so a user that should have rights would get none. Partly missing roles are a note (4.10's realm
-        drops some by design); a user that wants roles and gets none fails the step, naming the likely cause.
-        """
-        admin = for_environment(ctx.env)
-        password = admin.new_password()
-        user = admin.save_user(self.username, password, self.attributes)
-        realm_roles = admin.realm_roles(self.realm_roles)
-        admin.add_realm_roles(user, realm_roles)
-        assigned = len(realm_roles)
-        missing = sorted(set(self.realm_roles) - {str(r["name"]) for r in realm_roles})
-        for client, role in self.client_roles:
-            found = admin.client_role(client, role)
-            if found:
-                admin.add_client_role(user, *found)
-                assigned += 1
-            else:
-                missing.append(f"{client}:{role}")
-        for group in self.groups:
-            group_id = admin.group_id(group)
-            if group_id:
-                admin.join_group(user, group_id)
-                assigned += 1
-            else:
-                missing.append(f"group {group}")
-        wanted = self.realm_roles or self.client_roles or self.groups
-        if wanted and not assigned:
-            msg = (
-                f"{self.username} wants roles or groups but the realm has none of them ({', '.join(missing)}): "
-                "the realm was imported with skipRoles/skipGroups; redeploy with the roles imported "
-                "(minikube: `deploy --import-roles`) or seed them"
-            )
-            raise ValueError(msg)
-        if missing:
-            ctx.notes.append("not in realm: " + ", ".join(missing))
-        return {self.store_key: password}
-
-    def remove(self, ctx: Context, /) -> tuple[str, ...]:
-        """Delete the user."""
-        admin = for_environment(ctx.env)
-        user = admin.user_id(self.username)
-        if user:
-            admin.delete_user(user)
-        return (self.store_key,)
 
 
 # The groep of the KCC test user in ITA: ITA shows a contactverzoek only to members of the
@@ -367,11 +268,6 @@ class OpenKlantActor:
         for uuid in self._uuids(ctx):
             expect_status(http.delete(f"{url}/{uuid}", headers=headers), HTTPStatus.NO_CONTENT)
         return ()
-
-
-def keycloak_password_key(key: str) -> str:
-    """Key of a test user's password in the credentials Secret."""
-    return f"{PREFIX.replace('-', '_')}_{key}_password"
 
 
 def openformulieren_params(ctx: Context) -> dict[str, object]:
@@ -835,6 +731,7 @@ STEPS: tuple[Step, ...] = (
     # Open Archiefbeheer role users (TA seed-oab-users: recordmanager-test, reviewer-test, ...);
     # OAB logs them in locally, as in podiumd-minikube.
     *(django_user_step("openarchiefbeheer", key, (group,)) for key, group in OAB_ROLES.items()),
+    KeycloakRoles((KCC, ADMIN)),
     KCC,
     ADMIN,
     OpenKlantActor("kcc"),

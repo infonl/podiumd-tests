@@ -143,6 +143,16 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
         roles = cast("list[JsonObject]", self._get("/roles"))
         return [r for r in roles if r.get("name") in names]
 
+    def create_role(self, name: str, client_uuid: str | None = None) -> None:
+        """Create a realm role, or a role of the client with this uuid."""
+        self._send(
+            "POST", f"/clients/{client_uuid}/roles" if client_uuid else "/roles", {"name": name}, HTTPStatus.CREATED
+        )
+
+    def delete_role(self, name: str, client_uuid: str | None = None) -> None:
+        """Delete a realm role, or a role of the client with this uuid."""
+        self._send("DELETE", f"/clients/{client_uuid}/roles/{name}" if client_uuid else f"/roles/{name}", None)
+
     def user_realm_roles(self, user_id: str) -> set[str]:
         """Names of the realm roles mapped directly to a user."""
         return {

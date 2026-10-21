@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     import requests
 
     from podiumd_tests.bootstrap import Context
-    from podiumd_tests.bootstrap.steps import KeycloakUser
+    from podiumd_tests.bootstrap.keycloak import KeycloakUser
 
 STORE_KEY = "ptest_bootstrap_kiss_kanalen_record"
 KANALEN = ("Balie", "Telefoon", "Internet")

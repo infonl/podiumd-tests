@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     from playwright.sync_api import Page
 
-    from podiumd_tests.bootstrap.steps import KeycloakUser
+    from podiumd_tests.bootstrap.keycloak import KeycloakUser
     from podiumd_tests.environment import Environment
 
 pytestmark = [pytest.mark.component, pytest.mark.ui, pytest.mark.core, pytest.mark.requires("openinwoner", "keycloak")]

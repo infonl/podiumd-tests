@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
     from playwright.sync_api import Page
 
-    from podiumd_tests.bootstrap.steps import KeycloakUser
+    from podiumd_tests.bootstrap.keycloak import KeycloakUser
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
