@@ -96,7 +96,10 @@ def keycloak_login_realm(response: requests.Response, hosts: Collection[str]) ->
 
 
 def challenge_session(env: Environment, app_url: str, username: str, password: str) -> requests.Session:
-    """A session on an ASP.NET app with a /api/challenge route (KISS, ITA), logged in through Keycloak's form."""
+    """A session on an ASP.NET app with a /api/challenge route (KISS), logged in through Keycloak's form.
+
+    ITA starts a login only for a browser navigation: kcc.kcc_login.
+    """
     http = env.session()
     form_login(http, app_url + CHALLENGE, username, password)
     return http

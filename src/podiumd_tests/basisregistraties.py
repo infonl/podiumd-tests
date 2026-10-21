@@ -16,6 +16,8 @@ KVK_BASISPROFIELEN = "/api/v1/basisprofielen"
 KVK_VESTIGINGSPROFIELEN = "/api/v1/vestigingsprofielen"
 # Erebos Bultenaar, a person of the BRP test set; also the DigiD test inwoner's BSN.
 EREBOS = "999990019"
+# Kierkegaard, born 1931-07-06, another person of the BRP test set.
+KIERKEGAARD = "999990020"
 # The api-proxy of every estate the suite tests routes KvK to KvK's test API; its test set has
 # Test BV Donald, with this hoofdvestiging address.
 KVK_TEST_NUMMER = "68750110"

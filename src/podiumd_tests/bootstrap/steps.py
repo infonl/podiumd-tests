@@ -418,6 +418,12 @@ KCC = KeycloakUser(
     # ITA refuses a login without it ("Verwachtewaarde voor de samaccountname ontbreekt").
     attributes={"samaccountname": [f"{PREFIX}-kcc"]},
 )
+# ITA's functioneel beheerder: Alle contactverzoeken, reopening a closed contactverzoek.
+ITA_BEHEERDER = KeycloakUser(
+    "ita-beheerder",
+    client_roles=(("ita", "ITA_Gebruiker"), ("ita", "ITA_Functioneel_Beheerder")),
+    attributes={"samaccountname": [f"{PREFIX}-ita-beheerder"]},
+)
 # Test identities for DigiD and eHerkenning logins (TA testinwoner, testinwoner2, testbedrijf):
 # the Keycloak attributes become the bsn and eHerkenning claims of the mock.
 IDENTITIES = (
@@ -733,9 +739,10 @@ STEPS: tuple[Step, ...] = (
     # Open Archiefbeheer role users (TA seed-oab-users: recordmanager-test, reviewer-test, ...);
     # OAB logs them in locally, as in podiumd-minikube.
     *(django_user_step("openarchiefbeheer", key, (group,)) for key, group in OAB_ROLES.items()),
-    KeycloakRoles((KCC, ADMIN)),
+    KeycloakRoles((KCC, ADMIN, ITA_BEHEERDER)),
     KCC,
     ADMIN,
+    ITA_BEHEERDER,
     OpenKlantActor("kcc"),
     ItaMedewerker(KCC),
     *IDENTITIES,

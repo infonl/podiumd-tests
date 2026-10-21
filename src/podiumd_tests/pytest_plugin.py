@@ -42,6 +42,7 @@ from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
 from podiumd_tests.mock_server import Callback
+from podiumd_tests.oidc import challenge_session
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
@@ -67,6 +68,7 @@ if TYPE_CHECKING:
 
     from _pytest.mark.structures import ParameterSet  # pytest.param's type; pytest has no public name for it
 
+    from podiumd_tests.bootstrap.keycloak import KeycloakUser
     from podiumd_tests.capabilities import Capabilities
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.credentials import SecretResolver
@@ -373,6 +375,19 @@ def fixture_ontvangstbevestiging(
         pytest.skip(
             f"ZAC sends no ontvangstbevestiging for {zaaktype}: allow it with profile setting zac_email_confirmation"
         )
+
+
+@pytest.fixture(name="kiss_session")
+def fixture_kiss_session(
+    podiumd_env: Environment, urls: dict[str, str], need_bootstrap: Callable[..., None]
+) -> Callable[[KeycloakUser], requests.Session]:
+    """A KISS session of a test user, logged in through Keycloak without a browser."""
+
+    def login(user: KeycloakUser) -> requests.Session:
+        need_bootstrap(user.name)
+        return challenge_session(podiumd_env, urls["kiss"], user.username, podiumd_env.credentials.get(user.store_key))
+
+    return login
 
 
 @pytest.fixture(name="zac")

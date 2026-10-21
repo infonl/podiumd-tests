@@ -3,6 +3,7 @@
 import pytest
 import requests
 
+from podiumd_tests import oidc
 from podiumd_tests.oidc import keycloak_hosts
 from podiumd_tests.oidc import keycloak_login_realm
 from podiumd_tests.oidc import logs_in_through_keycloak
@@ -67,3 +68,10 @@ def test_logs_in_through_keycloak_fails_on_a_server_error(monkeypatch, response_
     monkeypatch.setattr(requests.Session, "get", lambda *_a, **_k: response_factory(status=502))
     with pytest.raises(AssertionError, match="fails instead of answering its login"):
         logs_in_through_keycloak(requests.Session(), "https://openzaak.example.test/oidc/authenticate/", HOSTS)
+
+
+def test_challenge_session_logs_in_through_the_challenge_route(env_factory, monkeypatch):
+    logins = []
+    monkeypatch.setattr(oidc, "form_login", lambda _http, url, user, password: logins.append((url, user, password)))
+    oidc.challenge_session(env_factory(), "https://kiss.test", "u", "p")
+    assert logins == [("https://kiss.test" + oidc.CHALLENGE, "u", "p")]

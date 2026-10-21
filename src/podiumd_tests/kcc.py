@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
     from playwright.sync_api import Page
 
+    from podiumd_tests.bootstrap.keycloak import KeycloakUser
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
@@ -36,9 +37,12 @@ KISS_KLANTCONTACTEN = "/api/klantinteracties/api/v1/klantcontacten"
 KENNIS_URL = "https://example.invalid/"
 
 
-def kcc_login(page: Page, env: Environment, component: str) -> requests.Session:
-    """The KCC test user's session in KISS ("kiss") or ITA ("ita")."""
-    return challenge_login(page, env, env.profile.urls[component], KCC.username, env.credentials.get(KCC.store_key))
+def kcc_login(page: Page, env: Environment, component: str, user: KeycloakUser = KCC) -> requests.Session:
+    """A test user's session (default the KCC user) in KISS ("kiss") or ITA ("ita"), logged in in the browser.
+
+    ITA starts a login only for a browser navigation; KISS also takes oidc.challenge_session.
+    """
+    return challenge_login(page, env, env.profile.urls[component], user.username, env.credentials.get(user.store_key))
 
 
 def kiss_register(kiss: requests.Session, kiss_url: str) -> dict[str, str]:

@@ -13,6 +13,7 @@ import pytest
 
 from podiumd_tests.basisregistraties import BRP_PERSONEN
 from podiumd_tests.basisregistraties import EREBOS
+from podiumd_tests.basisregistraties import KIERKEGAARD
 from podiumd_tests.basisregistraties import brp_personen
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
@@ -56,7 +57,6 @@ REG_150 = pytest.mark.source(
 )
 
 
-KIERKEGAARD = "999990020"
 NAAM = ["burgerservicenummer", "naam.voornamen", "naam.geslachtsnaam"]
 
 

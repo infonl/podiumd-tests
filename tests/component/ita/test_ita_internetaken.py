@@ -16,12 +16,14 @@ import pytest
 
 from podiumd_tests.bootstrap.steps import ITA_GROEP
 from podiumd_tests.bootstrap.steps import KCC
+from podiumd_tests.clients.platform import mailpit_client
 from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
 from podiumd_tests.kcc import expect_ita_group_access_bug
 from podiumd_tests.kcc import ita_detail_text
 from podiumd_tests.kcc import kcc_login
-from podiumd_tests.mailpit import forget_mails
+from podiumd_tests.mailpit import received
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
@@ -50,6 +52,12 @@ if TYPE_CHECKING:
     from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [pytest.mark.component, pytest.mark.ui, pytest.mark.requires("ita", "openklant", "keycloak")]
+
+ITA_E2E = "upstream interne-taak-afhandeling/ITA InterneTaakAfhandeling.EndToEndTest"
+# ITA sends its mail in the request; Mailpit lists it within seconds.
+MAIL_TIMEOUT = 60
+# A klantcontact nummer Open Klant never hands out (its numbers come from random_nummer).
+UNKNOWN_NUMMER = "0000000000"
 
 
 @pytest.fixture(name="ita")
@@ -148,6 +156,10 @@ def test_kanalen_answer_the_kcc_user(ita: requests.Session, urls: dict[str, str]
     "TA regression/184-ita-doorsturen-mutatie.spec.ts",
     "Checks forwarding a contactverzoek in ITA to an afdeling or a groep assigns it there.",
 )
+@pytest.mark.source(
+    f"{ITA_E2E}/Contactverzoek/ContactverzoekDoorsturenGroepsmailboxScenarios.cs",
+    "An afdeling or groep with a groepsmailbox gets the forwarded contactverzoek by mail.",
+)
 def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     ita: requests.Session,
     urls: dict[str, str],
@@ -172,10 +184,13 @@ def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(  # pylint: 
     )
     forward = ita.post(f"{urls['ita']}/api/internetaken/{taak['uuid']}/forward", json={soort.lower(): identificatie})
     expect_status(forward, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    # ITA mails the afdeling or groep about the forwarded contactverzoek.
-    forget_mails(podiumd_env, registry, f'to:"{data["email"]}"')
     assigned = entries(openklant.get(f"internetaken/{taak['uuid']}")["toegewezenAanActoren"])
     assert {str(a["uuid"]) for a in assigned} & {str(a["uuid"]) for a in openklant.list("actoren", actoren)}
+    if podiumd_env.capabilities.skip_reason("mailpit") is None:
+        # ITA mails the afdeling's or groep's mailbox about the forwarded contactverzoek.
+        nummer = openklant.get(str(section(taak, "aanleidinggevendKlantcontact")["url"]))["nummer"]
+        subject = f"Contactverzoek Doorgestuurd - {nummer}"
+        received(mailpit_client(podiumd_env), registry, timeout=MAIL_TIMEOUT, to=data["email"], subject=subject)
 
 
 @pytest.mark.requires("kiss", "objecten", "cluster")
@@ -234,3 +249,72 @@ def test_contactverzoek_from_kiss_shows_in_full_in_ita(  # pylint: disable=too-m
     clean_up_logboek(objecten, registry, logboek_type, str(taak["uuid"]))
     detail = ita_detail_text(ita, urls["ita"], taak)
     assert [v for v in (onderwerp, f"Vraag {onderwerp}", str(taak["toelichting"]), "PodiumD") if v not in detail] == []
+
+
+@pytest.mark.source(
+    f"{ITA_E2E}/Contactverzoek/ContactverzoekDoorsturenGroepsmailboxScenarios.cs",
+    "Forwarding to an afdeling without groepsmailbox and without medewerker is refused.",
+)
+def test_forward_to_an_afdeling_without_mailbox_is_refused(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    ita: requests.Session,
+    urls: dict[str, str],
+    podiumd_env: Environment,
+    openklant: ApiClient,
+    objecten: ApiClient,
+    registry: ResourceRegistry,
+    taak: JsonObject,
+) -> None:
+    """ITA refuses to forward to an afdeling that has no e-mail address when no medewerker is chosen; nothing changes."""
+    identificatie = registry.tagged("afdeling")
+    make_object(
+        objecten,
+        registry,
+        objecttype_url(podiumd_env, "Afdeling"),
+        {"naam": identificatie, "identificatie": identificatie},
+    )
+    registry.add(
+        f"actoren of {identificatie}",
+        lambda: [
+            openklant.delete(str(a["url"]))
+            for a in openklant.list("actoren", {"actoridentificatorObjectId": identificatie})
+        ],
+    )
+    forward = ita.post(f"{urls['ita']}/api/internetaken/{taak['uuid']}/forward", json={"afdeling": identificatie})
+    expect_status(forward, HTTPStatus.BAD_REQUEST)
+    assert entries(openklant.get(f"internetaken/{taak['uuid']}")["toegewezenAanActoren"]) == []
+
+
+@pytest.mark.source(
+    f"{ITA_E2E}/Contactverzoek/KlantcontactZoekenScenarios.cs",
+    "A medewerker finds a contactverzoek by its klantcontact number; not one outside their rights, nor an unknown one.",
+)
+def test_contactverzoek_is_found_by_its_klantcontactnummer(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    ita: requests.Session,
+    urls: dict[str, str],
+    openklant: ApiClient,
+    objecten: ApiClient,
+    registry: ResourceRegistry,
+    logboek_type: str,
+    need_bootstrap: Callable[..., None],
+    request: pytest.FixtureRequest,
+    podiumd_env: Environment,
+) -> None:
+    """ITA finds a contactverzoek of the user's groep by its klantcontact's nummer; not one outside the user's groepen.
+
+    ITA shows a medewerker only contactverzoeken assigned to one of their afdelingen or groepen (403), and answers
+    404 to an unknown nummer.
+    """
+    expect_ita_group_access_bug(request, podiumd_env)
+    need_bootstrap("objecten-medewerker-kcc")
+
+    def nummer_of(actoren: list[JsonObject]) -> str:
+        klantcontact = make_klantcontact(openklant, registry)
+        taak = make_internetaak(openklant, registry, klantcontact, actoren)
+        clean_up_logboek(objecten, registry, logboek_type, str(taak["uuid"]))
+        return str(klantcontact["nummer"])
+
+    by_nummer = f"{urls['ita']}/api/internetaken/by-klantcontact"
+    mine = nummer_of([make_actor(openklant, registry, "organisatorische_eenheid", ITA_GROEP, "grp")])
+    assert str(expect_status(ita.get(f"{by_nummer}/{mine}"), HTTPStatus.OK).json()["aanleidinggevendKlantcontact"])
+    expect_status(ita.get(f"{by_nummer}/{nummer_of([])}"), HTTPStatus.FORBIDDEN)
+    expect_status(ita.get(f"{by_nummer}/{UNKNOWN_NUMMER}"), HTTPStatus.NOT_FOUND)

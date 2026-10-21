@@ -16,7 +16,6 @@ import pytest
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.json_data import entries
-from podiumd_tests.oidc import challenge_session
 from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
@@ -25,26 +24,12 @@ if TYPE_CHECKING:
     import requests
 
     from podiumd_tests.bootstrap.keycloak import KeycloakUser
-    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("kiss", "keycloak")]
 
 E2E = "upstream klantinteractie-servicesysteem/KISS-frontend Kiss.Bff.EndToEndTest"
-
-
-@pytest.fixture(name="kiss_as")
-def fixture_kiss_as(
-    podiumd_env: Environment, urls: dict[str, str], need_bootstrap: Callable[..., None]
-) -> Callable[[KeycloakUser], requests.Session]:
-    """A KISS session of a test user, logged in through Keycloak without a browser."""
-
-    def login(user: KeycloakUser) -> requests.Session:
-        need_bootstrap(user.name)
-        return challenge_session(podiumd_env, urls["kiss"], user.username, podiumd_env.credentials.get(user.store_key))
-
-    return login
 
 
 class Beheer(NamedTuple):
@@ -86,11 +71,14 @@ BEHEER = {
     ],
 )
 def test_beheerder_adds_changes_and_deletes(
-    kiss_as: Callable[[KeycloakUser], requests.Session], urls: dict[str, str], registry: ResourceRegistry, kind: str
+    kiss_session: Callable[[KeycloakUser], requests.Session],
+    urls: dict[str, str],
+    registry: ResourceRegistry,
+    kind: str,
 ) -> None:
     """The KISS beheerder adds an item, renames it, and deletes it; the overview follows each step."""
     beheer, api = BEHEER[kind], urls["kiss"] + "/api"
-    kiss = kiss_as(ADMIN)
+    kiss = kiss_session(ADMIN)
     name = registry.tagged(kind)
 
     def listed() -> dict[str, str]:
@@ -115,14 +103,14 @@ def test_beheerder_adds_changes_and_deletes(
     "Nieuws and werkinstructies: the important message count on the home page and marking a message read.",
 )
 def test_published_bericht_reaches_the_kcc_and_is_marked_read(
-    kiss_as: Callable[[KeycloakUser], requests.Session], urls: dict[str, str], registry: ResourceRegistry
+    kiss_session: Callable[[KeycloakUser], requests.Session], urls: dict[str, str], registry: ResourceRegistry
 ) -> None:
     """The redacteur publishes an important bericht with a skill; the KCC sees it unread, counted, then reads it.
 
     Only a redacteur may publish: the KCC is refused.
     """
     api = urls["kiss"] + "/api"
-    redacteur, kcc = kiss_as(ADMIN), kiss_as(KCC)
+    redacteur, kcc = kiss_session(ADMIN), kiss_session(KCC)
     skill = expect_status(redacteur.post(f"{api}/Skills", json={"naam": registry.tagged("skill")}), 201).json()
     registry.add(f"KISS skill {skill['id']}", lambda: redacteur.delete(f"{api}/Skills/{skill['id']}"))
     titel = registry.tagged("bericht")
