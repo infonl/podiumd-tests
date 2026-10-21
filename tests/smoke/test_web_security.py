@@ -46,9 +46,12 @@ HEADER_GAPS = {
 }
 
 
-def public_url(urls: dict[str, str], component: str) -> str:
-    """The component's profile URL; skips when the profile reaches it in the cluster (no public host)."""
-    if cluster_service(urls[component]):
+def public_url(podiumd_env: Environment, urls: dict[str, str], component: str) -> str:
+    """The component's URL; skips when the profile reaches it in the cluster (no public host).
+
+    The profile URL decides: `urls` holds the port-forwarded 127.0.0.1 URL of an in-cluster component.
+    """
+    if cluster_service(podiumd_env.profile.urls[component]):
         pytest.skip(f"{component} has no public host in this profile")
     return urls[component]
 
@@ -61,23 +64,29 @@ def headers_param(component: str) -> ParameterSet:
 
 
 @pytest.mark.parametrize("component", [headers_param(c) for c in PUBLIC])
-def test_security_headers(http: requests.Session, urls: dict[str, str], component: str) -> None:
+def test_security_headers(
+    http: requests.Session, podiumd_env: Environment, urls: dict[str, str], component: str
+) -> None:
     """The root sends HSTS and nosniff, and frame protection when it is an HTML page."""
-    response = http.get(public_url(urls, component) + "/", allow_redirects=False)
+    response = http.get(public_url(podiumd_env, urls, component) + "/", allow_redirects=False)
     assert not missing_security_headers(response), f"{describe(response)} lacks {missing_security_headers(response)}"
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in PUBLIC])
-def test_session_cookies_are_secure(http: requests.Session, urls: dict[str, str], component: str) -> None:
+def test_session_cookies_are_secure(
+    http: requests.Session, podiumd_env: Environment, urls: dict[str, str], component: str
+) -> None:
     """Session, auth and token cookies the root sets are Secure and HttpOnly."""
-    response = http.get(public_url(urls, component) + "/", allow_redirects=False)
+    response = http.get(public_url(podiumd_env, urls, component) + "/", allow_redirects=False)
     assert not insecure_session_cookies(response), insecure_session_cookies(response)
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in PUBLIC])
-def test_foreign_origin_gets_no_cors_access(http: requests.Session, urls: dict[str, str], component: str) -> None:
+def test_foreign_origin_gets_no_cors_access(
+    http: requests.Session, podiumd_env: Environment, urls: dict[str, str], component: str
+) -> None:
     """Neither a preflight nor a GET from a foreign origin is allowed to read the root."""
-    url = public_url(urls, component) + "/"
+    url = public_url(podiumd_env, urls, component) + "/"
     preflight = http.options(url, headers={"Origin": FOREIGN_ORIGIN, "Access-Control-Request-Method": "GET"})
     get = http.get(url, headers={"Origin": FOREIGN_ORIGIN}, allow_redirects=False)
     for response in (preflight, get):
@@ -87,7 +96,7 @@ def test_foreign_origin_gets_no_cors_access(http: requests.Session, urls: dict[s
 @pytest.mark.parametrize("component", [requiring(c, c) for c in PUBLIC])
 def test_certificate_is_valid_long_enough(podiumd_env: Environment, urls: dict[str, str], component: str) -> None:
     """The host's certificate is valid for it and for at least MIN_CERT_DAYS more days."""
-    url = public_url(urls, component)
+    url = public_url(podiumd_env, urls, component)
     if not url.startswith("https://"):
         pytest.skip(f"{component} is not served over https in this profile")
     days = days_valid(podiumd_env.peer_certificate(url), time.time())
