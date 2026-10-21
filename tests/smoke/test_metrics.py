@@ -61,6 +61,8 @@ METRICS_GAPS = {
         "[podiumd-chart-19] podiumd 4.10.0's values-enable-observability.yaml enables no metrics for Open"
         " Archiefbeheer, Referentielijsten, Open VTB, Frank!Gateway and OpenBao (helm-charts #625)",
     ),
+    "zac": "[podiumd-chart-20] ZAC exports no OTEL metrics without -Dotel.metrics.exporter=otlp in its"
+    " javaOptions (helm-charts #625)",
 }
 OTEL_OFF = (
     "no app sends OTEL metrics: settings.otel is disabled for all Maykin apps"

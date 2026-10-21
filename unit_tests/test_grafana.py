@@ -126,6 +126,7 @@ def test_without_metrics():
                 {"metric": {"job": "podiumd/openforms"}},
                 {"metric": {"job": "openinwoner-web"}},
                 {"metric": {"job": "openobjectx"}},
+                {"metric": {"job": "podiumd/zac"}},
             ]
         }
     }

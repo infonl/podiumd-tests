@@ -23,7 +23,7 @@ class Component:
 
 
 COMPONENTS: dict[str, Component] = {
-    "zac": Component(("zac",), ("zac",)),
+    "zac": Component(("zac",), ("zac",), otel_service="zac"),
     "openzaak": Component(("openzaak",), ("openzaak",), otel_service="openzaak"),
     "keycloak": Component(("keycloak",), ("keycloak",), monitored=True),
     "keycloak-admin": Component(("keycloak-admin",), ()),
