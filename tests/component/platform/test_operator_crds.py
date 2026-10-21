@@ -39,7 +39,8 @@ OPERATOR_GROUPS = {
 # The helm-charts script that installs an operator's CRDs for a version.
 INSTALL_SCRIPTS = {
     "keycloak-operator": "charts/podiumd/scripts/install-keycloak-operator-crds.sh --keycloak-version {}",
-    "redis-operator": "charts/podiumd/scripts/install-redis-operator-crds.sh --version {}",
+    # Its --version is the chart version, and it refuses one below its default: the default is the chart's own.
+    "redis-operator": "charts/podiumd/scripts/install-redis-operator-crds.sh",
 }
 _KC = OPERATOR_GROUPS["keycloak-operator"]
 _REDIS = OPERATOR_GROUPS["redis-operator"]
