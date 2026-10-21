@@ -1,7 +1,8 @@
 """Open Archiefbeheer's zaken cache, for a test's own zaken only.
 
 Actions: cache (fetch the zaken from Open Zaak as OAB's sync does and store them), uncache
-(delete them and every destruction list that holds one). Params: action, urls. OAB's own
+(delete them and every destruction list that holds one), forget (delete only the cached zaken; their list
+items keep the zaak URL with zaak empty, as after a sync without them). Params: action, urls. OAB's own
 sync is no fit: the incremental one skips zaken that ended before the newest cached one,
 the full one wipes the whole cache.
 """
@@ -12,6 +13,8 @@ def run(params):
     from openarchiefbeheer.zaken.models import Zaak
 
     urls = params["urls"]
+    if params["action"] == "forget":
+        return {"removed": Zaak.objects.filter(url__in=urls).delete()[0]}
     if params["action"] == "uncache":
         holding = DestructionList.objects.filter(items__zaak__url__in=urls).values("pk")
         removed = DestructionList.objects.filter(pk__in=holding).delete()[0]

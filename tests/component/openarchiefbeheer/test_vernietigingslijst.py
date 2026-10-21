@@ -32,6 +32,7 @@ from podiumd_tests.json_data import section
 from podiumd_tests.oab import API
 from podiumd_tests.oab import cache_zaken
 from podiumd_tests.oab import destroy_now
+from podiumd_tests.oab import forget_zaken
 from podiumd_tests.oab import login
 from podiumd_tests.oab import process_review_response
 from podiumd_tests.oab import queues_review_response_on_commit
@@ -166,11 +167,11 @@ def _closed_zaak(
     return zaak
 
 
-def user_pk(oab: Callable[[str], requests.Session], api: str, role: str) -> int:
-    """The pk of the role's test user, as OAB lists users per assignee role."""
+def user_pk(oab: Callable[[str], requests.Session], api: str, role: str, user: str | None = None) -> int:
+    """The pk of a test user (default: the role's own) that OAB lists for the assignee role."""
     filter_role = {"reviewer": "main_reviewer", "coreviewer": "co_reviewer"}.get(role, role)
     users = expect_status(oab("recordmanager").get(api + "/users/", params={"role": filter_role}), HTTPStatus.OK)
-    return next(int(str(u["pk"])) for u in entries(users.json()) if str(u["username"]).endswith(f"-{role}"))
+    return next(int(str(u["pk"])) for u in entries(users.json()) if str(u["username"]).endswith(f"-{user or role}"))
 
 
 def rows(response: requests.Response) -> list[JsonObject]:
@@ -515,6 +516,100 @@ def test_only_the_record_manager_changes_the_list(
     lijst = new_list(oab, api, zaak, registry)
     changed = oab(role).patch(f"{api}/destruction-lists/{lijst}/", json={"name": registry.tagged("hernoemd")})
     expect_status(changed, *REFUSED, HTTPStatus.NOT_FOUND)
+
+
+UPSTREAM_E2E = "upstream maykinmedia/open-archiefbeheer backend/src/openarchiefbeheer/destruction/tests/e2e"
+
+
+def main_reviewer(oab: Callable[[str], requests.Session], api: str, lijst: str) -> object:
+    """The username of the list's main reviewer."""
+    detail = expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/"), HTTPStatus.OK).json()
+    reviewers = [a for a in entries(detail.get("assignees")) if a.get("role") == "main_reviewer"]
+    return section(reviewers[0], "user").get("username") if reviewers else None
+
+
+@pytest.mark.source(
+    f"{UPSTREAM_E2E}/features/test_feature_list_reassign.py", "The record manager changes the reviewer of a list."
+)
+@pytest.mark.source(
+    f"{UPSTREAM_E2E}/issues/test_841_reassign_when_changes_requested.py",
+    "The reviewer can also be changed after the reviewer requested changes.",
+)
+def test_record_manager_assigns_another_reviewer(
+    oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
+) -> None:
+    """The record manager hands a list to review to another reviewer, and back once that one requested changes."""
+    lijst = new_list(oab, api, zaak, registry)
+
+    def assign(user: str) -> None:
+        body = {
+            "comment": "podiumd-tests",
+            "assignee": {"user": user_pk(oab, api, "reviewer", user), "role": "main_reviewer"},
+        }
+        changed = oab("recordmanager").post(f"{api}/destruction-lists/{lijst}/update_assignee/", json=body)
+        expect_status(changed, HTTPStatus.OK)
+
+    assign("beheerder")
+    assert str(main_reviewer(oab, api, lijst)).endswith("-beheerder")
+    reject(oab, api, "beheerder", lijst, [zaak])
+    assert status(oab, api, lijst) == "changes_requested"
+    assign("reviewer")
+    assert str(main_reviewer(oab, api, lijst)).endswith("-reviewer")
+
+
+@pytest.mark.source(
+    f"{UPSTREAM_E2E}/features/test_feature_list_delete.py",
+    "A new list can be deleted; a list past status new cannot.",
+)
+def test_only_a_new_list_can_be_deleted(
+    oab: Callable[[str], requests.Session], api: str, closed_zaak: Callable[[], JsonObject], registry: ResourceRegistry
+) -> None:
+    """The record manager deletes a list that is still new; a list ready to review is refused."""
+    new = new_list(oab, api, closed_zaak(), registry, ready=False)
+    expect_status(oab("recordmanager").delete(f"{api}/destruction-lists/{new}/"), HTTPStatus.NO_CONTENT)
+    expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{new}/"), HTTPStatus.NOT_FOUND)
+    ready = new_list(oab, api, closed_zaak(), registry)
+    expect_status(oab("recordmanager").delete(f"{api}/destruction-lists/{ready}/"), *REFUSED)
+    assert status(oab, api, ready) == "ready_to_review"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="[open-archiefbeheer-6] Open Archiefbeheer 2.0.0 (also main): process_review_response reads item.zaak.url"
+    " of every suggested item (prepopulate_selection_after_review_response); an item whose zaak left the zaken cache"
+    " has zaak None, the task fails and the list stays changes_requested; not yet reported",
+)
+@pytest.mark.source(
+    f"{UPSTREAM_E2E}/features/test_feature_list_process_review.py",
+    "test_zaak_removed_outside_process: a zaak deleted by something else does not break processing the review.",
+)
+def test_review_is_processed_after_a_zaak_was_deleted_elsewhere(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    oab: Callable[[str], requests.Session],
+    api: str,
+    closed_zaak: Callable[[], JsonObject],
+    registry: ResourceRegistry,
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+) -> None:
+    """A zaak on a rejected list is deleted in Open Zaak and left OAB's cache; answering the review for the other works.
+
+    OAB keeps the list item with the zaak's URL and zaak empty; the list must still go back to review.
+    """
+    gone, stays = closed_zaak(), closed_zaak()
+    lijst = new_list(oab, api, [gone, stays], registry)
+    review_pk = reject(oab, api, "reviewer", lijst, [gone, stays])
+    delete_zaak(openzaak, str(gone["url"]))
+    forget_zaken(podiumd_env, [str(gone["url"])])
+    items = rows(oab("recordmanager").get(api + "/review-items/", params={"item-review-review": str(review_pk)}))
+    zaak_of = {item["pk"]: section(section(item, "destructionListItem"), "zaak").get("url") for item in items}
+    assert stays["url"] in zaak_of.values()
+    responses = [{"reviewItem": pk, **KEEP} for pk, url in zaak_of.items() if url == stays["url"]]
+    body = {"review": review_pk, "comment": "podiumd-tests", "itemsResponses": responses}
+    answered = oab("recordmanager").post(api + "/review-responses/", json=body)
+    expect_status(answered, HTTPStatus.CREATED)
+    wait_until(
+        lambda: status(oab, api, lijst) == "ready_to_review", timeout=60, description=f"list {lijst} ready_to_review"
+    )
 
 
 @pytest.mark.tc("ABC-031")

@@ -63,6 +63,11 @@ def cache_zaken(env: Environment, urls: list[str], *, cached: bool) -> None:
     run_snippet(env.kube, env.deployment_for("openarchiefbeheer"), "oab_zaken", params)
 
 
+def forget_zaken(env: Environment, urls: list[str]) -> None:
+    """Delete zaken from OAB's zaken cache only, as a zaak deleted in Open Zaak leaves OAB after its sync."""
+    run_snippet(env.kube, env.deployment_for("openarchiefbeheer"), "oab_zaken", {"action": "forget", "urls": urls})
+
+
 def set_archive_config(env: Environment, fields: dict[str, object]) -> dict[str, object]:
     """Set fields of OAB's global ArchiveConfig; their old values, to set back."""
     old = run_snippet(env.kube, env.deployment_for("openarchiefbeheer"), "oab_archive_config", {"fields": fields})
