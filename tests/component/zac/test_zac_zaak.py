@@ -71,7 +71,7 @@ def test_new_zaak_keeps_the_chosen_fields(
 @pytest.mark.xfail(
     strict=True,
     reason="[zac-2] ZAC 5.4.5 and 5.9.1 answer 500 to a zaak without startdatum (NullPointerException in"
-    " calculateDoorlooptijden); not yet reported upstream",
+    " calculateDoorlooptijden); PZ-13090",
 )
 def test_zaak_without_startdatum_is_refused_or_starts_today(zac_zaak: Callable[..., JsonObject]) -> None:
     """ZAC refuses a zaak without startdatum with 400, or starts it today."""
