@@ -13,8 +13,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
-from podiumd_tests.auth.keycloak import form_login
-from podiumd_tests.oidc import CHALLENGE
+from podiumd_tests.oidc import challenge_session
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 
@@ -46,14 +45,8 @@ class KissKanalen:
 
     def _session(self, ctx: Context) -> tuple[requests.Session, str]:
         kiss = ctx.env.profile.urls["kiss"]
-        http = ctx.env.session()
-        form_login(
-            http,
-            kiss + CHALLENGE,
-            self.admin.username,
-            ctx.env.credentials.get(self.admin.store_key),
-        )
-        return http, kiss
+        password = ctx.env.credentials.get(self.admin.store_key)
+        return challenge_session(ctx.env, kiss, self.admin.username, password), kiss
 
     @staticmethod
     def _current(http: requests.Session, kiss: str) -> dict[str, str]:

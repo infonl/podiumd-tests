@@ -402,15 +402,15 @@ OAB_ROLES = {
     # The functioneel beheerder: the only role that may change OAB's archive configuration.
     "beheerder": "Administrator",
 }
-# The klantcontactmedewerker of KISS and ITA (TA kcc-medewerker).
-# The test admin: ZAC beheerder, PABC administrator, KISS beheerder and admin of the Django apps' SSO.
+# The test admin: ZAC beheerder, PABC administrator, KISS beheerder and redacteur, admin of the Django apps' SSO.
 ADMIN = KeycloakUser(
     "admin",
     # beheerders: podiumd's pabc-dataset.json maps it to every ZAC role in all domains (ExternalsPodiumD).
     realm_roles=("Registreerders", "Behandelaar", "Coordinator", "Functioneel-beheerder", "beheerders"),
-    client_roles=(("pabc", "administrator"), ("kiss", "Beheerder")),
+    client_roles=(("pabc", "administrator"), ("kiss", "Beheerder"), ("kiss", "Redacteur")),
     groups=("beheerders",),
 )
+# The klantcontactmedewerker of KISS and ITA (TA kcc-medewerker).
 KCC = KeycloakUser(
     "kcc",
     realm_roles=("Klantcontactmedewerker",),

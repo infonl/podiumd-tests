@@ -17,7 +17,6 @@ from locust import events
 from locust import task
 
 from podiumd_tests.auth.keycloak import discovery_url
-from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.auth.keycloak_admin import realm_of
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import brp_personen
@@ -35,7 +34,7 @@ from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
 from podiumd_tests.kcc import vac_data
-from podiumd_tests.oidc import CHALLENGE
+from podiumd_tests.oidc import challenge_session
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
@@ -137,8 +136,7 @@ def _search_calls(env: Environment) -> dict[str, Call]:
         query = {"page": 0, "rows": 10, "type": "ZAAK", "zoeken": {"ALLE": SEARCH_TERM}}
         calls["zac_search"] = lambda _r: expect_status(zac.put(urls["zac"] + "/rest/zoeken/list", json=query), 200)
     if "kiss" in urls:
-        kiss = env.session()
-        form_login(kiss, urls["kiss"] + CHALLENGE, KCC.username, env.credentials.get(KCC.store_key))
+        kiss = challenge_session(env, urls["kiss"], KCC.username, env.credentials.get(KCC.store_key))
         body = {"query": SEARCH_TERM, "page": 1, "filters": []}
         calls["kiss_search"] = lambda _r: expect_status(kiss.post(urls["kiss"] + "/api/search", json=body), 200)
     if "openinwoner" in urls:

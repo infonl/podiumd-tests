@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 def keycloak_password_key(key: str) -> str:
     """Key of a test user's password in the credentials Secret."""
-    return f"{PREFIX.replace('-', '_')}_{key}_password"
+    return f"{PREFIX.replace('-', '_')}_{key.replace('-', '_')}_password"
 
 
 @dataclass(frozen=True)

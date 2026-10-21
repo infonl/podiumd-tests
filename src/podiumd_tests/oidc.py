@@ -8,6 +8,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
+from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.auth.keycloak import login_form_action
 from podiumd_tests.components import DJANGO_APPS
 from podiumd_tests.responses import UnexpectedStatusError
@@ -21,6 +22,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     import requests
+
+    from podiumd_tests.environment import Environment
 
 AUTH_PATH = re.compile(r"^/realms/(?P<realm>[^/]+)/protocol/openid-connect/auth$")
 LOGIN_FORM = re.compile(r"""(name|id)=["']username["']""")
@@ -90,3 +93,10 @@ def keycloak_login_realm(response: requests.Response, hosts: Collection[str]) ->
         msg = f"login form on {url_host(response.url)} posts to {url_host(action)}"
         raise LoginPageError(msg)
     return match["realm"]
+
+
+def challenge_session(env: Environment, app_url: str, username: str, password: str) -> requests.Session:
+    """A session on an ASP.NET app with a /api/challenge route (KISS, ITA), logged in through Keycloak's form."""
+    http = env.session()
+    form_login(http, app_url + CHALLENGE, username, password)
+    return http
