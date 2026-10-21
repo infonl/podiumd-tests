@@ -24,6 +24,7 @@ urls:
   openbeheer: https://ontw-openbeheer.dev.dimpact.nl
   referentielijsten: https://ontw-referentielijsten.dev.dimpact.nl
   grafana: https://ontw-podiumd-logs.dev.dimpact.nl
+  openbao: https://ontw-openbao-admin.dev.dimpact.nl
 secrets:
   pabc_api_key:
     pod_env: {deployment: pabc, var: API_KEY__0}
