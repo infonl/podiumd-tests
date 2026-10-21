@@ -278,3 +278,18 @@ def test_abonnement_sends_the_callback_auth(fake_http):
         "auth": CALLBACK_AUTH,
         "kanalen": [{"naam": "zaken", "filters": {"bronorganisatie": "1"}}],
     }
+
+
+def test_document_in_parts_uploads_each_part_without_json_content_type(fake_http):
+    eio = "/v1/documenten/api/v1/enkelvoudiginformatieobjecten"
+    parts = [{"url": f"{API}/deel/1", "omvang": 3}, {"url": f"{API}/deel/2", "omvang": 2}]
+    created_document = {"url": f"{API}{eio[3:]}/d", "lock": "L", "bestandsdelen": parts}
+    sent = fake_http({f"POST {eio}": (201, created_document), "/v1/deel/1": (200, {}), "/v1/deel/2": (200, {})})
+    document = openzaak.make_document_in_parts(api(), ResourceRegistry("run1"), "iot", b"abcde", bestandsnaam="x.bin")
+    assert document["lock"] == "L"
+    assert body(sent[0])["bestandsomvang"] == 5
+    assert "inhoud" not in body(sent[0])
+    uploads = sent[1:]
+    assert [u.url for u in uploads] == [p["url"] for p in parts]
+    assert all("multipart/form-data" in u.headers["Content-Type"] for u in uploads)
+    assert b"abc" in uploads[0].body and b"de" in uploads[1].body

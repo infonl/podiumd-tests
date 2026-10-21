@@ -12,7 +12,9 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
+from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import strings
+from podiumd_tests.responses import expect_status
 from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
@@ -167,15 +169,11 @@ def make_rol(
     return _create(openzaak, registry, f"{ZAKEN}/rollen", body)
 
 
-def make_document(
-    openzaak: ApiClient,
-    registry: ResourceRegistry,
-    informatieobjecttype: str,
-    inhoud: str = "podiumd-tests",
-    **fields: object,
-) -> JsonObject:
-    """An enkelvoudig informatieobject with text inhoud whose titel carries the run tag."""
-    body: dict[str, object] = {
+def _document_body(
+    registry: ResourceRegistry, informatieobjecttype: str, size: int, **fields: object
+) -> dict[str, object]:
+    """An enkelvoudig informatieobject of size bytes whose titel carries the run tag; fields override the defaults."""
+    return {
         "bronorganisatie": TEST_CATALOGUS_RSIN,
         "creatiedatum": today(),
         "titel": registry.tagged("document"),
@@ -184,13 +182,47 @@ def make_document(
         "bestandsnaam": "ptest.txt",
         "formaat": "text/plain",
         "informatieobjecttype": informatieobjecttype,
-        "inhoud": base64.b64encode(inhoud.encode()).decode(),
-        "bestandsomvang": len(inhoud.encode()),
+        "bestandsomvang": size,
         "indicatieGebruiksrecht": False,
         "vertrouwelijkheidaanduiding": "openbaar",
         **fields,
     }
+
+
+def make_document(
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    informatieobjecttype: str,
+    inhoud: str = "podiumd-tests",
+    **fields: object,
+) -> JsonObject:
+    """An enkelvoudig informatieobject with text inhoud whose titel carries the run tag."""
+    content = inhoud.encode()
+    body = _document_body(registry, informatieobjecttype, len(content), **fields)
+    body = {"inhoud": base64.b64encode(content).decode(), **body}
     return _create(openzaak, registry, f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", body)
+
+
+def make_document_in_parts(
+    openzaak: ApiClient, registry: ResourceRegistry, informatieobjecttype: str, content: bytes, **fields: object
+) -> JsonObject:
+    """A document created without inhoud whose bestandsdelen carry content; it stays locked (unlock merges them)."""
+    body = _document_body(registry, informatieobjecttype, len(content), formaat="application/octet-stream", **fields)
+    document = _create(openzaak, registry, f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", body)
+    # The parts are multipart uploads: the client's JSON Content-Type must not go along.
+    headers = {k: v for k, v in openzaak.headers().items() if k.lower() != "content-type"}
+    offset = 0
+    for part in entries(document.get("bestandsdelen")):
+        size = int(str(part["omvang"]))
+        upload = openzaak.http.put(
+            str(part["url"]),
+            headers=headers,
+            data={"lock": document["lock"]},
+            files={"inhoud": ("deel", content[offset : offset + size])},
+        )
+        expect_status(upload, HTTPStatus.OK)
+        offset += size
+    return document
 
 
 def link_document(

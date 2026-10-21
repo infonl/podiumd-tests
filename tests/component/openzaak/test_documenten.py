@@ -8,6 +8,8 @@ from __future__ import annotations
 import base64
 import hashlib
 
+from concurrent.futures import ThreadPoolExecutor
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
@@ -16,6 +18,7 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import link_document
 from podiumd_tests.seed.openzaak import make_document
+from podiumd_tests.seed.openzaak import make_document_in_parts
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.openzaak import today
 
@@ -125,3 +128,42 @@ def test_document_audittrail_with_catalogus_rights(
     """A client with audittrails.lezen on the catalogus reads a document's audittrail (TA reg-64)."""
     document = make_document(openzaak, registry, parts.informatieobjecttype)
     assert openzaak.request("GET", f"{document['url']}/audittrail", 200).json()
+
+
+# Concurrent same-name unlocks; four hit the race in every try on minikube.
+SAME_NAME_UPLOADS = 4
+# Over Open Zaak's in-memory upload limit, so the parts are merged through a file.
+LARGE_DOCUMENT = 3_000_000
+
+
+@pytest.mark.xfail(
+    reason="[open-zaak-4] Open Zaak 1.29.3 merges the bestandsdelen of documents with the same bestandsnaam in one"
+    " temporary file: concurrent unlocks answer 500 or store another document's content; fixed in 1.31.0"
+    " (open-zaak#2592). A race: it may not hit",
+)
+@pytest.mark.source(
+    "upstream open-zaak/open-zaak CHANGELOG.rst",
+    "1.31.0, #2592: documents with the same file name saved at the same time overwrote each other's content.",
+)
+def test_large_documents_with_the_same_name_keep_their_own_content(
+    openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
+) -> None:
+    """Documents uploaded in parts under one bestandsnaam and unlocked at once each keep their own content."""
+    contents = [bytes([ord("A") + i]) * LARGE_DOCUMENT for i in range(SAME_NAME_UPLOADS)]
+    name = f"{registry.tagged('deel')}.bin"
+    documents = [
+        make_document_in_parts(openzaak, registry, parts.informatieobjecttype, c, bestandsnaam=name) for c in contents
+    ]
+
+    def unlock(document: JsonObject) -> int:
+        body = {"lock": document["lock"]}
+        return openzaak.request("POST", f"{document['url']}/unlock", 204, 500, json=body).status_code
+
+    with ThreadPoolExecutor(SAME_NAME_UPLOADS) as pool:
+        unlocked = list(pool.map(unlock, documents))
+    stored = []
+    for document in documents:
+        download = openzaak.http.get(f"{document['url']}/download", headers={**openzaak.headers(), "Accept": "*/*"})
+        stored.append(download.content if download.status_code == HTTPStatus.OK else b"")
+    assert unlocked == [HTTPStatus.NO_CONTENT] * SAME_NAME_UPLOADS
+    assert [s == c for s, c in zip(stored, contents, strict=True)] == [True] * SAME_NAME_UPLOADS
