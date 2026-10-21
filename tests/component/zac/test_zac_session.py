@@ -57,4 +57,6 @@ def test_session_survives_two_token_refreshes(
     assert logged_in_user(zac, urls["zac"]) == ADMIN.username
     for _ in range(2):
         time.sleep(lifespan + MARGIN)
+        # The edge closes keep-alive connections that idle this long; a fresh one keeps the session's cookies.
+        zac.close()
         assert logged_in_user(zac, urls["zac"]) == ADMIN.username
