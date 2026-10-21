@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.omc import VALIDITY
 from podiumd_tests.bootstrap.omc import omc_token
 from podiumd_tests.responses import expect_status
 
@@ -30,10 +31,6 @@ pytestmark = [
     pytest.mark.component,
     pytest.mark.core,
     pytest.mark.requires("omc", "cluster"),
-    pytest.mark.source(
-        "podiumd-tests",
-        "OMC answers 206 to a notification it cannot process, which Open Notificaties counts as delivered.",
-    ),
 ]
 
 
@@ -56,9 +53,11 @@ def notification(urls: dict[str, str], root: tuple[str, ...]) -> dict[str, objec
     return body | dict.fromkeys(root, urls["opennotificaties"])
 
 
-def listen(http: requests.Session, podiumd_env: Environment, body: dict[str, object]) -> requests.Response:
-    """POST a notification to OMC's Events/Listen with the token its abonnement uses."""
-    token = omc_token(podiumd_env, time.time())
+def listen(
+    http: requests.Session, podiumd_env: Environment, body: dict[str, object], issued: float | None = None
+) -> requests.Response:
+    """POST a notification to OMC's Events/Listen with the token its abonnement uses, issued now unless given."""
+    token = omc_token(podiumd_env, time.time() if issued is None else issued)
     url = podiumd_env.profile.urls["omc"] + "/Events/Listen"
     return http.post(url, json=body, headers={"Authorization": f"Bearer {token}"})
 
@@ -78,8 +77,21 @@ def listen(http: requests.Session, podiumd_env: Environment, body: dict[str, obj
         ),
     ],
 )
+@pytest.mark.source(
+    "podiumd-tests", "OMC answers 206 to a notification it cannot process, which Open Notificaties counts as delivered."
+)
 def test_notification_is_recognized(
     http: requests.Session, podiumd_env: Environment, urls: dict[str, str], root: tuple[str, ...]
 ) -> None:
     """OMC processes the notification: 412, not the 206 that Open Notificaties would count as delivered."""
     expect_status(listen(http, podiumd_env, notification(urls, root)), HTTPStatus.PRECONDITION_FAILED)
+
+
+@pytest.mark.source(
+    "upstream Worth-NL/NotifyNL-OMC OMC/Tests/Infrastructure/WebApi/EventsHandler.IntegrationTests/Controllers/EventsControllerTests.cs",
+    "Listen_WithExpiredToken_Returns401: OMC refuses a notification whose token has expired.",
+)
+def test_expired_token_is_refused(http: requests.Session, podiumd_env: Environment, urls: dict[str, str]) -> None:
+    """A token that expired a day ago gets 401, though OMC's own secret signed it."""
+    expired = time.time() - VALIDITY - 24 * 3600
+    expect_status(listen(http, podiumd_env, notification(urls, ()), issued=expired), HTTPStatus.UNAUTHORIZED)
