@@ -38,6 +38,8 @@ urls:
   openvtb: https://openvtb.local
   zaakbrug: https://zaakbrug.local
   zgw-office-addin: https://office-addin.local
+  # podiumd-minikube profile frankgateway (on with --full).
+  openbao: https://openbao.local
   # No ingress, as on ExternalsPodiumD: reached through a port-forward.
   frankgateway: http://frankgateway-outway.podiumd-minikube.svc.cluster.local:9080
 secrets:
