@@ -12,6 +12,7 @@ from podiumd_tests.hygiene import unpinned_images
 from podiumd_tests.hygiene import without_disruption_budget
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import metadata_name
+from podiumd_tests.redis import REDIS_HA
 from podiumd_tests.workloads import failed_jobs
 from podiumd_tests.workloads import unhealthy_pods
 from podiumd_tests.workloads import unready_workloads
@@ -119,3 +120,20 @@ def test_keycloak_instances_have_a_disruption_budget(podiumd_env: Environment) -
     if not keycloak or all(section(w, "spec").get("replicas", 1) == 1 for w in keycloak):
         pytest.skip("Keycloak runs one instance")
     assert not without_disruption_budget(keycloak, podiumd_env.items("poddisruptionbudgets"))
+
+
+@pytest.mark.source(
+    "podiumd-tests",
+    "helm-charts #634 (IN-2961, IN-3225): redis-ha's replicas need a PodDisruptionBudget, so a node drain keeps a master.",
+)
+# Not strict: an environment with helm-charts #634 passes.
+@pytest.mark.xfail(
+    strict=False,
+    reason="helm-charts #634 (open) adds redis-operator.redis-ha.pdb; before it no PodDisruptionBudget selects redis-ha",
+)
+def test_redis_ha_replicas_have_a_disruption_budget(podiumd_env: Environment) -> None:
+    """redis-ha's replicas have a PodDisruptionBudget (redis-ha-replication), so a node drain keeps one running."""
+    redis = [w for w in podiumd_env.workloads() if metadata_name(w) == REDIS_HA]
+    if not redis or all(section(w, "spec").get("replicas", 1) == 1 for w in redis):
+        pytest.skip("redis-ha runs one replica")
+    assert not without_disruption_budget(redis, podiumd_env.items("poddisruptionbudgets"))
