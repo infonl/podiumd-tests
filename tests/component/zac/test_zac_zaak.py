@@ -6,6 +6,9 @@ the test admin is ZAC beheerder of every domain.
 
 from __future__ import annotations
 
+import io
+import zipfile
+
 from datetime import UTC
 from datetime import date
 from datetime import datetime
@@ -50,8 +53,47 @@ MINIMAL_PDF = (
     b" 3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n"
 )
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-# ZAC checks only the format, not the content.
-FILES = {"txt": ("text/plain", b"podiumd-tests"), "pdf": ("application/pdf", MINIMAL_PDF), "docx": (DOCX, b"versie 1")}
+
+
+def minimal_docx(text: str) -> bytes:
+    """A Word document with one paragraph, as small as LibreOffice (ZAC's office converter) still opens."""
+    parts = {
+        "[Content_Types].xml": (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            '<Default Extension="xml" ContentType="application/xml"/>'
+            '<Override PartName="/word/document.xml"'
+            ' ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+            "</Types>"
+        ),
+        "_rels/.rels": (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Target="word/document.xml"'
+            ' Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"/>'
+            "</Relationships>"
+        ),
+        "word/document.xml": (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            f"<w:body><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:body></w:document>"
+        ),
+    }
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as docx:
+        for name, xml in parts.items():
+            docx.writestr(name, xml)
+    return buffer.getvalue()
+
+
+# ZAC checks only the format, not the content; "word" is a real document for the office converter.
+FILES = {
+    "txt": ("text/plain", b"podiumd-tests"),
+    "pdf": ("application/pdf", MINIMAL_PDF),
+    "docx": (DOCX, b"versie 1"),
+    "word": (DOCX, minimal_docx("podiumd-tests")),
+}
 # The reason ZAC always offers for aborting a zaak.
 NIET_ONTVANKELIJK = "ZAAK_NIET_ONTVANKELIJK"
 
@@ -276,7 +318,7 @@ def uploaded_document(  # pylint: disable=too-many-arguments  # fixtures and two
     if not types:
         pytest.skip(f"zaaktype {section(zaak, 'zaaktype').get('identificatie')} has no informatieobjecttypen")
     formaat, content = FILES[suffix]
-    name = f"{registry.tagged('document')}.{suffix}"
+    name = f"{registry.tagged('document')}.{'docx' if suffix == 'word' else suffix}"
     form = {
         "titel": name,
         "bestandsnaam": name,
@@ -373,3 +415,21 @@ def test_sent_document_is_marked_verzonden(
     expect_status(zac.post(f"{urls['zac']}/rest/informatieobjecten/informatieobjecten/verzenden", json=body), 200, 204)
     listed = {str(d.get("uuid")): d for d in zaak_documents(zac, urls["zac"], zaak)}
     assert "VERZONDEN" in strings(listed[str(document["uuid"])].get("indicaties"))
+
+
+@pytest.mark.source(
+    "podiumd-tests",
+    "ZAC converts a Word document to PDF through its office converter (gotenberg); helm-charts #633 updates gotenberg.",
+)
+def test_word_document_is_converted_to_pdf(
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
+) -> None:
+    """A definitief Word document converted in ZAC becomes a PDF: its current version has the PDF format and content."""
+    zaak = zac_zaak()
+    document = uploaded_document(zac, urls["zac"], zaak, registry, suffix="word")
+    documents = f"{urls['zac']}/rest/informatieobjecten/informatieobject/{document['uuid']}"
+    converted = zac.post(f"{documents}/convert", params={"zaak": str(zaak["uuid"])})
+    expect_status(converted, HTTPStatus.NO_CONTENT, HTTPStatus.OK)
+    current = expect_status(zac.get(documents, params={"zaak": str(zaak["uuid"])}), HTTPStatus.OK).json()
+    assert current["formaat"] == "application/pdf", current.get("formaat")
+    assert expect_status(zac.get(f"{documents}/download"), HTTPStatus.OK).content.startswith(b"%PDF")
