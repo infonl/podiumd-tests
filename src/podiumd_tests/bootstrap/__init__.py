@@ -89,6 +89,16 @@ def refusal(profile: Profile) -> str | None:
     return None
 
 
+def not_allowed(ctx: Context, step: Step) -> str | None:
+    """Why the profile does not allow the step (an opt-in setting is off), or None.
+
+    Optional on a step: one without `not_allowed` is always allowed. check and bootstrap then report the step
+    as skipped, so a test that needs it skips with the reason; unbootstrap still removes what an earlier run set.
+    """
+    reason = getattr(step, "not_allowed", None)
+    return reason(ctx) if callable(reason) else None
+
+
 def _each(env: Environment, steps: Sequence[Step], act: Callable[[Context, Step], Outcome]) -> list[Outcome]:
     """Run act on every step the environment has the capabilities for; skip the others with a reason."""
     ctx = Context(env, CredentialStore(env.kube))
@@ -125,6 +135,9 @@ def bootstrap(env: Environment, steps: Sequence[Step], *, rotate: bool = False) 
     """Apply every applicable step that is not in place (all of them with rotate)."""
 
     def apply(ctx: Context, step: Step) -> Outcome:
+        reason = not_allowed(ctx, step)
+        if reason:
+            return Outcome(step.name, "skipped", reason)
         if not rotate and step.is_present(ctx):
             return Outcome(step.name, "present")
         ctx.notes.clear()
@@ -153,7 +166,14 @@ def unbootstrap(env: Environment, steps: Sequence[Step]) -> list[Outcome]:
 
 def check(env: Environment, steps: Sequence[Step]) -> list[Outcome]:
     """Whether every applicable step is in place; changes nothing."""
-    return _each(env, steps, lambda ctx, step: Outcome(step.name, "present" if step.is_present(ctx) else "missing"))
+
+    def present(ctx: Context, step: Step) -> Outcome:
+        reason = not_allowed(ctx, step)
+        if reason:
+            return Outcome(step.name, "skipped", reason)
+        return Outcome(step.name, "present" if step.is_present(ctx) else "missing")
+
+    return _each(env, steps, present)
 
 
 def format_outcomes(outcomes: Sequence[Outcome]) -> str:

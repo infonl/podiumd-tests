@@ -102,6 +102,12 @@ class ZacParameters:
         profile = ctx.env.profile
         return profile.settings.get("productaanvraag_zaaktype") if profile.allows(self.setting) else None
 
+    def not_allowed(self, ctx: Context) -> str | None:
+        """Why the profile does not allow the change, or None."""
+        if self._allowed(ctx) is None:
+            return f"profile setting {self.setting} is off for {ctx.env.profile.name}"
+        return None
+
     def _session(self, ctx: Context) -> requests.Session:
         return zac_session(ctx.env, self.admin.username, ctx.env.credentials.get(self.admin.store_key))
 

@@ -43,6 +43,10 @@ class KissKanalen:
     def _allowed(ctx: Context) -> bool:
         return ctx.env.profile.allows("kiss_kanalen")
 
+    def not_allowed(self, ctx: Context) -> str | None:
+        """Why the profile does not allow the change, or None."""
+        return None if self._allowed(ctx) else f"profile setting kiss_kanalen is off for {ctx.env.profile.name}"
+
     def _session(self, ctx: Context) -> tuple[requests.Session, str]:
         kiss = ctx.env.profile.urls["kiss"]
         password = ctx.env.credentials.get(self.admin.store_key)

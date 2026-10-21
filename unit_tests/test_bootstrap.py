@@ -125,6 +125,31 @@ def test_check_changes_nothing(env_factory, fake_runner, profile_factory):
     assert step.log == []
 
 
+@dataclass
+class OptInStep(FakeStep):
+    """A FakeStep behind a profile setting that is off; like FakeStep, it reports present."""
+
+    present: bool = True
+
+    def not_allowed(self, _ctx):
+        return "profile setting fake_opt_in is off"
+
+
+def test_check_and_bootstrap_skip_a_step_the_profile_does_not_allow(env_factory, fake_runner, profile_factory):
+    env = cluster_env(env_factory, fake_runner, profile_factory)
+    step = OptInStep()
+    for outcome in (check(env, [step])[0], bootstrap(env, [step])[0]):
+        assert (outcome.action, outcome.detail) == ("skipped", "profile setting fake_opt_in is off")
+    assert step.log == []
+
+
+def test_unbootstrap_still_removes_a_step_the_profile_no_longer_allows(env_factory, fake_runner, profile_factory):
+    env = cluster_env(env_factory, fake_runner, profile_factory)
+    step = OptInStep()
+    assert [o.action for o in unbootstrap(env, [step])] == ["removed"]
+    assert step.log == ["remove"]
+
+
 def test_store_merges_and_removes_keys(fake_runner):
     fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (0, stored({"a": "1", "b": "2"}))
     fake_runner.answers["apply -f -"] = (0, "")

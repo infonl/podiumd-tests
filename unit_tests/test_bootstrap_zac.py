@@ -63,6 +63,14 @@ def test_without_the_profile_setting_nothing_changes(ctx, fake_http):
     assert sent == []
 
 
+def test_not_allowed_names_the_profile_setting(ctx, fake_http):
+    fake_http({})
+    reason = STEP.not_allowed(ctx(allowed=False))
+    assert reason is not None
+    assert "zac_email_confirmation" in reason
+    assert STEP.not_allowed(ctx()) is None
+
+
 def test_apply_switches_it_on_and_records_the_old_value(ctx, fake_http):
     sent = fake_http(answers(OFF))
     stored = STEP.apply(ctx())
