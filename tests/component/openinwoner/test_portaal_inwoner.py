@@ -72,6 +72,23 @@ def test_profile_can_be_edited(page: Page, portal: str) -> None:
     expect(page.locator('input[name="phone_addresses-TOTAL_FORMS"]').first).to_be_attached()
 
 
+@pytest.mark.source(
+    "upstream maykinmedia/open-inwoner src/open_inwoner/accounts/tests/test_profile_edit_e2e.py",
+    "The profile edit page rejects a malformed e-mail address and a malformed phone number.",
+)
+def test_profile_edit_refuses_malformed_contact_details(page: Page, portal: str) -> None:
+    """A malformed e-mail address and phone number are refused with a message each; the page stays the edit form."""
+    page.goto(portal + "/mijn-profiel/edit/")
+    page.locator('input[name="email_addresses-0-value"]').first.fill("geen-e-mailadres")
+    page.locator('input[name="phone_addresses-0-value"]').first.fill("12ab")
+    page.get_by_role("button", name="Sla wijzigingen op").first.click()
+    expect(page).to_have_url(re.compile(r"/mijn-profiel/edit/"))
+    # The field's error notifications; the same texts also sit in hidden templates of the page.
+    errors = page.locator(".notifications__errors")
+    expect(errors.filter(has_text="Voer een geldig e-mailadres in.")).to_be_visible()
+    expect(errors.filter(has_text="Ongeldig Nederlands telefoonnummer")).to_be_visible()
+
+
 @pytest.mark.tc("OI-048")
 @pytest.mark.source(
     "TA regression/165-portaal-notif-save.spec.ts",
