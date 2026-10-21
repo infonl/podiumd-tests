@@ -86,6 +86,11 @@ Every new test gets `@pytest.mark.source` with the upstream file and the reason 
 
 ### Phase 1: API and chain tests on existing seeding (no new bootstrap)
 
+Done 2026-10-21, verified on minikube: 1 and 2 (cfd2671), 3 (84ff644; known issue open-zaak-4, fixed in Open Zaak
+1.31.0; the `laatstGemuteerd` part is dropped: #2308 is about the experimental cloud event), 4 (65072ca),
+5 (e8b2ad3), 6 (5866ed9; cases 3, 4, 5 and 7 of suite 1), 7 (42d244c; known issue open-archiefbeheer-6),
+8 (4c3ce11).
+
 | # | Tests (upstream source) | Where | Reuses |
 | --- | --- | --- | --- |
 | 1 | Objecten: a record that breaks its objecttype's JSON schema gets 400 naming the field; PUT/PATCH adds a record, `/history` lists both, `?date=` and `?registrationDate=` return the older record (objects-api Postman quickstart) | `tests/component/objecten/test_objecten.py` (new) | `make_object`, `objecttype_url`, bootstrap `objecten-token`, `registry` |
