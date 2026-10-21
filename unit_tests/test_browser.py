@@ -27,6 +27,7 @@ from podiumd_tests.browser import launch_args
 from podiumd_tests.browser import redirect_login
 from podiumd_tests.browser import refuse_cookies
 from podiumd_tests.browser import retry_network_change
+from podiumd_tests.browser import share_cookies
 
 APP = "https://pabc.example.test"
 COOKIE = {"name": "session", "value": "s1", "domain": "pabc.example.test"}
@@ -190,3 +191,12 @@ def test_other_errors_and_a_third_network_change_are_raised(fake_page):
     with pytest.warns(UserWarning, match="retry 2 of 2"), pytest.raises(PlaywrightError):
         retry_network_change(fake, lambda: fake.goto("https://x.test/"), "goto")
     assert [a[0] for a in fake.actions].count("pause") == 2
+
+
+def test_share_cookies_gives_the_browser_the_sessions_cookies():
+    added = []
+    page = type("P", (), {"context": type("C", (), {"add_cookies": staticmethod(added.extend)})()})()
+    http = requests.Session()
+    http.cookies.set("sessionid", "abc", domain="app.test", path="/")
+    share_cookies(http, page)  # pyright: ignore[reportArgumentType]  # duck-typed page
+    assert added == [{"name": "sessionid", "value": "abc", "domain": "app.test", "path": "/"}]

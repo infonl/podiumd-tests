@@ -147,6 +147,16 @@ def browser_session(page: Page, env: Environment) -> requests.Session:
     return http
 
 
+def share_cookies(http: requests.Session, page: Page) -> None:
+    """Give the browser the session's cookies, e.g. a login made without a browser (the reverse of browser_session)."""
+    cookies = [
+        {"name": c.name, "value": str(c.value), "domain": c.domain, "path": c.path or "/"}
+        for c in http.cookies
+        if c.domain
+    ]
+    page.context.add_cookies(cookies)  # pyright: ignore[reportArgumentType]  # Playwright's TypedDict
+
+
 def refuse_cookies(page: Page) -> None:
     """Close the cookie banner of Open Inwoner or Open Formulieren, which otherwise lies over the page's buttons."""
     banner = page.get_by_role("button", name="Alles weigeren")

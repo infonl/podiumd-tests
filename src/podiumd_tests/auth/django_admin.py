@@ -10,10 +10,15 @@ import re
 
 from typing import TYPE_CHECKING
 
+import pytest
+
 from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
     import requests
+
+    from podiumd_tests.credentials import SecretResolver
+    from podiumd_tests.environment import Environment
 
 CSRF = re.compile(r'name="csrfmiddlewaretoken" value="([^"]+)"')
 STEP = re.compile(r'name="admin_login_view-current_step" value="([^"]+)"')
@@ -46,3 +51,19 @@ def is_logged_in(response: requests.Response, username: str) -> bool:
     """True when the page shows the admin for username, and no login form."""
     body = re.sub(r"\s+", " ", response.text)
     return response.ok and f"<strong>{username}</strong>" in body and 'name="auth-username"' not in body
+
+
+def superuser_login(
+    env: Environment, credentials: SecretResolver, component: str
+) -> tuple[requests.Session, requests.Response]:
+    """A session logged in to the app's admin as its local superuser, with the page it landed on.
+
+    Skips where the admin logs in through Keycloak only (settings.django_admin_sso_only) or there is no local account.
+    """
+    if component in env.profile.settings.get("django_admin_sso_only", "").split(","):
+        pytest.skip(f"{component}'s admin logs in through Keycloak only (settings.django_admin_sso_only)")
+    username, password = credentials.optional("django_admin_username"), credentials.optional("django_admin_password")
+    if not username or not password:
+        pytest.skip("no secrets django_admin_username/password: admin login goes through SSO here")
+    http = env.session()
+    return http, admin_login(http, env.profile.urls[component], username, password)

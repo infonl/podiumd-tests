@@ -13,8 +13,8 @@ from typing import cast
 
 import pytest
 
-from podiumd_tests.auth.django_admin import admin_login
 from podiumd_tests.auth.django_admin import is_logged_in
+from podiumd_tests.auth.django_admin import superuser_login
 from podiumd_tests.components import DJANGO_APPS
 from podiumd_tests.components import ZGW_CONSUMER_APPS
 from podiumd_tests.django_snippets import run_snippet
@@ -83,10 +83,6 @@ def test_config_references_services(podiumd_env: Environment, component: str) ->
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
 def test_django_admin_login(podiumd_env: Environment, credentials: SecretResolver, component: str) -> None:
     """The app's superuser logs in to the admin (MK test_django_admin_login.py); environments with SSO only skip."""
-    if component in podiumd_env.profile.settings.get("django_admin_sso_only", "").split(","):
-        pytest.skip(f"{component}'s admin logs in through Keycloak only (settings.django_admin_sso_only)")
-    username, password = credentials.optional("django_admin_username"), credentials.optional("django_admin_password")
-    if not username or not password:
-        pytest.skip("no secrets django_admin_username/password: admin login goes through SSO here")
-    response = admin_login(podiumd_env.session(), podiumd_env.profile.urls[component], username, password)
+    _, response = superuser_login(podiumd_env, credentials, component)
+    username = str(credentials.optional("django_admin_username"))
     assert is_logged_in(response, username), f"{component}: not logged in ({response.url})"
