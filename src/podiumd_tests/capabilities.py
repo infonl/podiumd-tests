@@ -65,10 +65,11 @@ def detect(
         reasons.update(dict.fromkeys(in_cluster, "in-cluster URL, and the kube API is not reachable"))
         return Capabilities(frozenset(configured - in_cluster), reasons)
     deployed = deployed_components(deployment_names)
+    namespaces = " or ".join(n for n in (profile.kube.namespace, profile.kube.monitoring_namespace) if n)
     # Components without their own deployment (e.g. keycloak-admin) follow their URL only.
     for component in configured - deployed:
         if component in COMPONENTS_WITH_DEPLOYMENT:
-            reasons[component] = f"no deployment in namespace {profile.kube.namespace}"
+            reasons[component] = f"no deployment in namespace {namespaces}"
     present = {c for c in configured if c in deployed or c not in COMPONENTS_WITH_DEPLOYMENT}
     present.add(CLUSTER)
     present |= network[0]

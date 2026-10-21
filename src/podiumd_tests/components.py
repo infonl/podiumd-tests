@@ -63,7 +63,13 @@ COMPONENTS: dict[str, Component] = {
     # the estates, podiumd-minikube on minikube.
     "grafana": Component(
         ("grafana", "podiumd-logs"),
-        ("grafana", "monitoring-grafana", "monitoring-logging-grafana", "podiumd-minikube-grafana"),
+        (
+            "grafana",
+            "monitoring-grafana",
+            "monitoring-logging-grafana",
+            "podiumd-grafana",
+            "podiumd-minikube-grafana",
+        ),
     ),
     "mailpit": Component(("mailpit",), ("mailpit",)),
     # Without a URL: found by their workloads only.

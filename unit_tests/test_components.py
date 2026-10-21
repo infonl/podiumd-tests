@@ -11,6 +11,10 @@ def test_deployment_aliases():
     assert deployed_components(names) == {"opennotificaties", "openzaak", "grafana", "kiss"}
 
 
+def test_monitoring_logging_grafana_on_ssc_is_grafana():
+    assert deployed_components(["podiumd-grafana"]) == {"grafana"}
+
+
 @pytest.mark.parametrize(
     ("host", "component"),
     [
