@@ -577,7 +577,7 @@ def test_only_a_new_list_can_be_deleted(
     strict=True,
     reason="[open-archiefbeheer-6] Open Archiefbeheer 2.0.0 (also main): process_review_response reads item.zaak.url"
     " of every suggested item (prepopulate_selection_after_review_response); an item whose zaak left the zaken cache"
-    " has zaak None, the task fails and the list stays changes_requested; not yet reported",
+    " has zaak None, the task fails and the list stays changes_requested; open-archiefbeheer#1129",
 )
 @pytest.mark.source(
     f"{UPSTREAM_E2E}/features/test_feature_list_process_review.py",
