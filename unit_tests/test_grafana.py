@@ -105,7 +105,7 @@ def test_monitor_without_active_target_is_reported():
 
 def test_otel_jobs_query_uses_the_otel_service_names():
     query = otel_jobs_query(["openformulieren", "keycloak", "objecten"])
-    assert query == 'group by (job) ({job=~"(.+/)?(openforms|openobject)"})'
+    assert query == 'group by (job) ({job=~"(.+/)?(openforms|openobject)(-.+)?"})'
 
 
 def test_without_metrics():
@@ -119,9 +119,19 @@ def test_without_metrics():
             ]
         }
     }
-    otel = {"data": {"result": [{"metric": {"job": "openzaak"}}, {"metric": {"job": "podiumd/openforms"}}]}}
+    otel = {
+        "data": {
+            "result": [
+                {"metric": {"job": "openzaak"}},
+                {"metric": {"job": "podiumd/openforms"}},
+                {"metric": {"job": "openinwoner-web"}},
+                {"metric": {"job": "openobjectx"}},
+            ]
+        }
+    }
     components = ["keycloak", "redis", "frankgateway", "clamav", "openzaak", "openformulieren", "openvtb", "zac"]
-    assert without_metrics(components, targets, otel) == (["clamav", "redis"], ["openvtb"])
+    components += ["openinwoner", "objecten"]
+    assert without_metrics(components, targets, otel) == (["clamav", "redis"], ["objecten", "openvtb"])
 
 
 def pod(name, phase="Running", created="2026-10-20T08:00:00Z"):

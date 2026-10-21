@@ -101,9 +101,16 @@ def monitors_without_targets(monitors: Sequence[str], targets_response: JsonObje
 
 
 def otel_jobs_query(components: Iterable[str]) -> str:
-    """PromQL for the jobs of the components' OTEL services; remote write sets job to [<namespace>/]<service.name>."""
+    """PromQL for the jobs of the components' OTEL services; remote write sets job to [<namespace>/]<service.name>.
+
+    An app may name its processes <service>-<role> (Open Inwoner: openinwoner-web, openinwoner-celery-worker).
+    """
     services = sorted(COMPONENTS[c].otel_service for c in components if COMPONENTS[c].otel_service)
-    return f'group by (job) ({{job=~"(.+/)?({"|".join(services)})"}})'
+    return f'group by (job) ({{job=~"(.+/)?({"|".join(services)})(-.+)?"}})'
+
+
+def _has_otel_job(service: str, jobs: set[str]) -> bool:
+    return any(job == service or job.startswith(f"{service}-") for job in jobs)
 
 
 def without_metrics(
@@ -120,7 +127,7 @@ def without_metrics(
     ordered = sorted(components)
     return (
         [c for c in ordered if COMPONENTS[c].monitored and c not in up],
-        [c for c in ordered if COMPONENTS[c].otel_service and COMPONENTS[c].otel_service not in jobs],
+        [c for c in ordered if COMPONENTS[c].otel_service and not _has_otel_job(COMPONENTS[c].otel_service, jobs)],
     )
 
 
