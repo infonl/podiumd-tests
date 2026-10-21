@@ -121,12 +121,17 @@ class KeycloakUser:
         return (self.store_key,)
 
 
+# Attribute of the roles keycloak-roles creates.
+CREATED_BY = {PREFIX: ["keycloak-roles"]}
+
+
 @dataclass(frozen=True)
 class KeycloakRoles:
     """The realm and client roles of the test users that the realm lacks, as after keycloak.config.skipRoles true.
 
-    The record lists what the step created ("role" or "client:role"), so remove deletes only that. Roles of
-    clients the realm lacks are left out.
+    The record lists what the step created ("role" or "client:role"), and each role carries attribute
+    CREATED_BY; remove deletes only a recorded role that still has it, so a role that a later realm import
+    (skipRoles false) created or rewrote is kept. Roles of clients the realm lacks are left out.
     """
 
     users: tuple[KeycloakUser, ...]
@@ -164,14 +169,17 @@ class KeycloakRoles:
         admin = for_environment(ctx.env)
         missing = self._missing(admin)
         for entry in missing:
-            admin.create_role(*self._client_uuid(admin, entry))
+            admin.create_role(*self._client_uuid(admin, entry), CREATED_BY)
         return {self.store_key: json.dumps(self._record(ctx) + missing)}
 
     def remove(self, ctx: Context, /) -> tuple[str, ...]:
-        """Delete the roles the record lists."""
+        """Delete the recorded roles that still carry CREATED_BY."""
         admin = for_environment(ctx.env)
         for entry in self._record(ctx):
-            role, client_uuid = self._client_uuid(admin, entry)
-            if client_uuid or ":" not in entry:
-                admin.delete_role(role, client_uuid)
+            name, client_uuid = self._client_uuid(admin, entry)
+            if client_uuid is None and ":" in entry:
+                continue
+            role = admin.role(name, client_uuid)
+            if role and section(role, "attributes").get(PREFIX) == CREATED_BY[PREFIX]:
+                admin.delete_role(name, client_uuid)
         return (self.store_key,)

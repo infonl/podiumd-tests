@@ -143,11 +143,18 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
         roles = cast("list[JsonObject]", self._get("/roles"))
         return [r for r in roles if r.get("name") in names]
 
-    def create_role(self, name: str, client_uuid: str | None = None) -> None:
+    def role(self, name: str, client_uuid: str | None = None) -> JsonObject | None:
+        """A realm role, or a role of the client with this uuid, with its attributes; None when absent."""
+        path = f"/clients/{client_uuid}/roles" if client_uuid else "/roles"
+        roles = cast("list[JsonObject]", self._get(path, {"search": name, "briefRepresentation": "false"}))
+        return next((r for r in roles if r.get("name") == name), None)
+
+    def create_role(
+        self, name: str, client_uuid: str | None = None, attributes: dict[str, list[str]] | None = None
+    ) -> None:
         """Create a realm role, or a role of the client with this uuid."""
-        self._send(
-            "POST", f"/clients/{client_uuid}/roles" if client_uuid else "/roles", {"name": name}, HTTPStatus.CREATED
-        )
+        path = f"/clients/{client_uuid}/roles" if client_uuid else "/roles"
+        self._send("POST", path, {"name": name, "attributes": attributes or {}}, HTTPStatus.CREATED)
 
     def delete_role(self, name: str, client_uuid: str | None = None) -> None:
         """Delete a realm role, or a role of the client with this uuid."""

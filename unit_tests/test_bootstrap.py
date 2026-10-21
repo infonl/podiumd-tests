@@ -202,7 +202,7 @@ KC = "https://kc.example.test"
 REALM = "/admin/realms/podiumd"
 
 
-def keycloak_answers(*, user_exists, has_group):
+def keycloak_answers(*, user_exists, has_group) -> dict[str, tuple[int, object]]:
     return {
         "POST /realms/master/protocol/openid-connect/token": (200, {"access_token": "admin-token"}),
         f"GET {REALM}": (200, {"passwordPolicy": "length(50) and digits(3)"}),
@@ -360,19 +360,30 @@ def test_keycloak_roles_creates_the_missing_roles_and_records_them(
     values = step.apply(ctx)
     assert json.loads(values[step.store_key]) == ["Coordinator", "pabc:missing"]
     created = [(r.url.removeprefix(KC), json.loads(r.body)) for r in sent if r.method == "POST" and "/roles" in r.url]
-    assert created == [(f"{REALM}/roles", {"name": "Coordinator"}), (f"{REALM}/clients/c1/roles", {"name": "missing"})]
+    marker = {"attributes": {"ptest-bootstrap": ["keycloak-roles"]}}
+    assert created == [
+        (f"{REALM}/roles", {"name": "Coordinator", **marker}),
+        (f"{REALM}/clients/c1/roles", {"name": "missing", **marker}),
+    ]
 
 
-def test_keycloak_roles_remove_deletes_only_the_recorded_roles(env_factory, fake_runner, profile_factory, fake_http):
+def test_keycloak_roles_remove_deletes_only_recorded_roles_it_still_owns(
+    env_factory, fake_runner, profile_factory, fake_http
+):
     ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
     step = KeycloakRoles(ROLE_USERS)
-    record = json.dumps(["Coordinator", "pabc:missing", "gone:role"])
+    # Behandelaar was taken over by a realm import, which dropped the attribute.
+    record = json.dumps(["Coordinator", "Behandelaar", "pabc:missing", "gone:role"])
     fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (
         0,
         stored({step.store_key: record}),
     )
     answers = keycloak_answers(user_exists=True, has_group=True)
     answers[f"GET {REALM}/clients"] = (200, [])
+    answers[f"GET {REALM}/roles"] = (
+        200,
+        [{"name": "Coordinator", "attributes": {"ptest-bootstrap": ["keycloak-roles"]}}, {"name": "Behandelaar"}],
+    )
     answers[f"DELETE {REALM}/roles/Coordinator"] = (204, None)
     sent = fake_http(answers)
     assert step.remove(ctx) == (step.store_key,)
