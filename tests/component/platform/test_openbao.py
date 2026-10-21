@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.responses import describe
@@ -46,8 +47,8 @@ def metrics_listener(services: list[dict[str, object]]) -> tuple[str, int] | Non
         (metadata_name(s), int(str(p.get("port"))))
         for s in services
         if "openbao" in metadata_name(s)
-        for p in section(s, "spec").get("ports") or []
-        if isinstance(p, dict) and p.get("name") == METRICS_PORT_NAME
+        for p in entries(section(s, "spec").get("ports"))
+        if p.get("name") == METRICS_PORT_NAME
     ]
     return min(found, key=lambda f: len(f[0])) if found else None
 
