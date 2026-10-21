@@ -50,22 +50,6 @@ def pod_containers(workload: JsonObject, *, with_init: bool) -> list[JsonObject]
     return [*entries(pod.get("initContainers")), *found] if with_init else found
 
 
-def readiness_window(workload: JsonObject) -> int:
-    """Most seconds of failing readiness probes before a pod of the workload leaves its Service.
-
-    Unset probe fields take the Kubernetes defaults.
-    """
-    windows = [0]
-    for container in pod_containers(workload, with_init=False):
-        probe = section(container, "readinessProbe")
-        if probe:
-            failures = probe.get("failureThreshold", 3)
-            period = probe.get("periodSeconds", 10)
-            timeout = probe.get("timeoutSeconds", 1)
-            windows.append(_int(failures) * (_int(period) + _int(timeout)))
-    return max(windows)
-
-
 def _main_deployment(env: Environment, deployments: Mapping[str, Item], component: str) -> Item | None:
     try:
         return deployments[env.deployment_for(component)]

@@ -127,7 +127,7 @@ def test_a_node_id_narrows_the_tier(tmp_path, profile_factory):
     "node",
     [
         "tests/integration/test_continuiteit.py::test_does_not_exist",
-        "tests/integration/test_continuiteit.py::test_zac_stays_ready_without_pabc@destructive",
+        "tests/integration/test_continuiteit.py::test_without_open_zaak_the_apps_say_so@destructive",
     ],
 )
 def test_an_unknown_node_id_is_refused(tmp_path, profile_factory, node):

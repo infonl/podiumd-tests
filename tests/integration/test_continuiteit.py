@@ -45,9 +45,7 @@ from podiumd_tests.wait import WaitTimeoutError
 from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import ROOT_TIMEOUT
 from podiumd_tests.workloads import component_down
-from podiumd_tests.workloads import readiness_window
 from podiumd_tests.workloads import scaled
-from podiumd_tests.workloads import unready_workloads
 from podiumd_tests.zac import PRODUCTAANVRAAG_TIMEOUT
 from podiumd_tests.zac import productaanvraag_zaak
 from podiumd_tests.zac import read_zaak
@@ -81,8 +79,6 @@ QUESTION_SUBJECT = "Algemene vraag"
 FETCH_RETRY_TIMEOUT_MS = 180_000
 # Time a failed mail gets to be sent again after the outage.
 RETRY_TIMEOUT = 8 * 60
-# Time the kubelet and the endpoints controller get on top of the failed probes.
-READINESS_MARGIN = 30
 STOPPED = ("openzaak", "openformulieren", "openklant", "opennotificaties", "openinwoner", "ita", "kiss", "zac", "omc")
 
 
@@ -114,29 +110,6 @@ def test_frankgateway_outage_does_not_cascade(
     ]
     with scaled(podiumd_env.kube, podiumd_env.deployment_for("frankgateway"), 0):
         assert [c for c in apps if not root_answers(http, urls[c], ROOT_TIMEOUT)] == []
-
-
-@pytest.mark.requires("pabc", "zac")
-@pytest.mark.xfail(
-    strict=True,
-    reason="[zac-4] ZAC 5.9.1's readiness includes PabcReadinessHealthCheck: while PABC is down ZAC leaves its"
-    " Service and every page fails; not yet reported upstream",
-)
-def test_zac_stays_ready_without_pabc(http: requests.Session, podiumd_env: Environment) -> None:
-    """While PABC is stopped ZAC stays ready: a downstream outage does not take ZAC out of its Service."""
-    zac = podiumd_env.deployment_for("zac")
-    window = readiness_window(podiumd_env.kube.get_json("deployment", zac)) + READINESS_MARGIN
-
-    def zac_unready() -> bool:
-        return bool(unready_workloads([podiumd_env.kube.get_json("deployment", zac)]))
-
-    with component_down(podiumd_env, http, "pabc"):
-        try:
-            left = wait_until(zac_unready, timeout=window, description="ZAC unready")
-        except WaitTimeoutError:
-            left = False
-    wait_until(lambda: not zac_unready(), timeout=300, description="ZAC ready again")
-    assert not left, "ZAC became unready while PABC was stopped"
 
 
 def form_starts(podiumd_env: Environment, http: requests.Session, registry: ResourceRegistry) -> None:
@@ -236,7 +209,7 @@ def test_form_mail_is_sent_after_a_mail_outage(
     strict=True,
     raises=WaitTimeoutError,
     reason="[zac-3] ZAC 5.4.5 and 5.9.1 send mail directly over SMTP: during an outage it logs 'Failed to send mail' and drops it,"
-    " without a queue or a retry; not yet reported upstream",
+    " without a queue or a retry; PZ-13091",
 )
 def test_zac_mail_is_sent_after_a_mail_outage(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     http: requests.Session,

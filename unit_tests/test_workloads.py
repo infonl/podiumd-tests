@@ -11,7 +11,6 @@ from podiumd_tests.workloads import chart_version
 from podiumd_tests.workloads import component_versions
 from podiumd_tests.workloads import disruptions
 from podiumd_tests.workloads import failed_jobs
-from podiumd_tests.workloads import readiness_window
 from podiumd_tests.workloads import run_cronjob
 from podiumd_tests.workloads import scaled
 from podiumd_tests.workloads import unhealthy_pods
@@ -33,15 +32,6 @@ def job(name, *, failed=False, cronjob=None, created="2026-10-06T10:00:00Z"):
         metadata["ownerReferences"] = [{"kind": "CronJob", "name": cronjob}]
     conditions = [{"type": "Failed", "status": "True"}] if failed else [{"type": "Complete", "status": "True"}]
     return {"metadata": metadata, "status": {"conditions": conditions}}
-
-
-def test_readiness_window():
-    probed = {"readinessProbe": {"failureThreshold": 20, "periodSeconds": 10, "timeoutSeconds": 1}}
-    defaults = {"readinessProbe": {"httpGet": {"path": "/health"}}}
-    deployment = {"spec": {"template": {"spec": {"containers": [probed, defaults, {}]}}}}
-    assert readiness_window(deployment) == 220
-    assert readiness_window({"spec": {"template": {"spec": {"containers": [defaults]}}}}) == 33
-    assert readiness_window({}) == 0
 
 
 def test_unready_workloads():
