@@ -88,7 +88,7 @@ Every new test gets `@pytest.mark.source` with the upstream file and the reason 
 
 Done 2026-10-21, verified on minikube: 1 and 2 (cfd2671), 3 (84ff644; known issue open-zaak-4, fixed in Open Zaak
 1.31.0; the `laatstGemuteerd` part is dropped: #2308 is about the experimental cloud event), 4 (65072ca),
-5 (e8b2ad3), 6 (5866ed9; cases 3, 4, 5 and 7 of suite 1), 7 (42d244c; known issue open-archiefbeheer-6),
+5 (e8b2ad3), 6 (5866ed9, 262766b; cases 3 to 7 and 9 of suite 1), 7 (42d244c; known issue open-archiefbeheer-6),
 8 (4c3ce11).
 
 | # | Tests (upstream source) | Where | Reuses |
@@ -105,7 +105,8 @@ Done 2026-10-21, verified on minikube: 1 and 2 (cfd2671), 3 (84ff644; known issu
 ### Phase 2: KISS and ITA scenarios
 
 Done 2026-10-21, verified on minikube: 11 and 12 (6d70c35), 9, 14, 15 and 16 (c7c2bf0). Not ported: 10's form
-prefill and 13 (UI only; their API paths are covered), 17 (the reminder needs a contactverzoek past its deadline).
+prefill and 13 (UI only; their API paths are covered). 17 (ea51d9a): chaos tier; it skips where the reminder
+CronJob is off, as in podiumd 4.10 (DRT-726).
  (largest gain; mostly API through the BFFs, browser where the UI is the behaviour)
 
 | # | Tests (upstream source) | Reuses | New |
