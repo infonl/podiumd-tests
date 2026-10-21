@@ -145,3 +145,12 @@ def test_zac_session_logs_in_through_keycloak(env_factory, profile_factory, monk
     monkeypatch.setattr(zac, "form_login", lambda _http, url, user, password: logins.append((url, user, password)))
     zac.zac_session(env_factory(profile_factory(urls={"zac": ZAC})), "u", "p")
     assert logins == [(ZAC + zac.LOGIN_PATHS["zac"], "u", "p")]
+
+
+def test_zaak_listed_searches_by_identificatie_with_the_flags(fake_http):
+    sent = fake_http({"PUT /rest/zoeken/list": (200, {"resultaten": [{"identificatie": "ZAAK-1"}]})})
+    assert zac.zaak_listed(requests.Session(), ZAC, "ZAAK-1", alleenOpenstaandeZaken=True)
+    assert not zac.zaak_listed(requests.Session(), ZAC, "ZAAK-2")
+    body = json.loads(sent[0].body)
+    assert body["zoeken"] == {"ZAAK_IDENTIFICATIE": "ZAAK-1"}
+    assert body["alleenOpenstaandeZaken"] is True

@@ -24,7 +24,14 @@ if TYPE_CHECKING:
 
     from podiumd_tests.environment import Environment
 
-pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "keycloak")]
+pytestmark = [
+    pytest.mark.component,
+    pytest.mark.requires("zac", "keycloak"),
+    pytest.mark.source(
+        "podiumd-tests",
+        "ZAC must refresh its tokens itself and keep Keycloak's rotated refresh token, also with PKCE on (helm-charts #629).",
+    ),
+]
 
 LOGGED_IN_USER = "/rest/identity/loggedInUser"
 # Longer than this per wait (seconds) and the test skips; podiumd-infra's realms use 60.

@@ -42,6 +42,12 @@ def zac_session(env: Environment, username: str, password: str) -> requests.Sess
     return http
 
 
+def user_groups(http: requests.Session, zac_url: str) -> list[str]:
+    """The ids of the groups ZAC knows the session's user in."""
+    user = expect_status(http.get(f"{zac_url}/rest/identity/loggedInUser"), HTTPStatus.OK).json()
+    return [str(g) for g in user["groupIds"]]
+
+
 def zaakafhandelparameters(http: requests.Session, zac_url: str, identificatie: str | None = None) -> list[JsonObject]:
     """ZAC's zaakafhandelparameters of every version of the zaaktype, or of every zaaktype ZAC handles.
 
@@ -179,8 +185,19 @@ def reindex_zaken(env: Environment) -> None:
     env.kube.exec(env.deployment_for("zac"), "sh", "-c", command, timeout=REINDEX_TIMEOUT)
 
 
+def search(http: requests.Session, zac_url: str, **query: object) -> JsonObject:
+    """The first page of ZAC's search (rows 10 unless given) with these RestZoekParameters, as the session's user."""
+    body = {"page": 0, "rows": 10, **query}
+    return cast("JsonObject", expect_status(http.put(zac_url + "/rest/zoeken/list", json=body), HTTPStatus.OK).json())
+
+
+def zaak_listed(http: requests.Session, zac_url: str, identificatie: str, **flags: bool) -> bool:
+    """ZAC's search for zaken lists the zaak; flags are its alleen* filters (alleenOpenstaandeZaken: werkvoorraad)."""
+    found = search(http, zac_url, type="ZAAK", zoeken={"ZAAK_IDENTIFICATIE": identificatie}, **flags)
+    return any(r.get("identificatie") == identificatie for r in entries(found["resultaten"]))
+
+
 def count_zaken_found(zac: requests.Session, zac_url: str, zaaktype_omschrijving: str) -> int:
     """How many zaken of the zaaktype ZAC's search shows the session's user."""
-    query = {"page": 0, "rows": 1, "type": "ZAAK", "filters": {"ZAAKTYPE": {"values": [zaaktype_omschrijving]}}}
-    found = expect_status(zac.put(zac_url + "/rest/zoeken/list", json=query), HTTPStatus.OK).json()
-    return int(found["totaal"])
+    found = search(zac, zac_url, rows=1, type="ZAAK", filters={"ZAAKTYPE": {"values": [zaaktype_omschrijving]}})
+    return int(str(found["totaal"]))

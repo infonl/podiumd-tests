@@ -25,7 +25,14 @@ if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
 
-pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "keycloak")]
+pytestmark = [
+    pytest.mark.component,
+    pytest.mark.requires("zac", "openzaak", "keycloak"),
+    pytest.mark.source(
+        "PI test_zac_zaakafhandelparameters.py",
+        "A published zaaktype is unusable in ZAC until its zaakafhandelparameters are valide; guards against a reseed losing them.",
+    ),
+]
 
 
 def test_zaakafhandelparameters_are_valide(

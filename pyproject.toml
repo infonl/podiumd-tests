@@ -64,6 +64,7 @@ markers = [
     "slow: takes more than a minute",
     "requires(*capabilities): skip unless the environment has these capabilities",
     "tc(*ids): draaiboek test case ids",
+    "source(origin, reason): where the test comes from and why it exists, as that source says (sources.ORIGINS)",
 ]
 
 [tool.coverage.run]

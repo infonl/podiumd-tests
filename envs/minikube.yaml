@@ -80,6 +80,8 @@ settings:
   productaanvraag_zaaktype: zaaktype-voor-e2e-testen
   # podiumd-minikube allows bootstrap to switch on ZAC's ontvangstbevestiging for that zaaktype (2026-10-09).
   zac_email_confirmation: true
+  # podiumd-minikube allows bootstrap to switch on its human task Aanvullende informatie (2026-10-21).
+  zac_aanvullende_informatie: true
   # podiumd-minikube asks bootstrap to give that zaaktype the besluittype ZAC's inrichtingscheck needs (2026-10-09).
   zac_besluittype: true
   # KISS's kanalen are runtime data no environment seeds; bootstrap adds Balie, Telefoon and Internet (2026-10-10).

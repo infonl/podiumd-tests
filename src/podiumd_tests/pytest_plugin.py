@@ -51,6 +51,7 @@ from podiumd_tests.seed.openzaak import zaaktype_parts
 from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.zac import confirmation_on
 from podiumd_tests.zac import create_zaak
+from podiumd_tests.zac import user_groups
 from podiumd_tests.zac import zaakafhandelparameters
 from podiumd_tests.zac import zac_session
 
@@ -377,6 +378,12 @@ def fixture_zac(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -
     """The test admin's session on ZAC's REST API."""
     need_bootstrap(ADMIN.name)
     return zac_session(podiumd_env, ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
+
+
+@pytest.fixture(name="zac_group")
+def fixture_zac_group(zac: requests.Session, urls: dict[str, str]) -> str:
+    """A group of the test admin, to assign zaken and taken to together with the admin."""
+    return user_groups(zac, urls["zac"])[0]
 
 
 @pytest.fixture(name="zac_parameters")

@@ -28,6 +28,7 @@ from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_with_person
+from podiumd_tests.zac import zaak_listed
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -56,6 +57,10 @@ NIET_ONTVANKELIJK = "ZAAK_NIET_ONTVANKELIJK"
 
 
 @pytest.mark.tc("ZAC-006", "ZAC-010", "ZAC-019", "ZAC-022")
+@pytest.mark.source(
+    "draaiboek ZAC-006",
+    "A new zaak: the zaaktype, startdatum, communicatiekanaal and toelichting can be chosen (ZAC-006, -010, -019, -022).",
+)
 def test_new_zaak_keeps_the_chosen_fields(
     zac_zaak: Callable[..., JsonObject], zac_parameters: JsonObject, registry: ResourceRegistry
 ) -> None:
@@ -73,6 +78,9 @@ def test_new_zaak_keeps_the_chosen_fields(
     reason="[zac-2] ZAC 5.4.5 and 5.9.1 answer 500 to a zaak without startdatum (NullPointerException in"
     " calculateDoorlooptijden); PZ-13090",
 )
+@pytest.mark.source(
+    "podiumd-tests", "Found while porting ZAC-010: ZAC's UI always sends a startdatum, its API answers 500 without one."
+)
 def test_zaak_without_startdatum_is_refused_or_starts_today(zac_zaak: Callable[..., JsonObject]) -> None:
     """ZAC refuses a zaak without startdatum with 400, or starts it today."""
     refused, zaak = "", {}
@@ -86,7 +94,41 @@ def test_zaak_without_startdatum_is_refused_or_starts_today(zac_zaak: Callable[.
         assert zaak.get("startdatum") == date.today().isoformat()  # noqa: DTZ011  # ZAC's dates are local dates
 
 
+@pytest.mark.requires("opennotificaties")
+@pytest.mark.source(
+    "ZAC features/2-zaken-toevoegen.feature",
+    "Bob creates a zaak and sees it, its initiator, that no acknowledgment was sent, and the zaak in the werkvoorraad.",
+)
+@pytest.mark.source("ZAC features/8-personen.feature", "Bob opens the initiator's person details from the zaak.")
+def test_zaak_with_an_initiator_is_in_the_werkvoorraad(
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
+) -> None:
+    """A new zaak with a BRP person as initiator shows the person, lacks an ontvangstbevestiging, and is in the werkvoorraad.
+
+    The werkvoorraad is ZAC's search for open zaken; ZAC indexes the zaak on Open Notificaties' zaken kanaal.
+    """
+    zaak = zac_zaak()
+
+    def add(identificatie: JsonObject) -> requests.Response:
+        body = {"zaakUUID": zaak["uuid"], "betrokkeneIdentificatie": identificatie}
+        return zac.patch(f"{urls['zac']}/rest/zaken/initiator", json=body)
+
+    initiator = section(
+        expect_status(send_with_person(zac, urls["zac"], EREBOS, add), HTTPStatus.OK).json(), "initiatorIdentificatie"
+    )
+    person = zac.get(f"{urls['zac']}/rest/klanten/person/{initiator['temporaryPersonId']}")
+    assert expect_status(person, HTTPStatus.OK).json()["bsn"] == EREBOS
+    assert "ONTVANGSTBEVESTIGING_NIET_VERSTUURD" in strings(zaak.get("indicaties"))
+    identificatie = str(zaak["identificatie"])
+    wait_until(
+        lambda: zaak_listed(zac, urls["zac"], identificatie, alleenOpenstaandeZaken=True),
+        timeout=INDEX_TIMEOUT,
+        description=f"zaak {identificatie} in the werkvoorraad",
+    )
+
+
 @pytest.mark.tc("ZAC-029", "ZAC-030", "ZAC-031")
+@pytest.mark.source("draaiboek ZAC-029", "A zaaknotitie can be added, changed and deleted (ZAC-029, -030, -031).")
 def test_note_can_be_added_changed_and_deleted(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
 ) -> None:
@@ -108,6 +150,10 @@ def test_note_can_be_added_changed_and_deleted(
 
 
 @pytest.mark.tc("ZAC-042", "ZAC-043")
+@pytest.mark.source(
+    "draaiboek ZAC-042",
+    "A suspended zaak can be resumed, and a resumed zaak cannot be suspended again (ZAC-042, -043).",
+)
 def test_suspended_zaak_resumes_and_cannot_be_suspended_again(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
 ) -> None:
@@ -123,6 +169,7 @@ def test_suspended_zaak_resumes_and_cannot_be_suspended_again(
 
 
 @pytest.mark.tc("ZAC-044")
+@pytest.mark.source("draaiboek ZAC-044", "The streefdatum and fatale datum of a zaak can be extended, once.")
 def test_extension_moves_the_planned_and_final_dates(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     zac: requests.Session,
     urls: dict[str, str],
@@ -149,6 +196,9 @@ def test_extension_moves_the_planned_and_final_dates(  # pylint: disable=too-man
 @pytest.mark.tc("ZAC-045", "ZAC-062")
 # ZAC updates its search index from Open Notificaties' notifications.
 @pytest.mark.requires("opennotificaties")
+@pytest.mark.source(
+    "draaiboek ZAC-045", "A zaak can be aborted, and then shows in the werkvoorraad of closed zaken (ZAC-045, -062)."
+)
 def test_aborted_zaak_is_closed_and_listed_among_the_closed_zaken(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
 ) -> None:
@@ -161,22 +211,18 @@ def test_aborted_zaak_is_closed_and_listed_among_the_closed_zaken(
     response = zac.patch(f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}/afbreken", json=body)
     expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     assert not read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpen"]
-    query = {
-        "page": 0,
-        "rows": 10,
-        "type": "ZAAK",
-        "alleenAfgeslotenZaken": True,
-        "zoeken": {"ZAAK_IDENTIFICATIE": zaak["identificatie"]},
-    }
 
     def listed() -> bool:
-        found = expect_status(zac.put(f"{urls['zac']}/rest/zoeken/list", json=query), HTTPStatus.OK).json()
-        return any(r.get("identificatie") == zaak["identificatie"] for r in entries(found["resultaten"]))
+        return zaak_listed(zac, urls["zac"], str(zaak["identificatie"]), alleenAfgeslotenZaken=True)
 
     wait_until(listed, timeout=INDEX_TIMEOUT, description=f"zaak {zaak['identificatie']} among the closed zaken")
 
 
 @pytest.mark.tc("ZAC-047", "ZAC-048")
+@pytest.mark.source(
+    "draaiboek ZAC-047",
+    "Several betrokkenen with the same and different roles are linked to the zaak and shown with their role (ZAC-047, -048).",
+)
 def test_betrokkenen_with_the_same_and_different_roles_are_listed(
     zac: requests.Session, urls: dict[str, str], zac_parameters: JsonObject, zac_zaak: Callable[..., JsonObject]
 ) -> None:
@@ -260,6 +306,7 @@ def zaak_documents(zac: requests.Session, zac_url: str, zaak: JsonObject) -> lis
 
 
 @pytest.mark.tc("ZAC-058")
+@pytest.mark.source("draaiboek ZAC-058", "A document can be deleted.")
 def test_document_can_be_deleted(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
 ) -> None:
@@ -276,6 +323,9 @@ def test_document_can_be_deleted(
 
 
 @pytest.mark.tc("ZAC-056")
+@pytest.mark.source(
+    "draaiboek ZAC-056", "A document can be edited directly; Word saves it automatically as the new version."
+)
 def test_word_saves_an_edited_document_as_a_new_version(
     zac: requests.Session,
     http: requests.Session,
@@ -302,6 +352,9 @@ def test_word_saves_an_edited_document_as_a_new_version(
 
 
 @pytest.mark.tc("ZAC-039")
+@pytest.mark.source(
+    "draaiboek ZAC-039", "A document sent by post outside ZAC gets the indication verzonden in the documents overview."
+)
 def test_sent_document_is_marked_verzonden(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
 ) -> None:

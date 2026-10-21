@@ -54,7 +54,9 @@ from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.oidc_mock import KeycloakOidcMock
 from podiumd_tests.bootstrap.oidc_mock import oidc_params
 from podiumd_tests.bootstrap.omc import OmcAbonnement
-from podiumd_tests.bootstrap.zac import ZacEmailConfirmation
+from podiumd_tests.bootstrap.zac import AANVULLENDE_INFORMATIE
+from podiumd_tests.bootstrap.zac import EMAIL_CONFIRMATION
+from podiumd_tests.bootstrap.zac import ZacParameters
 from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.clients.platform import openklant_client
 from podiumd_tests.django_snippets import run_snippet
@@ -864,7 +866,9 @@ STEPS: tuple[Step, ...] = (
     ),
     OpenInwonerPartijen(),
     # ZAC's ontvangstbevestiging of productaanvragen, where the profile allows it (draaiboek OF-002).
-    ZacEmailConfirmation(ADMIN),
+    ZacParameters(ADMIN, "zac-email-confirmation", "zac_email_confirmation", EMAIL_CONFIRMATION),
+    # ZAC's human task Aanvullende informatie for that zaaktype, where the profile allows it: the taken tests start it.
+    ZacParameters(ADMIN, "zac-aanvullende-informatie", "zac_aanvullende_informatie", AANVULLENDE_INFORMATIE),
     # KISS's contactmoment kanalen, where the profile allows it (draaiboek KI-053-055).
     KissKanalen(ADMIN),
     # A besluittype for the zaaktype ZAC handles, where the profile allows it: ZAC's inrichtingscheck needs one.

@@ -20,7 +20,14 @@ if TYPE_CHECKING:
     import requests
 
 
-pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "keycloak")]
+pytestmark = [
+    pytest.mark.component,
+    pytest.mark.requires("zac", "keycloak"),
+    pytest.mark.source(
+        "TA regression/193-frankgateway-zac-openzaak-e2e.spec.ts",
+        "A logged-in ZAC user's BRP and KvK lookups return the right data through ZAC's own client.",
+    ),
+]
 
 
 def test_person_lookup(zac: requests.Session, urls: dict[str, str]) -> None:
