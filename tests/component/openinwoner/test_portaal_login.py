@@ -14,6 +14,7 @@ import pytest
 from playwright.sync_api import expect
 
 from podiumd_tests.bootstrap.steps import IDENTITIES
+from podiumd_tests.openinwoner import count_accounts
 from podiumd_tests.openinwoner import portal_login
 
 if TYPE_CHECKING:
@@ -69,3 +70,30 @@ def test_logout_ends_the_session(page: Page, podiumd_env: Environment, need_boot
     page.goto(portal + "/digid-oidc/logout/")
     page.goto(portal + "/mijn-zaken/")
     expect(page).to_have_url(re.compile(r"/accounts/login/\?next=/mijn-zaken/"))
+
+
+@pytest.mark.requires("cluster")
+@pytest.mark.parametrize(
+    ("method", "user", "lookup"),
+    [("digid", INWONER, "bsn"), ("eherkenning", BEDRIJF, "kvk")],
+    ids=["digid", "eherkenning"],
+)
+@pytest.mark.source(
+    "upstream maykinmedia/open-inwoner src/open_inwoner/accounts/tests/test_oidc_login_e2e.py",
+    "Logging in again with DigiD or eHerkenning reuses the existing user instead of creating one.",
+)
+def test_second_login_reuses_the_account(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    need_bootstrap: Callable[..., None],
+    method: str,
+    user: KeycloakUser,
+    lookup: str,
+) -> None:
+    """Two logins of the same BSN or KvK number in fresh sessions leave one Open Inwoner account."""
+    need_bootstrap(user.name, "openinwoner-oidc-mock")
+    for _ in range(2):
+        page.context.clear_cookies()
+        portal_login(page, podiumd_env, method, user)
+        expect(page).not_to_have_url(FAILED)
+    assert count_accounts(podiumd_env, **{lookup: user.attributes[lookup][0]}) == 1

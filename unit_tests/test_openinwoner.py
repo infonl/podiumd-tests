@@ -10,6 +10,7 @@ from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.openinwoner import LOGINS
 from podiumd_tests.openinwoner import ask_anonymously
 from podiumd_tests.openinwoner import begeleider_login
+from podiumd_tests.openinwoner import count_accounts
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.openinwoner import reset_begeleider
 from podiumd_tests.openinwoner import search_data
@@ -109,3 +110,9 @@ def test_snippet_helpers_pass_their_parameters(env):
     ]
     assert env.snippets[1][2] == {"bsn": "999", "fields": {"phonenumber": "06"}}
     assert env.snippets[3][2] == {"action": "read", "tag": "ptest", "products": []}
+
+
+def test_count_accounts_asks_the_account_snippet_for_a_count(env):
+    env.snippet_result = 1
+    assert count_accounts(env, kvk="68750110") == 1
+    assert env.snippets[-1][1:] == ("oi_account", {"count": {"kvk": "68750110"}})

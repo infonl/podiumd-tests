@@ -122,6 +122,12 @@ def set_account(env: Environment, bsn: str, **fields: object) -> dict[str, objec
     return cast("dict[str, object]", run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_account", params))
 
 
+def count_accounts(env: Environment, **lookup: str) -> int:
+    """How many Open Inwoner accounts match the lookup, e.g. bsn=... or kvk=..."""
+    params: dict[str, object] = {"count": lookup}
+    return int(str(run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_account", params)))
+
+
 def set_site_configuration(env: Environment, **fields: object) -> dict[str, object]:
     """Set fields of Open Inwoner's SiteConfiguration; their old values, to set back."""
     deployment = env.deployment_for("openinwoner")
