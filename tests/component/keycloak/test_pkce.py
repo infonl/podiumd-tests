@@ -28,6 +28,9 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("keycloak")]
 
+# Keycloak client ids, not component names: Open Archiefbeheer's client is "abc". The podiumd realm renders it
+# also where Open Archiefbeheer is off. podiumd 4.10 has no "objecttypen" client (Open Object serves the
+# Objecttypen API with client "objecten"); it skips there and is checked on older charts.
 NO_PKCE_REQUIRED = (
     "openzaak",
     "openklant",
@@ -35,7 +38,7 @@ NO_PKCE_REQUIRED = (
     "objecttypen",
     "opennotificaties",
     "openformulieren",
-    "openarchiefbeheer",
+    "abc",
     "ita",
     "kiss",
 )
