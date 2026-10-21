@@ -50,11 +50,12 @@ NO_VELDEN = ZaakVelden()
 
 
 class Document(NamedTuple):
-    """A document for voegZaakdocumentToe: its identificatie, its informatieobjecttype omschrijving, its content."""
+    """A document for voegZaakdocumentToe: its identificatie, informatieobjecttype omschrijving, content and status."""
 
     identificatie: str
     documenttype: str
     inhoud_base64: str
+    status: str = "In bewerking"
 
 
 def soap_action(message: str) -> dict[str, str]:
@@ -146,6 +147,32 @@ def _zaak_velden(now: datetime, zaak: str, velden: ZaakVelden) -> str:
 <ZKN:registratiedatum>{now:%Y%m%d}</ZKN:registratiedatum>{velden.verlenging_xml()}"""
 
 
+def _zaak_wijziging(  # pylint: disable=too-many-arguments  # one message
+    now: datetime,
+    zaak: str,
+    zaaktype_code: str,
+    *,
+    old: tuple[ZaakVelden, str],
+    new: tuple[ZaakVelden, str],
+    gemeentecode: str,
+) -> str:
+    """A zakLk01 envelope (mutatiesoort W): the zaak as it was (old), then as it becomes, each with extra elements."""
+    stuurgegevens = _stuurgegevens("Lk01", now, gemeentecode, rest="<StUF:entiteittype>ZAK</StUF:entiteittype>")
+    objects = "".join(
+        f"""<ZKN:object StUF:sleutelVerzendend="{zaak}" StUF:entiteittype="ZAK" StUF:verwerkingssoort="W">
+{_zaak_velden(now, zaak, velden)}
+{_isvan_zaaktype(zaaktype_code, "I")}{extra}</ZKN:object>"""
+        for velden, extra in (old, new)
+    )
+    return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
+ xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<SOAP-ENV:Body><ZKN:zakLk01>
+{stuurgegevens}
+<ZKN:parameters><StUF:mutatiesoort>W</StUF:mutatiesoort>
+<StUF:indicatorOvername>V</StUF:indicatorOvername></ZKN:parameters>
+{objects}</ZKN:zakLk01></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
+
+
 def update_zaak(  # pylint: disable=too-many-arguments  # one message
     now: datetime,
     zaak: str,
@@ -156,20 +183,32 @@ def update_zaak(  # pylint: disable=too-many-arguments  # one message
     gemeentecode: str = GEMEENTECODE,
 ) -> str:
     """An updateZaak_Lk01 envelope for the OntvangAsynchroon endpoint: the zaak as it was (old), then as it becomes."""
-    stuurgegevens = _stuurgegevens("Lk01", now, gemeentecode, rest="<StUF:entiteittype>ZAK</StUF:entiteittype>")
-    objects = "".join(
-        f"""<ZKN:object StUF:sleutelVerzendend="{zaak}" StUF:entiteittype="ZAK" StUF:verwerkingssoort="W">
-{_zaak_velden(now, zaak, velden)}
-{_isvan_zaaktype(zaaktype_code, "I")}</ZKN:object>"""
-        for velden in (old, new)
+    return _zaak_wijziging(now, zaak, zaaktype_code, old=(old, ""), new=(new, ""), gemeentecode=gemeentecode)
+
+
+def actualiseer_zaakstatus(  # pylint: disable=too-many-arguments  # one message
+    now: datetime,
+    zaak: str,
+    zaaktype_code: str,
+    *,
+    volgnummer: int,
+    omschrijving: str,
+    gezet: datetime,
+    gemeentecode: str = GEMEENTECODE,
+) -> str:
+    """An actualiseerZaakstatus_Lk01 envelope for the OntvangAsynchroon endpoint: give the zaak a new status."""
+    zonder = (
+        '<ZKN:heeft StUF:entiteittype="ZAKSTT" StUF:verwerkingssoort="T" xsi:nil="true" StUF:noValue="geenWaarde"/>'
     )
-    return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
- xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-<SOAP-ENV:Body><ZKN:zakLk01>
-{stuurgegevens}
-<ZKN:parameters><StUF:mutatiesoort>W</StUF:mutatiesoort>
-<StUF:indicatorOvername>V</StUF:indicatorOvername></ZKN:parameters>
-{objects}</ZKN:zakLk01></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
+    status = f"""<ZKN:heeft StUF:entiteittype="ZAKSTT" StUF:verwerkingssoort="T">
+<ZKN:gerelateerde StUF:entiteittype="STT" StUF:verwerkingssoort="I"><ZKN:zkt.code>{zaaktype_code}</ZKN:zkt.code>
+<ZKN:zkt.omschrijving>podiumd-tests</ZKN:zkt.omschrijving><ZKN:volgnummer>{volgnummer:04d}</ZKN:volgnummer>
+<ZKN:code>{volgnummer:04d}</ZKN:code><ZKN:omschrijving>{omschrijving}</ZKN:omschrijving>
+<ZKN:ingangsdatumObject xsi:nil="true" StUF:noValue="geenWaarde"/></ZKN:gerelateerde>
+<ZKN:datumStatusGezet>{gezet:%Y%m%d%H%M%S}00</ZKN:datumStatusGezet></ZKN:heeft>"""
+    return _zaak_wijziging(
+        now, zaak, zaaktype_code, old=(NO_VELDEN, zonder), new=(NO_VELDEN, status), gemeentecode=gemeentecode
+    )
 
 
 def geef_zaak_details(now: datetime, zaak: str, gemeentecode: str = GEMEENTECODE) -> str:
@@ -204,7 +243,7 @@ def voeg_zaakdocument_toe(
 <ZKN:dct.omschrijving>{document.documenttype}</ZKN:dct.omschrijving>
 <ZKN:creatiedatum>{now:%Y%m%d}</ZKN:creatiedatum><ZKN:titel>podiumd-tests document</ZKN:titel>
 <ZKN:formaat>pdf</ZKN:formaat><ZKN:taal>nld</ZKN:taal>
-<ZKN:versie xsi:nil="true" StUF:noValue="geenWaarde"/><ZKN:status>In bewerking</ZKN:status>
+<ZKN:versie xsi:nil="true" StUF:noValue="geenWaarde"/><ZKN:status>{document.status}</ZKN:status>
 <ZKN:vertrouwelijkAanduiding>OPENBAAR</ZKN:vertrouwelijkAanduiding><ZKN:auteur>ptest</ZKN:auteur>
 <ZKN:inhoud xmime:contentType="application/pdf" StUF:bestandsnaam="ptest.pdf">{document.inhoud_base64}</ZKN:inhoud>
 <ZKN:isRelevantVoor StUF:entiteittype="EDCZAK" StUF:verwerkingssoort="T">
@@ -212,6 +251,60 @@ def voeg_zaakdocument_toe(
 <ZKN:identificatie>{zaak}</ZKN:identificatie><ZKN:omschrijving>podiumd-tests</ZKN:omschrijving>
 {_isvan_zaaktype(zaaktype_code, "I")}
 </ZKN:gerelateerde></ZKN:isRelevantVoor></ZKN:object></ZKN:edcLk01></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
+
+
+def _vrij_bericht(message: str, functie: str, now: datetime, gemeentecode: str, body: str) -> str:
+    """A ZDS vrij bericht (Di02) envelope for the VrijBericht endpoint, with this body after its stuurgegevens."""
+    stuurgegevens = _stuurgegevens("Di02", now, gemeentecode, rest=f"<StUF:functie>{functie}</StUF:functie>")
+    return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
+ xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<SOAP-ENV:Body><ZKN:{message}>
+{stuurgegevens}
+{body}</ZKN:{message}></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
+
+
+def geef_zaakdocument_bewerken(now: datetime, document: str, gemeentecode: str = GEMEENTECODE) -> str:
+    """A geefZaakdocumentbewerken_Di02 envelope: check the document out for editing (answer: checkedOutId)."""
+    body = f"""<ZKN:edcLv01 StUF:entiteittype="EDC" StUF:functie="selectie">
+<ZKN:parameters><StUF:indicatorAfnemerIndicatie>false</StUF:indicatorAfnemerIndicatie></ZKN:parameters>
+<ZKN:gelijk StUF:entiteittype="EDC"><ZKN:identificatie>{document}</ZKN:identificatie></ZKN:gelijk></ZKN:edcLv01>"""
+    return _vrij_bericht("geefZaakdocumentbewerken_Di02", "geefZaakdocumentbewerken", now, gemeentecode, body)
+
+
+def update_zaakdocument(  # pylint: disable=too-many-arguments  # one message
+    now: datetime, zaak: str, document: str, checkout: str, *, titel: str, gemeentecode: str = GEMEENTECODE
+) -> str:
+    """An updateZaakdocument_Di02 envelope: give the checked-out document a new titel."""
+    body = f"""<ZKN:parameters><ZKN:checkedOutId>{checkout}</ZKN:checkedOutId></ZKN:parameters>
+<ZKN:edcLk02 StUF:entiteittype="EDC" StUF:functie="update"><ZKN:parameters><StUF:mutatiesoort>W</StUF:mutatiesoort>
+</ZKN:parameters><ZKN:object StUF:entiteittype="EDC" StUF:verwerkingssoort="W">
+<ZKN:identificatie>{document}</ZKN:identificatie><ZKN:creatiedatum>{now:%Y%m%d}</ZKN:creatiedatum>
+<ZKN:titel>{titel}</ZKN:titel><ZKN:formaat>pdf</ZKN:formaat><ZKN:taal>nld</ZKN:taal>
+<ZKN:versie xsi:nil="true" StUF:noValue="waardeOnbekend"/><ZKN:status>In bewerking</ZKN:status>
+<ZKN:vertrouwelijkAanduiding>OPENBAAR</ZKN:vertrouwelijkAanduiding><ZKN:auteur>ptest</ZKN:auteur>
+<ZKN:isRelevantVoor StUF:entiteittype="EDCZAK" StUF:verwerkingssoort="T">
+<ZKN:gerelateerde StUF:entiteittype="ZAK" StUF:verwerkingssoort="T"><ZKN:identificatie>{zaak}</ZKN:identificatie>
+</ZKN:gerelateerde></ZKN:isRelevantVoor></ZKN:object></ZKN:edcLk02>"""
+    return _vrij_bericht("updateZaakdocument_Di02", "updateZaakdocument", now, gemeentecode, body)
+
+
+def cancel_checkout(now: datetime, document: str, checkout: str, gemeentecode: str = GEMEENTECODE) -> str:
+    """A cancelCheckout_Di02 envelope: release a checked-out document."""
+    body = f"""<ZKN:parameters><ZKN:checkedOutId>{checkout}</ZKN:checkedOutId></ZKN:parameters>
+<ZKN:document StUF:entiteittype="EDC" StUF:verwerkingssoort="W" StUF:functie="entiteit">
+<ZKN:identificatie>{document}</ZKN:identificatie></ZKN:document>"""
+    return _vrij_bericht("cancelCheckout_Di02", "cancelCheckout", now, gemeentecode, body)
+
+
+def checked_out_id(answer: str) -> str | None:
+    """The checkedOutId in a geefZaakdocumentbewerken answer, or None."""
+    found = ET.fromstring(answer).find(f".//{{{ZKN}}}checkedOutId")  # noqa: S314  # nosec B314  # ZaakBrug's own answer
+    return found.text if found is not None else None
+
+
+def is_fault(answer: str) -> bool:
+    """True when the ZDS answer is a SOAP Fault (ZaakBrug answers its Fo03 faults with HTTP 200)."""
+    return ET.fromstring(answer).find(".//{http://schemas.xmlsoap.org/soap/envelope/}Fault") is not None  # noqa: S314  # nosec B314
 
 
 def zaak_identificatie(answer: str) -> str | None:

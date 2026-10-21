@@ -22,14 +22,20 @@ from podiumd_tests.zaakbrug import NO_VELDEN
 from podiumd_tests.zaakbrug import ZDS
 from podiumd_tests.zaakbrug import Document
 from podiumd_tests.zaakbrug import ZaakVelden
+from podiumd_tests.zaakbrug import actualiseer_zaakstatus
+from podiumd_tests.zaakbrug import cancel_checkout
+from podiumd_tests.zaakbrug import checked_out_id
 from podiumd_tests.zaakbrug import creeer_zaak
 from podiumd_tests.zaakbrug import document_identificatie
 from podiumd_tests.zaakbrug import geef_zaak_details
+from podiumd_tests.zaakbrug import geef_zaakdocument_bewerken
 from podiumd_tests.zaakbrug import genereer_document_identificatie
 from podiumd_tests.zaakbrug import genereer_zaak_identificatie
 from podiumd_tests.zaakbrug import is_bevestiging
+from podiumd_tests.zaakbrug import is_fault
 from podiumd_tests.zaakbrug import soap_action
 from podiumd_tests.zaakbrug import update_zaak
+from podiumd_tests.zaakbrug import update_zaakdocument
 from podiumd_tests.zaakbrug import voeg_zaakdocument_toe
 from podiumd_tests.zaakbrug import zaak_identificatie
 
@@ -201,3 +207,68 @@ def test_update_zaak_ignores_an_incomplete_verlenging(
     zaak = zaakbrug_zaak(CREATED)
     _update(http, urls, zaak.identificatie, CREATED, replace(CREATED, verlenging=verlenging))
     assert openzaak.get(zaak.url)["verlenging"] == {"duur": "P5D", "reden": "Eerste"}
+
+
+@pytest.mark.requires("openzaak")
+@pytest.mark.source(
+    SOAPUI,
+    "NewStatusWithAlreadyExistingDatumstatusgezetShouldThrowTechnicalError: a second status at the same moment faults.",
+)
+def test_status_at_an_existing_datum_status_gezet_is_refused(
+    http: requests.Session, urls: dict[str, str], openzaak: ApiClient, zaakbrug_zaak: Callable[..., CreatedZaak]
+) -> None:
+    """actualiseerZaakstatus_Lk01 sets status 1; a status 2 with the same datumStatusGezet gets a SOAP Fault."""
+    zaak = zaakbrug_zaak()
+    gezet = datetime.now(UTC).replace(microsecond=0)
+    endpoint = urls["zaakbrug"] + ZDS + "/OntvangAsynchroon"
+
+    def status(volgnummer: int, omschrijving: str) -> str:
+        envelope = actualiseer_zaakstatus(
+            datetime.now(UTC),
+            zaak.identificatie,
+            ZAAKBRUG_ZAAKTYPE,
+            volgnummer=volgnummer,
+            omschrijving=omschrijving,
+            gezet=gezet,
+        )
+        return _post(http, endpoint, envelope, "actualiseerZaakstatus_Lk01")
+
+    assert is_bevestiging(status(1, "Ingediend"))
+    assert is_fault(status(2, "In behandeling"))
+    assert len(openzaak.list(f"{ZAKEN}/statussen", {"zaak": zaak.url})) == 1
+
+
+@pytest.mark.requires("openzaak")
+@pytest.mark.source(
+    SOAPUI, "UpdateZaakDocumentShouldNotBeAllowedIfDocumentStatusIsDefinitief: a definitief document is not updated."
+)
+def test_definitief_document_is_not_updated(
+    http: requests.Session, urls: dict[str, str], openzaak: ApiClient, zaakbrug_zaak: Callable[..., CreatedZaak]
+) -> None:
+    """A document attached as Definitief can be checked out, but updateZaakdocument_Di02 faults; its titel stays."""
+    now = datetime.now(UTC)
+    vrij = urls["zaakbrug"] + ZDS + "/VrijBericht"
+    zaak = zaakbrug_zaak()
+    document = document_identificatie(
+        _post(http, vrij, genereer_document_identificatie(now), "genereerDocumentIdentificatie_Di02")
+    )
+    assert document
+    pdf = base64.b64encode(b"%PDF-1.4 ptest").decode()
+    toe = voeg_zaakdocument_toe(
+        now, zaak.identificatie, ZAAKBRUG_ZAAKTYPE, Document(document, ZAAKBRUG_IOT, pdf, status="Definitief")
+    )
+    assert is_bevestiging(_post(http, urls["zaakbrug"] + ZDS + "/OntvangAsynchroon", toe, "voegZaakdocumentToe_Lk01"))
+    checked_out = checked_out_id(
+        _post(http, vrij, geef_zaakdocument_bewerken(now, document), "geefZaakdocumentbewerken_Di02")
+    )
+    assert checked_out
+    try:
+        update = update_zaakdocument(
+            now, zaak.identificatie, document, checked_out, titel="gewijzigd door podiumd-tests"
+        )
+        assert is_fault(_post(http, vrij, update, "updateZaakdocument_Di02"))
+    finally:
+        _post(http, vrij, cancel_checkout(now, document, checked_out), "cancelCheckout_Di02")
+    links = openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": zaak.url})
+    titels = [str(openzaak.get(str(link["informatieobject"]))["titel"]) for link in links]
+    assert "gewijzigd door podiumd-tests" not in titels

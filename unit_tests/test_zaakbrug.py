@@ -8,10 +8,16 @@ from datetime import datetime
 
 from podiumd_tests.zaakbrug import ZKN
 from podiumd_tests.zaakbrug import ZaakVelden
+from podiumd_tests.zaakbrug import actualiseer_zaakstatus
+from podiumd_tests.zaakbrug import cancel_checkout
+from podiumd_tests.zaakbrug import checked_out_id
 from podiumd_tests.zaakbrug import creeer_zaak
+from podiumd_tests.zaakbrug import geef_zaakdocument_bewerken
 from podiumd_tests.zaakbrug import genereer_zaak_identificatie
 from podiumd_tests.zaakbrug import is_bevestiging
+from podiumd_tests.zaakbrug import is_fault
 from podiumd_tests.zaakbrug import update_zaak
+from podiumd_tests.zaakbrug import update_zaakdocument
 from podiumd_tests.zaakbrug import zaak_identificatie
 
 
@@ -49,3 +55,23 @@ def test_update_zaak_carries_the_old_and_the_new_zaak_in_stuf_order():
     tags = [child.tag.split("}")[1] for child in objects[0]]
     assert tags.index("kenmerk") < tags.index("startdatum") < tags.index("verlenging") < tags.index("isVan")
     assert ZaakVelden().kenmerk_xml() == ZaakVelden().verlenging_xml() == ""
+
+
+def test_status_and_document_envelopes():
+    now = datetime(2026, 10, 21, 13, 0, 5, tzinfo=UTC)
+    status = actualiseer_zaakstatus(now, "Z-1", "ZT", volgnummer=2, omschrijving="In behandeling", gezet=now)
+    assert "<ZKN:volgnummer>0002</ZKN:volgnummer>" in status
+    assert "<ZKN:datumStatusGezet>2026102113000500</ZKN:datumStatusGezet>" in status
+    assert 'xsi:nil="true" StUF:noValue="geenWaarde"/></ZKN:object>' in status  # the old zaak had no status
+    assert "<ZKN:checkedOutId>C-1</ZKN:checkedOutId>" in update_zaakdocument(now, "Z-1", "D-1", "C-1", titel="nieuw")
+    assert "geefZaakdocumentbewerken_Di02" in geef_zaakdocument_bewerken(now, "D-1")
+    assert "<ZKN:identificatie>D-1</ZKN:identificatie>" in cancel_checkout(now, "D-1", "C-1")
+
+
+def test_checked_out_id_and_fault():
+    answer = f'<Envelope><Body><x:Du02 xmlns:x="{ZKN}"><x:checkedOutId>C-9</x:checkedOutId></x:Du02></Body></Envelope>'
+    assert checked_out_id(answer) == "C-9"
+    assert checked_out_id("<Envelope/>") is None
+    fault = '<e:Envelope xmlns:e="http://schemas.xmlsoap.org/soap/envelope/"><e:Body><e:Fault/></e:Body></e:Envelope>'
+    assert is_fault(fault)
+    assert not is_fault(answer)
