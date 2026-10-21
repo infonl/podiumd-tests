@@ -122,7 +122,7 @@ prefill and 13 (UI only; their API paths are covered), 17 (the reminder needs a 
 
 ### Phase 3: browser checks and smaller additions
 
-Done 2026-10-21, verified on minikube: 18 without the related types (see its commit), 19 (cc07fc4), 20 (ae71d6f),
+Done 2026-10-21, verified on minikube: 18 (698c7b6, related types added later), 19 (cc07fc4), 20 (ae71d6f),
 21 (2e08549), 22 (55ff808).
 
 | # | Tests (upstream source) | Reuses |

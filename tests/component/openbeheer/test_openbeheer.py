@@ -15,6 +15,7 @@ from podiumd_tests.openbeheer import openbeheer_session
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openzaak import CATALOGI
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -111,7 +112,11 @@ def test_zaaktypen_filter_on_a_catalogus_from_its_choices(
     "upstream maykinmedia/open-beheer backend/src/openbeheer/zaaktype/tests/e2e/test_24_edit_zaaktype.py",
     "A beheerder edits a zaaktype's fields.",
 )
-def test_beheerder_creates_and_changes_a_concept_zaaktype_from_the_template(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "upstream maykinmedia/open-beheer backend/src/openbeheer/zaaktype/tests/e2e/test_25_edit_related.py",
+    "A beheerder adds related types (statustypen, roltypen) to a zaaktype.",
+)
+def test_beheerder_creates_a_concept_zaaktype_from_the_template_and_changes_it(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     openbeheer: requests.Session,
     urls: dict[str, str],
     catalogi_service: str,
@@ -119,7 +124,7 @@ def test_beheerder_creates_and_changes_a_concept_zaaktype_from_the_template(  # 
     registry: ResourceRegistry,
     test_zaaktype: JsonObject,
 ) -> None:
-    """From the Basis template Open Beheer makes a concept zaaktype in Open Zaak, and a change reaches Open Zaak too.
+    """From the Basis template Open Beheer makes a concept zaaktype in Open Zaak; a change and new related types too.
 
     The template leaves omschrijvingGeneriek empty, which the beheerder fills in (Open Zaak requires it).
     """
@@ -141,3 +146,13 @@ def test_beheerder_creates_and_changes_a_concept_zaaktype_from_the_template(  # 
     patch = openbeheer.patch(f"{catalogi_service}/zaaktypen/{created['uuid']}/", json={"omschrijving": changed})
     expect_status(patch, HTTPStatus.OK)
     assert openzaak.get(url)["omschrijving"] == changed
+    related = {
+        "statustypen": {"omschrijving": "Ontvangen", "volgnummer": 1},
+        "roltypen": {"omschrijving": "Initiator", "omschrijvingGeneriek": "initiator"},
+    }
+    for kind, body in related.items():
+        added = openbeheer.post(f"{catalogi_service}/zaaktypen/{created['uuid']}/{kind}/", json=body)
+        expect_status(added, HTTPStatus.CREATED)
+        # The Catalogi API lists the types of a concept zaaktype only with status alles.
+        listed = openzaak.list(f"{CATALOGI}/{kind}", {"zaaktype": url, "status": "alles"})
+        assert [t["omschrijving"] for t in listed] == [body["omschrijving"]]
