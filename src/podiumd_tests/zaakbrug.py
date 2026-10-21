@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 import xml.etree.ElementTree as ET  # nosec B405  # parses ZaakBrug's own answer
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from typing import NamedTuple
 
@@ -22,6 +23,30 @@ MUTATIE = (
     "<ZKN:parameters><StUF:mutatiesoort>T</StUF:mutatiesoort>\n"
     "<StUF:indicatorOvername>V</StUF:indicatorOvername></ZKN:parameters>"
 )
+
+
+@dataclass(frozen=True)
+class ZaakVelden:
+    """Optional fields of a ZDS zaak object: a kenmerk (bron ptest) and a verlenging (duur, reden)."""
+
+    kenmerk: str | None = None
+    verlenging: tuple[int, str] | None = None
+
+    def kenmerk_xml(self) -> str:
+        """The kenmerk element; it comes before startdatum."""
+        if self.kenmerk is None:
+            return ""
+        return f"<ZKN:kenmerk><ZKN:kenmerk>{self.kenmerk}</ZKN:kenmerk><ZKN:bron>ptest</ZKN:bron></ZKN:kenmerk>"
+
+    def verlenging_xml(self) -> str:
+        """The verlenging element; it comes after registratiedatum."""
+        if self.verlenging is None:
+            return ""
+        duur, reden = self.verlenging
+        return f"<ZKN:verlenging><ZKN:duur>{duur}</ZKN:duur><ZKN:reden>{reden}</ZKN:reden></ZKN:verlenging>"
+
+
+NO_VELDEN = ZaakVelden()
 
 
 class Document(NamedTuple):
@@ -86,7 +111,15 @@ def document_identificatie(answer: str) -> str | None:
     return found.text if found is not None else None
 
 
-def creeer_zaak(now: datetime, zaak: str, zaaktype_code: str, bsn: str, gemeentecode: str = GEMEENTECODE) -> str:
+def creeer_zaak(  # pylint: disable=too-many-arguments  # one message
+    now: datetime,
+    zaak: str,
+    zaaktype_code: str,
+    bsn: str,
+    gemeentecode: str = GEMEENTECODE,
+    *,
+    velden: ZaakVelden = NO_VELDEN,
+) -> str:
     """A creeerZaak_Lk01 envelope for the OntvangAsynchroon endpoint: one zaak of zaaktype_code with an initiator.
 
     zaaktype_code is the zaaktype identificatie and is at most 10 characters (the StUF code limit).
@@ -98,13 +131,45 @@ def creeer_zaak(now: datetime, zaak: str, zaaktype_code: str, bsn: str, gemeente
 {stuurgegevens}
 {MUTATIE}
 <ZKN:object StUF:sleutelVerzendend="{zaak}" StUF:entiteittype="ZAK" StUF:verwerkingssoort="T">
-<ZKN:identificatie>{zaak}</ZKN:identificatie><ZKN:omschrijving>podiumd-tests ZaakBrug</ZKN:omschrijving>
-<ZKN:startdatum>{now:%Y%m%d}</ZKN:startdatum><ZKN:registratiedatum>{now:%Y%m%d}</ZKN:registratiedatum>
+{_zaak_velden(now, zaak, velden)}
 {_isvan_zaaktype(zaaktype_code, "T")}
 <ZKN:heeftAlsInitiator StUF:entiteittype="ZAKBTRINI" StUF:verwerkingssoort="T"><ZKN:gerelateerde>
 <ZKN:natuurlijkPersoon StUF:entiteittype="NPS" StUF:verwerkingssoort="T"><BG:inp.bsn>{bsn}</BG:inp.bsn>
 <BG:geslachtsnaam>Ptest</BG:geslachtsnaam></ZKN:natuurlijkPersoon></ZKN:gerelateerde>
 </ZKN:heeftAlsInitiator></ZKN:object></ZKN:zakLk01></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
+
+
+def _zaak_velden(now: datetime, zaak: str, velden: ZaakVelden) -> str:
+    """The zaak object's own fields in StUF order: identificatie, omschrijving, kenmerk, dates, verlenging."""
+    return f"""<ZKN:identificatie>{zaak}</ZKN:identificatie><ZKN:omschrijving>podiumd-tests ZaakBrug</ZKN:omschrijving>
+{velden.kenmerk_xml()}<ZKN:startdatum>{now:%Y%m%d}</ZKN:startdatum>
+<ZKN:registratiedatum>{now:%Y%m%d}</ZKN:registratiedatum>{velden.verlenging_xml()}"""
+
+
+def update_zaak(  # pylint: disable=too-many-arguments  # one message
+    now: datetime,
+    zaak: str,
+    zaaktype_code: str,
+    *,
+    old: ZaakVelden,
+    new: ZaakVelden,
+    gemeentecode: str = GEMEENTECODE,
+) -> str:
+    """An updateZaak_Lk01 envelope for the OntvangAsynchroon endpoint: the zaak as it was (old), then as it becomes."""
+    stuurgegevens = _stuurgegevens("Lk01", now, gemeentecode, rest="<StUF:entiteittype>ZAK</StUF:entiteittype>")
+    objects = "".join(
+        f"""<ZKN:object StUF:sleutelVerzendend="{zaak}" StUF:entiteittype="ZAK" StUF:verwerkingssoort="W">
+{_zaak_velden(now, zaak, velden)}
+{_isvan_zaaktype(zaaktype_code, "I")}</ZKN:object>"""
+        for velden in (old, new)
+    )
+    return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
+ xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<SOAP-ENV:Body><ZKN:zakLk01>
+{stuurgegevens}
+<ZKN:parameters><StUF:mutatiesoort>W</StUF:mutatiesoort>
+<StUF:indicatorOvername>V</StUF:indicatorOvername></ZKN:parameters>
+{objects}</ZKN:zakLk01></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
 
 
 def geef_zaak_details(now: datetime, zaak: str, gemeentecode: str = GEMEENTECODE) -> str:
