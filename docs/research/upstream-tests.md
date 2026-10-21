@@ -78,3 +78,56 @@ KISS and ITA log in through Azure AD in their own tests; here the same flows log
 - Recorded or mocked integrations (VCR tests of BRP, BRK, Signicat; SDK MSW stories): replay, not a test of
   the environment; the live paths are covered by `test_brp.py` and `test_formulier_login.py`.
 - eIDAS logins and appointment plugins (JCC, Qmatic): no estate configures them.
+
+## Port plan
+
+Ordered by value per effort. Each item names what it reuses; new seeding is added only where no step covers it.
+Every new test gets `@pytest.mark.source` with the upstream file and the reason it gives.
+
+### Phase 1: API and chain tests on existing seeding (no new bootstrap)
+
+| # | Tests (upstream source) | Where | Reuses |
+| --- | --- | --- | --- |
+| 1 | Objecten: a record that breaks its objecttype's JSON schema gets 400 naming the field; PUT/PATCH adds a record, `/history` lists both, `?date=` and `?registrationDate=` return the older record (objects-api Postman quickstart) | `tests/component/objecten/test_objecten.py` (new) | `make_object`, `objecttype_url`, bootstrap `objecten-token`, `registry` |
+| 2 | Objecten: creating an object notifies kanaal `objecten` | `tests/integration/test_notificaties.py` | `callback` fixture (mock server), the abonnement pattern of the other kanaal tests |
+| 3 | Open Zaak: two documents with the same file name created at once keep their own content (CHANGELOG #2592); `laatstGemuteerd` follows a new status, rol and document (#2308) | `test_documenten.py`, `test_zaken.py` | `make_zaak`, `make_document`, `make_status`, `make_rol` |
+| 4 | Open Zaak perf: EIO list with a deep page and `ordering=-auteur`; zaken list for a client limited to one zaaktype (`performance_test/`) | `src/podiumd_tests/perf/locustfile.py`, `perf.yaml` | the `openzaak-client-productaanvraag` client (one zaaktype), seed-volume data |
+| 5 | Open Formulieren: follow the mailed resume link, finish and submit the paused submission (`test_resume_form.py`) | `tests/integration/test_formulier_pauzeren.py` | `start_submission`, `submit`, `received` (Mailpit), `registered_zaak` |
+| 6 | ZaakBrug: verlenging (valid, duur 0 and empty reden ignored), kenmerken, status with an existing datumStatusGezet refused, document update refused once definitief (SoapUI suite 1) | `tests/component/zaakbrug/test_zaakbrug.py` | `creeer_zaak`, `geef_zaak_details`, `voeg_zaakdocument_toe`, bootstrap `openzaak-zaaktype-zaakbrug`; new `updateZaak`/`actualiseerZaakstatus` builders in `zaakbrug.py` |
+| 7 | Open Archiefbeheer: a zaak deleted in Open Zaak while on a list does not break review and processing; reassign the reviewer, also after changes were requested; delete a new list, refused past status new (features `list_review`, `list_reassign`, `list_delete`, issue 841) | `test_vernietigingslijst.py` | the module's list fixtures and OAB users, `oab.login`, `delete_zaak` |
+| 8 | Open Inwoner: a repeat DigiD and eHerkenning login reuses the account, one User per BSN or KvK (`test_oidc_login_e2e.py`) | `test_portaal_login.py` | `portal_login`, snippet `oi_account` (read) |
+
+### Phase 2: KISS and ITA scenarios (largest gain; mostly API through the BFFs, browser where the UI is the behaviour)
+
+| # | Tests (upstream source) | Reuses | New |
+| --- | --- | --- | --- |
+| 9 | KISS person search by BSN, name and date of birth, postcode and huisnummer, and company search by name, KvK and vestigingsnummer, each found and not found (`SearchPersonScenarios`, `SearchCompanyScenarios`) | `kcc_login`, `kiss_register`, BRP test set (`EREBOS`), `KVK_TEST_NUMMER` | one parametrized test over the BFF proxy routes |
+| 10 | KISS contactverzoek to an afdeling and to a groep, by phone and by e-mail, with prefill from BSN or vestigingsnummer; it arrives in ITA for that afdeling or groep (`AnonymousContactverzoek*`) | `kiss_klantcontact`, `ita_detail_text`, bootstrap `objecten-medewerker-kcc`, `openklant-actor-kcc` | parametrize the existing contactverzoek test |
+| 11 | KISS beheer: kanalen, gespreksresultaten and skills created, changed and deleted (`Beheer/*Scenarios`) | ADMIN has `kiss:Beheerder`; `registry` for cleanup | BFF beheer routes |
+| 12 | KISS nieuws en werkinstructies: a bericht with a skill shows for the KCC user, read marker set and cleared (`NieuwsEnWerkInstructiesScenarios`) | ADMIN to create, KCC to read | BFF berichten routes |
+| 13 | KISS: two vragen in one contactmoment become two klantcontacten (`VraagScenarios`); contactmoment registered on a zaak (`AnonymousContactmomentZaakScenarios`, extends `test_klantcontact_zaak.py`) | `kiss_klantcontact`, `make_zaak` | |
+| 14 | ITA: forward a contactverzoek to an afdeling and a groep with and without a groepsmailbox, and to a medewerker; the mail goes to the groepsmailbox (`ContactverzoekDoorsturen*`) | the existing forward test, Mailpit `wait_for_mail` | groepsmailbox addresses on the seeded afdeling and groep (extend the ITA seeding of `objecten-medewerker-kcc`) |
+| 15 | ITA: search by klantcontactnummer (found, unknown, one outside the user's rights); actor display; digitale adressen fallback (`KlantcontactZoekenScenarios`, `DigitaleAdressenFallbackScenarios`) | `kcc_login`, `make_klantcontact`, `make_digitaal_adres` | |
+| 16 | ITA beheer: Alle contactverzoeken for a beheerder only; reopen a closed contactverzoek with a reason and a logboek line (`AlleContactverzoekenAccessScenarios`, `HeropenContactverzoekScenarios`) | `KeycloakUser` | bootstrap user `ita-beheerder` with client role `ita:ITA_Functioneel_Beheerder` (the chart has the role) |
+| 17 | ITA daily reminder mail for an expired contactverzoek: medewerker, afdeling, aggregated, no personal data in the body (`DagelijkseHerinneringScenarios`) | Mailpit, CronJob trigger as `kiss_sync_cronjob` | a contactverzoek past its afhandeltermijn (needs a back-dated klantcontact; check what ITA reads); chaos or destructive marker if the trigger mails others |
+
+### Phase 3: browser checks and smaller additions
+
+| # | Tests (upstream source) | Reuses |
+| --- | --- | --- |
+| 18 | Open Beheer: create a concept zaaktype from the template, edit it, add statustype and roltype; delete the concept (`test_22`, `test_24`, `test_25`) | `openbeheer_session`, test catalogus of `openzaak-zaaktype`, `make_concept_zaaktype` cleanup pattern |
+| 19 | Open Formulieren: the form designer admin pages render the bundle marker `data-testid="e2e-test-id"` (`test_admin_js.py`) | `auth/django_admin.py`, Playwright fixtures |
+| 20 | Open Inwoner: profile edit refuses a malformed and a duplicate e-mail and a malformed phone; a second phone is added and deleted (`test_profile_edit_e2e.py`) | `portal` fixture, `set_account` for cleanup |
+| 21 | OMC: `/Events/Listen` with an expired token answers 401 (`EventsControllerTests`) | `test_events_listen.py`, `omc_jwt_secret` |
+| 22 | Open Formulieren: `bin/report_component_problems.py` in the pod reports no broken form definitions (post-upgrade) | `Kube.exec` |
+
+### Not in the plan
+
+- ZGW Office Add-in frontend specs: the frontend is only reachable inside the cluster and the specs need an Office
+  mock page; the backend is covered.
+- ZaakBrug's role and translation suites (`2-` to `4-TestSuite...`): each needs its own zaaktype trees for one
+  municipality's message flavour; revisit when an estate uses ZaakBrug for them.
+- Publishing zaaktypen or objecttypen, CMS editing, select-all in Open Archiefbeheer: they leave residue in a
+  shared environment.
+- PABC, Open Klant, Open Notificaties, Objecttypen, Referentielijsten, Open VTB: no upstream scenario beyond what is
+  covered.
