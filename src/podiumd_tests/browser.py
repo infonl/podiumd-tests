@@ -18,6 +18,7 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 
 from podiumd_tests.auth.keycloak import one_login_at_a_time
+from podiumd_tests.auth.keycloak import totp
 from podiumd_tests.oidc import CHALLENGE
 from podiumd_tests.responses import url_host
 
@@ -104,6 +105,14 @@ def keycloak_login(page: Page, username: str, password: str) -> None:
             page.locator("#kc-login").click()
 
     retry_network_change(page, submit, f"Keycloak login of {username}")
+
+
+def configure_totp(page: Page) -> None:
+    """Complete Keycloak's CONFIGURE_TOTP required action the page shows, with the key it offers."""
+    page.get_by_role("link", name="Unable to scan?").click()
+    page.locator("#totp").fill(totp(page.locator("#kc-totp-secret-key").inner_text()))
+    with page.expect_navigation():
+        page.locator("#saveTOTPBtn").click()
 
 
 def redirect_login(page: Page, env: Environment, app_url: str, username: str, password: str) -> requests.Session:

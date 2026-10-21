@@ -14,6 +14,7 @@ from podiumd_tests.auth.keycloak import discovery_url
 from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.auth.keycloak import password_grant
 from podiumd_tests.auth.keycloak import realm_url
+from podiumd_tests.auth.keycloak import totp
 from podiumd_tests.auth.zgw_jwt import unsigned_jwt
 from podiumd_tests.auth.zgw_jwt import zgw_headers
 from podiumd_tests.auth.zgw_jwt import zgw_jwt
@@ -23,6 +24,12 @@ from podiumd_tests.seed.registry import ResourceRegistry
 
 def b64decode(part):
     return base64.urlsafe_b64decode(part + "=" * (-len(part) % 4))
+
+
+def test_totp_matches_the_rfc_6238_vectors():
+    key = "GEZD GNBV GY3T QOJQ GEZD GNBV GY3T QOJQ"  # base32 of "12345678901234567890"
+    assert totp(key, at=59) == "287082"
+    assert totp(key.lower(), at=1111111109) == "081804"
 
 
 def test_zgw_jwt_is_a_valid_hs256_token():

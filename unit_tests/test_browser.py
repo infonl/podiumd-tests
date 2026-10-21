@@ -19,6 +19,7 @@ from podiumd_tests.auth.django_admin import is_logged_in
 from podiumd_tests.browser import NETWORK_CHANGED
 from podiumd_tests.browser import browser_session
 from podiumd_tests.browser import challenge_login
+from podiumd_tests.browser import configure_totp
 from podiumd_tests.browser import context_args
 from podiumd_tests.browser import guard_navigation
 from podiumd_tests.browser import headless_page
@@ -92,6 +93,17 @@ def test_challenge_login_waits_until_the_signin_callback_is_done(fake_page, page
     assert page.actions[0] == ("goto", APP + "/api/challenge?returnUrl=%2F")
     assert not page.waits[0](APP + "/signin-oidc")
     assert page.waits[0](APP + "/")
+
+
+def test_configure_totp_submits_the_code_of_the_offered_key(fake_page, monkeypatch):
+    monkeypatch.setattr(browser, "totp", lambda secret: f"code-{secret}")
+    page = fake_page(texts={"#kc-totp-secret-key": "ABCD EFGH"})
+    configure_totp(page)
+    assert page.actions == [
+        ("click", "link:Unable to scan?"),
+        ("fill", "#totp", "code-ABCD EFGH"),
+        ("click", "#saveTOTPBtn"),
+    ]
 
 
 def test_browser_session_copies_cookies_without_domain(fake_page, page_env):

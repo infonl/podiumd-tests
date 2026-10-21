@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import base64
 import fcntl
 import hashlib
+import hmac
 import html
 import re
+import struct
 import tempfile
+import time
 
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -23,6 +27,9 @@ if TYPE_CHECKING:
     import requests
 
 LOGIN_LOCKS = Path(tempfile.gettempdir()) / "podiumd-tests-logins"
+# Keycloak's default OTP policy: time-based, SHA1, 6 digits, 30 seconds.
+TOTP_PERIOD = 30
+TOTP_DIGITS = 6
 
 
 def realm_url(keycloak_url: str, realm: str, path: str = "") -> str:
@@ -33,6 +40,18 @@ def realm_url(keycloak_url: str, realm: str, path: str = "") -> str:
 def admin_realm_url(keycloak_url: str, realm: str) -> str:
     """URL of a realm in the Keycloak admin REST API."""
     return f"{keycloak_url}/admin/realms/{realm}"
+
+
+def totp(secret: str, at: float | None = None) -> str:
+    """The RFC 6238 code of a base32 secret (spaces allowed) at a time, default now."""
+    compact = secret.replace(" ", "").upper()
+    key = base64.b32decode(compact + "=" * (-len(compact) % 8))
+    digest = hmac.new(
+        key, struct.pack(">Q", int(time.time() if at is None else at) // TOTP_PERIOD), hashlib.sha1
+    ).digest()
+    offset = digest[-1] & 0x0F
+    code = (struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF) % 10**TOTP_DIGITS
+    return str(code).zfill(TOTP_DIGITS)
 
 
 def discovery_url(keycloak_url: str, realm: str) -> str:

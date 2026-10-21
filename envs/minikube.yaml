@@ -63,6 +63,11 @@ secrets:
   # Signs the bootstrap's OMC abonnement token; read from OMC's own Secret.
   omc_jwt_secret:
     k8s_secret: {name: omc, key: OMC_AUTH_JWT_SECRET}
+  # Test user of acc-mock, the stand-in for the acceptance Keycloak behind admin identity provider accp-dimp-oidc.
+  admin_idp_username:
+    k8s_secret: {name: keycloak-acc-mock, key: username}
+  admin_idp_password:
+    k8s_secret: {name: keycloak-acc-mock, key: password}
 settings:
   zgw_client_id: formulier
   # No local superuser: Open Inwoner as in ExternalsPodiumD and podiumd-infra; Open VTB (podiumd-minikube creates none).
