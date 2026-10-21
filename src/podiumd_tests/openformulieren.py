@@ -62,9 +62,22 @@ def submit(  # pylint: disable=too-many-arguments  # one flow
     and `submission`: the submission's uuid. Cleanup deletes the submission. With registers,
     also wait_for_registration; a form waiting for a co-signer does not register yet.
     """
-    base_url = env.profile.urls["openformulieren"]
-    submission, headers = start_submission(http, base_url, slug)
+    submission, headers = start_submission(http, env.profile.urls["openformulieren"], slug)
     registry.add(f"submission {submission['id']}", lambda: delete_submission(env, str(submission["id"])))
+    return complete_submission(env, http, submission, headers, data, timeout=timeout, registers=registers)
+
+
+def complete_submission(  # pylint: disable=too-many-arguments  # one flow
+    env: Environment,
+    http: requests.Session,
+    submission: JsonObject,
+    headers: dict[str, str],
+    data: Mapping[str, object],
+    *,
+    timeout: float,
+    registers: bool = True,
+) -> JsonObject:
+    """Fill the submission's single step with data, complete it and return its final status (see submit)."""
     step = entries(submission["steps"])[0]
     expect_status(
         http.put(str(step["url"]), json={"data": dict(data)}, headers=headers), HTTPStatus.CREATED, HTTPStatus.OK
