@@ -35,10 +35,15 @@ def objecttype_url(env: Environment, name: str) -> str:
 
 
 def make_object(
-    objecten: ApiClient, registry: ResourceRegistry, objecttype: str, data: Mapping[str, object]
+    objecten: ApiClient,
+    registry: ResourceRegistry,
+    objecttype: str,
+    data: Mapping[str, object],
+    start_at: str | None = None,
 ) -> JsonObject:
-    """An object of an objecttype (its URL as Objecten knows it), version 1, starting today."""
-    body: dict[str, object] = {"type": objecttype, "record": {"typeVersion": 1, "data": data, "startAt": today()}}
+    """An object of an objecttype (its URL as Objecten knows it), version 1, valid from start_at (default today)."""
+    record = {"typeVersion": 1, "data": data, "startAt": start_at or today()}
+    body: dict[str, object] = {"type": objecttype, "record": record}
     created = objecten.post("objects", body)
     url = str(created["url"])
     registry.add(f"object {url}", lambda: objecten.delete(url))

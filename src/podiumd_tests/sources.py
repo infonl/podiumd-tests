@@ -7,13 +7,15 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import pytest
 
-# First word of an origin: the source repository (MIGRATION.md), draaiboek for a draaiboek case, or this suite.
+# First word of an origin: the source repository (MIGRATION.md), a component's own one, a draaiboek case, or this suite.
 ORIGINS = {
     "TA": "icatt-menselijk-digitaal/podiumd-testautomation",
     "MK": "infonl/podiumd-minikube/tests",
     "PI": "icatt-menselijk-digitaal/podiumd-infra/tests",
     "EX": "scctwente/ExternalsPodiumD/smoke-tests",
     "ZAC": "infonl/dimpact-zaakafhandelcomponent/src/e2e",
+    # Another component's own repository, named after the word: "upstream <owner>/<repo> <path>".
+    "upstream": "a component's own repository (docs/research/upstream-tests.md)",
     "draaiboek": "TA test-catalog/cases.yaml",
     "podiumd-tests": "made in this suite",
 }

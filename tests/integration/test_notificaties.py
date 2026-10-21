@@ -1,4 +1,4 @@
-"""Chains: changes in Open Zaak and Open Klant reach subscribers through Open Notificaties.
+"""Chains: changes in Open Zaak, Open Klant and Objecten reach subscribers through Open Notificaties.
 
 Ported from TA regression 19, 25, 26, 27, 30, 33, 34, 37, 42, 45 and 46. Each test subscribes
 callbacks of its own on the mock server (infra/mock-server) and matches the
@@ -11,8 +11,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.names import ITA_OBJECTTYPES
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.json_data import section
+from podiumd_tests.seed.objecten import make_object
+from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import make_internetaak
 from podiumd_tests.seed.openklant import make_klantcontact
 from podiumd_tests.seed.openklant import make_partij
@@ -27,6 +30,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.mock_server import Callback
     from podiumd_tests.seed.openzaak import ZaaktypeParts
@@ -226,3 +230,26 @@ def test_failed_delivery_is_retried(
     match = event("zaken", "zaak", "create", zaak["url"])
     callback.wait_for(lambda e: match(e) and e.get("status") == 204, timeout=DELIVERY_TIMEOUT, description="redelivery")
     assert [e.get("status") for e in callback.received() if match(e)] == [500, 204]
+
+
+@pytest.mark.requires("objecten", "cluster")
+@pytest.mark.source(
+    "upstream maykinmedia/objects-api docs/api/_assets/objects-api.postman_collection.json",
+    "Create object: Objecten publishes the new object on Open Notificaties' kanaal objecten.",
+)
+def test_object_is_notified_on_kanaal_objecten(
+    podiumd_env: Environment,
+    objecten: ApiClient,
+    opennotificaties: ApiClient,
+    registry: ResourceRegistry,
+    callback: Callback,
+) -> None:
+    """A new object reaches kanaal objecten with its objecttype as kenmerk.
+
+    Open Formulieren's objects API registration and the productaanvraag chain depend on it.
+    """
+    make_abonnement(opennotificaties, registry, callback.url, "objecten", {})
+    afdeling = objecttype_url(podiumd_env, ITA_OBJECTTYPES[0])
+    created = make_object(objecten, registry, afdeling, {"identificatie": registry.tagged("afdeling"), "naam": "x"})
+    body = notified(callback, event("objecten", "object", "create", created["url"]), "the object's create notification")
+    assert section(body, "kenmerken").get("objectType") == afdeling
