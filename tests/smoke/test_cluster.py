@@ -129,7 +129,7 @@ def test_keycloak_instances_have_a_disruption_budget(podiumd_env: Environment) -
 # Not strict: an environment with helm-charts #634 passes.
 @pytest.mark.xfail(
     strict=False,
-    reason="helm-charts #634 (open) adds redis-operator.redis-ha.pdb; before it no PodDisruptionBudget selects redis-ha",
+    reason="helm-charts #634 (podiumd 4.10.0) adds redis-operator.redis-ha.pdb; before it no PodDisruptionBudget selects redis-ha",
 )
 def test_redis_ha_replicas_have_a_disruption_budget(podiumd_env: Environment) -> None:
     """redis-ha's replicas have a PodDisruptionBudget (redis-ha-replication), so a node drain keeps one running."""
