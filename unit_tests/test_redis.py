@@ -26,9 +26,10 @@ class FakeEnv:
         return self.objects.get(kind, [])
 
 
-def pod(name, labels, probe_command):
+def pod(name, labels, probe_command, uid=""):
     container = {"name": "redis-ha", "readinessProbe": {"exec": {"command": probe_command}}}
-    return {"metadata": {"name": name, "namespace": "ns", "labels": labels}, "spec": {"containers": [container]}}
+    metadata = {"name": name, "namespace": "ns", "labels": labels, "uid": uid}
+    return {"metadata": metadata, "spec": {"containers": [container]}}
 
 
 def test_role_endpoints_and_master_check():
@@ -47,3 +48,18 @@ def test_role_endpoints_and_master_check():
     assert redis.reported_role(env, master) == "slave"
     args, kwargs = fake.kube.calls[0]
     assert args[:4] == ("exec", "pod/redis-ha-0", "-c", "redis-ha") and kwargs == {"namespace": "ns"}
+
+
+def test_master_pod_is_the_reporting_master_behind_the_service():
+    master = pod("redis-ha-1", {"app": "redis-ha", "redis-role": "master"}, ["true"], uid="u1")
+    endpoints = {
+        "metadata": {"name": "redis-ha-master"},
+        "subsets": [{"addresses": [{"targetRef": {"name": "redis-ha-1"}}]}],
+    }
+    env = cast("Environment", FakeEnv({"pods": [master], "endpoints": [endpoints]}, out="role:master\r\n"))
+    assert redis.master_pod(env) == master
+    assert redis.master_pod(env, replaced_uid="u1") is None
+    assert redis.master_pod(env, replaced_uid="u0") == master
+    slave = cast("Environment", FakeEnv({"pods": [master], "endpoints": [endpoints]}, out="role:slave\r\n"))
+    assert redis.master_pod(slave) is None
+    assert redis.master_pod(cast("Environment", FakeEnv({"pods": [master]}))) is None

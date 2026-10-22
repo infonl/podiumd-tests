@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import shlex
 
 from typing import TYPE_CHECKING
 
@@ -20,7 +21,7 @@ MASTER_SERVICE = "redis-ha-master"
 # The operator labels the pod it made master; redis-ha-master selects that label.
 MASTER_LABEL = "redis-role"
 # REDISCLI_AUTH is the pods' own password variable, set only when Redis has one.
-INFO_REPLICATION = "redis-cli -h $(hostname) -p ${REDIS_PORT:-6379} INFO replication"
+REDIS_CLI = "redis-cli -h $(hostname) -p ${REDIS_PORT:-6379}"
 
 
 def redis_pods(env: Environment) -> list[JsonObject]:
@@ -28,10 +29,11 @@ def redis_pods(env: Environment) -> list[JsonObject]:
     return [p for p in env.items("pods") if section(section(p, "metadata"), "labels").get("app") == REDIS_HA]
 
 
-def reported_role(env: Environment, pod: JsonObject) -> str:
-    """The role (master or slave) the pod's Redis reports in INFO replication."""
+def redis_cli(env: Environment, pod: JsonObject, *args: str) -> str:
+    """stdout of redis-cli with args against the pod's own Redis."""
     metadata = section(pod, "metadata")
-    out = env.kube.run(
+    command = f"{REDIS_CLI} {shlex.join(args)}"
+    return env.kube.run(
         "exec",
         f"pod/{metadata_name(pod)}",
         "-c",
@@ -39,10 +41,14 @@ def reported_role(env: Environment, pod: JsonObject) -> str:
         "--",
         "sh",
         "-c",
-        INFO_REPLICATION,
+        command,
         namespace=str(metadata.get("namespace")),
     )
-    found = re.search(r"^role:(\w+)", out, re.MULTILINE)
+
+
+def reported_role(env: Environment, pod: JsonObject) -> str:
+    """The role (master or slave) the pod's Redis reports in INFO replication."""
+    found = re.search(r"^role:(\w+)", redis_cli(env, pod, "INFO", "replication"), re.MULTILINE)
     return found.group(1) if found else ""
 
 
@@ -62,3 +68,18 @@ def ready_endpoints(env: Environment, service: str) -> list[str]:
         for subset in entries(e.get("subsets"))
         for a in entries(subset.get("addresses"))
     ]
+
+
+def master_pod(env: Environment, replaced_uid: str | None = None) -> JsonObject | None:
+    """The one pod behind redis-ha-master if its Redis reports role:master, else None.
+
+    With replaced_uid, None also while that pod (by uid: a recreated pod keeps its name) is still behind it.
+    """
+    behind = ready_endpoints(env, MASTER_SERVICE)
+    pods = {metadata_name(p): p for p in redis_pods(env)}
+    if len(behind) != 1 or behind[0] not in pods:
+        return None
+    pod = pods[behind[0]]
+    if replaced_uid and section(pod, "metadata").get("uid") == replaced_uid:
+        return None
+    return pod if reported_role(env, pod) == "master" else None
