@@ -20,6 +20,7 @@ from podiumd_tests.lock import holder
 from podiumd_tests.lock import is_stale
 from podiumd_tests.lock import lease_holder
 from podiumd_tests.lock import release_lease
+from podiumd_tests.lock import running_hold
 from podiumd_tests.lock import take_lease
 
 
@@ -121,3 +122,12 @@ def test_release_leaves_a_lock_file_another_took_over(tmp_path, profile_factory,
     with held(env, "run full"):
         lock.write_text("podiumd-minikube deploy 2026-10-10T18:00:00\n", encoding="utf-8")
     assert lock.read_text(encoding="utf-8").startswith("podiumd-minikube")
+
+
+def test_running_hold_is_the_line_of_a_running_podiumd_tests_process(tmp_path):
+    lock = tmp_path / "lock"
+    assert running_hold(lock) is None
+    lock.write_text(f"{holder('run chaos minikube')} 2026-10-22T10:00:00+00:00\n", encoding="utf-8")
+    assert running_hold(lock) == f"{holder('run chaos minikube')} 2026-10-22T10:00:00+00:00"
+    lock.write_text("podiumd-minikube deploy 2026-10-22T10:00:00+00:00\n", encoding="utf-8")
+    assert running_hold(lock) is None

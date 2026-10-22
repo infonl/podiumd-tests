@@ -95,7 +95,7 @@ setting `pytest_workers` changes that (1 runs serially).
 | `core` | smoke plus the tests marked `core`: the key user flows (create a zaak, submit a form, a contactverzoek from KISS to ITA, notifications). | yes: creates test data tagged with the run and deletes it at the end |
 | `full` | smoke, `tests/component` (one component's behaviour) and `tests/integration` (chains across components), except destructive tests. | yes: as `core` |
 | `perf` | `tests/perf`: Locust load with the response-time thresholds of `perf.yaml`. | read-mostly; load on the environment |
-| `chaos` | only tests marked `destructive`: a component or SMTP stopped and recovery, changes to global settings (Open Archiefbeheer). Opt-in. | yes: disrupts other users meanwhile |
+| `chaos` | only tests marked `destructive`: a component or SMTP stopped and recovery, changes to global settings (Open Archiefbeheer), and on a profile with setting `replicas_command` the tests that need several pods (fixture `several_replicas` switches them on once per run). Opt-in. | yes: disrupts other users meanwhile |
 
 ## Bootstrap and cleanup
 

@@ -100,5 +100,8 @@ settings:
   seed_volume_kennisartikelen: "200"
   # seed-volume may add the volume zaaktype to PABC's entity types, so ZAC shows its zaken to the test admin.
   pabc_volume_zaaktype: true
+  # One pod per component by default; tests using fixture several_replicas switch redis-ha to 3 and Keycloak to 2
+  # (tier chaos).
+  replicas_command: /home/kvv/development/werk/infonl-dimpact/infonl/podiumd-minikube/bin/replicas
   # Shared with the podiumd-minikube agent; bootstrap and writing runs take it.
   lock_file: /home/kvv/development/werk/infonl-dimpact/infonl/.minikube-lock

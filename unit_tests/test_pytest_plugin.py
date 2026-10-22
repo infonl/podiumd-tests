@@ -107,6 +107,27 @@ def test_other(request):
 # Inner sessions run in this process, so the plugin's module attributes can be patched from outside.
 INNER_ARGS = ("-p", "no:playwright", "-W", "ignore::pytest.PytestUnknownMarkWarning")
 
+REPLICAS_TEST = """
+import pytest
+
+
+def test_multi_pod(several_replicas, request):
+    assert request.node.get_closest_marker("destructive") is None
+"""
+
+
+def test_several_replicas_is_destructive_where_the_profile_switches_pods(pytester):
+    pytester.makeconftest(INNER_CONFTEST.replace('"urls"', '"settings": {"replicas_command": "replicas"}, "urls"'))
+    pytester.makepyfile(REPLICAS_TEST)
+    pytester.runpytest_inprocess(*INNER_ARGS, "-m", "not destructive").assert_outcomes(deselected=1)
+
+
+def test_several_replicas_is_a_no_op_without_replicas_command(pytester):
+    pytester.makeconftest(INNER_CONFTEST)
+    pytester.makepyfile(REPLICAS_TEST)
+    pytester.runpytest_inprocess(*INNER_ARGS, "-m", "not destructive").assert_outcomes(passed=1)
+
+
 APPS = ("openzaak", "openklant", "objecten", "objecttypen", "opennotificaties", "mailpit", "zac")
 WRITABLE_CONFTEST = (
     INNER_CONFTEST.replace('"allowed_tiers": ["smoke"]', '"allowed_tiers": ["smoke", "full"]')

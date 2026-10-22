@@ -120,6 +120,15 @@ def release_lease(kube: Kube, who: str) -> None:
         kube.delete("lease", LEASE)
 
 
+def running_hold(lock: Path) -> str | None:
+    """The lock file's line while a running podiumd-tests process of this user@host holds it, else None."""
+    try:
+        line = lock.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return None
+    return line if line.startswith(f"{HOLDER} {_me()} pid ") and not is_stale(line) else None
+
+
 def _take_file(lock: Path, who: str) -> None:
     """Create the lock file, taking over a stale one; LockBusyError while another holds it."""
     try:

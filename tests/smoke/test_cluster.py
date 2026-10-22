@@ -114,6 +114,7 @@ def test_containers_request_cpu_and_memory(podiumd_env: Environment) -> None:
     reason="[podiumd-chart-7] podiumd 4.10.0's Keycloak PodDisruptionBudget is off by default"
     " (keycloak.podDisruptionBudget.enabled), so a node drain can stop both instances",
 )
+@pytest.mark.usefixtures("several_replicas")
 def test_keycloak_instances_have_a_disruption_budget(podiumd_env: Environment) -> None:
     """Keycloak's instances have a PodDisruptionBudget, so a node drain keeps one running."""
     keycloak = [w for w in podiumd_env.workloads() if metadata_name(w) == "keycloak"]
@@ -131,6 +132,7 @@ def test_keycloak_instances_have_a_disruption_budget(podiumd_env: Environment) -
     strict=False,
     reason="helm-charts #634 (podiumd 4.10.0) adds redis-operator.redis-ha.pdb; before it no PodDisruptionBudget selects redis-ha",
 )
+@pytest.mark.usefixtures("several_replicas")
 def test_redis_ha_replicas_have_a_disruption_budget(podiumd_env: Environment) -> None:
     """redis-ha's replicas have a PodDisruptionBudget (redis-ha-replication), so a node drain keeps one running."""
     redis = [w for w in podiumd_env.workloads() if metadata_name(w) == REDIS_HA]

@@ -43,6 +43,8 @@ from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
 from podiumd_tests.mock_server import Callback
 from podiumd_tests.oidc import challenge_session
+from podiumd_tests.replicas import several_replicas
+from podiumd_tests.replicas import switches_replicas
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
@@ -107,6 +109,13 @@ def _environment(config: pytest.Config) -> Environment:
 def fixture_podiumd_env(request: pytest.FixtureRequest) -> Environment:
     """The environment under test, from --podiumd-env."""
     return _environment(request.config)
+
+
+@pytest.fixture(scope="session", name="several_replicas")
+def fixture_several_replicas(podiumd_env: Environment) -> Generator[None]:
+    """Several pods of redis-ha and Keycloak for the whole session (profile setting replicas_command)."""
+    with several_replicas(podiumd_env):
+        yield
 
 
 @pytest.fixture(scope="session", name="kube")
@@ -438,15 +447,21 @@ def fixture_zac_zaak(
 
 
 @pytest.hookimpl(tryfirst=True)  # before xdist reads the groups
-def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Put the destructive tests in one xdist group; record each test's sources as junit property "source".
 
-    A test without a valid source marker stops the run.
+    Tests using several_replicas are destructive where the fixture switches pods (tier chaos), so the
+    switch runs once, apart from parallel tests. A test without a valid source marker stops the run.
     """
     problems = [p for item in items for p in source_problems(item)]
     if problems:
         raise pytest.UsageError("\n".join(problems))
+    switching = any("several_replicas" in getattr(i, "fixturenames", ()) for i in items) and switches_replicas(
+        _environment(config).profile
+    )
     for item in items:
+        if switching and "several_replicas" in getattr(item, "fixturenames", ()):
+            item.add_marker(pytest.mark.destructive)
         if item.get_closest_marker("destructive"):
             item.add_marker(pytest.mark.xdist_group("destructive"))
         item.user_properties += [("source", s) for s in sources(item)]
