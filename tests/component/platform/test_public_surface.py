@@ -41,10 +41,13 @@ LOGIN = re.compile(r"login|auth|signin|oidc", re.IGNORECASE)
 )
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
 def test_django_admin_is_not_public(http: requests.Session, urls: dict[str, str], component: str) -> None:
-    """Anonymous /admin/ ends on a login page, never on the admin itself (TA reg-177)."""
-    response = http.get(urls[component] + "/admin/", allow_redirects=False)
-    if response.is_redirect:
-        assert LOGIN.search(response.headers["Location"]), response.headers["Location"]
+    """Anonymous /admin/ ends on a login page, never on the admin itself (TA reg-177).
+
+    Redirects are followed: an edge can first send an old host to the current one (objecttypen to objecten).
+    """
+    response = http.get(urls[component] + "/admin/")
+    if response.history:
+        assert LOGIN.search(response.url), f"{[r.url for r in response.history]} -> {response.url}"
         return
     assert response.status_code in REFUSED, describe(response)
 
