@@ -46,6 +46,12 @@ def test_login_shows_the_dashboard(
 @pytest.mark.source(
     "ZAC features/1-login.feature", "Bob logs out through the user profile menu and sees the sign-in page."
 )
+# Not strict: the race hits about 1 in 31 runs.
+@pytest.mark.xfail(
+    strict=False,
+    reason="[zac-7] ZAC 5.9.1 with Keycloak 26.8.1: after logout Keycloak can hand out a code of the session it is"
+    " removing (CODE_TO_TOKEN_ERROR invalid_code), and ZAC answers 403 (Geen toestemming); not yet reported upstream",
+)
 def test_logout_ends_the_session(
     page: Page, podiumd_env: Environment, urls: dict[str, str], need_bootstrap: Callable[..., None]
 ) -> None:
