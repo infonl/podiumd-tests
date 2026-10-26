@@ -24,7 +24,9 @@ Rules for marking a test as a known defect (user, 2026-10-26).
 ## XPASS
 
 - A strict xfail that passes fails the run: the defect no longer shows.
-- Verify the fix: rerun the test with `--runxfail` on the build that shows it, and find the change that fixed it (release, PR, environment setting).
+- Verify the fix: rerun the test with `--runxfail` on the build that shows it, and name the change that fixed it: the PR and the published version that contains it, or the environment setting.
+- Remove the marker, or set its fix version, only once the fix is in a published chart or component version: minikube runs unreleased fixes from local verify branches, and other environments (kees00, ExternalsPodiumD) still fail without the marker.
+- Until then, an XPASS of a strict xfail on a build with the unreleased fix is accepted; record the run in podiumd-known-issues.
 - Remove the marker in the same change that records the fix in podiumd-known-issues (status and Fix column, build and run id).
 - An XPASS of a non-strict xfail is expected and needs no action by itself.
 
