@@ -26,5 +26,10 @@ urls:
   grafana: https://ontw-podiumd-logs.dev.dimpact.nl
   openbao: https://ontw-openbao-admin.dev.dimpact.nl
 secrets:
+  # keycloak-operator's master admin, as on podiumd-infra (checked on ontw-dim1 2026-10-27).
+  keycloak_admin_username:
+    k8s_secret: {name: keycloak-podiumd-admin, key: username}
+  keycloak_admin_password:
+    k8s_secret: {name: keycloak-podiumd-admin, key: password}
   pabc_api_key:
     pod_env: {deployment: pabc, var: API_KEY__0}
