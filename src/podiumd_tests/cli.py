@@ -65,9 +65,9 @@ from podiumd_tests.seed.volume import format_seeded
 from podiumd_tests.seed.volume import seed
 from podiumd_tests.seed.volume import unseed
 from podiumd_tests.sweep import format_swept
-from podiumd_tests.sweep import parse_age
 from podiumd_tests.sweep import sweep
 from podiumd_tests.tiers import TIERS
+from podiumd_tests.wait import parse_duration
 from podiumd_tests.workloads import ClusterState
 from podiumd_tests.workloads import chart_version
 from podiumd_tests.workloads import cluster_state
@@ -296,7 +296,7 @@ def _apply_steps(
 def cmd_sweep(args: argparse.Namespace) -> int:
     """Delete what test runs left behind: run-tagged objects older than --older-than."""
     try:
-        cutoff = datetime.now(UTC) - parse_age(args.older_than)
+        cutoff = datetime.now(UTC) - parse_duration(args.older_than)
     except ValueError as exc:
         print(f"--older-than: {exc}", file=sys.stderr)
         return EXIT_CONFIG

@@ -1,14 +1,29 @@
-"""Polling with a deadline instead of fixed sleeps."""
+"""Polling with a deadline instead of fixed sleeps; durations."""
 
 from __future__ import annotations
 
+import re
 import time
 
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+
+DURATION = re.compile(r"(?:\d+[smhd])+")
+_PART = re.compile(r"(\d+)([smhd])")
+_UNITS = {"s": "seconds", "m": "minutes", "h": "hours", "d": "days"}
+
+
+def parse_duration(text: str) -> timedelta:
+    """A duration such as 30s, 1m30s, 24h or 7d (Prometheus format); ValueError otherwise."""
+    if not DURATION.fullmatch(text.strip()):
+        msg = f"duration {text!r}: expected numbers with s, m, h or d, e.g. 24h"
+        raise ValueError(msg)
+    return sum((timedelta(**{_UNITS[unit]: int(n)}) for n, unit in _PART.findall(text)), timedelta())
 
 
 class WaitTimeoutError(AssertionError):

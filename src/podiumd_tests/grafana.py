@@ -14,6 +14,7 @@ from podiumd_tests.json_data import JsonObject
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
+from podiumd_tests.wait import parse_duration
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -80,13 +81,21 @@ def _active_targets(targets_response: JsonObject) -> list[JsonObject]:
     return entries(section(targets_response, "data").get("activeTargets"))
 
 
-def down_targets(targets_response: JsonObject) -> list[str]:
-    """Prometheus scrape targets that are not up, as "job url: error", from a /api/v1/targets body."""
+def down_targets(targets_response: JsonObject, prometheus_age: timedelta) -> list[str]:
+    """Prometheus scrape targets that are down, as "job url: error", from a /api/v1/targets body.
+
+    A target not scraped yet (health "unknown") counts as down only once Prometheus has run longer than its scrape
+    interval plus timeout: after a restart, a PodMonitor with a 5m interval stays unknown for up to 5 minutes.
+    """
     return [
-        f"{section(t, 'labels').get('job')} {t.get('scrapeUrl')}: {t.get('lastError')}"
+        f"{section(t, 'labels').get('job')} {t.get('scrapeUrl')}: {t.get('lastError') or t.get('health')}"
         for t in _active_targets(targets_response)
-        if t.get("health") != "up"
+        if t.get("health") == "down" or (t.get("health") != "up" and prometheus_age > _first_scrape_due(t))
     ]
+
+
+def _first_scrape_due(target: JsonObject) -> timedelta:
+    return parse_duration(str(target.get("scrapeInterval"))) + parse_duration(str(target.get("scrapeTimeout")))
 
 
 def target_count(targets_response: JsonObject) -> int:

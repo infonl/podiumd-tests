@@ -2,6 +2,7 @@
 
 from datetime import UTC
 from datetime import datetime
+from datetime import timedelta
 
 import pytest
 import requests
@@ -80,12 +81,21 @@ def test_down_targets():
                     "health": "down",
                     "lastError": "connection refused",
                 },
+                {
+                    "labels": {"job": "elastic-operator"},
+                    "scrapeUrl": "http://eck:8080/metrics",
+                    "health": "unknown",
+                    "lastError": "",
+                    "scrapeInterval": "5m",
+                    "scrapeTimeout": "10s",
+                },
             ]
         }
     }
-    assert target_count(body) == 2
-    assert down_targets(body) == ["tempo http://tempo:3200/metrics: connection refused"]
-    assert down_targets({"data": {}}) == []
+    assert target_count(body) == 3
+    assert down_targets(body, timedelta(minutes=5)) == ["tempo http://tempo:3200/metrics: connection refused"]
+    assert down_targets(body, timedelta(minutes=6))[1] == "elastic-operator http://eck:8080/metrics: unknown"
+    assert down_targets({"data": {}}, timedelta()) == []
     assert target_count({}) == 0
 
 

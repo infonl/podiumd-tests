@@ -19,7 +19,6 @@ from podiumd_tests.sweep import FINDERS
 from podiumd_tests.sweep import Swept
 from podiumd_tests.sweep import format_swept
 from podiumd_tests.sweep import is_stale
-from podiumd_tests.sweep import parse_age
 from podiumd_tests.sweep import with_productaanvraag
 
 if TYPE_CHECKING:
@@ -50,18 +49,6 @@ def test_legacy_tags_are_stale_and_bootstrap_objects_never():
     assert is_stale({"naam": "ptest-4d4a3d-actor-12"}, cutoff)
     assert not is_stale({"naam": "ptest-bootstrap-kcc", "identificatie": "ptest-bootstrap-klacht"}, cutoff)
     assert not is_stale({"naam": "someone else's actor"}, cutoff)
-
-
-@pytest.mark.parametrize(
-    ("text", "age"), [("30m", timedelta(minutes=30)), ("24h", timedelta(hours=24)), ("7d", timedelta(days=7))]
-)
-def test_parse_age(text, age):
-    assert parse_age(text) == age
-
-
-def test_parse_age_refuses_other_units():
-    with pytest.raises(ValueError, match="expected a number with m, h or d"):
-        parse_age("1w")
 
 
 def test_a_zaak_of_a_run_tagged_productaanvraag_is_stale(monkeypatch, fake_http, env_factory):

@@ -8,11 +8,8 @@ order: objects that refer to others go first.
 from __future__ import annotations
 
 import json
-import re
 
 from dataclasses import dataclass
-from datetime import datetime
-from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from podiumd_tests.bootstrap import check
@@ -42,25 +39,14 @@ from podiumd_tests.seed.openzaak import delete_zaak
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from datetime import datetime
 
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
 
-AGE = re.compile(r"(\d+)([mhd])")
-_UNITS = {"m": "minutes", "h": "hours", "d": "days"}
-
 # The audit trail names sweep as the actor of its deletions.
 SWEEP_TAG = "podiumd-tests-sweep"
-
-
-def parse_age(text: str) -> timedelta:
-    """An age such as 30m, 24h or 7d; ValueError otherwise."""
-    found = AGE.fullmatch(text.strip())
-    if found is None:
-        msg = f"age {text!r}: expected a number with m, h or d, e.g. 24h"
-        raise ValueError(msg)
-    return timedelta(**{_UNITS[found.group(2)]: int(found.group(1))})
 
 
 def format_swept(swept: list[Swept]) -> str:

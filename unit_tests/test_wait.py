@@ -1,9 +1,12 @@
 """Unit tests for wait_until."""
 
+from datetime import timedelta
+
 import pytest
 
 from podiumd_tests.wait import Clock
 from podiumd_tests.wait import WaitTimeoutError
+from podiumd_tests.wait import parse_duration
 from podiumd_tests.wait import wait_until
 
 
@@ -41,3 +44,22 @@ def test_exceptions_count_as_not_yet_and_are_reported():
 
 def test_is_an_assertion_error_for_pytest():
     assert issubclass(WaitTimeoutError, AssertionError)
+
+
+@pytest.mark.parametrize(
+    ("text", "duration"),
+    [
+        ("30s", timedelta(seconds=30)),
+        ("1m30s", timedelta(seconds=90)),
+        ("24h", timedelta(hours=24)),
+        ("7d", timedelta(days=7)),
+    ],
+)
+def test_parse_duration(text, duration):
+    assert parse_duration(text) == duration
+
+
+@pytest.mark.parametrize("text", ["1w", "", "m5"])
+def test_parse_duration_refuses_other_formats(text):
+    with pytest.raises(ValueError, match="expected numbers with s, m, h or d"):
+        parse_duration(text)

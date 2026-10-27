@@ -126,7 +126,8 @@ def test_prometheus_scrape_targets_up(grafana: Grafana) -> None:
         pytest.skip("no prometheus datasource")
     body = grafana.proxy("prometheus", "/api/v1/targets")
     assert target_count(body), "no active scrape targets"
-    down = down_targets(body)
+    started = section(grafana.proxy("prometheus", "/api/v1/status/runtimeinfo"), "data").get("startTime")
+    down = down_targets(body, datetime.now(UTC) - datetime.fromisoformat(str(started)))
     assert not down, f"scrape targets down: {down}"
 
 
