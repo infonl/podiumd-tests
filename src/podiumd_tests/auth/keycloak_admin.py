@@ -42,6 +42,7 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
     def __init__(self, http: requests.Session, url: str, realm: str, admin: tuple[str, str]) -> None:
         self.http = http
         self.realm = realm
+        self.url = url
         self.base = admin_realm_url(url, realm)
         token = password_grant(http, url, "master", PasswordLogin("admin-cli", *admin))
         self.headers = {"Authorization": f"Bearer {token}"}
@@ -52,6 +53,11 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
     def _send(self, method: str, path: str, body: object, *expected: int) -> None:
         response = self.http.request(method, self.base + path, json=body, headers=self.headers)
         expect_status(response, *(expected or (HTTPStatus.NO_CONTENT,)))
+
+    def server_info(self) -> JsonObject:
+        """GET /admin/serverinfo: the server's version, themes and providers."""
+        url = f"{self.url}/admin/serverinfo"
+        return cast("JsonObject", expect_status(self.http.get(url, headers=self.headers), HTTPStatus.OK).json())
 
     def representation(self) -> JsonObject:
         """The realm's own settings, e.g. smtpServer."""

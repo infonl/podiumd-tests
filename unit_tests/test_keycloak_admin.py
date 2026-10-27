@@ -109,3 +109,9 @@ def test_single_calls_use_their_admin_paths(admin):
     keycloak.delete_client_scope("s1")
     assert calls(sent)[2:] == ["DELETE /users/u1", "PUT /users/u1/groups/g1", "DELETE /client-scopes/s1"]
     assert sent[-1].headers["Authorization"] == "Bearer t"
+
+
+def test_server_info_is_outside_the_realm(fake_http):
+    sent = fake_http({**TOKEN, "GET /admin/serverinfo": (200, {"systemInfo": {}})})
+    assert KeycloakAdmin(requests.Session(), KC, "master", ("admin", "pw")).server_info() == {"systemInfo": {}}
+    assert sent[-1].url == f"{KC}/admin/serverinfo"

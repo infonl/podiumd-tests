@@ -60,6 +60,16 @@ def test_signing_keys(http: requests.Session, urls: dict[str, str], realm: str) 
     assert (realm_info["realm"], bool(realm_info["public_key"])) == (realm, True)
 
 
+@pytest.mark.source(
+    "PI test_4_9_0_upgrade.py",
+    "Keycloak's bootstrap admin (Secret keycloak-podiumd-admin, Job ensurePodiumdAdminUser) works against the admin"
+    " REST API.",
+)
+def test_bootstrap_admin_reads_the_server_info(podiumd_env: Environment) -> None:
+    """The admin of secrets keycloak_admin_username and keycloak_admin_password gets /admin/serverinfo."""
+    assert for_environment(podiumd_env, "master").server_info().get("systemInfo")
+
+
 @pytest.mark.parametrize("which", ["login", "master"])
 @pytest.mark.source(
     "podiumd-tests",

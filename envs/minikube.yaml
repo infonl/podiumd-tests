@@ -48,6 +48,8 @@ secrets:
     k8s_secret: {name: keycloak-podiumd-admin, key: username}
   keycloak_admin_password:
     k8s_secret: {name: keycloak-podiumd-admin, key: password}
+  kiss_elastic_password:
+    k8s_secret: {name: kiss-es-elastic-user, key: elastic}
   # Well-known dev defaults of podiumd-minikube; the only place literals are allowed.
   # Superuser of every Maykin app (podiumd-minikube create-superuser Jobs).
   django_admin_username:
