@@ -1,5 +1,6 @@
 """Unit tests for reading Locust's stats and checking them against perf.yaml."""
 
+from podiumd_tests.perf import locust_command
 from podiumd_tests.perf.stats import SETTINGS
 from podiumd_tests.perf.stats import STATS
 from podiumd_tests.perf.stats import EndpointStats
@@ -66,3 +67,10 @@ def test_a_slowdown_must_pass_both_the_ratio_and_the_margin():
     threshold = Threshold(1500, 0.01, 1.5, 200)
     assert slowdown_limit(threshold, 130) == 330  # small numbers: the margin
     assert slowdown_limit(threshold, 1000) == 1500  # large numbers: the ratio
+
+
+def test_locust_command_runs_headless_against_the_environment(tmp_path):
+    command = locust_command(tmp_path / "lf.py", "10", "150s", tmp_path / "out", "ontw-dim1")
+    assert command[1:5] == ["-m", "locust", "-f", str(tmp_path / "lf.py")]
+    assert command[command.index("--users") + 1] == command[command.index("--spawn-rate") + 1] == "10"
+    assert command[-4:] == ["--csv", str(tmp_path / "out"), "--podiumd-env", "ontw-dim1"]

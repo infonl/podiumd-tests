@@ -10,9 +10,7 @@ settings go to the run's perf/ directory; without a run directory (plain pytest)
 from __future__ import annotations
 
 import json
-import sys
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -21,6 +19,7 @@ from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.config import REPO_ROOT
 from podiumd_tests.perf import ENDPOINTS
+from podiumd_tests.perf import locust_command
 from podiumd_tests.perf.stats import SETTINGS
 from podiumd_tests.perf.stats import STATS
 from podiumd_tests.perf.stats import baseline_p95
@@ -36,6 +35,7 @@ from podiumd_tests.seed.volume import counts
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
     from _pytest.mark import ParameterSet
 
@@ -45,15 +45,6 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.perf
 
 LOCUSTFILE = REPO_ROOT / "src" / "podiumd_tests" / "perf" / "locustfile.py"
-
-
-@pytest.fixture(scope="module", name="perf_dir")
-def fixture_perf_dir(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """The run's perf/ directory, or a temporary one outside a CLI run."""
-    junit = request.config.option.xmlpath
-    directory = Path(junit).parent / "perf" if junit else tmp_path_factory.mktemp("perf")
-    directory.mkdir(parents=True, exist_ok=True)
-    return directory
 
 
 @pytest.fixture(scope="module", name="stats")
@@ -75,12 +66,9 @@ def fixture_stats(
     calls = sorted(e for e, c in ENDPOINTS.items() if c in podiumd_env.profile.urls)
     settings = {"users": users, "duration": duration, "calls": calls, "volume": counts(podiumd_env)}
     (directory / SETTINGS).write_text(json.dumps(settings, sort_keys=True) + "\n", encoding="utf-8")
-    command = [sys.executable, "-m", "locust", "-f", str(LOCUSTFILE), "--headless", "--only-summary"]
-    command += ["--users", users, "--spawn-rate", users, "--run-time", duration, "--exit-code-on-error", "0"]
+    command = locust_command(LOCUSTFILE, users, duration, directory / "locust", podiumd_env.profile.name)
     # Users finish their round, so every write is deleted.
-    command += ["--stop-timeout", "60"]
-    command += ["--csv", str(directory / "locust"), "--podiumd-env", podiumd_env.profile.name]
-    command += ["--podiumd-run-tag", run_tag]
+    command += ["--stop-timeout", "60", "--podiumd-run-tag", run_tag]
     run_checked(run_process, command, timeout=600)
     return read_stats((directory / STATS).read_text(encoding="utf-8"))
 

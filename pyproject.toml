@@ -69,8 +69,8 @@ markers = [
 
 [tool.coverage.run]
 source = ["src/podiumd_tests"]
-# Same excludes as the static checks: snippets run inside the components, the locustfile under Locust.
-omit = ["*/snippets/*.py", "*/perf/locustfile.py"]
+# Same excludes as the static checks: snippets run inside the components, the locustfiles under Locust.
+omit = ["*/snippets/*.py", "*/perf/*locustfile.py"]
 
 [tool.coverage.report]
 fail_under = 95
@@ -217,7 +217,7 @@ sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 #   - pytest_* hooks, test_* functions, pytestmark and @pytest.fixture functions: used by pytest.
 #   - __call__ of a callable Protocol (process.Runner): called through the protocol.
 #   - wait_until, tagged: library API without a caller in tests/.
-#   - Locust's hooks in perf/locustfile.py (wait_time, @task, @events listeners): called by Locust.
+#   - Locust's hooks in perf/*locustfile.py (wait_time, @task, @events listeners): called by Locust.
 [tool.vulture]
 # Django snippets: run() is called inside the component, not from here.
 exclude = ["*/snippets/*.py"]
@@ -239,7 +239,7 @@ exclude = [
     # podiumd-tests: Django snippets import models that exist only in the component images.
     "src/podiumd_tests/snippets/*.py",
     # podiumd-tests: Locust's event hooks are untyped.
-    "src/podiumd_tests/perf/locustfile.py",
+    "src/podiumd_tests/perf/*locustfile.py",
 ]
 typeCheckingMode = "strict"
 reportUnusedImport = false  # done by ruff F401
