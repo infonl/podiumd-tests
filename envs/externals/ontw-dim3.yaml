@@ -19,5 +19,9 @@ urls:
   keycloak-admin: https://ontw-keycloak-admin.dim3.dimpact.nl
   kiss: https://ontw-contact.dim3.dimpact.nl
   ita: https://ontw-ita.dim3.dimpact.nl
+  pabc: https://ontw-pabc.dim3.dimpact.nl
   openarchiefbeheer: https://ontw-abc.dim3.dimpact.nl
   grafana: https://ontw-podiumd-logs.dim3.dimpact.nl
+secrets:
+  pabc_api_key:
+    pod_env: {deployment: pabc, var: API_KEY__0}
