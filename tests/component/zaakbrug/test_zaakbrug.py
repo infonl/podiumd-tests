@@ -15,6 +15,7 @@ import pytest
 
 from podiumd_tests.bootstrap.names import ZAAKBRUG_IOT
 from podiumd_tests.bootstrap.names import ZAAKBRUG_ZAAKTYPE
+from podiumd_tests.lock import file_lock
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak
@@ -41,6 +42,7 @@ from podiumd_tests.zaakbrug import zaak_identificatie
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
     import requests
 
@@ -59,6 +61,19 @@ MADE_HERE = pytest.mark.source(
     "podiumd-tests",
     "PodiumD 4.10 adds ZaakBrug: ZDS 1.2 messages answer through its translate endpoints and reach Open Zaak.",
 )
+
+
+@pytest.fixture(scope="module", autouse=True, name="first_identificaties")
+def fixture_first_identificaties(http: requests.Session, urls: dict[str, str], run_dir: Path) -> None:
+    """The run's first genereer calls, one worker at a time: parallel first calls break ZaakBrug's counter (zaakbrug-2)."""
+    done = run_dir / "zaakbrug-identificaties"
+    with file_lock(run_dir / "zaakbrug-identificaties.lock"):
+        if done.exists():
+            return
+        now, url = datetime.now(UTC), urls["zaakbrug"] + ZDS + "/VrijBericht"
+        _post(http, url, genereer_zaak_identificatie(now), "genereerZaakIdentificatie_Di02")
+        _post(http, url, genereer_document_identificatie(now), "genereerDocumentIdentificatie_Di02")
+        done.touch()
 
 
 def _post(http: requests.Session, url: str, envelope: str, message: str) -> str:

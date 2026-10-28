@@ -157,9 +157,16 @@ def fixture_run_tag(request: pytest.FixtureRequest) -> str:
     return str(request.config.getoption("--podiumd-run-tag") or results.run_tag(results.new_run_id()))
 
 
+@pytest.fixture(scope="session", name="run_dir")
+def fixture_run_dir(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """A directory that every pytest-xdist worker of this run shares."""
+    base = tmp_path_factory.getbasetemp()
+    return base.parent if hasattr(request.config, "workerinput") else base
+
+
 @pytest.fixture(scope="session", name="need_bootstrap")
 def fixture_need_bootstrap(
-    request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory, podiumd_env: Environment
+    request: pytest.FixtureRequest, run_dir: Path, podiumd_env: Environment
 ) -> Callable[..., None]:
     """need(*step_names): fail fast when those bootstrap steps are missing.
 
@@ -167,8 +174,7 @@ def fixture_need_bootstrap(
     With --auto-bootstrap the missing ones are applied.
     """
     auto = bool(request.config.getoption("--auto-bootstrap"))
-    base = tmp_path_factory.getbasetemp()
-    present = (base.parent if hasattr(request.config, "workerinput") else base) / "bootstrap-present"
+    present = run_dir / "bootstrap-present"
     present.mkdir(exist_ok=True)
 
     def need(*names: str) -> None:

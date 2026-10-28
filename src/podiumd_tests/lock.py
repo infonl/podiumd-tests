@@ -14,6 +14,7 @@ run as Ctrl-C does.
 
 from __future__ import annotations
 
+import fcntl
 import getpass
 import json
 import os
@@ -43,6 +44,18 @@ if TYPE_CHECKING:
 HOLDER = "podiumd-tests"
 LEASE = "podiumd-tests-lock"
 LEASE_SECONDS = 3 * 3600
+
+
+@contextmanager
+def file_lock(path: Path) -> Generator[None]:
+    """Hold an exclusive lock on the file (created if absent) while the block runs; other processes wait."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 class LockBusyError(Exception):

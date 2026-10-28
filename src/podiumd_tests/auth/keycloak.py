@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import fcntl
 import hashlib
 import hmac
 import html
@@ -19,6 +18,7 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from podiumd_tests.lock import file_lock
 from podiumd_tests.responses import describe
 
 if TYPE_CHECKING:
@@ -67,14 +67,8 @@ def one_login_at_a_time(username: str) -> Generator[None]:
     is in progress ("Invalid user credentials"; keycloak#33527), and parallel test workers share
     the test users.
     """
-    LOGIN_LOCKS.mkdir(exist_ok=True)
-    lock = LOGIN_LOCKS / hashlib.sha256(username.encode()).hexdigest()[:16]
-    with lock.open("w") as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(handle, fcntl.LOCK_UN)
+    with file_lock(LOGIN_LOCKS / hashlib.sha256(username.encode()).hexdigest()[:16]):
+        yield
 
 
 class TokenError(Exception):
