@@ -17,6 +17,7 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import expect_status
+from podiumd_tests.results import now_iso
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.workloads import component_versions
 
@@ -121,6 +122,6 @@ def kennisartikel_data(titel: str, tekst: str = "Tekst van podiumd-tests.") -> d
         },
         "locaties": None,
         "doelgroep": "eu-burger",
-        "vertalingen": [{"taal": "nl", "datumWijziging": today(), "titel": titel, "tekst": tekst}],
+        "vertalingen": [{"taal": "nl", "datumWijziging": now_iso(), "titel": titel, "tekst": tekst}],
         "beschikbareTalen": ["nl"],
     }
