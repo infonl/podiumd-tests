@@ -9,7 +9,9 @@ description = "Smoke, component, integration and perf tests for PodiumD environm
 requires-python = ">=3.12"
 # Every dependency needs a reason.
 dependencies = [
-    "pytest",            # test runner for every tier
+    # test runner for every tier; <9.2: pytest-xdist 3.8.0 sets item._nodeid for xdist_group, which 9.2
+    # ignores (it reads _id), so loadgroup runs grouped tests in parallel
+    "pytest<9.2",
     "pytest-playwright", # UI tests; already used by podiumd-minikube and podiumd-infra
     "pytest-xdist",      # parallel component/integration runs (R10)
     "pytest-html",       # report.html of each run
