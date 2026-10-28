@@ -95,7 +95,7 @@ def test_run_keeps_screenshots_of_failed_browser_tests_but_no_traces(tmp_path, p
 @pytest.mark.parametrize(
     ("tier", "settings", "workers"),
     [
-        ("full", {}, "4"),
+        ("full", {}, "8"),
         ("full", {"pytest_workers": "2"}, "2"),
         ("full", {"pytest_workers": "1"}, None),
         ("smoke", {}, None),

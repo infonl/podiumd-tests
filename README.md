@@ -86,7 +86,7 @@ Exit codes: 0 pass, 1 test failures, 2 configuration or preflight error,
 ## Tiers
 
 A profile's `allowed_tiers` limits which tiers may run against that
-environment. `core`, `full` and `chaos` run on 4 pytest-xdist workers; profile
+environment. `core`, `full` and `chaos` run on 8 pytest-xdist workers; profile
 setting `pytest_workers` changes that (1 runs serially).
 
 | Tier | Runs | Changes the environment |

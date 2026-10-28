@@ -90,7 +90,7 @@ EXIT_CONFIG = 2
 EXIT_NOT_ALLOWED = 3
 EXIT_BUSY = 4
 # pytest-xdist workers of a parallel tier; profile setting pytest_workers overrides, 1 runs serially.
-DEFAULT_WORKERS = 4
+DEFAULT_WORKERS = 8
 
 
 def _load(args: argparse.Namespace) -> Profile:
