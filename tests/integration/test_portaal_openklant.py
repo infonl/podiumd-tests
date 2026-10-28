@@ -208,17 +208,22 @@ def test_mijn_vragen_shows_more_than_one_page_of_questions(  # pylint: disable=t
             openklant, registry, kanaal="contactformulier", onderwerp=SUBJECT, inhoud=f"{tag}-{number}"
         )
         make_betrokkene(openklant, registry, question, partij)
-    # Mijn vragen shows 9 questions per page; a page number past the last answers 404. A question that
-    # another test adds for this inwoner meanwhile shifts the pages, so one card can show on two pages.
-    shown: set[str] = set()
-    for number in itertools.count(1):
-        response = page.goto(f"{mijn_vragen}?page={number}")
-        if response and response.status == HTTPStatus.NOT_FOUND:
-            break
-        shown.update(
-            re.findall(rf"{re.escape(tag)}-\d+", " ".join(page.locator(".card", has_text=tag).all_inner_texts()))
-        )
-    assert shown == {f"{tag}-{number}" for number in range(MANY_QUESTIONS)}
+    expected = {f"{tag}-{number}" for number in range(MANY_QUESTIONS)}
+
+    def walk() -> set[str]:
+        """The tagged questions on all pages; 9 per page, and a page number past the last answers 404."""
+        shown: set[str] = set()
+        for number in itertools.count(1):
+            response = page.goto(f"{mijn_vragen}?page={number}")
+            if response and response.status == HTTPStatus.NOT_FOUND:
+                break
+            cards = " ".join(page.locator(".card", has_text=tag).all_inner_texts())
+            shown.update(re.findall(rf"{re.escape(tag)}-\d+", cards))
+        assert shown == expected, f"missing {sorted(expected - shown)}"
+        return shown
+
+    # Other tests add and delete questions of this inwoner meanwhile; that shifts the pages during a walk.
+    wait_until(walk, timeout=60, description=f"every {tag} question in Mijn vragen")
 
 
 @pytest.mark.requires("ita", "objecten")
