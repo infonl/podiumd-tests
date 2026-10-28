@@ -158,16 +158,21 @@ def fixture_run_tag(request: pytest.FixtureRequest) -> str:
 
 
 @pytest.fixture(scope="session", name="need_bootstrap")
-def fixture_need_bootstrap(request: pytest.FixtureRequest, podiumd_env: Environment) -> Callable[..., None]:
+def fixture_need_bootstrap(
+    request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory, podiumd_env: Environment
+) -> Callable[..., None]:
     """need(*step_names): fail fast when those bootstrap steps are missing.
 
-    Each step is checked once per session. With --auto-bootstrap the missing ones are applied.
+    A step found present is not checked again in this run, also not by other pytest-xdist workers.
+    With --auto-bootstrap the missing ones are applied.
     """
-    checked: set[str] = set()
     auto = bool(request.config.getoption("--auto-bootstrap"))
+    base = tmp_path_factory.getbasetemp()
+    present = (base.parent if hasattr(request.config, "workerinput") else base) / "bootstrap-present"
+    present.mkdir(exist_ok=True)
 
     def need(*names: str) -> None:
-        wanted = [s for s in STEPS if s.name in names and s.name not in checked]
+        wanted = [s for s in STEPS if s.name in names and not (present / s.name).exists()]
         unknown = set(names) - {s.name for s in STEPS}
         if unknown:
             pytest.fail(f"unknown bootstrap steps: {', '.join(sorted(unknown))}")
@@ -187,7 +192,8 @@ def fixture_need_bootstrap(request: pytest.FixtureRequest, podiumd_env: Environm
             failed_steps = [o for o in bootstrap(podiumd_env, missing) if o.action != "created"]
             if failed_steps:
                 pytest.fail("--auto-bootstrap: " + "; ".join(f"{o.step} {o.action}: {o.detail}" for o in failed_steps))
-        checked.update(s.name for s in wanted)
+        for step in wanted:
+            (present / step.name).touch()
 
     return need
 
