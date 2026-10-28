@@ -1,23 +1,28 @@
 """Are the APIs up and guarded? Health endpoints answer; anonymous calls are refused.
 
 Ported from TA/EX smoke 00j, 00k, 06, 66 (API key checks), 72 (anonymous),
-79 (anonymous) and 81. A refused anonymous call shows the API is routed and
+79 and 81. A refused anonymous call shows the API is routed and
 its authentication is wired, without needing any credentials.
 """
 
 from __future__ import annotations
+
+import time
 
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.omc import omc_token
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
     import requests
+
+    from podiumd_tests.environment import Environment
 
 pytestmark = pytest.mark.smoke
 
@@ -137,3 +142,18 @@ def test_anonymous_call_is_refused(
     body = ({"FunctionalRoleNames": ["ptest"]} if component == "pabc" else {}) if method == "POST" else None
     response = http.request(method, urls[component] + path, json=body, headers=headers, allow_redirects=False)
     expect_status(response, *REFUSED)
+
+
+@pytest.mark.requires("omc", "cluster")
+@pytest.mark.source("TA smoke/79-omc-health.spec.ts", "NotifyNL OMC health and auth: OMC's Version endpoint answers.")
+@pytest.mark.source(
+    "EX tests/smoke/79-omc-health.spec.ts", "NotifyNL OMC health and auth: OMC's Version endpoint answers."
+)
+def test_omc_version_answers_to_its_token(
+    http: requests.Session, podiumd_env: Environment, urls: dict[str, str]
+) -> None:
+    """OMC answers /Events/Version to a token from its own JWT settings and secret omc_jwt_secret."""
+    token = omc_token(podiumd_env, time.time())
+    expect_status(
+        http.get(urls["omc"] + "/Events/Version", headers={"Authorization": f"Bearer {token}"}), HTTPStatus.OK
+    )
