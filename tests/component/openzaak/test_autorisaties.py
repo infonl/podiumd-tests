@@ -66,10 +66,13 @@ def test_vertrouwelijk_document_is_hidden_from_an_openbaar_client(
     document = make_document(
         openzaak, registry, parts.informatieobjecttype, vertrouwelijkheidaanduiding="vertrouwelijk"
     )
-    # Not titel: every document of a run has the same one, also those of parallel workers.
+    # Not titel: every document of a run has the same one. Compare URLs: Open Zaak can give a parallel worker's
+    # document the same identificatie.
     own = {"identificatie": str(document["identificatie"])}
-    assert openzaak_openbaar.list(f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", own) == []
-    assert [d["url"] for d in openzaak.list(f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", own)] == [document["url"]]
+    assert document["url"] not in [
+        d["url"] for d in openzaak_openbaar.list(f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", own)
+    ]
+    assert document["url"] in [d["url"] for d in openzaak.list(f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", own)]
     openzaak_openbaar.request("GET", str(document["url"]), *REFUSED, 404)
 
 
