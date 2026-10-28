@@ -79,6 +79,15 @@ WHO = [
 ]
 
 
+@pytest.fixture(scope="module", name="virus_scan")
+def fixture_virus_scan(podiumd_env: Environment) -> None:
+    """Skips unless Open Inwoner scans uploads with ClamAV."""
+    if not virus_scan_enabled(podiumd_env):
+        pytest.skip(
+            "Open Inwoner scans no uploads: set profile setting clamav and run bootstrap step openinwoner-virus-scan"
+        )
+
+
 def zaak_of(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts, who: str = "inwoner") -> JsonObject:
     """An openbaar zaak with its first status (Open Inwoner hides zaken without one) and the identity as initiator."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
@@ -297,6 +306,7 @@ def test_uploaded_document_reaches_the_zaak(  # pylint: disable=too-many-argumen
     "TA regression/123-portaal-clamav-eicar-rejectie.spec.ts",
     "The portal refuses harmful uploads through ClamAV's virus scan.",
 )
+@pytest.mark.usefixtures("virus_scan")
 def test_infected_upload_is_refused(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -307,10 +317,6 @@ def test_infected_upload_is_refused(  # pylint: disable=too-many-arguments,too-m
     who: str,
 ) -> None:
     """With ClamAV on, an upload of the EICAR test file does not reach the zaak (TA reg-123)."""
-    if not virus_scan_enabled(podiumd_env):
-        pytest.skip(
-            "Open Inwoner scans no uploads: set profile setting clamav and run bootstrap step openinwoner-virus-scan"
-        )
     need_bootstrap(LOGINS[who][0].name, *WIRING, "openinwoner-zaaktype-config")
     zaak = zaak_of(openzaak, registry, parts, who)
     clean_up_new_documents(openzaak, registry, zaak)
