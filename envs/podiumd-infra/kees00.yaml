@@ -45,9 +45,9 @@ secrets:
   # Grafana's own admin (basic auth), from the monitoring stack podiumd-infra deploys with
   # grafana-deploy=true. grafana-admin in Key Vault is a Keycloak SSO user and cannot log in with basic auth.
   grafana_username:
-    k8s_secret: {name: monitoring-grafana, key: admin-user, namespace: monitoring}
+    k8s_secret: {name: monitoring-logging-grafana, key: admin-user, namespace: monitoring}
   grafana_password:
-    k8s_secret: {name: monitoring-grafana, key: admin-password, namespace: monitoring}
+    k8s_secret: {name: monitoring-logging-grafana, key: admin-password, namespace: monitoring}
   # Signs the bootstrap's OMC abonnement token; read from OMC's own Secret.
   omc_jwt_secret:
     k8s_secret: {name: omc, key: OMC_AUTH_JWT_SECRET}
