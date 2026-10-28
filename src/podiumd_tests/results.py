@@ -280,6 +280,6 @@ def write_run(sink: ResultsSink, directory: str, info: RunInfo, details: Details
     sink.write_text(f"{directory}/summary.md", redactor.redact(summary_markdown(info, details)))
 
 
-def now_iso() -> str:
-    """Current UTC time, ISO 8601, seconds precision."""
-    return datetime.now(UTC).isoformat(timespec="seconds")
+def now_iso(timespec: str = "seconds") -> str:
+    """Current UTC time, ISO 8601, to the given precision (datetime.isoformat timespec)."""
+    return datetime.now(UTC).isoformat(timespec=timespec)

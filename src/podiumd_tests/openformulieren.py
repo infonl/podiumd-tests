@@ -11,8 +11,10 @@ from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
 from podiumd_tests.results import TAG_PREFIX
+from podiumd_tests.results import now_iso
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak
+from podiumd_tests.wait import Clock
 from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
@@ -25,6 +27,10 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
+
+
+# Seconds after a failed report download to try it again, for the failure message.
+REPORT_RETRIES = (2, 5, 10, 30)
 
 
 def form_and_headers(http: requests.Session, base_url: str, slug: str) -> tuple[JsonObject, dict[str, str]]:
@@ -118,14 +124,33 @@ def wait_for_registration(env: Environment, submission: str, *, timeout: float) 
 
 
 def download_report(env: Environment, http: requests.Session, status: JsonObject) -> bytes:
-    """The submission's PDF report through the inwoner's download link; a failure says what the web pod has."""
-    response = http.get(str(status["reportDownloadUrl"]))
-    if response.status_code != HTTPStatus.OK:
-        params: dict[str, object] = {"uuid": str(status["submission"]), "action": "report"}
-        found = run_snippet(env.kube, env.deployment_for("openformulieren"), "openformulieren_submission", params)
-        msg = f"report download: HTTP {response.status_code}; Open Formulieren web pod: {found}"
-        raise AssertionError(msg)
-    return response.content
+    """The submission's PDF report through the inwoner's download link.
+
+    A failed download fails the test, after retries that record when the web pod serves the file
+    (a 404 although the worker wrote it: NFS cache or another test's same-named report).
+    """
+    url, first = str(status["reportDownloadUrl"]), now_iso("milliseconds")
+    response = http.get(url)
+    if response.status_code == HTTPStatus.OK:
+        return response.content
+    lines = [
+        f"report download: HTTP {response.status_code} at {first}; status done at {status.get('doneAt')}",
+        f"  web pod at {now_iso('milliseconds')}: {_report_state(env, status)}",
+    ]
+    clock = Clock()
+    start = clock.now()
+    for delay in REPORT_RETRIES:
+        clock.sleep(max(0.0, start + delay - clock.now()))
+        at, code = now_iso("milliseconds"), http.get(url).status_code
+        lines.append(f"  retry +{delay}s at {at}: HTTP {code}; web pod: {_report_state(env, status)}")
+        if code == HTTPStatus.OK:
+            break
+    raise AssertionError("\n".join(lines))
+
+
+def _report_state(env: Environment, status: JsonObject) -> object:
+    params: dict[str, object] = {"uuid": str(status["submission"]), "action": "report"}
+    return run_snippet(env.kube, env.deployment_for("openformulieren"), "openformulieren_submission", params)
 
 
 def registration_state(env: Environment, submission: str) -> dict[str, str]:
@@ -143,6 +168,7 @@ def _processed(http: requests.Session, status_url: str, submission: str, *, time
         return status if status.get("status") in {"done", "failed"} else None
 
     status = wait_until(finished, timeout=timeout, description=f"submission {submission} done")
+    status = {**status, "doneAt": now_iso("milliseconds")}
     if status.get("status") == "failed":
         msg = f"submission {submission} failed: {status.get('errorMessage')}"
         raise AssertionError(msg)

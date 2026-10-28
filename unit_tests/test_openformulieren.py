@@ -1,14 +1,17 @@
 """Unit tests for submitting an Open Formulieren form."""
 
 import json
+import re
 
 import pytest
 import requests
 
+from podiumd_tests import openformulieren
 from podiumd_tests import wait
 from podiumd_tests.bootstrap.steps import OF_REDACTEUR
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.credentials import env_var_name
+from podiumd_tests.openformulieren import REPORT_RETRIES
 from podiumd_tests.openformulieren import download_report
 from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import redacteur_session
@@ -105,14 +108,22 @@ def test_failed_registration_in_open_formulieren_names_the_error(env, fake_runne
         wait_for_registration(env, "s1", timeout=0)
 
 
-def test_failed_report_download_says_what_the_web_pod_has(fake_http, env, fake_runner):
-    fake_http({"GET /submissions/pdf/3/t/download": (404, {})})
+def test_failed_report_download_says_what_the_web_pod_has_then_and_on_each_retry(
+    fake_http, env, fake_runner, monkeypatch
+):
+    monkeypatch.setattr(openformulieren, "Clock", lambda: Clock(sleep=lambda _seconds: None))
+    sent = fake_http({"GET /submissions/pdf/3/t/download": (404, {})})
     fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "openformulieren"}}]}))
     value = {"report": True, "file": "submission-reports/2026/10/15/r.pdf", "on_disk": False}
     fake_runner.answers["exec -i deploy/openformulieren"] = (0, f"PTEST_VALUE={json.dumps(value)}\n")
-    status = {"submission": "s1", "reportDownloadUrl": f"{OF}/submissions/pdf/3/t/download"}
-    with pytest.raises(AssertionError, match=r"HTTP 404; Open Formulieren web pod: .*'on_disk': False"):
+    status = {"submission": "s1", "reportDownloadUrl": f"{OF}/submissions/pdf/3/t/download", "doneAt": "T0"}
+    with pytest.raises(AssertionError) as info:
         download_report(env, requests.Session(), status)
+    lines = str(info.value).splitlines()
+    assert re.fullmatch(r"report download: HTTP 404 at \S+; status done at T0", lines[0])
+    assert "'on_disk': False" in lines[1]
+    assert [line.split(" at ")[0].strip() for line in lines[2:]] == [f"retry +{d}s" for d in REPORT_RETRIES]
+    assert len(sent) == 1 + len(REPORT_RETRIES)
 
 
 def snippet_answers(fake_runner, value):
