@@ -53,17 +53,11 @@ EMPTY_MONITORS = {
         " (helm-charts #481)",
     ),
 }
-# Known components without metrics: they xfail instead of fail.
-METRICS_GAPS = {
-    "eck-operator": "[podiumd-chart-15] eck-operator 3.x ignores config.metricsPort, so the operator exposes no"
-    " metrics; set config.metrics.port",
-    **dict.fromkeys(
-        ("frankgateway", "openbao"),
-        "[podiumd-chart-19] values-enable-observability.yaml enables no metrics for Frank!Gateway and OpenBao",
-    ),
-}
-# Known components without metrics before podiumd 4.10.0 (helm-charts #625).
+# Known components without metrics before podiumd 4.10.0: they xfail instead of fail (helm-charts #625 and the
+# 4.10.0 values-enable-observability.yaml).
 METRICS_GAPS_BEFORE_4_10 = {
+    "eck-operator": "[podiumd-chart-15] podiumd before 4.10.0: values-enable-observability.yaml sets"
+    " config.metricsPort, which eck-operator 3.x ignores; set config.metrics.port",
     **dict.fromkeys(
         ("openarchiefbeheer", "referentielijsten", "openvtb", "frankgateway", "openbao"),
         "[podiumd-chart-19] podiumd before 4.10.0: values-enable-observability.yaml enables no metrics for Open"
@@ -202,7 +196,7 @@ def test_every_component_reports_metrics(grafana: Grafana, podiumd_env: Environm
     no_monitor, no_otel = without_metrics(deployed, grafana.proxy("prometheus", "/api/v1/targets"), otel)
     otel_off = bool(otel_apps) and len(no_otel) == len(otel_apps)
     missing = no_monitor + ([] if otel_off else no_otel)
-    gaps = METRICS_GAPS | (METRICS_GAPS_BEFORE_4_10 if chart_older_than(podiumd_env, (4, 10, 0)) else {})
+    gaps = METRICS_GAPS_BEFORE_4_10 if chart_older_than(podiumd_env, (4, 10, 0)) else {}
     unknown = [c for c in missing if c not in gaps]
     assert not unknown, f"components without metrics in Prometheus: {unknown}"
     if missing:
