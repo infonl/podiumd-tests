@@ -63,7 +63,7 @@ def submit(  # pylint: disable=too-many-arguments  # one flow
     also wait_for_registration; a form waiting for a co-signer does not register yet.
     """
     submission, headers = start_submission(http, env.profile.urls["openformulieren"], slug)
-    registry.add(f"submission {submission['id']}", lambda: delete_submission(env, str(submission["id"])))
+    forget_submission(env, registry, str(submission["id"]))
     return complete_submission(env, http, submission, headers, data, timeout=timeout, registers=registers)
 
 
@@ -157,13 +157,11 @@ def registered_zaak(
     zaken = openzaak.list(f"{ZAKEN}/zaken", {"identificatie": str(status["publicReference"])})
 
     def delete() -> None:
-        try:
-            delete_submission(env, submission)
-        finally:
-            for zaak in zaken:
-                delete_zaak(openzaak, str(zaak["url"]), with_documents=True)
+        for zaak in zaken:
+            delete_zaak(openzaak, str(zaak["url"]), with_documents=True)
 
-    registry.add(f"submission {submission} and its zaak", delete)
+    registry.add(f"zaken of submission {submission}", delete)
+    forget_submission(env, registry, submission)  # LIFO: before the zaken
     if len(zaken) != 1:
         msg = f"submission {submission}: {len(zaken)} zaken with identificatie {status['publicReference']}"
         raise AssertionError(msg)
@@ -193,13 +191,17 @@ def make_form(  # pylint: disable=too-many-arguments,too-many-positional-argumen
         "payment": dict(payment or {}),
     }
     run_snippet(env.kube, deployment, "openformulieren_form", {**params, "settings": settings, "action": "apply"})
-    registry.add(f"form {slug}", lambda: remove_form(env, slug))
+    registry.add_snippet(f"form {slug}", env.kube, deployment, "openformulieren_form", _removal(slug))
 
 
 def remove_form(env: Environment, slug: str) -> None:
     """Delete a test form with its step, product and submissions."""
-    params: dict[str, object] = {"slug": slug, "action": "remove"}
-    run_snippet(env.kube, env.deployment_for("openformulieren"), "openformulieren_form", params)
+    run_snippet(env.kube, env.deployment_for("openformulieren"), "openformulieren_form", _removal(slug))
+
+
+def _removal(slug: str) -> dict[str, object]:
+    """Parameters of snippet openformulieren_form that delete the form."""
+    return {"slug": slug, "action": "remove"}
 
 
 def tagged_forms(env: Environment) -> list[str]:
@@ -216,10 +218,11 @@ def redacteur_session(env: Environment) -> requests.Session:
     return http
 
 
-def delete_submission(env: Environment, uuid: str) -> None:
-    """Delete a submission, so its public reference cannot block a later registration."""
+def forget_submission(env: Environment, registry: ResourceRegistry, uuid: str) -> None:
+    """Cleanup deletes the submission, so its public reference cannot block a later registration."""
     params: dict[str, object] = {"uuid": uuid, "action": "delete"}
-    run_snippet(env.kube, env.deployment_for("openformulieren"), "openformulieren_submission", params)
+    deployment = env.deployment_for("openformulieren")
+    registry.add_snippet(f"submission {uuid}", env.kube, deployment, "openformulieren_submission", params)
 
 
 def _json(response: requests.Response, *expected: int) -> JsonObject:

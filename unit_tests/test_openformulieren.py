@@ -42,7 +42,8 @@ def answers(final_status):
     }
 
 
-def test_submit_walks_the_sdk_sequence_and_returns_the_done_status(fake_http, env):
+def test_submit_walks_the_sdk_sequence_and_returns_the_done_status(fake_http, env, fake_runner):
+    snippet_answers(fake_runner, None)
     sent = fake_http(answers({"status": "done", "result": "success", "publicReference": "ZAAK-1"}))
     registry = ResourceRegistry("ptest-abc", keep=True)
     status = submit(env, requests.Session(), registry, "klacht", {"veld": "x"}, timeout=0, registers=False)
@@ -57,13 +58,15 @@ def test_submit_walks_the_sdk_sequence_and_returns_the_done_status(fake_http, en
     assert registry.cleanup() == ["submission s1"]
 
 
-def test_failed_submission_names_the_submission(fake_http, env):
+def test_failed_submission_names_the_submission(fake_http, env, fake_runner):
+    snippet_answers(fake_runner, None)
     fake_http(answers({"status": "failed", "errorMessage": "zaaktype not found"}))
     with pytest.raises(AssertionError, match="submission s1 failed: zaaktype not found"):
         submit(env, requests.Session(), ResourceRegistry("ptest-abc"), "klacht", {}, timeout=0)
 
 
-def test_done_without_success_is_a_failed_registration(fake_http, env):
+def test_done_without_success_is_a_failed_registration(fake_http, env, fake_runner):
+    snippet_answers(fake_runner, None)
     fake_http(answers({"status": "done", "result": "failed", "errorMessage": "geen zaaktype", "publicReference": ""}))
     with pytest.raises(AssertionError, match="result 'failed', 'geen zaaktype'"):
         submit(env, requests.Session(), ResourceRegistry("ptest-abc"), "klacht", {}, timeout=0)

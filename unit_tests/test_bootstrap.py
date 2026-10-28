@@ -190,11 +190,11 @@ def test_cli_refuses_bootstrap_on_smoke_only_profiles(tmp_path, capsys):
 
 
 def snippet_params(code):
-    """The params a snippet call was sent with: the string constant passed to _json.loads."""
+    """The params the first snippet was sent with, from the [name, source, params] list passed to _json.loads."""
     calls = [
         n for n in ast.walk(ast.parse(code)) if isinstance(n, ast.Call) and getattr(n.func, "attr", None) == "loads"
     ]
-    return json.loads(ast.literal_eval(calls[0].args[0]))
+    return json.loads(ast.literal_eval(calls[0].args[0]))[0][2]
 
 
 def snippet_answer(value):

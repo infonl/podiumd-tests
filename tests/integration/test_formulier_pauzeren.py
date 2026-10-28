@@ -20,7 +20,7 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.mailpit import received
 from podiumd_tests.openformulieren import complete_submission
-from podiumd_tests.openformulieren import delete_submission
+from podiumd_tests.openformulieren import forget_submission
 from podiumd_tests.openformulieren import form_and_headers
 from podiumd_tests.openformulieren import registered_zaak
 from podiumd_tests.openformulieren import start_submission
@@ -58,7 +58,7 @@ def test_paused_submission_mails_its_resume_link(  # pylint: disable=too-many-ar
     """Pausing a half-filled form sends the given address a mail with a link back to Open Formulieren (TA reg-154)."""
     need_bootstrap("openformulieren-form")
     submission, headers = start_submission(http, urls["openformulieren"], TEST_FORM)
-    registry.add(f"submission {submission['id']}", lambda: delete_submission(podiumd_env, str(submission["id"])))
+    forget_submission(podiumd_env, registry, str(submission["id"]))
     step = entries(submission["steps"])[0]
     data = {"data": {"klacht_omschrijving": registry.tagged("gepauzeerd")}}
     expect_status(http.put(str(step["url"]), json=data, headers=headers), HTTPStatus.CREATED, HTTPStatus.OK)
@@ -90,7 +90,7 @@ def test_resume_link_continues_and_completes_the_submission(  # pylint: disable=
     need_bootstrap("openformulieren-form")
     base_url = podiumd_env.profile.urls["openformulieren"]
     submission, headers = start_submission(http, base_url, TEST_FORM)
-    registry.add(f"submission {submission['id']}", lambda: delete_submission(podiumd_env, str(submission["id"])))
+    forget_submission(podiumd_env, registry, str(submission["id"]))
     omschrijving = registry.tagged("hervat")
     step = entries(submission["steps"])[0]
     expect_status(

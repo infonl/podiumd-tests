@@ -17,7 +17,7 @@ import pytest
 from podiumd_tests.bootstrap.names import TEST_FORM
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
-from podiumd_tests.openformulieren import delete_submission
+from podiumd_tests.openformulieren import forget_submission
 from podiumd_tests.openformulieren import start_submission
 from podiumd_tests.responses import expect_status
 
@@ -112,7 +112,7 @@ def test_upload_of_a_false_file_is_refused(  # pylint: disable=too-many-argument
     """A file whose content does not match its name, or that has no extension, is refused with a reason (TA reg-178)."""
     need_bootstrap("openformulieren-form")
     submission, headers = start_submission(http, urls["openformulieren"], TEST_FORM)
-    registry.add(f"submission {submission['id']}", lambda: delete_submission(podiumd_env, str(submission["id"])))
+    forget_submission(podiumd_env, registry, str(submission["id"]))
     upload = {"file": (name, b"plain text, no PDF", "application/pdf")}
     response = http.post(f"{urls['openformulieren']}/api/v2/formio/fileupload", files=upload, headers=headers)
     expect_status(response, HTTPStatus.BAD_REQUEST)
@@ -169,7 +169,7 @@ def test_address_search_reaches_pdok(
     """
     need_bootstrap("openformulieren-form")
     submission, headers = start_submission(http, urls["openformulieren"], TEST_FORM)
-    registry.add(f"submission {submission['id']}", lambda: delete_submission(podiumd_env, str(submission["id"])))
+    forget_submission(podiumd_env, registry, str(submission["id"]))
     found = http.get(
         urls["openformulieren"] + "/api/v2/geo/address-search", params={"q": PDOK_ADDRESS}, headers=headers
     )

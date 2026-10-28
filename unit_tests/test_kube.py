@@ -13,7 +13,7 @@ from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import cluster_service
 from podiumd_tests.kube import context_names
-from podiumd_tests.kube import django_value
+from podiumd_tests.kube import django_values
 from podiumd_tests.kube import forwarded_port
 
 
@@ -58,14 +58,16 @@ def test_context_names(fake_runner):
     assert context_names(fake_runner) == ["minikube", "podiumd-kees00-aks"]
 
 
-def test_django_value_picks_the_marked_line_from_django_chatter():
-    output = "118 objects imported automatically (use -v 2 for details).\n\nPTEST_VALUE=s3cret=with=equals\n"
-    assert django_value(output) == "s3cret=with=equals"
+def test_django_values_picks_the_marked_lines_from_django_chatter():
+    output = (
+        "118 objects imported automatically (use -v 2 for details).\n\nPTEST_VALUE=s3cret=with=equals\nPTEST_VALUE=2\n"
+    )
+    assert django_values(output) == ["s3cret=with=equals", "2"]
 
 
-def test_django_value_without_marker_is_an_error():
+def test_django_values_without_marker_is_an_error():
     with pytest.raises(ValueError, match="no PTEST_VALUE= line"):
-        django_value("118 objects imported automatically\nTraceback ...\n")
+        django_values("118 objects imported automatically\nTraceback ...\n")
 
 
 def test_context_names_timeout_is_a_kube_error():

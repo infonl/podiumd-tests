@@ -18,6 +18,7 @@ from podiumd_tests.auth.keycloak import totp
 from podiumd_tests.auth.zgw_jwt import unsigned_jwt
 from podiumd_tests.auth.zgw_jwt import zgw_headers
 from podiumd_tests.auth.zgw_jwt import zgw_jwt
+from podiumd_tests.kube import Kube
 from podiumd_tests.seed.registry import CleanupError
 from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -82,6 +83,31 @@ def test_registry_runs_every_deleter_and_reports_failures():
     with pytest.raises(CleanupError, match="broken: RuntimeError: 404"):
         registry.cleanup()
     assert deleted == ["first"]
+
+
+def test_registry_runs_consecutive_snippets_of_a_deployment_in_one_shell(fake_runner):
+    fake_runner.answers["exec -i deploy/openformulieren"] = (0, "PTEST_VALUE=null\nPTEST_VALUE=null\n")
+    kube, deleted = Kube("ctx", "ns", fake_runner), []
+    registry = ResourceRegistry("ptest-abc123")
+    registry.add_snippet("form", kube, "openformulieren", "openformulieren_form", {"slug": "f"})
+    registry.add_snippet("submission", kube, "openformulieren", "openformulieren_submission", {"uuid": "s1"})
+    registry.add("zaak", lambda: deleted.append("zaak"))
+    registry.add_snippet("submission again", kube, "openformulieren", "openformulieren_submission", {"uuid": "s1"})
+    assert registry.cleanup() == []
+    assert deleted == ["zaak"]
+    assert len(fake_runner.stdins) == 2
+    assert fake_runner.stdins[1].index('"uuid": "s1"') < fake_runner.stdins[1].index('"slug": "f"')
+
+
+def test_registry_runs_each_snippet_of_a_failed_shell_and_reports_it(fake_runner):
+    fake_runner.answers["exec -i deploy/openformulieren"] = (1, "django.db.utils.OperationalError: gone")
+    kube = Kube("ctx", "ns", fake_runner)
+    registry = ResourceRegistry("ptest-abc123")
+    registry.add_snippet("form", kube, "openformulieren", "openformulieren_form", {"slug": "f"})
+    registry.add_snippet("submission", kube, "openformulieren", "openformulieren_submission", {"uuid": "s1"})
+    with pytest.raises(CleanupError, match=r"submission: KubeError: .*; form: KubeError: .*OperationalError: gone"):
+        registry.cleanup()
+    assert len(fake_runner.stdins) == 3
 
 
 def test_keep_data_skips_cleanup():

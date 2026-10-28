@@ -133,7 +133,7 @@ class Kube:
 
         The code goes over stdin, so nothing in it appears in argv or errors.
         The stdout also holds Django's own chatter ("118 objects imported
-        automatically"); use django_value() to pick out one printed value.
+        automatically"); use django_values() to pick out the printed values.
         `shell -c` reads stdin itself: plain `shell` checks stdin without
         waiting and falls back to the interactive interpreter when the code
         has not arrived yet.
@@ -221,13 +221,15 @@ def decode_secret_data(data: Mapping[str, object]) -> dict[str, str]:
     return {k: base64.b64decode(str(v)).decode() for k, v in data.items()}
 
 
-def django_value(output: str) -> str:
-    """The value a Django shell snippet printed as print("PTEST_VALUE=" + value)."""
-    for line in output.splitlines():
-        if line.startswith(DJANGO_VALUE_MARKER):
-            return line.removeprefix(DJANGO_VALUE_MARKER)
-    msg = f"no {DJANGO_VALUE_MARKER} line in Django shell output"
-    raise ValueError(msg)
+def django_values(output: str) -> list[str]:
+    """The values a Django shell printed as print("PTEST_VALUE=" + value), in order."""
+    values = [
+        line.removeprefix(DJANGO_VALUE_MARKER) for line in output.splitlines() if line.startswith(DJANGO_VALUE_MARKER)
+    ]
+    if not values:
+        msg = f"no {DJANGO_VALUE_MARKER} line in Django shell output"
+        raise ValueError(msg)
+    return values
 
 
 def metadata_name(item: Mapping[str, object]) -> str:

@@ -22,7 +22,7 @@ from podiumd_tests.kcc import kcc_login
 from podiumd_tests.mailpit import forget_mails
 from podiumd_tests.mailpit import mail_queue
 from podiumd_tests.mailpit import received
-from podiumd_tests.openformulieren import delete_submission
+from podiumd_tests.openformulieren import forget_submission
 from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import start_submission
 from podiumd_tests.openformulieren import submit
@@ -130,7 +130,7 @@ def test_frankgateway_outage_does_not_cascade(
 def form_starts(podiumd_env: Environment, http: requests.Session, registry: ResourceRegistry) -> None:
     """Open Formulieren starts a submission of the test form; cleanup deletes it."""
     submission, _ = start_submission(http, podiumd_env.profile.urls["openformulieren"], TEST_FORM)
-    registry.add(f"submission {submission['id']}", lambda: delete_submission(podiumd_env, str(submission["id"])))
+    forget_submission(podiumd_env, registry, str(submission["id"]))
 
 
 @pytest.mark.requires("openzaak", "openformulieren", "openinwoner", "zac", "keycloak")
