@@ -89,8 +89,13 @@ EXIT_TESTS_FAILED = 1
 EXIT_CONFIG = 2
 EXIT_NOT_ALLOWED = 3
 EXIT_BUSY = 4
-# pytest-xdist workers of a parallel tier; profile setting pytest_workers overrides, 1 runs serially.
-DEFAULT_WORKERS = 8
+# pytest-xdist workers of a parallel tier at most; profile setting pytest_workers overrides, 1 runs serially.
+MAX_WORKERS = 8
+
+
+def default_workers(cpus: int | None) -> int:
+    """Workers for this machine: half its CPUs, at most MAX_WORKERS; the browsers and a local cluster share them."""
+    return max(1, min(MAX_WORKERS, (cpus or 2) // 2))
 
 
 def _load(args: argparse.Namespace) -> Profile:
@@ -237,7 +242,7 @@ def pytest_selection(profile: Profile, tier_name: str, run_id: str, junit: Path,
     selection += [f"--html={junit.parent / 'report.html'}", "--self-contained-html"]
     if args.keep_data:
         selection.append("--keep-data")
-    workers = int(profile.settings.get("pytest_workers", DEFAULT_WORKERS))
+    workers = int(profile.settings.get("pytest_workers", default_workers(os.cpu_count())))
     if tier.parallel and workers > 1:
         selection += ["-n", str(workers)]
     return [*selection, *args.pytest_args]

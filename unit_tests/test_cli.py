@@ -101,13 +101,19 @@ def test_run_keeps_screenshots_of_failed_browser_tests_but_no_traces(tmp_path, p
         ("smoke", {}, None),
     ],
 )
-def test_parallel_tiers_run_on_xdist_workers(tmp_path, profile_factory, tier, settings, workers):
+def test_parallel_tiers_run_on_xdist_workers(tmp_path, profile_factory, monkeypatch, tier, settings, workers):
+    monkeypatch.setattr(cli.os, "cpu_count", lambda: 24)
     args = cli.build_parser().parse_args(["run", "--env", "x", "--tier", tier])
     selection = cli.pytest_selection(
         profile_factory(settings=settings), tier, "2610071230a3f1", tmp_path / "j.xml", args
     )
     found = selection[selection.index("-n") + 1] if "-n" in selection else None
     assert found == workers
+
+
+@pytest.mark.parametrize(("cpus", "workers"), [(24, 8), (16, 8), (12, 6), (8, 4), (4, 2), (2, 1), (1, 1), (None, 1)])
+def test_default_workers_are_half_the_cpus_at_most_eight(cpus, workers):
+    assert cli.default_workers(cpus) == workers
 
 
 def test_a_path_after_dashes_narrows_the_tier(tmp_path, profile_factory):
