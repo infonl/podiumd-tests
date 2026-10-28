@@ -369,14 +369,6 @@ def _versions(env: Environment) -> dict[str, str]:
     return {name: ".".join(map(str, version)) for name, version in found.items()}
 
 
-def _chart_version(env: Environment) -> str | None:
-    """The deployed podiumd chart's version; none when the cluster is unreachable."""
-    try:
-        return chart_version(env)
-    except KubeError:
-        return None
-
-
 def cmd_run(args: argparse.Namespace) -> int:
     """Run a tier against an environment and record the results."""
     profile = _load(args)
@@ -398,7 +390,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         exit_code=0,
         selection=[],
         suite_commit=suite_commit(REPO_ROOT),
-        chart_version=_chart_version(env),
+        chart_version=chart_version(env),
         capabilities=sorted(env.capabilities.present),
         versions=_versions(env),
     )

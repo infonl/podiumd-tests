@@ -104,12 +104,25 @@ def _image_release(env: Environment, deployment: str) -> str:
 
 
 def chart_version(env: Environment) -> str | None:
-    """The podiumd chart's version: Helm's app.kubernetes.io/version label on podiumd's own ConfigMaps."""
-    for config_map in env.items("configmaps"):
+    """The podiumd chart's version: Helm's app.kubernetes.io/version label on podiumd's own ConfigMaps.
+
+    None when no ConfigMap has it or the cluster is unreachable.
+    """
+    try:
+        config_maps = env.items("configmaps")
+    except KubeError:
+        return None
+    for config_map in config_maps:
         labels = section(section(config_map, "metadata"), "labels")
         if labels.get("app.kubernetes.io/name") == "podiumd" and labels.get("app.kubernetes.io/version"):
             return str(labels["app.kubernetes.io/version"])
     return None
+
+
+def chart_older_than(env: Environment, version: tuple[int, ...]) -> bool:
+    """Whether the deployed podiumd chart is older than `version`; True when its version is unknown."""
+    found = _version(chart_version(env) or "")
+    return found is None or found < version
 
 
 def _owner_kinds(item: Item) -> set[str]:

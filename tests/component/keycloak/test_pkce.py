@@ -19,6 +19,7 @@ import pytest
 from podiumd_tests.auth.keycloak_admin import for_environment
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import url_host
+from podiumd_tests.workloads import chart_older_than
 
 if TYPE_CHECKING:
     import requests
@@ -84,8 +85,8 @@ def test_client_does_not_require_pkce(keycloak_admin: KeycloakAdmin, client_id: 
 
 
 ZAC_PKCE_OFF = (
-    "[podiumd-chart-21] ZAC sends no PKCE code challenge: zac.auth.enablePkce is off (on by default from"
-    " podiumd 4.10.0, helm-charts #629)"
+    "[podiumd-chart-21] podiumd before 4.10.0 leaves ZAC's PKCE off: no code challenge (zac.auth.enablePkce,"
+    " helm-charts #629)"
 )
 
 
@@ -101,11 +102,13 @@ def zac_login_query(http: requests.Session, urls: dict[str, str]) -> dict[str, l
 @pytest.mark.source(
     "podiumd-tests", "helm-charts #629 turns ZAC's PKCE on by default; ZAC and its Keycloak client must agree on it."
 )
-def test_zac_login_sends_an_s256_code_challenge(http: requests.Session, urls: dict[str, str]) -> None:
+def test_zac_login_sends_an_s256_code_challenge(
+    http: requests.Session, urls: dict[str, str], podiumd_env: Environment
+) -> None:
     """ZAC's login redirect to Keycloak carries an S256 code challenge (PKCE)."""
     query = zac_login_query(http, urls)
     assert query.get("client_id") == ["zac"]
-    if not query.get("code_challenge"):
+    if not query.get("code_challenge") and chart_older_than(podiumd_env, (4, 10, 0)):
         pytest.xfail(ZAC_PKCE_OFF)
     assert query.get("code_challenge_method") == ["S256"]
 

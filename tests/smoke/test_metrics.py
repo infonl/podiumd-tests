@@ -32,6 +32,7 @@ from podiumd_tests.json_data import section
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
+from podiumd_tests.workloads import chart_older_than
 
 if TYPE_CHECKING:
     import requests
@@ -57,12 +58,19 @@ METRICS_GAPS = {
     "eck-operator": "[podiumd-chart-15] eck-operator 3.x ignores config.metricsPort, so the operator exposes no"
     " metrics; set config.metrics.port",
     **dict.fromkeys(
+        ("frankgateway", "openbao"),
+        "[podiumd-chart-19] values-enable-observability.yaml enables no metrics for Frank!Gateway and OpenBao",
+    ),
+}
+# Known components without metrics before podiumd 4.10.0 (helm-charts #625).
+METRICS_GAPS_BEFORE_4_10 = {
+    **dict.fromkeys(
         ("openarchiefbeheer", "referentielijsten", "openvtb", "frankgateway", "openbao"),
-        "[podiumd-chart-19] podiumd 4.10.0's values-enable-observability.yaml enables no metrics for Open"
+        "[podiumd-chart-19] podiumd before 4.10.0: values-enable-observability.yaml enables no metrics for Open"
         " Archiefbeheer, Referentielijsten, Open VTB, Frank!Gateway and OpenBao (helm-charts #625)",
     ),
-    "zac": "[podiumd-chart-20] ZAC exports no OTEL metrics without -Dotel.metrics.exporter=otlp in its"
-    " javaOptions (helm-charts #625)",
+    "zac": "[podiumd-chart-20] podiumd before 4.10.0: ZAC exports no OTEL metrics without"
+    " -Dotel.metrics.exporter=otlp in its javaOptions (helm-charts #625)",
 }
 OTEL_OFF = (
     "no app sends OTEL metrics: settings.otel is disabled for all Maykin apps"
@@ -194,10 +202,11 @@ def test_every_component_reports_metrics(grafana: Grafana, podiumd_env: Environm
     no_monitor, no_otel = without_metrics(deployed, grafana.proxy("prometheus", "/api/v1/targets"), otel)
     otel_off = bool(otel_apps) and len(no_otel) == len(otel_apps)
     missing = no_monitor + ([] if otel_off else no_otel)
-    unknown = [c for c in missing if c not in METRICS_GAPS]
+    gaps = METRICS_GAPS | (METRICS_GAPS_BEFORE_4_10 if chart_older_than(podiumd_env, (4, 10, 0)) else {})
+    unknown = [c for c in missing if c not in gaps]
     assert not unknown, f"components without metrics in Prometheus: {unknown}"
     if missing:
-        pytest.xfail("; ".join(sorted({METRICS_GAPS[c] for c in missing}) + ([OTEL_OFF] if otel_off else [])))
+        pytest.xfail("; ".join(sorted({gaps[c] for c in missing}) + ([OTEL_OFF] if otel_off else [])))
     assert not missing, f"components without metrics in Prometheus: {missing}"
     if otel_off:
         pytest.skip(OTEL_OFF)

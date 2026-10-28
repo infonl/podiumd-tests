@@ -7,6 +7,7 @@ import pytest
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
 from podiumd_tests.workloads import ClusterState
+from podiumd_tests.workloads import chart_older_than
 from podiumd_tests.workloads import chart_version
 from podiumd_tests.workloads import component_versions
 from podiumd_tests.workloads import disruptions
@@ -129,6 +130,15 @@ def test_chart_version_comes_from_podiumds_own_config_maps(env_factory, fake_run
     assert chart_version(env_factory()) == "4.10.0"
     fake_runner.answers["get configmaps"] = (0, json.dumps({"items": [other]}))
     assert chart_version(env_factory()) is None
+    fake_runner.answers["get configmaps"] = (1, "connection refused")
+    assert chart_version(env_factory()) is None
+
+
+@pytest.mark.parametrize(("label", "older"), [("4.9.3", True), ("4.10.0", False), ("4.10.1", False), ("main", True)])
+def test_chart_older_than_holds_also_for_an_unknown_version(env_factory, fake_runner, label, older):
+    podiumd = {"metadata": {"labels": {"app.kubernetes.io/name": "podiumd", "app.kubernetes.io/version": label}}}
+    fake_runner.answers["get configmaps"] = (0, json.dumps({"items": [podiumd]}))
+    assert chart_older_than(env_factory(), (4, 10, 0)) is older
 
 
 def placed_pod(uid, name, *, node="n1", restarts=0, created="2026-10-15T09:51:00Z"):
