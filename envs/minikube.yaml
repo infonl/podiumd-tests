@@ -4,7 +4,8 @@ estate: minikube
 allowed_tiers: [smoke, core, full, perf, chaos]
 kube:
   context: minikube
-  namespace: podiumd-minikube
+  namespace: podiumd
+  monitoring_namespace: monitoring
 access:
   mode: host-header
   ingress_service:
@@ -41,7 +42,7 @@ urls:
   # podiumd-minikube profile frankgateway (on with --full).
   openbao: https://openbao.local
   # No ingress, as on ExternalsPodiumD: reached through a port-forward.
-  frankgateway: http://frankgateway-outway.podiumd-minikube.svc.cluster.local:9080
+  frankgateway: http://frankgateway-outway.podiumd.svc.cluster.local:9080
 secrets:
   # keycloak-operator's master admin, as on podiumd-infra.
   keycloak_admin_username:
@@ -106,6 +107,6 @@ settings:
   # (tier chaos).
   replicas_command: /home/kvv/development/werk/infonl-dimpact/infonl/podiumd-minikube/bin/replicas
   # ConfigMap where podiumd-minikube records what it deployed (local chart checkouts); run.json and summary.md show it.
-  deployed_build: podiumd-minikube/podiumd-minikube-deployed
+  deployed_build: podiumd/podiumd-minikube-deployed
   # Shared with the podiumd-minikube agent; bootstrap and writing runs take it.
   lock_file: /home/kvv/development/werk/infonl-dimpact/infonl/.minikube-lock

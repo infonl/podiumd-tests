@@ -7,7 +7,7 @@ from podiumd_tests.components import deployed_components
 
 
 def test_deployment_aliases():
-    names = ["notificaties-celery", "openzaak", "podiumd-minikube-grafana", "kiss-frontend"]
+    names = ["notificaties-celery", "openzaak", "monitoring-logging-grafana", "kiss-frontend"]
     assert deployed_components(names) == {"opennotificaties", "openzaak", "grafana", "kiss"}
 
 
@@ -42,5 +42,5 @@ def test_new_410_components_by_deployment():
 
 
 def test_components_without_url_by_workload():
-    names = ["elastic-operator", "redis-ha", "clamav", "podiumd-minikube-openbao"]
+    names = ["elastic-operator", "redis-ha", "clamav", "podiumd-openbao"]
     assert deployed_components(names) == {"eck-operator", "redis", "clamav", "openbao"}

@@ -56,11 +56,10 @@ COMPONENTS: dict[str, Component] = {
         ("frankgateway",), ("frankgateway-outway", "frankgateway", "frank-gateway"), monitored=True
     ),
     # The chart names its StatefulSet and ServiceMonitor <helm release>-openbao.
-    "openbao": Component(("openbao",), ("openbao", "podiumd-openbao", "podiumd-minikube-openbao"), monitored=True),
+    "openbao": Component(("openbao",), ("openbao", "podiumd-openbao"), monitored=True),
     # podiumd's nginx in front of BRP, KvK and BAG (Frank!Gateway replaces it in newer charts).
     "api-proxy": Component(("api-proxy",), ("api-proxy",)),
-    # monitoring-logging's Grafana is named <helm release>-grafana: release monitoring or monitoring-logging on
-    # the estates, podiumd-minikube on minikube.
+    # monitoring-logging's Grafana is named <helm release>-grafana: release monitoring or monitoring-logging.
     "grafana": Component(
         ("grafana", "podiumd-logs"),
         (
@@ -68,7 +67,6 @@ COMPONENTS: dict[str, Component] = {
             "monitoring-grafana",
             "monitoring-logging-grafana",
             "podiumd-grafana",
-            "podiumd-minikube-grafana",
         ),
     ),
     "mailpit": Component(("mailpit",), ("mailpit",)),
