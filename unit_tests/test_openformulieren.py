@@ -5,6 +5,7 @@ import json
 import pytest
 import requests
 
+from podiumd_tests import wait
 from podiumd_tests.bootstrap.steps import OF_REDACTEUR
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.credentials import env_var_name
@@ -16,6 +17,7 @@ from podiumd_tests.openformulieren import submit
 from podiumd_tests.openformulieren import tagged_forms
 from podiumd_tests.openformulieren import wait_for_registration
 from podiumd_tests.seed.registry import ResourceRegistry
+from podiumd_tests.wait import Clock
 
 OF = "https://of.example.test"
 
@@ -56,6 +58,28 @@ def test_submit_walks_the_sdk_sequence_and_returns_the_done_status(fake_http, en
     ]
     assert "X-CSRFToken" in sent[1].headers
     assert registry.cleanup() == ["submission s1"]
+
+
+def test_submit_waits_out_the_completion_throttle(fake_http, env, fake_runner, monkeypatch):
+    snippet_answers(fake_runner, None)
+    monkeypatch.setattr(wait, "Clock", lambda: Clock(sleep=lambda _seconds: None))
+    completions = iter([(429, {"code": "throttled"}), (200, {"statusUrl": f"{OF}/api/v2/submissions/s1/status"})])
+
+    table = answers({"status": "done", "result": "success", "publicReference": "ZAAK-1"})
+
+    class Throttled:
+        """fake_http's answer table; _complete answers 429 first."""
+
+        @staticmethod
+        def get(key, default=None):
+            return next(completions) if key == "POST /api/v2/submissions/s1/_complete" else table.get(key, default)
+
+    sent = fake_http(Throttled())
+    status = submit(
+        env, requests.Session(), ResourceRegistry("ptest-abc", keep=True), "klacht", {}, timeout=5, registers=False
+    )
+    assert status["publicReference"] == "ZAAK-1"
+    assert [s.url for s in sent].count(f"{OF}/api/v2/submissions/s1/_complete") == 2
 
 
 def test_failed_submission_names_the_submission(fake_http, env, fake_runner):

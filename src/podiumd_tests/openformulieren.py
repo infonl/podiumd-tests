@@ -82,14 +82,23 @@ def complete_submission(  # pylint: disable=too-many-arguments  # one flow
     expect_status(
         http.put(str(step["url"]), json={"data": dict(data)}, headers=headers), HTTPStatus.CREATED, HTTPStatus.OK
     )
-    complete = _json(
-        http.post(f"{submission['url']}/_complete", json={"privacyPolicyAccepted": True}, headers=headers),
-        HTTPStatus.OK,
-    )
+    complete = _complete(http, str(submission["url"]), headers, timeout=timeout)
     status = _processed(http, str(complete["statusUrl"]), str(submission["id"]), timeout=timeout)
     if registers:
         wait_for_registration(env, str(submission["id"]), timeout=timeout)
     return {**status, "submission": submission["id"]}
+
+
+def _complete(http: requests.Session, submission_url: str, headers: dict[str, str], *, timeout: float) -> JsonObject:
+    """Complete the submission; waits out Open Formulieren's throttle (HTTP 429), which parallel test workers hit."""
+
+    def attempt() -> tuple[requests.Response] | None:
+        response = http.post(f"{submission_url}/_complete", json={"privacyPolicyAccepted": True}, headers=headers)
+        # In a tuple: a Response is falsy for any error status, which wait_until would retry.
+        return None if response.status_code == HTTPStatus.TOO_MANY_REQUESTS else (response,)
+
+    (response,) = wait_until(attempt, timeout=timeout, description=f"{submission_url}/_complete not throttled")
+    return _json(response, HTTPStatus.OK)
 
 
 def wait_for_registration(env: Environment, submission: str, *, timeout: float) -> None:
