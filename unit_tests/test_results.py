@@ -86,6 +86,7 @@ def test_write_run_redacts_secrets(tmp_path):
     counts, details = parse_junit(JUNIT)
     info.counts = counts
     info.versions = {"ita": "3.3.4"}
+    info.build = {"podiumd": "4.10.0", "command": "deploy --full"}
     write_run(LocalDirSink(tmp_path), "2026-10/run", info, details, redactor)
     run_json = (tmp_path / "2026-10/run/run.json").read_text()
     summary = (tmp_path / "2026-10/run/summary.md").read_text()
@@ -93,6 +94,7 @@ def test_write_run_redacts_secrets(tmp_path):
     assert json.loads(run_json)["counts"]["failed"] == 1
     assert "| 1 | 1 | 1 | 1 | 1 | 1 | 6 |" in summary
     assert "- Component versions: ita 3.3.4" in summary
+    assert "- Deployed build: command deploy --full; podiumd 4.10.0" in summary
     assert "- TICKET-2 (1): `tests.smoke.test_up::test_fixed`" in summary
     assert "| no report id | **did not show in 1 of 2 tests** | 2 |" in summary
     assert "- requires: oab (1): `tests.smoke.test_up::test_skip`" in summary

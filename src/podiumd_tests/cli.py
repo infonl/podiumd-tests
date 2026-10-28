@@ -72,6 +72,7 @@ from podiumd_tests.workloads import ClusterState
 from podiumd_tests.workloads import chart_version
 from podiumd_tests.workloads import cluster_state
 from podiumd_tests.workloads import component_versions
+from podiumd_tests.workloads import deployed_build
 from podiumd_tests.workloads import disruptions
 
 if TYPE_CHECKING:
@@ -391,6 +392,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         selection=[],
         suite_commit=suite_commit(REPO_ROOT),
         chart_version=chart_version(env),
+        build=deployed_build(env),
         capabilities=sorted(env.capabilities.present),
         versions=_versions(env),
     )

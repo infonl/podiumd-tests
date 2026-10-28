@@ -10,6 +10,7 @@ from podiumd_tests.workloads import ClusterState
 from podiumd_tests.workloads import chart_older_than
 from podiumd_tests.workloads import chart_version
 from podiumd_tests.workloads import component_versions
+from podiumd_tests.workloads import deployed_build
 from podiumd_tests.workloads import disruptions
 from podiumd_tests.workloads import failed_jobs
 from podiumd_tests.workloads import run_cronjob
@@ -139,6 +140,18 @@ def test_chart_older_than_holds_also_for_an_unknown_version(env_factory, fake_ru
     podiumd = {"metadata": {"labels": {"app.kubernetes.io/name": "podiumd", "app.kubernetes.io/version": label}}}
     fake_runner.answers["get configmaps"] = (0, json.dumps({"items": [podiumd]}))
     assert chart_older_than(env_factory(), (4, 10, 0)) is older
+
+
+def test_deployed_build_reads_the_one_line_entries_of_the_configmap_in_the_setting(
+    env_factory, fake_runner, profile_factory
+):
+    data = {"podiumd": "4.10.0", "monitoring-logging": "checkout x (f054)", "charts": "{" + "x" * 300 + "}"}
+    fake_runner.answers["get configmap deployed"] = (0, json.dumps({"data": data}))
+    profile = profile_factory(settings={"deployed_build": "ns/deployed"})
+    assert deployed_build(env_factory(profile)) == {"podiumd": "4.10.0", "monitoring-logging": "checkout x (f054)"}
+    assert deployed_build(env_factory()) == {}
+    fake_runner.answers["get configmap deployed"] = (1, "not found")
+    assert deployed_build(env_factory(profile)) == {}
 
 
 def placed_pod(uid, name, *, node="n1", restarts=0, created="2026-10-15T09:51:00Z"):

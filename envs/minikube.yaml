@@ -105,5 +105,7 @@ settings:
   # One pod per component by default; tests using fixture several_replicas switch redis-ha to 3 and Keycloak to 2
   # (tier chaos).
   replicas_command: /home/kvv/development/werk/infonl-dimpact/infonl/podiumd-minikube/bin/replicas
+  # ConfigMap where podiumd-minikube records what it deployed (local chart checkouts); run.json and summary.md show it.
+  deployed_build: podiumd-minikube/podiumd-minikube-deployed
   # Shared with the podiumd-minikube agent; bootstrap and writing runs take it.
   lock_file: /home/kvv/development/werk/infonl-dimpact/infonl/.minikube-lock

@@ -119,6 +119,22 @@ def chart_version(env: Environment) -> str | None:
     return None
 
 
+def deployed_build(env: Environment) -> dict[str, str]:
+    """The one-line entries of the ConfigMap named by setting deployed_build ("namespace/name"); {} when unreadable.
+
+    The deployer records there what the chart version hides, such as a local chart checkout. Entries over 200
+    characters (podiumd-minikube's object map `charts`) are left out.
+    """
+    namespace, _, name = env.profile.settings.get("deployed_build", "").partition("/")
+    if not name:
+        return {}
+    try:
+        data = section(env.kube.get_json("configmap", name, namespace=namespace), "data")
+    except KubeError:
+        return {}
+    return {key: str(value) for key, value in data.items() if "\n" not in str(value) and len(str(value)) <= 200}
+
+
 def chart_older_than(env: Environment, version: tuple[int, ...]) -> bool:
     """Whether the deployed podiumd chart is older than `version`; True when its version is unknown."""
     found = _version(chart_version(env) or "")

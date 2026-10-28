@@ -141,6 +141,8 @@ class RunInfo:  # pylint: disable=too-many-instance-attributes  # mirrors run.js
     selection: list[str]
     suite_commit: str
     chart_version: str | None = None
+    # What the deployer recorded, e.g. {"monitoring-logging": "checkout ..."}.
+    build: dict[str, str] = field(default_factory=dict[str, str])
     capabilities: list[str] = field(default_factory=list[str])
     # Component versions read from the cluster, e.g. {"ita": "3.3.4"}.
     versions: dict[str, str] = field(default_factory=dict[str, str])
@@ -241,6 +243,7 @@ def summary_markdown(info: RunInfo, details: Details) -> str:
         f"- Finished: {info.finished}",
         f"- Exit code: {info.exit_code}",
         f"- Chart version: {info.chart_version or 'unknown'}",
+        *([f"- Deployed build: {'; '.join(f'{k} {v}' for k, v in sorted(info.build.items()))}"] if info.build else []),
         f"- Component versions: {versions}",
         f"- Suite commit: {info.suite_commit}",
         "- What the outcomes mean: [results/README.md](../../README.md)",
