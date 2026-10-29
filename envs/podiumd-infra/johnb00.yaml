@@ -42,10 +42,10 @@ secrets:
     k8s_secret: {name: keycloak-podiumd-admin, key: username}
   keycloak_admin_password:
     k8s_secret: {name: keycloak-podiumd-admin, key: password}
-  # Grafana's own admin (basic auth), from the monitoring stack setup-grafana-monitoring.sh deploys
-  # (monitoring-logging 1.0.19, 2026-10-20). grafana-admin in Key Vault is a Keycloak SSO user and
+  # Grafana's own admin (basic auth), from Secret monitoring-logging-grafana (podiumd-infra names the
+  # release monitoring-logging since #218; johnb00 rebuilt 2026-10-29). grafana-admin in Key Vault is a Keycloak SSO user and
   # cannot log in with basic auth.
   grafana_username:
-    k8s_secret: {name: monitoring-grafana, key: admin-user, namespace: monitoring}
+    k8s_secret: {name: monitoring-logging-grafana, key: admin-user, namespace: monitoring}
   grafana_password:
-    k8s_secret: {name: monitoring-grafana, key: admin-password, namespace: monitoring}
+    k8s_secret: {name: monitoring-logging-grafana, key: admin-password, namespace: monitoring}
