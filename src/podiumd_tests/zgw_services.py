@@ -29,6 +29,8 @@ LIST_PATHS = {
     "objecten": "objects",
     "objecttypen": "objecttypes",
 }
+# Gateways in the environment to registers outside it: judged as those registers, by their answer alone.
+GATEWAYS = ("api-proxy", "frankgateway")
 
 
 @dataclass(frozen=True)
@@ -103,14 +105,14 @@ def service_problem(service: Mapping[str, object], path: str | None) -> str | No
     """Why the probed Service fails, or None.
 
     An API in LIST_PATHS must list with the Service's credentials. An API outside the environment and
-    LIST_PATHS (a public register, a gateway) only has to answer its api_root without a server error.
+    LIST_PATHS (a public register, or one behind GATEWAYS) only has to answer its api_root without a server error.
     """
     status, api_root = service["status"], str(service["api_root"])
     described = f"{service['name']} {api_root}{path or ''} ({service['auth_type']}): {status}"
     if path is not None:
         ok = isinstance(status, int) and HTTPStatus.OK <= status < HTTPStatus.MULTIPLE_CHOICES
         return None if ok else f"{described}, expected 2xx with its credentials"
-    if component_for_host(urlsplit(api_root).hostname or "") is not None:
+    if component_for_host(urlsplit(api_root).hostname or "") not in (None, *GATEWAYS):
         return f"{described}: no list endpoint for this API in LIST_PATHS"
     ok = isinstance(status, int) and status < HTTPStatus.INTERNAL_SERVER_ERROR
     return None if ok else f"{described}, expected an answer below 500"

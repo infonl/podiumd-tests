@@ -48,6 +48,9 @@ def service(api_root, status, auth_type="zgw", uuid="u1", *, referenced=True):
         ("https://selectielijst.openzaak.nl/api/v1/", None, 404, None),
         ("https://selectielijst.openzaak.nl/api/v1/", None, 502, "502, expected an answer below 500"),
         ("https://selectielijst.openzaak.nl/api/v1/", None, "Timeout", "Timeout, expected an answer below 500"),
+        # The BRP API behind api-proxy only takes POST.
+        ("http://api-proxy/haalcentraal/api/brp/", None, 405, None),
+        ("http://api-proxy/haalcentraal/api/brp/", None, 503, "503, expected an answer below 500"),
     ],
 )
 def test_service_problem(api_root, path, status, problem):
