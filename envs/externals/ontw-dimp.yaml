@@ -23,6 +23,9 @@ urls:
   openarchiefbeheer: https://ontw-abc.dimpact.nl
   openbeheer: https://ontw-openbeheer.dimpact.nl
   grafana: https://ontw-podiumd-logs.dimpact.nl
+settings:
+  # Azure Policy admits only images from acrprodmgmt; its Python mirror (ExternalsPodiumD pipelines/images.yml).
+  mock_server_image: acrprodmgmt.azurecr.io/library/python:3.14.7-slim
 secrets:
   # keycloak-operator's master admin, as on podiumd-infra (checked on ontw-dimp 2026-10-29).
   keycloak_admin_username:
