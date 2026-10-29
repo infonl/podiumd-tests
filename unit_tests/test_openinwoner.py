@@ -11,6 +11,7 @@ from podiumd_tests.openinwoner import LOGINS
 from podiumd_tests.openinwoner import ask_anonymously
 from podiumd_tests.openinwoner import begeleider_login
 from podiumd_tests.openinwoner import count_accounts
+from podiumd_tests.openinwoner import kvk_api_root
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.openinwoner import reset_begeleider
 from podiumd_tests.openinwoner import search_data
@@ -101,12 +102,14 @@ def test_snippet_helpers_pass_their_parameters(env):
     assert set_site_configuration(env, name="x") == {"old": 1}
     assert search_data(env, "read", "ptest") == {"old": 1}
     assert virus_scan_enabled(env)
+    assert kvk_api_root(env) == "{'old': 1}"
     assert [(d, n) for d, n, _ in env.snippets] == [
         ("openinwoner", "oi_begeleider_reset"),
         ("openinwoner", "oi_account"),
         ("openinwoner", "oi_site_configuration"),
         ("openinwoner", "oi_search_data"),
         ("openinwoner", "oi_virus_scan"),
+        ("openinwoner", "oi_kvk_api_root"),
     ]
     assert env.snippets[1][2] == {"bsn": "999", "fields": {"phonenumber": "06"}}
     assert env.snippets[3][2] == {"action": "read", "tag": "ptest", "products": []}

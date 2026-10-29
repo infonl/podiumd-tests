@@ -116,6 +116,11 @@ def virus_scan_enabled(env: Environment) -> bool:
     return bool(run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_virus_scan", {"action": "read"}))
 
 
+def kvk_api_root(env: Environment) -> str:
+    """Open Inwoner's KvK API root; empty when unset (podiumd before 4.10.0 leaves it to the admin)."""
+    return str(run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_kvk_api_root", {}))
+
+
 def set_account(env: Environment, bsn: str, **fields: object) -> dict[str, object]:
     """Set fields of the Open Inwoner account with this BSN; their old values, to set back."""
     params: dict[str, object] = {"bsn": bsn, "fields": fields}

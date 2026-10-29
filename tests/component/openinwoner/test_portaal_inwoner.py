@@ -19,6 +19,7 @@ from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.basisregistraties import kvk_basisprofiel
 from podiumd_tests.basisregistraties import kvk_vestigingsprofiel
 from podiumd_tests.bootstrap.steps import IDENTITIES
+from podiumd_tests.openinwoner import kvk_api_root
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.openinwoner import set_account
 from podiumd_tests.responses import expect_status
@@ -259,7 +260,7 @@ def test_profile_email_reaches_open_klant(  # pylint: disable=too-many-arguments
     wait_until(stored, timeout=60, description=f"digitaal adres {adres} in Open Klant")
 
 
-@pytest.mark.requires("api-proxy")
+@pytest.mark.requires("api-proxy", "cluster")
 @pytest.mark.tc("OI-083")
 @pytest.mark.source(
     "TA regression/118-portaal-vestigingsnaam-bedrijf.spec.ts",
@@ -283,6 +284,8 @@ def test_company_profile_shows_kvk_names(  # pylint: disable=too-many-arguments,
 ) -> None:
     """The company's profile shows its KvK number, its name and the vestiging's trade name from KvK (TA reg-118, reg-146)."""
     need_bootstrap(BEDRIJF.name)
+    if not kvk_api_root(podiumd_env):
+        pytest.skip("Open Inwoner has no KvK API (KvKConfig.api_root): set openinwoner.kvk.apiRoot (podiumd 4.10.0+)")
     kvk, vestiging = BEDRIJF.attributes["kvk"][0], BEDRIJF.attributes["vestigingsnummer"][0]
     naam = expect_status(kvk_basisprofiel(http, urls["api-proxy"], kvk), HTTPStatus.OK).json()["naam"]
     profiel = expect_status(kvk_vestigingsprofiel(http, urls["api-proxy"], vestiging), HTTPStatus.OK).json()
