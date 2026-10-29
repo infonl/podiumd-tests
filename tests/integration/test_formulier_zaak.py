@@ -58,7 +58,7 @@ def test_submission_creates_a_zaak_with_the_form_pdf(  # pylint: disable=too-man
 
     The inwoner downloads the PDF.
     """
-    need_bootstrap("openformulieren-form")
+    need_bootstrap("openformulieren-form", "openformulieren-zgw-group", "openzaak-of-autorisatie")
     omschrijving = registry.tagged("klacht")
     session = podiumd_env.session()
     status = submit(
