@@ -109,11 +109,15 @@ def test_sweep_deletes_stale_mails_and_forms_and_skips_what_it_cannot_reach(swep
     assert skipped["zaak"].startswith("requires: openzaak")
 
 
-def test_sweep_names_a_missing_bootstrap_step_and_a_missing_cluster(swept_env, fake_http):
+def test_sweep_names_a_missing_bootstrap_step_setting_and_cluster(swept_env, fake_http, monkeypatch):
     fake_http()
-    swept = sweep_module.sweep(swept_env({"openzaak"}), NOW, dry_run=True)
+    env = swept_env({"openzaak", "zac"})
+    monkeypatch.setattr(sweep_module, "check", lambda *_: [Outcome("openzaak-client-productaanvraag", "present")])
+    swept = sweep_module.sweep(env, NOW, dry_run=True)
     skipped = {s.kind: s.detail for s in swept if s.action == "skipped"}
     assert skipped["zaak"] == "bootstrap step openzaak-client missing"
+    # Without the setting the client has no Zaken API rights: Open Zaak answers 403 to the list.
+    assert skipped["productaanvraag zaak"] == f"profile {env.profile.name} has no settings.productaanvraag_zaaktype"
     assert skipped["form"].startswith("requires: openformulieren")
 
 

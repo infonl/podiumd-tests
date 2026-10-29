@@ -81,6 +81,8 @@ class Finder:  # pylint: disable=too-many-instance-attributes  # a record of one
     delete: Callable[[ApiClient], Callable[[JsonObject], None]] = _delete
     # Adds what tells whether an item is stale, from outside the item.
     with_context: Callable[[Environment, ApiClient, list[JsonObject]], list[JsonObject]] | None = None
+    # A profile setting without which the bootstrap client has no rights to list this kind.
+    setting: str = ""
 
     def items(self, env: Environment, client: ApiClient) -> list[JsonObject]:
         """Everything the list returns; Mailpit's search answers with "messages"."""
@@ -146,6 +148,7 @@ FINDERS: tuple[Finder, ...] = (
         {},
         _zaak,
         with_productaanvraag,
+        "productaanvraag_zaaktype",
     ),
     Finder("document", "openzaak", "openzaak-client", _openzaak, f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", RSIN),
     Finder(
@@ -212,6 +215,8 @@ def sweep(env: Environment, cutoff: datetime, *, dry_run: bool) -> list[Swept]:
         reason = env.capabilities.skip_reason(finder.component)
         if reason is None and finder.step and finder.step not in present:
             reason = f"bootstrap step {finder.step} missing"
+        if reason is None and finder.setting and not env.profile.settings.get(finder.setting):
+            reason = f"profile {env.profile.name} has no settings.{finder.setting}"
         if reason:
             swept.append(Swept(finder.kind, "", "skipped", reason))
             continue
