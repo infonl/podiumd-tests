@@ -47,10 +47,17 @@ def kcc_login(page: Page, env: Environment, component: str, user: KeycloakUser =
 
 
 def kiss_register(kiss: requests.Session, kiss_url: str) -> dict[str, str]:
-    """The header that sends a KISS proxy call to its default register (KISS has one per systeem)."""
+    """The header that sends a KISS proxy call to its Open Klant 2 register, the default one first.
+
+    Skips when KISS has none: its klantinteracties proxy answers 400 for an e-Suite register (OpenKlant1).
+    """
     systemen = entries(expect_status(kiss.get(kiss_url + "/api/environment/registers"), 200).json()["systemen"])
-    default = next(s for s in systemen if s.get("isDefault"))
-    return {"systemIdentifier": str(default["identifier"])}
+    openklant2 = sorted(
+        (s for s in systemen if s.get("registryVersion") == "OpenKlant2"), key=lambda s: not s.get("isDefault")
+    )
+    if not openklant2:
+        pytest.skip("KISS has no Open Klant 2 register (REGISTERS__<n>__REGISTRY_VERSION=OpenKlant2), only e-Suite")
+    return {"systemIdentifier": str(openklant2[0]["identifier"])}
 
 
 def kiss_klantcontact(

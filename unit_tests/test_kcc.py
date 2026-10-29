@@ -21,7 +21,13 @@ from podiumd_tests.kcc import vac_data
 from podiumd_tests.seed.registry import ResourceRegistry
 
 KISS = "https://kiss.example.test"
-REGISTERS = {"systemen": [{"identifier": "oud", "isDefault": False}, {"identifier": "ok-1", "isDefault": True}]}
+REGISTERS = {
+    "systemen": [
+        {"identifier": "oud", "isDefault": False, "registryVersion": "OpenKlant2"},
+        {"identifier": "esuite", "isDefault": False, "registryVersion": "OpenKlant1"},
+        {"identifier": "ok-1", "isDefault": True, "registryVersion": "OpenKlant2"},
+    ]
+}
 
 
 def test_kcc_login_uses_the_kcc_test_user(monkeypatch, page_env):
@@ -31,9 +37,16 @@ def test_kcc_login_uses_the_kcc_test_user(monkeypatch, page_env):
     assert logins == [("https://ita.example.test", KCC.username, f"pw-{KCC.store_key}")]
 
 
-def test_kiss_register_picks_the_default_systeem(fake_http):
+def test_kiss_register_picks_the_default_open_klant_2_systeem(fake_http):
     fake_http({"/api/environment/registers": (200, REGISTERS)})
     assert kiss_register(requests.Session(), KISS) == {"systemIdentifier": "ok-1"}
+
+
+def test_kiss_register_skips_without_an_open_klant_2_systeem(fake_http):
+    esuite = {"systemen": [{"identifier": "esuite", "isDefault": True, "registryVersion": "OpenKlant1"}]}
+    fake_http({"/api/environment/registers": (200, esuite)})
+    with pytest.raises(pytest.skip.Exception, match="no Open Klant 2 register"):
+        kiss_register(requests.Session(), KISS)
 
 
 def test_kiss_klantcontact_registers_cleanup_in_open_klant(fake_http):
