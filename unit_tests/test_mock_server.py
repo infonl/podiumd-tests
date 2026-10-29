@@ -41,14 +41,28 @@ def test_callback_url_is_the_in_cluster_service(env_factory):
     assert Callback.new(env_factory(), "run1").path != callback.path
 
 
-def test_mock_server_is_present_only_with_current_code_and_a_ready_replica(env_factory, fake_runner):
+def deployment_with(image):
+    return {"spec": {"template": {"spec": {"containers": [{"image": image}]}}}, "status": {"readyReplicas": 1}}
+
+
+def test_mock_server_is_present_only_with_current_code_image_and_a_ready_replica(
+    env_factory, profile_factory, fake_runner
+):
     code = (mock_server.INFRA / "server.py").read_text()
-    fake_runner.answers[f"get deployment {NAME}"] = (0, json.dumps({"status": {"readyReplicas": 1}}))
+    fake_runner.answers[f"get deployment {NAME}"] = (0, json.dumps(deployment_with("python:3.13-alpine")))
     fake_runner.answers[f"get configmap {NAME}"] = (0, json.dumps({"data": {"server.py": "old"}}))
     ctx = ctx_for(env_factory())
     assert not MockServer().is_present(ctx)
     fake_runner.answers[f"get configmap {NAME}"] = (0, json.dumps({"data": {"server.py": code}}))
     assert MockServer().is_present(ctx)
+    acr = ctx_for(env_factory(profile_factory(settings={"mock_server_image": "acr.example/python:3.13-alpine"})))
+    assert not MockServer().is_present(acr)
+
+
+def test_manifests_take_the_profiles_image():
+    deployment = mock_server.manifests("acr.example/python:3.13-alpine")[1]
+    containers = section(section(section(deployment, "spec"), "template"), "spec")["containers"]
+    assert containers[0]["image"] == "acr.example/python:3.13-alpine"
 
 
 def test_apply_sends_manifests_over_stdin_and_waits_for_the_rollout(env_factory, fake_runner):

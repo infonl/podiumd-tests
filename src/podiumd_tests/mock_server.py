@@ -17,6 +17,8 @@ from typing import cast
 import yaml
 
 from podiumd_tests.config import REPO_ROOT
+from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.wait import wait_until
 
@@ -39,13 +41,24 @@ NOTIFY_SMS = "/v2/notifications/sms"
 ROLLOUT_TIMEOUT = 180
 
 
-def manifests() -> list[dict[str, object]]:
-    """The mock server's ConfigMap, Deployment and Service, with server.py in the ConfigMap."""
+def manifests(image: str = "") -> list[dict[str, object]]:
+    """The mock server's ConfigMap, Deployment and Service, with server.py in the ConfigMap; image replaces the default."""
     docs = [cast("dict[str, object]", d) for d in yaml.safe_load_all((INFRA / "manifests.yaml").read_text()) if d]
     for doc in docs:
         if doc["kind"] == "ConfigMap":
             doc["data"] = {"server.py": (INFRA / "server.py").read_text()}
+        if doc["kind"] == "Deployment" and image:
+            _container(doc)["image"] = image
     return docs
+
+
+def _container(deployment: JsonObject) -> JsonObject:
+    return entries(section(section(section(deployment, "spec"), "template"), "spec").get("containers"))[0]
+
+
+def _image(env: Environment) -> str:
+    """The profile's settings.mock_server_image (a registry the cluster's policy allows), or the default."""
+    return env.profile.settings.get("mock_server_image", "")
 
 
 def _entry(line: str) -> JsonObject | None:
@@ -108,12 +121,15 @@ class MockServer:
             return False
         code = cast("dict[str, object]", config_map.get("data") or {}).get("server.py")
         ready = cast("dict[str, object]", deployment.get("status") or {}).get("readyReplicas")
-        return code == (INFRA / "server.py").read_text() and bool(ready)
+        wanted = _container(manifests(_image(ctx.env))[1])["image"]
+        return (
+            code == (INFRA / "server.py").read_text() and bool(ready) and _container(deployment).get("image") == wanted
+        )
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Apply the manifests, restart on new code, and wait until the Deployment is ready."""
         kube = ctx.env.kube
-        for manifest in manifests():
+        for manifest in manifests(_image(ctx.env)):
             kube.apply(manifest)
         kube.run("rollout", "restart", f"deployment/{NAME}")
         kube.run(
