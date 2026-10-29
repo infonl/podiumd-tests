@@ -42,7 +42,7 @@ ROLLOUT_TIMEOUT = 180
 
 
 def manifests(image: str = "") -> list[dict[str, object]]:
-    """The mock server's ConfigMap, Deployment and Service, with server.py in the ConfigMap; image replaces the default."""
+    """The mock server's ConfigMap, Deployment and Service, with server.py; image replaces the default image."""
     docs = [cast("dict[str, object]", d) for d in yaml.safe_load_all((INFRA / "manifests.yaml").read_text()) if d]
     for doc in docs:
         if doc["kind"] == "ConfigMap":
@@ -52,8 +52,11 @@ def manifests(image: str = "") -> list[dict[str, object]]:
     return docs
 
 
-def _container(deployment: JsonObject) -> JsonObject:
-    return entries(section(section(section(deployment, "spec"), "template"), "spec").get("containers"))[0]
+def _container(deployment: JsonObject) -> dict[str, object]:
+    return cast(
+        "dict[str, object]",
+        entries(section(section(section(deployment, "spec"), "template"), "spec").get("containers"))[0],
+    )
 
 
 def _image(env: Environment) -> str:

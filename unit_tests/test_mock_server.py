@@ -6,6 +6,7 @@ import json
 from podiumd_tests import mock_server
 from podiumd_tests.bootstrap import Context
 from podiumd_tests.credential_store import CredentialStore
+from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.mock_server import NAME
 from podiumd_tests.mock_server import Callback
@@ -61,7 +62,7 @@ def test_mock_server_is_present_only_with_current_code_image_and_a_ready_replica
 
 def test_manifests_take_the_profiles_image():
     deployment = mock_server.manifests("acr.example/python:3.13-alpine")[1]
-    containers = section(section(section(deployment, "spec"), "template"), "spec")["containers"]
+    containers = entries(section(section(section(deployment, "spec"), "template"), "spec").get("containers"))
     assert containers[0]["image"] == "acr.example/python:3.13-alpine"
 
 
