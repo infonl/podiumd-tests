@@ -18,36 +18,41 @@ class Component:
     deployment_prefixes: tuple[str, ...]
     # Prometheus scrapes it through a ServiceMonitor or PodMonitor named like one of its workloads.
     monitored: bool = False
-    # Its OTEL service.name, which the collector's remote write turns into the series' job label.
-    otel_service: str = ""
+    # Its OTEL service.name per version, which the collector's remote write turns into the series' job label.
+    otel_services: tuple[str, ...] = ()
 
 
 COMPONENTS: dict[str, Component] = {
-    "zac": Component(("zac",), ("zac",), otel_service="zac"),
-    "openzaak": Component(("openzaak",), ("openzaak",), otel_service="openzaak"),
+    "zac": Component(("zac",), ("zac",), otel_services=("zac",)),
+    "openzaak": Component(("openzaak",), ("openzaak",), otel_services=("openzaak",)),
     "keycloak": Component(("keycloak",), ("keycloak",), monitored=True),
     "keycloak-admin": Component(("keycloak-admin",), ()),
     "kiss": Component(("contact", "kiss"), ("contact", "contact-web", "kiss")),
     "ita": Component(("ita", "internetaakafhandeling"), ("ita", "ita-web")),
     "pabc": Component(("pabc",), ("pabc",)),
     "openarchiefbeheer": Component(
-        ("abc", "openarchiefbeheer", "openarchiefbeheer-ui"), ("openarchiefbeheer",), otel_service="openarchiefbeheer"
+        ("abc", "openarchiefbeheer", "openarchiefbeheer-ui"),
+        ("openarchiefbeheer",),
+        otel_services=("openarchiefbeheer",),
     ),
-    "openinwoner": Component(("portaal", "mijn", "openinwoner"), ("openinwoner",), otel_service="openinwoner"),
+    "openinwoner": Component(("portaal", "mijn", "openinwoner"), ("openinwoner",), otel_services=("openinwoner",)),
     "openformulieren": Component(
-        ("formulier", "openformulieren", "openformulieren-nginx"), ("openformulieren",), otel_service="openforms"
+        ("formulier", "openformulieren", "openformulieren-nginx"), ("openformulieren",), otel_services=("openforms",)
     ),
-    "openklant": Component(("openklant",), ("openklant",), otel_service="openklant"),
-    "objecten": Component(("objecten",), ("objecten",), otel_service="openobject"),
+    "openklant": Component(("openklant",), ("openklant",), otel_services=("openklant",)),
+    # Open Object 4.x reports as openobject, Objecten 3.x as objects.
+    "objecten": Component(("objecten",), ("objecten",), otel_services=("openobject", "objects")),
     # Open Object (podiumd 4.10) serves the Objecttypen API from deployment objecten.
     "objecttypen": Component(("objecttypen",), ("objecttypen", "objecten")),
     "opennotificaties": Component(
-        ("notificaties", "opennotificaties"), ("opennotificaties", "notificaties"), otel_service="opennotificaties"
+        ("notificaties", "opennotificaties"), ("opennotificaties", "notificaties"), otel_services=("opennotificaties",)
     ),
     "omc": Component(("omc",), ("omc",)),
     "openbeheer": Component(("openbeheer",), ("openbeheer",)),
-    "referentielijsten": Component(("referentielijsten",), ("referentielijsten",), otel_service="referentielijsten"),
-    "openvtb": Component(("openvtb",), ("openvtb",), otel_service="openvtb"),
+    "referentielijsten": Component(
+        ("referentielijsten",), ("referentielijsten",), otel_services=("referentielijsten",)
+    ),
+    "openvtb": Component(("openvtb",), ("openvtb",), otel_services=("openvtb",)),
     # The sub-chart names its deployment <helm release>-zaakbrug.
     "zaakbrug": Component(("zaakbrug",), ("zaakbrug", "podiumd-zaakbrug")),
     # ExternalsPodiumD's host is <stage>-office-addin.<domain>.

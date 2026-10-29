@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 from http import HTTPStatus
@@ -30,6 +31,8 @@ type Json = dict[str, object]
 MONITOR_POOLS = {"servicemonitors": "serviceMonitor", "podmonitors": "podMonitor"}
 # A younger pod may not have been collected by Alloy yet.
 MIN_POD_AGE = timedelta(minutes=10)
+# Lines this recent may not be in Loki yet: a pod that logs in bursts would show as missing.
+LOKI_LAG = timedelta(minutes=2)
 
 
 class GrafanaError(AssertionError):
@@ -114,12 +117,12 @@ def otel_jobs_query(components: Iterable[str]) -> str:
 
     An app may name its processes <service>-<role> (Open Inwoner: openinwoner-web, openinwoner-celery-worker).
     """
-    services = sorted(COMPONENTS[c].otel_service for c in components if COMPONENTS[c].otel_service)
+    services = sorted(s for c in components for s in COMPONENTS[c].otel_services)
     return f'group by (job) ({{job=~"(.+/)?({"|".join(services)})(-.+)?"}})'
 
 
-def _has_otel_job(service: str, jobs: set[str]) -> bool:
-    return any(job == service or job.startswith(f"{service}-") for job in jobs)
+def _has_otel_job(services: tuple[str, ...], jobs: set[str]) -> bool:
+    return any(job == s or job.startswith(f"{s}-") for s in services for job in jobs)
 
 
 def without_metrics(
@@ -136,7 +139,7 @@ def without_metrics(
     ordered = sorted(components)
     return (
         [c for c in ordered if COMPONENTS[c].monitored and c not in up],
-        [c for c in ordered if COMPONENTS[c].otel_service and not _has_otel_job(COMPONENTS[c].otel_service, jobs)],
+        [c for c in ordered if COMPONENTS[c].otel_services and not _has_otel_job(COMPONENTS[c].otel_services, jobs)],
     )
 
 
@@ -144,6 +147,15 @@ def pods_in_loki(query_response: JsonObject) -> set[tuple[str, str]]:
     """(namespace, pod) of each series in a Loki `sum by (namespace, pod)` query result."""
     metrics = (section(r, "metric") for r in entries(section(query_response, "data").get("result")))
     return {(str(m.get("namespace")), str(m.get("pod"))) for m in metrics}
+
+
+def logged_before(timestamped_logs: str, cutoff: datetime) -> bool:
+    """Whether the first line of `kubectl logs --timestamps` output was written before cutoff."""
+    first = timestamped_logs.lstrip().partition(" ")[0]
+    if not first:
+        return False
+    # kubectl writes nanoseconds; fromisoformat takes at most microseconds.
+    return datetime.fromisoformat(first[:26]).replace(tzinfo=UTC) < cutoff
 
 
 def running_pods_not_in_loki(

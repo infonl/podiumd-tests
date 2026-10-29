@@ -18,10 +18,12 @@ import pytest
 
 from podiumd_tests.components import COMPONENTS
 from podiumd_tests.components import deployed_components
+from podiumd_tests.grafana import LOKI_LAG
 from podiumd_tests.grafana import MONITOR_POOLS
 from podiumd_tests.grafana import Grafana
 from podiumd_tests.grafana import down_targets
 from podiumd_tests.grafana import grafana_auth
+from podiumd_tests.grafana import logged_before
 from podiumd_tests.grafana import monitors_without_targets
 from podiumd_tests.grafana import otel_jobs_query
 from podiumd_tests.grafana import pods_in_loki
@@ -191,7 +193,7 @@ def test_every_component_reports_metrics(grafana: Grafana, podiumd_env: Environm
     if not any(podiumd_env.items(kind) for kind in MONITOR_POOLS):
         pytest.skip("no ServiceMonitor or PodMonitor in the environment's namespaces")
     deployed = deployed_components(podiumd_env.workload_names)
-    otel_apps = [c for c in deployed if COMPONENTS[c].otel_service]
+    otel_apps = [c for c in deployed if COMPONENTS[c].otel_services]
     otel = grafana.proxy("prometheus", "/api/v1/query", {"query": otel_jobs_query(otel_apps)}) if otel_apps else {}
     no_monitor, no_otel = without_metrics(deployed, grafana.proxy("prometheus", "/api/v1/targets"), otel)
     otel_off = bool(otel_apps) and len(no_otel) == len(otel_apps)
@@ -227,17 +229,22 @@ def test_every_pod_logs_to_loki(grafana: Grafana, podiumd_env: Environment) -> N
         f'sum by (namespace, pod) (count_over_time({{namespace=~"{"|".join(podiumd_env.namespaces)}"}}[{LOG_WINDOW}]))'
     )
     in_loki = pods_in_loki(grafana.proxy("loki", "/loki/api/v1/query", {"query": query}))
-    candidates = running_pods_not_in_loki(podiumd_env.items("pods"), in_loki, datetime.now(UTC))
+    now = datetime.now(UTC)
+    candidates = running_pods_not_in_loki(podiumd_env.items("pods"), in_loki, now)
     missing = [
         f"{section(p, 'metadata').get('namespace')}/{metadata_name(p)}"
         for p in candidates
-        if podiumd_env.kube.run(
-            "logs",
-            f"pod/{metadata_name(p)}",
-            "--all-containers",
-            f"--since={LOG_WINDOW}",
-            "--tail=1",
-            namespace=str(section(p, "metadata").get("namespace")),
-        ).strip()
+        if logged_before(
+            podiumd_env.kube.run(
+                "logs",
+                f"pod/{metadata_name(p)}",
+                "--all-containers",
+                f"--since={LOG_WINDOW}",
+                "--timestamps",
+                "--limit-bytes=1024",
+                namespace=str(section(p, "metadata").get("namespace")),
+            ),
+            now - LOKI_LAG,
+        )
     ]
     assert not missing, f"pods whose logs are not in Loki: {missing}"

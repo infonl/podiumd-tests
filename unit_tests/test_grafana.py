@@ -12,6 +12,7 @@ from podiumd_tests.grafana import Grafana
 from podiumd_tests.grafana import GrafanaError
 from podiumd_tests.grafana import down_targets
 from podiumd_tests.grafana import grafana_auth
+from podiumd_tests.grafana import logged_before
 from podiumd_tests.grafana import monitors_without_targets
 from podiumd_tests.grafana import otel_jobs_query
 from podiumd_tests.grafana import pods_in_loki
@@ -115,7 +116,7 @@ def test_monitor_without_active_target_is_reported():
 
 def test_otel_jobs_query_uses_the_otel_service_names():
     query = otel_jobs_query(["openformulieren", "keycloak", "objecten"])
-    assert query == 'group by (job) ({job=~"(.+/)?(openforms|openobject)(-.+)?"})'
+    assert query == 'group by (job) ({job=~"(.+/)?(objects|openforms|openobject)(-.+)?"})'
 
 
 def test_without_metrics():
@@ -143,6 +144,9 @@ def test_without_metrics():
     components = ["keycloak", "redis", "frankgateway", "clamav", "openzaak", "openformulieren", "openvtb", "zac"]
     components += ["openinwoner", "objecten"]
     assert without_metrics(components, targets, otel) == (["clamav", "redis"], ["objecten", "openvtb"])
+    # Objecten 3.x reports as objects.
+    otel["data"]["result"].append({"metric": {"job": "podiumd/objects-worker-celery"}})
+    assert without_metrics(components, targets, otel)[1] == ["openvtb"]
 
 
 def pod(name, phase="Running", created="2026-10-20T08:00:00Z"):
@@ -154,3 +158,10 @@ def test_running_pods_not_in_loki_skips_young_and_finished_pods():
     pods = [pod("logged"), pod("silent"), pod("young", created="2026-10-20T08:55:00Z"), pod("done", phase="Succeeded")]
     now = datetime(2026, 10, 20, 9, 0, tzinfo=UTC)
     assert running_pods_not_in_loki(pods, pods_in_loki(body), now) == [pods[1]]
+
+
+def test_logged_before_reads_the_first_timestamp():
+    logs = "2026-10-29T11:03:08.451094127Z first\n2026-10-29T11:04:00.000000001Z second\n"
+    assert logged_before(logs, datetime(2026, 10, 29, 11, 3, 9, tzinfo=UTC))
+    assert not logged_before(logs, datetime(2026, 10, 29, 11, 3, 8, tzinfo=UTC))
+    assert not logged_before("", datetime(2026, 10, 29, 11, 3, 9, tzinfo=UTC))
