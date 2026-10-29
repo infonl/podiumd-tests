@@ -14,6 +14,7 @@ import pytest
 
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.json_data import strings
 from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openzaak import today
@@ -53,8 +54,12 @@ def test_record_breaking_the_objecttype_schema_is_refused(
     refused = objecten.request(
         "POST", "objects", HTTPStatus.BAD_REQUEST, json={"type": afdeling_type, "record": record}
     )
-    reasons = [str(p.get("reason")) for p in entries(refused.json().get("invalid_params"))]
-    assert any("'naam'" in r for r in reasons), reasons
+    body = refused.json()
+    # Objecten 3.x answers with non_field_errors; Open Object 4.x with invalid_params.
+    reasons = [str(p.get("reason")) for p in entries(body.get("invalid_params"))] + strings(
+        body.get("non_field_errors")
+    )
+    assert any("'naam'" in r for r in reasons), body
 
 
 @pytest.mark.source(
