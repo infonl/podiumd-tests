@@ -19,6 +19,7 @@ from podiumd_tests.auth.keycloak_admin import realm_of
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.browser import keycloak_login
 from podiumd_tests.components import DJANGO_APPS
+from podiumd_tests.oab import expect_admin_logout_bug
 from podiumd_tests.oidc import LOGIN_PATHS
 from podiumd_tests.oidc import keycloak_hosts
 from podiumd_tests.oidc import logs_in_through_keycloak
@@ -109,10 +110,13 @@ def test_admin_logout_returns_to_the_login(  # pylint: disable=too-many-argument
     need_bootstrap: Callable[..., None],
     sso_admins: dict[str, str],
     component: str,
+    request: pytest.FixtureRequest,
 ) -> None:
     """Logging out of the app's admin ends the session: the admin then asks for a login again."""
     if component not in sso_admins:
         pytest.skip(f"{component}'s admin does not log in through Keycloak")
+    if component == "openarchiefbeheer":
+        expect_admin_logout_bug(request, podiumd_env)
     admin = sso_admins[component]
     need_bootstrap(ADMIN.name)
     page.goto(admin + LOGIN_PATHS[component])

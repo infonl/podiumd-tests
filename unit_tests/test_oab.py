@@ -2,6 +2,10 @@
 
 import json
 
+from types import SimpleNamespace
+
+import pytest
+
 from podiumd_tests import oab
 from podiumd_tests.bootstrap.names import PREFIX
 from podiumd_tests.bootstrap.steps import django_secret_key
@@ -49,3 +53,13 @@ def test_snippet_helpers_pass_their_parameters(page_env):
         ("oab_archive_config", {"fields": {"x": 1}}),
         ("oab_destroy_now", {"uuid": "u-1"}),
     ]
+
+
+@pytest.mark.parametrize(("version", "xfail"), [((2, 0, 0), False), ((2, 1, 2), True), (None, False)])
+def test_admin_logout_bug_is_expected_from_2_1(monkeypatch, version, xfail):
+    monkeypatch.setattr(
+        oab, "component_versions", lambda _env, _c: {} if version is None else {"openarchiefbeheer": version}
+    )
+    markers = []
+    oab.expect_admin_logout_bug(SimpleNamespace(applymarker=markers.append), None)  # pyright: ignore[reportArgumentType]
+    assert bool(markers) is xfail
