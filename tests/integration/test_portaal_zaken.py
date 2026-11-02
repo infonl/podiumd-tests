@@ -262,7 +262,8 @@ def test_zaak_document_can_be_downloaded(  # pylint: disable=too-many-arguments,
     document = make_document(openzaak, registry, parts.informatieobjecttype, inhoud, status="definitief")
     link_document(openzaak, registry, zaak, document)
     open_status_page(page, podiumd_env, zaak)
-    expect(page.get_by_text(str(document["titel"])).first).to_be_visible()
+    # The status page loads the zaak's documents after the page itself ("Gegevens laden...").
+    expect(page.get_by_text(str(document["titel"])).first).to_be_visible(timeout=LIST_TIMEOUT_MS)
     href = page.locator(f'a[href*="{str(document["url"]).rsplit("/", 1)[-1]}"]').first.get_attribute("href")
     assert href, "no download link for the document"
     download = browser_session(page, podiumd_env).get(
