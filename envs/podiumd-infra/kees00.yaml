@@ -55,6 +55,8 @@ secrets:
   zgw_client_secret:
     zgw_jwt_secret: {deployment: openzaak, client_id: formulier}
 settings:
+  # Kyverno ClusterPolicy redirect-registries rewrites Docker Hub images to this mirror; the step compares images.
+  mock_server_image: podiumdregistry.azurecr.io/dockerhub/library/python:3.13-alpine
   # podiumd's e2e zaaktype; podiumd-infra seeds ZAC's zaakafhandelparameters for it (runtime data, not in its values).
   productaanvraag_type: productaanvraag-zaaktype-voor-e2e-testen
   productaanvraag_zaaktype: zaaktype-voor-e2e-testen
