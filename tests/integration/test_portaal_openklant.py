@@ -24,6 +24,7 @@ from podiumd_tests.bootstrap.steps import ITA_GROEP
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.kcc import add_klantcontact
 from podiumd_tests.kcc import ita_detail_text
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.mailpit import forget_mails
@@ -270,8 +271,7 @@ def test_question_answered_in_ita_shows_as_answered(  # pylint: disable=too-many
         # ITA numbers the klantcontact itself.
         "klantcontactRequest": {k: v for k, v in antwoord_body.items() if k != "nummer"},
     }
-    response = ita.post(podiumd_env.profile.urls["ita"] + "/api/klantcontacten/add-klantcontact", json=body)
-    expect_status(response, HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.NO_CONTENT)
+    add_klantcontact(ita, podiumd_env.profile.urls["ita"], body)
     # ITA has no call to close the taak; KCC closes it as it does in ITA's UI.
     openklant.patch(str(taak["url"]), {"status": "verwerkt"})
     page.context.clear_cookies()

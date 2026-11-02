@@ -82,6 +82,26 @@ def ita_detail_text(ita: requests.Session, ita_url: str, taak: JsonObject) -> st
     return json.dumps(expect_status(ita.get(f"{ita_url}/api/internetaken/{taak['nummer']}"), HTTPStatus.OK).json())
 
 
+# ITA answers 409 with this when Objecten refuses its logboek POST.
+LOGBOEK_FORBIDDEN = "403 (Forbidden)"
+LOGBOEK_HINT = (
+    "on a Traefik edge without request-body buffering for Objecten, uWSGI reads ITA's chunked .NET body as empty"
+    " (NGINX Gateway Fabric always buffers): set bufferRequestBody on the objecten ingress"
+)
+
+
+def add_klantcontact(ita: requests.Session, ita_url: str, body: JsonObject) -> requests.Response:
+    """ITA's answer to an internetaak; UnexpectedStatusError, with the edge cause for Objecten's 403, otherwise."""
+    response = ita.post(f"{ita_url}/api/klantcontacten/add-klantcontact", json=body)
+    try:
+        return expect_status(response, HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.NO_CONTENT)
+    except UnexpectedStatusError as error:
+        if response.status_code == HTTPStatus.CONFLICT and LOGBOEK_FORBIDDEN in response.text:
+            msg = f"{error}; {LOGBOEK_HINT}"
+            raise UnexpectedStatusError(msg) from error
+        raise
+
+
 # ITA before 3.3.4 takes Open Klant's deprecated toegewezenAanActor (a bare reference to the first
 # assigned actor) over the expanded actor with the same uuid: a groep assigned first is not seen as a
 # groep (Interne-Taak-Afhandeling/ITA#582).

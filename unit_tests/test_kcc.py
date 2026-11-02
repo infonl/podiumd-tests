@@ -10,6 +10,8 @@ import requests
 from podiumd_tests import kcc
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.kcc import KENNIS_URL
+from podiumd_tests.kcc import LOGBOEK_HINT
+from podiumd_tests.kcc import add_klantcontact
 from podiumd_tests.kcc import expect_ita_group_access_bug
 from podiumd_tests.kcc import ita_detail_text
 from podiumd_tests.kcc import kcc_login
@@ -18,6 +20,7 @@ from podiumd_tests.kcc import kiss_klantcontact
 from podiumd_tests.kcc import kiss_register
 from podiumd_tests.kcc import kiss_sync_cronjob
 from podiumd_tests.kcc import vac_data
+from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.seed.registry import ResourceRegistry
 
 KISS = "https://kiss.example.test"
@@ -92,3 +95,29 @@ def test_search_content_carries_the_title():
     artikel = kennisartikel_data("Afval ophalen")
     assert artikel["url"] == KENNIS_URL + "Afval%20ophalen"
     assert artikel["vertalingen"][0]["titel"] == "Afval ophalen"  # pyright: ignore[reportIndexIssue]
+
+
+ITA = "https://ita.example.test"
+ADD = "/api/klantcontacten/add-klantcontact"
+LOGBOEK_409 = {
+    "code": "UNEXPECTED_ERROR",
+    "message": "Response status code does not indicate success: 403 (Forbidden).",
+}
+
+
+def test_add_klantcontact_names_the_edge_cause_of_objectens_403(fake_http):
+    fake_http({ADD: (409, LOGBOEK_409)})
+    with pytest.raises(UnexpectedStatusError, match="bufferRequestBody"):
+        add_klantcontact(requests.Session(), ITA, {})
+
+
+def test_add_klantcontact_other_failures_get_no_hint(fake_http):
+    fake_http({ADD: (500, {"detail": "boom"})})
+    with pytest.raises(UnexpectedStatusError) as raised:
+        add_klantcontact(requests.Session(), ITA, {})
+    assert LOGBOEK_HINT not in str(raised.value)
+
+
+def test_add_klantcontact_returns_the_response(fake_http):
+    fake_http({ADD: (201, {})})
+    assert add_klantcontact(requests.Session(), ITA, {}).status_code == 201

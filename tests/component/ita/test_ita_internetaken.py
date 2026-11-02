@@ -20,11 +20,11 @@ from podiumd_tests.clients.platform import mailpit_client
 from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.kcc import add_klantcontact
 from podiumd_tests.kcc import expect_ita_group_access_bug
 from podiumd_tests.kcc import ita_detail_text
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.mailpit import received
-from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.objecten import clean_up_logboek
@@ -136,9 +136,8 @@ def test_answering_an_internetaak_registers_a_klantcontact(
         "aanleidinggevendKlantcontactUuid": aanleiding["uuid"],
         "klantcontactRequest": {k: v for k, v in antwoord.items() if k != "nummer"},
     }
-    response = ita.post(urls["ita"] + "/api/klantcontacten/add-klantcontact", json=body)
+    add_klantcontact(ita, urls["ita"], body)
     found = klantcontacten_about(openklant, onderwerp)
-    assert response.status_code in {HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.NO_CONTENT}, describe(response)
     assert [k["indicatieContactGelukt"] for k in found] == [False]
 
 
