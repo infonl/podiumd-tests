@@ -42,6 +42,9 @@ secrets:
     k8s_secret: {name: keycloak-podiumd-admin, key: password}
   kiss_elastic_password:
     k8s_secret: {name: kiss-es-elastic-user, key: elastic}
+  # KISS's Objecten token for its logboek (Activiteitenlog).
+  kiss_logboek_token:
+    k8s_secret: {name: contact, key: LOGBOEK_TOKEN}
   # Grafana's own admin (basic auth), from the monitoring stack podiumd-infra deploys with
   # grafana-deploy=true. grafana-admin in Key Vault is a Keycloak SSO user and cannot log in with basic auth.
   grafana_username:
