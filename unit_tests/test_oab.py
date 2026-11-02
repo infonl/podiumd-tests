@@ -27,7 +27,7 @@ def test_ui_login_fills_the_form_once_the_spa_enabled_it(monkeypatch, fake_page,
         ("fill", "label:Wachtwoord", "pw-" + django_secret_key("openarchiefbeheer", "record-manager")),
         ("click", "button:Inloggen"),
     ]
-    assert page.waits == ["**/destruction-lists"]
+    assert page.waits == ["document.cookie.includes('csrftoken=')", "**/destruction-lists"]
 
 
 def test_login_echoes_the_csrf_token_and_takes_the_rotated_one(fake_http, page_env, monkeypatch):

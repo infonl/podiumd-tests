@@ -41,6 +41,8 @@ def ui_login(page: Page, env: Environment, role: str) -> None:
     page.goto(env.profile.urls["openarchiefbeheer"] + "/login")
     # The SPA renders the form after its own requests; filling it earlier loses the input.
     expect(page.get_by_role("button", name="Inloggen")).to_be_enabled()
+    # The button is enabled before whoami sets csrftoken; a login without it gets 403 session_expired.
+    page.wait_for_function("document.cookie.includes('csrftoken=')")
     page.get_by_label("Gebruikersnaam").fill(credentials["username"])
     page.get_by_label("Wachtwoord").fill(credentials["password"])
     page.get_by_role("button", name="Inloggen").click()
