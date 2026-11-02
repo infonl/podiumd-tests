@@ -193,11 +193,12 @@ def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(  # pylint: 
 
 
 @pytest.mark.requires("kiss", "objecten", "cluster")
+# Non-strict: an estate setting; environments with helm-charts #684's permission (minikube, kees00) pass.
 @pytest.mark.xfail(
-    strict=True,
-    reason="[kiss-2] reference configuration (ExternalsPodiumD, podiumd-infra, minikube): KISS's Objecten token"
+    strict=False,
+    reason="[kiss-2] reference configuration (ExternalsPodiumD, podiumd-infra): KISS's Objecten token"
     " (LOGBOEK_TOKEN) has no permission on Activiteitenlog, only ITA's has; Objecten answers 200 with"
-    " an empty list, so KISS shows none of ITA's activities",
+    " an empty list, so KISS shows none of ITA's activities; fix: helm-charts #684 migrate script",
 )
 @pytest.mark.source(
     "podiumd-tests",
