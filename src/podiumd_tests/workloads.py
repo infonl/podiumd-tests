@@ -284,8 +284,26 @@ def _job_failed(job: Item) -> bool:
     return any(c.get("type") == "Failed" and c.get("status") == "True" for c in conditions)
 
 
-def failed_jobs(jobs: Sequence[Item]) -> list[str]:
-    """Jobs that failed: every standalone Job, and the latest Job of each CronJob."""
+KEYCLOAKS = "keycloaks.k8s.keycloak.org"
+
+
+def recreate_update_jobs(keycloaks: Sequence[Item]) -> set[str]:
+    """Update Jobs of Keycloak CRs that fail by design: exit 3 makes the operator recreate Keycloak.
+
+    Any other exit code gives a different RecreateUpdateUsed message, so a broken update Job still counts.
+    """
+    return {
+        f"{metadata_name(k)}-update-job"
+        for k in keycloaks
+        for c in entries(section(k, "status").get("conditions"))
+        if c.get("type") == "RecreateUpdateUsed"
+        and c.get("status") == "True"
+        and str(c.get("message", "")).startswith("Incompatible changes detected")
+    }
+
+
+def failed_jobs(jobs: Sequence[Item], keycloaks: Sequence[Item] = ()) -> list[str]:
+    """Jobs that failed: every standalone Job, and the latest Job of each CronJob; not a `recreate_update_jobs` one."""
     latest: dict[str, Item] = {}
     standalone: list[Item] = []
     for job in jobs:
@@ -297,7 +315,10 @@ def failed_jobs(jobs: Sequence[Item]) -> list[str]:
         current = latest.get(cronjob)
         if current is None or created > str(section(current, "metadata").get("creationTimestamp", "")):
             latest[cronjob] = job
-    return sorted(metadata_name(j) for j in [*standalone, *latest.values()] if _job_failed(j))
+    expected = recreate_update_jobs(keycloaks)
+    return sorted(
+        metadata_name(j) for j in [*standalone, *latest.values()] if _job_failed(j) and metadata_name(j) not in expected
+    )
 
 
 @contextmanager

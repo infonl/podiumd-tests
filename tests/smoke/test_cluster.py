@@ -13,6 +13,7 @@ from podiumd_tests.hygiene import without_disruption_budget
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.redis import REDIS_HA
+from podiumd_tests.workloads import KEYCLOAKS
 from podiumd_tests.workloads import chart_older_than
 from podiumd_tests.workloads import failed_jobs
 from podiumd_tests.workloads import unhealthy_pods
@@ -70,7 +71,8 @@ def test_pods_healthy(podiumd_env: Environment) -> None:
 )
 def test_jobs_succeeded(podiumd_env: Environment) -> None:
     """No setup Job failed, and the latest run of each CronJob did not fail."""
-    failed = failed_jobs(podiumd_env.items("jobs"))
+    keycloaks = podiumd_env.items(KEYCLOAKS) if "keycloak-operator" in podiumd_env.deployment_names else []
+    failed = failed_jobs(podiumd_env.items("jobs"), keycloaks)
     assert not failed, f"failed jobs: {failed}"
 
 

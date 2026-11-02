@@ -13,6 +13,7 @@ from podiumd_tests.workloads import component_versions
 from podiumd_tests.workloads import deployed_build
 from podiumd_tests.workloads import disruptions
 from podiumd_tests.workloads import failed_jobs
+from podiumd_tests.workloads import recreate_update_jobs
 from podiumd_tests.workloads import run_cronjob
 from podiumd_tests.workloads import scaled
 from podiumd_tests.workloads import unhealthy_pods
@@ -67,6 +68,21 @@ def test_failed_jobs_counts_only_the_latest_cronjob_run():
         job("other-1", failed=True, cronjob="other"),
     ]
     assert failed_jobs(jobs) == ["other-1", "setup"]
+
+
+def keycloak(name, message):
+    condition = {"type": "RecreateUpdateUsed", "status": "True", "message": message}
+    return {"metadata": {"name": name}, "status": {"conditions": [condition]}}
+
+
+def test_failed_jobs_skips_an_update_job_that_asked_for_a_recreate():
+    keycloaks = [
+        keycloak("keycloak", "Incompatible changes detected. Check update job for details."),
+        keycloak("other", "Unexpected update-compatibility command exit code (1). Check update job for details."),
+    ]
+    assert recreate_update_jobs(keycloaks) == {"keycloak-update-job"}
+    jobs = [job("keycloak-update-job", failed=True), job("other-update-job", failed=True)]
+    assert failed_jobs(jobs, keycloaks) == ["other-update-job"]
 
 
 def test_scaled_restores_the_replicas_also_when_the_block_fails(fake_runner):
