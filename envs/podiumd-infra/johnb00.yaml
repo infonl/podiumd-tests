@@ -29,6 +29,8 @@ urls:
   # OpenBao's API listener; no ingress on johnb00.
   openbao: http://podiumd-openbao.podiumd.svc.cluster.local:8200
 settings:
+  # Kyverno ClusterPolicy redirect-registries rewrites Docker Hub images to this mirror; the step compares images.
+  mock_server_image: podiumdregistry.azurecr.io/dockerhub/library/python:3.13-alpine
   # podiumd's e2e zaaktype. ZAC's zaakafhandelparameters for it are runtime data, seeded on
   # 2026-10-13 with productaanvraagtype productaanvraag-e2e-test (podiumd-infra seed script).
   productaanvraag_type: productaanvraag-e2e-test
