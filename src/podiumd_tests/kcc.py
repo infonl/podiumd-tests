@@ -10,10 +10,12 @@ from typing import TYPE_CHECKING
 from urllib.parse import quote
 
 import pytest
+import yaml
 
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.browser import challenge_login
 from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import expect_status
@@ -126,6 +128,23 @@ def kiss_sync_cronjob(env: Environment, source: str) -> str:
     """The name of KISS's elastic-sync CronJob for a search source (vac, kennisbank), e.g. contact-vac-sync."""
     names = [metadata_name(c) for c in env.items("cronjobs")]
     return next(n for n in names if n.endswith(f"-{source}-sync"))
+
+
+def kiss_website_crawlers(env: Environment) -> dict[str, str]:
+    """KISS's website crawler CronJobs (kiss.settings.syncJobs.website), each with the URL it crawls.
+
+    The KISS chart names the Secret with the crawler's crawler.yml after its CronJob.
+    """
+    names = [n for n in (metadata_name(c) for c in env.items("cronjobs")) if "-crawler-website-" in n]
+    return {
+        n: str(entries(yaml.safe_load(env.kube.secret_value(n, "crawler.yml")).get("domains"))[0]["url"]) for n in names
+    }
+
+
+def kiss_search_hits(kiss: requests.Session, kiss_url: str, query: str) -> list[JsonObject]:
+    """The hits of KISS's search for the query in all its sources."""
+    response = kiss.post(kiss_url + "/api/search", json={"query": query, "page": 1, "filters": []})
+    return entries(section(expect_status(response, HTTPStatus.OK).json(), "hits").get("hits"))
 
 
 def vac_data(titel: str, antwoord: str = "Antwoord van podiumd-tests.") -> dict[str, object]:

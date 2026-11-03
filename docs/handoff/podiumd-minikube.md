@@ -20,3 +20,21 @@ Why it matters for the tests: the node's 6 CPUs limit the full tier, not the lap
 (podiumd 4.10.0, one pod per component) the full tier took 634-648 s with 4 pytest workers and 573 s with 6. With 6
 workers the minikube container ran at about 434% of its 600% limit, and 4 more tests failed through contention
 (Open Inwoner search, Open Zaak autorisaties).
+
+## KISS website as ExternalsPodiumD (Kees, 2026-11-03)
+
+`tests/integration/test_kiss_website.py` runs KISS's website crawler CronJob and searches KISS for the crawled
+site. It skips while `kiss.settings.syncJobs.website` is empty. Kees wants minikube to crawl the site that
+ExternalsPodiumD's dimp ontw and dimp test crawl:
+
+```yaml
+kiss:
+  settings:
+    syncJobs:
+      website:
+        - sourceName: "Website"
+          domain: "https://www.dimpact.nl"
+          schedule: "0 7 * * 1-5"
+```
+
+This makes the plan.md note "Not taken: ... the KISS website crawler (no app or test uses them here)" outdated.

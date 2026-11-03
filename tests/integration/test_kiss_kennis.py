@@ -7,19 +7,16 @@ and, at cleanup, again after deleting the object, so the index drops it.
 
 from __future__ import annotations
 
-from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
 
 from podiumd_tests.bootstrap.steps import KCC
-from podiumd_tests.json_data import entries
-from podiumd_tests.json_data import section
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.kcc import kennisartikel_data
+from podiumd_tests.kcc import kiss_search_hits
 from podiumd_tests.kcc import kiss_sync_cronjob
 from podiumd_tests.kcc import vac_data
-from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.wait import wait_until
@@ -72,10 +69,7 @@ def test_object_is_found_in_kiss_search(  # pylint: disable=too-many-arguments,t
     kiss = kcc_login(page, podiumd_env, "kiss")
 
     def found() -> bool:
-        response = kiss.post(
-            podiumd_env.profile.urls["kiss"] + "/api/search", json={"query": titel, "page": 1, "filters": []}
-        )
-        hits = entries(section(expect_status(response, HTTPStatus.OK).json(), "hits").get("hits"))
+        hits = kiss_search_hits(kiss, podiumd_env.profile.urls["kiss"], titel)
         return any(titel in str(hit.get("_source")) for hit in hits)
 
     # Elasticsearch shows new documents only after its next index refresh, which lags under load.

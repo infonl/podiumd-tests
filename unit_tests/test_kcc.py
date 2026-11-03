@@ -18,7 +18,9 @@ from podiumd_tests.kcc import kcc_login
 from podiumd_tests.kcc import kennisartikel_data
 from podiumd_tests.kcc import kiss_klantcontact
 from podiumd_tests.kcc import kiss_register
+from podiumd_tests.kcc import kiss_search_hits
 from podiumd_tests.kcc import kiss_sync_cronjob
+from podiumd_tests.kcc import kiss_website_crawlers
 from podiumd_tests.kcc import vac_data
 from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.seed.registry import ResourceRegistry
@@ -88,6 +90,28 @@ def test_kiss_sync_cronjob_finds_the_cronjob_of_the_source():
         items=lambda _kind: [{"metadata": {"name": n}} for n in ("contact-vac-sync", "contact-kennisbank-sync")]
     )
     assert kiss_sync_cronjob(env, "kennisbank") == "contact-kennisbank-sync"  # pyright: ignore[reportArgumentType]
+
+
+def test_kiss_website_crawlers_reads_the_url_of_each_crawler():
+    names = ("contact-vac-sync", "contact-crawler-website-0", "contact-crawler-index-template")
+    secrets = {("contact-crawler-website-0", "crawler.yml"): "domains:\n  - url: https://www.dimpact.nl\n"}
+    env = SimpleNamespace(
+        items=lambda _kind: [{"metadata": {"name": n}} for n in names],
+        kube=SimpleNamespace(secret_value=lambda name, key: secrets[name, key]),
+    )
+    assert kiss_website_crawlers(env) == {"contact-crawler-website-0": "https://www.dimpact.nl"}  # pyright: ignore[reportArgumentType]
+
+
+def test_kiss_search_hits_posts_the_query_to_all_sources(response_factory):
+    posted = []
+
+    def post(url, json):
+        posted.append((url, json))
+        return response_factory(json_body={"hits": {"hits": [{"_source": {"url_host": "www.dimpact.nl"}}]}})
+
+    hits = kiss_search_hits(SimpleNamespace(post=post), KISS, "dimpact")  # pyright: ignore[reportArgumentType]
+    assert hits == [{"_source": {"url_host": "www.dimpact.nl"}}]
+    assert posted == [(KISS + "/api/search", {"query": "dimpact", "page": 1, "filters": []})]
 
 
 def test_search_content_carries_the_title():
