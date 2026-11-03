@@ -51,9 +51,12 @@ def test_objecttype_is_published(podiumd_env: Environment, name: str) -> None:
     + [requiring("kiss", n, test_id=n) for n in KISS_OBJECTTYPES],
 )
 def test_api_serves_the_objecttype_with_its_schema(objecttypen: ApiClient, name: str) -> None:
-    """The API lists the objecttype by name, and its newest version carries a JSON schema."""
+    """The API lists the objecttype once by name, and its newest version carries a JSON schema.
+
+    Once: podiumd's create-required-objecttypen Job runs on every upgrade and must not create it again.
+    """
     found = [t for t in objecttypen.list("objecttypes", {"name": name}) if t.get("name") == name]
-    assert found, f"Objecttypen API lists no objecttype {name}"
+    assert len(found) == 1, f"Objecttypen API lists {len(found)} objecttypes named {name}, expected 1"
     versions = strings(found[0].get("versions"))
     newest = objecttypen.get(max(versions, key=lambda url: int(url.rstrip("/").rsplit("/", 1)[-1])))
     assert section(newest, "jsonSchema"), f"{name}: newest version has no jsonSchema"
