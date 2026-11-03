@@ -24,6 +24,7 @@ import pytest
 from playwright.sync_api import expect
 
 from podiumd_tests.bootstrap.names import PREFIX
+from podiumd_tests.bootstrap.names import PRODUCTAANVRAAG_OBJECTTYPE
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.bootstrap.names import TEST_ZAAKTYPE
 from podiumd_tests.bootstrap.steps import OAB_ROLES
@@ -40,6 +41,8 @@ from podiumd_tests.oab import set_archive_config
 from podiumd_tests.oab import ui_login
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.objecten import make_productaanvraag
+from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import close_zaak
 from podiumd_tests.seed.openzaak import delete_zaak
@@ -810,6 +813,16 @@ def destroy(  # pylint: disable=too-many-arguments,too-many-positional-arguments
                 delete_zaak(openzaak, str(rapport["url"]), with_documents=True)
 
     registry.add(f"destruction report of {naam}", delete_report)
+    assert run_destruction(podiumd_env, oab, api, lijst) == "succeeded"
+    assert status(oab, api, lijst) == "deleted"
+    report = oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/download_report/")
+    # An xlsx: its cell texts are in the shared strings.
+    with zipfile.ZipFile(io.BytesIO(expect_status(report, HTTPStatus.OK).content)) as workbook:
+        return workbook.read("xl/sharedStrings.xml").decode()
+
+
+def run_destruction(podiumd_env: Environment, oab: Callable[[str], requests.Session], api: str, lijst: str) -> str:
+    """Queue the list and destroy it now; its processingStatus once OAB has finished (succeeded, failed)."""
     queue(oab, api, lijst)
     destroy_now(podiumd_env, lijst)
 
@@ -817,12 +830,7 @@ def destroy(  # pylint: disable=too-many-arguments,too-many-positional-arguments
         found = expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/"), HTTPStatus.OK).json()
         return None if found["processingStatus"] in {"new", "queued", "processing"} else str(found["processingStatus"])
 
-    assert wait_until(processed, timeout=120, description=f"destruction of list {lijst}") == "succeeded"
-    assert status(oab, api, lijst) == "deleted"
-    report = oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/download_report/")
-    # An xlsx: its cell texts are in the shared strings.
-    with zipfile.ZipFile(io.BytesIO(expect_status(report, HTTPStatus.OK).content)) as workbook:
-        return workbook.read("xl/sharedStrings.xml").decode()
+    return wait_until(processed, timeout=120, description=f"destruction of list {lijst}")
 
 
 def report_config(parts: ZaaktypeParts) -> dict[str, object]:
@@ -856,6 +864,39 @@ def test_destruction_deletes_the_zaak_and_leaves_a_report(  # pylint: disable=to
     openzaak.request("GET", str(zaak["url"]), HTTPStatus.NOT_FOUND)
     assert str(zaak["identificatie"]) in report
     assert [c for c in REPORT_COLUMNS if c not in report] == []
+
+
+@pytest.mark.destructive
+@pytest.mark.requires("objecten")
+@pytest.mark.source(
+    "podiumd-tests",
+    "Destroying a zaak also deletes its productaanvraag in Objecten, which needs OAB's token to write that objecttype.",
+)
+def test_destruction_deletes_the_productaanvraag_of_the_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    podiumd_env: Environment,
+    oab: Callable[[str], requests.Session],
+    api: str,
+    openzaak: ApiClient,
+    objecten: ApiClient,
+    zaak: JsonObject,
+    registry: ResourceRegistry,
+) -> None:
+    """OAB deletes the productaanvraag object linked to the zaak before it deletes the zaak itself."""
+    kenmerk = registry.tagged("oab-productaanvraag")
+    aanvraag = make_productaanvraag(
+        objecten, registry, objecttype_url(podiumd_env, PRODUCTAANVRAAG_OBJECTTYPE), kenmerk, kenmerk
+    )
+    link = {
+        "zaak": zaak["url"],
+        "object": aanvraag["url"],
+        "objectType": "overige",
+        "objectTypeOverige": "productaanvraag",
+    }
+    zaakobject = openzaak.post(f"{ZAKEN}/zaakobjecten", link)
+    registry.add("zaakobject", lambda: openzaak.delete(str(zaakobject["url"])))
+    # The list itself may fail on the zaak (open-archiefbeheer-4); the objects go first.
+    run_destruction(podiumd_env, oab, api, ready_to_delete(oab, api, zaak, registry))
+    objecten.request("GET", str(aanvraag["url"]), HTTPStatus.NOT_FOUND)
 
 
 @pytest.mark.destructive
