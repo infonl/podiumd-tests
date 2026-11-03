@@ -205,9 +205,6 @@ class FakePage:  # pylint: disable=too-many-instance-attributes  # one per Page 
         if self.landings:
             self.url = self.landings.pop(0)
 
-    def wait_for_function(self, script):
-        self.waits.append(script)
-
     def wait_for_timeout(self, ms):
         self.actions.append(("pause", ms))
 

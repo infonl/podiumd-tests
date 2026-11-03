@@ -14,6 +14,7 @@ from podiumd_tests.bootstrap.names import PREFIX
 from podiumd_tests.bootstrap.steps import django_secret_key
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.responses import expect_status
+from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import component_versions
 
 if TYPE_CHECKING:
@@ -42,7 +43,13 @@ def ui_login(page: Page, env: Environment, role: str) -> None:
     # The SPA renders the form after its own requests; filling it earlier loses the input.
     expect(page.get_by_role("button", name="Inloggen")).to_be_enabled()
     # The button is enabled before whoami sets csrftoken; a login without it gets 403 session_expired.
-    page.wait_for_function("document.cookie.includes('csrftoken=')")
+    # Read from the context: OAB's CSP refuses the eval of page.wait_for_function.
+    wait_until(
+        lambda: any(c.get("name") == "csrftoken" for c in page.context.cookies()) or None,
+        timeout=10,
+        interval=0.2,
+        description="Open Archiefbeheer sets the csrftoken cookie",
+    )
     page.get_by_label("Gebruikersnaam").fill(credentials["username"])
     page.get_by_label("Wachtwoord").fill(credentials["password"])
     page.get_by_role("button", name="Inloggen").click()

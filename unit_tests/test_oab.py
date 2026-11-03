@@ -18,7 +18,7 @@ def test_ui_login_fills_the_form_once_the_spa_enabled_it(monkeypatch, fake_page,
     monkeypatch.setattr(
         oab, "expect", lambda locator: type("E", (), {"to_be_enabled": lambda _s: enabled.append(locator.key)})()
     )
-    page = fake_page()
+    page = fake_page(cookies=[{"name": "csrftoken"}])
     oab.ui_login(page, page_env(), "record-manager")
     assert enabled == ["button:Inloggen"]
     assert page.actions == [
@@ -27,7 +27,7 @@ def test_ui_login_fills_the_form_once_the_spa_enabled_it(monkeypatch, fake_page,
         ("fill", "label:Wachtwoord", "pw-" + django_secret_key("openarchiefbeheer", "record-manager")),
         ("click", "button:Inloggen"),
     ]
-    assert page.waits == ["document.cookie.includes('csrftoken=')", "**/destruction-lists"]
+    assert page.waits == ["**/destruction-lists"]
 
 
 def test_login_echoes_the_csrf_token_and_takes_the_rotated_one(fake_http, page_env, monkeypatch):
