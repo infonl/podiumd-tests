@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 
+from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -50,8 +51,14 @@ SWEEP_TAG = "podiumd-tests-sweep"
 
 
 def format_swept(swept: list[Swept]) -> str:
-    """One line per leftover or skipped kind, for the terminal."""
-    lines = [f"{s.action:<8} {s.kind:<20} {s.name} {s.detail}".rstrip() for s in swept]
+    """One line per leftover or skipped kind, and one count of the kept objects, for the terminal."""
+    lines = [f"{s.action:<8} {s.kind:<20} {s.name} {s.detail}".rstrip() for s in swept if s.action != "kept"]
+    kept = Counter(s.kind for s in swept if s.action == "kept")
+    if kept:
+        kinds = ", ".join(f"{kind} {count}" for kind, count in kept.items())
+        lines.append(
+            f"kept     {kept.total()} run-tagged objects of runs after the cutoff ({kinds}): lower --older-than"
+        )
     return "\n".join(lines) or "nothing to sweep"
 
 
@@ -180,7 +187,7 @@ class Swept:
 
     kind: str
     name: str
-    action: str  # "deleted", "found" (dry run), "failed" or "skipped"
+    action: str  # "deleted", "found" (dry run), "failed", "skipped" or "kept" (run after the cutoff)
     detail: str = ""
 
 
@@ -194,6 +201,8 @@ def _sweep_items(
     swept: list[Swept] = []
     for item in items:
         if not is_stale(item, cutoff):
+            if RUN_TAG.search(json.dumps(item)):
+                swept.append(Swept(kind, _name(item), "kept"))
             continue
         if dry_run:
             swept.append(Swept(kind, _name(item), "found"))

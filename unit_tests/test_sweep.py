@@ -75,6 +75,13 @@ def test_format_swept():
     assert format_swept([]) == "nothing to sweep"
 
 
+def test_format_swept_counts_the_kept_objects_per_kind():
+    kept = [Swept("zaak", "z/1", "kept"), Swept("zaak", "z/2", "kept"), Swept("mail", "m1", "kept")]
+    assert format_swept(kept) == (
+        "kept     3 run-tagged objects of runs after the cutoff (zaak 2, mail 1): lower --older-than"
+    )
+
+
 OLD = f"ptest-{new_run_id(NOW - timedelta(days=2))}"
 FRESH = f"ptest-{new_run_id(NOW)}"
 
@@ -102,7 +109,12 @@ def test_sweep_deletes_stale_mails_and_forms_and_skips_what_it_cannot_reach(swep
         swept_env({"mailpit", "openformulieren", "cluster"}), NOW - timedelta(hours=24), dry_run=False
     )
     by_action = {(s.kind, s.action, s.name) for s in swept if s.action != "skipped"}
-    assert by_action == {("mail", "deleted", f"{OLD}-mail"), ("form", "deleted", f"{OLD}-form")}
+    assert by_action == {
+        ("mail", "deleted", f"{OLD}-mail"),
+        ("form", "deleted", f"{OLD}-form"),
+        ("mail", "kept", f"{FRESH}-mail"),
+        ("form", "kept", f"{FRESH}-form"),
+    }
     assert removed == [f"{OLD}-form"]
     assert [s.method for s in sent].count("DELETE") == 2  # one per Mailpit finder
     skipped = {s.kind: s.detail for s in swept if s.action == "skipped"}
