@@ -55,8 +55,8 @@ MINIMAL_PDF = (
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
-def minimal_docx(text: str) -> bytes:
-    """A Word document with one paragraph, as small as LibreOffice (ZAC's office converter) still opens."""
+def minimal_docx(text: str, paragraphs: int = 1) -> bytes:
+    """A Word document with the text in each paragraph, as small as LibreOffice (ZAC's office converter) still opens."""
     parts = {
         "[Content_Types].xml": (
             '<?xml version="1.0" encoding="UTF-8"?>'
@@ -77,7 +77,7 @@ def minimal_docx(text: str) -> bytes:
         "word/document.xml": (
             '<?xml version="1.0" encoding="UTF-8"?>'
             '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
-            f"<w:body><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:body></w:document>"
+            f"<w:body>{f'<w:p><w:r><w:t>{text}</w:t></w:r></w:p>' * paragraphs}</w:body></w:document>"
         ),
     }
     buffer = io.BytesIO()
@@ -93,6 +93,8 @@ FILES = {
     "pdf": ("application/pdf", MINIMAL_PDF),
     "docx": (DOCX, b"versie 1"),
     "word": (DOCX, minimal_docx("podiumd-tests")),
+    # About 300 pages: LibreOffice's memory grows with them; gotenberg stops a conversion after 30 s.
+    "large-word": (DOCX, minimal_docx("podiumd-tests " * 20, paragraphs=10_000)),
 }
 # The reason ZAC always offers for aborting a zaak.
 NIET_ONTVANKELIJK = "ZAAK_NIET_ONTVANKELIJK"
@@ -318,7 +320,7 @@ def uploaded_document(  # pylint: disable=too-many-arguments  # fixtures and two
     if not types:
         pytest.skip(f"zaaktype {section(zaak, 'zaaktype').get('identificatie')} has no informatieobjecttypen")
     formaat, content = FILES[suffix]
-    name = f"{registry.tagged('document')}.{'docx' if suffix == 'word' else suffix}"
+    name = f"{registry.tagged('document')}.{'docx' if suffix.endswith('word') else suffix}"
     form = {
         "titel": name,
         "bestandsnaam": name,
@@ -421,14 +423,19 @@ def test_sent_document_is_marked_verzonden(
     "podiumd-tests",
     "ZAC converts a Word document to PDF through its office converter (gotenberg); helm-charts #633 updates gotenberg.",
 )
+@pytest.mark.parametrize("suffix", ["word", "large-word"])
 def test_word_document_is_converted_to_pdf(
-    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    registry: ResourceRegistry,
+    suffix: str,
 ) -> None:
     """A definitief Word document converted in ZAC becomes a PDF: its current version has the PDF format and content."""
     zaak = zac_zaak()
-    document = uploaded_document(zac, urls["zac"], zaak, registry, suffix="word")
+    document = uploaded_document(zac, urls["zac"], zaak, registry, suffix=suffix)
     documents = f"{urls['zac']}/rest/informatieobjecten/informatieobject/{document['uuid']}"
-    converted = zac.post(f"{documents}/convert", params={"zaak": str(zaak["uuid"])})
+    converted = zac.post(f"{documents}/convert", params={"zaak": str(zaak["uuid"])}, timeout=60)
     expect_status(converted, HTTPStatus.NO_CONTENT, HTTPStatus.OK)
     current = expect_status(zac.get(documents, params={"zaak": str(zaak["uuid"])}), HTTPStatus.OK).json()
     assert current["formaat"] == "application/pdf", current.get("formaat")
