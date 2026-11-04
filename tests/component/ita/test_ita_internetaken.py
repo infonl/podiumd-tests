@@ -32,6 +32,7 @@ from podiumd_tests.kcc import weekday_hours_before
 from podiumd_tests.mailpit import received
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
+from podiumd_tests.results import TAG_PREFIX
 from podiumd_tests.seed.objecten import clean_up_logboek
 from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
@@ -107,8 +108,12 @@ def claim(ita: requests.Session, urls: dict[str, str], taak: JsonObject) -> None
 """)
 def test_afdelingen_and_groepen_are_seeded_together(ita: requests.Session, urls: dict[str, str]) -> None:
     """Afdelingen and groepen both answer, and are both empty or both filled (TA reg-77)."""
-    afdelingen = get_entries(ita, urls["ita"] + "/api/afdelingen")
-    groepen = get_entries(ita, urls["ita"] + "/api/groepen")
+
+    def seeded(path: str) -> list[JsonObject]:
+        # Other tests of the run create their own afdeling or groep (ptest-<run>-...) at the same time.
+        return [e for e in get_entries(ita, urls["ita"] + path) if not str(e.get("naam")).startswith(TAG_PREFIX)]
+
+    afdelingen, groepen = seeded("/api/afdelingen"), seeded("/api/groepen")
     assert bool(afdelingen) == bool(groepen), f"{len(afdelingen)} afdelingen, {len(groepen)} groepen"
 
 
