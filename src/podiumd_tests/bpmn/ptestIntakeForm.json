@@ -1,0 +1,40 @@
+{
+  "display": "form",
+  "name": "ptestIntakeForm",
+  "title": "Intake",
+  "path": "ptestintakeform",
+  "type": "form",
+  "components": [
+    {
+      "type": "textfield",
+      "key": "AM_TeamBehandelaar_Groep",
+      "label": "Groep",
+      "input": true
+    },
+    {
+      "type": "textfield",
+      "key": "AM_TeamBehandelaar_Medewerker",
+      "label": "Behandelaar",
+      "input": true
+    },
+    {
+      "type": "textfield",
+      "key": "ZK_Status",
+      "label": "Status",
+      "input": true
+    },
+    {
+      "type": "textfield",
+      "key": "ZK_Result",
+      "label": "Resultaat",
+      "input": true
+    },
+    {
+      "type": "button",
+      "key": "submit",
+      "label": "Submit",
+      "action": "submit",
+      "input": true
+    }
+  ]
+}

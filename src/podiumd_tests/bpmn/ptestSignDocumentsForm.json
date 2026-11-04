@@ -1,0 +1,36 @@
+{
+  "display": "form",
+  "name": "ptestSignDocumentsForm",
+  "title": "Sign documents",
+  "path": "ptestsigndocumentsform",
+  "type": "form",
+  "components": [
+    {
+      "type": "datagrid",
+      "key": "ZAAK_Documenten_Te_Ondertekenen",
+      "label": "Documents to sign",
+      "input": true,
+      "components": [
+        {
+          "type": "checkbox",
+          "key": "selected",
+          "label": "Selected",
+          "input": true
+        },
+        {
+          "type": "textfield",
+          "key": "titel",
+          "label": "Titel",
+          "input": true
+        }
+      ]
+    },
+    {
+      "type": "button",
+      "key": "submit",
+      "label": "Submit",
+      "action": "submit",
+      "input": true
+    }
+  ]
+}

@@ -13,9 +13,13 @@ from typing import cast
 
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.basisregistraties import EREBOS
+from podiumd_tests.bootstrap.bpmn import ZacBpmnProcess
 from podiumd_tests.bootstrap.keycloak import KeycloakRoles
 from podiumd_tests.bootstrap.keycloak import KeycloakUser
 from podiumd_tests.bootstrap.kiss import KissKanalen
+from podiumd_tests.bootstrap.names import BPMN_BESLUITTYPE
+from podiumd_tests.bootstrap.names import BPMN_IOT
+from podiumd_tests.bootstrap.names import BPMN_ZAAKTYPE
 from podiumd_tests.bootstrap.names import CATALOGI_SCOPES
 from podiumd_tests.bootstrap.names import ITA_OBJECTTYPES
 from podiumd_tests.bootstrap.names import KANALEN
@@ -665,6 +669,20 @@ STEPS: tuple[Step, ...] = (
             "besluittype": ZAAKBRUG_BESLUITTYPE,
         },
     ),
+    # The zaaktype of podiumd-tests' BPMN process in ZAC (step zac-bpmn-process).
+    SnippetStep(
+        "openzaak-zaaktype-bpmn",
+        ("openzaak", "zac"),
+        "openzaak_zaaktype",
+        None,
+        {
+            "domein": TEST_CATALOGUS_DOMEIN,
+            "rsin": TEST_CATALOGUS_RSIN,
+            "identificatie": BPMN_ZAAKTYPE,
+            "iot_omschrijving": BPMN_IOT,
+            "besluittype": BPMN_BESLUITTYPE,
+        },
+    ),
     # ZaakBrug's statuses on a zaak of an expired zaaktype version: version 1 valid in 2020, version 2 from 2021.
     SnippetStep(
         "openzaak-zaaktype-zaakbrug-versies",
@@ -894,6 +912,8 @@ STEPS: tuple[Step, ...] = (
     ZacParameters(ADMIN, "zac-email-confirmation", "zac_email_confirmation", EMAIL_CONFIRMATION),
     # ZAC's human task Aanvullende informatie for that zaaktype, where the profile allows it: the taken tests start it.
     ZacParameters(ADMIN, "zac-aanvullende-informatie", "zac_aanvullende_informatie", AANVULLENDE_INFORMATIE),
+    # podiumd-tests' BPMN process in ZAC, for zaaktype ptest-bootstrap-bpmn (needs PABC to know that zaaktype).
+    ZacBpmnProcess(ADMIN),
     # KISS's contactmoment kanalen, where the profile allows it (draaiboek KI-053-055).
     KissKanalen(ADMIN),
     # A besluittype for the zaaktype ZAC handles, where the profile allows it: ZAC's inrichtingscheck needs one.
