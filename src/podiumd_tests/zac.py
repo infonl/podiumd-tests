@@ -33,6 +33,8 @@ if TYPE_CHECKING:
 REINDEX_TIMEOUT = 1800
 # Objecten notifies, Open Notificaties delivers to ZAC, and ZAC starts the zaak and its case.
 PRODUCTAANVRAAG_TIMEOUT = 120
+# ZAC indexes a zaak in Solr after Open Notificaties tells it about the change.
+INDEX_TIMEOUT = 60
 
 
 def zac_session(env: Environment, username: str, password: str) -> requests.Session:
@@ -195,6 +197,15 @@ def zaak_listed(http: requests.Session, zac_url: str, identificatie: str, **flag
     """ZAC's search for zaken lists the zaak; flags are its alleen* filters (alleenOpenstaandeZaken: werkvoorraad)."""
     found = search(http, zac_url, type="ZAAK", zoeken={"ZAAK_IDENTIFICATIE": identificatie}, **flags)
     return any(r.get("identificatie") == identificatie for r in entries(found["resultaten"]))
+
+
+def wait_in_werkvoorraad(http: requests.Session, zac_url: str, identificatie: str) -> None:
+    """Wait until ZAC's werkvoorraad (its open zaken) lists the zaak."""
+    wait_until(
+        lambda: zaak_listed(http, zac_url, identificatie, alleenOpenstaandeZaken=True),
+        timeout=INDEX_TIMEOUT,
+        description=f"zaak {identificatie} in the werkvoorraad",
+    )
 
 
 def count_zaken_found(zac: requests.Session, zac_url: str, zaaktype_omschrijving: str) -> int:

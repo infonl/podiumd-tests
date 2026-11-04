@@ -18,6 +18,7 @@ from podiumd_tests.seed.objecten import make_productaanvraag
 from podiumd_tests.seed.openklant import make_submission_contact
 from podiumd_tests.zac import PRODUCTAANVRAAG_TIMEOUT
 from podiumd_tests.zac import productaanvraag_zaak
+from podiumd_tests.zac import wait_in_werkvoorraad
 
 if TYPE_CHECKING:
     import requests
@@ -93,14 +94,17 @@ def test_zac_mails_the_initiator_an_ontvangstbevestiging(  # pylint: disable=too
 @pytest.mark.tc("FB-008")
 @pytest.mark.requires("openformulieren")
 @pytest.mark.source("draaiboek FB-008", "A new form can be set up that links to ZAC.")
+@pytest.mark.source("ZAC features/3-open-formulieren.feature", "A submitted form becomes a zaak in ZAC's werkvoorraad.")
 @pytest.mark.scenario("""
     Given a new form in Open Formulieren that registers a productaanvraag in Objecten
     When an inwoner submits the form
     Then ZAC starts a zaak for it in Open Zaak
+    And the zaak is in ZAC's werkvoorraad
 """)
 def test_new_form_becomes_a_zac_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     podiumd_env: Environment,
     http: requests.Session,
+    zac: requests.Session,
     objecten: ApiClient,
     openzaak_productaanvraag: ApiClient,
     registry: ResourceRegistry,
@@ -141,4 +145,5 @@ def test_new_form_becomes_a_zac_zaak(  # pylint: disable=too-many-arguments,too-
             for o in objecten.list("objects", {"data_attr": f"bron__kenmerk__exact__{kenmerk}"})
         ],
     )
-    productaanvraag_zaak(openzaak_productaanvraag, registry, kenmerk)
+    zaak = productaanvraag_zaak(openzaak_productaanvraag, registry, kenmerk)
+    wait_in_werkvoorraad(zac, podiumd_env.profile.urls["zac"], str(zaak["identificatie"]))

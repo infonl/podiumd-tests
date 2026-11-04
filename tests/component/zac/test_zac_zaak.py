@@ -29,8 +29,10 @@ from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_with_person
+from podiumd_tests.zac import wait_in_werkvoorraad
 from podiumd_tests.zac import zaak_listed
 
 if TYPE_CHECKING:
@@ -44,8 +46,6 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "keycloak")]
 
-# ZAC indexes a zaak in Solr after Open Notificaties tells it about the change.
-INDEX_TIMEOUT = 60
 _, _, BEDRIJF = IDENTITIES
 # The smallest PDF a viewer opens: one empty page.
 MINIMAL_PDF = (
@@ -180,12 +180,7 @@ def test_zaak_with_an_initiator_is_in_the_werkvoorraad(
     person = zac.get(f"{urls['zac']}/rest/klanten/person/{initiator['temporaryPersonId']}")
     assert expect_status(person, HTTPStatus.OK).json()["bsn"] == EREBOS
     assert "ONTVANGSTBEVESTIGING_NIET_VERSTUURD" in strings(zaak.get("indicaties"))
-    identificatie = str(zaak["identificatie"])
-    wait_until(
-        lambda: zaak_listed(zac, urls["zac"], identificatie, alleenOpenstaandeZaken=True),
-        timeout=INDEX_TIMEOUT,
-        description=f"zaak {identificatie} in the werkvoorraad",
-    )
+    wait_in_werkvoorraad(zac, urls["zac"], str(zaak["identificatie"]))
 
 
 @pytest.mark.tc("ZAC-029", "ZAC-030", "ZAC-031")
