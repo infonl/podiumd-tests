@@ -1,15 +1,14 @@
 # Open requests for podiumd-infra
 
-## ClamAV on kees00, as ExternalsPodiumD (Kees, 2026-11-04)
+## ClamAV metrics on kees00, as ExternalsPodiumD (2026-11-04)
 
-kees00 runs no ClamAV: `helm_deploy.py:422` sets `clamav.enabled=false` unless the deploy gets `--clamav`, although
-`values/kees00/podiumd.yaml:92` sets `clamav.enabled: true`. Open Formulieren on kees00 has `enable_virus_scan=False`.
-ExternalsPodiumD sets no `clamav.enabled`; the chart counts a missing key as on (`podiumd.clamav.enabled` in
-`_helpers.tpl`), so it runs ClamAV, and the chart's configure-clamav Jobs turn on Open Formulieren's virus scan.
-minikube runs it too (`clamav-0`, `enable_virus_scan=True`, host `clamav:3310`).
+ClamAV runs on kees00 since podiumd-infra 7ddf377, but without its exporter: pod `clamav-0` has only the `clamav`
+container and there is no ServiceMonitor, so `test_every_component_reports_metrics` fails with "components without
+metrics in Prometheus: ['clamav']" (core 20261104-113142, the only failure). ExternalsPodiumD (dim1) sets
+`clamav.metrics.enabled: true` with `serviceMonitor.enabled: true` (interval 30s, scrapeTimeout 10s), as the chart's
+`values-enable-observability.yaml`; minikube runs the exporter too.
 
-Request: deploy kees00 with ClamAV, so the values file decides (`--clamav` by default for kees00, or no
-`clamav.enabled` override in section 2).
+Request: the same `clamav.metrics` block for kees00 (`values/kees00/podiumd.yaml`).
 
-Verify: StatefulSet `clamav` ready; Open Formulieren `GlobalConfiguration.enable_virus_scan` is true with
-`clamav_host` `clamav`; then `podiumd-tests run --env kees00 --tier core`.
+Verify: pod `clamav-0` has the `clamav-exporter` container, a ServiceMonitor for clamav exists, then
+`podiumd-tests run --env kees00 --tier core -- -k test_every_component_reports_metrics`.
