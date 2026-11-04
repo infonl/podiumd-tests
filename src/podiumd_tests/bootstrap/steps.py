@@ -49,6 +49,7 @@ from podiumd_tests.bootstrap.names import ZAAKBRUG_VERSIES_BESLUITTYPE
 from podiumd_tests.bootstrap.names import ZAAKBRUG_VERSIES_IOT
 from podiumd_tests.bootstrap.names import ZAAKBRUG_VERSIES_ZAAKTYPE
 from podiumd_tests.bootstrap.names import ZAAKBRUG_ZAAKTYPE
+from podiumd_tests.bootstrap.names import ZAC_FUNCTIONAL_ROLE
 from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_COMPONENTS
 from podiumd_tests.bootstrap.names import ZGW_NOAUTH_CLIENT_ID
@@ -413,7 +414,14 @@ OAB_ROLES = {
 ADMIN = KeycloakUser(
     "admin",
     # beheerders: podiumd's pabc-dataset.json maps it to every ZAC role in all domains (ExternalsPodiumD).
-    realm_roles=("Registreerders", "Behandelaar", "Coordinator", "Functioneel-beheerder", "beheerders"),
+    realm_roles=(
+        "Registreerders",
+        "Behandelaar",
+        "Coordinator",
+        "Functioneel-beheerder",
+        "beheerders",
+        ZAC_FUNCTIONAL_ROLE,
+    ),
     client_roles=(("pabc", "administrator"), ("kiss", "Beheerder"), ("kiss", "Redacteur")),
     groups=("beheerders",),
 )

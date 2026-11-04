@@ -32,6 +32,11 @@ TEST_BESLUITTYPE = "ptest-bootstrap-besluit"
 BPMN_ZAAKTYPE = "ptest-bootstrap-bpmn"
 BPMN_IOT = "ptest-bootstrap-bpmn-bijlage"
 BPMN_BESLUITTYPE = "ptest-bootstrap-bpmn-besluit"
+# ZAC's rights on podiumd-tests' own zaaktypen, apart from the estate's PABC dataset: a realm role of the test
+# admin, PABC's functional role of that name, and PABC's domain of those zaaktypen.
+ZAC_FUNCTIONAL_ROLE = "ptest-bootstrap-zac"
+ZAC_DOMAIN = "ptest-bootstrap"
+ZAC_APPLICATION_ROLES = ("behandelaar", "coordinator")
 # ZaakBrug drives ZDS, whose StUF zaaktype code is at most 10 characters; the klacht id (22) is too long.
 ZAAKBRUG_ZAAKTYPE = "ZBTESTPT"
 ZAAKBRUG_IOT = "ptest-bootstrap-zb-bijlage"

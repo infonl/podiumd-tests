@@ -1,5 +1,7 @@
 """Unit tests for PABC's decision endpoint, login and entity type management."""
 
+import json
+
 from contextlib import nullcontext
 
 import pytest
@@ -63,3 +65,49 @@ def test_admin_session_logs_in_on_a_headless_page(monkeypatch, page_env):
     monkeypatch.setattr(pabc, "headless_page", lambda _env: nullcontext("page"))
     monkeypatch.setattr(pabc, "login", lambda page, _env, user, _pw: (page, user))
     assert pabc.admin_session(page_env(), "beheerder", "pw") == ("page", "beheerder")
+
+
+def test_ensure_domain_creates_it_and_adds_only_missing_entity_types(fake_http):
+    sent = fake_http(
+        {
+            "GET /api/v1/domains": (200, [{"id": "d-1", "name": "ptest", "entityTypes": ["e-1"]}]),
+            "POST /api/v1/domains/d-1/entity-types/e-2": (204, None),
+        }
+    )
+    assert pabc.ensure_domain(requests.Session(), PABC, "ptest", ["e-1", "e-2"]) == "d-1"
+    assert [f"{s.method} {s.url.removeprefix(PABC)}" for s in sent if s.method == "POST"] == [
+        "POST /api/v1/domains/d-1/entity-types/e-2"
+    ]
+
+
+def test_ensure_functional_role_maps_only_the_missing_application_roles(fake_http):
+    roles = [
+        {"id": "a-1", "name": "behandelaar", "application": "zaakafhandelcomponent"},
+        {"id": "a-2", "name": "coordinator", "application": "zaakafhandelcomponent"},
+        {"id": "a-3", "name": "behandelaar", "application": "other"},
+    ]
+    mapped = [{"applicationRoleId": "a-1", "domain": "ptest"}]
+    sent = fake_http(
+        {
+            "GET /api/v1/functional-roles": (200, [{"id": "f-1", "name": "ptest-zac", "mappings": mapped}]),
+            "GET /api/v1/application-roles": (200, roles),
+            "POST /api/v1/functional-roles/f-1/mappings": (201, {}),
+        }
+    )
+    pabc.ensure_functional_role(
+        requests.Session(), PABC, "ptest-zac", "zaakafhandelcomponent", ("behandelaar", "coordinator"), "d-1"
+    )
+    posted = [json.loads(s.body) for s in sent if s.method == "POST"]
+    assert posted == [{"applicationRoleId": "a-2", "domainId": "d-1", "isAllEntityTypes": False}]
+    assert pabc.domain_mappings(requests.Session(), PABC, "ptest-zac") == 1
+
+
+def test_mapped_application_roles_of_one_entity_type():
+    decision = {
+        "results": [
+            {"entityType": {"id": "zt-1"}, "applicationRoles": [{"name": "behandelaar"}, {"name": "coordinator"}]},
+            {"applicationRoles": [{"name": "brp_zoeken"}]},
+        ]
+    }
+    assert pabc.mapped_application_roles(decision, "zt-1") == {"behandelaar", "coordinator"}
+    assert pabc.mapped_application_roles(decision, "zt-2") == set()

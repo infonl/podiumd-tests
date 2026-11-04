@@ -16,9 +16,15 @@ import pytest
 
 from podiumd_tests.bootstrap.bpmn import bpmn_zaaktype
 from podiumd_tests.bootstrap.bpmn import uuid_of
+from podiumd_tests.bootstrap.names import BPMN_ZAAKTYPE
+from podiumd_tests.bootstrap.names import ZAC_APPLICATION_ROLES
+from podiumd_tests.bootstrap.names import ZAC_FUNCTIONAL_ROLE
 from podiumd_tests.bootstrap.steps import ADMIN
+from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
+from podiumd_tests.pabc import decide
+from podiumd_tests.pabc import mapped_application_roles
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import ZAKEN
@@ -105,6 +111,27 @@ def signed_document(zac: requests.Session, zac_url: str, zaak: JsonObject, regis
     complete_task(zac, zac_url, open_task(zac, zac_url, uuid, SELECT), {"ZAAK_Documenten_Ondertekenen_Selectie": row})
     complete_task(zac, zac_url, open_task(zac, zac_url, uuid, SIGN), {"ZAAK_Documenten_Te_Ondertekenen": row})
     return document
+
+
+@pytest.mark.source(
+    "podiumd-tests",
+    "The BPMN tests must not depend on the estate's PABC dataset: bootstrap maps its own role in its own domain.",
+)
+@pytest.mark.scenario("""
+    Given podiumd-tests' own realm role, which bootstrap gives the test admin
+    When ZAC asks PABC for the rights of that role alone
+    Then PABC gives the roles behandelaar and coordinator on the BPMN test zaaktype
+    And on no zaaktype of the estate
+""")
+def test_bpmn_rights_come_from_podiumd_tests_own_pabc_role(
+    http: requests.Session, urls: dict[str, str], pabc_api_key: str, need_bootstrap: Callable[..., None]
+) -> None:
+    """PABC's decision for role ptest-bootstrap-zac alone covers the BPMN test zaaktype and nothing else."""
+    need_bootstrap("zac-bpmn-process")
+    decision = expect_status(decide(http, urls["pabc"], pabc_api_key, [ZAC_FUNCTIONAL_ROLE]), HTTPStatus.OK).json()
+    assert mapped_application_roles(decision, BPMN_ZAAKTYPE) == set(ZAC_APPLICATION_ROLES)
+    covered = {str(section(r, "entityType").get("id")) for r in entries(decision.get("results")) if r.get("entityType")}
+    assert covered == {BPMN_ZAAKTYPE}
 
 
 @pytest.mark.source(FEATURE, "Bob creates a BPMN zaak; it is in the werkvoorraad.")

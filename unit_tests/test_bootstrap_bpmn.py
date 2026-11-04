@@ -54,20 +54,26 @@ def test_configuration_links_the_process_to_the_zaaktype(monkeypatch):
     assert "productaanvraagtype" not in body
 
 
+LINK = {"bpmnProcessDefinitionKey": PROCESS_KEY, "zaaktypeUuid": "zt-1"}
+
+
 @pytest.mark.parametrize(
-    ("keys", "links", "present"),
+    ("keys", "links", "mappings", "present"),
     [
-        ([PROCESS_KEY], [{"bpmnProcessDefinitionKey": PROCESS_KEY, "zaaktypeUuid": "zt-1"}], True),
-        ([PROCESS_KEY], [{"bpmnProcessDefinitionKey": PROCESS_KEY, "zaaktypeUuid": "zt-old"}], False),
-        ([], [{"bpmnProcessDefinitionKey": PROCESS_KEY, "zaaktypeUuid": "zt-1"}], False),
+        ([PROCESS_KEY], [LINK], 2, True),
+        ([PROCESS_KEY], [{**LINK, "zaaktypeUuid": "zt-old"}], 2, False),
+        ([], [LINK], 2, False),
+        ([PROCESS_KEY], [LINK], 0, False),
     ],
 )
-def test_present_needs_the_process_and_a_link_to_the_current_zaaktype(monkeypatch, keys, links, present):
+def test_present_needs_the_process_a_link_and_the_pabc_role(monkeypatch, keys, links, mappings, present):
     answers = {bpmn.DEFINITIONS: [{"key": k} for k in keys], bpmn.CONFIGURATION: links}
     http = SimpleNamespace(get=lambda url: FakeResponse(status_code=200, body=answers[url.removeprefix("https://zac")]))
     step = ZacBpmnProcess(ADMIN)
     monkeypatch.setattr(ZacBpmnProcess, "_zac", lambda _self, _ctx: (http, "https://zac"))
     monkeypatch.setattr(ZacBpmnProcess, "_openzaak", staticmethod(lambda _ctx: FakeOpenZaak([ZAAKTYPE])))
+    monkeypatch.setattr(ZacBpmnProcess, "_pabc", lambda _self, _ctx: (None, "https://pabc"))
+    monkeypatch.setattr(bpmn, "domain_mappings", lambda _pabc, _url, _role: mappings)
     assert step.is_present(None) is present  # pyright: ignore[reportArgumentType]
 
 
