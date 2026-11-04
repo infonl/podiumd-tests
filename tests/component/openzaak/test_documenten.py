@@ -54,6 +54,11 @@ def new_version(openzaak: ApiClient, document: JsonObject, inhoud: str, **fields
     "A document is linked to a zaak in two steps, EnkelvoudigInformatieObject and ZaakInformatieObject, as ZGW prescribes.",
 )
 @pytest.mark.core
+@pytest.mark.scenario("""
+    Given a zaak and an informatieobject in Open Zaak
+    When the informatieobject is linked to the zaak
+    Then the zaak's zaakinformatieobjecten hold only that informatieobject
+""")
 def test_document_linked_to_zaak(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """A document linked to a zaak shows in the zaak's zaakinformatieobjecten (TA int-03)."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
@@ -74,6 +79,14 @@ def test_document_linked_to_zaak(openzaak: ApiClient, registry: ResourceRegistry
     "TA regression/51-document-crud-edges.spec.ts",
     "Document edge cases: gebruiksrecht, concept to definitief, ondertekening and integriteit.",
 )
+@pytest.mark.scenario("""
+    When an informatieobject without gebruiksrecht is uploaded to Open Zaak
+    Then it is version 1 with the content's size and a download link for that version
+    When it is locked, made definitief, signed and unlocked
+    Then it is version 2 with status definitief
+    When it gets new content the same way
+    Then it is version 3 with the new content's size
+""")
 def test_document_versions_and_definitief(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
@@ -99,6 +112,10 @@ def test_document_versions_and_definitief(
     "TA regression/51-document-crud-edges.spec.ts",
     "Document edge cases: gebruiksrecht, concept to definitief, ondertekening and integriteit.",
 )
+@pytest.mark.scenario("""
+    When an informatieobject is uploaded to Open Zaak with a SHA-256 integriteit and a digital ondertekening
+    Then Open Zaak stores the integriteit and the ondertekening as sent
+""")
 def test_document_integriteit_and_ondertekening(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
@@ -122,6 +139,11 @@ AUDITTRAIL_BUG = (
     "Document lifecycle: upload, sign, make definitief, add version 2 and unlock.",
 )
 @pytest.mark.xfail(strict=True, reason=AUDITTRAIL_BUG)
+@pytest.mark.scenario("""
+    Given an informatieobject in Open Zaak
+    When an API client with audittrail rights on the catalogus reads its audittrail
+    Then Open Zaak returns the audittrail
+""")
 def test_document_audittrail_with_catalogus_rights(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
@@ -145,6 +167,12 @@ LARGE_DOCUMENT = 3_000_000
     "upstream open-zaak/open-zaak CHANGELOG.rst",
     "1.31.0, #2592: documents with the same file name saved at the same time overwrote each other's content.",
 )
+@pytest.mark.scenario("""
+    Given four large informatieobjecten uploaded in parts under one bestandsnaam
+    When all four are unlocked at the same time
+    Then every unlock succeeds
+    And each informatieobject downloads its own content
+""")
 def test_large_documents_with_the_same_name_keep_their_own_content(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:

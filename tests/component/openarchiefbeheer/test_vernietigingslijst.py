@@ -286,6 +286,10 @@ def review(oab: Callable[[str], requests.Session], api: str, role: str, lijst: s
 
 
 @INT_142
+@pytest.mark.scenario("""
+    When a visitor without a session asks Open Archiefbeheer for the vernietigingslijsten
+    Then Open Archiefbeheer refuses the request
+""")
 def test_anonymous_lists_are_refused(http: requests.Session, api: str) -> None:
     """Without a session the vernietigingslijsten are refused (TA int-142)."""
     expect_status(http.get(api + "/destruction-lists/"), *REFUSED)
@@ -295,6 +299,11 @@ def test_anonymous_lists_are_refused(http: requests.Session, api: str) -> None:
 @INT_142
 @REG_143
 @REG_166
+@pytest.mark.scenario("""
+    Given a test user with one Open Archiefbeheer role
+    When the user asks Open Archiefbeheer for their own account
+    Then Open Archiefbeheer gives the user exactly the permissions of that role
+""")
 def test_role_permissions(oab: Callable[[str], requests.Session], api: str, role: str) -> None:
     """Each role's test user has exactly its role's permissions (TA int-142, reg-143 ABC-006/012, reg-166 ABC-036/037)."""
     me = expect_status(oab(role).get(api + "/whoami/"), HTTPStatus.OK).json()
@@ -306,6 +315,14 @@ def test_role_permissions(oab: Callable[[str], requests.Session], api: str, role
 @INT_142
 @REG_143
 @INT_168
+@pytest.mark.scenario("""
+    Given the record manager made a vernietigingslijst of one closed zaak
+    Then the list holds only that zaak
+    When the reviewer accepts the list
+    Then the list is internally reviewed
+    When the record manager hands it to the archivist and the archivist accepts it
+    Then the list is ready to delete
+""")
 def test_list_goes_through_both_reviews(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
 ) -> None:
@@ -323,6 +340,12 @@ def test_list_goes_through_both_reviews(
 @pytest.mark.tc("ABC-009", "ABC-016")
 @REG_143
 @REG_169
+@pytest.mark.scenario("""
+    Given a vernietigingslijst of one closed zaak, ready for review
+    When the reviewer rejects it, proposing to keep the zaak
+    Then the list asks the record manager for changes
+    And the record manager cannot hand it to the archivist
+""")
 def test_rejected_list_goes_back_to_the_record_manager(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
 ) -> None:
@@ -350,6 +373,11 @@ def test_rejected_list_goes_back_to_the_record_manager(
 @pytest.mark.source(
     "podiumd-tests", "OAB queues the review response task before its commit, so the worker can miss the response."
 )
+@pytest.mark.scenario("""
+    Given the record manager answers a review of a vernietigingslijst
+    When Open Archiefbeheer stores the answer
+    Then it hands the answer to its worker only once the answer is stored
+""")
 def test_review_response_is_queued_after_its_commit(podiumd_env: Environment) -> None:
     """ReviewResponseSerializer.create queues its task with transaction.on_commit, so the worker finds the response."""
     assert queues_review_response_on_commit(podiumd_env)
@@ -358,6 +386,13 @@ def test_review_response_is_queued_after_its_commit(podiumd_env: Environment) ->
 @pytest.mark.tc("ABC-015")
 @INT_168
 @REG_169
+@pytest.mark.scenario("""
+    Given a vernietigingslijst of one closed zaak
+    And the reviewer rejected it, proposing to keep the zaak
+    When the record manager declines the proposal
+    Then the list is ready for review again
+    And the zaak is still on the list
+""")
 def test_record_manager_response_sends_the_list_back_to_review(
     oab: Callable[[str], requests.Session],
     api: str,
@@ -384,6 +419,13 @@ def test_record_manager_response_sends_the_list_back_to_review(
     "draaiboek ABC-013",
     "The record manager can agree with all of the reviewer's proposals; the list goes back for review.",
 )
+@pytest.mark.scenario("""
+    Given a vernietigingslijst of two closed zaken
+    And the reviewer rejected it, proposing to keep one zaak
+    When the record manager agrees and gives that zaak a later archiefactiedatum
+    Then the list is ready for review again
+    And only the other zaak is on the list
+""")
 def test_record_manager_takes_the_proposals_over(
     oab: Callable[[str], requests.Session],
     api: str,
@@ -415,6 +457,13 @@ def test_record_manager_takes_the_proposals_over(
 @pytest.mark.source(
     "draaiboek ABC-012", "A proposal to keep a zaak forever must be able to leave its archiefactiedatum empty."
 )
+@pytest.mark.scenario("""
+    Given a vernietigingslijst of two closed zaken
+    And the reviewer rejected it, proposing to keep one zaak forever
+    When the record manager agrees and empties that zaak's archiefactiedatum
+    Then the list is ready for review again
+    And the zaak in Open Zaak has no archiefactiedatum
+""")
 def test_keeping_forever_empties_the_archiefactiedatum(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     oab: Callable[[str], requests.Session],
     api: str,
@@ -443,6 +492,14 @@ def test_keeping_forever_empties_the_archiefactiedatum(  # pylint: disable=too-m
 @pytest.mark.source(
     "draaiboek ABC-019", "The archivist can reject the list; it goes back to the record manager with change requests."
 )
+@pytest.mark.scenario("""
+    Given a vernietigingslijst of one closed zaak, accepted by the reviewer and handed to the archivist
+    When the archivist rejects it, proposing to keep the zaak
+    Then the list asks the record manager for changes
+    When the record manager declines the proposal
+    Then the list is back with the archivist
+    And the zaak is still on the list
+""")
 def test_archivist_rejection_goes_back_and_returns_to_the_archivist(
     oab: Callable[[str], requests.Session],
     api: str,
@@ -465,6 +522,13 @@ def test_archivist_rejection_goes_back_and_returns_to_the_archivist(
     "draaiboek ABC-021",
     "The record manager can agree with some of the archivist's proposals; the list returns to the archivist.",
 )
+@pytest.mark.scenario("""
+    Given a vernietigingslijst of three closed zaken, accepted by the reviewer and handed to the archivist
+    And the archivist rejected it, proposing to keep two of the zaken
+    When the record manager agrees to one proposal and declines the other
+    Then the list is back with the archivist
+    And only the declined zaak and the third zaak are on the list
+""")
 def test_record_manager_takes_some_archivist_proposals_over(
     oab: Callable[[str], requests.Session],
     api: str,
@@ -495,6 +559,11 @@ def test_record_manager_takes_some_archivist_proposals_over(
     "draaiboek ABC-004",
     "A saved list not yet offered for review can be edited by the record manager, also to add zaken.",
 )
+@pytest.mark.scenario("""
+    Given a vernietigingslijst of one closed zaak, not yet offered for review
+    When the record manager adds a second closed zaak
+    Then both zaken are on the list
+""")
 def test_record_manager_adds_zaken_before_review(
     oab: Callable[[str], requests.Session], api: str, closed_zaak: Callable[[], JsonObject], registry: ResourceRegistry
 ) -> None:
@@ -509,6 +578,11 @@ def test_record_manager_adds_zaken_before_review(
 @pytest.mark.tc("ABC-006", "ABC-017", "ABC-026")
 @pytest.mark.parametrize("role", [pytest.param("reviewer", marks=REVIEWER_RENAMES), "archivist", "coreviewer"])
 @pytest.mark.source("draaiboek ABC-006", "A reviewer cannot change the list itself; that is the record manager's work.")
+@pytest.mark.scenario("""
+    Given a vernietigingslijst ready for review
+    When the reviewer, the co-reviewer or the archivist renames the list
+    Then Open Archiefbeheer refuses the change
+""")
 def test_only_the_record_manager_changes_the_list(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry, role: str
 ) -> None:
@@ -538,6 +612,14 @@ def main_reviewer(oab: Callable[[str], requests.Session], api: str, lijst: str) 
     f"{UPSTREAM_E2E}/issues/test_841_reassign_when_changes_requested.py",
     "The reviewer can also be changed after the reviewer requested changes.",
 )
+@pytest.mark.scenario("""
+    Given a vernietigingslijst ready for review
+    When the record manager assigns it to another reviewer
+    Then that user is the list's reviewer
+    When that reviewer rejects the list
+    Then the list asks the record manager for changes
+    And the record manager can assign it back to the first reviewer
+""")
 def test_record_manager_assigns_another_reviewer(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
 ) -> None:
@@ -564,6 +646,13 @@ def test_record_manager_assigns_another_reviewer(
     f"{UPSTREAM_E2E}/features/test_feature_list_delete.py",
     "A new list can be deleted; a list past status new cannot.",
 )
+@pytest.mark.scenario("""
+    Given a new vernietigingslijst and a vernietigingslijst ready for review
+    When the record manager deletes both
+    Then the new list is deleted
+    But deleting the list ready for review is refused
+    And that list stays ready for review
+""")
 def test_only_a_new_list_can_be_deleted(
     oab: Callable[[str], requests.Session], api: str, closed_zaak: Callable[[], JsonObject], registry: ResourceRegistry
 ) -> None:
@@ -586,6 +675,13 @@ def test_only_a_new_list_can_be_deleted(
     f"{UPSTREAM_E2E}/features/test_feature_list_process_review.py",
     "test_zaak_removed_outside_process: a zaak deleted by something else does not break processing the review.",
 )
+@pytest.mark.scenario("""
+    Given a vernietigingslijst of two closed zaken that the reviewer rejected, proposing to keep both
+    And one zaak is deleted in Open Zaak and removed from Open Archiefbeheer's zaken
+    When the record manager declines the proposal for the other zaak
+    Then the answer is accepted
+    And the list is ready for review again
+""")
 def test_review_is_processed_after_a_zaak_was_deleted_elsewhere(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     oab: Callable[[str], requests.Session],
     api: str,
@@ -617,6 +713,11 @@ def test_review_is_processed_after_a_zaak_was_deleted_elsewhere(  # pylint: disa
 
 @pytest.mark.tc("ABC-031")
 @pytest.mark.source("draaiboek ABC-031", "The reviewer may forward a list whether or not the co-reviewer has reacted.")
+@pytest.mark.scenario("""
+    Given a vernietigingslijst ready for review, with a co-reviewer who has not reacted
+    When the reviewer accepts the list
+    Then the list is internally reviewed
+""")
 def test_reviewer_forwards_without_the_coreviewer(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
 ) -> None:
@@ -630,6 +731,14 @@ def test_reviewer_forwards_without_the_coreviewer(
 @pytest.mark.ui
 @pytest.mark.tc("ABC-002")
 @REG_143
+@pytest.mark.scenario("""
+    Given the record manager is logged in to Open Archiefbeheer
+    When the record manager selects a closed zaak and makes a vernietigingslijst of it for the reviewer
+    Then the new list is shown
+    And the list holds only that zaak
+    When the record manager opens the list
+    Then the page shows the list's name and the zaak
+""")
 def test_record_manager_creates_a_list_in_the_ui(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -667,6 +776,12 @@ def test_record_manager_creates_a_list_in_the_ui(  # pylint: disable=too-many-ar
 @pytest.mark.ui
 @pytest.mark.tc("ABC-009", "ABC-010")
 @REG_143
+@pytest.mark.scenario("""
+    Given a vernietigingslijst that the reviewer rejected with a proposal for its zaak
+    When the record manager opens the list in Open Archiefbeheer
+    Then the page shows the zaak
+    And the page shows the reviewer's proposal
+""")
 def test_record_manager_sees_the_proposals_in_the_ui(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -691,6 +806,11 @@ def test_record_manager_sees_the_proposals_in_the_ui(  # pylint: disable=too-man
 @pytest.mark.ui
 @pytest.mark.tc("ABC-005")
 @pytest.mark.source("draaiboek ABC-005", "A new list can be assigned to a reviewer, who can then open the site.")
+@pytest.mark.scenario("""
+    Given a vernietigingslijst assigned to the reviewer
+    When the reviewer logs in to Open Archiefbeheer
+    Then the reviewer sees the list
+""")
 def test_reviewer_finds_the_assigned_list_in_the_ui(
     page: Page,
     podiumd_env: Environment,
@@ -716,6 +836,11 @@ def assign_coreviewer(oab: Callable[[str], requests.Session], api: str, lijst: s
 
 
 @REG_166
+@pytest.mark.scenario("""
+    Given a vernietigingslijst ready for review, with a co-reviewer
+    When the co-reviewer gives feedback on the list
+    Then the reviewer sees that feedback
+""")
 def test_coreviewer_feedback_reaches_the_reviewer(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
 ) -> None:
@@ -752,6 +877,13 @@ def queue(oab: Callable[[str], requests.Session], api: str, lijst: str) -> JsonO
 
 @pytest.mark.tc("ABC-024")
 @REG_170
+@pytest.mark.scenario("""
+    Given a vernietigingslijst that the reviewer and the archivist accepted
+    When the record manager starts the destruction
+    Then the destruction is planned after today
+    When the record manager aborts the destruction
+    Then the list is new again
+""")
 def test_destruction_waits_and_can_be_aborted(
     oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
 ) -> None:
@@ -848,6 +980,14 @@ def report_config(parts: ZaaktypeParts) -> dict[str, object]:
 @DESTRUCTION_FAILS
 @pytest.mark.tc("ABC-032", "ABC-033")
 @REG_170
+@pytest.mark.scenario("""
+    Given a vernietigingslijst of one closed zaak that the reviewer and the archivist accepted
+    When the record manager starts the destruction and it runs
+    Then the destruction succeeds
+    And the list is deleted
+    And the zaak is gone from Open Zaak
+    And the destruction report names the zaak with its metadata columns
+""")
 def test_destruction_deletes_the_zaak_and_leaves_a_report(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     podiumd_env: Environment,
     oab: Callable[[str], requests.Session],
@@ -872,6 +1012,12 @@ def test_destruction_deletes_the_zaak_and_leaves_a_report(  # pylint: disable=to
     "podiumd-tests",
     "Destroying a zaak also deletes its productaanvraag in Objecten, which needs OAB's token to write that objecttype.",
 )
+@pytest.mark.scenario("""
+    Given a closed zaak linked to a productaanvraag in Objecten
+    And a vernietigingslijst of the zaak that the reviewer and the archivist accepted
+    When the destruction runs
+    Then the productaanvraag is gone from Objecten
+""")
 def test_destruction_deletes_the_productaanvraag_of_the_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     podiumd_env: Environment,
     oab: Callable[[str], requests.Session],
@@ -902,6 +1048,12 @@ def test_destruction_deletes_the_productaanvraag_of_the_zaak(  # pylint: disable
 @pytest.mark.destructive
 @pytest.mark.tc("ABC-038")
 @REG_171
+@pytest.mark.scenario("""
+    Given the test zaaktype takes the short procedure
+    And a vernietigingslijst of a closed zaak of that zaaktype, ready for review
+    When the reviewer accepts the list
+    Then the list is ready to delete
+""")
 def test_short_procedure_skips_the_archivist(
     oab: Callable[[str], requests.Session],
     api: str,
@@ -921,6 +1073,12 @@ def test_short_procedure_skips_the_archivist(
 @pytest.mark.source(
     "draaiboek ABC-034", "A functioneel beheerder chooses in OAB's settings which zaaktypen take the short procedure."
 )
+@pytest.mark.scenario("""
+    When the record manager sets which zaaktypen take the short procedure
+    Then Open Archiefbeheer refuses the change
+    When the functioneel beheerder sets the test zaaktype to take the short procedure
+    Then the record manager sees that setting
+""")
 def test_beheerder_sets_the_short_procedure_zaaktypen(
     oab: Callable[[str], requests.Session], api: str, registry: ResourceRegistry
 ) -> None:
@@ -945,6 +1103,13 @@ def test_beheerder_sets_the_short_procedure_zaaktypen(
     "draaiboek ABC-036",
     "Zaaktypen with the short procedure can only follow it; the route through the archivist is closed.",
 )
+@pytest.mark.scenario("""
+    Given the test zaaktype takes the short procedure
+    And the reviewer accepted a vernietigingslijst of a closed zaak of that zaaktype
+    When the archivist reviews the list
+    Then Open Archiefbeheer refuses the review
+    And the list stays ready to delete
+""")
 def test_short_procedure_list_cannot_go_to_the_archivist(
     oab: Callable[[str], requests.Session],
     api: str,
@@ -969,6 +1134,14 @@ def test_short_procedure_list_cannot_go_to_the_archivist(
     "draaiboek ABC-039",
     "After a short-procedure destruction a report is made that can be exported for the destruction statement.",
 )
+@pytest.mark.scenario("""
+    Given the test zaaktype takes the short procedure
+    And the reviewer accepted a vernietigingslijst of a closed zaak of that zaaktype
+    When the destruction runs
+    Then the destruction succeeds
+    And the list is deleted
+    And the destruction report names the zaak with its metadata columns
+""")
 def test_short_procedure_destruction_leaves_a_report(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     podiumd_env: Environment,
     oab: Callable[[str], requests.Session],

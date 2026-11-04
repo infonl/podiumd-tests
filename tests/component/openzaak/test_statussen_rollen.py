@@ -38,6 +38,13 @@ def urls(objects: list[JsonObject]) -> set[str]:
     "A zaak moves through its statussen from Ingediend to Afgehandeld, as ZAC and behandelaars use them.",
 )
 @pytest.mark.core
+@pytest.mark.scenario("""
+    When a zaak is made in Open Zaak
+    Then the zaak has no status
+    When it gets the first two statussen of its zaaktype
+    Then the zaak's status is the second
+    And the zaak has two statussen
+""")
 def test_statussen_in_order(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """A new zaak has no status; after two statussen the zaak points at the second (TA reg-15)."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
@@ -51,6 +58,13 @@ def test_statussen_in_order(openzaak: ApiClient, registry: ResourceRegistry, par
 @pytest.mark.source(
     "TA regression/39-zaak-lifecycle-close.spec.ts", "A zaak closes with an einddatum and an archiefnominatie."
 )
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak
+    When it gets a resultaat and the eindstatus
+    Then the zaak has an einddatum
+    And its archiefnominatie is vernietigen
+    And it has an archiefactiedatum
+""")
 def test_zaak_closes_with_resultaat_and_eindstatus(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
@@ -69,6 +83,11 @@ def test_zaak_closes_with_resultaat_and_eindstatus(
     reason="[open-zaak-1] Open Zaak 1.29.3: DELETE of a zaak with a resultaat answers 500 although it deletes the zaak "
     "(vng_api_common etag recalculated for the deleted resultaat); open-zaak#2484, fixed in 1.31.0",
 )
+@pytest.mark.scenario("""
+    Given a zaak with a resultaat in Open Zaak
+    When the zaak is deleted
+    Then Open Zaak reports the delete as successful
+""")
 def test_closed_zaak_delete_answers_204(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """Deleting a zaak with a resultaat answers 204."""
     if not parts.resultaattypen:
@@ -81,6 +100,12 @@ def test_closed_zaak_delete_answers_204(openzaak: ApiClient, registry: ResourceR
 @pytest.mark.source(
     "TA regression/39-zaak-lifecycle-close.spec.ts", "A zaak closes with an einddatum and an archiefnominatie."
 )
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak without einddatum
+    When its archiefnominatie is set to vernietigen with an archiefactiedatum and an archiefstatus
+    Then the zaak holds that archiefnominatie and archiefactiedatum
+    And a search for zaken of the zaaktype to be destroyed finds the zaak
+""")
 def test_archiefnominatie_can_be_set_and_filtered(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
@@ -108,6 +133,12 @@ def test_archiefnominatie_can_be_set_and_filtered(
     "TA regression/56-zaak-rel-batch.spec.ts", "KISS finds the zaken of a batch of BSNs with one _zoek call."
 )
 @pytest.mark.core
+@pytest.mark.scenario("""
+    Given three zaken in Open Zaak, each with an initiator with their own BSN
+    When the zaken are searched by each initiator's BSN, through the list and through the search endpoint
+    Then each search finds only that initiator's zaak
+    And a search by another BSN finds no zaak
+""")
 def test_zaak_found_by_initiator_bsn(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """Each initiator's BSN finds only its zaak, by list filter and _zoek; another finds none (TA int-10, reg-50, 56)."""
     zaken: dict[str, str] = {}
@@ -131,6 +162,10 @@ def test_zaak_found_by_initiator_bsn(openzaak: ApiClient, registry: ResourceRegi
     reason="[open-zaak-2] Open Zaak 1.29.3: _zoek ignores an unknown filter (e.g. inpBsn__in, which TA reg-56 relied on) and returns "
     "all zaken, where GET /zaken answers 400; not yet reported upstream",
 )
+@pytest.mark.scenario("""
+    When the zaken search endpoint of Open Zaak gets a filter it does not support
+    Then Open Zaak refuses the search as invalid, as the zaken list does
+""")
 def test_zoek_refuses_an_unknown_filter(openzaak: ApiClient) -> None:
     """_zoek with an unsupported filter answers 400, as GET /zaken does."""
     openzaak.request("POST", f"{ZAKEN}/zaken/_zoek", 400, json={f"{BSN_FILTER}__in": [random_bsn()]})
@@ -140,6 +175,12 @@ def test_zoek_refuses_an_unknown_filter(openzaak: ApiClient) -> None:
     "TA regression/41-multi-rollen-zaak.spec.ts",
     "A zaak has several rollen at once and is found through each rol type.",
 )
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak
+    When a citizen is added as initiator and an employee as belanghebbende
+    Then the zaak's rollen are a natuurlijk persoon and a medewerker
+    And a search by the employee's identificatie finds only this zaak
+""")
 def test_rollen_of_two_kinds(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """A burger initiator and a medewerker belanghebbende: both listed, both filters find the zaak (TA reg-41)."""
     bsn = random_bsn()
@@ -168,6 +209,11 @@ def test_rollen_of_two_kinds(openzaak: ApiClient, registry: ResourceRegistry, pa
     "TA regression/16-bedrijf-aanvraag-kvk.spec.ts",
     "A company files a request: the zaak with a niet-natuurlijk persoon rol is found by its KvK number.",
 )
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak
+    When a company with a KvK number is added as initiator
+    Then a search by that KvK number finds only this zaak
+""")
 def test_rol_of_a_company(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """A niet-natuurlijk persoon with a KvK number finds the zaak (TA reg-16)."""
     kvk = random_kvk_nummer()
@@ -189,6 +235,11 @@ def test_rol_of_a_company(openzaak: ApiClient, registry: ResourceRegistry, parts
     "TA regression/122-gemachtigde-flow.spec.ts", "A rol stores indicatieMachtiging for the portal's gemachtigde flow."
 )
 @pytest.mark.parametrize("machtiging", ["gemachtigde", "machtiginggever"])
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak
+    When a citizen is added as initiator with an indicatieMachtiging (gemachtigde or machtiginggever)
+    Then the rol holds that indicatieMachtiging
+""")
 def test_rol_indicatie_machtiging(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts, machtiging: str
 ) -> None:

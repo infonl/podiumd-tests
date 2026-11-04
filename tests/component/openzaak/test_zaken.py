@@ -35,6 +35,14 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("openzaak")]
     "Create a zaak through the ZGW Zaken API as Open Formulieren does and find it back by its identificatie.",
 )
 @pytest.mark.core
+@pytest.mark.scenario("""
+    When a zaak of the test zaaktype is made in Open Zaak
+    Then it reads back with its zaaktype, omschrijving and an identificatie
+    When its toelichting is changed
+    Then the zaak has the new toelichting
+    When the zaak is deleted
+    Then it is no longer found
+""")
 def test_zaak_lifecycle(openzaak: ApiClient, registry: ResourceRegistry, test_zaaktype: JsonObject) -> None:
     """A zaak reads back with an identificatie, accepts a PATCH and is gone after DELETE."""
     zaak = make_zaak(openzaak, registry, str(test_zaaktype["url"]))
@@ -51,6 +59,11 @@ def test_zaak_lifecycle(openzaak: ApiClient, registry: ResourceRegistry, test_za
     "TA regression/38-concurrency-uniqueness.spec.ts",
     "Under concurrent creates with one bronorganisatie and identificatie, Open Zaak keeps exactly one zaak.",
 )
+@pytest.mark.scenario("""
+    When five zaken with the same identificatie are created in Open Zaak at the same time
+    Then exactly one create succeeds
+    And a search by the identificatie finds one zaak
+""")
 def test_identificatie_is_unique_under_concurrent_creates(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
@@ -90,6 +103,12 @@ def relations(zaak: JsonObject) -> list[tuple[object, object]]:
     "TA regression/59-zaak-relatie-keten.spec.ts",
     "Zaak relations chain three levels deep: hoofdzaak, deelzaken and a sub-deelzaak.",
 )
+@pytest.mark.scenario("""
+    Given four zaken in Open Zaak
+    When a hoofdzaak refers to two of them as vervolg, and one of those refers to the fourth
+    Then the hoofdzaak lists both vervolgzaken
+    And that vervolgzaak lists the fourth zaak
+""")
 def test_relevante_andere_zaken(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """A zaak refers to two vervolgzaken, one of which refers to a third (TA reg-28, 59)."""
     hoofd, a, b, b1 = (make_zaak(openzaak, registry, parts.zaaktype) for _ in range(4))
@@ -106,6 +125,11 @@ def test_relevante_andere_zaken(openzaak: ApiClient, registry: ResourceRegistry,
     "TA regression/36-zaakobject-koppeling.spec.ts",
     "A zaak refers to an external registration, such as a BAG address, through a zaakobject.",
 )
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak
+    When an address is linked to the zaak as zaakobject
+    Then the zaak's zaakobjecten hold only that address, with its postcode
+""")
 def test_zaakobject_adres(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """An address zaakobject is found through the zaak (TA reg-36)."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
@@ -134,6 +158,12 @@ def test_zaakobject_adres(openzaak: ApiClient, registry: ResourceRegistry, parts
     "TA regression/52-zaak-geometrie.spec.ts",
     "Location-bound zaken carry a GeoJSON zaakgeometrie that can be read and updated.",
 )
+@pytest.mark.scenario("""
+    When a zaak with a point as zaakgeometrie is made in Open Zaak
+    Then the zaak holds that point
+    When the point is moved to another place
+    Then a search for zaken within an area around the new place finds the zaak
+""")
 def test_zaakgeometrie_and_zoek_within(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """A zaak with a point is found by _zoek within a polygon around it, after moving it there (TA reg-52)."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype, zaakgeometrie={"type": "Point", "coordinates": [4.31, 52.075]})
@@ -153,6 +183,12 @@ def test_zaakgeometrie_and_zoek_within(openzaak: ApiClient, registry: ResourceRe
 @pytest.mark.source(
     "TA regression/55-multi-zaaktype.spec.ts", "Zaken lists filter on one zaaktype, as ZAC work lists and KISS do."
 )
+@pytest.mark.scenario("""
+    Given three new zaken of the test zaaktype in Open Zaak
+    When the zaken of that zaaktype are listed across all pages
+    Then the list contains the three zaken
+    And every listed zaak has that zaaktype
+""")
 def test_zaken_by_zaaktype_across_pages(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """All new zaken of the zaaktype are listed, following every page (TA reg-43, 55)."""
     created = {str(make_zaak(openzaak, registry, parts.zaaktype)["url"]) for _ in range(3)}

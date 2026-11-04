@@ -25,6 +25,12 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("openzaak")]
 @pytest.mark.source(
     "TA regression/29-besluit-op-zaak.spec.ts", "A besluit records a formal decision on a zaak in the Besluiten API."
 )
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak
+    When a besluit of the zaaktype's besluittype is made on the zaak
+    Then the besluit reads back with its besluittype, zaak and toelichting
+    And the besluiten of the zaak are only this besluit
+""")
 def test_besluit_on_a_zaak(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """A besluit of the zaak's besluittype reads back and is found by besluittype and zaak (TA reg-29)."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
@@ -42,6 +48,12 @@ def test_besluit_on_a_zaak(openzaak: ApiClient, registry: ResourceRegistry, part
     "TA regression/24-zaakeigenschappen.spec.ts",
     "Open Formulieren passes form fields to a zaak as zaakeigenschappen, which ZAC and the portal show.",
 )
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak
+    When the value 12-AB-34 is stored for the zaaktype's eigenschap kenteken
+    Then the zaakeigenschap has the name kenteken and that value
+    And the zaak's zaakeigenschappen hold only that value
+""")
 def test_zaakeigenschap(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """A value for eigenschap kenteken is stored on the zaak (TA reg-24)."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype)

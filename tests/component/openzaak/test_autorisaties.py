@@ -43,6 +43,13 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("openzaak")]
     "An application with maximum vertrouwelijkheid openbaar may never write or read above that level.",
 )
 @pytest.mark.core
+@pytest.mark.scenario("""
+    Given a zaakvertrouwelijke zaak in Open Zaak with an initiator's BSN
+    When an API client with maximum vertrouwelijkheid openbaar searches and reads the zaak
+    Then the search by the initiator's BSN finds no zaak
+    And reading the zaak is refused
+    But the API client that made the zaak finds it
+""")
 def test_zaakvertrouwelijke_zaak_is_hidden_from_an_openbaar_client(
     openzaak: ApiClient, openzaak_openbaar: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
@@ -59,6 +66,13 @@ def test_zaakvertrouwelijke_zaak_is_hidden_from_an_openbaar_client(
     "TA regression/17-document-va-handhaving.spec.ts",
     "A vertrouwelijk document must not be readable by an application with maximum vertrouwelijkheid openbaar.",
 )
+@pytest.mark.scenario("""
+    Given a vertrouwelijk informatieobject in Open Zaak
+    When an API client with maximum vertrouwelijkheid openbaar lists and reads informatieobjecten
+    Then the list does not contain the informatieobject
+    And reading it is refused
+    But the API client that made it finds it in the list
+""")
 def test_vertrouwelijk_document_is_hidden_from_an_openbaar_client(
     openzaak: ApiClient, openzaak_openbaar: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
@@ -80,6 +94,11 @@ def test_vertrouwelijk_document_is_hidden_from_an_openbaar_client(
     "TA regression/23-va-escalatie.spec.ts",
     "An application with maximum vertrouwelijkheid openbaar may never write or read above that level.",
 )
+@pytest.mark.scenario("""
+    Given an API client with maximum vertrouwelijkheid openbaar
+    When it creates a zaakvertrouwelijke zaak and a vertrouwelijk informatieobject in Open Zaak
+    Then Open Zaak refuses both
+""")
 def test_openbaar_client_cannot_create_above_its_level(
     openzaak_openbaar: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
@@ -106,6 +125,11 @@ def test_openbaar_client_cannot_create_above_its_level(
 
 
 @pytest.mark.source("podiumd-tests", "Checks that a client without zaken.verwijderen cannot delete a zaak.")
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak
+    When an API client without the right to delete zaken deletes it
+    Then Open Zaak refuses the delete
+""")
 def test_openbaar_client_cannot_delete(
     openzaak: ApiClient, openzaak_openbaar: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
@@ -125,6 +149,11 @@ def test_openbaar_client_cannot_delete(
         pytest.param(lambda secret: zgw_jwt("ptest-unknown-client", secret), id="unknown-client"),
     ],
 )
+@pytest.mark.scenario("""
+    Given a token that is expired or names an unknown API client
+    When the token is used to list the zaken in Open Zaak
+    Then Open Zaak refuses the request
+""")
 def test_bad_tokens_are_refused(openzaak: ApiClient, zgw_secret: str, token: Callable[[str], str]) -> None:
     """An expired token or an unknown client gets 401/403 (TA reg-22a, c; b: smoke test_bad_token_is_refused)."""
     headers = zgw_headers(token(zgw_secret))
@@ -136,6 +165,12 @@ def test_bad_tokens_are_refused(openzaak: ApiClient, zgw_secret: str, token: Cal
     "TA regression/22-negative-auth.spec.ts",
     "Open Zaak refuses expired tokens, unknown clients and applications without autorisaties.",
 )
+@pytest.mark.scenario("""
+    Given an API client that Open Zaak knows, without autorisaties
+    When it lists the zaken and creates a zaak
+    Then the list is refused or empty
+    And creating the zaak is refused
+""")
 def test_client_without_autorisaties(
     openzaak_noauth: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:

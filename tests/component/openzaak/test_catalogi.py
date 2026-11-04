@@ -30,6 +30,13 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("openzaak")]
     "TA regression/90-fb-oz-catalogi-integriteit.spec.ts",
     "Detects that a chart upgrade or seed error breaks no zaaktype, statustype or informatieobjecttype in the catalogi.",
 )
+@pytest.mark.scenario("""
+    Given the test zaaktype that bootstrap made in Open Zaak
+    When its configuration is read
+    Then the zaaktype is published and valid without end date
+    And its statustypen are numbered 1 to 3 and the last is the eindstatus
+    And it has the roltypen initiator, behandelaar and belanghebbende
+""")
 def test_test_zaaktype_is_published_and_complete(test_zaaktype: JsonObject, parts: ZaaktypeParts) -> None:
     """The bootstrap zaaktype is published, with ordered statustypen ending in an eindstatus and the roles tests use (TA reg-60, 90)."""
     assert test_zaaktype["concept"] is False
@@ -43,6 +50,13 @@ def test_test_zaaktype_is_published_and_complete(test_zaaktype: JsonObject, part
     "TA regression/167-fb-zaaktype-crud-api.spec.ts",
     "Functional management can create, version and delete zaaktypen through the Catalogi API.",
 )
+@pytest.mark.scenario("""
+    When a new zaaktype is made in the test catalogus of Open Zaak
+    Then the zaaktype is a concept
+    And a search for concept zaaktypen with its identificatie finds only this zaaktype
+    When the zaaktype is deleted
+    Then it is no longer found
+""")
 def test_concept_zaaktype_crud(openzaak: ApiClient, registry: ResourceRegistry, test_zaaktype: JsonObject) -> None:
     """A new zaaktype is a concept, is found with status=concept, and can be deleted (TA reg-167)."""
     concept = make_concept_zaaktype(openzaak, registry, str(test_zaaktype["catalogus"]))
@@ -63,6 +77,13 @@ def test_concept_zaaktype_crud(openzaak: ApiClient, registry: ResourceRegistry, 
     "TA regression/173-fb-zaaktype-versie-isolatie.spec.ts",
     "Zaken created under an old zaaktype version stay unchanged when a new version is added.",
 )
+@pytest.mark.scenario("""
+    Given a concept zaaktype valid in the first half of 2026
+    When a second version with the same identificatie is made, valid from July 2026
+    Then the two versions are separate zaaktypen
+    And a search by the identificatie finds both
+    And the first version keeps its end of validity
+""")
 def test_zaaktype_versions(openzaak: ApiClient, registry: ResourceRegistry, test_zaaktype: JsonObject) -> None:
     """Two versions with one identificatie and adjacent validity are both kept (TA reg-167, 173)."""
     catalogus = str(test_zaaktype["catalogus"])

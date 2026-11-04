@@ -47,6 +47,12 @@ pytestmark = [
         "bad-date",
     ],
 )
+@pytest.mark.scenario("""
+    Given a new zaak with one invalid or missing field
+    When it is created in Open Zaak
+    Then Open Zaak refuses the zaak as invalid
+    And the error names that field
+""")
 def test_invalid_zaak_names_the_field(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts, field: str, value: object
 ) -> None:
