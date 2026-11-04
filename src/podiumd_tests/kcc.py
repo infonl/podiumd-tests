@@ -16,6 +16,7 @@ from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.browser import challenge_login
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import expect_status
@@ -122,6 +123,19 @@ def expect_ita_group_access_bug(request: pytest.FixtureRequest, env: Environment
                 " (403: its guard reads the deprecated toegewezenAanActor reference; ITA#582)",
             )
         )
+
+
+# ITA's afhandeltermijn in weekday hours where the environment does not set Urgentie__AfhandeltermijnUren.
+ITA_TERMIJN_HOURS = 48
+
+
+def ita_afhandeltermijn_hours(env: Environment) -> int:
+    """ITA's afhandeltermijn in weekday hours, after which a contactverzoek is overdue."""
+    try:
+        value = env.kube.exec(env.deployment_for("ita"), "printenv", "Urgentie__AfhandeltermijnUren", timeout=30)
+        return int(value.strip())
+    except (KubeError, ValueError):
+        return ITA_TERMIJN_HOURS
 
 
 def kiss_sync_cronjob(env: Environment, source: str) -> str:

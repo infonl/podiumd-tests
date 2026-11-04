@@ -145,3 +145,11 @@ def test_add_klantcontact_other_failures_get_no_hint(fake_http):
 def test_add_klantcontact_returns_the_response(fake_http):
     fake_http({ADD: (201, {})})
     assert add_klantcontact(requests.Session(), ITA, {}).status_code == 201
+
+
+@pytest.mark.parametrize(("answer", "hours"), [((0, "72\n"), 72), ((1, ""), 48), ((0, "soon\n"), 48)])
+def test_ita_afhandeltermijn_hours_falls_back_to_itas_default(env_factory, fake_runner, monkeypatch, answer, hours):
+    env = env_factory()
+    monkeypatch.setattr(type(env), "deployment_for", lambda _self, _component: "ita-web")
+    fake_runner.answers["printenv Urgentie__AfhandeltermijnUren"] = answer
+    assert kcc.ita_afhandeltermijn_hours(env) == hours

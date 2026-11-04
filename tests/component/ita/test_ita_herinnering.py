@@ -1,12 +1,14 @@
 """ITA's daily reminder mail for overdue contactverzoeken, per afdeling.
 
 ITA's poller (POLLER_MODE verlopen-contactverzoek-herinnering-notificatie) mails every actor with contactverzoeken
-whose klantcontact took place more than 48 weekday hours ago and that are still te_verwerken. podiumd 4.10 leaves
-its CronJob off (ita.verlopenContactverzoekHerinneringNotificatie.enabled, DRT-726); the test runs where an
-environment turns it on. It runs the job once, which mails every overdue actor of the environment: destructive.
+whose klantcontact took place more than ITA's afhandeltermijn of weekday hours ago and that are still
+te_verwerken. podiumd 4.10 leaves its CronJob off (ita.verlopenContactverzoekHerinneringNotificatie.enabled,
+DRT-726); the test runs where an environment turns it on. It runs the job once, which mails every overdue actor of the environment: destructive.
 """
 
 from __future__ import annotations
+
+import math
 
 from datetime import UTC
 from datetime import datetime
@@ -16,11 +18,13 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.json_data import entries
+from podiumd_tests.kcc import ita_afhandeltermijn_hours
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.mailpit import received
 from podiumd_tests.seed.objecten import clean_up_logboek
 from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
+from podiumd_tests.seed.openklant import close_internetaak
 from podiumd_tests.seed.openklant import make_actor
 from podiumd_tests.seed.openklant import make_internetaak
 from podiumd_tests.seed.openklant import make_klantcontact
@@ -41,8 +45,6 @@ pytestmark = [
 E2E = "upstream interne-taak-afhandeling/ITA InterneTaakAfhandeling.EndToEndTest/DagelijkseHerinnering"
 # The chart's CronJob <release>-verlopen-cv-notify (internetaakafhandeling 3.3).
 REMINDER = "-verlopen-cv-notify"
-# Long past ITA's 48 weekday hours, whatever day the test runs.
-OVERDUE = timedelta(days=10)
 MAIL_TIMEOUT = 60
 
 
@@ -54,6 +56,11 @@ def reminder_cronjob(env: Environment) -> str:
             "ITA's daily reminder is off here (ita.verlopenContactverzoekHerinneringNotificatie.enabled; DRT-726)"
         )
     return found[0]
+
+
+def overdue_age(env: Environment) -> timedelta:
+    """An age past ITA's afhandeltermijn whatever day the test runs: weekday hours, plus a weekend and a margin."""
+    return timedelta(days=math.ceil(ita_afhandeltermijn_hours(env) / 24 * 7 / 5) + 4)
 
 
 @pytest.mark.source(
@@ -81,6 +88,7 @@ def test_afdeling_gets_one_reminder_for_its_overdue_contactverzoeken(  # pylint:
 ) -> None:
     """Two overdue contactverzoeken of an afdeling give it one mail; recent, closed and mailbox-less ones give none."""
     cronjob = reminder_cronjob(podiumd_env)
+    overdue_for = overdue_age(podiumd_env)
     afdeling_type = objecttype_url(podiumd_env, "Afdeling")
     logboek_type = objecttype_url(podiumd_env, "Activiteitenlog")
 
@@ -99,17 +107,17 @@ def test_afdeling_gets_one_reminder_for_its_overdue_contactverzoeken(  # pylint:
         taak = make_internetaak(openklant, registry, klantcontact, [actor])
         clean_up_logboek(objecten, registry, logboek_type, str(taak["uuid"]))
         if closed:
-            openklant.patch(str(taak["url"]), {"status": "verwerkt"})
+            close_internetaak(openklant, taak)
         return onderwerp
 
     onderwerpen_made: list[str] = []
     overdue, overdue_address = afdeling("verlopen", email=True)
-    onderwerpen = [contactverzoek(overdue, OVERDUE), contactverzoek(overdue, OVERDUE)]
+    onderwerpen = [contactverzoek(overdue, overdue_for), contactverzoek(overdue, overdue_for)]
     quiet, quiet_address = afdeling("rustig", email=True)
     contactverzoek(quiet, timedelta(hours=1))
-    contactverzoek(quiet, OVERDUE, closed=True)
+    contactverzoek(quiet, overdue_for, closed=True)
     no_mailbox, _ = afdeling("zonder-mailbox", email=False)
-    contactverzoek(no_mailbox, OVERDUE)
+    contactverzoek(no_mailbox, overdue_for)
 
     run_cronjob(podiumd_env.kube, cronjob, registry.tagged("herinnering"))
     body = received(
