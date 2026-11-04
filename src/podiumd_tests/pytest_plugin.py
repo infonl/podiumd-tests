@@ -41,6 +41,7 @@ from podiumd_tests.clients.platform import openzaak_client
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
+from podiumd_tests.kube import cluster_service
 from podiumd_tests.mock_server import Callback
 from podiumd_tests.oidc import challenge_session
 from podiumd_tests.replicas import several_replicas
@@ -502,6 +503,16 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
         reason = _environment(item.config).capabilities.skip_reason(*needed)
         if reason:
             pytest.skip(reason)
+
+
+def public_url(podiumd_env: Environment, urls: dict[str, str], component: str) -> str:
+    """The component's URL; skips when the profile reaches it in the cluster (no public host).
+
+    The profile URL decides: `urls` holds the port-forwarded 127.0.0.1 URL of an in-cluster component.
+    """
+    if cluster_service(podiumd_env.profile.urls[component]):
+        pytest.skip(f"{component} has no public host in this profile")
+    return urls[component]
 
 
 def requiring(

@@ -22,6 +22,7 @@ from podiumd_tests.oidc import NAVIGATE
 from podiumd_tests.oidc import keycloak_hosts
 from podiumd_tests.oidc import keycloak_login_realm
 from podiumd_tests.oidc import logs_in_through_keycloak
+from podiumd_tests.pytest_plugin import public_url
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import expect_status
 
@@ -66,7 +67,10 @@ def test_login_ends_on_the_keycloak_form(
     http: requests.Session, urls: dict[str, str], podiumd_env: Environment, component: str
 ) -> None:
     """Starting the app's login ends on Keycloak's login form: Keycloak accepts its client, redirect URI and scopes."""
-    start, hosts = urls[podiumd_env.admin_of(component)] + LOGIN_PATHS[component], keycloak_hosts(urls)
+    start, hosts = (
+        public_url(podiumd_env, urls, podiumd_env.admin_of(component)) + LOGIN_PATHS[component],
+        keycloak_hosts(urls),
+    )
     if component in DJANGO_APPS and not logs_in_through_keycloak(http, start, hosts):
         pytest.skip(f"{component}'s admin does not log in through Keycloak")
     keycloak_login_realm(http.get(start, headers=NAVIGATE), hosts)

@@ -28,6 +28,8 @@ urls:
   frankgateway: http://frankgateway-outway.podiumd.svc.cluster.local:9080
   # OpenBao's API listener; no ingress on johnb00.
   openbao: http://podiumd-openbao.podiumd.svc.cluster.local:8200
+  # No ingress on johnb00.
+  zaakbrug: http://zaakbrug.podiumd.svc.cluster.local
 settings:
   # Kyverno ClusterPolicy redirect-registries rewrites Docker Hub images to this mirror; the step compares images.
   mock_server_image: podiumdregistry.azurecr.io/dockerhub/library/python:3.13-alpine

@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.components import HOSTED
-from podiumd_tests.kube import cluster_service
+from podiumd_tests.pytest_plugin import public_url
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import describe
 from podiumd_tests.security import MIN_CERT_DAYS
@@ -51,16 +51,6 @@ HEADER_GAPS = {
     "omc": "[omc-3] OMC 2.3.1 sends no HSTS and no nosniff",
     "openbao": "[podiumd-chart-23] podiumd sets no custom_response_headers for OpenBao's listener: no nosniff",
 }
-
-
-def public_url(podiumd_env: Environment, urls: dict[str, str], component: str) -> str:
-    """The component's URL; skips when the profile reaches it in the cluster (no public host).
-
-    The profile URL decides: `urls` holds the port-forwarded 127.0.0.1 URL of an in-cluster component.
-    """
-    if cluster_service(podiumd_env.profile.urls[component]):
-        pytest.skip(f"{component} has no public host in this profile")
-    return urls[component]
 
 
 def headers_param(component: str) -> ParameterSet:
