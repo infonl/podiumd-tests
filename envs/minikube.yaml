@@ -51,6 +51,11 @@ secrets:
     k8s_secret: {name: keycloak-podiumd-admin, key: password}
   kiss_elastic_password:
     k8s_secret: {name: kiss-es-elastic-user, key: elastic}
+  # Grafana's admin, as on podiumd-infra.
+  grafana_username:
+    k8s_secret: {name: monitoring-logging-grafana, key: admin-user, namespace: monitoring}
+  grafana_password:
+    k8s_secret: {name: monitoring-logging-grafana, key: admin-password, namespace: monitoring}
   # Well-known dev defaults of podiumd-minikube; the only place literals are allowed.
   # Superuser of every Maykin app (podiumd-minikube create-superuser Jobs).
   django_admin_username:
