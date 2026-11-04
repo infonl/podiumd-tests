@@ -21,19 +21,15 @@ Why it matters for the tests: the node's 6 CPUs limit the full tier, not the lap
 workers the minikube container ran at about 434% of its 600% limit, and 4 more tests failed through contention
 (Open Inwoner search, Open Zaak autorisaties).
 
-## Open Inwoner: uWSGI threads and max-requests as ExternalsPodiumD (Kees, 2026-11-04)
+## uWSGI threads as ExternalsPodiumD for Objecten, Open Notificaties, Open Formulieren and Open Archiefbeheer (Kees, 2026-11-04)
 
-minikube's Open Inwoner runs `settings.uwsgi.threads: 2` and `UWSGI_MAX_REQUESTS=1000` (values.yaml, openinwoner
-block). ExternalsPodiumD and kees00 set neither, so they run the image defaults from `/start.sh`: 8 threads per
-process and a worker recycle every 100 requests (podiumd-infra checked dimp/test, dim1/ontw and icat/ontw on
-2026-11-04). Kees asks to keep minikube's configuration close to ExternalsPodiumD.
+minikube runs these four with 2 uWSGI threads: `settings.uwsgi.threads: 2` for objecten, opennotificaties and
+openformulieren, and `UWSGI_THREADS=2` in openarchiefbeheer's `extraEnvVars` (values.yaml). ExternalsPodiumD and
+kees00 set no uWSGI values and the podiumd chart sets none for these four, so they run the threads of each image's
+`/start.sh`.
 
-Request: remove `threads: 2` and the `UWSGI_MAX_REQUESTS` variable for Open Inwoner, so it runs the image defaults.
-`processes: 1` stays (laptop budget).
+Request: remove the `threads: 2` settings and the `UWSGI_THREADS` variable, so these four run their image's threads
+as ExternalsPodiumD. `processes: 1` stays (laptop budget), as for Open Inwoner in 08c66cc.
 
-Why it matters for the tests: on kees00 (Open Inwoner 2.4.9, 2026-11-04) Open Inwoner requests hung inside the
-process until uWSGI killed the worker ("NO MERCY" 17:16:22, 17:56:45, 17:57:05 CET): a livez with no test running,
-a DigiD callback and a Mijn zaken content request, which failed two tests. Open Zaak, Redis and Postgres answered
-normally. The leading hypothesis is a thread deadlock under 8 threads; minikube's 2 threads and rare recycles hide
-it. podiumd-tests takes a py-spy stack of a stuck worker on the fresh kees00 (Open Inwoner 2.5.0) on 2026-11-05; with
-the image defaults, minikube can show the same hang.
+Why it matters for the tests: a race or deadlock between request threads shows only with the estates' thread count;
+Open Inwoner's hang on kees00 (2026-11-04) did not show on minikube while it ran 2 threads.
