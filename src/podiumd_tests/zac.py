@@ -35,6 +35,8 @@ REINDEX_TIMEOUT = 1800
 PRODUCTAANVRAAG_TIMEOUT = 120
 # ZAC indexes a zaak in Solr after Open Notificaties tells it about the change.
 INDEX_TIMEOUT = 60
+# A BPMN process reaches its next user task after ZAC's service tasks have run.
+TASK_TIMEOUT = 30
 
 
 def zac_session(env: Environment, username: str, password: str) -> requests.Session:
@@ -197,6 +199,24 @@ def zaak_listed(http: requests.Session, zac_url: str, identificatie: str, **flag
     """ZAC's search for zaken lists the zaak; flags are its alleen* filters (alleenOpenstaandeZaken: werkvoorraad)."""
     found = search(http, zac_url, type="ZAAK", zoeken={"ZAAK_IDENTIFICATIE": identificatie}, **flags)
     return any(r.get("identificatie") == identificatie for r in entries(found["resultaten"]))
+
+
+def open_task(http: requests.Session, zac_url: str, zaak_uuid: str, name: str) -> JsonObject:
+    """Wait until the zaak has an open task of this name, as ZAC lists it (with its formioFormulier)."""
+
+    def found() -> JsonObject | None:
+        tasks = get_entries(http, f"{zac_url}/rest/taken/zaak/{zaak_uuid}")
+        return next((t for t in tasks if t.get("naam") == name and t.get("status") != "AFGEROND"), None)
+
+    return wait_until(found, timeout=TASK_TIMEOUT, description=f"open task {name!r} on zaak {zaak_uuid}")
+
+
+def complete_task(http: requests.Session, zac_url: str, task: JsonObject, data: JsonObject) -> JsonObject:
+    """Complete a form task with its form's data, as ZAC's UI submits it; the completed task."""
+    body = {**task, "taakdata": {**section(task, "taakdata"), **data}}
+    return cast(
+        "JsonObject", expect_status(http.patch(f"{zac_url}/rest/taken/complete", json=body), HTTPStatus.OK).json()
+    )
 
 
 def wait_in_werkvoorraad(http: requests.Session, zac_url: str, identificatie: str) -> None:

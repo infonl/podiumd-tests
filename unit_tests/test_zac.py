@@ -154,3 +154,18 @@ def test_zaak_listed_searches_by_identificatie_with_the_flags(fake_http):
     body = json.loads(sent[0].body)
     assert body["zoeken"] == {"ZAAK_IDENTIFICATIE": "ZAAK-1"}
     assert body["alleenOpenstaandeZaken"] is True
+
+
+def test_open_task_skips_completed_tasks_and_complete_task_sends_the_form_data(fake_http):
+    tasks = [
+        {"id": "t-1", "naam": "Intake", "status": "AFGEROND", "taakdata": {}},
+        {"id": "t-2", "naam": "Intake", "status": "TOEGEKEND", "taakdata": {"bestaand": "x"}},
+    ]
+    sent = fake_http(
+        {"GET /rest/taken/zaak/z-1": (200, tasks), "PATCH /rest/taken/complete": (200, {"status": "AFGEROND"})}
+    )
+    http = requests.Session()
+    task = zac.open_task(http, "https://zac.example.test", "z-1", "Intake")
+    assert task["id"] == "t-2"
+    assert zac.complete_task(http, "https://zac.example.test", task, {"veld": "y"}) == {"status": "AFGEROND"}
+    assert json.loads(sent[-1].body)["taakdata"] == {"bestaand": "x", "veld": "y"}

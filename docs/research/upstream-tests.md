@@ -14,6 +14,7 @@ Verdict: **port** (worth a test here), **maybe** (only under a condition), **no*
 | KISS | klantinteractie-servicesysteem/KISS-frontend @ 90a79fa | `Kiss.Bff.EndToEndTest`: Playwright (C#), ~120 scenarios | port, largest gain |
 | ITA | interne-taak-afhandeling/ITA @ 54056be | `InterneTaakAfhandeling.EndToEndTest`: Playwright (C#), ~140 scenarios | port, largest gain |
 | ZaakBrug | wearefrank/zaakbrug @ cdd465f | `e2e/SoapUI/zaakbrug-e2e-soapui-project.xml`: 127 ZDS cases against Open Zaak | port a selection |
+| ZAC | infonl/dimpact-zaakafhandelcomponent @ v5.9.1 | `src/e2e/features` and `src/e2e/bdd`: Cucumber and playwright-bdd, 29 scenarios against a live ZAC | ported 2026-11-04, see below |
 | ZGW Office Add-in | infonl/zgw-office-addin @ 3b74f94 | `e2e/tests`: Playwright, 10 tests (Office mocked) | maybe |
 | Open Beheer | maykinmedia/open-beheer @ 7ce9f34 | ~25 Gherkin Playwright scenarios (VCR against Open Zaak) | port the write path |
 | Open Archiefbeheer | maykinmedia/open-archiefbeheer @ 7d77889 | ~60 Gherkin Playwright scenarios (Open Zaak mocked) | port 3, rest covered |
@@ -144,3 +145,18 @@ Done 2026-10-21, verified on minikube: 18 (698c7b6, related types added later), 
   shared environment.
 - PABC, Open Klant, Open Notificaties, Objecttypen, Referentielijsten, Open VTB: no upstream scenario beyond what is
   covered.
+
+## ZAC's own end-to-end suite (2026-11-04)
+
+ZAC's scenarios (29, in `src/e2e/features` and `src/e2e/bdd`), against `tests/component/zac/`:
+
+- Covered before: login, failed login, logout, zaak with initiator in the werkvoorraad, verdelen and vrijgeven of
+  zaken and taken, the initiator's person view.
+- Ported: login again after logout (`test_login_after_logout_shows_the_dashboard`), the status
+  "Wacht op aanvullende informatie" (`test_aanvullende_informatie_gives_the_zaak_its_waiting_status`), a form zaak
+  in the werkvoorraad (`test_new_form_becomes_a_zac_zaak`), and `9-bpmn.feature` in `test_zac_bpmn.py` on
+  podiumd-tests' own process (`src/podiumd_tests/bpmn/`, bootstrap steps `openzaak-zaaktype-bpmn` and
+  `zac-bpmn-process`): start and intake form, assignment, select and sign documents, summary and close.
+- Not ported: the SmartDocuments scenarios (`4-smartdocuments.feature` and the BPMN step that creates Word files):
+  no environment has SmartDocuments. A second ZAC user receiving a task (Oscar in `5-taken-toevoegen.feature`) needs
+  a second ZAC test user; the assignment itself is covered.
