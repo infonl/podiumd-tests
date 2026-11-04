@@ -31,6 +31,7 @@ from podiumd_tests.seed.objecten import clean_up_logboek
 from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import clean_up_klantcontacten
+from podiumd_tests.seed.openklant import close_internetaak
 from podiumd_tests.seed.openklant import klantcontact_body
 from podiumd_tests.seed.openklant import klantcontacten_about
 from podiumd_tests.seed.openklant import make_actor
@@ -375,3 +376,60 @@ def test_contactverzoek_is_found_by_its_klantcontactnummer(  # pylint: disable=t
     assert str(expect_status(ita.get(f"{by_nummer}/{mine}"), HTTPStatus.OK).json()["aanleidinggevendKlantcontact"])
     expect_status(ita.get(f"{by_nummer}/{nummer_of([])}"), HTTPStatus.FORBIDDEN)
     expect_status(ita.get(f"{by_nummer}/{UNKNOWN_NUMMER}"), HTTPStatus.NOT_FOUND)
+
+
+def _guarded_calls(taak: JsonObject) -> dict[str, tuple[str, dict[str, object]]]:
+    """ITA's writes on one contactverzoek: path and the smallest body its model accepts."""
+    uuid = str(taak["uuid"])
+    klantcontact = str(section(taak, "aanleidinggevendKlantcontact").get("uuid"))
+    return {
+        "assign to self": (f"/api/internetaken/{uuid}/aan-mij-toewijzen", {}),
+        "notitie": (f"/api/internetaken/{uuid}/notitie", {"notitie": "podiumd-tests"}),
+        "forward": (f"/api/internetaken/{uuid}/forward", {"afdeling": "podiumd-tests"}),
+        "link a zaak": (
+            "/api/internetaken/koppel-zaak",
+            {
+                "internetaakId": uuid,
+                "zaakIdentificatie": "ZAAK-PTEST",
+                "aanleidinggevendKlantcontactUuid": klantcontact,
+            },
+        ),
+        "register a contactmoment": (
+            "/api/internetaken/close-with-klantcontact",
+            {
+                "interneTaakId": uuid,
+                "aanleidinggevendKlantcontactUuid": klantcontact,
+                "klantcontactRequest": {
+                    "indicatieContactGelukt": True,
+                    "onderwerp": "podiumd-tests",
+                    "inhoud": "podiumd-tests",
+                    "kanaal": "e-mail",
+                    "taal": "nl",
+                    "vertrouwelijk": False,
+                },
+            },
+        ),
+    }
+
+
+@pytest.mark.parametrize("action", ["assign to self", "notitie", "forward", "link a zaak", "register a contactmoment"])
+@pytest.mark.source(
+    f"{ITA_E2E}/Contactverzoek/ContactverzoekScenarios.cs",
+    "A verwerkt contactverzoek is read-only: assigning, a notitie, forwarding, a zaak link and a contactmoment get 409.",
+)
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to ITA
+    And a contactverzoek in Open Klant that is verwerkt
+    When the medewerker changes it in ITA
+    Then ITA refuses with a conflict that names the status verwerkt
+    And the contactverzoek stays verwerkt in Open Klant
+""")
+def test_a_verwerkt_contactverzoek_is_read_only(
+    ita: requests.Session, urls: dict[str, str], openklant: ApiClient, taak: JsonObject, action: str
+) -> None:
+    """Each write ITA offers on a contactverzoek answers 409 naming verwerkt once Open Klant has it verwerkt."""
+    close_internetaak(openklant, taak)
+    path, body = _guarded_calls(taak)[action]
+    refused = expect_status(ita.post(urls["ita"] + path, json=body), HTTPStatus.CONFLICT)
+    assert "verwerkt" in refused.text, refused.text[:300]
+    assert openklant.get(f"internetaken/{taak['uuid']}")["status"] == "verwerkt"
