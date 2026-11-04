@@ -29,6 +29,7 @@ from podiumd_tests.kcc import ita_detail_text
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.mailpit import forget_mails
 from podiumd_tests.openinwoner import ask_anonymously
+from podiumd_tests.openinwoner import forget_questions
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import clean_up_logboek
@@ -263,21 +264,24 @@ def test_question_answered_in_ita_shows_as_answered(  # pylint: disable=too-many
     antwoord_body = klantcontact_body(
         registry, kanaal=question["kanaal"], onderwerp=antwoord, inhoud=f"Antwoord {antwoord}"
     )
+    partij = str(section(expanded(openklant, str(question["url"]), "hadBetrokkenen")[0], "wasPartij")["uuid"])
     body = {
         "interneTaakId": taak["uuid"],
         "aanleidinggevendKlantcontactUuid": question["uuid"],
         # ITA links the answer to this partij; Mijn vragen lists only klantcontacten of the inwoner's partij.
-        "partijUuid": section(expanded(openklant, str(question["url"]), "hadBetrokkenen")[0], "wasPartij")["uuid"],
+        "partijUuid": partij,
         # ITA numbers the klantcontact itself.
         "klantcontactRequest": {k: v for k, v in antwoord_body.items() if k != "nummer"},
     }
     add_klantcontact(ita, podiumd_env.profile.urls["ita"], body)
     # ITA has no call to close the taak; KCC closes it as it does in ITA's UI.
     openklant.patch(str(taak["url"]), {"status": "verwerkt"})
+    forget_questions(podiumd_env, partij)
     page.context.clear_cookies()
     portal_login(page, podiumd_env, "digid", INWONER, MIJN_VRAGEN)
     card = page.locator(".card", has_text=vraag)
-    expect(card).to_contain_text("Beantwoord")
+    # From 2.5.0 a question whose interne taken are all verwerkt shows Afgehandeld instead.
+    expect(card).to_contain_text(re.compile("Beantwoord|Afgehandeld"))
     card.locator("a").first.click()
     expect(page.locator("main")).to_contain_text(f"Antwoord {antwoord}")
 

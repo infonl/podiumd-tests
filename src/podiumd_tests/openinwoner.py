@@ -121,6 +121,11 @@ def kvk_api_root(env: Environment) -> str:
     return str(run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_kvk_api_root", {}))
 
 
+def forget_questions(env: Environment, partij_uuid: str) -> None:
+    """Drop the partij's cached Mijn vragen, which hide an answer registered outside the portal for up to 5 minutes."""
+    run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_questions_cache", {"partij": partij_uuid})
+
+
 def set_account(env: Environment, bsn: str, **fields: object) -> dict[str, object]:
     """Set fields of the Open Inwoner account with this BSN; their old values, to set back."""
     params: dict[str, object] = {"bsn": bsn, "fields": fields}
