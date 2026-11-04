@@ -59,8 +59,8 @@ Sources:
 | `regression/110-portaal-anoniem-en-mobile.spec.ts` | component or integration | 3/4/5 | port | Contact part → `tests/component/openinwoner/test_portaal_anoniem.py`; mobile homepage: merged into `test_inwoners_zaak_is_in_mijn_zaken` (`test_portaal_zaken.py`, same devices, also checks the page fits the screen). |
 | `regression/112-ita-toewijzen-actor-types.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openklant/` test_internetaken.py (pure Open Klant, despite the name). |
 | `regression/114-portaal-multi-user-digid.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_inwoner.py`. |
-| `regression/115-omc-notifynl-mock-keten.spec.ts` | component or integration | 3/4/5 | todo | Blocked on OMC upstream: OMC 1.17.19 (podiumd 4.9.4 and every estate) answers every notification 206 with an inner 422 on `source` (2.3.1 too, tried 2026-10-10), so minikube runs without OMC; port when a PodiumD release has an OMC that accepts them. NotifyNL calls go to the mock server's `/notify`. |
-| `regression/116-omc-mail-keten-e2e.spec.ts` | component or integration | 3/4/5 | todo | Blocked on OMC upstream: OMC 1.17.19 (podiumd 4.9.4 and every estate) answers every notification 206 with an inner 422 on `source` (2.3.1 too, tried 2026-10-10), so minikube runs without OMC; port when a PodiumD release has an OMC that accepts them. NotifyNL calls go to the mock server's `/notify`. |
+| `regression/115-omc-notifynl-mock-keten.spec.ts` | component or integration | 3/4/5 | merge | `tests/integration/test_omc.py`: OMC's Notify calls go to the mock server's `/notify` and are checked there. |
+| `regression/116-omc-mail-keten-e2e.spec.ts` | component or integration | 3/4/5 | merge | `tests/integration/test_omc.py`: the chain from a zaak status through OMC and Notify back to Open Klant. |
 | `regression/117-portaal-contactmomenten-paginatie.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_inwoner.py`. |
 | `regression/118-portaal-vestigingsnaam-bedrijf.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_inwoner.py`, against the KvK test API (wiring `openinwoner-kvk`). |
 | `regression/119-infra-quick-wins.spec.ts` | component or integration | 3/4/5 | merge | Unknown BSN: `test_brp.py`; KISS `/api/me`: `test_kcc_session.py`. BRP postcode search: `test_brp.py`. Dropped: KISS `/api/zoeken`, which also accepted 500, and the `/kennisartikelen` fixme. |
@@ -84,7 +84,7 @@ Sources:
 | `regression/151-pdok-externe-service.spec.ts` | component or integration | 3/4/5 | drop | Tests the public PDOK Locatieserver, not PodiumD. |
 | `regression/152-of-retention-en-pdf.spec.ts` | component or integration | 3/4/5 | merge | With 76 into `tests/integration/test_formulier_zaak.py`: the PDF report downloads through reportDownloadUrl. |
 | `regression/153-of-features-direct.spec.ts` | component or integration | 3/4/5 | merge | Cosign → `test_formulier_api.py`. Demo payment: as 185. NotifyNL mock (fixme in TA) and form variables (need a login): drop. |
-| `regression/154-omc-cosign-direct.spec.ts` | component or integration | 3/4/5 | todo | OMC part blocked as 80. Open Formulieren: the paused submission's resume mail → `tests/integration/test_formulier_pauzeren.py`; cosign options and submission start: `test_formulier_api.py`. |
+| `regression/154-omc-cosign-direct.spec.ts` | component or integration | 3/4/5 | merge | OMC part (Events/Listen with a JWT is not 401): `test_notification_is_recognized`. Open Formulieren: the paused submission's resume mail → `tests/integration/test_formulier_pauzeren.py`; cosign options and submission start: `test_formulier_api.py`. |
 | `regression/156-esuite-ui-navigatie.spec.ts` | component or integration | 3/4/5 | todo | Blocked with smoke 155: eSuite is outside PodiumD and no profile has an `esuite` URL. |
 | `regression/157-contact-haalcentraal-validatie.spec.ts` | component or integration | 3/4/5 | merge | KI-060 → `tests/component/openklant/` test_internetaken.py; KvK parts: phase 3, external services. |
 | `regression/158-of-eherkenning-vestiging.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_formulier_login.py`: eHerkenning through Keycloak's mock (W1), the vestiging is the zaak's initiator. |
@@ -169,9 +169,9 @@ Sources:
 | `regression/77-ita-afdelingen-groepen.spec.ts` | component or integration | 3/4/5 | port | `tests/component/ita/test_ita_internetaken.py`. |
 | `regression/79-of-form-cosign-config.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openformulieren/test_formulier_api.py`: the published settings. |
 | `regression/80-brp-kvk-prefill-foutpaden.spec.ts` | component or integration | 3/4/5 | port | BRP parts → `test_brp.py`, basisprofiel and searches → `test_kvk.py` (KvK test set). |
-| `regression/80-omc-listen-event.spec.ts` | component or integration | 3/4/5 | todo | Blocked on OMC upstream: OMC 1.17.19 (podiumd 4.9.4 and every estate) answers every notification 206 with an inner 422 on `source` (2.3.1 too, tried 2026-10-10), so minikube runs without OMC; port when a PodiumD release has an OMC that accepts them. NotifyNL calls go to the mock server's `/notify`. |
-| `regression/81-omc-confirm-callback.spec.ts` | component or integration | 3/4/5 | todo | Blocked on OMC upstream: OMC 1.17.19 (podiumd 4.9.4 and every estate) answers every notification 206 with an inner 422 on `source` (2.3.1 too, tried 2026-10-10), so minikube runs without OMC; port when a PodiumD release has an OMC that accepts them. NotifyNL calls go to the mock server's `/notify`. |
-| `regression/82-omc-zaak-e2e.spec.ts` | component or integration | 3/4/5 | todo | Blocked on OMC upstream: OMC 1.17.19 (podiumd 4.9.4 and every estate) answers every notification 206 with an inner 422 on `source` (2.3.1 too, tried 2026-10-10), so minikube runs without OMC; port when a PodiumD release has an OMC that accepts them. NotifyNL calls go to the mock server's `/notify`. |
+| `regression/80-omc-listen-event.spec.ts` | component or integration | 3/4/5 | merge | `tests/component/omc/test_events_listen.py`: a notification with OMC's token is processed (412, not 206); an expired token gets 401. |
+| `regression/81-omc-confirm-callback.spec.ts` | component or integration | 3/4/5 | merge | `test_delivery_receipt_becomes_a_klantcontact` (`tests/integration/test_omc.py`): Notify's delivery receipt becomes a klantcontact in Open Klant. |
+| `regression/82-omc-zaak-e2e.spec.ts` | component or integration | 3/4/5 | merge | `tests/integration/test_omc.py`: zaak created, updated and closed send the e-mails through the Notify mock; SMS for a phone number. |
 | `regression/83-portaal-anonieme-pagina-bereikbaarheid.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_anoniem.py`. |
 | `regression/84-portaal-ingelogd-sessie.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openinwoner/test_portaal_login.py`: Mijn zaken while logged in, the login page after /digid-oidc/logout/. |
 | `regression/85-ok2-bedrijf-partij.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openklant/` test_partijen.py: organisatie with KvK or RSIN. |
@@ -222,7 +222,7 @@ Sources:
 | `test_frankgateway.py` | smoke | 1 | merge | Outway routes → `tests/smoke/test_frankgateway.py` (now BRP V2 `/personen`); OpenBao unsealed and ZAC's ConfigMap: minikube's own deploy. |
 | `test_kiss_ita.py` | component | 3 | merge | Health and anonymous ITA → `test_api_health.py`; objecttypes → `tests/component/objecten/test_objecttypen.py` (by name); Elasticsearch health and chunked forwarding: minikube's deploy (forwarding also through `test_kiss_reads_itas_logboek`). |
 | `test_memory.py` | — | — | drop | minikube's memory budget and baseline. |
-| `test_omc.py` | smoke | 1 | todo | Anonymous `/Events/Listen` → `test_api_health.py`; `/Events/Version` with a JWT blocked with the OMC tests (spec 80). |
+| `test_omc.py` | smoke | 1 | merge | Anonymous `/Events/Listen` → `test_api_health.py`; `/Events/Version` with a JWT → `test_omc_version_answers_to_its_token` (`test_api_health.py`). |
 
 ## PI
 
