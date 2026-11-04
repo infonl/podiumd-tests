@@ -18,6 +18,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import pytest
 import yaml
 
 from podiumd_tests.json_data import JsonObject
@@ -29,6 +30,7 @@ from podiumd_tests.responses import root_answers
 from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from collections.abc import Generator
     from collections.abc import Mapping
     from collections.abc import Sequence
@@ -138,6 +140,21 @@ def deployed_build(env: Environment) -> dict[str, str]:
     except KubeError:
         return {}
     return {key: str(value) for key, value in data.items() if "\n" not in str(value) and len(str(value)) <= 200}
+
+
+def expect_defect(  # pylint: disable=too-many-arguments  # one marker
+    request: pytest.FixtureRequest,
+    env: Environment,
+    component: str,
+    affected: Callable[[tuple[int, ...]], bool],
+    *,
+    raises: type[BaseException],
+    reason: str,
+) -> None:
+    """Mark the test a strict xfail when the deployed component's version is affected; an unknown version is not."""
+    version = component_versions(env, [component]).get(component)
+    if version is not None and affected(version):
+        request.applymarker(pytest.mark.xfail(strict=True, raises=raises, reason=reason))
 
 
 def chart_older_than(env: Environment, version: tuple[int, ...]) -> bool:

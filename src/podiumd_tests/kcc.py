@@ -24,7 +24,7 @@ from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import expect_status
 from podiumd_tests.results import now_iso
 from podiumd_tests.seed.openzaak import today
-from podiumd_tests.workloads import component_versions
+from podiumd_tests.workloads import expect_defect
 
 if TYPE_CHECKING:
     import requests
@@ -115,16 +115,15 @@ ITA_GROUP_ACCESS_FIXED = (3, 3, 4)
 
 def expect_ita_group_access_bug(request: pytest.FixtureRequest, env: Environment) -> None:
     """Mark the test a strict xfail when the deployed ITA is older than 3.3.4."""
-    version = component_versions(env, ["ita"]).get("ita")
-    if version is not None and version < ITA_GROUP_ACCESS_FIXED:
-        request.applymarker(
-            pytest.mark.xfail(
-                strict=True,
-                raises=UnexpectedStatusError,
-                reason="ITA before 3.3.4 refuses a groep member a contactverzoek assigned to the groep first"
-                " (403: its guard reads the deprecated toegewezenAanActor reference; ITA#582)",
-            )
-        )
+    expect_defect(
+        request,
+        env,
+        "ita",
+        lambda version: version < ITA_GROUP_ACCESS_FIXED,
+        raises=UnexpectedStatusError,
+        reason="ITA before 3.3.4 refuses a groep member a contactverzoek assigned to the groep first"
+        " (403: its guard reads the deprecated toegewezenAanActor reference; ITA#582)",
+    )
 
 
 SATURDAY = 5

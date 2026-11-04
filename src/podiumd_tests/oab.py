@@ -6,8 +6,6 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
-import pytest
-
 from playwright.sync_api import expect
 
 from podiumd_tests.bootstrap.names import PREFIX
@@ -15,9 +13,10 @@ from podiumd_tests.bootstrap.steps import django_secret_key
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.responses import expect_status
 from podiumd_tests.wait import wait_until
-from podiumd_tests.workloads import component_versions
+from podiumd_tests.workloads import expect_defect
 
 if TYPE_CHECKING:
+    import pytest
     import requests
 
     from playwright.sync_api import Page
@@ -108,13 +107,12 @@ def process_review_response(env: Environment, lijst: str) -> bool:
 
 def expect_admin_logout_bug(request: pytest.FixtureRequest, env: Environment) -> None:
     """Mark the test a strict xfail when the deployed Open Archiefbeheer is 2.1 or newer."""
-    version = component_versions(env, ["openarchiefbeheer"]).get("openarchiefbeheer")
-    if version is not None and version >= ADMIN_LOGOUT_GET_405:
-        request.applymarker(
-            pytest.mark.xfail(
-                strict=True,
-                raises=AssertionError,
-                reason="[open-archiefbeheer-7] Open Archiefbeheer 2.1.2: the admin's 'Log out' link sends a GET,"
-                " which Django 5.2's logout answers with 405; not yet reported upstream",
-            )
-        )
+    expect_defect(
+        request,
+        env,
+        "openarchiefbeheer",
+        lambda version: version >= ADMIN_LOGOUT_GET_405,
+        raises=AssertionError,
+        reason="[open-archiefbeheer-7] Open Archiefbeheer 2.1.2: the admin's 'Log out' link sends a GET,"
+        " which Django 5.2's logout answers with 405; not yet reported upstream",
+    )

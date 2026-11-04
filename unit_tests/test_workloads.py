@@ -4,8 +4,11 @@ import base64
 import gzip
 import json
 
+from types import SimpleNamespace
+
 import pytest
 
+from podiumd_tests import workloads
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
 from podiumd_tests.workloads import ClusterState
@@ -243,3 +246,14 @@ def test_replica_drift_names_workloads_that_differ_from_their_helm_release(env_f
     hpa = {"metadata": {"namespace": "podiumd"}, "spec": {"scaleTargetRef": {"kind": "StatefulSet", "name": "clamav"}}}
     fake_runner.answers["get horizontalpodautoscalers"] = (0, json.dumps({"items": [hpa]}))
     assert replica_drift(env_factory()) == ["Deployment/objecten 0 (Helm 1)"]
+
+
+@pytest.mark.parametrize(("version", "xfail"), [((1, 26, 19), True), ((1, 27, 0), False), (None, False)])
+def test_expect_defect_marks_only_an_affected_known_version(monkeypatch, version, xfail):
+    monkeypatch.setattr(
+        workloads, "component_versions", lambda _env, _c: {} if version is None else {"zaakbrug": version}
+    )
+    markers = []
+    request = SimpleNamespace(applymarker=markers.append)
+    workloads.expect_defect(request, None, "zaakbrug", lambda v: v < (1, 27, 0), raises=AssertionError, reason="r")  # pyright: ignore[reportArgumentType]
+    assert [m.kwargs.get("strict") for m in markers] == ([True] if xfail else [])

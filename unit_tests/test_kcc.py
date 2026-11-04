@@ -10,6 +10,7 @@ import pytest
 import requests
 
 from podiumd_tests import kcc
+from podiumd_tests import workloads
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.kcc import KENNIS_URL
 from podiumd_tests.kcc import LOGBOEK_HINT
@@ -81,7 +82,7 @@ def test_ita_detail_text_is_the_json_of_the_internetaak(fake_http):
 
 @pytest.mark.parametrize(("version", "xfail"), [((3, 3, 3), True), ((3, 3, 4), False), (None, False)])
 def test_ita_group_access_bug_is_expected_before_3_3_4(monkeypatch, version, xfail):
-    monkeypatch.setattr(kcc, "component_versions", lambda _env, _c: {} if version is None else {"ita": version})
+    monkeypatch.setattr(workloads, "component_versions", lambda _env, _c: {} if version is None else {"ita": version})
     markers = []
     expect_ita_group_access_bug(SimpleNamespace(applymarker=markers.append), None)  # pyright: ignore[reportArgumentType]
     assert bool(markers) is xfail
