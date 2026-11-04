@@ -4,7 +4,7 @@ An informatieobjecttype, three statustypen (the last is the eindstatus), initiat
 and belanghebbende roltypen, eigenschap "kenteken", a published besluittype, and a
 resultaattype whose selectielijst klasse comes from Open Zaak's own Selectielijst API (left out,
 with a note, when that API cannot be reached).
-Actions: status, apply (recreates), remove (also the zaken of the zaaktype).
+Actions: status, apply (recreates), remove (also the zaken of the zaaktype and the documents of its type).
 Params: action, domein, rsin, identificatie, iot_omschrijving, besluittype; optional versions, a list of
 [begin, end] dates (ISO, end may be null): one published version each, whose statustypen end in " v<n>".
 """
@@ -21,6 +21,7 @@ def run(params):
     from openzaak.components.catalogi.models import Catalogus
     from openzaak.components.catalogi.models import InformatieObjectType
     from openzaak.components.catalogi.models import ZaakType
+    from openzaak.components.documenten.models import EnkelvoudigInformatieObject
     from openzaak.components.zaken.models import Zaak
 
     catalogus = Catalogus.objects.filter(domein=params["domein"], rsin=params["rsin"]).first()
@@ -33,6 +34,10 @@ def run(params):
         return {"present": bool(catalogus and present)}
     # zaaktype is a "foreign key or URL" field; _zaaktype is its local foreign key.
     Zaak.objects.filter(_zaaktype__in=zaaktypen).delete()
+    # Documents protect their informatieobjecttype; one per canonical deletes all its versions.
+    canonicals = {e.canonical for e in EnkelvoudigInformatieObject.objects.filter(_informatieobjecttype__in=iots)}
+    for canonical in canonicals:
+        canonical.delete()
     zaaktypen.delete()
     iots.delete()
     besluittypen.delete()
