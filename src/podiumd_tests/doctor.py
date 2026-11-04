@@ -30,6 +30,7 @@ from podiumd_tests.lock import lease_holder
 from podiumd_tests.responses import get_root
 from podiumd_tests.responses import is_server_error
 from podiumd_tests.responses import url_host
+from podiumd_tests.workloads import replica_drift
 from podiumd_tests.workloads import unhealthy_pods
 from podiumd_tests.workloads import unready_workloads
 
@@ -134,6 +135,13 @@ def _workloads(env: Environment, namespace: str) -> Check:
     not_ready = unready_workloads(items)
     if not_ready:
         return Check(f"workloads {namespace}", "warn", "not ready: " + ", ".join(not_ready))
+    try:
+        drift = replica_drift(env, [namespace])
+    except KubeError as exc:
+        return Check(f"workloads {namespace}", "warn", f"{len(items)} ready; Helm releases unreadable: {exc}")
+    if drift:
+        hint = "a test left it scaled? `kubectl scale` back, or redeploy"
+        return Check(f"workloads {namespace}", "warn", "replicas differ from Helm: " + ", ".join(drift), hint)
     return Check(f"workloads {namespace}", "ok", f"{len(items)} ready")
 
 

@@ -395,3 +395,21 @@ def test_main_turns_process_and_lock_errors_into_exit_codes(envs, monkeypatch, c
     monkeypatch.setattr(cli, "cmd_doctor", fail)
     assert cli.main([*envs(), "doctor", "--env", "e"]) == code
     assert capsys.readouterr().err.startswith(prefix)
+
+
+@pytest.mark.parametrize(("chaos", "smoke", "result"), [(0, 0, 0), (0, 1, 1), (1, 0, 1), (3, 0, 3)])
+def test_a_chaos_run_ends_with_a_smoke_run(monkeypatch, chaos, smoke, result):
+    tiers = []
+
+    def run_tier(args):
+        tiers.append((args.tier, args.pytest_args))
+        return {"chaos": chaos, "smoke": smoke}[args.tier]
+
+    monkeypatch.setattr(cli, "_run_tier", run_tier)
+    args = argparse.Namespace(tier="chaos", pytest_args=["-k", "continuiteit"])
+    code = cli.cmd_run(args)
+    if chaos == cli.EXIT_NOT_ALLOWED:
+        assert tiers == [("chaos", ["-k", "continuiteit"])]
+    else:
+        assert tiers == [("chaos", ["-k", "continuiteit"]), ("smoke", [])]
+    assert code == result

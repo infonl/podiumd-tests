@@ -376,7 +376,16 @@ def _versions(env: Environment) -> dict[str, str]:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    """Run a tier against an environment and record the results."""
+    """Run a tier against an environment and record the results; a chaos run ends with a smoke run."""
+    code = _run_tier(args)
+    if args.tier != "chaos" or code == EXIT_NOT_ALLOWED:
+        return code
+    # The smoke tier shows what a chaos test left broken: a component at 0 replicas, an unhealthy pod.
+    smoke = _run_tier(argparse.Namespace(**{**vars(args), "tier": "smoke", "pytest_args": []}))
+    return code if code != EXIT_OK else smoke
+
+
+def _run_tier(args: argparse.Namespace) -> int:
     profile = _load(args)
     if args.tier not in profile.allowed_tiers:
         allowed = ", ".join(profile.allowed_tiers)

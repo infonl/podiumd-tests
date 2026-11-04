@@ -8,12 +8,17 @@ and only the latest Job of each CronJob counts, as older runs are history.
 
 from __future__ import annotations
 
+import base64
 import contextlib
+import gzip
+import json
 import re
 
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+
+import yaml
 
 from podiumd_tests.json_data import JsonObject
 from podiumd_tests.json_data import entries
@@ -207,6 +212,50 @@ def unready_workloads(items: Sequence[Item]) -> list[str]:
         if ready < wanted:
             found.append(f"{item.get('kind', '?')}/{metadata_name(item)} {ready}/{wanted}")
     return found
+
+
+def helm_replicas(env: Environment, namespaces: Sequence[str] | None = None) -> dict[str, int]:
+    """Replicas of each Deployment and StatefulSet in the deployed Helm releases, by "namespace/Kind/name".
+
+    Helm keeps a release as base64 of gzipped JSON inside the Secret's base64 data; a manifest without
+    replicas means 1.
+    """
+    found: dict[str, int] = {}
+    for namespace in env.namespaces if namespaces is None else namespaces:
+        releases = env.kube.get_json("secrets", "-l", "owner=helm,status=deployed", namespace=namespace)
+        for secret in entries(releases.get("items")):
+            data = base64.b64decode(base64.b64decode(str(section(secret, "data").get("release", ""))))
+            release = section({"release": json.loads(gzip.decompress(data))}, "release")
+            for doc in entries(list(yaml.safe_load_all(str(release.get("manifest", ""))))):
+                if doc.get("kind") in {"Deployment", "StatefulSet"}:
+                    where = section(doc, "metadata").get("namespace") or release.get("namespace") or namespace
+                    found[f"{where}/{doc['kind']}/{metadata_name(doc)}"] = _int(section(doc, "spec").get("replicas", 1))
+    return found
+
+
+def replica_drift(env: Environment, namespaces: Sequence[str] | None = None) -> list[str]:
+    """Workloads whose replicas differ from their Helm release, as "Kind/name live (Helm n)".
+
+    Catches a component a test scaled to 0 and never restored, which unready_workloads counts as 0/0 ready.
+    Workloads an autoscaler drives are left out.
+    """
+    wanted = helm_replicas(env, namespaces)
+    targets = [
+        (h, section(section(h, "spec"), "scaleTargetRef")) for h in env.items("horizontalpodautoscalers", namespaces)
+    ]
+    autoscaled = {f"{_namespace(h)}/{ref.get('kind')}/{ref.get('name')}" for h, ref in targets}
+    found: list[str] = []
+    for item in env.workloads(namespaces):
+        key = f"{_namespace(item)}/{item.get('kind')}/{metadata_name(item)}"
+        if key in wanted and key not in autoscaled:
+            live = _int(section(item, "spec").get("replicas", 1))
+            if live != wanted[key]:
+                found.append(f"{item.get('kind')}/{metadata_name(item)} {live} (Helm {wanted[key]})")
+    return found
+
+
+def _namespace(item: Item) -> str:
+    return str(section(item, "metadata").get("namespace", ""))
 
 
 def unhealthy_pods(pods: Sequence[Item]) -> list[str]:

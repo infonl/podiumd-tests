@@ -16,6 +16,7 @@ from podiumd_tests.redis import REDIS_HA
 from podiumd_tests.workloads import KEYCLOAKS
 from podiumd_tests.workloads import chart_older_than
 from podiumd_tests.workloads import failed_jobs
+from podiumd_tests.workloads import replica_drift
 from podiumd_tests.workloads import unhealthy_pods
 from podiumd_tests.workloads import unready_workloads
 
@@ -45,6 +46,16 @@ def test_workloads_ready(podiumd_env: Environment) -> None:
     """Every Deployment and StatefulSet has all wanted replicas ready."""
     not_ready = unready_workloads(podiumd_env.workloads())
     assert not not_ready, f"not ready: {not_ready}"
+
+
+@pytest.mark.source(
+    "podiumd-tests",
+    "A chaos test that scales a component to 0 and is stopped before it restores it leaves the component down.",
+)
+def test_workloads_have_their_helm_replicas(podiumd_env: Environment) -> None:
+    """Every Deployment and StatefulSet of a Helm release runs the replicas its release sets."""
+    drift = replica_drift(podiumd_env)
+    assert not drift, f"replicas differ from Helm: {drift}"
 
 
 @pytest.mark.source(

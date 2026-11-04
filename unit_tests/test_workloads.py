@@ -1,5 +1,7 @@
 """Unit tests for judging workload health from kubectl JSON."""
 
+import base64
+import gzip
 import json
 
 import pytest
@@ -14,6 +16,7 @@ from podiumd_tests.workloads import deployed_build
 from podiumd_tests.workloads import disruptions
 from podiumd_tests.workloads import failed_jobs
 from podiumd_tests.workloads import recreate_update_jobs
+from podiumd_tests.workloads import replica_drift
 from podiumd_tests.workloads import run_cronjob
 from podiumd_tests.workloads import scaled
 from podiumd_tests.workloads import unhealthy_pods
@@ -203,3 +206,40 @@ def test_disruptions_name_moved_pods_restarts_and_nodes():
 def test_an_unchanged_cluster_has_no_disruptions():
     state = ClusterState({"a": placed_pod("a", "zac-1")}, frozenset({"n1"}))
     assert disruptions(state, state) == []
+
+
+def _release_secret(manifest: str) -> dict[str, object]:
+    """A Helm release Secret as Helm stores it: base64 of gzipped JSON, base64-encoded again by Kubernetes."""
+    release = base64.b64encode(gzip.compress(json.dumps({"namespace": "podiumd", "manifest": manifest}).encode()))
+    return {"data": {"release": base64.b64encode(release).decode()}}
+
+
+MANIFEST = """
+kind: Deployment
+metadata: {name: openzaak}
+spec: {replicas: 2}
+---
+kind: Deployment
+metadata: {name: objecten}
+---
+kind: StatefulSet
+metadata: {name: clamav, namespace: podiumd}
+spec: {replicas: 1}
+---
+kind: Service
+metadata: {name: openzaak}
+"""
+
+
+def test_replica_drift_names_workloads_that_differ_from_their_helm_release(env_factory, fake_runner):
+    def workload(kind, name, replicas):
+        return {"kind": kind, "metadata": {"name": name, "namespace": "podiumd"}, "spec": {"replicas": replicas}}
+
+    fake_runner.answers["get secrets"] = (0, json.dumps({"items": [_release_secret(MANIFEST)]}))
+    deployments = [workload("Deployment", "openzaak", 2), workload("Deployment", "objecten", 0)]
+    deployments.append(workload("Deployment", "keycloak-operator", 0))  # not in a release: an operator's own
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": deployments}))
+    fake_runner.answers["get statefulsets"] = (0, json.dumps({"items": [workload("StatefulSet", "clamav", 0)]}))
+    hpa = {"metadata": {"namespace": "podiumd"}, "spec": {"scaleTargetRef": {"kind": "StatefulSet", "name": "clamav"}}}
+    fake_runner.answers["get horizontalpodautoscalers"] = (0, json.dumps({"items": [hpa]}))
+    assert replica_drift(env_factory()) == ["Deployment/objecten 0 (Helm 1)"]
