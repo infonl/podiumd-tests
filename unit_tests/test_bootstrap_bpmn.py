@@ -10,7 +10,6 @@ from podiumd_tests.bootstrap.bpmn import ZacBpmnProcess
 from podiumd_tests.bootstrap.bpmn import bpmn_zaaktype
 from podiumd_tests.bootstrap.bpmn import uuid_of
 from podiumd_tests.bootstrap.steps import ADMIN
-from podiumd_tests.json_data import section
 
 ZAAKTYPE = {
     "url": "https://oz/catalogi/api/v1/zaaktypen/zt-1/",
@@ -23,11 +22,8 @@ class FakeOpenZaak:
     def __init__(self, zaaktypen):
         self.zaaktypen = zaaktypen
 
-    def list(self, path, params):
-        if path.endswith("zaaktypen"):
-            return self.zaaktypen
-        assert params == {"zaaktype": ZAAKTYPE["url"]}
-        return [{"url": "https://oz/catalogi/api/v1/resultaattypen/rt-1", "omschrijving": "Afgehandeld"}]
+    def list(self, _path, _params):
+        return self.zaaktypen
 
 
 class FakeResponse(SimpleNamespace):
@@ -44,14 +40,15 @@ def test_bpmn_zaaktype_is_the_published_version():
 
 def test_configuration_links_the_process_to_the_zaaktype(monkeypatch):
     monkeypatch.setattr(bpmn, "user_groups", lambda _http, _zac: ["beheerders"])
-    body = ZacBpmnProcess(ADMIN).configuration(FakeOpenZaak([ZAAKTYPE]), None, "https://zac", ZAAKTYPE)  # pyright: ignore[reportArgumentType]
+    body = ZacBpmnProcess(ADMIN).configuration(None, "https://zac", ZAAKTYPE)  # pyright: ignore[reportArgumentType]
     assert (body["zaaktypeUuid"], body["bpmnProcessDefinitionKey"], body["groepNaam"]) == (
         "zt-1",
         PROCESS_KEY,
         "beheerders",
     )
-    assert section(body, "zaakNietOntvankelijkResultaattype")["id"] == "rt-1"
+    # A link left for a deleted zaaktype must neither block the next one nor break ZAC's list of links.
     assert "productaanvraagtype" not in body
+    assert "zaakNietOntvankelijkResultaattype" not in body
 
 
 LINK = {"bpmnProcessDefinitionKey": PROCESS_KEY, "zaaktypeUuid": "zt-1"}
@@ -62,6 +59,7 @@ LINK = {"bpmnProcessDefinitionKey": PROCESS_KEY, "zaaktypeUuid": "zt-1"}
     [
         ([PROCESS_KEY], [LINK], 2, True),
         ([PROCESS_KEY], [{**LINK, "zaaktypeUuid": "zt-old"}], 2, False),
+        ([PROCESS_KEY], [{**LINK, "zaakNietOntvankelijkResultaattype": {"id": "rt-1"}}], 2, False),
         ([], [LINK], 2, False),
         ([PROCESS_KEY], [LINK], 0, False),
     ],

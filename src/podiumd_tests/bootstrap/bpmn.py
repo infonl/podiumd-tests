@@ -71,7 +71,8 @@ class ZacBpmnProcess:
     """The process ptestBpmnProcess with its forms, linked to the BPMN test zaaktype, which PABC knows.
 
     ZAC 5.9 has no call to delete a zaaktype-bpmn-configuration: remove leaves it, and names it in a note. The link
-    has no productaanvraagtype, so a link left for a deleted zaaktype does not block the next one.
+    has no productaanvraagtype and no niet-ontvankelijk resultaattype, so a link left for a deleted zaaktype neither
+    blocks the next one nor breaks ZAC's list of links, which reads that resultaattype from Open Zaak.
     """
 
     admin: KeycloakUser
@@ -101,7 +102,10 @@ class ZacBpmnProcess:
         keys = {d.get("key") for d in entries(expect_status(http.get(zac + DEFINITIONS), HTTPStatus.OK).json())}
         links = entries(expect_status(http.get(zac + CONFIGURATION), HTTPStatus.OK).json())
         linked = any(
-            c.get("bpmnProcessDefinitionKey") == PROCESS_KEY and c.get("zaaktypeUuid") == zaaktype for c in links
+            c.get("bpmnProcessDefinitionKey") == PROCESS_KEY
+            and c.get("zaaktypeUuid") == zaaktype
+            and not c.get("zaakNietOntvankelijkResultaattype")
+            for c in links
         )
         if PROCESS_KEY not in keys or not linked:
             return False
@@ -127,15 +131,11 @@ class ZacBpmnProcess:
         for form in sorted(FILES.glob("*.json")):
             body = {"filename": form.name, "content": form.read_text(encoding="utf-8")}
             expect_status(http.post(f"{zac}{DEFINITIONS}/{PROCESS_KEY}/forms", json=body), HTTPStatus.CREATED)
-        expect_status(
-            http.post(zac + CONFIGURATION, json=self.configuration(openzaak, http, zac, zaaktype)), HTTPStatus.OK
-        )
+        expect_status(http.post(zac + CONFIGURATION, json=self.configuration(http, zac, zaaktype)), HTTPStatus.OK)
         return {}
 
-    def configuration(self, openzaak: ApiClient, http: requests.Session, zac: str, zaaktype: JsonObject) -> JsonObject:
-        """ZAC's zaaktype-bpmn-configuration request, as ZAC's integration tests send it."""
-        resultaattype = openzaak.list(f"{CATALOGI}/resultaattypen", {"zaaktype": str(zaaktype["url"])})[0]
-        omschrijving = str(resultaattype["omschrijving"])
+    def configuration(self, http: requests.Session, zac: str, zaaktype: JsonObject) -> JsonObject:
+        """ZAC's zaaktype-bpmn-configuration request for the zaaktype."""
         return {
             "zaaktypeUuid": uuid_of(zaaktype["url"]),
             "zaaktypeOmschrijving": zaaktype["omschrijving"],
@@ -149,16 +149,6 @@ class ZacBpmnProcess:
                 "verwerkingregisterWaarde": "Algemeen",
             },
             "zaakbeeindigParameters": [],
-            "zaakNietOntvankelijkResultaattype": {
-                "id": uuid_of(resultaattype["url"]),
-                "naam": omschrijving,
-                "naamGeneriek": omschrijving,
-                "archiefNominatie": "VERNIETIGEN",
-                "archiefTermijn": "10 jaren",
-                "besluitVerplicht": False,
-                "vervaldatumBesluitVerplicht": False,
-                "toelichting": "podiumd-tests",
-            },
         }
 
     def remove(self, ctx: Context, /) -> tuple[str, ...]:
