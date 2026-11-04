@@ -33,6 +33,13 @@ RECOVERY_SECONDS = 180
 
 
 @STALE_LABEL
+@pytest.mark.scenario("""
+    Given Redis HA with the master readiness check
+    When the roles the redis-ha pods report are read
+    Then the service redis-ha-master has exactly one ready pod
+    And that pod reports the role master
+    And no pod labelled master reports another role
+""")
 def test_redis_ha_master_service_points_at_the_master(podiumd_env: Environment) -> None:
     """redis-ha-master has one ready endpoint, that pod reports role:master, and no master-labelled pod is a slave.
 
@@ -60,6 +67,13 @@ def test_redis_ha_master_service_points_at_the_master(podiumd_env: Environment) 
     "podiumd-tests",
     "helm-charts #634 (IN-2961, IN-3225): after the master pod goes, redis-ha-master points at one master again.",
 )
+@pytest.mark.scenario("""
+    Given Redis HA runs several replicas
+    And a key is stored on the master
+    When the master pod is deleted
+    Then redis-ha-master points at a master again, which still holds the key
+    And all redis-ha pods are ready again
+""")
 def test_redis_ha_master_recovers_when_the_master_pod_is_deleted(
     podiumd_env: Environment, registry: ResourceRegistry
 ) -> None:

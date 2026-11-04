@@ -102,6 +102,10 @@ def fixture_grafana(http: requests.Session, urls: dict[str, str], credentials: S
     "PI test_monitoring_logging.py",
     "monitoring-logging checks adapted from podiumd-minikube: Grafana datasources, scrape targets and Loki pod logs.",
 )
+@pytest.mark.scenario("""
+    When Grafana's datasources are read
+    Then there is a Prometheus datasource
+""")
 def test_prometheus_datasource_provisioned(grafana: Grafana) -> None:
     """Grafana has a Prometheus datasource."""
     kinds = sorted({str(d.get("type")) for d in grafana.datasources})
@@ -124,6 +128,11 @@ def test_prometheus_datasource_provisioned(grafana: Grafana) -> None:
     "PI test_monitoring_logging.py",
     "monitoring-logging checks adapted from podiumd-minikube: Grafana datasources, scrape targets and Loki pod logs.",
 )
+@pytest.mark.scenario("""
+    When Prometheus' scrape targets are read through Grafana
+    Then there are scrape targets
+    And all of them are up
+""")
 def test_prometheus_scrape_targets_up(grafana: Grafana) -> None:
     """Prometheus has scrape targets, and all of them are up."""
     if not grafana.uid("prometheus"):
@@ -143,6 +152,10 @@ def test_prometheus_scrape_targets_up(grafana: Grafana) -> None:
     "PI test_monitoring_logging.py",
     "monitoring-logging checks adapted from podiumd-minikube: Loki has the namespace's pod logs.",
 )
+@pytest.mark.scenario("""
+    When Loki is asked through Grafana for logs of the application namespace
+    Then it has recent log streams of that namespace
+""")
 def test_loki_has_pod_logs(grafana: Grafana, podiumd_env: Environment) -> None:
     """Loki has recent log streams of the application namespace (Alloy forwards them)."""
     if not grafana.uid("loki"):
@@ -159,6 +172,11 @@ def test_loki_has_pod_logs(grafana: Grafana, podiumd_env: Environment) -> None:
 )
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
+@pytest.mark.scenario("""
+    Given the ServiceMonitors and PodMonitors of the environment
+    When Prometheus' scrape targets are read
+    Then every monitor has scrape targets
+""")
 def test_every_monitor_has_scrape_targets(grafana: Grafana, podiumd_env: Environment) -> None:
     """Every ServiceMonitor and PodMonitor has scrape targets: Prometheus selects it and it matches running pods."""
     if not grafana.uid("prometheus"):
@@ -186,6 +204,11 @@ def test_every_monitor_has_scrape_targets(grafana: Grafana, podiumd_env: Environ
 )
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
+@pytest.mark.scenario("""
+    Given every deployed component
+    When Prometheus is read through Grafana
+    Then each component has a scrape target that is up, or sends OpenTelemetry metrics
+""")
 def test_every_component_reports_metrics(grafana: Grafana, podiumd_env: Environment) -> None:
     """Every deployed component has series in Prometheus: a monitor target that is up, or OTEL remote write."""
     if not grafana.uid("prometheus"):
@@ -218,6 +241,11 @@ LOG_WINDOW = "15m"
 )
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
+@pytest.mark.scenario("""
+    Given every running pod that wrote log lines in the last 15 minutes
+    When Loki is asked through Grafana for the log lines of that window
+    Then Loki has log lines of each such pod
+""")
 def test_every_pod_logs_to_loki(grafana: Grafana, podiumd_env: Environment) -> None:
     """Every running pod that wrote log lines in the last LOG_WINDOW has log lines of that window in Loki.
 

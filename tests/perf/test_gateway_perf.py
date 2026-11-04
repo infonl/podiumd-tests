@@ -42,6 +42,12 @@ ROUNDS = (1, 2)
     ("scenario", "rnd"),
     [requiring(c, s, r, test_id=f"{s}-{r}") for r in ROUNDS for s, (c, _p, _s) in GATEWAY_SCENARIOS.items()],
 )
+@pytest.mark.scenario("""
+    Given simulated anonymous users run each scenario through the public gateway
+    When the load test ends after its warm-up and measured time, in each of two rounds
+    Then the scenario's 95th percentile response time stays within its threshold
+    And so does its ratio of failed requests
+""")
 def test_gateway_scenario_meets_its_threshold(
     request: pytest.FixtureRequest, podiumd_env: Environment, perf_dir: Path, scenario: str, rnd: int
 ) -> None:

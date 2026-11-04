@@ -39,6 +39,11 @@ METRICS_PORT_NAME = "metrics"
     "Checks that OpenBao serves its metrics on the API listener only with a token (helm-charts request).",
 )
 @pytest.mark.parametrize("query", ["", "?format=prometheus"])
+@pytest.mark.scenario("""
+    Given a request without an OpenBao token
+    When it asks OpenBao's public API for its metrics, in either format
+    Then OpenBao refuses the request
+""")
 def test_metrics_need_a_token(http: requests.Session, urls: dict[str, str], query: str) -> None:
     """Without a token the metrics endpoint is refused, not 200 with metrics."""
     response = http.get(f"{urls['openbao']}/v1/sys/metrics{query}")
@@ -74,6 +79,11 @@ def fixture_metrics_url(podiumd_env: Environment) -> Generator[str]:
 )
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
+@pytest.mark.scenario("""
+    Given OpenBao's metrics-only listener
+    When Prometheus metrics are asked for without a token
+    Then the listener answers 200 OK with Prometheus metrics
+""")
 def test_metrics_listener_serves_prometheus_metrics_without_a_token(http: requests.Session, metrics_url: str) -> None:
     """The metrics-only listener answers /v1/sys/metrics?format=prometheus with metrics, no token needed."""
     response = http.get(f"{metrics_url}/v1/sys/metrics?format=prometheus")
@@ -88,6 +98,12 @@ def test_metrics_listener_serves_prometheus_metrics_without_a_token(http: reques
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
 @pytest.mark.parametrize("path", ["/v1/sys/seal-status", "/v1/sys/mounts", "/v1/secret/data/x", "/ui/"])
+@pytest.mark.scenario("""
+    Given OpenBao's metrics-only listener
+    When another path, such as the seal status, the mounts, a secret or the UI, is asked for
+    Then the listener does not answer 200 OK
+    And it gives no server error
+""")
 def test_metrics_listener_serves_nothing_else(http: requests.Session, metrics_url: str, path: str) -> None:
     """metrics_only: every other path on the metrics listener is refused or not found, never 200."""
     response = http.get(f"{metrics_url}{path}", allow_redirects=False)

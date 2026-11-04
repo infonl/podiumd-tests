@@ -38,6 +38,11 @@ pytestmark = [
     ("component", "path"),
     [requiring("openinwoner", "openinwoner", "/"), requiring("openformulieren", "openformulieren", f"/{TEST_FORM}/")],
 )
+@pytest.mark.scenario("""
+    Given each public page: the Open Inwoner homepage and the Open Formulieren test form
+    When the page is rendered in a browser
+    Then an axe-core scan finds no critical WCAG 2.1 AA violation
+""")
 def test_page_has_no_critical_wcag_violation(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     urls: dict[str, str],

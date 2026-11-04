@@ -61,6 +61,11 @@ def headers_param(component: str) -> ParameterSet:
 
 
 @pytest.mark.parametrize("component", [headers_param(c) for c in PUBLIC])
+@pytest.mark.scenario("""
+    When the root of each public host is opened
+    Then it sends HSTS and nosniff headers
+    And an HTML page also sends frame protection
+""")
 def test_security_headers(
     http: requests.Session, podiumd_env: Environment, urls: dict[str, str], component: str
 ) -> None:
@@ -70,6 +75,10 @@ def test_security_headers(
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in PUBLIC])
+@pytest.mark.scenario("""
+    When the root of each public host is opened
+    Then every session, auth or token cookie it sets is Secure and HttpOnly
+""")
 def test_session_cookies_are_secure(
     http: requests.Session, podiumd_env: Environment, urls: dict[str, str], component: str
 ) -> None:
@@ -79,6 +88,11 @@ def test_session_cookies_are_secure(
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in PUBLIC])
+@pytest.mark.scenario("""
+    Given a page on a foreign origin
+    When it sends a CORS preflight and a GET to the root of each public host
+    Then the host allows neither to be read by that origin
+""")
 def test_foreign_origin_gets_no_cors_access(
     http: requests.Session, podiumd_env: Environment, urls: dict[str, str], component: str
 ) -> None:
@@ -91,6 +105,10 @@ def test_foreign_origin_gets_no_cors_access(
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in PUBLIC])
+@pytest.mark.scenario("""
+    When the TLS certificate of each public host is read
+    Then it is valid for at least the minimum number of days ahead
+""")
 def test_certificate_is_valid_long_enough(podiumd_env: Environment, urls: dict[str, str], component: str) -> None:
     """The host's certificate is valid for it and for at least MIN_CERT_DAYS more days."""
     url = public_url(podiumd_env, urls, component)

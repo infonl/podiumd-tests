@@ -37,6 +37,11 @@ POLICY_CONFIG = {
 AKS_CONFIG = {"routing-mode": "native", "ipam": "delegated-plugin"}
 
 
+@pytest.mark.scenario("""
+    When the cluster's DaemonSets are read
+    Then there is no kube-proxy
+    And every Cilium agent pod is ready
+""")
 def test_cilium_replaces_kube_proxy(podiumd_env: Environment) -> None:
     """Cilium is the service proxy: no kube-proxy DaemonSet, and every Cilium agent pod is ready."""
     daemonsets = {metadata_name(d): d for d in podiumd_env.kube.items("daemonsets", namespace=KUBE_SYSTEM)}
@@ -46,6 +51,12 @@ def test_cilium_replaces_kube_proxy(podiumd_env: Environment) -> None:
     assert status.get("numberReady") == status.get("desiredNumberScheduled")
 
 
+@pytest.mark.scenario("""
+    When Cilium's configuration is read
+    Then it replaces kube-proxy and enforces network policies
+    And it runs without Hubble and without the L7 proxy
+    And on AKS it uses native routing and delegated IPAM
+""")
 def test_cilium_config(podiumd_env: Environment) -> None:
     """cilium-config enforces the policy intent; on AKS it also uses Azure's native routing and delegated IPAM."""
     config = section(podiumd_env.kube.get_json("configmap", "cilium-config", namespace=KUBE_SYSTEM), "data")

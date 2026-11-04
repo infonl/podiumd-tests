@@ -83,6 +83,12 @@ def _owned_crds(env: Environment, operator: str) -> list[dict[str, object]]:
 
 
 @pytest.mark.parametrize("operator", sorted(OPERATOR_GROUPS))
+@pytest.mark.scenario("""
+    Given each deployed operator (Keycloak, Redis)
+    When the CRDs of its API group are listed
+    Then the API group has CRDs
+    And every CRD is Established
+""")
 def test_operator_crds_are_established(podiumd_env: Environment, operator: str) -> None:
     """Every CRD of the operator's API group exists and is Established."""
     not_ready = [metadata_name(c) for c in _owned_crds(podiumd_env, operator) if not is_established(c)]
@@ -90,6 +96,12 @@ def test_operator_crds_are_established(podiumd_env: Environment, operator: str) 
 
 
 @pytest.mark.parametrize("operator", sorted(MARKERS))
+@pytest.mark.scenario("""
+    Given each deployed operator (Keycloak, Redis)
+    When its CRDs' schemas are compared with the version of the running operator image
+    Then they have the fields that operator version introduced
+    And none of the fields it dropped
+""")
 def test_operator_crd_schemas_match_the_operator_version(podiumd_env: Environment, operator: str) -> None:
     """The CRDs' storage schemas have the fields of the running operator's image version."""
     owned = _owned_crds(podiumd_env, operator)

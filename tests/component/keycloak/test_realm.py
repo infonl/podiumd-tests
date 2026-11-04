@@ -37,6 +37,12 @@ def fixture_realm(podiumd_env: Environment) -> str:
     "TA regression/91-fb-keycloak-realm-snapshot.spec.ts",
     "Snapshot of realm podiumd's public endpoints, so a deploy that loses the realm or breaks its URLs is caught.",
 )
+@pytest.mark.scenario("""
+    When the OIDC discovery document of the Keycloak realm the applications log in to is read
+    Then it names the issuer, token, authorization and JWKS endpoints
+    And the issuer is on the Keycloak host
+    And the realm supports the authorization code and password grants
+""")
 def test_discovery_document(http: requests.Session, urls: dict[str, str], realm: str) -> None:
     """The realm publishes its endpoints on the Keycloak host, and supports the code and password grants."""
     config = http.get(discovery_url(urls["keycloak"], realm)).json()
@@ -50,6 +56,11 @@ def test_discovery_document(http: requests.Session, urls: dict[str, str], realm:
     "TA regression/91-fb-keycloak-realm-snapshot.spec.ts",
     "Snapshot of realm podiumd's public endpoints, so a deploy that loses the realm or breaks its URLs is caught.",
 )
+@pytest.mark.scenario("""
+    When the signing keys of the Keycloak realm the applications log in to are read
+    Then the realm publishes at least one signing key, each with a key type
+    And the realm publishes its public key
+""")
 def test_signing_keys(http: requests.Session, urls: dict[str, str], realm: str) -> None:
     """The realm has a public key and at least one signing key in its JWKS."""
     config = http.get(discovery_url(urls["keycloak"], realm)).json()
@@ -65,6 +76,11 @@ def test_signing_keys(http: requests.Session, urls: dict[str, str], realm: str) 
     "Keycloak's bootstrap admin (Secret keycloak-podiumd-admin, Job ensurePodiumdAdminUser) works against the admin"
     " REST API.",
 )
+@pytest.mark.scenario("""
+    Given Keycloak's bootstrap admin
+    When the admin asks the Keycloak admin API for the server info
+    Then Keycloak returns its system info
+""")
 def test_bootstrap_admin_reads_the_server_info(podiumd_env: Environment) -> None:
     """The admin of secrets keycloak_admin_username and keycloak_admin_password gets /admin/serverinfo."""
     assert for_environment(podiumd_env, "master").server_info().get("systemInfo")
@@ -75,6 +91,13 @@ def test_bootstrap_admin_reads_the_server_info(podiumd_env: Environment) -> None
     "podiumd-tests",
     "Security baseline: the realm meets podiumd's realm templates for brute force, token lifespan and events.",
 )
+@pytest.mark.scenario("""
+    Given the Keycloak realm the applications log in to, or the realm master
+    When its settings are read
+    Then it locks out password guessing and requires a minimum password length
+    And it keeps access tokens short and revokes used refresh tokens
+    And it logs login and admin events and requires TLS with HSTS
+""")
 def test_realm_meets_the_security_policy(podiumd_env: Environment, which: str) -> None:
     """The realm locks out password guessing, keeps tokens short and logs events, as podiumd's realm templates do."""
     realm = realm_of(podiumd_env) if which == "login" else "master"
@@ -85,6 +108,13 @@ def test_realm_meets_the_security_policy(podiumd_env: Environment, which: str) -
 @pytest.mark.source(
     "podiumd-tests", "Security baseline: the realm's brute-force protection locks a user out after wrong passwords."
 )
+@pytest.mark.scenario("""
+    Given a new user in the Keycloak realm the applications log in to
+    When someone logs in with a wrong password as often as the realm allows
+    Then Keycloak refuses each of these logins
+    And Keycloak locks the user out
+    And Keycloak refuses a login with the right password too
+""")
 def test_password_guessing_locks_the_user_out(
     podiumd_env: Environment, urls: dict[str, str], realm: str, registry: ResourceRegistry
 ) -> None:
@@ -114,6 +144,12 @@ def test_password_guessing_locks_the_user_out(
 
 @pytest.mark.tc("FB-004")
 @pytest.mark.source("draaiboek FB-004", "Local municipal policy can be applied to the username and password regime.")
+@pytest.mark.scenario("""
+    Given a new user in the Keycloak realm the applications log in to
+    And the realm's password policy has counted rules, such as a minimum length or digits
+    When the user's password is set to one that misses a single rule by one
+    Then Keycloak refuses that password, for every rule
+""")
 def test_realm_enforces_its_password_policy(podiumd_env: Environment, realm: str, registry: ResourceRegistry) -> None:
     """Keycloak refuses a new password that misses one counted rule of the realm's passwordPolicy by one."""
     admin = for_environment(podiumd_env, realm)

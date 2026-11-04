@@ -43,6 +43,11 @@ pytestmark = pytest.mark.smoke
     "Continuity pings: every PodiumD component, Keycloak's realm included, answers through its ingress within 5 s.",
 )
 @pytest.mark.requires("keycloak")
+@pytest.mark.scenario("""
+    When the OIDC discovery document of the Keycloak realm master is read
+    Then it answers 200 OK
+    And it names the realm master as issuer
+""")
 def test_keycloak_discovery(http: requests.Session, urls: dict[str, str]) -> None:
     """The master realm publishes its OIDC configuration."""
     response = expect_status(http.get(discovery_url(urls["keycloak"], "master")), HTTPStatus.OK)
@@ -63,6 +68,11 @@ def test_keycloak_discovery(http: requests.Session, urls: dict[str, str]) -> Non
 )
 @pytest.mark.requires("keycloak")
 @pytest.mark.parametrize("component", [requiring(c, c) for c in LOGIN_PATHS])
+@pytest.mark.scenario("""
+    Given an anonymous user
+    When the user starts the login of each deployed application
+    Then the user ends on Keycloak's login form
+""")
 def test_login_ends_on_the_keycloak_form(
     http: requests.Session, urls: dict[str, str], podiumd_env: Environment, component: str
 ) -> None:
@@ -88,6 +98,11 @@ def test_login_ends_on_the_keycloak_form(
     reason="[podiumd-chart-5] podiumd 4.10.0: Keycloak client objecten accepts only the objecten host as redirect URI,"
     " so the admin login on the objecttypen host answers 400; not yet reported upstream",
 )
+@pytest.mark.scenario("""
+    Given Open Object serves Objecttypen on its own host
+    When an anonymous user starts the admin login on the objecttypen host
+    Then the user ends on Keycloak's login form
+""")
 def test_admin_login_on_the_objecttypen_host_ends_on_the_keycloak_form(
     http: requests.Session, urls: dict[str, str], podiumd_env: Environment
 ) -> None:
@@ -124,6 +139,12 @@ def test_admin_login_on_the_objecttypen_host_ends_on_the_keycloak_form(
 )
 @pytest.mark.requires("openinwoner")
 @pytest.mark.tc("ARCH-019")
+@pytest.mark.scenario("""
+    When an anonymous user opens the Open Inwoner login page
+    Then the page has the Open Inwoner theme
+    And it offers a DigiD login with the text "Log in met DigiD"
+    And it offers an eHerkenning login
+""")
 def test_portaal_login_page_offers_digid_and_eherkenning(http: requests.Session, urls: dict[str, str]) -> None:
     """The Open Inwoner login page has the theme and both login options (82, 05a, 99)."""
     response = expect_status(http.get(urls["openinwoner"] + "/accounts/login/"), HTTPStatus.OK)
@@ -160,6 +181,11 @@ def test_portaal_login_page_offers_digid_and_eherkenning(http: requests.Session,
 )
 @pytest.mark.requires("openinwoner", "keycloak")
 @pytest.mark.parametrize("method", ["digid", "eherkenning"])
+@pytest.mark.scenario("""
+    Given an anonymous user on Open Inwoner
+    When the user starts a DigiD or eHerkenning login
+    Then the user ends on Keycloak's login form
+""")
 def test_portaal_login_redirects_to_keycloak(http: requests.Session, urls: dict[str, str], method: str) -> None:
     """Starting a DigiD or eHerkenning login ends on the Keycloak login form (82 test 4, 05b and 99 first leg)."""
     keycloak_login_realm(http.get(f"{urls['openinwoner']}/{method}-oidc/authenticate/?next=/"), keycloak_hosts(urls))

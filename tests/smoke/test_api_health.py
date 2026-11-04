@@ -79,6 +79,10 @@ ANONYMOUS = [
     "PodiumD 4.10 adds Open VTB, ZaakBrug and the ZGW Office add-in, whose health endpoints are checked.",
 )
 @pytest.mark.parametrize(("component", "path"), [requiring(c, c, p, test_id=f"{c}{p}") for c, p in HEALTH])
+@pytest.mark.scenario("""
+    When the health endpoint of each deployed component is called
+    Then it answers 200 OK
+""")
 def test_health_endpoint(http: requests.Session, urls: dict[str, str], component: str, path: str) -> None:
     """The component's own health endpoint reports healthy."""
     expect_status(http.get(urls[component] + path), HTTPStatus.OK)
@@ -132,6 +136,11 @@ def test_health_endpoint(http: requests.Session, urls: dict[str, str], component
     ("component", "method", "path", "headers"),
     [requiring(c, c, m, p, h, test_id=f"{c}{p}{'-wrong-key' if h else ''}") for c, m, p, h in ANONYMOUS],
 )
+@pytest.mark.scenario("""
+    Given a request without credentials, or with a wrong API key
+    When it calls each protected API endpoint
+    Then the API answers 401 or 403
+""")
 def test_anonymous_call_is_refused(
     http: requests.Session, urls: dict[str, str], component: str, method: str, path: str, headers: dict[str, str]
 ) -> None:
@@ -149,6 +158,11 @@ def test_anonymous_call_is_refused(
 @pytest.mark.source(
     "EX tests/smoke/79-omc-health.spec.ts", "NotifyNL OMC health and auth: OMC's Version endpoint answers."
 )
+@pytest.mark.scenario("""
+    Given a token signed with OMC's own JWT settings
+    When the token is used to ask OMC for its version
+    Then OMC answers 200 OK
+""")
 def test_omc_version_answers_to_its_token(
     http: requests.Session, podiumd_env: Environment, urls: dict[str, str]
 ) -> None:

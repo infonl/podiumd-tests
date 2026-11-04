@@ -45,6 +45,11 @@ MAX_SECONDS = 5.0
     "External reachability over real HTTPS with real DNS and certificates, adapted from podiumd-minikube.",
 )
 @pytest.mark.parametrize("component", [requiring(c, c) for c in sorted(HOSTED)])
+@pytest.mark.scenario("""
+    When the root of each deployed component is opened through its ingress
+    Then it answers without a server error
+    And it answers within 5 seconds
+""")
 def test_root_answers(http: requests.Session, urls: dict[str, str], component: str) -> None:
     """The root of each component answers without a server error, within 5 s (81).
 
@@ -80,6 +85,11 @@ def test_root_answers(http: requests.Session, urls: dict[str, str], component: s
     "Continuity pings: every PodiumD component is reachable through its ingress and answers within 5 s.",
 )
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
+@pytest.mark.scenario("""
+    When the Django admin login page of each deployed Maykin app is opened
+    Then it answers 200 OK
+    And the browser ends on the login page
+""")
 def test_django_admin_login_page(http: requests.Session, urls: dict[str, str], component: str) -> None:
     """The admin login page renders (MK/PI admin login reachable, 00h, 00l, 81)."""
     response = expect_status(http.get(urls[component] + "/admin/login/"), HTTPStatus.OK)

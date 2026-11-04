@@ -41,6 +41,12 @@ SPATIAL = frozenset({"openzaak", "objecten"})
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
+@pytest.mark.scenario("""
+    Given each deployed Maykin app
+    When the app connects to its database
+    Then the database is PostgreSQL
+    And the apps that store geometry (Open Zaak, Objecten) have PostGIS
+""")
 def test_database(podiumd_env: Environment, component: str) -> None:
     """The app reaches its PostgreSQL database; apps with geometry have PostGIS (MK/PI test_database.py)."""
     info = cast(
@@ -62,6 +68,11 @@ def test_database(podiumd_env: Environment, component: str) -> None:
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
 @pytest.mark.parametrize("component", [requiring(c, c) for c in ZGW_CONSUMER_APPS])
+@pytest.mark.scenario("""
+    Given each deployed app that calls other APIs through configured services
+    When the app calls each service its configuration references with that service's credentials
+    Then every service lists its API without a problem
+""")
 def test_zgw_services_authenticate(podiumd_env: Environment, component: str) -> None:
     """Every zgw_consumers Service the app's config references lists its API with the Service's own credentials (PI)."""
     assert service_problems(podiumd_env, component) == []
@@ -74,6 +85,11 @@ def test_zgw_services_authenticate(podiumd_env: Environment, component: str) -> 
 @pytest.mark.cluster
 @pytest.mark.requires("cluster")
 @pytest.mark.parametrize("component", [requiring(c, c) for c in SERVICE_REFERENCES])
+@pytest.mark.scenario("""
+    Given each deployed app whose configuration PodiumD links to services
+    When its configuration is read
+    Then every configuration field PodiumD sets references an existing service
+""")
 def test_config_references_services(podiumd_env: Environment, component: str) -> None:
     """The app's config fields that PodiumD sets reference a Service in every row."""
     assert reference_problems(podiumd_env, component) == []
@@ -81,6 +97,11 @@ def test_config_references_services(podiumd_env: Environment, component: str) ->
 
 @pytest.mark.source("MK test_django_admin_login.py", "The superuser logs in to the Django admin of each Maykin app.")
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
+@pytest.mark.scenario("""
+    Given each deployed Maykin app with a local admin login
+    When the superuser logs in to the Django admin
+    Then the admin shows the superuser as logged in
+""")
 def test_django_admin_login(podiumd_env: Environment, credentials: SecretResolver, component: str) -> None:
     """The app's superuser logs in to the admin (MK test_django_admin_login.py); environments with SSO only skip."""
     _, response = superuser_login(podiumd_env, credentials, component)

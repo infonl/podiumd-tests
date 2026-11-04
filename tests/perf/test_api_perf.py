@@ -100,6 +100,12 @@ def endpoint_params() -> list[ParameterSet]:
 
 
 @pytest.mark.parametrize("endpoint", endpoint_params())
+@pytest.mark.scenario("""
+    Given simulated users call each API endpoint during a load test
+    When the load test ends
+    Then the endpoint's 95th percentile response time stays within its threshold
+    And so does its ratio of failed requests
+""")
 def test_endpoint_meets_its_threshold(stats: dict[str, EndpointStats], endpoint: str) -> None:
     """The endpoint's p95 and failure ratio stay within perf.yaml."""
     assert endpoint in stats, f"Locust made no {endpoint} requests"
@@ -111,6 +117,11 @@ def test_endpoint_meets_its_threshold(stats: dict[str, EndpointStats], endpoint:
     "Perf shows change over time per environment, also where its absolute numbers mean little (minikube).",
 )
 @pytest.mark.parametrize("endpoint", [requiring(c, e, test_id=e) for e, c in ENDPOINTS.items()])
+@pytest.mark.scenario("""
+    Given earlier load tests of this environment with the same settings
+    When each API endpoint is measured in a new load test
+    Then its 95th percentile response time is no slowdown against the median of the earlier runs
+""")
 def test_endpoint_is_not_slower_than_before(stats: dict[str, EndpointStats], perf_dir: Path, endpoint: str) -> None:
     """The endpoint's p95 is no slowdown (stats.slowdown_limit) against its median over the earlier comparable runs."""
     if endpoint not in stats:

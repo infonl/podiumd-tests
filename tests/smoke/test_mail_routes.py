@@ -41,12 +41,22 @@ def outside(routes: list[MailRoute], internal: frozenset[str]) -> list[str]:
     return [f"{r.where} = {r.host}" for r in routes if not is_internal(r.host, internal)]
 
 
+@pytest.mark.scenario("""
+    Given an environment whose mail must stay inside the cluster
+    When the SMTP hosts of all containers are read
+    Then each is a cluster service or no server
+""")
 def test_workloads_send_mail_only_inside_the_cluster(podiumd_env: Environment, internal: frozenset[str]) -> None:
     """Every SMTP host a container gets is a cluster Service or no server."""
     assert not outside(workload_routes(podiumd_env), internal)
 
 
 @pytest.mark.requires("keycloak")
+@pytest.mark.scenario("""
+    Given an environment whose mail must stay inside the cluster
+    When the mail settings of the Keycloak realm the applications log in to and of the realm master are read
+    Then each sends mail to a cluster service, or not at all
+""")
 def test_keycloak_realms_send_mail_only_inside_the_cluster(podiumd_env: Environment, internal: frozenset[str]) -> None:
     """The login realm and master send mail to a cluster Service, or not at all."""
     admins = [for_environment(podiumd_env), for_environment(podiumd_env, "master")]

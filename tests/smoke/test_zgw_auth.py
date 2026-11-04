@@ -47,6 +47,11 @@ def _get(http: requests.Session, url: str, token: str) -> requests.Response:
     "ZGW authentication: the Open Zaak Catalogi API is reachable with a ZGW JWT (HS256, user_id, user_representation).",
 )
 @pytest.mark.parametrize("path", ["/catalogi/api/v1/catalogussen", "/catalogi/api/v1/zaaktypen"])
+@pytest.mark.scenario("""
+    Given a ZGW token signed with the client's secret
+    When it is used to list catalogussen or zaaktypen in Open Zaak
+    Then Open Zaak answers 200 OK with a paginated list
+""")
 def test_jwt_is_accepted(
     http: requests.Session, urls: dict[str, str], credentials: SecretResolver, client_id: str, path: str
 ) -> None:
@@ -67,6 +72,11 @@ def test_jwt_is_accepted(
     "Continuity graceful degradation: Open Zaak answers an invalid token with 401/403, not a crash.",
 )
 @pytest.mark.parametrize("wrong", ["secret", "not-a-jwt"])
+@pytest.mark.scenario("""
+    Given a ZGW token with a wrong signature, or one that is no JWT
+    When it is used to list catalogussen in Open Zaak
+    Then Open Zaak answers 401 or 403
+""")
 def test_bad_token_is_refused(http: requests.Session, urls: dict[str, str], client_id: str, wrong: str) -> None:
     """A token with a wrong signature, or one that is no JWT, is refused (TA reg-121, 22b)."""
     token = zgw_jwt(client_id, "ptest-wrong-secret") if wrong == "secret" else "ptest-bogus"

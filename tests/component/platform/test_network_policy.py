@@ -35,6 +35,12 @@ ATTACKER = "ptest-bootstrap-mock-server"
 REDIS = ("redis-ha-master", "6379")
 
 
+@pytest.mark.scenario("""
+    Given a pod that is not on the network policy's allow-list of Redis
+    When the pod opens a TCP connection to redis-ha
+    Then the connection fails
+    And Cilium records a policy drop of that connection
+""")
 def test_network_policy_blocks_a_non_allowlisted_pod(podiumd_env: Environment, tmp_path: Path) -> None:
     """From a pod off the allow-list a TCP connect to redis-ha is denied, and the drop is recorded."""
     kube = podiumd_env.kube

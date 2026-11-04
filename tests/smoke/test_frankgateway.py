@@ -37,6 +37,12 @@ ROUTES = {
     "frankgateway profile: the outway serves the api-proxy's paths.",
 )
 @pytest.mark.parametrize("path", [pytest.param(p, id=n) for n, p in ROUTES.items()])
+@pytest.mark.scenario("""
+    When each base registration route (BRP, BAG, KVK) of the Frank!Gateway outway is called
+    Then the outway has a route for it
+    And its upstream is available
+    And the BRP route refuses GET with 405 Method Not Allowed
+""")
 def test_outway_routes_to_upstream(http: requests.Session, urls: dict[str, str], path: str) -> None:
     """The outway has a route, and its upstream is available (no 503).
 
@@ -53,6 +59,11 @@ def test_outway_routes_to_upstream(http: requests.Session, urls: dict[str, str],
     "TA smoke/192-frankgateway-health.spec.ts",
     "Frank!Gateway outway: the KVK route reaches KVK's test dataset and injects the OpenBao-backed API key.",
 )
+@pytest.mark.scenario("""
+    When the KVK basisprofiel of a test company is asked for through the Frank!Gateway outway
+    Then KVK answers 200 OK with that kvkNummer
+    And so accepts the API key the outway adds from OpenBao
+""")
 def test_outway_key_is_accepted_by_the_kvk_upstream(http: requests.Session, urls: dict[str, str]) -> None:
     """The KvK basisprofiel route answers 200 with the kvkNummer: the outway's API key (OpenBao) is accepted.
 

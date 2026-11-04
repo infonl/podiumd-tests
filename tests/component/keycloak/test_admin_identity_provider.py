@@ -60,6 +60,11 @@ def _delete_user(admin: KeycloakAdmin, username: str) -> None:
     "podiumd-tests",
     "Keycloak 26.8 refuses an admin-role IdP mapper unless the IdP allows admin role mapping; the realm import fails.",
 )
+@pytest.mark.scenario("""
+    Given an identity provider of the Keycloak realm master that grants the admin role
+    When its configuration is read
+    Then it allows admin role mapping
+""")
 def test_admin_role_identity_provider_allows_admin_role_mapping(podiumd_env: Environment) -> None:
     """Every master-realm IdP whose mapper grants the admin role has config.allowAdminRoleMapping true."""
     offenders = []
@@ -75,6 +80,13 @@ def test_admin_role_identity_provider_allows_admin_role_mapping(podiumd_env: Env
     "podiumd-tests",
     "An admin console login through the admin-role identity provider, with TOTP enrolment, gives the user admin.",
 )
+@pytest.mark.scenario("""
+    Given the test user of the admin identity provider has never logged in to Keycloak
+    When the user logs in to the Keycloak admin console through that identity provider
+    And the user sets up a one-time code (TOTP)
+    Then the admin console opens
+    And the user exists in the realm master with the admin role
+""")
 def test_admin_identity_provider_login_gets_the_admin_role(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     urls: dict[str, str],
