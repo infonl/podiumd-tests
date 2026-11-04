@@ -67,9 +67,9 @@ def _main_deployment(env: Environment, deployments: Mapping[str, Item], componen
 def component_versions(env: Environment, components: Sequence[str]) -> dict[str, tuple[int, ...]]:
     """Versions of the components' main deployments, e.g. {"ita": (3, 3, 4)}; unknown ones are left out.
 
-    The numeric image tag; for an image pinned by digest only (podiumd-infra), the image's own
-    RELEASE variable (Maykin images set it); else Helm's app.kubernetes.io/version label, which
-    is the sub-chart's appVersion and can lag behind the image.
+    The numeric image tag; for an image pinned by digest only (podiumd-infra), the version the image itself
+    states (_image_release); else Helm's app.kubernetes.io/version label, which is the sub-chart's appVersion
+    and can lag behind the image.
     """
     deployments = {metadata_name(d): d for d in env.items("deployments")}
     found: dict[str, tuple[int, ...]] = {}
@@ -80,7 +80,7 @@ def component_versions(env: Environment, components: Sequence[str]) -> dict[str,
         version = image_version(workload)
         if version is None:
             label = str(section(section(workload, "metadata"), "labels").get("app.kubernetes.io/version", ""))
-            version = _version(_image_release(env, metadata_name(workload))) or _version(label)
+            version = _version(_image_release(env, component, metadata_name(workload))) or _version(label)
         if version:
             found[component] = version
     return found
@@ -102,11 +102,29 @@ def _version(value: str) -> tuple[int, ...] | None:
     return tuple(int(n) for n in value.split(".")) if re.fullmatch(r"\d+(\.\d+)+", value) else None
 
 
-def _image_release(env: Environment, deployment: str) -> str:
-    """The RELEASE variable of a deployment's image, or "" when the pod cannot tell."""
+# Images without a version variable: the Python package whose __version__ ("v2.4.9") states it.
+VERSION_PACKAGES = {"openinwoner": ("/app/src", "open_inwoner")}
+
+
+def _image_release(env: Environment, component: str, deployment: str) -> str:
+    """The version a deployment's image states, or "" when the pod cannot tell.
+
+    Maykin images set RELEASE, ZAC sets VERSION_NUMBER; Open Inwoner sets RELEASE empty.
+    """
+    variables = 'echo "${RELEASE:-$VERSION_NUMBER}"'
     try:
-        return env.kube.exec(deployment, "printenv", "RELEASE", timeout=30).strip()
+        found = env.kube.exec(deployment, "sh", "-c", variables, timeout=30).strip()
     except KubeError:
+        found = ""
+    if found:
+        return found
+    if component not in VERSION_PACKAGES:
+        return ""
+    path, package = VERSION_PACKAGES[component]
+    code = f"import sys; sys.path.insert(0, {path!r}); import {package}; print({package}.__version__)"
+    try:
+        return env.kube.exec(deployment, "python", "-c", code, timeout=60).strip().splitlines()[-1].removeprefix("v")
+    except (KubeError, IndexError):
         return ""
 
 

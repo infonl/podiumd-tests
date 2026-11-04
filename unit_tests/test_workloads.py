@@ -142,8 +142,26 @@ def test_component_versions_read_release_of_an_image_pinned_by_digest(env_factor
         "spec": {"template": {"spec": {"containers": [{"image": "ghcr.io/ita/ita.web@sha256:0bef"}]}}},
     }
     fake_runner.answers["get deployments"] = (0, json.dumps({"items": [ita]}))
-    fake_runner.answers["printenv RELEASE"] = (0, "3.3.4\n")
+    fake_runner.answers["RELEASE:-$VERSION_NUMBER"] = (0, "3.3.4\n")
     assert component_versions(env_factory(), ["ita"]).get("ita") == (3, 3, 4)
+
+
+@pytest.mark.parametrize(
+    ("answers", "version"),
+    [
+        ({"RELEASE:-$VERSION_NUMBER": (0, "\n"), "open_inwoner.__version__": (0, "warning\nv2.4.9\n")}, (2, 4, 9)),
+        ({"RELEASE:-$VERSION_NUMBER": (0, "\n"), "open_inwoner.__version__": (1, "ImportError")}, (2, 4, 3)),
+    ],
+)
+def test_open_inwoner_states_its_version_in_its_package(env_factory, fake_runner, answers, version):
+    """Open Inwoner's RELEASE is empty: its package's __version__ wins over the stale sub-chart label."""
+    openinwoner = {
+        "metadata": {"name": "openinwoner", "labels": {"app.kubernetes.io/version": "2.4.3"}},
+        "spec": {"template": {"spec": {"containers": [{"image": "maykinmedia/open-inwoner@sha256:ae87"}]}}},
+    }
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [openinwoner]}))
+    fake_runner.answers.update(answers)
+    assert component_versions(env_factory(), ["openinwoner"]).get("openinwoner") == version
 
 
 def test_chart_version_comes_from_podiumds_own_config_maps(env_factory, fake_runner):
