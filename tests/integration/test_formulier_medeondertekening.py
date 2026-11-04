@@ -57,6 +57,14 @@ OTP_SUBJECT = "Mede-ondertekentoegangscode"
 
 
 @pytest.mark.tc("OF-011", "OF-012", "OF-043", "OF-044", "OF-045", "OF-046")
+@pytest.mark.scenario("""
+    Given a form in Open Formulieren that needs a co-signer
+    When an inwoner submits the form with the co-signer's e-mail address
+    Then the confirmation page offers to co-sign right away
+    And the co-signer receives a mail with a link, and the form is not registered yet
+    When the co-signer logs in with DigiD, enters the code mailed to them and signs
+    Then the form is registered by e-mail
+""")
 def test_cosigned_form_is_registered(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     http: requests.Session,

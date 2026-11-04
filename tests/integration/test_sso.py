@@ -74,6 +74,12 @@ def fixture_sso_admins(http: requests.Session, urls: dict[str, str], podiumd_env
     "TA smoke/92-fb-cross-component-sso.spec.ts",
     "One Keycloak login works across PodiumD components: the second component asks for no new login.",
 )
+@pytest.mark.scenario("""
+    Given the test admin logged in through Keycloak at another app's Django admin
+    When the admin opens the Django admin of an app that logs in through Keycloak
+    Then Keycloak asks for no new login
+    And the admin is in the app's Django admin
+""")
 def test_one_login_opens_every_admin(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     urls: dict[str, str],
@@ -103,6 +109,12 @@ def test_one_login_opens_every_admin(  # pylint: disable=too-many-arguments,too-
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
 @pytest.mark.tc("FB-006")
 @pytest.mark.source("draaiboek FB-006", "Users can log out, which returns them to the login screen.")
+@pytest.mark.scenario("""
+    Given the test admin logged in through Keycloak at an app's Django admin
+    When the admin logs out
+    And opens the Django admin again
+    Then the admin is asked to log in again
+""")
 def test_admin_logout_returns_to_the_login(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     urls: dict[str, str],

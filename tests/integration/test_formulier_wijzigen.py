@@ -48,6 +48,12 @@ KENTEKEN = {"type": "textfield", "key": "kenteken", "label": "Kenteken"}
 
 
 @pytest.mark.tc("OF-068", "OF-073", "FB-009")
+@pytest.mark.scenario("""
+    Given a form in Open Formulieren that registers zaken in Open Zaak
+    When the form editor adds a field kenteken mapped to the zaak eigenschap kenteken
+    And an inwoner submits the changed form
+    Then the new zaak has the filled-in kenteken as eigenschap
+""")
 def test_changed_form_registers_the_new_field(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     http: requests.Session,
     urls: dict[str, str],

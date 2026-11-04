@@ -173,6 +173,13 @@ def fixture_payment_form(
 @pytest.mark.source("draaiboek OF-021", "A form can carry a payment: the form shows an Ogone payment option.")
 @pytest.mark.source("draaiboek INT-008", "Integration check of the Ogone payment provider.")
 @pytest.mark.source("draaiboek OF-054", "A form can carry a payment: the form shows a Worldline payment option.")
+@pytest.mark.scenario("""
+    Given a form in Open Formulieren with a price, paid through a payment provider
+    When an inwoner completes the form
+    Then Open Formulieren sends the inwoner to the provider with the price of 12.50 euro
+    And the registration waits for the payment
+    And the zaak in Open Zaak has no status and is not yet paid
+""")
 def test_form_asks_for_a_payment(
     podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, payment_form: tuple[str, str]
 ) -> None:
@@ -208,6 +215,12 @@ def test_form_asks_for_a_payment(
 @pytest.mark.source(
     "draaiboek OF-060", "A zaak is created after a successful payment in Worldline's test environment (status 9)."
 )
+@pytest.mark.scenario("""
+    Given an inwoner completed a form in Open Formulieren with a price
+    When the payment provider reports the payment as paid
+    Then the form tells the inwoner the payment is completed
+    And the zaak in Open Zaak gets a status
+""")
 def test_paid_form_registers_a_zaak(
     podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, payment_form: tuple[str, str]
 ) -> None:
@@ -243,6 +256,13 @@ def test_paid_form_registers_a_zaak(
     "draaiboek OF-056, OF-059, OF-061, OF-062, OF-063",
     "An uncertain, failed or cancelled Worldline payment gives the user a message or the payment page, and no zaak.",
 )
+@pytest.mark.scenario("""
+    Given an inwoner completed a form in Open Formulieren with a price
+    When the payment provider reports the payment as uncertain, refused, failed or cancelled
+    Then the form tells the inwoner the payment is processing or failed
+    And after a failed payment the inwoner can start a new payment
+    And the registration keeps waiting
+""")
 def test_unpaid_form_tells_the_inwoner_and_registers_nothing(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures and parameters
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -273,6 +293,13 @@ def test_unpaid_form_tells_the_inwoner_and_registers_nothing(  # pylint: disable
 )
 @pytest.mark.source("draaiboek OF-025", "An Ogone payment with status 92 'payment uncertain' is handled.")
 @pytest.mark.source("draaiboek OF-059", "A Worldline payment with status 92 'payment uncertain' is handled.")
+@pytest.mark.scenario("""
+    Given an inwoner completed a form in Open Formulieren with a price
+    When the payment provider reports the payment as uncertain
+    And the provider later confirms the payment
+    Then the form first tells the inwoner the payment is processing
+    And the zaak in Open Zaak gets a status after the confirmation
+""")
 def test_uncertain_payment_registers_once_the_provider_confirms_it(
     podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, payment_form: tuple[str, str]
 ) -> None:
@@ -292,6 +319,11 @@ def test_uncertain_payment_registers_once_the_provider_confirms_it(
 @pytest.mark.parametrize("payment_form", [OGONE, WORLDLINE], indirect=True)
 @pytest.mark.tc("OF-022")
 @pytest.mark.source("draaiboek OF-022", "A form that is not paid does not end up as a zaak in ZAC.")
+@pytest.mark.scenario("""
+    Given a form in Open Formulieren with a price
+    When an inwoner completes the form without paying
+    Then no zaak exists in Open Zaak
+""")
 def test_unpaid_form_leaves_no_zaak(
     podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, payment_form: tuple[str, str]
 ) -> None:
@@ -312,6 +344,11 @@ def test_unpaid_form_leaves_no_zaak(
     "draaiboek OF-024",
     "The exact status of the payment (successful, uncertain, partial) is visible at the zaak in ZAC.",
 )
+@pytest.mark.scenario("""
+    Given an inwoner completed a form in Open Formulieren with a price
+    When the payment provider reports the payment as paid
+    Then the zaak in Open Zaak is marked fully paid
+""")
 def test_zaak_of_a_paid_form_is_marked_paid(
     podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, payment_form: tuple[str, str]
 ) -> None:

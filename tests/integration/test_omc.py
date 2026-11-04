@@ -107,6 +107,11 @@ def email_address(registry: ResourceRegistry) -> str:
     return f"{registry.tagged(f'omc-{uuid.uuid4().hex[:8]}')}@example.invalid"
 
 
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak whose initiator has an e-mail address in Open Klant
+    When the zaak gets its first status
+    Then OMC asks Notify to send the inwoner the zaak-created e-mail
+""")
 def test_new_zaak_mails_the_initiator(
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -120,6 +125,11 @@ def test_new_zaak_mails_the_initiator(
     notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_ZAAKCREATE")
 
 
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak whose initiator has an e-mail address in Open Klant
+    When the zaak gets its first status and then a status that does not close it
+    Then OMC asks Notify to send the zaak-created and then the zaak-updated e-mail
+""")
 def test_next_status_mails_a_zaak_update(
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -137,6 +147,11 @@ def test_next_status_mails_a_zaak_update(
     notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_ZAAKUPDATE")
 
 
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak whose initiator has an e-mail address in Open Klant
+    When the zaak gets its first status and then its eindstatus
+    Then OMC asks Notify to send the zaak-created and then the zaak-closed e-mail
+""")
 def test_closing_the_zaak_mails_a_zaak_close(
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -153,6 +168,11 @@ def test_closing_the_zaak_mails_a_zaak_close(
     notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_ZAAKCLOSE")
 
 
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak whose initiator has only a telefoonnummer in Open Klant
+    When the zaak gets its first status
+    Then OMC asks Notify to send the inwoner the zaak-created SMS
+""")
 def test_initiator_with_only_a_phone_number_gets_an_sms(
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -166,6 +186,11 @@ def test_initiator_with_only_a_phone_number_gets_an_sms(
     notify_request(podiumd_env, SMS, adres, "NOTIFY_TEMPLATEID_SMS_ZAAKCREATE")
 
 
+@pytest.mark.scenario("""
+    Given OMC had Notify send the zaak-created e-mail for a zaak in Open Zaak
+    When Notify reports to OMC that the e-mail was delivered
+    Then OMC registers a klantcontact about the zaak in Open Klant
+""")
 def test_delivery_receipt_becomes_a_klantcontact(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     podiumd_env: Environment,
     http: requests.Session,

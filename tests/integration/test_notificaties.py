@@ -69,6 +69,12 @@ def notified(callback: Callback, match: Callable[[JsonObject], bool], descriptio
     "TA regression/25-abonnement-filter.spec.ts",
     "Only the subscriber whose abonnement filter matches the vertrouwelijkheidaanduiding gets the callback.",
 )
+@pytest.mark.scenario("""
+    Given two subscribers in Open Notificaties, one for openbaar and one for vertrouwelijk zaken
+    When an openbaar and a vertrouwelijk zaak are created in Open Zaak
+    Then each subscriber gets the notification of its own zaak
+    And the vertrouwelijk subscriber does not get the openbaar zaak
+""")
 def test_kenmerk_filter_selects_the_subscriber(
     openzaak: ApiClient,
     opennotificaties: ApiClient,
@@ -97,6 +103,12 @@ def test_kenmerk_filter_selects_the_subscriber(
 @pytest.mark.source(
     "TA regression/26-multi-subscriber.spec.ts", "One zaak event reaches two independent subscribers on kanaal zaken."
 )
+@pytest.mark.scenario("""
+    Given two subscribers on kanaal zaken in Open Notificaties
+    When a zaak is created in Open Zaak
+    Then both subscribers get the same notification
+    And it names the zaak and its zaaktype
+""")
 def test_every_subscriber_gets_the_notification(
     openzaak: ApiClient,
     opennotificaties: ApiClient,
@@ -134,6 +146,11 @@ def test_every_subscriber_gets_the_notification(
 @pytest.mark.source(
     "TA regression/46-rol-delete-event.spec.ts", "Deleting a rol publishes a destroy event on kanaal zaken."
 )
+@pytest.mark.scenario("""
+    Given a subscriber on kanaal zaken in Open Notificaties
+    When a zaak in Open Zaak gets a status, a rol, a change and a document, and loses the rol
+    Then the subscriber gets a notification of each change, naming the changed object
+""")
 def test_zaak_changes_are_notified_with_their_resource(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     openzaak: ApiClient,
     opennotificaties: ApiClient,
@@ -164,6 +181,11 @@ def test_zaak_changes_are_notified_with_their_resource(  # pylint: disable=too-m
 @pytest.mark.source(
     "TA regression/34-zio-events.spec.ts", "Creating a document publishes an event on kanaal documenten."
 )
+@pytest.mark.scenario("""
+    Given a subscriber on kanaal documenten in Open Notificaties
+    When a document is created in Open Zaak
+    Then the subscriber gets a notification about the document
+""")
 def test_document_is_notified_on_kanaal_documenten(
     openzaak: ApiClient,
     opennotificaties: ApiClient,
@@ -183,6 +205,11 @@ def test_document_is_notified_on_kanaal_documenten(
     "TA regression/37-ok2-partij-events.spec.ts",
     "Creating and changing a partij in Open Klant publish events on kanaal partijen.",
 )
+@pytest.mark.scenario("""
+    Given a subscriber on kanaal partijen in Open Notificaties
+    When a partij is created and changed in Open Klant
+    Then the subscriber gets a notification of both
+""")
 def test_partij_changes_are_notified(
     openklant: ApiClient, opennotificaties: ApiClient, registry: ResourceRegistry, callback: Callback
 ) -> None:
@@ -199,6 +226,11 @@ def test_partij_changes_are_notified(
     "TA regression/45-internetaak-event.spec.ts",
     "Creating an internetaak and changing its status publish events on kanaal internetaken.",
 )
+@pytest.mark.scenario("""
+    Given a subscriber on kanaal internetaken in Open Notificaties
+    When an internetaak is created and completed in Open Klant
+    Then the subscriber gets a notification of both
+""")
 def test_internetaak_changes_are_notified(
     openklant: ApiClient, opennotificaties: ApiClient, registry: ResourceRegistry, callback: Callback
 ) -> None:
@@ -214,6 +246,12 @@ def test_internetaak_changes_are_notified(
     "TA regression/42-notif-retry.spec.ts",
     "Open Notificaties retries delivery to a subscriber that first answers 500, so the event arrives eventually.",
 )
+@pytest.mark.scenario("""
+    Given a subscriber in Open Notificaties that refuses its first notification
+    When a zaak is created in Open Zaak
+    Then Open Notificaties delivers the notification again
+    And the subscriber accepts it the second time
+""")
 def test_failed_delivery_is_retried(
     openzaak: ApiClient,
     opennotificaties: ApiClient,
@@ -237,6 +275,11 @@ def test_failed_delivery_is_retried(
     "upstream maykinmedia/objects-api docs/api/_assets/objects-api.postman_collection.json",
     "Create object: Objecten publishes the new object on Open Notificaties' kanaal objecten.",
 )
+@pytest.mark.scenario("""
+    Given a subscriber on kanaal objecten in Open Notificaties
+    When an object is created in Objecten
+    Then the subscriber gets a notification that names the object's objecttype
+""")
 def test_object_is_notified_on_kanaal_objecten(
     podiumd_env: Environment,
     objecten: ApiClient,

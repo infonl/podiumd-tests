@@ -41,6 +41,11 @@ pytestmark = [
     "PI test_productaanvraag_flow.py",
     "A productaanvraag object makes ZAC create a zaak through the environment's standard chart wiring.",
 )
+@pytest.mark.scenario("""
+    Given ZAC handles productaanvragen of a zaaktype
+    When a productaanvraag is added to Objecten
+    Then ZAC starts a zaak in Open Zaak that names the productaanvraag's kenmerk
+""")
 def test_productaanvraag_becomes_a_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     objecten: ApiClient,
     openzaak_productaanvraag: ApiClient,
@@ -61,6 +66,11 @@ def test_productaanvraag_becomes_a_zaak(  # pylint: disable=too-many-arguments,t
     "draaiboek OF-002",
     "A form leads to a zaak in ZAC, which automatically sends a receipt confirmation with the zaaknummer.",
 )
+@pytest.mark.scenario("""
+    Given a form's submitter left an e-mail address in Open Klant
+    When the form's productaanvraag makes ZAC start a zaak
+    Then the submitter receives a mail with the zaaknummer
+""")
 def test_zac_mails_the_initiator_an_ontvangstbevestiging(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     podiumd_env: Environment,
     objecten: ApiClient,
@@ -83,6 +93,11 @@ def test_zac_mails_the_initiator_an_ontvangstbevestiging(  # pylint: disable=too
 @pytest.mark.tc("FB-008")
 @pytest.mark.requires("openformulieren")
 @pytest.mark.source("draaiboek FB-008", "A new form can be set up that links to ZAC.")
+@pytest.mark.scenario("""
+    Given a new form in Open Formulieren that registers a productaanvraag in Objecten
+    When an inwoner submits the form
+    Then ZAC starts a zaak for it in Open Zaak
+""")
 def test_new_form_becomes_a_zac_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     podiumd_env: Environment,
     http: requests.Session,

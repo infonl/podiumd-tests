@@ -38,6 +38,11 @@ pytestmark = [
 CRAWL_TIMEOUT = 900
 
 
+@pytest.mark.scenario("""
+    Given KISS has a website to crawl
+    When KISS's crawler indexes the website
+    Then the KCC medewerker finds a page of that website in KISS's search by the site's name
+""")
 def test_crawled_website_is_found_in_kiss_search(
     page: Page, podiumd_env: Environment, registry: ResourceRegistry, need_bootstrap: Callable[..., None]
 ) -> None:

@@ -47,6 +47,13 @@ SAMENWERKEN = "/samenwerken/"
 
 @pytest.mark.tc("OI-089", "OI-090")
 @pytest.mark.parametrize("who", sorted(LOGINS))
+@pytest.mark.scenario("""
+    Given an inwoner or company has an account in Open Inwoner
+    When the begeleider of the gemeente adds the account as contact
+    And the inwoner or company approves the contact
+    And the begeleider makes a samenwerking with the contact
+    Then the inwoner or company sees the samenwerking in Samenwerken
+""")
 def test_begeleider_starts_a_samenwerking(
     page: Page, podiumd_env: Environment, registry: ResourceRegistry, need_bootstrap: Callable[..., None], who: str
 ) -> None:

@@ -49,6 +49,11 @@ pytestmark = [
     [("VAC", "vac", vac_data), ("Kennisartikel", "kennisbank", kennisartikel_data)],
     ids=["vac", "kennisartikel"],
 )
+@pytest.mark.scenario("""
+    Given a new VAC or kennisartikel in Objecten
+    When KISS synchronises its search index
+    Then the KCC medewerker finds it by its title in KISS's search
+""")
 def test_object_is_found_in_kiss_search(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,

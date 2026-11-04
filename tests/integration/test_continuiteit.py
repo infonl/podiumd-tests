@@ -96,6 +96,13 @@ STOPPED = ("openzaak", "openformulieren", "openklant", "opennotificaties", "open
     "TA regression/89-cluster-pod-recovery.spec.ts",
     "Validates that scaling a deployment to 0 stops its pod, scaling back up starts it, and the service is reachable again.",
 )
+@pytest.mark.scenario("""
+    Given the other components of the environment answer
+    When a component is stopped
+    Then the stopped component answers no more
+    And every other component still answers
+    And the component answers again once it is started
+""")
 def test_stopped_component_harms_no_other(
     http: requests.Session, urls: dict[str, str], podiumd_env: Environment, component: str
 ) -> None:
@@ -111,6 +118,11 @@ def test_stopped_component_harms_no_other(
 @pytest.mark.source(
     "podiumd-tests", "Checks that a Frank!Gateway outway outage does not cascade: the apps' roots still answer."
 )
+@pytest.mark.scenario("""
+    Given the apps of the environment answer
+    When the Frank!Gateway outway is stopped
+    Then every app still answers
+""")
 def test_frankgateway_outage_does_not_cascade(
     http: requests.Session, urls: dict[str, str], podiumd_env: Environment
 ) -> None:
@@ -141,6 +153,13 @@ def form_starts(podiumd_env: Environment, http: requests.Session, registry: Reso
     "With Open Zaak unavailable, the portal shows no zaken but a user-friendly message that the zaaksysteem is down.",
 )
 @pytest.mark.source("draaiboek CONT-028", "With Open Zaak unavailable, ZAC cannot start handling a new zaak.")
+@pytest.mark.scenario("""
+    Given an inwoner is logged in to Open Inwoner with DigiD
+    When Open Zaak is stopped
+    Then Open Formulieren still starts a form
+    And Mijn zaken says that not all zaken could be fetched
+    And ZAC refuses to start a new zaak but itself keeps answering
+""")
 def test_without_open_zaak_the_apps_say_so(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     http: requests.Session,
@@ -172,6 +191,11 @@ def test_without_open_zaak_the_apps_say_so(  # pylint: disable=too-many-argument
 @pytest.mark.tc("CONT-031", "CONT-036")
 @pytest.mark.source("draaiboek CONT-031", "With Open Klant unavailable, Open Formulieren works undisturbed.")
 @pytest.mark.source("draaiboek CONT-036", "With Open Notificaties unavailable, Open Formulieren works undisturbed.")
+@pytest.mark.scenario("""
+    Given Open Formulieren has a test form
+    When Open Klant or Open Notificaties is stopped
+    Then Open Formulieren still starts the form
+""")
 def test_forms_start_without_open_klant_or_open_notificaties(
     http: requests.Session,
     podiumd_env: Environment,
@@ -199,6 +223,13 @@ def test_forms_start_without_open_klant_or_open_notificaties(
     "draaiboek CONT-044",
     "With Objecten unavailable, a field that searches Objecten fails but the zaak handling (ZAC) keeps working.",
 )
+@pytest.mark.scenario("""
+    Given Objecten is stopped
+    When an inwoner logs in to Mijn zaken with DigiD
+    Then Mijn zaken opens
+    And KISS answers
+    And ZAC starts a new zaak
+""")
 def test_without_objecten_the_portal_kiss_and_zac_work(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     http: requests.Session,
@@ -227,6 +258,13 @@ def test_without_objecten_the_portal_kiss_and_zac_work(  # pylint: disable=too-m
     "draaiboek CONT-062",
     "With the mail server unavailable, Open Formulieren's mail is queued and sent once the outage is over.",
 )
+@pytest.mark.scenario("""
+    Given a form in Open Formulieren that registers by e-mail
+    And the mail server is stopped
+    When an inwoner submits the form
+    And the mail server is started again
+    Then the registration mail arrives
+""")
 def test_form_mail_is_sent_after_a_mail_outage(
     http: requests.Session, podiumd_env: Environment, mailpit: ApiClient, registry: ResourceRegistry
 ) -> None:
@@ -253,6 +291,13 @@ def test_form_mail_is_sent_after_a_mail_outage(
 @pytest.mark.source(
     "draaiboek CONT-061", "With the mail server unavailable, ZAC's mail is queued and sent once the outage is over."
 )
+@pytest.mark.scenario("""
+    Given the mail server is stopped
+    When a productaanvraag with the inwoner's e-mail address makes ZAC start a zaak
+    And ZAC fails to send the ontvangstbevestiging
+    And the mail server is started again
+    Then the ontvangstbevestiging with the zaaknummer arrives
+""")
 def test_zac_mail_is_sent_after_a_mail_outage(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     http: requests.Session,
     podiumd_env: Environment,
@@ -288,6 +333,13 @@ def test_zac_mail_is_sent_after_a_mail_outage(  # pylint: disable=too-many-argum
     "draaiboek CONT-034",
     "With Open Klant unavailable, a zaak cannot be handled and the employee sees a user-friendly error message.",
 )
+@pytest.mark.scenario("""
+    Given a zaak in ZAC with a person as initiator
+    When Open Klant is stopped
+    Then ZAC fails to open the zaak with a server error
+    And ZAC itself keeps answering
+    And ZAC opens the zaak again once Open Klant is back
+""")
 def test_without_open_klant_a_zaak_with_a_person_cannot_be_opened(
     http: requests.Session, podiumd_env: Environment, zac: requests.Session, zac_zaak: Callable[..., JsonObject]
 ) -> None:
@@ -321,6 +373,13 @@ def test_without_open_klant_a_zaak_with_a_person_cannot_be_opened(
     "draaiboek CONT-063",
     "With the mail server unavailable, the portal's mail is queued and sent once the outage is over.",
 )
+@pytest.mark.scenario("""
+    Given the mail server is stopped
+    When an anonymous inwoner sends a question with the contact form of Open Inwoner
+    Then Open Inwoner confirms the question
+    And its mail stays unsent in Open Inwoner's mail queue
+    And the mail arrives once the mail server is back and the queue is retried
+""")
 def test_portal_mail_waits_in_the_queue_during_a_mail_outage(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     http: requests.Session,
@@ -372,6 +431,13 @@ def test_portal_mail_waits_in_the_queue_during_a_mail_outage(  # pylint: disable
     "draaiboek CONT-064",
     "With the mail server unavailable, Contact's (ITA) mail is queued and sent once the outage is over.",
 )
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to ITA and has taken a contactverzoek
+    And the mail server is stopped
+    When the KCC medewerker forwards the contactverzoek to a groep
+    And the mail server is started again
+    Then the groep receives the mail about the forwarded contactverzoek
+""")
 def test_ita_mail_is_sent_after_a_mail_outage(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     http: requests.Session,

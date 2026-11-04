@@ -31,6 +31,12 @@ pytestmark = [
 
 
 @pytest.mark.core
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak
+    When the KCC medewerker registers a klantcontact in Open Klant about the zaak
+    Then the klantcontact shows the link to the zaak
+    And the klantcontact is found by the zaak
+""")
 def test_klantcontact_about_a_zaak_is_found_by_the_zaak(
     openklant: ApiClient, openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:

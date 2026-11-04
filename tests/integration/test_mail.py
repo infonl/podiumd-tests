@@ -61,6 +61,11 @@ def send_and_receive(
 
 @pytest.mark.tc("INT-009")
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
+@pytest.mark.scenario("""
+    Given an app with a Django admin
+    When the app sends a mail with its own settings
+    Then the mail arrives in Mailpit from the app's sender address
+""")
 def test_app_mail_reaches_mailpit(
     podiumd_env: Environment, mailpit: ApiClient, registry: ResourceRegistry, component: str
 ) -> None:
@@ -71,6 +76,11 @@ def test_app_mail_reaches_mailpit(
 
 @pytest.mark.ui
 @pytest.mark.requires("openzaak")
+@pytest.mark.scenario("""
+    Given Open Zaak sent a mail
+    When a user opens Mailpit's web interface
+    Then the mail is listed by its subject
+""")
 def test_sent_mail_shows_in_the_mailpit_ui(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page, podiumd_env: Environment, mailpit: ApiClient, registry: ResourceRegistry, urls: dict[str, str]
 ) -> None:

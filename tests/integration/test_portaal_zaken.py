@@ -114,6 +114,11 @@ def log_in(page: Page, podiumd_env: Environment, who: str = "inwoner") -> None:
 @pytest.mark.xdist_group("openinwoner-search")
 @pytest.mark.tc("OI-091")
 @pytest.mark.source("draaiboek OI-091", "The portal can be searched on zaaknummer.")
+@pytest.mark.scenario("""
+    Given an inwoner with a zaak in Open Zaak is logged in to Open Inwoner
+    When the inwoner searches on the zaaknummer
+    Then the portal opens that zaak
+""")
 def test_search_on_a_zaaknummer_opens_the_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -177,6 +182,12 @@ PHONES = {
     "TA interaction/10-cross-component-zaak-portaal.spec.ts",
     "A zaak with the inwoner's BSN as initiator is found by the rol filter the portal uses.",
 )
+@pytest.mark.scenario("""
+    Given an inwoner with a zaak in Open Zaak
+    When the inwoner logs in to Open Inwoner with DigiD on a desktop or phone screen
+    Then Mijn zaken lists the zaak
+    And the page fits the width of the screen
+""")
 def test_inwoners_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -199,6 +210,11 @@ def test_inwoners_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,t
     "TA interaction/141-bedrijf-eherkenning-mijn-zaken.spec.ts",
     "After an eHerkenning login a company sees its zaak in Mijn zaken.",
 )
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak of a company's vestiging
+    When the company logs in to Open Inwoner with eHerkenning
+    Then Mijn zaken lists the zaak
+""")
 def test_bedrijfs_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -220,6 +236,11 @@ def test_bedrijfs_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,t
     "draaiboek OI-014, OI-068",
     "Every zaak shown in the portal has the correct status, exactly matching its status in ZAC.",
 )
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak of an inwoner or company that got a second status
+    When the inwoner or company opens the zaak in Mijn zaken
+    Then the zaak shows its current status
+""")
 def test_zaak_shows_its_current_status(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -247,6 +268,12 @@ def test_zaak_shows_its_current_status(  # pylint: disable=too-many-arguments,to
     "TA interaction/31-document-portaal-ui.spec.ts",
     "Documents of a zaak are visible to the logged-in inwoner on the zaak's detail page.",
 )
+@pytest.mark.scenario("""
+    Given an inwoner's zaak in Open Zaak with a definitief document
+    When the inwoner opens the zaak in Mijn zaken
+    Then the zaak shows the document
+    And the document downloads with its content
+""")
 def test_zaak_document_can_be_downloaded(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -281,6 +308,11 @@ def test_zaak_document_can_be_downloaded(  # pylint: disable=too-many-arguments,
     "TA interaction/111-portaal-documenten-uploaden.spec.ts",
     "Documents can be uploaded from the portal's zaak detail page.",
 )
+@pytest.mark.scenario("""
+    Given an inwoner's zaak in Open Zaak
+    When the inwoner uploads a file on the zaak in Mijn zaken
+    Then the file is a document of the zaak in Open Zaak
+""")
 def test_uploaded_document_reaches_the_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -308,6 +340,12 @@ def test_uploaded_document_reaches_the_zaak(  # pylint: disable=too-many-argumen
     "The portal refuses harmful uploads through ClamAV's virus scan.",
 )
 @pytest.mark.usefixtures("virus_scan")
+@pytest.mark.scenario("""
+    Given Open Inwoner scans uploads for viruses
+    And a zaak in Open Zaak of an inwoner or company
+    When the inwoner or company uploads a test virus file on the zaak in Mijn zaken
+    Then the zaak gets no document
+""")
 def test_infected_upload_is_refused(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -331,6 +369,11 @@ def test_infected_upload_is_refused(  # pylint: disable=too-many-arguments,too-m
     "TA regression/178-blacklist-upload.spec.ts",
     "Uploading a file with a blacklisted extension in the portal is refused with a message.",
 )
+@pytest.mark.scenario("""
+    Given an inwoner's zaak in Open Zaak
+    When the inwoner chooses an .html file to upload on the zaak in Mijn zaken
+    Then the upload button stays disabled
+""")
 def test_refused_file_type_cannot_be_uploaded(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -368,6 +411,12 @@ def documents_of(openzaak: ApiClient, zaak: JsonObject) -> list[str]:
     "TA interaction/164-portaal-vraag-stellen-vanuit-zaak.spec.ts",
     "A question asked from the zaak detail page lands in Open Klant as a contactmoment linked to the zaak.",
 )
+@pytest.mark.scenario("""
+    Given an inwoner's zaak in Open Zaak
+    When the inwoner asks a question on the zaak in Mijn zaken
+    Then Open Klant has one klantcontact about the zaak
+    And it holds the question and the zaaknummer
+""")
 def test_question_about_a_zaak_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -410,6 +459,12 @@ def test_question_about_a_zaak_reaches_open_klant(  # pylint: disable=too-many-a
 @pytest.mark.tc("ZAC-066")
 @pytest.mark.requires("zac")
 @pytest.mark.source("draaiboek ZAC-066", "The portal shows zaken from ZAC correctly.")
+@pytest.mark.scenario("""
+    Given a behandelaar starts a zaak in ZAC
+    And makes the inwoner its initiator
+    When the inwoner logs in to Open Inwoner with DigiD
+    Then Mijn zaken lists the zaak
+""")
 def test_zaak_started_in_zac_shows_in_mijn_zaken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,

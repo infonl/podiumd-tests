@@ -81,6 +81,12 @@ def submit_after_login(  # pylint: disable=too-many-arguments,too-many-positiona
     "TA regression/183-of-digid-zaak-rol.spec.ts",
     "A DigiD-logged-in inwoner's form registers a zaak with a BSN initiator role and the form's PDF report as document.",
 )
+@pytest.mark.scenario("""
+    Given an inwoner logs in to the test form in Open Formulieren with DigiD
+    When the inwoner submits the form
+    Then a zaak in Open Zaak gets the form as document
+    And its initiator is the inwoner, by BSN
+""")
 def test_digid_submission_has_the_inwoner_as_initiator(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -103,6 +109,12 @@ def test_digid_submission_has_the_inwoner_as_initiator(  # pylint: disable=too-m
     "TA regression/159-of-zaak-keten.spec.ts",
     "A completed eHerkenning submission creates a zaak in Open Zaak with the company's KvK as initiator.",
 )
+@pytest.mark.scenario("""
+    Given a company logs in to the test form in Open Formulieren with eHerkenning
+    When the company submits the form
+    Then a zaak in Open Zaak gets the form as document
+    And its initiator is the company's vestiging, by KvK and vestigingsnummer
+""")
 def test_eherkenning_submission_has_the_vestiging_as_initiator(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,

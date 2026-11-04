@@ -31,6 +31,11 @@ OMSCHRIJVING = {"type": "textfield", "key": "omschrijving", "label": "Omschrijvi
 )
 @pytest.mark.source("draaiboek OF-041", "Open Formulieren can send an e-mail registration, to bypass eSuite.")
 @pytest.mark.source("draaiboek OF-075", "A completed form can be sent by mail, without requiring eSuite or ZAC.")
+@pytest.mark.scenario("""
+    Given a form in Open Formulieren that registers by e-mail
+    When an inwoner submits the form
+    Then the registration address receives a mail with the filled-in value
+""")
 def test_email_registration_mails_the_submission(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     http: requests.Session,
     urls: dict[str, str],
@@ -50,6 +55,11 @@ def test_email_registration_mails_the_submission(  # pylint: disable=too-many-ar
 @pytest.mark.tc("OF-040", "ARCH-011")
 @pytest.mark.source("draaiboek OF-040", "Open Formulieren can send the filler an overview of what they filled in.")
 @pytest.mark.source("draaiboek ARCH-011", "Mandatory receipt confirmation of an electronic message.")
+@pytest.mark.scenario("""
+    Given a form in Open Formulieren that sends a confirmation mail
+    When an inwoner submits the form with their e-mail address
+    Then the inwoner receives a confirmation mail with the filled-in value
+""")
 def test_confirmation_mail_summarises_the_submission(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     http: requests.Session,
     urls: dict[str, str],

@@ -38,6 +38,12 @@ def kept_after_removal(podiumd_env: Environment, submission: str, age_days: int)
 
 
 @pytest.mark.tc("OF-067")
+@pytest.mark.scenario("""
+    Given a form in Open Formulieren that removes registered submissions after 1 day
+    When an inwoner submits the form and it is registered
+    Then Open Formulieren's data removal keeps the submission within the limit
+    And deletes it once the limit has passed
+""")
 def test_registered_submission_is_removed_after_the_limit(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     http: requests.Session,
     urls: dict[str, str],

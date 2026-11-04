@@ -47,6 +47,13 @@ REGISTRATION_TIMEOUT = 90
 
 @pytest.mark.core
 @pytest.mark.tc("OF-007", "OF-020")
+@pytest.mark.scenario("""
+    Given the test form in Open Formulieren
+    When an anonymous inwoner submits it
+    Then a zaak of the test zaaktype exists in Open Zaak with the form as document
+    And the filled-in name is its initiator
+    And the inwoner can download the form as PDF
+""")
 def test_submission_creates_a_zaak_with_the_form_pdf(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     podiumd_env: Environment,
     openzaak: ApiClient,

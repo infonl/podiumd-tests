@@ -47,6 +47,11 @@ pytestmark = [
 
 
 @pytest.mark.tc("INT-009")
+@pytest.mark.scenario("""
+    Given an inwoner has filled in a step of the test form in Open Formulieren
+    When the inwoner pauses the form and gives an e-mail address
+    Then that address receives a mail with a link to Open Formulieren
+""")
 def test_paused_submission_mails_its_resume_link(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     http: requests.Session,
     urls: dict[str, str],
@@ -78,6 +83,12 @@ REGISTRATION_TIMEOUT = 90
     "upstream open-formulieren/open-forms src/openforms/tests/e2e/test_resume_form.py",
     "Resuming a paused form through its resume URL shows the saved step, so the user can finish the form.",
 )
+@pytest.mark.scenario("""
+    Given an inwoner paused a half-filled test form in Open Formulieren
+    When the inwoner opens the mailed link in a new browser session
+    Then the form shows the saved data
+    And completing the form registers a zaak in Open Zaak
+""")
 def test_resume_link_continues_and_completes_the_submission(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     http: requests.Session,
     podiumd_env: Environment,
