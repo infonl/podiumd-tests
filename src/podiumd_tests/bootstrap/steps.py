@@ -410,7 +410,8 @@ OAB_ROLES = {
     # The functioneel beheerder: the only role that may change OAB's archive configuration.
     "beheerder": "Administrator",
 }
-# The test admin: ZAC beheerder, PABC administrator, KISS beheerder and redacteur, admin of the Django apps' SSO.
+# The test admin: ZAC beheerder, PABC administrator, KISS beheerder and redacteur, ZaakBrug console tester, admin of
+# the Django apps' SSO.
 ADMIN = KeycloakUser(
     "admin",
     # beheerders: podiumd's pabc-dataset.json maps it to every ZAC role in all domains (ExternalsPodiumD).
@@ -422,7 +423,13 @@ ADMIN = KeycloakUser(
         "beheerders",
         ZAC_FUNCTIONAL_ROLE,
     ),
-    client_roles=(("pabc", "administrator"), ("kiss", "Beheerder"), ("kiss", "Redacteur")),
+    # zaakbrug_admin: Frank!Framework's IbisTester on ZaakBrug's console (oauthRoleMapping).
+    client_roles=(
+        ("pabc", "administrator"),
+        ("kiss", "Beheerder"),
+        ("kiss", "Redacteur"),
+        ("zaakbrug", "zaakbrug_admin"),
+    ),
     groups=("beheerders",),
 )
 # The klantcontactmedewerker of KISS and ITA (TA kcc-medewerker).
