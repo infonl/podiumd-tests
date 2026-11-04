@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
@@ -48,9 +49,18 @@ def login(page: Page, env: Environment, username: str, password: str) -> request
 
 
 def admin_session(env: Environment, username: str, password: str) -> requests.Session:
-    """A PABC management session, logged in through headless Chromium: PABC's login needs a page navigation."""
-    with headless_page(env) as page:
-        return login(page, env, username, password)
+    """A PABC management session, logged in through headless Chromium: PABC's login needs a page navigation.
+
+    The login runs in its own thread: Playwright's sync API refuses a thread with a running asyncio loop, which a
+    pytest worker has after a browser test (bootstrap checks of need_bootstrap).
+    """
+
+    def log_in() -> requests.Session:
+        with headless_page(env) as page:
+            return login(page, env, username, password)
+
+    with ThreadPoolExecutor(max_workers=1) as thread:
+        return thread.submit(log_in).result()
 
 
 def zaaktype_entity_type(pabc: requests.Session, pabc_url: str, omschrijving: str) -> str | None:

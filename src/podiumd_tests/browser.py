@@ -85,7 +85,7 @@ def context_args(env: Environment) -> dict[str, object]:
 
 @contextmanager
 def headless_page(env: Environment) -> Generator[Page]:
-    """A page in headless Chromium with the profile's settings, outside pytest (bootstrap, seed-volume)."""
+    """Headless Chromium page with the profile's settings, without pytest's page fixture (bootstrap, seed-volume)."""
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(args=launch_args(env))
         try:
