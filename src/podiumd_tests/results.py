@@ -114,6 +114,8 @@ class Entry:
     message: str
     # The test's sources, "origin: reason" (marker source).
     sources: list[str] = field(default_factory=list[str])
+    # The test as a Gherkin scenario (marker scenario); "" without one.
+    scenario: str = ""
 
 
 @dataclass
@@ -178,12 +180,13 @@ def parse_junit(xml_text: str) -> tuple[Counts, Details]:
         skipped = case.find("skipped")
         xpass = next((p.get("value") or "" for p in case.iter("property") if p.get("name") == "xpass"), None)
         found = [p.get("value") or "" for p in case.iter("property") if p.get("name") == "source"]
+        story = next((p.get("value") or "" for p in case.iter("property") if p.get("name") == "scenario"), "")
         if problem is not None:
             if problem.tag == "failure":
                 counts.failed += 1
             else:
                 counts.errors += 1
-            details.failures.append(Entry(test_id, _first_line(problem.get("message")), found))
+            details.failures.append(Entry(test_id, _first_line(problem.get("message")), found, story))
         elif skipped is not None and skipped.get("type") == "pytest.xfail":
             counts.xfailed += 1
             details.xfailed.append(Entry(test_id, _first_line(skipped.get("message")), found))
@@ -271,6 +274,11 @@ def summary_markdown(info: RunInfo, details: Details) -> str:
     if sourced := [e for e in [*details.xpassed, *details.xfailed, *details.failures] if e.sources]:
         lines += ["", "## Sources of the failed and known-defect tests", ""]
         lines += [f"- `{e.test_id}`: " + "; ".join(e.sources) for e in sourced]
+    if told := [e for e in details.failures if e.scenario]:
+        lines += ["", "## Scenarios of the failed tests", ""]
+        for entry in told:
+            lines += [f"`{entry.test_id}`", "", "```gherkin", entry.scenario, "```", ""]
+        lines.pop()
     return "\n".join(lines) + "\n"
 
 

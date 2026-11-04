@@ -30,6 +30,11 @@ pytestmark = [pytest.mark.component, pytest.mark.ui, pytest.mark.core, pytest.ma
 )
 @pytest.mark.source("draaiboek ZAC-002", "Users log in with their username and password; the dashboard loads.")
 @pytest.mark.source("ZAC features/1-login.feature", "Bob logs in to ZAC and sees the dashboard.")
+@pytest.mark.scenario("""
+    Given the test admin is not logged in to ZAC
+    When the admin logs in through Keycloak
+    Then ZAC shows its dashboard
+""")
 def test_login_shows_the_dashboard(
     page: Page, podiumd_env: Environment, urls: dict[str, str], need_bootstrap: Callable[..., None]
 ) -> None:
@@ -52,6 +57,11 @@ def test_login_shows_the_dashboard(
     reason="[zac-7] ZAC 5.9.1 with Keycloak 26.8.1: after logout Keycloak can hand out a code of the session it is"
     " removing (CODE_TO_TOKEN_ERROR invalid_code), and ZAC answers 403 (Geen toestemming); not yet reported upstream",
 )
+@pytest.mark.scenario("""
+    Given the test admin is logged in to ZAC
+    When the admin chooses Uitloggen in the account menu
+    Then the browser shows Keycloak's login form
+""")
 def test_logout_ends_the_session(
     page: Page, podiumd_env: Environment, urls: dict[str, str], need_bootstrap: Callable[..., None]
 ) -> None:
@@ -67,6 +77,12 @@ def test_logout_ends_the_session(
     "ZAC bdd/@login/@login.feature",
     "A failed login shows 'Invalid username or password.' and gives no access to the dashboard.",
 )
+@pytest.mark.scenario("""
+    Given a user that Keycloak does not know
+    When the user tries to log in to ZAC
+    Then Keycloak's login form shows "Invalid username or password."
+    And the ZAC dashboard stays out of reach
+""")
 def test_unknown_user_stays_on_the_login_form(page: Page, urls: dict[str, str]) -> None:
     """Keycloak refuses a user it does not know with an error on its login form; ZAC stays out of reach."""
     page.goto(urls["zac"] + "/")

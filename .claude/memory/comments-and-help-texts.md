@@ -16,6 +16,7 @@ Write comments, docstrings, `--help` texts, skip reasons and error messages mini
 - Say only what the code cannot: the why, a constraint, a non-obvious fact ("TokenAuth.token allows 40 characters"). Never restate what the code does.
 - One sentence where one sentence does; no history, no "now/new/changed", no references to this session.
 - Docstrings: one line stating what it returns or does. Add a second paragraph only for a real constraint or edge case.
+- Test scenarios (`@pytest.mark.scenario`, user 2026-11-04): Given/When/Then in the words of the domain, 2 to 6 lines, one fact per line, no code names (say "the behandelaar", not `zac_session`); they are for people reading the report. The docstring stays one line and says what the test checks; the scenario says it as a story. Change both when the test changes.
 - Help texts: what the option does and its default, in under one line; no examples unless the syntax is unclear.
 - Errors and skip reasons: the fact, the object and the fix in one line ("bootstrap missing on kees00 (openzaak-client): run `podiumd-tests bootstrap --env kees00`").
 - Exact terms: name the real object, field, command or limit; no "some", "various", "etc.", hedges or filler.

@@ -108,3 +108,11 @@ def test_summary_lists_the_sources_of_known_defect_tests():
     details = Details(xfailed=[Entry("t1", "[kiss-1] KISS 500", ["TA regression/1-x.spec.ts: why"])])
     info = RunInfo("r", "e", "full", "s", "f", 0, [], "c")
     assert "- `t1`: TA regression/1-x.spec.ts: why" in summary_markdown(info, details)
+
+
+def test_summary_shows_the_scenarios_of_failed_tests():
+    details = Details(failures=[Entry("t1", "boom", [], "Given a\nWhen b\nThen c"), Entry("t2", "boom")])
+    info = RunInfo("r", "e", "full", "s", "f", 1, [], "c")
+    summary = summary_markdown(info, details)
+    assert "## Scenarios of the failed tests\n\n`t1`\n\n```gherkin\nGiven a\nWhen b\nThen c\n```\n" in summary
+    assert "`t2`\n\n```gherkin" not in summary

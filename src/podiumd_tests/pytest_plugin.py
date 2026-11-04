@@ -9,6 +9,7 @@ from __future__ import annotations
 import functools
 
 from contextvars import ContextVar
+from html import escape
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import cast
@@ -46,6 +47,8 @@ from podiumd_tests.mock_server import Callback
 from podiumd_tests.oidc import challenge_session
 from podiumd_tests.replicas import several_replicas
 from podiumd_tests.replicas import switches_replicas
+from podiumd_tests.scenarios import scenario
+from podiumd_tests.scenarios import scenario_problems
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
@@ -461,12 +464,13 @@ def fixture_zac_zaak(
 
 @pytest.hookimpl(tryfirst=True)  # before xdist reads the groups
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    """Put the destructive tests in one xdist group; record each test's sources as junit property "source".
+    """Put the destructive tests in one xdist group; record each test's sources and scenario as junit properties.
 
     Tests using several_replicas are destructive where the fixture switches pods (tier chaos), so the
-    switch runs once, apart from parallel tests. A test without a valid source marker stops the run.
+    switch runs once, apart from parallel tests. A test without a valid source marker, or with a malformed
+    scenario, stops the run.
     """
-    problems = [p for item in items for p in source_problems(item)]
+    problems = [p for item in items for p in [*source_problems(item), *scenario_problems(item)]]
     if problems:
         raise pytest.UsageError("\n".join(problems))
     switching = any("several_replicas" in getattr(i, "fixturenames", ()) for i in items) and switches_replicas(
@@ -478,17 +482,29 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         if item.get_closest_marker("destructive"):
             item.add_marker(pytest.mark.xdist_group("destructive"))
         item.user_properties += [("source", s) for s in sources(item)]
+        if text := scenario(item):
+            item.user_properties.append(("scenario", text))
 
 
 @pytest.hookimpl(wrapper=True)
 def pytest_runtest_makereport(
     item: pytest.Item, call: pytest.CallInfo[None]
 ) -> Generator[None, pytest.TestReport, pytest.TestReport]:
-    """Record a non-strict xpass and its reason as junit property "xpass"; junit writes it as a plain pass."""
+    """Record a non-strict xpass and its reason as junit property "xpass", and show the scenario in report.html."""
     report = yield
     if call.when == "call" and report.passed and hasattr(report, "wasxfail"):
         # junit writes the properties of the teardown report, which copies the item's.
         item.user_properties.append(("xpass", str(report.wasxfail)))
+    if call.when == "call" and (text := scenario(item)):
+        # pytest-html shows a report's extras (its extras.html() shape) in the row's detail.
+        extra = {
+            "name": None,
+            "format_type": "html",
+            "content": f"<pre>{escape(text)}</pre>",
+            "mime_type": None,
+            "extension": None,
+        }
+        vars(report)["extras"] = [*vars(report).get("extras", []), extra]
     return report
 
 

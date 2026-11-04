@@ -388,3 +388,37 @@ def test_sourced(request):
 """
     )
     pytester.runpytest_inprocess(*INNER_ARGS).assert_outcomes(passed=1)
+
+
+def test_scenarios_become_junit_properties_and_malformed_ones_stop_the_run(pytester):
+    pytester.makeconftest(INNER_CONFTEST)
+    pytester.makepyfile(
+        """
+import pytest
+
+
+@pytest.mark.source("podiumd-tests", "why")
+@pytest.mark.scenario(\"\"\"
+    Given a zaak
+    When it is read
+    Then it answers
+\"\"\")
+def test_told(request):
+    assert dict(request.node.user_properties)["scenario"] == "Given a zaak\\nWhen it is read\\nThen it answers"
+"""
+    )
+    pytester.runpytest_inprocess(*INNER_ARGS).assert_outcomes(passed=1)
+    pytester.makepyfile(
+        """
+import pytest
+
+
+@pytest.mark.source("podiumd-tests", "why")
+@pytest.mark.scenario("Given a zaak")
+def test_untold():
+    pass
+"""
+    )
+    result = pytester.runpytest_inprocess(*INNER_ARGS)
+    assert result.ret == pytest.ExitCode.USAGE_ERROR
+    result.stderr.fnmatch_lines(["*scenario has no Then*"])
