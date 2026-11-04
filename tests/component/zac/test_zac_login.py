@@ -20,6 +20,22 @@ if TYPE_CHECKING:
 
     from podiumd_tests.environment import Environment
 
+# Not strict: the race hits about 1 in 31 runs.
+ZAC_7 = pytest.mark.xfail(
+    strict=False,
+    reason="[zac-7] ZAC 5.9.1 with Keycloak 26.8.1: after logout Keycloak can hand out a code of the session it is"
+    " removing (CODE_TO_TOKEN_ERROR invalid_code), and ZAC answers 403 (Geen toestemming); not yet reported upstream",
+)
+
+
+def log_in_and_out(page: Page, env: Environment, zac_url: str) -> None:
+    """The test admin logs in to ZAC and out through the account menu, ending on Keycloak's login form."""
+    redirect_login(page, env, zac_url, ADMIN.username, env.credentials.get(ADMIN.store_key))
+    page.get_by_role("button", name="Gebruikers profiel").click()
+    page.get_by_role("menuitem", name="Uitloggen").click()
+    expect(page.locator("#kc-form-login")).to_be_visible()
+
+
 pytestmark = [pytest.mark.component, pytest.mark.ui, pytest.mark.core, pytest.mark.requires("zac", "keycloak")]
 
 
@@ -51,12 +67,7 @@ def test_login_shows_the_dashboard(
 @pytest.mark.source(
     "ZAC features/1-login.feature", "Bob logs out through the user profile menu and sees the sign-in page."
 )
-# Not strict: the race hits about 1 in 31 runs.
-@pytest.mark.xfail(
-    strict=False,
-    reason="[zac-7] ZAC 5.9.1 with Keycloak 26.8.1: after logout Keycloak can hand out a code of the session it is"
-    " removing (CODE_TO_TOKEN_ERROR invalid_code), and ZAC answers 403 (Geen toestemming); not yet reported upstream",
-)
+@ZAC_7
 @pytest.mark.scenario("""
     Given the test admin is logged in to ZAC
     When the admin chooses Uitloggen in the account menu
@@ -67,10 +78,24 @@ def test_logout_ends_the_session(
 ) -> None:
     """Uitloggen in the account menu ends the session: the browser ends on Keycloak's login form."""
     need_bootstrap(ADMIN.name)
+    log_in_and_out(page, podiumd_env, urls["zac"])
+
+
+@pytest.mark.source("ZAC features/1-login.feature", "Bob logs back in after logging out and sees the dashboard.")
+@ZAC_7
+@pytest.mark.scenario("""
+    Given the test admin logged in to ZAC and logged out again
+    When the admin logs in once more through Keycloak
+    Then ZAC shows its dashboard
+""")
+def test_login_after_logout_shows_the_dashboard(
+    page: Page, podiumd_env: Environment, urls: dict[str, str], need_bootstrap: Callable[..., None]
+) -> None:
+    """A second login after Uitloggen reaches the dashboard: ZAC does not refuse the new session (zac-7)."""
+    need_bootstrap(ADMIN.name)
+    log_in_and_out(page, podiumd_env, urls["zac"])
     redirect_login(page, podiumd_env, urls["zac"], ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
-    page.get_by_role("button", name="Gebruikers profiel").click()
-    page.get_by_role("menuitem", name="Uitloggen").click()
-    expect(page.locator("#kc-form-login")).to_be_visible()
+    expect(page.get_by_role("button", name="Dashboard", exact=True)).to_be_visible()
 
 
 @pytest.mark.source(
