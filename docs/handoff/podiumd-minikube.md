@@ -20,16 +20,3 @@ Why it matters for the tests: the node's 6 CPUs limit the full tier, not the lap
 (podiumd 4.10.0, one pod per component) the full tier took 634-648 s with 4 pytest workers and 573 s with 6. With 6
 workers the minikube container ran at about 434% of its 600% limit, and 4 more tests failed through contention
 (Open Inwoner search, Open Zaak autorisaties).
-
-## uWSGI threads as ExternalsPodiumD for Objecten, Open Notificaties, Open Formulieren and Open Archiefbeheer (Kees, 2026-11-04)
-
-minikube runs these four with 2 uWSGI threads: `settings.uwsgi.threads: 2` for objecten, opennotificaties and
-openformulieren, and `UWSGI_THREADS=2` in openarchiefbeheer's `extraEnvVars` (values.yaml). ExternalsPodiumD and
-kees00 set no uWSGI values and the podiumd chart sets none for these four, so they run the threads of each image's
-`/start.sh`.
-
-Request: remove the `threads: 2` settings and the `UWSGI_THREADS` variable, so these four run their image's threads
-as ExternalsPodiumD. `processes: 1` stays (laptop budget), as for Open Inwoner in 08c66cc.
-
-Why it matters for the tests: a race or deadlock between request threads shows only with the estates' thread count;
-Open Inwoner's hang on kees00 (2026-11-04) did not show on minikube while it ran 2 threads.
