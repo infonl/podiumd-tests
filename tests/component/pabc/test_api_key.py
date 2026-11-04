@@ -27,6 +27,11 @@ pytestmark = [
 ]
 
 
+@pytest.mark.scenario("""
+    Given a client with PABC's API key
+    When it asks PABC's decision endpoint for a functional role PABC does not know
+    Then PABC answers with no application roles
+""")
 def test_unknown_functional_role_gets_no_application_roles(
     http: requests.Session, urls: dict[str, str], pabc_api_key: str
 ) -> None:
@@ -36,6 +41,11 @@ def test_unknown_functional_role_gets_no_application_roles(
     assert all(not entries(r.get("applicationRoles")) for r in entries(response.json()["results"]))
 
 
+@pytest.mark.scenario("""
+    Given a client with PABC's API key
+    When it asks PABC's decision endpoint for no functional roles
+    Then PABC answers with no application roles, or refuses the request as invalid
+""")
 def test_no_functional_roles(http: requests.Session, urls: dict[str, str], pabc_api_key: str) -> None:
     """No role names: no application roles, or a validation error (TA reg-68b)."""
     response = decide(http, urls["pabc"], pabc_api_key, [])

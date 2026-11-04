@@ -37,6 +37,11 @@ pytestmark = [
     + [requiring("kiss", n, test_id=n) for n in KISS_OBJECTTYPES],
 )
 @pytest.mark.requires("cluster")
+@pytest.mark.scenario("""
+    Given an objecttype that KISS or ITA works with
+    When its versions are read in Objecttypen
+    Then its newest version is published
+""")
 def test_objecttype_is_published(podiumd_env: Environment, name: str) -> None:
     """The objecttype exists and its newest version is published (a draft cannot hold objects)."""
     found = run_snippet(
@@ -50,6 +55,12 @@ def test_objecttype_is_published(podiumd_env: Environment, name: str) -> None:
     [requiring("ita", n, test_id=n) for n in ITA_OBJECTTYPES]
     + [requiring("kiss", n, test_id=n) for n in KISS_OBJECTTYPES],
 )
+@pytest.mark.scenario("""
+    Given an objecttype that KISS or ITA works with
+    When a client lists the objecttypes by its name in the Objecttypen API
+    Then the API lists exactly one objecttype with that name
+    And its newest version has a JSON schema
+""")
 def test_api_serves_the_objecttype_with_its_schema(objecttypen: ApiClient, name: str) -> None:
     """The API lists the objecttype once by name, and its newest version carries a JSON schema.
 

@@ -41,6 +41,11 @@ def fixture_openbeheer(podiumd_env: Environment, need_bootstrap: Callable[..., N
     "podiumd-tests",
     "Covers Open Beheer: it refuses anonymous API calls, knows the Keycloak user and manages Open Zaak's catalogi.",
 )
+@pytest.mark.scenario("""
+    Given nobody is logged in to Open Beheer
+    When a client asks Open Beheer who is logged in
+    Then Open Beheer refuses the request
+""")
 def test_api_needs_a_login(http: requests.Session, urls: dict[str, str]) -> None:
     """Without a session the API refuses to say who is logged in."""
     response = http.get(urls["openbeheer"] + "/api/v1/whoami/")
@@ -51,6 +56,11 @@ def test_api_needs_a_login(http: requests.Session, urls: dict[str, str]) -> None
     "podiumd-tests",
     "Covers Open Beheer: it refuses anonymous API calls, knows the Keycloak user and manages Open Zaak's catalogi.",
 )
+@pytest.mark.scenario("""
+    Given the test admin is logged in to Open Beheer through Keycloak
+    When the admin asks Open Beheer who is logged in
+    Then Open Beheer answers with the admin's Keycloak username
+""")
 def test_keycloak_login_is_the_admin(openbeheer: requests.Session, urls: dict[str, str]) -> None:
     """After the Keycloak login Open Beheer knows the user by its Keycloak username."""
     whoami = expect_status(openbeheer.get(urls["openbeheer"] + "/api/v1/whoami/"), HTTPStatus.OK).json()
@@ -76,6 +86,13 @@ def zaaktype_ids(openbeheer: requests.Session, catalogi_service: str, **query: s
     "podiumd-tests",
     "Covers Open Beheer: it refuses anonymous API calls, knows the Keycloak user and manages Open Zaak's catalogi.",
 )
+@pytest.mark.scenario("""
+    Given the test admin is logged in to Open Beheer
+    And Open Zaak has the test catalogus with the test zaaktype
+    When the admin lists the catalogi and the zaaktypen of Open Zaak in Open Beheer
+    Then the catalogi include the test catalogus
+    And the zaaktypen include the test zaaktype
+""")
 def test_open_zaaks_zaaktypen_are_managed(
     openbeheer: requests.Session, catalogi_service: str, test_zaaktype: JsonObject
 ) -> None:
@@ -95,6 +112,11 @@ def test_open_zaaks_zaaktypen_are_managed(
     "podiumd-tests",
     "Pins Open Beheer's known defect: a catalogus from catalogi/choices filters the zaaktypen to nothing.",
 )
+@pytest.mark.scenario("""
+    Given the test admin is logged in to Open Beheer
+    When the admin filters the zaaktypen on the test catalogus as Open Beheer offers it
+    Then the zaaktypen include the test zaaktype
+""")
 def test_zaaktypen_filter_on_a_catalogus_from_its_choices(
     openbeheer: requests.Session, catalogi_service: str, test_zaaktype: JsonObject
 ) -> None:
@@ -116,6 +138,14 @@ def test_zaaktypen_filter_on_a_catalogus_from_its_choices(
     "upstream maykinmedia/open-beheer backend/src/openbeheer/zaaktype/tests/e2e/test_25_edit_related.py",
     "A beheerder adds related types (statustypen, roltypen) to a zaaktype.",
 )
+@pytest.mark.scenario("""
+    Given the beheerder of Open Beheer is logged in
+    When the beheerder creates a zaaktype from the Basis template in the test catalogus
+    Then Open Zaak has the zaaktype as a concept with its omschrijving
+    When the beheerder changes its omschrijving and adds a statustype and a roltype
+    Then Open Zaak has the changed omschrijving
+    And Open Zaak lists the new statustype and roltype of the zaaktype
+""")
 def test_beheerder_creates_a_concept_zaaktype_from_the_template_and_changes_it(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     openbeheer: requests.Session,
     urls: dict[str, str],

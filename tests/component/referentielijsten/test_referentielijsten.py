@@ -28,6 +28,10 @@ pytestmark = [
 ]
 
 
+@pytest.mark.scenario("""
+    When a client creates a tabel through the Referentielijsten API
+    Then Referentielijsten refuses the request
+""")
 def test_api_cannot_be_written(http: requests.Session, urls: dict[str, str]) -> None:
     """Tabellen are maintained in the admin: the API refuses a new tabel."""
     response = http.post(urls["referentielijsten"] + "/api/v1/tabellen", json={"code": "ptest", "naam": "ptest"})
@@ -37,6 +41,12 @@ def test_api_cannot_be_written(http: requests.Session, urls: dict[str, str]) -> 
 
 
 @pytest.mark.requires("cluster")
+@pytest.mark.scenario("""
+    Given a tabel with the items Ja and Nee made in the Referentielijsten admin
+    When a client lists the tabellen and the tabel's items through the API
+    Then the tabellen include the tabel
+    And the tabel has exactly the items Ja and Nee
+""")
 def test_items_of_a_tabel_are_listed(
     http: requests.Session, urls: dict[str, str], podiumd_env: Environment, registry: ResourceRegistry
 ) -> None:

@@ -51,6 +51,11 @@ def names(items: list[JsonObject]) -> list[str]:
     "TA regression/67-pabc-functional-roles.spec.ts",
     "PABC has the functional roles seeded, and the base roles ZAC and KISS expect.",
 )
+@pytest.mark.scenario("""
+    Given the test admin is logged in to PABC
+    When the admin lists the functional roles
+    Then PABC has at least one functional role
+""")
 def test_functional_roles_are_configured(pabc: requests.Session, urls: dict[str, str]) -> None:
     """PABC has at least one functional role (TA reg-67)."""
     assert get_entries(pabc, urls["pabc"] + "/api/v1/functional-roles")
@@ -60,6 +65,11 @@ def test_functional_roles_are_configured(pabc: requests.Session, urls: dict[str,
     "TA regression/67-pabc-functional-roles.spec.ts",
     "PABC has the functional roles seeded, and the base roles ZAC and KISS expect.",
 )
+@pytest.mark.scenario("""
+    Given the test admin is logged in to PABC
+    When the admin lists the application roles
+    Then they include a behandelaar, KCC or medewerker role
+""")
 def test_application_roles_include_a_handling_role(pabc: requests.Session, urls: dict[str, str]) -> None:
     """The application roles include ZAC's behandelaar or KISS's KCC role (TA reg-67)."""
     found = names(get_entries(pabc, urls["pabc"] + "/api/v1/application-roles"))
@@ -70,6 +80,12 @@ def test_application_roles_include_a_handling_role(pabc: requests.Session, urls:
     "TA regression/68-pabc-decision.spec.ts",
     "PABC's decision endpoint maps functional roles to application roles per entity type, the core of PBAC.",
 )
+@pytest.mark.scenario("""
+    Given the test admin is logged in to PABC
+    And a client with PABC's API key
+    When the client asks PABC's decision endpoint for up to three configured functional roles
+    Then PABC answers with a list of application roles per entity type
+""")
 def test_known_functional_roles_get_application_roles(
     pabc: requests.Session, http: requests.Session, urls: dict[str, str], pabc_api_key: str
 ) -> None:
@@ -85,6 +101,12 @@ def test_known_functional_roles_get_application_roles(
     "TA regression/69-pabc-domains-entity-types.spec.ts",
     "PABC's domains and entity types answer and are consistent, with no orphaned references.",
 )
+@pytest.mark.scenario("""
+    Given the test admin is logged in to PABC
+    When the admin lists the domains and the entity types
+    Then PABC answers both lists
+    And no entity type is listed twice
+""")
 def test_entity_types_have_unique_ids(pabc: requests.Session, urls: dict[str, str]) -> None:
     """Domains answer, and no entity type was seeded twice (TA reg-69)."""
     get_entries(pabc, urls["pabc"] + "/api/v1/domains")
@@ -96,6 +118,11 @@ def test_entity_types_have_unique_ids(pabc: requests.Session, urls: dict[str, st
     "TA regression/71-pabc-zac-integration-coherence.spec.ts",
     "ZAC must be registered in PABC, else every ZAC login gets no roles.",
 )
+@pytest.mark.scenario("""
+    Given the test admin is logged in to PABC
+    When the admin lists the applications
+    Then ZAC is a registered application
+""")
 def test_zac_is_a_registered_application(pabc: requests.Session, urls: dict[str, str]) -> None:
     """ZAC, PABC's first consumer, is a registered application (TA reg-71)."""
     found = names(get_entries(pabc, urls["pabc"] + "/api/v1/applications"))
@@ -106,6 +133,11 @@ def test_zac_is_a_registered_application(pabc: requests.Session, urls: dict[str,
     "TA smoke/66-pabc-health.spec.ts",
     "PABC, which gives ZAC its PBAC decisions, is reachable and enforces its API key.",
 )
+@pytest.mark.scenario("""
+    Given the test admin is logged in to PABC
+    When the admin asks for PABC's version
+    Then PABC answers with its version and revision
+""")
 def test_app_version_is_shown_after_login(pabc: requests.Session, urls: dict[str, str]) -> None:
     """PABC tells a logged-in user its version and revision (TA smoke 66)."""
     version = expect_status(pabc.get(urls["pabc"] + "/api/app-version"), HTTPStatus.OK).json()

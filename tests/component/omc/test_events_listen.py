@@ -80,6 +80,12 @@ def listen(
 @pytest.mark.source(
     "podiumd-tests", "OMC answers 206 to a notification it cannot process, which Open Notificaties counts as delivered."
 )
+@pytest.mark.scenario("""
+    Given a notification of a new status for a zaak that does not exist
+    And the notification with or without Open Notificaties' source property
+    When it is posted to OMC with the token of OMC's abonnement
+    Then OMC processes it and fails only on fetching the unknown status
+""")
 def test_notification_is_recognized(
     http: requests.Session, podiumd_env: Environment, urls: dict[str, str], root: tuple[str, ...]
 ) -> None:
@@ -91,6 +97,12 @@ def test_notification_is_recognized(
     "upstream Worth-NL/NotifyNL-OMC OMC/Tests/Infrastructure/WebApi/EventsHandler.IntegrationTests/Controllers/EventsControllerTests.cs",
     "Listen_WithExpiredToken_Returns401: OMC refuses a notification whose token has expired.",
 )
+@pytest.mark.scenario("""
+    Given a notification of a new status
+    And a token signed with OMC's secret that expired a day ago
+    When the notification is posted to OMC with that token
+    Then OMC refuses it as unauthorized
+""")
 def test_expired_token_is_refused(http: requests.Session, podiumd_env: Environment, urls: dict[str, str]) -> None:
     """A token that expired a day ago gets 401, though OMC's own secret signed it."""
     expired = time.time() - VALIDITY - 24 * 3600

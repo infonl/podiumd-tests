@@ -81,6 +81,11 @@ def _post(http: requests.Session, url: str, envelope: str, message: str) -> str:
 
 
 @MADE_HERE
+@pytest.mark.scenario("""
+    Given ZaakBrug answers ZDS 1.2 messages
+    When a client sends a genereerZaakIdentificatie message to ZaakBrug
+    Then ZaakBrug answers with a new zaak identificatie
+""")
 def test_genereer_zaak_identificatie(http: requests.Session, urls: dict[str, str]) -> None:
     """genereerZaakIdentificatie_Di02 answers a new zaak identificatie (stored in ZaakBrug, not in Open Zaak)."""
     answer = _post(
@@ -125,6 +130,13 @@ def fixture_zaakbrug_zaak(
 
 @pytest.mark.requires("openzaak")
 @MADE_HERE
+@pytest.mark.scenario("""
+    Given a new zaak identificatie from ZaakBrug
+    When a client sends a creeerZaak message with it to ZaakBrug
+    Then ZaakBrug confirms the message
+    And the zaak is in Open Zaak with ZaakBrug's RSIN as bronorganisatie
+    And the zaak has an initiator rol for a natuurlijk persoon
+""")
 def test_creeer_zaak_reaches_open_zaak(openzaak: ApiClient, zaakbrug_zaak: Callable[..., CreatedZaak]) -> None:
     """creeerZaak_Lk01 confirms (Bv03) and the zaak is in Open Zaak with the ZaakBrug RSIN and an initiator rol."""
     rollen = openzaak.list(f"{ZAKEN}/rollen", {"zaak": zaakbrug_zaak().url})
@@ -133,6 +145,11 @@ def test_creeer_zaak_reaches_open_zaak(openzaak: ApiClient, zaakbrug_zaak: Calla
 
 @pytest.mark.requires("openzaak")
 @MADE_HERE
+@pytest.mark.scenario("""
+    Given a zaak created through ZaakBrug
+    When a client asks ZaakBrug for the zaak with a geefZaakdetails message
+    Then the answer carries the zaak's identificatie
+""")
 def test_geef_zaak_details_reads_a_created_zaak(
     http: requests.Session, urls: dict[str, str], zaakbrug_zaak: Callable[..., CreatedZaak]
 ) -> None:
@@ -145,6 +162,13 @@ def test_geef_zaak_details_reads_a_created_zaak(
 
 @pytest.mark.requires("openzaak")
 @MADE_HERE
+@pytest.mark.scenario("""
+    Given a zaak created through ZaakBrug
+    And a new document identificatie from ZaakBrug
+    When a client attaches a document to the zaak with a voegZaakdocumentToe message
+    Then ZaakBrug confirms the message
+    And Open Zaak links the document to the zaak
+""")
 def test_voeg_zaakdocument_toe_attaches_a_document(
     http: requests.Session, urls: dict[str, str], openzaak: ApiClient, zaakbrug_zaak: Callable[..., CreatedZaak]
 ) -> None:
@@ -175,6 +199,13 @@ def _update(http: requests.Session, urls: dict[str, str], zaak: str, old: ZaakVe
 @pytest.mark.requires("openzaak")
 @pytest.mark.source(SOAPUI, "ValidVerlengingShouldBeReturnedInGeefZaakDetails: a changed verlenging is stored.")
 @pytest.mark.source(SOAPUI, "ValidKenmerkenShouldBeReturnedInGeefZaakDetails: a changed kenmerk is stored.")
+@pytest.mark.scenario("""
+    When a client creates a zaak through ZaakBrug with a kenmerk and a verlenging
+    Then Open Zaak stores the kenmerk and the verlenging
+    When the client sends an updateZaak message with another kenmerk and verlenging
+    Then ZaakBrug confirms the message
+    And Open Zaak holds the new kenmerk and verlenging
+""")
 def test_update_zaak_changes_verlenging_and_kenmerk(
     http: requests.Session, urls: dict[str, str], openzaak: ApiClient, zaakbrug_zaak: Callable[..., CreatedZaak]
 ) -> None:
@@ -211,6 +242,12 @@ def test_update_zaak_changes_verlenging_and_kenmerk(
         ),
     ],
 )
+@pytest.mark.scenario("""
+    Given a zaak created through ZaakBrug with a verlenging
+    When a client sends an updateZaak message with a verlenging of duur 0 or without reden
+    Then ZaakBrug confirms the message
+    And the zaak in Open Zaak keeps its first verlenging
+""")
 def test_update_zaak_ignores_an_incomplete_verlenging(
     http: requests.Session,
     urls: dict[str, str],
@@ -229,6 +266,14 @@ def test_update_zaak_ignores_an_incomplete_verlenging(
     SOAPUI,
     "NewStatusWithAlreadyExistingDatumstatusgezetShouldThrowTechnicalError: a second status at the same moment faults.",
 )
+@pytest.mark.scenario("""
+    Given a zaak created through ZaakBrug
+    When a client sets a first status with an actualiseerZaakstatus message
+    Then ZaakBrug confirms the message
+    When the client sets a second status with the same datumStatusGezet
+    Then ZaakBrug answers with a SOAP Fault
+    And the zaak in Open Zaak has one status
+""")
 def test_status_at_an_existing_datum_status_gezet_is_refused(
     http: requests.Session, urls: dict[str, str], openzaak: ApiClient, zaakbrug_zaak: Callable[..., CreatedZaak]
 ) -> None:
@@ -257,6 +302,13 @@ def test_status_at_an_existing_datum_status_gezet_is_refused(
 @pytest.mark.source(
     SOAPUI, "UpdateZaakDocumentShouldNotBeAllowedIfDocumentStatusIsDefinitief: a definitief document is not updated."
 )
+@pytest.mark.scenario("""
+    Given a zaak created through ZaakBrug
+    And a document with status Definitief attached to it through ZaakBrug
+    When a client checks the document out and changes its titel with an updateZaakdocument message
+    Then ZaakBrug answers with a SOAP Fault
+    And no document of the zaak in Open Zaak has the changed titel
+""")
 def test_definitief_document_is_not_updated(
     http: requests.Session, urls: dict[str, str], openzaak: ApiClient, zaakbrug_zaak: Callable[..., CreatedZaak]
 ) -> None:

@@ -62,6 +62,13 @@ def _create(client: ApiClient, type_url: str, *expected: int) -> int:
     return client.request("POST", "objects", *expected, json=body).status_code
 
 
+@pytest.mark.scenario("""
+    Given an Objecten token permitted on one KISS objecttype only
+    When the token creates an object of an ITA objecttype
+    Then Objecten refuses it as forbidden
+    When the token creates an empty object of its permitted objecttype
+    Then Objecten refuses it as invalid, not as forbidden
+""")
 def test_token_cannot_create_an_object_of_an_unpermitted_objecttype(
     restricted_objecten: ApiClient, podiumd_env: Environment
 ) -> None:

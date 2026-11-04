@@ -42,6 +42,12 @@ def fixture_afdeling_type(podiumd_env: Environment) -> str:
 @pytest.mark.source(
     POSTMAN, "Create object (invalid): a record that does not match the objecttype's JSON schema is refused."
 )
+@pytest.mark.scenario("""
+    Given the objecttype Afdeling, which requires identificatie and naam
+    When a client creates an object in Objecten with only an identificatie
+    Then Objecten refuses it as invalid
+    And the error names the field naam
+""")
 def test_record_breaking_the_objecttype_schema_is_refused(
     objecten: ApiClient, afdeling_type: str, registry: ResourceRegistry
 ) -> None:
@@ -65,6 +71,13 @@ def test_record_breaking_the_objecttype_schema_is_refused(
 @pytest.mark.source(
     POSTMAN, "An object's records stay available: its history, and the object on a date or registration date."
 )
+@pytest.mark.scenario("""
+    Given an object in Objecten of objecttype Afdeling that started ten days ago
+    When a client changes the object's naam with a new record that starts today
+    Then the history lists the first record, ended today, and the new record
+    And the object on a date before today has its first naam
+    And the object did not exist before its registration date
+""")
 def test_changed_object_keeps_its_earlier_record(
     objecten: ApiClient, afdeling_type: str, registry: ResourceRegistry
 ) -> None:
