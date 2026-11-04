@@ -12,6 +12,7 @@ from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.browser import browser_session
 from podiumd_tests.browser import keycloak_login
 from podiumd_tests.grafana import grafana_auth
+from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import url_host
 
@@ -69,16 +70,22 @@ def test_recreated_keycloak_user_logs_in_to_the_same_grafana_user(
 ) -> None:
     """After its Keycloak account is recreated, a login reaches the same Grafana user, with the role of the new token."""
     grafana = podiumd_env.profile.urls["grafana"]
-    settings = expect_status(podiumd_env.session().get(grafana + "/api/frontend/settings"), HTTPStatus.OK).json()
-    if "generic_oauth" not in (settings.get("oauth") or {}):
-        pytest.skip("Grafana's Keycloak login is off here (auth.generic_oauth.enabled)")
-    admin = for_environment(podiumd_env)
-    username, password = registry.tagged("grafana"), admin.new_password()
     auth = grafana_auth(podiumd_env.credentials)
     if auth is None:
         pytest.skip(
             "Grafana's admin login is needed to remove the test's Grafana user: secrets grafana_username/password"
         )
+    settings = expect_status(
+        podiumd_env.session().get(grafana + "/api/admin/settings", auth=auth), HTTPStatus.OK
+    ).json()
+    if section(settings, "auth.generic_oauth").get("enabled") != "true":
+        pytest.skip("Grafana's Keycloak login is off here (auth.generic_oauth.enabled)")
+    if section(settings, "auth").get("oauth_allow_insecure_email_lookup") != "true":
+        pytest.skip(
+            "Grafana links logins by e-mail from monitoring-logging 1.0.19 (auth.oauth_allow_insecure_email_lookup)"
+        )
+    admin = for_environment(podiumd_env)
+    username, password = registry.tagged("grafana"), admin.new_password()
 
     def remove_grafana_user() -> None:
         lookup = podiumd_env.session().get(
