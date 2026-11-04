@@ -1,6 +1,7 @@
 # ICATT podiumd-infra AKS environment kees00 (values/kees00/).
 estate: podiumd-infra
-allowed_tiers: [smoke, core, full, perf]
+# chaos: Kees's own environment; tell podiumd-infra before a run, its deploys must not overlap.
+allowed_tiers: [smoke, core, full, perf, chaos]
 kube:
   context: podiumd-kees00-aks
   namespace: podiumd
