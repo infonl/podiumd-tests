@@ -211,6 +211,7 @@ def test_mijn_vragen_shows_more_than_one_page_of_questions(  # pylint: disable=t
         )
         make_betrokkene(openklant, registry, question, partij)
     expected = {f"{tag}-{number}" for number in range(MANY_QUESTIONS)}
+    forget_questions(podiumd_env, partij["uuid"])
 
     def walk() -> set[str]:
         """The tagged questions on all pages; 9 per page, and a page number past the last answers 404."""
