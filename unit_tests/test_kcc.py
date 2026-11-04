@@ -2,6 +2,8 @@
 
 import json
 
+from datetime import UTC
+from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
@@ -147,9 +149,25 @@ def test_add_klantcontact_returns_the_response(fake_http):
     assert add_klantcontact(requests.Session(), ITA, {}).status_code == 201
 
 
-@pytest.mark.parametrize(("answer", "hours"), [((0, "72\n"), 72), ((1, ""), 48), ((0, "soon\n"), 48)])
-def test_ita_afhandeltermijn_hours_falls_back_to_itas_default(env_factory, fake_runner, monkeypatch, answer, hours):
+@pytest.mark.parametrize(("answer", "hours"), [((0, "72\n"), (72, 72)), ((1, ""), (48, 6)), ((0, "soon\n"), (48, 6))])
+def test_ita_urgency_hours_fall_back_to_itas_defaults(env_factory, fake_runner, monkeypatch, answer, hours):
     env = env_factory()
     monkeypatch.setattr(type(env), "deployment_for", lambda _self, _component: "ita-web")
-    fake_runner.answers["printenv Urgentie__AfhandeltermijnUren"] = answer
-    assert kcc.ita_afhandeltermijn_hours(env) == hours
+    fake_runner.answers["printenv Urgentie__"] = answer
+    assert (kcc.ita_afhandeltermijn_hours(env), kcc.ita_bijna_verlopen_hours(env)) == hours
+
+
+MONDAY_10 = datetime(2026, 11, 2, 10, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("moment", "hours", "expected"),
+    [
+        (MONDAY_10, 0, MONDAY_10),
+        (MONDAY_10, 5, datetime(2026, 11, 2, 5, tzinfo=UTC)),
+        (MONDAY_10, 48, datetime(2026, 10, 29, 10, tzinfo=UTC)),  # Friday and Thursday, not the weekend
+        (datetime(2026, 11, 1, 12, tzinfo=UTC), 1, datetime(2026, 10, 30, 23, tzinfo=UTC)),  # from a Sunday
+    ],
+)
+def test_weekday_hours_before_skips_the_weekend(moment, hours, expected):
+    assert kcc.weekday_hours_before(moment, hours) == expected

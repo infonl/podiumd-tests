@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import uuid
 
+from datetime import datetime
+from datetime import timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from urllib.parse import quote
@@ -125,17 +127,39 @@ def expect_ita_group_access_bug(request: pytest.FixtureRequest, env: Environment
         )
 
 
-# ITA's afhandeltermijn in weekday hours where the environment does not set Urgentie__AfhandeltermijnUren.
+SATURDAY = 5
+# ITA's urgency in weekday hours where the environment does not set it (Urgentie__* of ITA after 3.4.0).
 ITA_TERMIJN_HOURS = 48
+ITA_BIJNA_VERLOPEN_HOURS = 6
+
+
+def _ita_hours(env: Environment, variable: str, default: int) -> int:
+    try:
+        return int(env.kube.exec(env.deployment_for("ita"), "printenv", variable, timeout=30).strip())
+    except (KubeError, ValueError):
+        return default
 
 
 def ita_afhandeltermijn_hours(env: Environment) -> int:
     """ITA's afhandeltermijn in weekday hours, after which a contactverzoek is overdue."""
-    try:
-        value = env.kube.exec(env.deployment_for("ita"), "printenv", "Urgentie__AfhandeltermijnUren", timeout=30)
-        return int(value.strip())
-    except (KubeError, ValueError):
-        return ITA_TERMIJN_HOURS
+    return _ita_hours(env, "Urgentie__AfhandeltermijnUren", ITA_TERMIJN_HOURS)
+
+
+def ita_bijna_verlopen_hours(env: Environment) -> int:
+    """The weekday hours before the afhandeltermijn ends in which ITA marks a contactverzoek almost overdue."""
+    return _ita_hours(env, "Urgentie__BijnaVerlopenDrempelUren", ITA_BIJNA_VERLOPEN_HOURS)
+
+
+def weekday_hours_before(moment: datetime, hours: float) -> datetime:
+    """The moment `hours` weekday hours (Monday to Friday, UTC) before `moment`, as ITA counts its afhandeltermijn."""
+    left = timedelta(hours=hours)
+    end, day = moment, moment.replace(hour=0, minute=0, second=0, microsecond=0)
+    while True:
+        if day.weekday() < SATURDAY:
+            if left <= end - day:
+                return end - left
+            left -= end - day
+        end, day = day, day - timedelta(days=1)
 
 
 def kiss_sync_cronjob(env: Environment, source: str) -> str:

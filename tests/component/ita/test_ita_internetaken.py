@@ -8,6 +8,8 @@ KISS reads that logboek with its own Objecten token.
 
 from __future__ import annotations
 
+from datetime import UTC
+from datetime import datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
@@ -22,8 +24,11 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.kcc import add_klantcontact
 from podiumd_tests.kcc import expect_ita_group_access_bug
+from podiumd_tests.kcc import ita_afhandeltermijn_hours
+from podiumd_tests.kcc import ita_bijna_verlopen_hours
 from podiumd_tests.kcc import ita_detail_text
 from podiumd_tests.kcc import kcc_login
+from podiumd_tests.kcc import weekday_hours_before
 from podiumd_tests.mailpit import received
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
@@ -433,3 +438,41 @@ def test_a_verwerkt_contactverzoek_is_read_only(
     refused = expect_status(ita.post(urls["ita"] + path, json=body), HTTPStatus.CONFLICT)
     assert "verwerkt" in refused.text, refused.text[:300]
     assert openklant.get(f"internetaken/{taak['uuid']}")["status"] == "verwerkt"
+
+
+@pytest.mark.source(
+    f"{ITA_E2E}/Werklijst/WerklijstUrgentieScenarios.cs",
+    "The werklijst marks each contactverzoek in time, almost overdue or overdue, counting weekday hours only.",
+)
+@pytest.mark.scenario("""
+    Given the KCC medewerker has claimed three contactverzoeken in ITA
+    And their klantcontacten took place now, just inside the afhandeltermijn and long before it
+    When the medewerker opens the contactverzoeken assigned to them
+    Then ITA marks them in time, almost overdue and overdue
+    And weekends do not count towards the afhandeltermijn
+""")
+def test_werklijst_shows_the_urgency_of_each_contactverzoek(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    podiumd_env: Environment,
+    ita: requests.Session,
+    urls: dict[str, str],
+    openklant: ApiClient,
+    objecten: ApiClient,
+    registry: ResourceRegistry,
+    logboek_type: str,
+) -> None:
+    """ITA's urgentie status per contactverzoek in Aan mij toegewezen: success, warning or error (weekday hours)."""
+    termijn, bijna = ita_afhandeltermijn_hours(podiumd_env), ita_bijna_verlopen_hours(podiumd_env)
+    now = datetime.now(tz=UTC)
+    ages = {"success": 0, "warning": termijn - bijna / 2, "error": termijn + 24}
+    expected: dict[str, str] = {}
+    for status, hours in ages.items():
+        plaatsgevonden = weekday_hours_before(now, hours).isoformat()
+        taak = make_internetaak(
+            openklant, registry, make_klantcontact(openklant, registry, plaatsgevondenOp=plaatsgevonden), []
+        )
+        clean_up_logboek(objecten, registry, logboek_type, str(taak["uuid"]))
+        claim(ita, urls, taak)
+        expected[str(taak["uuid"])] = status
+    mine = {str(t.get("uuid")): t for t in get_entries(ita, urls["ita"] + "/api/internetaken/aan-mij-toegewezen")}
+    found = {uuid: section(mine.get(uuid, {}), "urgentie").get("status") for uuid in expected}
+    assert found == expected, {uuid: mine.get(uuid, {}).get("urgentie") for uuid in expected}
