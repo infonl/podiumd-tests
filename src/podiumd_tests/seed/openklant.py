@@ -198,6 +198,11 @@ def make_internetaak(
     return _create(openklant, registry, "internetaken", body)
 
 
+def close_internetaak(openklant: ApiClient, taak: JsonObject) -> JsonObject:
+    """The internetaak set to verwerkt, as a KCC medewerker closes it."""
+    return openklant.patch(str(taak["url"]), {"status": "verwerkt"})
+
+
 # (codeObjecttype, codeRegister, codeSoortObjectId) of what an onderwerpobject points at.
 ZAAK = ("zaak", "openzaak", "zaak-uuid")
 FORMULIERINZENDING = ("formulierinzending", "Open Formulieren", "public_registration_reference")

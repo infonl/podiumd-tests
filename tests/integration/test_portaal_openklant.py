@@ -35,6 +35,7 @@ from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import clean_up_logboek
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import clean_up_klantcontacten
+from podiumd_tests.seed.openklant import close_internetaak
 from podiumd_tests.seed.openklant import expanded
 from podiumd_tests.seed.openklant import klantcontact_body
 from podiumd_tests.seed.openklant import klantcontacten_about
@@ -304,7 +305,7 @@ def test_question_answered_in_ita_shows_as_answered(  # pylint: disable=too-many
     }
     add_klantcontact(ita, podiumd_env.profile.urls["ita"], body)
     # ITA has no call to close the taak; KCC closes it as it does in ITA's UI.
-    openklant.patch(str(taak["url"]), {"status": "verwerkt"})
+    close_internetaak(openklant, taak)
     forget_questions(podiumd_env, partij)
     page.context.clear_cookies()
     portal_login(page, podiumd_env, "digid", INWONER, MIJN_VRAGEN)

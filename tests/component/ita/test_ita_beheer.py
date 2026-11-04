@@ -17,6 +17,7 @@ from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import clean_up_logboek
 from podiumd_tests.seed.objecten import objecttype_url
+from podiumd_tests.seed.openklant import close_internetaak
 from podiumd_tests.seed.openklant import make_internetaak
 from podiumd_tests.seed.openklant import make_klantcontact
 
@@ -45,7 +46,7 @@ def fixture_closed_taak(
     """An internetaak raised by a klantcontact and set to verwerkt; ITA's logboek of it is cleaned up too."""
     taak = make_internetaak(openklant, registry, make_klantcontact(openklant, registry), [])
     clean_up_logboek(objecten, registry, objecttype_url(podiumd_env, "Activiteitenlog"), str(taak["uuid"]))
-    return openklant.patch(str(taak["url"]), {"status": "verwerkt"})
+    return close_internetaak(openklant, taak)
 
 
 @pytest.fixture(name="ita_as")

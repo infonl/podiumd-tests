@@ -16,6 +16,7 @@ from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.json_data import section
 from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
+from podiumd_tests.seed.openklant import close_internetaak
 from podiumd_tests.seed.openklant import make_internetaak
 from podiumd_tests.seed.openklant import make_klantcontact
 from podiumd_tests.seed.openklant import make_partij
@@ -237,7 +238,7 @@ def test_internetaak_changes_are_notified(
     """Creating an internetaak and completing it reach kanaal internetaken (TA reg-45)."""
     make_abonnement(opennotificaties, registry, callback.url, "internetaken", {})
     taak = make_internetaak(openklant, registry, make_klantcontact(openklant, registry), [])
-    openklant.patch(str(taak["url"]), {"status": "verwerkt"})
+    close_internetaak(openklant, taak)
     for actie in ("create", "partial_update"):
         notified(callback, event("internetaken", "internetaak", actie, taak["url"]), f"internetaak {actie}")
 
