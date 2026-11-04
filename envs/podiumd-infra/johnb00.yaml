@@ -22,14 +22,9 @@ urls:
   opennotificaties: https://notificaties.johnb00.pd.test-rig.nl
   mailpit: https://mailpit.johnb00.pd.test-rig.nl
   grafana: https://grafana.johnb00.pd.test-rig.nl
-  # No ingress: reached through a port-forward. Open Inwoner reaches KvK through the outway
-  # (chart openinwoner.kvk, helm-charts #604); the tests compare against the api-proxy.
+  # No ingress: reached through a port-forward.
   api-proxy: http://api-proxy.podiumd.svc.cluster.local
-  frankgateway: http://frankgateway-outway.podiumd.svc.cluster.local:9080
-  # OpenBao's API listener; no ingress on johnb00.
-  openbao: http://podiumd-openbao.podiumd.svc.cluster.local:8200
-  # No ingress on johnb00.
-  zaakbrug: http://zaakbrug.podiumd.svc.cluster.local
+  # zaakbrug, OpenBao and Frank!Gateway are switched off on johnb00.
 settings:
   # Kyverno ClusterPolicy redirect-registries rewrites Docker Hub images to this mirror; the step compares images.
   mock_server_image: podiumdregistry.azurecr.io/dockerhub/library/python:3.13-alpine
