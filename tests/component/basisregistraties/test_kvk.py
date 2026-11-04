@@ -62,6 +62,12 @@ def resultaten(response: requests.Response) -> list[JsonObject]:
 @REG_08
 @REG_47
 @REG_57
+@pytest.mark.scenario("""
+    Given the test company in KvK's test set
+    When KvK is searched by its KvK number through the api-proxy
+    Then the results hold its rechtspersoon and its hoofdvestiging
+    And a result is named Test
+""")
 def test_search_by_kvk_nummer_finds_rechtspersoon_and_vestigingen(http: requests.Session, urls: dict[str, str]) -> None:
     """A KvK number finds the rechtspersoon and its hoofdvestiging, named Test (TA reg-08, reg-47b, reg-57)."""
     found = resultaten(kvk_zoeken(http, urls["api-proxy"], {"kvkNummer": KVK_TEST_NUMMER}))
@@ -70,6 +76,11 @@ def test_search_by_kvk_nummer_finds_rechtspersoon_and_vestigingen(http: requests
 
 
 @REG_47
+@pytest.mark.scenario("""
+    Given the test company in KvK's test set
+    When KvK is searched by its KvK number for type rechtspersoon only
+    Then every result is a rechtspersoon
+""")
 def test_search_by_type_finds_only_that_type(http: requests.Session, urls: dict[str, str]) -> None:
     """type=rechtspersoon leaves out the vestigingen (TA reg-47b)."""
     query = {"kvkNummer": KVK_TEST_NUMMER, "type": "rechtspersoon"}
@@ -85,6 +96,11 @@ def test_search_by_type_finds_only_that_type(http: requests.Session, urls: dict[
 @pytest.mark.tc("INT-005")
 @REG_47
 @REG_125
+@pytest.mark.scenario("""
+    Given the test company in KvK's test set
+    When KvK is searched through the api-proxy by name, by postcode and huisnummer, or by KvK number and name
+    Then the test company is among the results
+""")
 def test_search_finds_the_test_company(http: requests.Session, urls: dict[str, str], query: dict[str, str]) -> None:
     """Searching by name, by address or by number and name finds Test BV Donald (TA reg-47a, reg-47d, reg-125)."""
     found = resultaten(kvk_zoeken(http, urls["api-proxy"], query))
@@ -99,6 +115,11 @@ def test_search_finds_the_test_company(http: requests.Session, urls: dict[str, s
 @REG_08
 @REG_47
 @REG_125
+@pytest.mark.scenario("""
+    Given a KvK number or an adres that KvK does not know
+    When KvK is searched by it through the api-proxy
+    Then KvK answers 404, or 200 without results
+""")
 def test_search_without_match_finds_nothing(
     http: requests.Session, urls: dict[str, str], query: dict[str, str]
 ) -> None:
@@ -110,12 +131,21 @@ def test_search_without_match_finds_nothing(
 
 @pytest.mark.parametrize("nummer", ["ABCDEFGH", "1234"], ids=["letters", "too-short"])
 @REG_150
+@pytest.mark.scenario("""
+    Given a KvK number that is not 8 digits
+    When KvK is searched by it through the api-proxy
+    Then KvK refuses it with 400
+""")
 def test_invalid_kvk_nummer_is_refused(http: requests.Session, urls: dict[str, str], nummer: str) -> None:
     """A KvK number that is not 8 digits answers 400 (TA reg-150)."""
     expect_status(kvk_zoeken(http, urls["api-proxy"], {"kvkNummer": nummer}), HTTPStatus.BAD_REQUEST)
 
 
 @REG_125
+@pytest.mark.scenario("""
+    When KvK is searched by a postcode without huisnummer through the api-proxy
+    Then KvK refuses it with 400
+""")
 def test_postcode_without_huisnummer_is_refused(http: requests.Session, urls: dict[str, str]) -> None:
     """KvK wants postcode and huisnummer together (TA reg-125)."""
     expect_status(kvk_zoeken(http, urls["api-proxy"], {"postcode": KVK_TEST_ADRES["postcode"]}), HTTPStatus.BAD_REQUEST)
@@ -124,6 +154,11 @@ def test_postcode_without_huisnummer_is_refused(http: requests.Session, urls: di
 @pytest.mark.tc("INT-004", "INT-005")
 @REG_157
 @REG_80
+@pytest.mark.scenario("""
+    Given the test company in KvK's test set
+    When its basisprofiel is requested through the api-proxy
+    Then KvK gives the basisprofiel with its KvK number
+""")
 def test_basisprofiel(http: requests.Session, urls: dict[str, str]) -> None:
     """The basisprofiel of the test company answers with its number (TA reg-157c, reg-80)."""
     response = expect_status(kvk_basisprofiel(http, urls["api-proxy"], KVK_TEST_NUMMER), HTTPStatus.OK)

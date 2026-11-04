@@ -93,6 +93,12 @@ def claim(ita: requests.Session, urls: dict[str, str], taak: JsonObject) -> None
     "TA regression/77-ita-afdelingen-groepen.spec.ts",
     "Checks ITA's afdelingen and groepen answer, and catches a seed that fills only one of them.",
 )
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to ITA
+    When the medewerker lists ITA's afdelingen and groepen
+    Then both lists answer
+    And both are empty or both are filled
+""")
 def test_afdelingen_and_groepen_are_seeded_together(ita: requests.Session, urls: dict[str, str]) -> None:
     """Afdelingen and groepen both answer, and are both empty or both filled (TA reg-77)."""
     afdelingen = get_entries(ita, urls["ita"] + "/api/afdelingen")
@@ -109,6 +115,13 @@ def test_afdelingen_and_groepen_are_seeded_together(ita: requests.Session, urls:
     "TA regression/73-ita-assigned-list.spec.ts",
     "Checks ITA's assigned-to-me list, the werkbak where a KCC employee sees their daily work.",
 )
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to ITA
+    And an unassigned contactverzoek in Open Klant
+    When the medewerker claims it in ITA
+    Then the contactverzoek is assigned in Open Klant
+    And it is on the medewerker's own list in ITA
+""")
 def test_claimed_internetaak_is_on_my_list(
     ita: requests.Session, urls: dict[str, str], openklant: ApiClient, taak: JsonObject
 ) -> None:
@@ -123,6 +136,12 @@ def test_claimed_internetaak_is_on_my_list(
     "TA interaction/180-ita-contactmoment-afsluiten.spec.ts",
     "Checks a KCC employee can register a contactmoment on an internetaak in ITA and close it.",
 )
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to ITA
+    And an unassigned contactverzoek in Open Klant
+    When the medewerker answers it in ITA with a contact that did not succeed
+    Then that klantcontact is in Open Klant, marked as not gelukt
+""")
 def test_answering_an_internetaak_registers_a_klantcontact(
     ita: requests.Session, urls: dict[str, str], openklant: ApiClient, registry: ResourceRegistry, taak: JsonObject
 ) -> None:
@@ -145,6 +164,11 @@ def test_answering_an_internetaak_registers_a_klantcontact(
     "TA smoke/72-ita-health-kanalen.spec.ts",
     "Checks ITA's kanalen endpoint answers and enforces login; without it no KCC employee can use ITA.",
 )
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to ITA
+    When the medewerker asks ITA for its kanalen
+    Then ITA answers with a list of kanalen
+""")
 def test_kanalen_answer_the_kcc_user(ita: requests.Session, urls: dict[str, str]) -> None:
     """With a login, ITA lists its kanalen (TA smoke 72; anonymous it refuses, test_api_health)."""
     assert isinstance(expect_status(ita.get(urls["ita"] + "/api/kanalen"), HTTPStatus.OK).json(), list)
@@ -159,6 +183,13 @@ def test_kanalen_answer_the_kcc_user(ita: requests.Session, urls: dict[str, str]
     f"{ITA_E2E}/Contactverzoek/ContactverzoekDoorsturenGroepsmailboxScenarios.cs",
     "An afdeling or groep with a groepsmailbox gets the forwarded contactverzoek by mail.",
 )
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to ITA
+    And a contactverzoek, and an afdeling or groep with a groepsmailbox
+    When the medewerker forwards the contactverzoek to the afdeling or groep
+    Then the contactverzoek is assigned to it in Open Klant
+    And its groepsmailbox gets the mail "Contactverzoek Doorgestuurd" with the klantcontact's nummer, where mail is tested
+""")
 def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     ita: requests.Session,
     urls: dict[str, str],
@@ -204,6 +235,12 @@ def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(  # pylint: 
     "podiumd-tests",
     "KISS reads the Activiteitenlog entries ITA writes with its own Objecten token, so that token needs read access.",
 )
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to ITA
+    When the medewerker claims a contactverzoek in ITA
+    Then ITA writes an entry in its logboek in Objecten
+    And KISS reads the same entries with its own Objecten token
+""")
 def test_kiss_reads_itas_logboek(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     ita: requests.Session,
     urls: dict[str, str],
@@ -227,6 +264,12 @@ def test_kiss_reads_itas_logboek(  # pylint: disable=too-many-arguments,too-many
     "draaiboek ITA-035",
     "A contactverzoek submitted through Contact shows all its recorded information on ITA's detail page.",
 )
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to ITA
+    And a contactverzoek as KISS registers it: a klantcontact with a klant, assigned to the medewerker's groep
+    When the medewerker opens the contactverzoek in ITA
+    Then the detail page shows its onderwerp, vraag, toelichting and the klant's name
+""")
 def test_contactverzoek_from_kiss_shows_in_full_in_ita(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     ita: requests.Session,
     urls: dict[str, str],
@@ -255,6 +298,13 @@ def test_contactverzoek_from_kiss_shows_in_full_in_ita(  # pylint: disable=too-m
     f"{ITA_E2E}/Contactverzoek/ContactverzoekDoorsturenGroepsmailboxScenarios.cs",
     "Forwarding to an afdeling without groepsmailbox and without medewerker is refused.",
 )
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to ITA
+    And a contactverzoek, and an afdeling without e-mail address
+    When the medewerker forwards it to the afdeling without choosing a medewerker
+    Then ITA refuses it
+    And the contactverzoek stays unassigned in Open Klant
+""")
 def test_forward_to_an_afdeling_without_mailbox_is_refused(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     ita: requests.Session,
     urls: dict[str, str],
@@ -288,6 +338,13 @@ def test_forward_to_an_afdeling_without_mailbox_is_refused(  # pylint: disable=t
     f"{ITA_E2E}/Contactverzoek/KlantcontactZoekenScenarios.cs",
     "A medewerker finds a contactverzoek by its klantcontact number; not one outside their rights, nor an unknown one.",
 )
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to ITA
+    When the medewerker searches a contactverzoek by its klantcontact's nummer
+    Then ITA finds one assigned to the medewerker's groep
+    And refuses one outside the medewerker's afdelingen and groepen
+    And answers 404 to an unknown nummer
+""")
 def test_contactverzoek_is_found_by_its_klantcontactnummer(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     ita: requests.Session,
     urls: dict[str, str],

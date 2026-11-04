@@ -69,6 +69,11 @@ def personen(http: requests.Session, urls: dict[str, str], query: Mapping[str, o
 
 @REG_07
 @REG_11
+@pytest.mark.scenario("""
+    Given a person in the BRP test set
+    When the person is looked up by BSN through the api-proxy
+    Then the BRP gives exactly that person with voornamen and geslachtsnaam
+""")
 def test_person_by_bsn(http: requests.Session, urls: dict[str, str]) -> None:
     """A test-set BSN gives that person with a name (TA reg-07, reg-11)."""
     found = personen(
@@ -81,6 +86,11 @@ def test_person_by_bsn(http: requests.Session, urls: dict[str, str]) -> None:
 
 @REG_07
 @REG_119
+@pytest.mark.scenario("""
+    Given a BSN that is not in the BRP test set
+    When it is looked up through the api-proxy
+    Then the BRP answers with an empty list, not an error
+""")
 def test_unknown_bsn_finds_no_one(http: requests.Session, urls: dict[str, str]) -> None:
     """A BSN outside the test set gives an empty list, not an error (TA reg-07)."""
     query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": ["123456789"], "fields": NAAM[:1]}
@@ -88,6 +98,11 @@ def test_unknown_bsn_finds_no_one(http: requests.Session, urls: dict[str, str]) 
 
 
 @REG_40
+@pytest.mark.scenario("""
+    Given two persons in the BRP test set
+    When both BSNs are looked up in one query through the api-proxy
+    Then the BRP gives both persons
+""")
 def test_several_bsns_at_once(http: requests.Session, urls: dict[str, str]) -> None:
     """One query returns every known BSN it asks for (TA reg-40d)."""
     query = {
@@ -103,6 +118,11 @@ def test_several_bsns_at_once(http: requests.Session, urls: dict[str, str]) -> N
     [("Kierkegaard", "1931-07-06", [KIERKEGAARD]), ("Janssen", "1900-01-01", [])],
 )
 @REG_40
+@pytest.mark.scenario("""
+    Given a geslachtsnaam and geboortedatum, of a person in the BRP test set or of no one
+    When the BRP is searched by them through the api-proxy
+    Then exactly the matching persons are found, or no one
+""")
 def test_search_by_name_and_birth_date(
     http: requests.Session, urls: dict[str, str], geslachtsnaam: str, geboortedatum: str, expected: list[str]
 ) -> None:
@@ -117,6 +137,12 @@ def test_search_by_name_and_birth_date(
 
 
 @REG_119
+@pytest.mark.scenario("""
+    Given a person in the BRP test set who lives at a known adres
+    When the BRP is searched by that postcode and huisnummer through the api-proxy
+    Then the person is among the residents found
+    And a search on an unknown adres finds no one
+""")
 def test_search_by_postcode_and_huisnummer(http: requests.Session, urls: dict[str, str]) -> None:
     """Searching by postcode and huisnummer finds the residents of that address, and no one at an unknown one (TA reg-119)."""
     query = {"type": "ZoekMetPostcodeEnHuisnummer", "fields": NAAM[:1]}
@@ -133,6 +159,11 @@ def test_search_by_postcode_and_huisnummer(http: requests.Session, urls: dict[st
 @REG_40
 @REG_80
 @REG_121
+@pytest.mark.scenario("""
+    Given an invalid BRP query: empty, of an unknown type, or with a malformed BSN
+    When it is sent to the BRP through the api-proxy
+    Then the BRP refuses it with 400 or 422, not a server error
+""")
 def test_invalid_query_is_refused(http: requests.Session, urls: dict[str, str], query: Mapping[str, object]) -> None:
     """An invalid query answers 400 or 422, never 5xx (TA reg-40c, reg-80, reg-121)."""
     response = brp_personen(http, urls["api-proxy"], query)
@@ -140,6 +171,11 @@ def test_invalid_query_is_refused(http: requests.Session, urls: dict[str, str], 
 
 
 @REG_150
+@pytest.mark.scenario("""
+    Given a BSN that fails the eleven-test
+    When it is looked up through the api-proxy
+    Then the BRP refuses it with 400 or 422, or finds no one
+""")
 def test_bsn_failing_the_eleven_test_finds_no_one(http: requests.Session, urls: dict[str, str]) -> None:
     """A BSN that fails the eleven-test is refused, or finds no one; never 5xx (TA reg-150)."""
     query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": ["123456789"]}
@@ -150,6 +186,11 @@ def test_bsn_failing_the_eleven_test_finds_no_one(http: requests.Session, urls: 
 
 
 @REG_11
+@pytest.mark.scenario("""
+    Given a person in the BRP test set
+    When the person is looked up on the Haal Centraal V1 path through the api-proxy
+    Then the BRP answers 405, as it serves V2 only
+""")
 def test_v1_lookup_is_not_offered(http: requests.Session, urls: dict[str, str]) -> None:
     """The BRP serves Haal Centraal V2 only: the V1 path answers 405 (TA reg-11, finding 14)."""
     v1 = urls["api-proxy"] + BRP_PERSONEN.replace("personen", f"ingeschrevenpersonen/{EREBOS}")

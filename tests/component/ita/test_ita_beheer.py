@@ -66,6 +66,12 @@ def fixture_ita_as(
     f"{E2E}/AlleContactverzoeken/AlleContactverzoekenAccessScenarios.cs",
     "A beheerder opens Alle contactverzoeken; a medewerker without the beheerder role is blocked.",
 )
+@pytest.mark.scenario("""
+    Given the functioneel beheerder and the KCC medewerker of ITA
+    When each opens Alle contactverzoeken in ITA
+    Then ITA shows the list to the functioneel beheerder
+    And refuses the KCC medewerker
+""")
 def test_only_the_beheerder_lists_all_contactverzoeken(
     ita_as: Callable[[KeycloakUser], requests.Session], urls: dict[str, str]
 ) -> None:
@@ -79,6 +85,14 @@ def test_only_the_beheerder_lists_all_contactverzoeken(
     f"{E2E}/Contactverzoek/HeropenContactverzoekScenarios.cs",
     "A beheerder reopens a closed contactverzoek with a reason; confirming without a reason is not possible.",
 )
+@pytest.mark.scenario("""
+    Given a closed contactverzoek in Open Klant
+    When the functioneel beheerder reopens it in ITA without a reason
+    Then ITA refuses it
+    And ITA refuses the KCC medewerker to reopen it
+    When the functioneel beheerder reopens it with a reason
+    Then the contactverzoek is te_verwerken again in Open Klant
+""")
 def test_beheerder_reopens_a_closed_contactverzoek(
     ita_as: Callable[[KeycloakUser], requests.Session],
     urls: dict[str, str],

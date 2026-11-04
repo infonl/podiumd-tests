@@ -18,6 +18,11 @@ pytestmark = [pytest.mark.component, pytest.mark.cluster, pytest.mark.requires("
     "PI test_4_9_0_upgrade.py",
     "KISS Kibana is available: /api/status as user elastic answers status.overall.level available.",
 )
+@pytest.mark.scenario("""
+    Given KISS runs with Kibana
+    When Kibana's status is asked as user elastic
+    Then Kibana reports its overall level as available
+""")
 def test_kibana_is_available(podiumd_env: Environment) -> None:
     """Kibana's /api/status, as user elastic, reports overall level available."""
     password = podiumd_env.credentials.optional("kiss_elastic_password")

@@ -70,6 +70,12 @@ _, _, BEDRIJF = IDENTITIES
     f"{E2E}/SearchPersonScenarios.cs",
     "Searching a person by BSN, by last name and date of birth, and by postcode and huisnummer; found and not found.",
 )
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to KISS
+    When the medewerker searches the BRP by BSN, by geslachtsnaam and geboortedatum, or by postcode and huisnummer
+    Then KISS finds the person of the BRP test set
+    And finds no one for search terms outside the test set
+""")
 def test_person_search(
     kiss_session: Callable[[KeycloakUser], requests.Session],
     urls: dict[str, str],
@@ -102,6 +108,12 @@ def test_person_search(
     f"{E2E}/SearchCompanyScenarios.cs",
     "Searching a company by name, by KvK number and by vestigingsnummer; found and not found.",
 )
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to KISS
+    When the medewerker searches KvK by KvK number, naam, vestigingsnummer, or postcode and huisnummer
+    Then KISS finds the KvK test company
+    And finds nothing for an unknown KvK number
+""")
 def test_company_search(
     kiss_session: Callable[[KeycloakUser], requests.Session],
     urls: dict[str, str],

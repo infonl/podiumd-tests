@@ -29,6 +29,13 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("openklant")]
 
 
 @pytest.mark.source("podiumd-tests", "The partij lifecycle in Open Klant: create, read, patch, delete, then 404.")
+@pytest.mark.scenario("""
+    Given a persoon created as partij in Open Klant
+    When the partij is read, set inactive and deleted
+    Then it reads back as a persoon
+    And Open Klant returns it inactive
+    And after the delete Open Klant answers 404 for it
+""")
 def test_partij_lifecycle(openklant: ApiClient, registry: ResourceRegistry) -> None:
     """A created partij reads back, accepts a PATCH and is gone after DELETE."""
     partij = make_partij(openklant, registry)
@@ -40,6 +47,11 @@ def test_partij_lifecycle(openklant: ApiClient, registry: ResourceRegistry) -> N
 
 
 @pytest.mark.source("podiumd-tests", "The nummer Open Klant assigns to a partij works as a filter.")
+@pytest.mark.scenario("""
+    Given a partij in Open Klant
+    When partijen are filtered on the nummer Open Klant gave it
+    Then exactly that partij is found
+""")
 def test_partij_is_found_by_its_nummer(openklant: ApiClient, registry: ResourceRegistry) -> None:
     """The nummer Open Klant assigns is a working filter."""
     partij = make_partij(openklant, registry)
@@ -48,6 +60,11 @@ def test_partij_is_found_by_its_nummer(openklant: ApiClient, registry: ResourceR
 
 
 @pytest.mark.source("podiumd-tests", "A partij's contactnaam is stored as sent.")
+@pytest.mark.scenario("""
+    Given a partij created in Open Klant with a contactnaam
+    When the partij is read back
+    Then its contactnaam has the achternaam it was created with
+""")
 def test_contactnaam_is_stored(openklant: ApiClient, registry: ResourceRegistry) -> None:
     """The partij identification comes back as sent."""
     partij = make_partij(openklant, registry)
@@ -60,6 +77,11 @@ def test_contactnaam_is_stored(openklant: ApiClient, registry: ResourceRegistry)
     "TA interaction/35-ok2-partij-flow.spec.ts",
     "Customer registration in Open Klant: a persoon with a BSN and an e-mail address is found by either.",
 )
+@pytest.mark.scenario("""
+    Given a persoon in Open Klant with a BSN and an e-mail address
+    When Open Klant is searched by the BSN and by the e-mail address
+    Then each search finds exactly that persoon
+""")
 def test_persoon_with_bsn_and_email(openklant: ApiClient, registry: ResourceRegistry) -> None:
     """A persoon gets a BSN and an e-mail address; both lookups find them (TA int-35)."""
     partij = make_partij(openklant, registry)
@@ -80,6 +102,11 @@ def test_persoon_with_bsn_and_email(openklant: ApiClient, registry: ResourceRegi
     "TA regression/85-ok2-bedrijf-partij.spec.ts",
     "A company partij with a KvK number or RSIN is found by it, so the KCC can identify business customers.",
 )
+@pytest.mark.scenario("""
+    Given an organisatie in Open Klant
+    When it gets a KvK number or an RSIN as identificator
+    Then a search by that number finds one identificator of that kind
+""")
 def test_organisatie_identificator(openklant: ApiClient, registry: ResourceRegistry, kind: str, number: str) -> None:
     """An organisatie carries a KvK number or an RSIN (TA reg-85)."""
     partij = make_organisatie(openklant, registry)
@@ -96,6 +123,14 @@ def test_organisatie_identificator(openklant: ApiClient, registry: ResourceRegis
 @pytest.mark.source(
     "TA regression/149-ok2-crud-uitbreiding.spec.ts", "A DigitaalAdres goes through create, update and delete."
 )
+@pytest.mark.scenario("""
+    Given a partij in Open Klant with an e-mail address
+    When the partij is read with its digitale adressen expanded
+    Then it holds exactly that e-mail address
+    When the e-mail address is changed and then deleted
+    Then Open Klant returns the new address
+    And answers 404 for it after the delete
+""")
 def test_digitaal_adres_patch_and_expand(openklant: ApiClient, registry: ResourceRegistry) -> None:
     """A partij's e-mail address shows with expand, changes with PATCH and goes with DELETE (TA reg-58, reg-149)."""
     partij = make_partij(openklant, registry)
@@ -120,6 +155,11 @@ def test_digitaal_adres_patch_and_expand(openklant: ApiClient, registry: Resourc
     "TA interaction/145-contact-lookup-flow.spec.ts",
     "Contactmomenten and contactverzoeken of an inwoner or company can be looked up in Open Klant.",
 )
+@pytest.mark.scenario("""
+    Given an organisatie in Open Klant that is betrokkene at two klantcontacten
+    When betrokkenen are filtered on that partij
+    Then exactly those two klantcontacten are found
+""")
 def test_betrokkenen_of_a_partij(openklant: ApiClient, registry: ResourceRegistry) -> None:
     """Two klantcontacten of one partij are both found through its betrokkenen (TA reg-54, reg-86, int-145)."""
     partij = make_organisatie(openklant, registry)

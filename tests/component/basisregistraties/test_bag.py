@@ -29,6 +29,11 @@ pytestmark = [
 DAM_1 = "0363200003761447"
 
 
+@pytest.mark.scenario("""
+    Given Dam 1 in Amsterdam is an adres in the BAG
+    When its nummeraanduiding is looked up through the api-proxy
+    Then the BAG gives street Dam, huisnummer 1, postcode 1012JS and woonplaats Amsterdam
+""")
 def test_adres_by_nummeraanduiding(http: requests.Session, urls: dict[str, str]) -> None:
     """A nummeraanduiding gives its adres: street, number, postcode and place."""
     adres = expect_status(bag_adres(http, urls["api-proxy"], DAM_1), HTTPStatus.OK).json()

@@ -26,6 +26,11 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("kiss")]
     "TA regression/100-kiss-frontend-basis.spec.ts",
     "Checks KISS's frontend and the BFF routes a KCC employee meets, such as /api/me, without a login.",
 )
+@pytest.mark.scenario("""
+    Given a user who is not logged in to KISS
+    When the user starts KISS's login
+    Then KISS redirects to Keycloak's login endpoint
+""")
 def test_challenge_redirects_to_keycloak(http: requests.Session, urls: dict[str, str]) -> None:
     """The login challenge redirects to the Keycloak auth endpoint (TA reg-100)."""
     response = http.get(urls["kiss"] + "/api/challenge", params={"returnUrl": "/"}, allow_redirects=False)
@@ -40,6 +45,11 @@ def test_challenge_redirects_to_keycloak(http: requests.Session, urls: dict[str,
     "TA regression/100-kiss-frontend-basis.spec.ts",
     "Checks KISS's frontend and the BFF routes a KCC employee meets, such as /api/me, without a login.",
 )
+@pytest.mark.scenario("""
+    Given a user who is not logged in to KISS
+    When the user opens a KISS page or asks KISS who is logged in
+    Then KISS answers without a server error
+""")
 def test_pages_without_login(http: requests.Session, urls: dict[str, str], path: str) -> None:
     """Anonymous /api/me and the SPA routes give no server error (TA reg-100)."""
     response = http.get(urls["kiss"] + path)
@@ -51,6 +61,11 @@ def test_pages_without_login(http: requests.Session, urls: dict[str, str], path:
     "TA regression/147-kiss-contentbronnen.spec.ts",
     "Checks KISS's search endpoints for its content sources are reachable and protected by its auth policy.",
 )
+@pytest.mark.scenario("""
+    Given a user who is not logged in to KISS
+    When the user calls KISS's search or its list of search sources
+    Then KISS refuses the call or redirects to Keycloak's login
+""")
 def test_search_needs_a_login(http: requests.Session, urls: dict[str, str], method: str, path: str) -> None:
     """KISS's search answers no anonymous call: it is refused or sent to the Keycloak login (TA reg-147)."""
     body = {"query": "a", "page": 1, "filters": []} if method == "POST" else None

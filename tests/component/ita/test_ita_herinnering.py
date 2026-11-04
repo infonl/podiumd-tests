@@ -64,6 +64,14 @@ def reminder_cronjob(env: Environment) -> str:
     f"{E2E}/DagelijkseHerinneringScenarios.cs",
     "No reminder for a contactverzoek that is closed or not yet overdue; an afdeling without e-mail blocks no one.",
 )
+@pytest.mark.scenario("""
+    Given an afdeling with two overdue contactverzoeken
+    And an afdeling with only a recent and a closed contactverzoek
+    When ITA's daily reminder runs
+    Then the first afdeling gets one mail "2 contactverzoeken wachten op jou" with a link to its contacten
+    And the mail shows no onderwerp of a contactverzoek
+    And the second afdeling gets no mail
+""")
 def test_afdeling_gets_one_reminder_for_its_overdue_contactverzoeken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     podiumd_env: Environment,
     openklant: ApiClient,

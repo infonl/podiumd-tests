@@ -70,6 +70,14 @@ BEHEER = {
         ),
     ],
 )
+@pytest.mark.scenario("""
+    Given the KISS beheerder is logged in to KISS
+    When the beheerder adds a kanaal, gespreksresultaat or skill
+    And renames it
+    Then the overview shows it under its new name
+    When the beheerder deletes it
+    Then it is gone from the overview
+""")
 def test_beheerder_adds_changes_and_deletes(
     kiss_session: Callable[[KeycloakUser], requests.Session],
     urls: dict[str, str],
@@ -102,6 +110,14 @@ def test_beheerder_adds_changes_and_deletes(
     f"{E2E}/NieuwsEnWerkInstructies/NieuwsEnWerkInstructiesScenarios.cs",
     "Nieuws and werkinstructies: the important message count on the home page and marking a message read.",
 )
+@pytest.mark.scenario("""
+    Given the KISS redacteur and the KCC medewerker are logged in to KISS
+    When the redacteur publishes an important nieuwsbericht for a skill
+    Then KISS refuses the same bericht from the KCC medewerker
+    And the KCC medewerker sees it unread and counted among the important berichten
+    When the medewerker marks it read
+    Then it is read and the count drops by one
+""")
 def test_published_bericht_reaches_the_kcc_and_is_marked_read(
     kiss_session: Callable[[KeycloakUser], requests.Session], urls: dict[str, str], registry: ResourceRegistry
 ) -> None:
