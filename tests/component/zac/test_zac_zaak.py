@@ -105,6 +105,11 @@ NIET_ONTVANKELIJK = "ZAAK_NIET_ONTVANKELIJK"
     "draaiboek ZAC-006",
     "A new zaak: the zaaktype, startdatum, communicatiekanaal and toelichting can be chosen (ZAC-006, -010, -019, -022).",
 )
+@pytest.mark.scenario("""
+    Given a behandelaar is logged in to ZAC
+    When the behandelaar starts a zaak with a zaaktype, an earlier startdatum, a communicatiekanaal and a toelichting
+    Then the zaak has the chosen zaaktype, startdatum, communicatiekanaal and toelichting
+""")
 def test_new_zaak_keeps_the_chosen_fields(
     zac_zaak: Callable[..., JsonObject], zac_parameters: JsonObject, registry: ResourceRegistry
 ) -> None:
@@ -125,6 +130,11 @@ def test_new_zaak_keeps_the_chosen_fields(
 @pytest.mark.source(
     "podiumd-tests", "Found while porting ZAC-010: ZAC's UI always sends a startdatum, its API answers 500 without one."
 )
+@pytest.mark.scenario("""
+    Given a behandelaar is logged in to ZAC
+    When the behandelaar starts a zaak without a startdatum
+    Then ZAC refuses the zaak as a bad request, or starts it today
+""")
 def test_zaak_without_startdatum_is_refused_or_starts_today(zac_zaak: Callable[..., JsonObject]) -> None:
     """ZAC refuses a zaak without startdatum with 400, or starts it today."""
     refused, zaak = "", {}
@@ -144,6 +154,13 @@ def test_zaak_without_startdatum_is_refused_or_starts_today(zac_zaak: Callable[.
     "Bob creates a zaak and sees it, its initiator, that no acknowledgment was sent, and the zaak in the werkvoorraad.",
 )
 @pytest.mark.source("ZAC features/8-personen.feature", "Bob opens the initiator's person details from the zaak.")
+@pytest.mark.scenario("""
+    Given a new zaak in ZAC
+    When the behandelaar adds a person from the BRP as initiator
+    Then the initiator's person details show that person's BSN
+    And the zaak shows that no ontvangstbevestiging was sent
+    And the zaak appears among the open zaken in the werkvoorraad
+""")
 def test_zaak_with_an_initiator_is_in_the_werkvoorraad(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
 ) -> None:
@@ -173,6 +190,13 @@ def test_zaak_with_an_initiator_is_in_the_werkvoorraad(
 
 @pytest.mark.tc("ZAC-029", "ZAC-030", "ZAC-031")
 @pytest.mark.source("draaiboek ZAC-029", "A zaaknotitie can be added, changed and deleted (ZAC-029, -030, -031).")
+@pytest.mark.scenario("""
+    Given a zaak in ZAC
+    When the behandelaar adds, changes and then deletes a zaaknotitie
+    Then the zaak lists the notitie with its text after adding
+    And the zaak lists the changed text after changing
+    And the zaak lists no notitie after deleting
+""")
 def test_note_can_be_added_changed_and_deleted(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
 ) -> None:
@@ -198,6 +222,14 @@ def test_note_can_be_added_changed_and_deleted(
     "draaiboek ZAC-042",
     "A suspended zaak can be resumed, and a resumed zaak cannot be suspended again (ZAC-042, -043).",
 )
+@pytest.mark.scenario("""
+    Given a zaak in ZAC
+    When the behandelaar suspends the zaak
+    Then the zaak is suspended
+    When the behandelaar resumes the zaak
+    Then the zaak is no longer suspended
+    And ZAC refuses to suspend it a second time
+""")
 def test_suspended_zaak_resumes_and_cannot_be_suspended_again(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
 ) -> None:
@@ -214,6 +246,11 @@ def test_suspended_zaak_resumes_and_cannot_be_suspended_again(
 
 @pytest.mark.tc("ZAC-044")
 @pytest.mark.source("draaiboek ZAC-044", "The streefdatum and fatale datum of a zaak can be extended, once.")
+@pytest.mark.scenario("""
+    Given a zaak in ZAC of a zaaktype that allows verlenging
+    When the behandelaar extends the zaak by 10 days
+    Then the zaak's uiterlijke einddatum afdoening is 10 days later
+""")
 def test_extension_moves_the_planned_and_final_dates(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     zac: requests.Session,
     urls: dict[str, str],
@@ -243,6 +280,12 @@ def test_extension_moves_the_planned_and_final_dates(  # pylint: disable=too-man
 @pytest.mark.source(
     "draaiboek ZAC-045", "A zaak can be aborted, and then shows in the werkvoorraad of closed zaken (ZAC-045, -062)."
 )
+@pytest.mark.scenario("""
+    Given an open zaak in ZAC
+    When the behandelaar aborts the zaak as niet ontvankelijk
+    Then the zaak is closed
+    And the zaak appears among the closed zaken
+""")
 def test_aborted_zaak_is_closed_and_listed_among_the_closed_zaken(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
 ) -> None:
@@ -267,6 +310,12 @@ def test_aborted_zaak_is_closed_and_listed_among_the_closed_zaken(
     "draaiboek ZAC-047",
     "Several betrokkenen with the same and different roles are linked to the zaak and shown with their role (ZAC-047, -048).",
 )
+@pytest.mark.scenario("""
+    Given a zaak in ZAC
+    When the behandelaar adds a person as belanghebbende and as contactpersoon
+    And adds a company as belanghebbende
+    Then the zaak lists all three betrokkenen with their roles
+""")
 def test_betrokkenen_with_the_same_and_different_roles_are_listed(
     zac: requests.Session, urls: dict[str, str], zac_parameters: JsonObject, zac_zaak: Callable[..., JsonObject]
 ) -> None:
@@ -351,6 +400,11 @@ def zaak_documents(zac: requests.Session, zac_url: str, zaak: JsonObject) -> lis
 
 @pytest.mark.tc("ZAC-058")
 @pytest.mark.source("draaiboek ZAC-058", "A document can be deleted.")
+@pytest.mark.scenario("""
+    Given a document uploaded to a zaak in ZAC
+    When the behandelaar deletes the document
+    Then the zaak no longer lists the document
+""")
 def test_document_can_be_deleted(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
 ) -> None:
@@ -370,6 +424,13 @@ def test_document_can_be_deleted(
 @pytest.mark.source(
     "draaiboek ZAC-056", "A document can be edited directly; Word saves it automatically as the new version."
 )
+@pytest.mark.scenario("""
+    Given a Word document in bewerking on a zaak in ZAC
+    When the behandelaar opens it for editing in Word
+    And Word saves the edited document
+    Then the document has a new version
+    And the download gives the saved content
+""")
 def test_word_saves_an_edited_document_as_a_new_version(
     zac: requests.Session,
     http: requests.Session,
@@ -399,6 +460,11 @@ def test_word_saves_an_edited_document_as_a_new_version(
 @pytest.mark.source(
     "draaiboek ZAC-039", "A document sent by post outside ZAC gets the indication verzonden in the documents overview."
 )
+@pytest.mark.scenario("""
+    Given a definitief PDF document on a zaak in ZAC
+    When the behandelaar records that the document was sent by post
+    Then the zaak's documents mark the document as verzonden
+""")
 def test_sent_document_is_marked_verzonden(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
 ) -> None:
@@ -424,6 +490,11 @@ def test_sent_document_is_marked_verzonden(
     "ZAC converts a Word document to PDF through its office converter (gotenberg); helm-charts #633 updates gotenberg.",
 )
 @pytest.mark.parametrize("suffix", ["word", "large-word"])
+@pytest.mark.scenario("""
+    Given a definitief Word document, small or large, on a zaak in ZAC
+    When the behandelaar converts the document to PDF
+    Then the document's current version is a PDF
+""")
 def test_word_document_is_converted_to_pdf(
     zac: requests.Session,
     urls: dict[str, str],

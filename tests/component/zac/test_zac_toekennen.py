@@ -35,6 +35,11 @@ def assignment(zaak: JsonObject) -> tuple[object, object]:
 
 
 @pytest.mark.source("ZAC features/9-bpmn.feature", "Bob changes the group and user a zaak is assigned to.")
+@pytest.mark.scenario("""
+    Given a zaak in ZAC
+    When the behandelaar assigns the zaak to a group and a behandelaar
+    Then the zaak has that group and behandelaar
+""")
 def test_zaak_is_assigned_to_a_group_and_behandelaar(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], zac_group: str
 ) -> None:
@@ -54,6 +59,13 @@ def test_zaak_is_assigned_to_a_group_and_behandelaar(
     "ZAC features/6-zaken-verdelen-vrijgeven.feature",
     "Bob assigns selected zaken from the werkvoorraad to a group and user, and releases them.",
 )
+@pytest.mark.scenario("""
+    Given two zaken in ZAC
+    When the behandelaar assigns both from the werkvoorraad to a group and a behandelaar
+    Then both zaken have that group and behandelaar
+    When the behandelaar releases both zaken
+    Then both zaken keep the group but have no behandelaar
+""")
 def test_zaken_from_the_list_are_assigned_and_released(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], zac_group: str
 ) -> None:

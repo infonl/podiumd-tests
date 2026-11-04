@@ -47,6 +47,11 @@ def logged_in_user(zac: requests.Session, zac_url: str) -> str:
     return str(response.json()["id"])
 
 
+@pytest.mark.scenario("""
+    Given the test admin is logged in to ZAC
+    When the admin's access token expires twice
+    Then ZAC still answers as the logged-in admin after each expiry
+""")
 def test_session_survives_two_token_refreshes(
     zac: requests.Session, urls: dict[str, str], podiumd_env: Environment
 ) -> None:

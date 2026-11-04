@@ -31,6 +31,12 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "ke
     "podiumd-tests",
     "ZAC's OPA policies must refuse a user without ZAC roles; helm-charts #633 updates OPA.",
 )
+@pytest.mark.scenario("""
+    Given a zaak in ZAC that the test admin can open
+    And a klantcontactmedewerker without ZAC roles is logged in to ZAC
+    When the klantcontactmedewerker opens the same zaak
+    Then ZAC refuses access
+""")
 def test_user_without_zac_roles_cannot_read_a_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     zac: requests.Session,
     podiumd_env: Environment,

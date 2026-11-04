@@ -32,6 +32,11 @@ MARKER = "e2e-test-id"
     "upstream open-formulieren/open-forms src/openforms/tests/e2e/test_admin_js.py",
     "Admin pages that include the Webpack admin JS bundle do not crash: the bundle renders its e2e marker.",
 )
+@pytest.mark.scenario("""
+    Given a beheerder is logged in to the Open Formulieren admin
+    When the beheerder opens an admin page that uses the admin's JavaScript
+    Then the admin's JavaScript renders on the page
+""")
 def test_admin_page_renders_its_javascript_bundle(
     page: Page, podiumd_env: Environment, credentials: SecretResolver, path: str
 ) -> None:
@@ -47,6 +52,11 @@ def test_admin_page_renders_its_javascript_bundle(
     "upstream open-formulieren/open-forms bin/report_component_problems.py",
     "Reports form definitions with broken components (null defaults, bad minDate, bad translations) before an upgrade.",
 )
+@pytest.mark.scenario("""
+    Given the forms in Open Formulieren
+    When Open Formulieren's own checks for broken forms run
+    Then no check finds a broken form definition or form logic
+""")
 def test_open_formulieren_finds_no_broken_forms(podiumd_env: Environment) -> None:
     """Open Formulieren's bin/report_*.py checks find no broken form definitions or logic (as after an upgrade)."""
     results = run_snippet(

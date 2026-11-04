@@ -70,6 +70,12 @@ def assignment(taak: JsonObject) -> tuple[object, object]:
     "ZAC features/5-taken-toevoegen.feature",
     "Lacking information to finish the intake, Bob assigns an Aanvullende informatie task, which the assignee sees in Mijn taken.",
 )
+@pytest.mark.scenario("""
+    Given a zaak in ZAC
+    When the behandelaar starts the taak Aanvullende informatie for a group and a behandelaar
+    Then the taak has that group and behandelaar
+    And the taak is listed in Mijn taken
+""")
 def test_started_task_is_in_mijn_taken(
     zac: requests.Session, urls: dict[str, str], taak: JsonObject, zac_group: str
 ) -> None:
@@ -89,6 +95,13 @@ def test_started_task_is_in_mijn_taken(
     "ZAC features/7-taken-verdelen-vrijgeven.feature",
     "Bob assigns selected taken from the werkvoorraad to a group and user, and releases them.",
 )
+@pytest.mark.scenario("""
+    Given a taak Aanvullende informatie on a zaak in ZAC, assigned to a behandelaar
+    When the behandelaar releases the taak from the list
+    Then the taak keeps its group but has no behandelaar
+    When the behandelaar assigns the taak from the list to the group and a behandelaar
+    Then the taak has that group and behandelaar again
+""")
 def test_taken_from_the_list_are_released_and_assigned(
     zac: requests.Session, urls: dict[str, str], taak: JsonObject, zac_group: str
 ) -> None:

@@ -35,6 +35,11 @@ pytestmark = [
 ]
 
 
+@pytest.mark.scenario("""
+    Given the zaaktype for productaanvragen is published in Open Zaak
+    When the beheerder opens its zaakafhandelparameters in ZAC
+    Then ZAC reports them as valide
+""")
 def test_zaakafhandelparameters_are_valide(
     zac: requests.Session, urls: dict[str, str], openzaak: ApiClient, podiumd_env: Environment
 ) -> None:
@@ -49,6 +54,11 @@ def test_zaakafhandelparameters_are_valide(
         assert expect_status(zac.get(url), HTTPStatus.OK).json()["valide"], zaaktype["url"]
 
 
+@pytest.mark.scenario("""
+    Given ZAC has zaakafhandelparameters for a set of zaaktypen
+    When the beheerder clears ZAC's catalogus cache and runs the inrichtingscheck
+    Then none of those zaaktypen fails the inrichtingscheck
+""")
 def test_handled_zaaktypen_pass_zacs_inrichtingscheck(zac: requests.Session, urls: dict[str, str]) -> None:
     """Every zaaktype ZAC has zaakafhandelparameters for passes ZAC's own inrichtingscheck (Admin, Inrichtingscheck).
 

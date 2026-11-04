@@ -37,6 +37,11 @@ def title(html: str) -> str:
 @pytest.mark.source(
     "TA smoke/04-portaal-homepage.spec.ts", "The portal homepage loads without errors and renders Dutch content."
 )
+@pytest.mark.scenario("""
+    Given a visitor who is not logged in
+    When the visitor opens the homepage of Open Inwoner
+    Then the portal's themed welkom page is shown
+""")
 def test_homepage_is_the_portal(
     http: requests.Session, urls: dict[str, str], need_bootstrap: Callable[..., None]
 ) -> None:
@@ -51,6 +56,11 @@ def test_homepage_is_the_portal(
     "TA regression/83-portaal-anonieme-pagina-bereikbaarheid.spec.ts",
     "A page that does not exist answers 404, not 500.",
 )
+@pytest.mark.scenario("""
+    Given a visitor who is not logged in
+    When the visitor opens a page that does not exist in Open Inwoner
+    Then the portal answers page not found, not an error
+""")
 def test_unknown_page_is_404(http: requests.Session, urls: dict[str, str]) -> None:
     """An unknown CMS path answers 404, not an error (TA reg-83)."""
     expect_status(http.get(urls["openinwoner"] + "/pages/ptest-bestaat-niet/"), HTTPStatus.NOT_FOUND)
@@ -60,6 +70,12 @@ def test_unknown_page_is_404(http: requests.Session, urls: dict[str, str]) -> No
     "TA regression/110-portaal-anoniem-en-mobile.spec.ts",
     "A user who is not logged in can submit a contact request on /contactformulier/.",
 )
+@pytest.mark.scenario("""
+    Given a visitor who is not logged in
+    When the visitor opens the contactformulier in Open Inwoner
+    Then the page shows the Contactformulier heading
+    And the form has the subject and question fields
+""")
 def test_contact_form_is_open_to_everyone(
     http: requests.Session, urls: dict[str, str], need_bootstrap: Callable[..., None]
 ) -> None:
@@ -78,6 +94,11 @@ def test_contact_form_is_open_to_everyone(
     "TA regression/65-oi-cache-webhook.spec.ts",
     "Open Inwoner's zaken notifications webhook exists and refuses calls without the subscription's auth.",
 )
+@pytest.mark.scenario("""
+    Given a caller without the subscription's credentials
+    When the caller sends a notification to Open Inwoner's zaken webhook
+    Then Open Inwoner refuses it as unauthenticated
+""")
 def test_zaken_webhook_refuses_unauthenticated_calls(
     http: requests.Session, urls: dict[str, str], body: dict[str, str]
 ) -> None:

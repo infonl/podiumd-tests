@@ -42,6 +42,12 @@ FAILED = re.compile(r"/(accounts/login|login/failure)/")
     "EX tests/smoke/99-portaal-eherkenning-login.spec.ts",
     "The test company logs in through the Keycloak eHerkenning-OIDC mock and gets a session.",
 )
+@pytest.mark.scenario("""
+    Given a test identity for DigiD or eHerkenning
+    When the identity logs in to Open Inwoner through Keycloak's DigiD or eHerkenning mock
+    Then the portal does not show a login or failure page
+    And the browser has an Open Inwoner session
+""")
 def test_login_through_the_keycloak_mock_starts_a_session(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -61,6 +67,13 @@ def test_login_through_the_keycloak_mock_starts_a_session(  # pylint: disable=to
     "TA regression/84-portaal-ingelogd-sessie.spec.ts",
     "After a DigiD login the session opens Mijn zaken, and logging out ends it.",
 )
+@pytest.mark.scenario("""
+    Given an inwoner logged in with DigiD
+    When the inwoner opens Mijn zaken
+    Then Mijn zaken is shown
+    When the inwoner logs out and opens Mijn zaken again
+    Then the portal asks for a login
+""")
 def test_logout_ends_the_session(page: Page, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> None:
     """Logged in, Mijn zaken opens; after logging out it asks for a login again (TA reg-84)."""
     need_bootstrap(INWONER.name, "openinwoner-oidc-mock", "openinwoner-cms-pages")
@@ -82,6 +95,12 @@ def test_logout_ends_the_session(page: Page, podiumd_env: Environment, need_boot
     "upstream maykinmedia/open-inwoner src/open_inwoner/accounts/tests/test_oidc_login_e2e.py",
     "Logging in again with DigiD or eHerkenning reuses the existing user instead of creating one.",
 )
+@pytest.mark.scenario("""
+    Given a test identity for DigiD or eHerkenning
+    When the identity logs in to Open Inwoner twice in fresh sessions
+    Then each login succeeds
+    And Open Inwoner has one account for that BSN or KvK number
+""")
 def test_second_login_reuses_the_account(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,

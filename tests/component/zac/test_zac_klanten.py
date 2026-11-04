@@ -30,6 +30,12 @@ pytestmark = [
 ]
 
 
+@pytest.mark.scenario("""
+    Given a behandelaar is logged in to ZAC
+    When the behandelaar looks up a test person by BSN in the BRP
+    Then ZAC finds exactly that person
+    And shows the person's name
+""")
 def test_person_lookup(zac: requests.Session, urls: dict[str, str]) -> None:
     """ZAC finds a BRP test-set person by BSN, with the name (TA reg-193)."""
     personen = person_lookup(zac, urls["zac"], EREBOS)
@@ -38,6 +44,12 @@ def test_person_lookup(zac: requests.Session, urls: dict[str, str]) -> None:
 
 
 @pytest.mark.tc("INT-004", "INT-005")
+@pytest.mark.scenario("""
+    Given a behandelaar is logged in to ZAC
+    When the behandelaar looks up the test company by KvK number
+    Then ZAC shows the company's basisprofiel with that KvK number
+    And shows the company's name
+""")
 def test_company_lookup(zac: requests.Session, urls: dict[str, str]) -> None:
     """ZAC finds the KvK test company's basisprofiel by KvK number (TA reg-193)."""
     url = f"{urls['zac']}/rest/klanten/basisprofiel/{KVK_TEST_NUMMER}"

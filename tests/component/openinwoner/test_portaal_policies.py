@@ -52,6 +52,11 @@ def visit(page: Page, base: str, paths: tuple[str, ...]) -> list[str]:
     "podiumd-tests",
     "Open Inwoner 2.5.0 enforces a stricter CSP for staff and a Permissions Policy; a page it breaks shows it in the console.",
 )
+@pytest.mark.scenario("""
+    Given a visitor who is not logged in
+    When the visitor opens the homepage, the search and the contactformulier of Open Inwoner
+    Then the browser reports no Content-Security-Policy or Permissions-Policy violation
+""")
 def test_public_pages_raise_no_policy_violation(page: Page, podiumd_env: Environment) -> None:
     """The homepage, search and contact form raise no CSP or Permissions-Policy violation."""
     base = podiumd_env.profile.urls["openinwoner"]
@@ -64,6 +69,12 @@ def test_public_pages_raise_no_policy_violation(page: Page, podiumd_env: Environ
     "podiumd-tests",
     "Open Inwoner 2.5.0 enforces a stricter CSP for staff and a Permissions Policy; a page it breaks shows it in the console.",
 )
+@pytest.mark.scenario("""
+    Given the test admin logs in to the Open Inwoner admin through Keycloak
+    When the admin opens the admin's start page, a new product and the user list
+    Then the browser reports no Content-Security-Policy or Permissions-Policy violation
+    And the admin stays logged in
+""")
 def test_admin_pages_raise_no_policy_violation(
     page: Page, podiumd_env: Environment, need_bootstrap: Callable[..., None]
 ) -> None:

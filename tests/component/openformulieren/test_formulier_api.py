@@ -47,6 +47,12 @@ def fixture_form(http: requests.Session, urls: dict[str, str], need_bootstrap: C
     "TA regression/75-of-zaaktype-matching.spec.ts",
     "Checks that the form configuration stays intact between deploys: the form is active and its step has the expected field.",
 )
+@pytest.mark.scenario("""
+    Given the test form in Open Formulieren
+    When a visitor opens the form
+    Then the form is active, not in maintenance and accepts submissions
+    And it has one step with the klacht field
+""")
 def test_test_form_takes_submissions(http: requests.Session, form: JsonObject) -> None:
     """The form is active, out of maintenance and has its one step with the klacht field (TA reg-75)."""
     assert (form["active"], form["maintenanceMode"], form["submissionAllowed"]) == (True, False, "yes")
@@ -61,6 +67,12 @@ def test_test_form_takes_submissions(http: requests.Session, form: JsonObject) -
     "TA regression/75-of-zaaktype-matching.spec.ts",
     "Checks that the form's login configuration is consistent: public, or authenticated with login options.",
 )
+@pytest.mark.scenario("""
+    Given the test form in Open Formulieren
+    When a visitor opens the form
+    Then a form that requires a login offers a login option
+    And the test form offers a DigiD login
+""")
 def test_login_options_fit_login_required(form: JsonObject) -> None:
     """A form that requires a login offers one; the test form offers DigiD without requiring it (TA reg-75)."""
     options = [str(o.get("identifier")) for o in entries(form["loginOptions"])]
@@ -76,6 +88,12 @@ def test_login_options_fit_login_required(form: JsonObject) -> None:
     "TA regression/153-of-features-direct.spec.ts",
     "Checks that the form exposes its cosignLoginOptions, so the co-signer feature is present.",
 )
+@pytest.mark.scenario("""
+    Given the test form in Open Formulieren
+    When a visitor opens the form
+    Then the form gives its cosign, confirmation mail, required field and pausing settings
+    And the resume link of a paused form has a lifetime longer than zero
+""")
 def test_form_publishes_its_settings(form: JsonObject) -> None:
     """The SDK gets the settings it renders with: cosign, confirmation mail, asterisks, pausing (TA reg-79, reg-153)."""
     assert isinstance(form["cosignLoginOptions"], list)
@@ -100,6 +118,11 @@ def test_form_publishes_its_settings(form: JsonObject) -> None:
     "TA regression/178-blacklist-upload.spec.ts",
     "An uploaded file with a blacklisted or invalid format is refused with a message.",
 )
+@pytest.mark.scenario("""
+    Given a visitor filling in a form in Open Formulieren
+    When the visitor uploads a file whose content does not match its name, or without extension
+    Then Open Formulieren refuses the file with a reason
+""")
 def test_upload_of_a_false_file_is_refused(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     http: requests.Session,
     urls: dict[str, str],
@@ -124,6 +147,11 @@ def test_upload_of_a_false_file_is_refused(  # pylint: disable=too-many-argument
     "MK test_productaanvraag_flow.py",
     "Validates the form's Objects API registration backend against the live Catalogi and Objecttypen APIs.",
 )
+@pytest.mark.scenario("""
+    Given the active forms in Open Formulieren that register in the Objects API
+    When their registration settings are checked
+    Then each finds its objecttype and types in the live APIs
+""")
 def test_objects_api_registrations_are_valid(podiumd_env: Environment) -> None:
     """Every active form's Objects API registration resolves its objecttype and types (MK test_productaanvraag_flow.py)."""
     backends = cast(
@@ -142,6 +170,11 @@ def test_objects_api_registrations_are_valid(podiumd_env: Environment) -> None:
     "podiumd-tests",
     "An Objects API group no form uses yet can still hold a Service with a wrong token; every group must read with its own Services.",
 )
+@pytest.mark.scenario("""
+    Given the Objects API groups in Open Formulieren
+    When each group reads objects and objecttypes with its own connections
+    Then every group reads them without an error
+""")
 def test_objects_api_groups_read(podiumd_env: Environment) -> None:
     """Every Objects API group, used by a form or not, lists objects and objecttypes with its own Services."""
     groups = cast(
@@ -156,6 +189,11 @@ def test_objects_api_groups_read(podiumd_env: Environment) -> None:
 
 @pytest.mark.tc("INT-003")
 @pytest.mark.source("draaiboek INT-003", "Integratieteam link check of PDOK.")
+@pytest.mark.scenario("""
+    Given a visitor filling in a form in Open Formulieren
+    When the visitor searches for a known address
+    Then the PDOK Locatieserver finds the address with its postcode
+""")
 def test_address_search_reaches_pdok(
     http: requests.Session,
     urls: dict[str, str],

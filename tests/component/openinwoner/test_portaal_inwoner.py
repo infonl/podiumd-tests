@@ -65,6 +65,12 @@ def heading(page: Page) -> str:
     "TA interaction/105-portaal-profiel-edit.spec.ts",
     "Contact details (e-mail, phone number) can be changed on the profile edit page after a DigiD login.",
 )
+@pytest.mark.scenario("""
+    Given an inwoner logged in with DigiD
+    When the inwoner opens the edit page of Mijn profiel
+    Then the page Bewerk contactgegevens is shown
+    And it offers e-mail addresses and phone numbers
+""")
 def test_profile_can_be_edited(page: Page, portal: str) -> None:
     """The profile edit form offers e-mail addresses and phone numbers (TA int-105, as formsets in this Open Inwoner)."""
     page.goto(portal + "/mijn-profiel/edit/")
@@ -77,6 +83,12 @@ def test_profile_can_be_edited(page: Page, portal: str) -> None:
     "upstream maykinmedia/open-inwoner src/open_inwoner/accounts/tests/test_profile_edit_e2e.py",
     "The profile edit page rejects a malformed e-mail address and a malformed phone number.",
 )
+@pytest.mark.scenario("""
+    Given an inwoner logged in with DigiD
+    When the inwoner saves a malformed e-mail address and phone number in Mijn profiel
+    Then the edit page stays open
+    And it shows an error for the e-mail address and for the phone number
+""")
 def test_profile_edit_refuses_malformed_contact_details(page: Page, portal: str) -> None:
     """A malformed e-mail address and phone number are refused with a message each; the page stays the edit form."""
     page.goto(portal + "/mijn-profiel/edit/")
@@ -99,6 +111,13 @@ def test_profile_edit_refuses_malformed_contact_details(page: Page, portal: str)
     "TA regression/106-portaal-notificatievoorkeur.spec.ts",
     "The notification preferences page offers the zaak notification toggles and a save button.",
 )
+@pytest.mark.scenario("""
+    Given an inwoner logged in with DigiD
+    When the inwoner switches the zaak notifications setting and saves
+    Then the changed setting is kept after reopening the page
+    When the inwoner switches it back and saves
+    Then the original setting is kept
+""")
 def test_notification_setting_is_saved(page: Page, portal: str) -> None:
     """Switching the zaak notifications setting persists, and switching back too (TA reg-106, reg-165)."""
     page.goto(portal + "/mijn-profiel/notificaties/")
@@ -119,6 +138,11 @@ def test_notification_setting_is_saved(page: Page, portal: str) -> None:
     "TA regression/117-portaal-contactmomenten-paginatie.spec.ts",
     "The contactmomenten overview and its pagination (?page=2) are reachable after a DigiD login.",
 )
+@pytest.mark.scenario("""
+    Given an inwoner logged in with DigiD
+    When the inwoner opens Mijn vragen and its second page
+    Then both pages render in the portal's theme without a server error
+""")
 def test_mijn_vragen_answers(page: Page, portal: str) -> None:
     """The Mijn vragen list and its second page render without an error (TA reg-117)."""
     for path in ("/mijn-zaken/contactmomenten/", "/mijn-zaken/contactmomenten/?page=2"):
@@ -151,6 +175,11 @@ def test_mijn_vragen_answers(page: Page, portal: str) -> None:
     "TA interaction/108-portaal-vraag-stellen-inwoner.spec.ts",
     "An inwoner can ask the municipality a question on the contact form page titled Contactformulier.",
 )
+@pytest.mark.scenario("""
+    Given an inwoner logged in with DigiD
+    When the inwoner opens a page from the menu
+    Then the page's heading names what the menu item promises
+""")
 def test_page_heading_matches_its_menu_item(page: Page, portal: str, path: str, words: str) -> None:
     """Each page's heading names what its menu item promises (TA reg-163, reg-96, int-108)."""
     page.goto(portal + path)
@@ -162,6 +191,12 @@ def test_page_heading_matches_its_menu_item(page: Page, portal: str, path: str, 
     "TA regression/114-portaal-multi-user-digid.spec.ts",
     "After logging out of DigiD, logging in with another DigiD account gives the second inwoner's own session.",
 )
+@pytest.mark.scenario("""
+    Given an inwoner logged in with DigiD
+    When the inwoner logs out
+    And a second inwoner logs in with DigiD
+    Then the second inwoner sees Mijn profiel
+""")
 def test_second_inwoner_sees_own_profile(
     page: Page, podiumd_env: Environment, portal: str, need_bootstrap: Callable[..., None]
 ) -> None:
@@ -195,6 +230,11 @@ def test_second_inwoner_sees_own_profile(
     "Records that deactivated_on set in the admin does not block a DigiD login.",
 )
 @pytest.mark.source("podiumd-tests", "An account set to is_active=False in the admin cannot log in with DigiD.")
+@pytest.mark.scenario("""
+    Given an inwoner's account is set to inactive or deactivated in the admin
+    When the inwoner logs in with DigiD
+    Then the portal asks for a login again
+""")
 def test_disabled_account_cannot_log_in(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -224,6 +264,11 @@ def test_disabled_account_cannot_log_in(  # pylint: disable=too-many-arguments,t
     "TA regression/179-portaal-profiel-naar-openklant.spec.ts",
     "An e-mail address changed in the portal profile lands as a DigitaalAdres in Open Klant.",
 )
+@pytest.mark.scenario("""
+    Given an inwoner logged in with DigiD
+    When the inwoner saves a new e-mail address in Mijn profiel
+    Then the e-mail address appears as a digitaal adres of the inwoner in Open Klant
+""")
 def test_profile_email_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
@@ -274,6 +319,11 @@ def test_profile_email_reaches_open_klant(  # pylint: disable=too-many-arguments
     "EX tests/smoke/99-portaal-eherkenning-login.spec.ts",
     "After the eHerkenning login the test company's user has its KvK number set.",
 )
+@pytest.mark.scenario("""
+    Given a company logged in with eHerkenning
+    When the company opens Mijn profiel
+    Then the profile shows the KvK number, the company's name and the vestiging's trade name from KvK
+""")
 def test_company_profile_shows_kvk_names(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
     page: Page,
     podiumd_env: Environment,
