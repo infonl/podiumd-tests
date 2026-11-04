@@ -223,6 +223,10 @@ Sources:
 | `test_kiss_ita.py` | component | 3 | merge | Health and anonymous ITA → `test_api_health.py`; objecttypes → `tests/component/objecten/test_objecttypen.py` (by name); Elasticsearch health and chunked forwarding: minikube's deploy (forwarding also through `test_kiss_reads_itas_logboek`). |
 | `test_memory.py` | — | — | drop | minikube's memory budget and baseline. |
 | `test_omc.py` | smoke | 1 | merge | Anonymous `/Events/Listen` → `test_api_health.py`; `/Events/Version` with a JWT → `test_omc_version_answers_to_its_token` (`test_api_health.py`). |
+| `test_keycloak_realm.py` | smoke | 1 | merge | Issuer on the frontend URL → `tests/smoke/test_oidc.py` and `tests/component/keycloak/test_realm.py`; PKCE → `test_pkce.py`; the JVM flags of the operator-built pod are podiumd-minikube's own tuning. |
+| `test_monitoring.py` | smoke | 1 | merge | Alloy keeps `NODE_NAME`, or no log reaches Loki: `test_every_pod_logs_to_loki` (`tests/smoke/test_metrics.py`) fails without it. |
+| `test_redis.py` | component | 3 | merge | `test_redis_ha_master_service_points_at_the_master` (`tests/component/platform/test_redis.py`). |
+| `test_solr.py` | — | — | drop | Solr's and ZooKeeper's JVM settings are podiumd-minikube's laptop budget. |
 
 ## PI
 
