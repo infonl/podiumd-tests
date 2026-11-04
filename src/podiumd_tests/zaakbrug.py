@@ -9,8 +9,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from typing import NamedTuple
 
+from podiumd_tests.workloads import expect_defect
+
 if TYPE_CHECKING:
     from datetime import datetime
+
+    import pytest
+
+    from podiumd_tests.environment import Environment
 
 # Translate endpoints of the ZDS 1.2 messages; ZaakBrug picks the operation by the SOAPAction header.
 ZDS = "/services/translate/generic/zds"
@@ -324,3 +330,20 @@ def is_bevestiging(answer: str) -> bool:
     """True when the ZDS answer is a Bv03 confirmation (not an Fo03 fault)."""
     code = ET.fromstring(answer).find(f".//{{{STUF}}}berichtcode")  # noqa: S314  # nosec B314  # ZaakBrug's own answer
     return code is not None and code.text == "Bv03"
+
+
+# ZaakBrug takes the statustype from a zaak's own zaaktype version from this release on (zaakbrug-3).
+EXPIRED_VERSION_FIXED = (1, 27, 0)
+
+
+def expect_expired_version_bug(request: pytest.FixtureRequest, env: Environment) -> None:
+    """Mark the test a strict xfail when the deployed ZaakBrug is older than 1.27.0."""
+    expect_defect(
+        request,
+        env,
+        "zaakbrug",
+        lambda version: version < EXPIRED_VERSION_FIXED,
+        raises=AssertionError,
+        reason="[zaakbrug-3] ZaakBrug before 1.27.0 takes the statustype from the zaaktype version valid today:"
+        " a status on a zaak of an expired version fails ('Adding a new status is failed'); fixed in 1.27.0",
+    )

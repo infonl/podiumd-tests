@@ -14,11 +14,15 @@ from typing import NamedTuple
 import pytest
 
 from podiumd_tests.bootstrap.names import ZAAKBRUG_IOT
+from podiumd_tests.bootstrap.names import ZAAKBRUG_VERSIES_ZAAKTYPE
 from podiumd_tests.bootstrap.names import ZAAKBRUG_ZAAKTYPE
+from podiumd_tests.json_data import strings
 from podiumd_tests.lock import file_lock
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak
+from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.zaakbrug import NO_VELDEN
 from podiumd_tests.zaakbrug import ZDS
 from podiumd_tests.zaakbrug import Document
@@ -28,6 +32,7 @@ from podiumd_tests.zaakbrug import cancel_checkout
 from podiumd_tests.zaakbrug import checked_out_id
 from podiumd_tests.zaakbrug import creeer_zaak
 from podiumd_tests.zaakbrug import document_identificatie
+from podiumd_tests.zaakbrug import expect_expired_version_bug
 from podiumd_tests.zaakbrug import geef_zaak_details
 from podiumd_tests.zaakbrug import geef_zaakdocument_bewerken
 from podiumd_tests.zaakbrug import genereer_document_identificatie
@@ -47,6 +52,7 @@ if TYPE_CHECKING:
     import requests
 
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.environment import Environment
     from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [
@@ -339,3 +345,49 @@ def test_definitief_document_is_not_updated(
     links = openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": zaak.url})
     titels = [str(openzaak.get(str(link["informatieobject"]))["titel"]) for link in links]
     assert "gewijzigd door podiumd-tests" not in titels
+
+
+@pytest.mark.requires("openzaak")
+@pytest.mark.source(
+    f"{SOAPUI} 10-TestSuite-ZaakTypeVersions",
+    "ActualiseerZaakstatusOnZaakWithExpiredZaakTypeVersionShouldUseStatusTypeOfThatVersion: the zaak's own version.",
+)
+@pytest.mark.scenario("""
+    Given a zaaktype with a version valid in 2020 and a newer version from 2021
+    And a zaak of the 2020 version in Open Zaak
+    When a client sets the zaak's first status with an actualiseerZaakstatus message to ZaakBrug
+    Then ZaakBrug confirms the message
+    And the zaak's status in Open Zaak has a statustype of the 2020 version
+""")
+def test_status_on_an_expired_zaaktype_version_uses_that_versions_statustype(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+    http: requests.Session,
+    urls: dict[str, str],
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+    request: pytest.FixtureRequest,
+    podiumd_env: Environment,
+) -> None:
+    """ZaakBrug takes the statustype from the zaak's zaaktype version, not from the version valid today."""
+    expect_expired_version_bug(request, podiumd_env)
+    need_bootstrap("openzaak-zaaktype-zaakbrug-versies")
+    versions = openzaak.list(f"{CATALOGI}/zaaktypen", {"identificatie": ZAAKBRUG_VERSIES_ZAAKTYPE})
+    expired = next(v for v in versions if v.get("eindeGeldigheid"))
+    zaak = make_zaak(
+        openzaak, registry, str(expired["url"]), startdatum="2020-06-01", bronorganisatie=ZAAKBRUG_BRONORGANISATIE
+    )
+    envelope = actualiseer_zaakstatus(
+        datetime.now(UTC),
+        str(zaak["identificatie"]),
+        ZAAKBRUG_VERSIES_ZAAKTYPE,
+        volgnummer=1,
+        omschrijving="Ingediend v1",
+        gezet=datetime.now(UTC).replace(microsecond=0),
+    )
+    assert is_bevestiging(
+        _post(http, urls["zaakbrug"] + ZDS + "/OntvangAsynchroon", envelope, "actualiseerZaakstatus_Lk01")
+    )
+    statussen = openzaak.list(f"{ZAKEN}/statussen", {"zaak": str(zaak["url"])})
+    of_version = strings(expired.get("statustypen"))
+    assert [s["statustype"] for s in statussen if s["statustype"] not in of_version] == []
+    assert statussen, f"no status on {zaak['identificatie']}"

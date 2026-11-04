@@ -5,7 +5,8 @@ and belanghebbende roltypen, eigenschap "kenteken", a published besluittype, and
 resultaattype whose selectielijst klasse comes from Open Zaak's own Selectielijst API (left out,
 with a note, when that API cannot be reached).
 Actions: status, apply (recreates), remove (also the zaken of the zaaktype).
-Params: action, domein, rsin, identificatie, iot_omschrijving, besluittype.
+Params: action, domein, rsin, identificatie, iot_omschrijving, besluittype; optional versions, a list of
+[begin, end] dates (ISO, end may be null): one published version each, whose statustypen end in " v<n>".
 """
 
 STATUSTYPEN = ("Ingediend", "In behandeling", "Afgehandeld")
@@ -38,18 +39,51 @@ def run(params):
     if params["action"] == "remove":
         return {"present": False}
 
+    today = dt.datetime.now(tz=dt.UTC).date()
+    versions = [
+        (dt.date.fromisoformat(begin), end and dt.date.fromisoformat(end), f" v{number}")
+        for number, (begin, end) in enumerate(params.get("versions") or [], start=1)
+    ] or [(today, None, "")]
     with transaction.atomic():  # all or nothing: a failure leaves no half zaaktype
-        return _create(params, catalogus, dt.datetime.now(tz=dt.UTC).date())
+        return _create(params, catalogus, versions)
 
 
-def _create(params, catalogus, today):
+def _create(params, catalogus, versions):
     import datetime as dt
 
     from openzaak.components.catalogi.models import BesluitType
+    from openzaak.components.catalogi.models import InformatieObjectType
+
+    iot = InformatieObjectType.objects.create(
+        catalogus=catalogus,
+        omschrijving=params["iot_omschrijving"],
+        informatieobjectcategorie="podiumd-tests",
+        vertrouwelijkheidaanduiding="openbaar",
+        datum_begin_geldigheid=min(begin for begin, _, _ in versions),
+        concept=False,
+    )
+    besluittype = BesluitType.objects.create(
+        catalogus=catalogus,
+        omschrijving=params["besluittype"],
+        besluitcategorie="podiumd-tests",
+        reactietermijn=dt.timedelta(days=14),
+        publicatie_indicatie=False,
+        datum_begin_geldigheid=min(begin for begin, _, _ in versions),
+        concept=False,
+    )
+    notes = []
+    for begin, end, suffix in versions:
+        zaaktype = _version(params, catalogus, iot, begin, end, suffix)
+        besluittype.zaaktypen.add(zaaktype)
+        notes += _resultaattype(zaaktype)
+    return {"present": True, "notes": sorted(set(notes))}
+
+
+def _version(params, catalogus, iot, begin, end, suffix):  # pylint: disable=too-many-arguments,too-many-positional-arguments  # one version
+    import datetime as dt
+
     from openzaak.components.catalogi.models import Eigenschap
     from openzaak.components.catalogi.models import EigenschapSpecificatie
-    from openzaak.components.catalogi.models import InformatieObjectType
-    from openzaak.components.catalogi.models import ResultaatType
     from openzaak.components.catalogi.models import RolType
     from openzaak.components.catalogi.models import StatusType
     from openzaak.components.catalogi.models import ZaakType
@@ -73,16 +107,9 @@ def _create(params, catalogus, today):
         verantwoordingsrelatie=[],
         producten_of_diensten=[],
         referentieproces_naam="podiumd-tests",
-        datum_begin_geldigheid=today,
-        versiedatum=today,
-        concept=False,
-    )
-    iot = InformatieObjectType.objects.create(
-        catalogus=catalogus,
-        omschrijving=params["iot_omschrijving"],
-        informatieobjectcategorie="podiumd-tests",
-        vertrouwelijkheidaanduiding="openbaar",
-        datum_begin_geldigheid=today,
+        datum_begin_geldigheid=begin,
+        datum_einde_geldigheid=end,
+        versiedatum=begin,
         concept=False,
     )
     ZaakTypeInformatieObjectType.objects.create(
@@ -91,7 +118,10 @@ def _create(params, catalogus, today):
     for number, omschrijving in enumerate(STATUSTYPEN, start=1):
         # informeren: OMC mails the initiator on each status (TA seed-minimal).
         StatusType.objects.create(
-            zaaktype=zaaktype, statustype_omschrijving=omschrijving, statustypevolgnummer=number, informeren=True
+            zaaktype=zaaktype,
+            statustype_omschrijving=omschrijving + suffix,
+            statustypevolgnummer=number,
+            informeren=True,
         )
     for omschrijving, generiek in ROLTYPEN:
         RolType.objects.create(zaaktype=zaaktype, omschrijving=omschrijving, omschrijving_generiek=generiek)
@@ -99,23 +129,14 @@ def _create(params, catalogus, today):
     Eigenschap.objects.create(
         zaaktype=zaaktype, eigenschapnaam="kenteken", definitie="Kenteken", specificatie_van_eigenschap=specificatie
     )
-    besluittype = BesluitType.objects.create(
-        catalogus=catalogus,
-        omschrijving=params["besluittype"],
-        besluitcategorie="podiumd-tests",
-        reactietermijn=dt.timedelta(days=14),
-        publicatie_indicatie=False,
-        datum_begin_geldigheid=today,
-        concept=False,
-    )
-    besluittype.zaaktypen.add(zaaktype)
-    return {"present": True, "notes": _resultaattype(zaaktype, ResultaatType)}
+    return zaaktype
 
 
-def _resultaattype(zaaktype, resultaattype_model):
+def _resultaattype(zaaktype):
     """Create a resultaattype from the first 2020 selectielijst procestype; notes when that is not possible."""
     import datetime as dt
 
+    from openzaak.components.catalogi.models import ResultaatType
     from openzaak.selectielijst.models import ReferentieLijstConfig
     from zgw_consumers.client import build_client
 
@@ -128,7 +149,7 @@ def _resultaattype(zaaktype, resultaattype_model):
         return [f"no resultaattype: Selectielijst API unreachable ({type(exc).__name__})"]
     zaaktype.selectielijst_procestype = proces["url"]
     zaaktype.save()
-    resultaattype_model.objects.create(
+    ResultaatType.objects.create(
         zaaktype=zaaktype,
         omschrijving="Afgehandeld",
         resultaattypeomschrijving=omschrijving["url"],

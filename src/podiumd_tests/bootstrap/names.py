@@ -32,6 +32,10 @@ TEST_BESLUITTYPE = "ptest-bootstrap-besluit"
 ZAAKBRUG_ZAAKTYPE = "ZBTESTPT"
 ZAAKBRUG_IOT = "ptest-bootstrap-zb-bijlage"
 ZAAKBRUG_BESLUITTYPE = "ptest-bootstrap-zb-besluit"
+# Two published versions of one zaaktype, the first expired (StUF code at most 10 characters).
+ZAAKBRUG_VERSIES_ZAAKTYPE = "ZBVERSIE"
+ZAAKBRUG_VERSIES_IOT = "ptest-bootstrap-zbv-bijlage"
+ZAAKBRUG_VERSIES_BESLUITTYPE = "ptest-bootstrap-zbv-besluit"
 TEST_FORM = "ptest-bootstrap-klacht"
 # The Ogone merchant of the payment tests in Open Formulieren; the tests play Ogone with its passphrase.
 OGONE_MERCHANT = "ptest-bootstrap-ogone"

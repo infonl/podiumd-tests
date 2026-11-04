@@ -41,6 +41,9 @@ from podiumd_tests.bootstrap.names import WORLDLINE_MERCHANT
 from podiumd_tests.bootstrap.names import WORLDLINE_STORE_KEY
 from podiumd_tests.bootstrap.names import ZAAKBRUG_BESLUITTYPE
 from podiumd_tests.bootstrap.names import ZAAKBRUG_IOT
+from podiumd_tests.bootstrap.names import ZAAKBRUG_VERSIES_BESLUITTYPE
+from podiumd_tests.bootstrap.names import ZAAKBRUG_VERSIES_IOT
+from podiumd_tests.bootstrap.names import ZAAKBRUG_VERSIES_ZAAKTYPE
 from podiumd_tests.bootstrap.names import ZAAKBRUG_ZAAKTYPE
 from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_COMPONENTS
@@ -660,6 +663,21 @@ STEPS: tuple[Step, ...] = (
             "identificatie": ZAAKBRUG_ZAAKTYPE,
             "iot_omschrijving": ZAAKBRUG_IOT,
             "besluittype": ZAAKBRUG_BESLUITTYPE,
+        },
+    ),
+    # ZaakBrug's statuses on a zaak of an expired zaaktype version: version 1 valid in 2020, version 2 from 2021.
+    SnippetStep(
+        "openzaak-zaaktype-zaakbrug-versies",
+        ("openzaak", "zaakbrug"),
+        "openzaak_zaaktype",
+        None,
+        {
+            "domein": TEST_CATALOGUS_DOMEIN,
+            "rsin": TEST_CATALOGUS_RSIN,
+            "identificatie": ZAAKBRUG_VERSIES_ZAAKTYPE,
+            "iot_omschrijving": ZAAKBRUG_VERSIES_IOT,
+            "besluittype": ZAAKBRUG_VERSIES_BESLUITTYPE,
+            "versions": [["2020-01-01", "2020-12-31"], ["2021-01-01", None]],
         },
     ),
     # Platform wiring.
