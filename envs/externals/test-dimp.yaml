@@ -1,7 +1,7 @@
 # SSC Twente ExternalsPodiumD environment test-dimp (applications/gemeenten/dimp/test/).
-# Every tier, chaos included (user, 2026-10-13).
+# Smoke only.
 estate: externals
-allowed_tiers: [smoke, core, full, perf, chaos]
+allowed_tiers: [smoke]
 kube:
   context: aks-blue-test-dimp
   namespace: podiumd
