@@ -20,6 +20,7 @@ from podiumd_tests.security import days_valid
 from podiumd_tests.security import foreign_origin_allowed
 from podiumd_tests.security import insecure_session_cookies
 from podiumd_tests.security import missing_security_headers
+from podiumd_tests.workloads import chart_older_than
 
 if TYPE_CHECKING:
     import requests
@@ -49,7 +50,6 @@ HEADER_GAPS = {
     "grafana": "[podiumd-chart-1] Grafana sends no HSTS (its strict_transport_security setting is off)",
     "openbeheer": "[open-beheer-1] Open Beheer 0.9.1 sends no HSTS and no nosniff on its frontend",
     "omc": "[omc-3] OMC 2.3.1 sends no HSTS and no nosniff",
-    "openbao": "[podiumd-chart-23] podiumd sets no custom_response_headers for OpenBao's listener: no nosniff",
 }
 
 
@@ -67,9 +67,16 @@ def headers_param(component: str) -> ParameterSet:
     And an HTML page also sends frame protection
 """)
 def test_security_headers(
-    http: requests.Session, podiumd_env: Environment, urls: dict[str, str], component: str
+    request: pytest.FixtureRequest,
+    http: requests.Session,
+    podiumd_env: Environment,
+    urls: dict[str, str],
+    component: str,
 ) -> None:
     """The root sends HSTS and nosniff, and frame protection when it is an HTML page."""
+    if component == "openbao" and chart_older_than(podiumd_env, (4, 10, 1)):
+        reason = "[podiumd-chart-23] podiumd before 4.10.1 sets no custom_response_headers for OpenBao: no nosniff"
+        request.applymarker(pytest.mark.xfail(strict=False, reason=f"{reason} (helm-charts #664)"))
     response = http.get(public_url(podiumd_env, urls, component) + "/", allow_redirects=False)
     assert not missing_security_headers(response), f"{describe(response)} lacks {missing_security_headers(response)}"
 
