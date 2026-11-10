@@ -133,7 +133,7 @@ bandit -c pyproject.toml -r "$SRC" -q
 
 # Test directories get TESTS_PYLINT_DISABLE on top (pylint has no per-directory config).
 # False positives under tests/:
-TESTS_PYLINT_DISABLE=missing-function-docstring,wrong-import-position,unused-argument,protected-access
+TESTS_PYLINT_DISABLE=missing-function-docstring
 TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,unused-variable,redefined-outer-name,duplicate-code
 # Not enforced for tests:
 TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,consider-using-from-import,use-implicit-booleaness-not-comparison
