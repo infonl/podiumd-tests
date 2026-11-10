@@ -1,3 +1,4 @@
+---
 # Thresholds of the perf tier (tests/perf), per endpoint of podiumd_tests.perf.ENDPOINTS.
 # p95_ms and max_failure_ratio are TA's k6 thresholds. A slowdown: the p95 grew more than max_slowdown
 # times and more than min_slowdown_ms against the median of the environment's earlier runs with the same

@@ -1,3 +1,4 @@
+---
 # ICATT podiumd-infra AKS environment bas00 (values/bas00/).
 estate: podiumd-infra
 allowed_tiers: [smoke, core, full, perf]
