@@ -61,7 +61,7 @@ Research notes:
 | R16 | **Fast, read-only smoke.** Under 2 minutes, and safe for any environment. |
 | R17 | **Preflight (`podiumd-tests doctor --env X`).** A read-only check of everything a run needs, without running any test (§8b). It runs on its own, and as a short version at the start of every `run`, `bootstrap` and `perf`. Each failed check is one line, with a fix hint. Exit code 2. |
 | R18 | **Each run records its environment.** Every run writes a `run.json` with the environment, chart version, detected component image tags, capabilities, the suite's git SHA and the selection used. This makes results comparable across versions without folders per version (§7). |
-| R19 | **Code quality: the same checks as podiumd.** Use the checks and settings of `helm-charts/charts/podiumd/bin/run_python_checks` and its `pyproject.toml`, unchanged (§8a). |
+| R19 | **Code quality: strict checks.** `run_python_checks` runs them with the settings in `pyproject.toml` and `.yamllint` (§8a). |
 | R20 | **Allowed scope per environment.** Each profile has an `allowed_tiers` setting, for example `[smoke]` for a gemeente environment that may only receive smoke tests, or `[smoke, core, full, perf]`. The CLI refuses `bootstrap`, `seed-volume` and every tier outside the list. It says why, and offers no override flag. ExternalsPodiumD (user, 2026-11-05): ontw-dimp runs every tier, chaos included; ontw-icat, ontw-info, ontw-mayk, ontw-dim1 and ontw-dim2 every tier except chaos; ontw-dim3 and every test-* and acc-* environment only ever run smoke. |
 | R21 | **Pipeline-neutral execution (§7a).** There is no pipeline-specific code in the suite. |
 | R22 | **Minimal toolset, reuse first.** Add no language, framework or library unless existing ones cannot do the job. Before writing new code, reuse the existing code: the stdlib, the libraries the source suites already use (`requests`, `PyYAML`, Playwright; ZGW JWTs are signed with the stdlib, as in MK, so no JWT library), and the MK, PI and EX helpers. A new dependency needs a one-line reason in `pyproject.toml`. That rules out, for example, `httpx` (use `requests`), `pydantic-settings` (use dataclasses plus `PyYAML`), `tenacity` (use a small `wait_until`), the `kubernetes` Python client (use the `kubectl` CLI; reasons in §8), `mypy` (use basedpyright, as in podiumd), pre-commit, and Allure (a Java or Node CLI to build its HTML). The user chose pytest-html for a readable report per run (2026-10-12). |
@@ -315,7 +315,7 @@ Why this layout:
 
 ## 8a. Code quality checks
 
-`run_python_checks` is a copy of `dimpact-samenwerking/helm-charts/charts/podiumd/bin/run_python_checks`, modified for this layout. It runs the same checks with the same settings, fastest first, and stops at the first failure:
+`run_python_checks` runs these checks, fastest first, and stops at the first failure:
 
 1. `ruff check`
 2. `shellcheck`

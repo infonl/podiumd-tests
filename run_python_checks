@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 #
 # Runs the code quality checks, fastest first, stopping at the first failure.
-# Adapted from dimpact-samenwerking/helm-charts charts/podiumd/bin/run_python_checks
-# (same tools, same settings) for this repo's src/ layout.
 set -euo pipefail
 
 usage() {
@@ -89,10 +87,8 @@ jscpd --exit-code 1 --format python --mode weak --min-lines 4 --min-tokens 35 --
     --ignore-pattern 'from .* import .*,import .*, +[a-z_]+: [^=\n]+\x2c\n' \
     src
 
-# Same rules as podiumd's verify-podiumd markdown check
-# (quality_gates.markdown_disabled_rules default and MARKDOWN_PLUGIN_SETTINGS).
 echo "=== pymarkdown (${#markdown_files[@]} file(s)) ==="
-# podiumd-tests: front-matter on, for the rule files in .claude/memory/.
+# Front matter on, for the rule files in .claude/memory/.
 pymarkdown -d md013,md014 -s 'plugins.md024.siblings_only=$!True' -s 'extensions.front-matter.enabled=$!True' \
     scan "${markdown_files[@]}"
 

@@ -82,9 +82,6 @@ omit = ["*/snippets/*.py", "*/perf/*locustfile.py"]
 [tool.coverage.report]
 fail_under = 95
 
-# Tool settings below are copied from podiumd charts/podiumd/bin/pyproject.toml.
-# Deviations are marked "podiumd-tests:".
-
 [tool.ruff]
 # Shared with [tool.ruff.format] and pylint max-line-length.
 line-length = 120
@@ -186,7 +183,7 @@ check-typed-exception = true  # Enable additional checks for try-except-pass
 # (SLF001), no __init__.py (INP001), composite asserts (PT018), unused
 # unpacked vars (RUF059), fixed-argv `git` calls (S603/S607), fake tokens
 # (S106). bandit does not scan tests/ either.
-# podiumd-tests: the same rules apply to unit_tests/.
+# The same rules apply to unit_tests/.
 # PL counts and magic values (PLR2004, PLR0913, PLR0917, PLW0717, PLR0904, PLR0914) and local imports (PLC0415):
 # not enforced for tests.
 "tests/**" = ["S101", "ARG001", "ARG005", "SLF001", "INP001", "PT018", "RUF059", "S603", "S607", "S106", "PLR2004", "PLR0913", "PLR0917", "PLC0415", "PLW0717", "PLR0904", "PLR0914"]
@@ -273,12 +270,8 @@ disable = [
 ]
 
 [tool.pylint.main]
-# podiumd-tests: Django snippets import models that exist only in the component images.
+# Django snippets import models that exist only in the component images.
 ignore = ["snippets"]
-
-[tool.pylint.basic]
-# Allow hyphens for the kebab-case script names (e.g. "verify-podiumd").
-module-rgx = "^(([a-z_][a-z0-9_-]*)|(__.*__))$"
 
 [tool.pylint.format]
 # Matches [tool.ruff] line-length.
@@ -297,7 +290,7 @@ force_single_line = true
 default_section = "THIRDPARTY"
 sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 
-# podiumd-tests: vulture runs on src/ plus tests/ (see run_python_checks), so library
+# Vulture runs on src/ plus tests/ (see run_python_checks), so library
 # code that only environment tests use is not dead. unit_tests/ is left out on purpose:
 # code used only by its own unit test is still dead. False positives:
 #   - pytest_* hooks, test_* functions, pytestmark and @pytest.fixture functions: used by pytest.
@@ -322,9 +315,9 @@ skips = [
 exclude = [
     "**/__pycache__",
     ".venv",
-    # podiumd-tests: Django snippets import models that exist only in the component images.
+    # Django snippets import models that exist only in the component images.
     "src/podiumd_tests/snippets/*.py",
-    # podiumd-tests: Locust's event hooks are untyped.
+    # Locust's event hooks are untyped.
     "src/podiumd_tests/perf/*locustfile.py",
 ]
 typeCheckingMode = "strict"
@@ -333,7 +326,7 @@ reportUntypedBaseClass = false # done by ruff N801
 
 # tests/: fakes, parametrize args and monkeypatch lambdas are unannotated
 # and scripts load as ModuleType, so Unknown types remain.
-# podiumd-tests: the same relaxations apply to unit_tests/.
+# The same relaxations apply to unit_tests/.
 [[tool.basedpyright.executionEnvironments]]
 root = "tests"
 reportMissingParameterType = false
