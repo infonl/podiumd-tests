@@ -83,6 +83,8 @@ branch = true
 
 [tool.coverage.report]
 fail_under = 96
+# The threshold check rounds to this precision; at 0, 95.996% passes as 96%.
+precision = 2
 
 [tool.ruff]
 # Shared with [tool.ruff.format] and pylint max-line-length.
