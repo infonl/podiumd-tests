@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from podiumd_tests.auth.keycloak_admin import KeycloakAdmin
-    from podiumd_tests.bootstrap import Context
+    from podiumd_tests.bootstrap.runner import Context
     from podiumd_tests.json_data import JsonObject
 
 type _AppClient = tuple[str, tuple[str, ...], bool]

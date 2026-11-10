@@ -1,6 +1,6 @@
 """Unit tests for reading Locust's stats and checking them against perf.yaml."""
 
-from podiumd_tests.perf import locust_command
+from podiumd_tests.perf.runs import locust_command
 from podiumd_tests.perf.stats import SETTINGS
 from podiumd_tests.perf.stats import STATS
 from podiumd_tests.perf.stats import EndpointStats

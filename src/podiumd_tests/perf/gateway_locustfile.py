@@ -21,7 +21,7 @@ from locust import task
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
-from podiumd_tests.perf import GATEWAY_SCENARIOS
+from podiumd_tests.perf.runs import GATEWAY_SCENARIOS
 
 if TYPE_CHECKING:
     from argparse import ArgumentParser

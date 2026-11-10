@@ -16,7 +16,7 @@ from podiumd_tests.json_data import section
 
 if TYPE_CHECKING:
     from podiumd_tests.auth.keycloak_admin import KeycloakAdmin
-    from podiumd_tests.bootstrap import Context
+    from podiumd_tests.bootstrap.runner import Context
 
 
 def keycloak_password_key(key: str) -> str:

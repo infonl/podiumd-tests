@@ -25,7 +25,7 @@ from podiumd_tests.wait import wait_until
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from podiumd_tests.bootstrap import Context
+    from podiumd_tests.bootstrap.runner import Context
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
 

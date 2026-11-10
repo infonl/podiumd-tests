@@ -20,8 +20,8 @@ from podiumd_tests.responses import get_entries
 if TYPE_CHECKING:
     import requests
 
-    from podiumd_tests.bootstrap import Context
     from podiumd_tests.bootstrap.keycloak import KeycloakUser
+    from podiumd_tests.bootstrap.runner import Context
 
 STORE_KEY = "ptest_bootstrap_kiss_kanalen_record"
 KANALEN = ("Balie", "Telefoon", "Internet")

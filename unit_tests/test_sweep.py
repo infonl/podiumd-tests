@@ -9,7 +9,7 @@ import pytest
 import requests
 
 from podiumd_tests import sweep as sweep_module
-from podiumd_tests.bootstrap import Outcome
+from podiumd_tests.bootstrap.runner import Outcome
 from podiumd_tests.capabilities import Capabilities
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.credentials import env_var_name

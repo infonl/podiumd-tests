@@ -12,12 +12,6 @@ import pytest
 
 from podiumd_tests import cli
 from podiumd_tests.auth.keycloak_admin import KeycloakAdmin
-from podiumd_tests.bootstrap import Context
-from podiumd_tests.bootstrap import bootstrap
-from podiumd_tests.bootstrap import check
-from podiumd_tests.bootstrap import failed
-from podiumd_tests.bootstrap import refusal
-from podiumd_tests.bootstrap import unbootstrap
 from podiumd_tests.bootstrap.keycloak import KeycloakRoles
 from podiumd_tests.bootstrap.keycloak import KeycloakUser
 from podiumd_tests.bootstrap.keycloak import keycloak_password_key
@@ -28,6 +22,12 @@ from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.oidc_mock import KEYCLOAK_STORE_KEY
 from podiumd_tests.bootstrap.oidc_mock import KeycloakOidcMock
 from podiumd_tests.bootstrap.oidc_mock import oidc_params
+from podiumd_tests.bootstrap.runner import Context
+from podiumd_tests.bootstrap.runner import bootstrap
+from podiumd_tests.bootstrap.runner import check
+from podiumd_tests.bootstrap.runner import failed
+from podiumd_tests.bootstrap.runner import refusal
+from podiumd_tests.bootstrap.runner import unbootstrap
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.bootstrap.steps import ItaMedewerker

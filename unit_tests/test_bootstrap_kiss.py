@@ -6,10 +6,10 @@ import json
 import pytest
 import requests
 
-from podiumd_tests.bootstrap import Context
 from podiumd_tests.bootstrap import kiss as kiss_step
 from podiumd_tests.bootstrap.kiss import STORE_KEY
 from podiumd_tests.bootstrap.kiss import KissKanalen
+from podiumd_tests.bootstrap.runner import Context
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.credentials import env_var_name

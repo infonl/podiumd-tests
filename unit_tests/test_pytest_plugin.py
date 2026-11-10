@@ -3,7 +3,8 @@
 import pytest
 
 from podiumd_tests import pytest_plugin
-from podiumd_tests.bootstrap import Outcome
+from podiumd_tests.bootstrap import runner
+from podiumd_tests.bootstrap.runner import Outcome
 from podiumd_tests.pytest_plugin import requiring
 
 pytest_plugins = ["pytester"]
@@ -183,7 +184,7 @@ def test_api_fixtures_check_their_bootstrap_step_once(pytester, monkeypatch):
         checked.extend(s.name for s in steps)
         return [Outcome(s.name, "present") for s in steps]
 
-    monkeypatch.setattr(pytest_plugin, "check", check)
+    monkeypatch.setattr(runner, "check", check)
     pytester.makeconftest(WRITABLE_CONFTEST)
     pytester.makepyfile(
         """
@@ -227,7 +228,7 @@ def test_needs(need_bootstrap):
     ],
 )
 def test_need_bootstrap_skips_or_fails_on_absent_steps(pytester, monkeypatch, action, args, outcome, message):
-    monkeypatch.setattr(pytest_plugin, "check", _check_all(action))
+    monkeypatch.setattr(runner, "check", _check_all(action))
     pytester.makeconftest(INNER_CONFTEST)
     pytester.makepyfile(NEEDS_A_STEP)
     result = pytester.runpytest_inprocess(*INNER_ARGS, "-rsf", *args)
@@ -237,10 +238,8 @@ def test_need_bootstrap_skips_or_fails_on_absent_steps(pytester, monkeypatch, ac
 
 @pytest.mark.parametrize(("created", "outcome"), [("created", "passed"), ("failed", "failed")])
 def test_auto_bootstrap_applies_the_missing_steps(pytester, monkeypatch, created, outcome):
-    monkeypatch.setattr(pytest_plugin, "check", _check_all("missing"))
-    monkeypatch.setattr(
-        pytest_plugin, "bootstrap", lambda _env, steps: [Outcome(s.name, created, "403") for s in steps]
-    )
+    monkeypatch.setattr(runner, "check", _check_all("missing"))
+    monkeypatch.setattr(runner, "bootstrap", lambda _env, steps: [Outcome(s.name, created, "403") for s in steps])
     pytester.makeconftest(WRITABLE_CONFTEST)
     pytester.makepyfile(NEEDS_A_STEP)
     result = pytester.runpytest_inprocess(*INNER_ARGS, "-rf", "--auto-bootstrap")
@@ -309,7 +308,7 @@ def test_fixed():
 def test_zac_and_zaaktype_fixtures(pytester, monkeypatch, fake_http):
     fake_http({"/catalogi/api/v1/zaaktypen": (200, {"results": [{"url": "zt-1"}], "next": None})})
     deleted = []
-    monkeypatch.setattr(pytest_plugin, "check", lambda _env, steps: [Outcome(s.name, "present") for s in steps])
+    monkeypatch.setattr(runner, "check", lambda _env, steps: [Outcome(s.name, "present") for s in steps])
     monkeypatch.setattr(pytest_plugin, "zac_session", lambda _env, user, password: f"{user}:{password}")
     monkeypatch.setattr(pytest_plugin, "zaakafhandelparameters", lambda _zac, _url, zaaktype: [{"zaaktype": zaaktype}])
     monkeypatch.setattr(pytest_plugin, "confirmation_on", lambda _zac, _url, _zaaktype: False)
@@ -343,7 +342,7 @@ def test_confirmation(ontvangstbevestiging):
 
 
 def test_zac_parameters_skip_without_parameters_in_zac(pytester, monkeypatch):
-    monkeypatch.setattr(pytest_plugin, "check", lambda _env, steps: [Outcome(s.name, "present") for s in steps])
+    monkeypatch.setattr(runner, "check", lambda _env, steps: [Outcome(s.name, "present") for s in steps])
     monkeypatch.setattr(pytest_plugin, "zac_session", lambda _env, _user, _password: None)
     monkeypatch.setattr(pytest_plugin, "zaakafhandelparameters", lambda _zac, _url, _zaaktype: [])
     pytester.makeconftest(WRITABLE_CONFTEST)

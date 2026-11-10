@@ -16,41 +16,22 @@ from typing import cast
 
 import pytest
 
+from podiumd_tests import replicas
 from podiumd_tests import results
-from podiumd_tests.bootstrap import bootstrap
-from podiumd_tests.bootstrap import check
-from podiumd_tests.bootstrap import refusal
+from podiumd_tests import scenarios
+from podiumd_tests.bootstrap import names
+from podiumd_tests.bootstrap import runner
 from podiumd_tests.bootstrap.bpmn import bpmn_zaaktype
 from podiumd_tests.bootstrap.bpmn import uuid_of
-from podiumd_tests.bootstrap.names import PRODUCTAANVRAAG_OBJECTTYPE
-from podiumd_tests.bootstrap.names import TEST_ZAAKTYPE
-from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
-from podiumd_tests.bootstrap.names import ZGW_NOAUTH_CLIENT_ID
-from podiumd_tests.bootstrap.names import ZGW_NOAUTH_STORE_KEY
-from podiumd_tests.bootstrap.names import ZGW_OPENBAAR_CLIENT_ID
-from podiumd_tests.bootstrap.names import ZGW_OPENBAAR_STORE_KEY
-from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_CLIENT_ID
-from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_STORE_KEY
-from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import STEPS
-from podiumd_tests.clients.platform import mailpit_client
-from podiumd_tests.clients.platform import objecten_client
-from podiumd_tests.clients.platform import objecttypen_client
-from podiumd_tests.clients.platform import openklant_client
-from podiumd_tests.clients.platform import opennotificaties_client
-from podiumd_tests.clients.platform import openvtb_client
-from podiumd_tests.clients.platform import openzaak_client
+from podiumd_tests.clients import platform
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
 from podiumd_tests.kube import cluster_service
 from podiumd_tests.mock_server import Callback
 from podiumd_tests.oidc import challenge_session
-from podiumd_tests.replicas import several_replicas
-from podiumd_tests.replicas import switches_replicas
-from podiumd_tests.scenarios import scenario
-from podiumd_tests.scenarios import scenario_problems
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
@@ -120,7 +101,7 @@ def fixture_podiumd_env(request: pytest.FixtureRequest) -> Environment:
 @pytest.fixture(scope="session", name="several_replicas")
 def fixture_several_replicas(podiumd_env: Environment) -> Generator[None]:
     """Several pods of redis-ha and Keycloak for the whole session (profile setting replicas_command)."""
-    with several_replicas(podiumd_env):
+    with replicas.several_replicas(podiumd_env):
         yield
 
 
@@ -183,12 +164,12 @@ def fixture_need_bootstrap(
     present = run_dir / "bootstrap-present"
     present.mkdir(exist_ok=True)
 
-    def need(*names: str) -> None:
-        wanted = [step for step in STEPS if step.name in names and not (present / step.name).exists()]
-        unknown = set(names) - {step.name for step in STEPS}
+    def need(*step_names: str) -> None:
+        wanted = [step for step in STEPS if step.name in step_names and not (present / step.name).exists()]
+        unknown = set(step_names) - {step.name for step in STEPS}
         if unknown:
             pytest.fail(f"unknown bootstrap steps: {', '.join(sorted(unknown))}")
-        outcomes = check(podiumd_env, wanted)
+        outcomes = runner.check(podiumd_env, wanted)
         skipped = [outcome for outcome in outcomes if outcome.action == "skipped"]
         if skipped:  # e.g. wiring off for the profile, or the component is absent
             pytest.skip("; ".join(f"bootstrap step {outcome.step}: {outcome.detail}" for outcome in skipped))
@@ -198,10 +179,12 @@ def fixture_need_bootstrap(
             steps = ", ".join(step.name for step in missing)
             pytest.fail(f"bootstrap missing on {name} ({steps}): run `podiumd-tests bootstrap --env {name}`")
         if missing:
-            reason = refusal(podiumd_env.profile)
+            reason = runner.refusal(podiumd_env.profile)
             if reason:
                 pytest.fail(f"--auto-bootstrap refused: {reason}")
-            failed_steps = [outcome for outcome in bootstrap(podiumd_env, missing) if outcome.action != "created"]
+            failed_steps = [
+                outcome for outcome in runner.bootstrap(podiumd_env, missing) if outcome.action != "created"
+            ]
             if failed_steps:
                 failures = "; ".join(f"{outcome.step} {outcome.action}: {outcome.detail}" for outcome in failed_steps)
                 pytest.fail(f"--auto-bootstrap: {failures}")
@@ -215,42 +198,42 @@ def fixture_need_bootstrap(
 def fixture_openklant(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Open Klant klantinteracties API with the suite's own token (bootstrap step openklant-token)."""
     need_bootstrap("openklant-token")
-    return openklant_client(podiumd_env)
+    return platform.openklant_client(podiumd_env)
 
 
 @pytest.fixture(scope="session", name="openvtb_verzoeken")
 def fixture_openvtb_verzoeken(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Open VTB's verzoeken API with the suite's own token (bootstrap step openvtb-token)."""
     need_bootstrap("openvtb-token")
-    return openvtb_client(podiumd_env, "verzoeken")
+    return platform.openvtb_client(podiumd_env, "verzoeken")
 
 
 @pytest.fixture(scope="session", name="openvtb_taken")
 def fixture_openvtb_taken(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Open VTB's taken API with the suite's own token (bootstrap step openvtb-token)."""
     need_bootstrap("openvtb-token")
-    return openvtb_client(podiumd_env, "taken")
+    return platform.openvtb_client(podiumd_env, "taken")
 
 
 @pytest.fixture(scope="session", name="openvtb_berichten")
 def fixture_openvtb_berichten(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Open VTB's berichten API with the suite's own token (bootstrap step openvtb-token)."""
     need_bootstrap("openvtb-token")
-    return openvtb_client(podiumd_env, "berichten")
+    return platform.openvtb_client(podiumd_env, "berichten")
 
 
 @pytest.fixture(scope="session", name="objecten")
 def fixture_objecten(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Objecten API with the suite's own token (bootstrap step objecten-token)."""
     need_bootstrap("objecten-token")
-    return objecten_client(podiumd_env)
+    return platform.objecten_client(podiumd_env)
 
 
 @pytest.fixture(scope="session", name="objecttypen")
 def fixture_objecttypen(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Objecttypen API with the suite's own token (bootstrap step objecttypen-token)."""
     need_bootstrap("objecttypen-token")
-    return objecttypen_client(podiumd_env)
+    return platform.objecttypen_client(podiumd_env)
 
 
 # The test running now; Open Zaak writes it into its audittrail through X-Audit-Toelichting.
@@ -269,27 +252,34 @@ def _zgw_client(  # noqa: PLR0913, PLR0917  # fixture plumbing
     run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None], step: str, client_id: str, key: str
 ) -> ApiClient:
     need_bootstrap(step)
-    return openzaak_client(podiumd_env, client_id, key, run_tag, _CURRENT_TEST.get)
+    return platform.openzaak_client(podiumd_env, client_id, key, run_tag, _CURRENT_TEST.get)
 
 
 @pytest.fixture(scope="session", name="openzaak")
 def fixture_openzaak(run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Open Zaak's ZGW APIs as the suite's own client, with a fresh token per request."""
-    return _zgw_client(run_tag, podiumd_env, need_bootstrap, "openzaak-client", ZGW_CLIENT_ID, ZGW_STORE_KEY)
+    return _zgw_client(
+        run_tag, podiumd_env, need_bootstrap, "openzaak-client", names.ZGW_CLIENT_ID, names.ZGW_STORE_KEY
+    )
 
 
 @pytest.fixture(scope="session", name="zgw_secret")
 def fixture_zgw_secret(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> str:
     """Return the secret of the suite's own ZGW client, for tests that build their own tokens."""
     need_bootstrap("openzaak-client")
-    return podiumd_env.credentials.get(ZGW_STORE_KEY)
+    return podiumd_env.credentials.get(names.ZGW_STORE_KEY)
 
 
 @pytest.fixture(scope="session", name="openzaak_openbaar")
 def fixture_openzaak_openbaar(run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Open Zaak as a client that sees vertrouwelijkheid openbaar at most and cannot delete."""
     return _zgw_client(
-        run_tag, podiumd_env, need_bootstrap, "openzaak-client-openbaar", ZGW_OPENBAAR_CLIENT_ID, ZGW_OPENBAAR_STORE_KEY
+        run_tag,
+        podiumd_env,
+        need_bootstrap,
+        "openzaak-client-openbaar",
+        names.ZGW_OPENBAAR_CLIENT_ID,
+        names.ZGW_OPENBAAR_STORE_KEY,
     )
 
 
@@ -297,7 +287,12 @@ def fixture_openzaak_openbaar(run_tag: str, podiumd_env: Environment, need_boots
 def fixture_openzaak_noauth(run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Open Zaak as a known client without any autorisatie."""
     return _zgw_client(
-        run_tag, podiumd_env, need_bootstrap, "openzaak-client-noauth", ZGW_NOAUTH_CLIENT_ID, ZGW_NOAUTH_STORE_KEY
+        run_tag,
+        podiumd_env,
+        need_bootstrap,
+        "openzaak-client-noauth",
+        names.ZGW_NOAUTH_CLIENT_ID,
+        names.ZGW_NOAUTH_STORE_KEY,
     )
 
 
@@ -311,8 +306,8 @@ def fixture_openzaak_productaanvraag(
         podiumd_env,
         need_bootstrap,
         "openzaak-client-productaanvraag",
-        ZGW_PRODUCTAANVRAAG_CLIENT_ID,
-        ZGW_PRODUCTAANVRAAG_STORE_KEY,
+        names.ZGW_PRODUCTAANVRAAG_CLIENT_ID,
+        names.ZGW_PRODUCTAANVRAAG_STORE_KEY,
     )
 
 
@@ -320,14 +315,14 @@ def fixture_openzaak_productaanvraag(
 def fixture_opennotificaties(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Open Notificaties as the suite's own client ptest-bootstrap-nrc."""
     need_bootstrap("opennotificaties-client")
-    return opennotificaties_client(podiumd_env)
+    return platform.opennotificaties_client(podiumd_env)
 
 
 @pytest.fixture(scope="session", name="test_zaaktype")
 def fixture_test_zaaktype(openzaak: ApiClient, need_bootstrap: Callable[..., None]) -> JsonObject:
     """Return the published test zaaktype in the test catalogus (bootstrap step openzaak-zaaktype)."""
     need_bootstrap("openzaak-zaaktype")
-    found = openzaak.list(f"{CATALOGI}/zaaktypen", {"identificatie": TEST_ZAAKTYPE})
+    found = openzaak.list(f"{CATALOGI}/zaaktypen", {"identificatie": names.TEST_ZAAKTYPE})
     return found[0]
 
 
@@ -350,7 +345,7 @@ def fixture_registry(request: pytest.FixtureRequest, run_tag: str) -> Iterator[R
 @pytest.fixture(scope="session", name="mailpit")
 def fixture_mailpit(podiumd_env: Environment) -> ApiClient:
     """Return the environment's Mailpit API."""
-    return mailpit_client(podiumd_env)
+    return platform.mailpit_client(podiumd_env)
 
 
 @pytest.fixture(scope="session", name="pabc_api_key")
@@ -389,7 +384,7 @@ def fixture_productaanvraagtype(podiumd_env: Environment) -> str:
 @pytest.fixture(scope="session", name="productaanvraag_objecttype")
 def fixture_productaanvraag_objecttype(podiumd_env: Environment) -> str:
     """Return the productaanvraag objecttype's URL as Objecten knows it."""
-    return objecttype_url(podiumd_env, PRODUCTAANVRAAG_OBJECTTYPE)
+    return objecttype_url(podiumd_env, names.PRODUCTAANVRAAG_OBJECTTYPE)
 
 
 @pytest.fixture(name="ontvangstbevestiging")
@@ -494,19 +489,19 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     switch runs once, apart from parallel tests. A test without a valid source marker, or with a malformed
     scenario, stops the run.
     """
-    problems = [problem for item in items for problem in (*source_problems(item), *scenario_problems(item))]
+    problems = [problem for item in items for problem in (*source_problems(item), *scenarios.scenario_problems(item))]
     if problems:
         raise pytest.UsageError("\n".join(problems))
-    switching = any("several_replicas" in getattr(test, "fixturenames", ()) for test in items) and switches_replicas(
-        _environment(config).profile
-    )
+    switching = any(
+        "several_replicas" in getattr(test, "fixturenames", ()) for test in items
+    ) and replicas.switches_replicas(_environment(config).profile)
     for item in items:
         if switching and "several_replicas" in getattr(item, "fixturenames", ()):
             item.add_marker(pytest.mark.destructive)
         if item.get_closest_marker("destructive"):
             item.add_marker(pytest.mark.xdist_group("destructive"))
         item.user_properties += [("source", source) for source in sources(item)]
-        if text := scenario(item):
+        if text := scenarios.scenario(item):
             item.user_properties.append(("scenario", text))
 
 
@@ -519,7 +514,7 @@ def pytest_runtest_makereport(
     if call.when == "call" and report.passed and hasattr(report, "wasxfail"):
         # junit writes the properties of the teardown report, which copies the item's.
         item.user_properties.append(("xpass", str(report.wasxfail)))
-    if call.when == "call" and (text := scenario(item)):
+    if call.when == "call" and (text := scenarios.scenario(item)):
         # pytest-html shows a report's extras (its extras.html() shape) in the row's detail.
         extra = {
             "name": None,

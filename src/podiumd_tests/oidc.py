@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
 
 AUTH_PATH = re.compile(r"^/realms/(?P<realm>[^/]+)/protocol/openid-connect/auth$")
-LOGIN_FORM = re.compile(r"""(name|id)=["']username["']""")
+LOGIN_FORM = re.compile(r"(name|id)=[\"']username[\"']")
 
 # Where an app's login starts. A Django admin may log in through Keycloak or only locally.
 CHALLENGE = "/api/challenge?returnUrl=%2F"

@@ -22,25 +22,21 @@ from typing import TYPE_CHECKING
 import pytest
 import yaml
 
+from podiumd_tests import config
 from podiumd_tests import doctor
-from podiumd_tests.bootstrap import bootstrap
-from podiumd_tests.bootstrap import failed
-from podiumd_tests.bootstrap import format_outcomes
-from podiumd_tests.bootstrap import refusal
-from podiumd_tests.bootstrap import unbootstrap
+from podiumd_tests import results
+from podiumd_tests import workloads
+from podiumd_tests.bootstrap.runner import bootstrap
+from podiumd_tests.bootstrap.runner import failed
+from podiumd_tests.bootstrap.runner import format_outcomes
+from podiumd_tests.bootstrap.runner import refusal
+from podiumd_tests.bootstrap.runner import unbootstrap
 from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.capabilities import CLUSTER
 from podiumd_tests.ci import group
 from podiumd_tests.ci import publish_summary
 from podiumd_tests.components import COMPONENTS
 from podiumd_tests.components import component_for_host
-from podiumd_tests.config import ESTATES
-from podiumd_tests.config import REPO_ROOT
-from podiumd_tests.config import Profile
-from podiumd_tests.config import ProfileError
-from podiumd_tests.config import default_envs_dir
-from podiumd_tests.config import list_profiles
-from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
@@ -50,16 +46,6 @@ from podiumd_tests.kube import KubeError
 from podiumd_tests.lock import LockBusyError
 from podiumd_tests.lock import held
 from podiumd_tests.process import ProcessError
-from podiumd_tests.results import Details
-from podiumd_tests.results import LocalDirSink
-from podiumd_tests.results import RunInfo
-from podiumd_tests.results import new_run_id
-from podiumd_tests.results import now_iso
-from podiumd_tests.results import parse_junit
-from podiumd_tests.results import run_dir
-from podiumd_tests.results import run_tag
-from podiumd_tests.results import suite_commit
-from podiumd_tests.results import write_run
 from podiumd_tests.seed.volume import faster
 from podiumd_tests.seed.volume import format_seeded
 from podiumd_tests.seed.volume import seed
@@ -68,19 +54,13 @@ from podiumd_tests.sweep import format_swept
 from podiumd_tests.sweep import sweep
 from podiumd_tests.tiers import TIERS
 from podiumd_tests.wait import parse_duration
-from podiumd_tests.workloads import ClusterState
-from podiumd_tests.workloads import chart_version
-from podiumd_tests.workloads import cluster_state
-from podiumd_tests.workloads import component_versions
-from podiumd_tests.workloads import deployed_build
-from podiumd_tests.workloads import disruptions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from collections.abc import Sequence
 
-    from podiumd_tests.bootstrap import Outcome
-    from podiumd_tests.bootstrap import Step
+    from podiumd_tests.bootstrap.runner import Outcome
+    from podiumd_tests.bootstrap.runner import Step
 
 # Options a pipeline sets in the environment: PODIUMD_TESTS_<OPTION> (secrets have their own prefix).
 ENV_OPTION_PREFIX = "PODIUMD_TESTS_"
@@ -98,13 +78,13 @@ def default_workers(cpus: int | None) -> int:
     return max(1, min(MAX_WORKERS, (cpus or 2) // 2))
 
 
-def _load(args: argparse.Namespace) -> Profile:
-    return load_profile(args.env, Path(args.envs_dir))
+def _load(args: argparse.Namespace) -> config.Profile:
+    return config.load_profile(args.env, Path(args.envs_dir))
 
 
 def cmd_env_list(args: argparse.Namespace) -> int:
     """List all profiles."""
-    for name, path in list_profiles(Path(args.envs_dir)).items():
+    for name, path in config.list_profiles(Path(args.envs_dir)).items():
         print(f"{name:20} {path.relative_to(Path(args.envs_dir))}")
     return EXIT_OK
 
@@ -211,26 +191,30 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 def _defines_test(node_id: str) -> bool:
     """Whether the node id's file defines its test function; pytest on xdist runs nothing for an unknown one."""
     name = node_id.rsplit("::", maxsplit=1)[-1].split("[", maxsplit=1)[0]
-    source = (REPO_ROOT / node_id.split("::", maxsplit=1)[0]).read_text(encoding="utf-8")
+    source = (config.REPO_ROOT / node_id.split("::", maxsplit=1)[0]).read_text(encoding="utf-8")
     return re.search(rf"^\s*(?:async\s+)?def {re.escape(name)}\(", source, re.MULTILINE) is not None
 
 
-def pytest_selection(profile: Profile, tier_name: str, run_id: str, junit: Path, args: argparse.Namespace) -> list[str]:
+def pytest_selection(
+    profile: config.Profile, tier_name: str, run_id: str, junit: Path, args: argparse.Namespace
+) -> list[str]:
     """Return the pytest arguments of a run: the tier's paths and markers, the run tag and the results files."""
     tier = TIERS[tier_name]
-    paths = [str(REPO_ROOT / path) for path in tier.paths if (REPO_ROOT / path).is_dir()]
+    paths = [str(config.REPO_ROOT / path) for path in tier.paths if (config.REPO_ROOT / path).is_dir()]
     positional = [arg for arg in args.pytest_args if not arg.startswith("-")]
-    given = [arg for arg in positional if (REPO_ROOT / arg.split("::")[0]).exists()]
-    outside = [arg for arg in given if not any((REPO_ROOT / arg).resolve().is_relative_to(path) for path in paths)]
+    given = [arg for arg in positional if (config.REPO_ROOT / arg.split("::")[0]).exists()]
+    outside = [
+        arg for arg in given if not any((config.REPO_ROOT / arg).resolve().is_relative_to(path) for path in paths)
+    ]
     if outside:
         msg = f"not in tier {tier_name}: {', '.join(outside)} (its paths: {', '.join(tier.paths)})"
-        raise ProfileError(msg)
+        raise config.ProfileError(msg)
     unknown = [arg for arg in given if "::" in arg and not _defines_test(arg)]
     if unknown:
         msg = (
             f"no such test: {', '.join(unknown)} (a node id names a test function, without the report's @group suffix)"
         )
-        raise ProfileError(msg)
+        raise config.ProfileError(msg)
     # Paths after -- narrow the tier; pytest would otherwise run them and the tier's paths.
     selection = [
         *([] if given else paths),
@@ -239,7 +223,7 @@ def pytest_selection(profile: Profile, tier_name: str, run_id: str, junit: Path,
         f"--podiumd-env={profile.name}",
         f"--junitxml={junit}",
     ]
-    selection.append(f"--podiumd-run-tag={run_tag(run_id)}")
+    selection.append(f"--podiumd-run-tag={results.run_tag(run_id)}")
     # A screenshot of each failed browser test in artifacts/<test-id>/. No Playwright traces:
     # they record what a test types, test passwords included (R8).
     selection += [f"--output={junit.parent / 'artifacts'}", "--screenshot=only-on-failure"]
@@ -366,14 +350,14 @@ def selected_steps(names: list[str] | None) -> tuple[Step, ...]:
     unknown = sorted(set(names) - {step.name for step in STEPS})
     if unknown:
         msg = f"unknown bootstrap steps: {', '.join(unknown)} (known: {', '.join(step.name for step in STEPS)})"
-        raise ProfileError(msg)
+        raise config.ProfileError(msg)
     return tuple(step for step in STEPS if step.name in names)
 
 
 def _versions(env: Environment) -> dict[str, str]:
     """Return the deployed components' versions for run.json; none when the cluster is unreachable."""
     try:
-        found = component_versions(env, sorted(COMPONENTS))
+        found = workloads.component_versions(env, sorted(COMPONENTS))
     except KubeError:
         return {}
     return {name: ".".join(map(str, version)) for name, version in found.items()}
@@ -400,22 +384,22 @@ def _run_tier(args: argparse.Namespace) -> int:
         preflight = _preflight_ok(env, args)
     if not preflight:
         return EXIT_CONFIG
-    info = RunInfo(
-        run_id=new_run_id(),
+    info = results.RunInfo(
+        run_id=results.new_run_id(),
         env=profile.name,
         tier=args.tier,
-        started=now_iso(),
+        started=results.now_iso(),
         finished="",
         exit_code=0,
         selection=[],
-        suite_commit=suite_commit(REPO_ROOT),
-        chart_version=chart_version(env),
-        build=deployed_build(env),
+        suite_commit=results.suite_commit(config.REPO_ROOT),
+        chart_version=workloads.chart_version(env),
+        build=workloads.deployed_build(env),
         capabilities=sorted(env.capabilities.present),
         versions=_versions(env),
     )
-    sink = LocalDirSink(Path(args.results_dir))
-    directory = run_dir(datetime.fromisoformat(info.started), profile.name, args.tier, info.run_id)
+    sink = results.LocalDirSink(Path(args.results_dir))
+    directory = results.run_dir(datetime.fromisoformat(info.started), profile.name, args.tier, info.run_id)
     junit = Path(sink.location(f"{directory}/junit.xml"))
     junit.parent.mkdir(parents=True, exist_ok=True)
     info.selection = pytest_selection(profile, args.tier, info.run_id, junit, args)
@@ -427,20 +411,20 @@ def _run_tier(args: argparse.Namespace) -> int:
         nullcontext() if args.tier == "smoke" else held(env, f"run {args.tier} {profile.name}"),
     ):
         info.exit_code = int(pytest.main(info.selection))
-    info.finished = now_iso()
-    details = Details()
+    info.finished = results.now_iso()
+    details = results.Details()
     # pytest writes the failure texts as they are; mask secrets as write_run does.
     env.credentials.register_all()
     for written in (junit, junit.parent / "report.html"):
         if written.exists():
             written.write_text(env.redactor.redact(written.read_text(encoding="utf-8")), encoding="utf-8")
     if junit.exists():
-        counts, details = parse_junit(junit.read_text(encoding="utf-8"))
+        counts, details = results.parse_junit(junit.read_text(encoding="utf-8"))
         info.counts = counts
     after = _cluster_state(env)
     if before and after:
-        details.disruptions = disruptions(before, after)
-    write_run(sink, directory, info, details, env.redactor)
+        details.disruptions = workloads.disruptions(before, after)
+    results.write_run(sink, directory, info, details, env.redactor)
     publish_summary(Path(sink.location(f"{directory}/summary.md")))
     print(f"results: {sink.location(directory)}")
     if info.exit_code in {pytest.ExitCode.OK, pytest.ExitCode.NO_TESTS_COLLECTED}:
@@ -448,11 +432,11 @@ def _run_tier(args: argparse.Namespace) -> int:
     return EXIT_TESTS_FAILED if info.exit_code == pytest.ExitCode.TESTS_FAILED else EXIT_CONFIG
 
 
-def _cluster_state(env: Environment) -> ClusterState | None:
+def _cluster_state(env: Environment) -> workloads.ClusterState | None:
     if CLUSTER not in env.capabilities.present:
         return None
     try:
-        return cluster_state(env)
+        return workloads.cluster_state(env)
     except KubeError:
         return None
 
@@ -489,7 +473,7 @@ def _add_env(parser: argparse.ArgumentParser) -> None:
 def _add_results_dir(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--results-dir",
-        default=_from_env("results-dir", str(REPO_ROOT / "results")),
+        default=_from_env("results-dir", str(config.REPO_ROOT / "results")),
         help="results directory (default: results/)",
     )
 
@@ -502,7 +486,9 @@ def build_parser() -> argparse.ArgumentParser:
         epilog="--env, --tier, --results-dir and --envs-dir can also come from PODIUMD_TESTS_<OPTION>.",
     )
     parser.add_argument(
-        "--envs-dir", default=_from_env("envs-dir", str(default_envs_dir())), help="profile directory (default: envs/)"
+        "--envs-dir",
+        default=_from_env("envs-dir", str(config.default_envs_dir())),
+        help="profile directory (default: envs/)",
     )
     commands = parser.add_subparsers(dest="command", required=True)
 
@@ -513,7 +499,7 @@ def build_parser() -> argparse.ArgumentParser:
     show.set_defaults(func=cmd_env_show)
     init = env.add_parser("init", help="draft a profile from the cluster's ingresses and HTTPRoutes")
     init.add_argument("name", help="profile name")
-    init.add_argument("--estate", choices=ESTATES, required=True)
+    init.add_argument("--estate", choices=config.ESTATES, required=True)
     init.add_argument("--context", required=True, help="kube context")
     init.add_argument("--namespace", default="podiumd", help="application namespace (default: podiumd)")
     init.add_argument("--scheme", choices=("https", "http"), default="https", help="URL scheme (default: https)")
@@ -569,7 +555,7 @@ def main(argv: list[str] | None = None) -> int:
         args.pytest_args = args.pytest_args[1:]
     try:
         return int(args.func(args))
-    except ProfileError as exc:
+    except config.ProfileError as exc:
         print(f"profile error: {exc}", file=sys.stderr)
         return EXIT_CONFIG
     except ProcessError as exc:

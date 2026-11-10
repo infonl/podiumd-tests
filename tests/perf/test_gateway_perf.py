@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.config import REPO_ROOT
-from podiumd_tests.perf import GATEWAY_SCENARIOS
-from podiumd_tests.perf import locust_command
+from podiumd_tests.perf.runs import GATEWAY_SCENARIOS
+from podiumd_tests.perf.runs import locust_command
 from podiumd_tests.perf.stats import STATS
 from podiumd_tests.perf.stats import read_stats
 from podiumd_tests.perf.stats import thresholds

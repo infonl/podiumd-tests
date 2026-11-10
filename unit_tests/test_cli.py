@@ -14,7 +14,7 @@ import yaml
 
 from podiumd_tests import cli
 from podiumd_tests import doctor
-from podiumd_tests.bootstrap import Outcome
+from podiumd_tests.bootstrap.runner import Outcome
 from podiumd_tests.capabilities import CLUSTER
 from podiumd_tests.capabilities import Capabilities
 from podiumd_tests.config import ProfileError

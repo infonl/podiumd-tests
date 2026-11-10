@@ -18,8 +18,8 @@ import pytest
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.config import REPO_ROOT
-from podiumd_tests.perf import ENDPOINTS
-from podiumd_tests.perf import locust_command
+from podiumd_tests.perf.runs import ENDPOINTS
+from podiumd_tests.perf.runs import locust_command
 from podiumd_tests.perf.stats import SETTINGS
 from podiumd_tests.perf.stats import STATS
 from podiumd_tests.perf.stats import baseline_p95

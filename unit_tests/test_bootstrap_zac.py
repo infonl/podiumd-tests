@@ -6,8 +6,8 @@ import json
 import pytest
 import requests
 
-from podiumd_tests.bootstrap import Context
 from podiumd_tests.bootstrap import zac as zac_step
+from podiumd_tests.bootstrap.runner import Context
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.zac import AANVULLENDE_INFORMATIE
 from podiumd_tests.bootstrap.zac import EMAIL_CONFIRMATION

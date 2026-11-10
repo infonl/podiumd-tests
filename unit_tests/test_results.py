@@ -88,6 +88,7 @@ def test_write_run_redacts_secrets(tmp_path):
     info.counts = counts
     info.versions = {"ita": "3.3.4"}
     info.build = {"podiumd": "4.10.0", "command": "deploy --full"}
+    details.disruptions = ["pod openzaak-0 restarted"]
     write_run(LocalDirSink(tmp_path), "2026-10/run", info, details, redactor)
     run_json = (tmp_path / "2026-10/run/run.json").read_text()
     summary = (tmp_path / "2026-10/run/summary.md").read_text()
@@ -99,6 +100,7 @@ def test_write_run_redacts_secrets(tmp_path):
     assert "- TICKET-2 (1): `tests.smoke.test_up::test_fixed`" in summary
     assert "| no report id | **did not show in 1 of 2 tests** | 2 |" in summary
     assert "- requires: oab (1): `tests.smoke.test_up::test_skip`" in summary
+    assert "## Pods replaced or restarted during the run\n\n- pod openzaak-0 restarted" in summary
 
 
 def test_summary_table_puts_each_count_under_its_header():

@@ -7,12 +7,12 @@ import time
 import pytest
 import requests
 
-from podiumd_tests.bootstrap import Context
 from podiumd_tests.bootstrap.omc import STORE_KEY
 from podiumd_tests.bootstrap.omc import VALIDITY
 from podiumd_tests.bootstrap.omc import OmcAbonnement
 from podiumd_tests.bootstrap.omc import notify_mock_missing
 from podiumd_tests.bootstrap.omc import omc_actor_missing
+from podiumd_tests.bootstrap.runner import Context
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.credentials import env_var_name

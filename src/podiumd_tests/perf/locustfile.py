@@ -186,7 +186,7 @@ class ApiUser(User):
         )
 
     def _calls(self) -> dict[str, Call]:
-        """Return the calls of podiumd_tests.perf.ENDPOINTS whose component the environment has."""
+        """Return the calls of podiumd_tests.perf.runs.ENDPOINTS whose component the environment has."""
         env = self.env_under_test
         http = env.session(cookies=False)
         urls = env.profile.urls

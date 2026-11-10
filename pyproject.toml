@@ -243,18 +243,14 @@ ignore = [
     "WPS504",  # negated condition: flags x if y is not None else None, the natural order
     "WPS529",  # implicit .get(): flags a dispatch on which keys a dict has; SIM401 catches the if/else default case
     "WPS602",  # staticmethod: a method that needs no instance
-    "WPS203",  # too many imported names: the module that wires all bootstrap steps imports them all
-    "WPS322",  # multi-line string layout: scenario texts and Django snippets start on the opening line
-    "WPS412",  # logic in __init__.py: the package's API lives there; a move would leave a re-export facade
-    "WPS462",  # multi-line string not a docstring: Given/When/Then scenarios and Django shell snippets
 ]
 # flake8 applies only the longest pattern that matches a file (* matches / too).
 per-file-ignores = [
     # tests: counts and sizes (asserts, comparisons, line complexity, annotations of fixtures), test idioms (short
     # names, == [] in an assert, nested classes for fakes, list multiplication, slices, float values), pytest markers
-    # as decorators (WPS216)
-    "tests/*:WPS111,WPS114,WPS118,WPS216,WPS218,WPS219,WPS221,WPS228,WPS230,WPS234,WPS301,WPS324,WPS358,WPS362,WPS431,WPS435,WPS458,WPS520",
-    "unit_tests/*:WPS111,WPS114,WPS118,WPS216,WPS218,WPS219,WPS221,WPS228,WPS230,WPS234,WPS301,WPS324,WPS358,WPS362,WPS431,WPS435,WPS458,WPS520",
+    # as decorators (WPS216), multi-line strings: Given/When/Then scenarios and pytester conftests (WPS322, WPS462)
+    "tests/*:WPS111,WPS114,WPS118,WPS216,WPS218,WPS219,WPS221,WPS228,WPS230,WPS234,WPS301,WPS322,WPS324,WPS358,WPS362,WPS431,WPS435,WPS458,WPS462,WPS520",
+    "unit_tests/*:WPS111,WPS114,WPS118,WPS216,WPS218,WPS219,WPS221,WPS228,WPS230,WPS234,WPS301,WPS322,WPS324,WPS358,WPS362,WPS431,WPS435,WPS458,WPS462,WPS520",
 ]
 
 # pylint covers checks ruff lacks; overlapping rules are owned by one tool.

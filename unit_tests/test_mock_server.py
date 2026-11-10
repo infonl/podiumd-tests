@@ -4,7 +4,7 @@ import importlib.util
 import json
 
 from podiumd_tests import mock_server
-from podiumd_tests.bootstrap import Context
+from podiumd_tests.bootstrap.runner import Context
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section

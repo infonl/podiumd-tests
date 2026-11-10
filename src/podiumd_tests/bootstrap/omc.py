@@ -22,7 +22,7 @@ from podiumd_tests.responses import url_host
 from podiumd_tests.seed.opennotificaties import delete_abonnement
 
 if TYPE_CHECKING:
-    from podiumd_tests.bootstrap import Context
+    from podiumd_tests.bootstrap.runner import Context
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
 

@@ -27,8 +27,8 @@ if TYPE_CHECKING:
 
     import requests
 
-    from podiumd_tests.bootstrap import Context
     from podiumd_tests.bootstrap.keycloak import KeycloakUser
+    from podiumd_tests.bootstrap.runner import Context
     from podiumd_tests.json_data import JsonObject
 
 
