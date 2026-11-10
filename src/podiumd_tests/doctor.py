@@ -134,14 +134,14 @@ def _workloads(env: Environment, namespace: str) -> Check:
     items = env.workloads([namespace])
     not_ready = unready_workloads(items)
     if not_ready:
-        return Check(f"workloads {namespace}", "warn", "not ready: " + ", ".join(not_ready))
+        return Check(f"workloads {namespace}", "warn", f"not ready: {', '.join(not_ready)}")
     try:
         drift = replica_drift(env, [namespace])
     except KubeError as exc:
         return Check(f"workloads {namespace}", "warn", f"{len(items)} ready; Helm releases unreadable: {exc}")
     if drift:
         hint = "a test left it scaled? `kubectl scale` back, or redeploy"
-        return Check(f"workloads {namespace}", "warn", "replicas differ from Helm: " + ", ".join(drift), hint)
+        return Check(f"workloads {namespace}", "warn", f"replicas differ from Helm: {', '.join(drift)}", hint)
     return Check(f"workloads {namespace}", "ok", f"{len(items)} ready")
 
 
@@ -173,7 +173,7 @@ def resolve_hosts(
         thread.start()
     deadline = time.monotonic() + timeout
     for thread in threads:
-        thread.join(max(0.0, deadline - time.monotonic()))
+        thread.join(max(0, deadline - time.monotonic()))
     done = dict(results)
     return {host: done.get(host, f"DNS lookup gave no answer within {timeout:g}s") for host in unique}
 
@@ -209,7 +209,7 @@ def _url_checks(env: Environment, session: requests.Session, console: dict[str, 
     # In host-header mode the requests go to the ingress IP; the hosts need not resolve.
     dns_errors: dict[str, str] = {}
     if env.profile.access.mode == "direct":
-        dns_errors = resolve_hosts((url_host(console[c]) for c, _ in urls), resolve)
+        dns_errors = resolve_hosts((url_host(console[component]) for component, _ in urls), resolve)
     checks: dict[str, Check] = {}
     reachable: list[tuple[str, str]] = []
     absent = _not_deployed(env)
@@ -223,15 +223,22 @@ def _url_checks(env: Environment, session: requests.Session, console: dict[str, 
             reachable.append((component, url))
     if reachable:
         with ThreadPoolExecutor(max_workers=min(len(reachable), 16)) as pool:
-            futures = {c: pool.submit(_url_check, session, c, u, console[c]) for c, u in reachable}
-            checks.update({c: f.result() for c, f in futures.items()})
+            futures = {
+                component: pool.submit(_url_check, session, component, url, console[component])
+                for component, url in reachable
+            }
+            checks.update({component: future.result() for component, future in futures.items()})
     return [checks[component] for component, _ in urls]
 
 
 def _not_deployed(env: Environment) -> dict[str, str]:
     """Components with a URL in the profile but no deployment: their checks skip, as their tests do."""
     reasons = env.capabilities.reasons
-    return {c: reasons[c] for c in env.profile.urls if c in reasons and c not in env.capabilities.present}
+    return {
+        component: reasons[component]
+        for component in env.profile.urls
+        if component in reasons and component not in env.capabilities.present
+    }
 
 
 def _secrets(env: Environment, *, cluster_ok: bool) -> list[Check]:
@@ -259,9 +266,10 @@ def _secrets(env: Environment, *, cluster_ok: bool) -> list[Check]:
 def _capabilities(env: Environment) -> Check:
     caps = env.capabilities
     absent = sorted(set(caps.reasons))
-    detail = "present: " + (", ".join(sorted(caps.present)) or "none")
+    present = ", ".join(sorted(caps.present)) or "none"
+    detail = f"present: {present}"
     if absent:
-        detail += "; absent: " + ", ".join(absent)
+        detail = f"{detail}; absent: {', '.join(absent)}"
     return Check("capabilities", "ok", detail)
 
 
@@ -283,11 +291,11 @@ def run_checks(
     """Run all preflight checks; dependent checks are skipped after a failure."""
     checks = [Check("profile", "ok", str(env.profile.path or env.profile.name))]
     checks.append(_kubectl(which))
-    if any(c.status == "fail" and c.name == "tool kubectl" for c in checks):
+    if any(check.status == "fail" and check.name == "tool kubectl" for check in checks):
         return [*checks, Check("cluster", "skip", "kubectl missing")]
     cluster = _cluster(env)
     checks += cluster
-    cluster_ok = all(c.status == "ok" for c in cluster if c.name in {"kube context", "kube API"})
+    cluster_ok = all(check.status == "ok" for check in cluster if check.name in {"kube context", "kube API"})
     checks += (
         _urls(env, resolve)
         if cluster_ok or env.profile.access.mode == "direct"
@@ -298,21 +306,21 @@ def run_checks(
     checks.append(_capabilities(env))
     if cluster_ok:
         checks.append(_cilium(env))
-    return [Check(c.name, c.status, env.redactor.redact(c.detail), c.hint) for c in checks]
+    return [Check(check.name, check.status, env.redactor.redact(check.detail), check.hint) for check in checks]
 
 
 def failed(checks: list[Check]) -> bool:
     """True when any check failed."""
-    return any(c.status == "fail" for c in checks)
+    return any(check.status == "fail" for check in checks)
 
 
 def format_checks(checks: list[Check]) -> str:
     """Checklist text for the terminal, with hints for failures and warnings."""
-    width = max((len(c.name) for c in checks), default=0)
+    width = max((len(check.name) for check in checks), default=0)
     lines: list[str] = []
-    for c in checks:
-        line = f"{SYMBOLS[c.status]} {c.name.ljust(width)}  {c.detail}".rstrip()
-        if c.hint and c.status in {"fail", "warn"}:
-            line += f"\n  {' ' * width}  hint: {c.hint}"
+    for check in checks:
+        line = f"{SYMBOLS[check.status]} {check.name.ljust(width)}  {check.detail}".rstrip()
+        if check.hint and check.status in {"fail", "warn"}:
+            line = f"{line}\n  {' ' * width}  hint: {check.hint}"
         lines.append(line)
     return "\n".join(lines)

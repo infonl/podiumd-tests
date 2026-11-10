@@ -37,24 +37,24 @@ def env(page_env):
 
 def test_portal_login_logs_in_and_closes_the_cookie_banner(fake_page, env):
     user, method = LOGINS["inwoner"]
-    page = fake_page(landings=[PORTAL + "/"], texts={BANNER: "Alles weigeren"})
+    page = fake_page(landings=[f"{PORTAL}/"], texts={BANNER: "Alles weigeren"})
     portal_login(page, env, method, user, "/zaken")
-    assert page.actions[0] == ("goto", PORTAL + "/digid-oidc/authenticate/?next=/zaken")
+    assert page.actions[0] == ("goto", f"{PORTAL}/digid-oidc/authenticate/?next=/zaken")
     assert ("fill", "#password", f"pw-{user.store_key}") in page.actions
     assert page.actions[-1] == ("click", BANNER)
     landed = page.waits[0]
-    assert landed(PORTAL + "/zaken") and not landed(PORTAL + "/digid-oidc/callback/?code=1")
+    assert landed(f"{PORTAL}/zaken") and not landed(f"{PORTAL}/digid-oidc/callback/?code=1")
 
 
 def test_a_first_eherkenning_login_completes_the_registration(fake_page, env):
     user, method = LOGINS["bedrijf"]
-    page = fake_page(landings=[PORTAL + "/register/necessary/", PORTAL + "/"])
+    page = fake_page(landings=[f"{PORTAL}/register/necessary/", f"{PORTAL}/"])
     portal_login(page, env, method, user, "/zaken")
     fill = next(a for a in page.actions if a[1] == 'input[name="email"]')
     assert fill[2] == user_email(user.username)
     assert ("click", "button:Voltooi registratie") in page.actions
-    assert page.actions[-1] == ("goto", PORTAL + "/zaken")
-    assert not page.waits[1](PORTAL + "/register/necessary/")
+    assert page.actions[-1] == ("goto", f"{PORTAL}/zaken")
+    assert not page.waits[1](f"{PORTAL}/register/necessary/")
 
 
 def test_ask_anonymously_fills_the_contact_form_and_solves_the_captcha(fake_page, env):
@@ -79,7 +79,7 @@ def test_begeleider_login_posts_the_password_with_the_csrf_token(fake_page, env)
     page = fake_page(texts={'input[name="csrfmiddlewaretoken"]': "tok"})
     begeleider_login(page, env)
     _, _, (url, body) = next(a for a in page.actions if a[0] == "evaluate")
-    assert url == PORTAL + "/accounts/login/"
+    assert url == f"{PORTAL}/accounts/login/"
     assert body["csrfmiddlewaretoken"] == "tok"
     assert body["password"].startswith("pw-")
 
@@ -91,7 +91,7 @@ def test_upload_document_waits_for_the_post_to_the_document_form(fake_page):
         ("files", '#document-upload input[name="file"]', [{"name": "a.txt", "mimeType": "text/plain", "buffer": b"x"}]),
         ("click", "#document-upload button:Upload documenten"),
     ]
-    posted = type("R", (), {"url": PORTAL + "/document-form/", "request": type("Q", (), {"method": "POST"})})
+    posted = type("R", (), {"url": f"{PORTAL}/document-form/", "request": type("Q", (), {"method": "POST"})})
     assert page.waits[0](posted)
 
 

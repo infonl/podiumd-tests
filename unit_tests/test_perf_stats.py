@@ -59,7 +59,7 @@ def test_earlier_stats_take_only_older_runs_of_the_env_with_the_same_settings(tm
     history = earlier_stats(current)
     assert [h["oz_zaken"].p95_ms for h in history] == [300.0]
     assert baseline_p95(history, "oz_zaken") is None  # one earlier run is no baseline
-    assert baseline_p95([*history, *history, *history], "oz_zaken") == 300.0
+    assert baseline_p95([*history, *history, *history], "oz_zaken") == 300
     assert baseline_p95([*history, *history, *history], "kc_discovery") is None
 
 

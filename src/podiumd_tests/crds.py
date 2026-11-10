@@ -29,7 +29,7 @@ class Marker:
 def is_established(crd: JsonObject) -> bool:
     """Whether the CRD has condition Established=True."""
     conditions = entries(section(crd, "status").get("conditions"))
-    return any(c.get("type") == "Established" and c.get("status") == "True" for c in conditions)
+    return any(condition.get("type") == "Established" and condition.get("status") == "True" for condition in conditions)
 
 
 def storage_schema(crd: JsonObject) -> JsonObject:
@@ -56,9 +56,11 @@ def has_field(schema: JsonObject, path: str) -> bool:
 
 def wrong_markers(crds: Iterable[JsonObject], markers: Sequence[Marker], version: tuple[int, ...]) -> list[str]:
     """The markers up to `version` that the CRDs break, as "<crd>: lacks|has <path>" or "<crd>: not installed"."""
-    schemas = {metadata_name(c): storage_schema(c) for c in crds}
+    schemas = {metadata_name(crd): storage_schema(crd) for crd in crds}
     wrong: list[str] = []
-    for marker in (m for m in markers if m.since <= version):
+    for marker in markers:
+        if marker.since > version:
+            continue
         schema = schemas.get(marker.crd)
         if schema is None:
             wrong.append(f"{marker.crd}: not installed")

@@ -30,6 +30,15 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
 
 Action = Literal["created", "present", "removed", "absent", "skipped", "missing", "failed"]
+_STEP_ERRORS = (
+    ProcessError,
+    SecretError,
+    TokenError,
+    AssertionError,
+    LookupError,
+    ValueError,
+    requests.RequestException,
+)
 
 
 @dataclass(frozen=True)
@@ -115,15 +124,7 @@ def _each(env: Environment, steps: Sequence[Step], act: Callable[[Context, Step]
             continue
         try:
             outcomes.append(act(ctx, step))
-        except (
-            ProcessError,
-            SecretError,
-            TokenError,
-            AssertionError,
-            LookupError,
-            ValueError,
-            requests.RequestException,
-        ) as exc:
+        except _STEP_ERRORS as exc:
             # One broken step must not stop the others, least of all during unbootstrap.
             outcomes.append(Outcome(step.name, "failed", str(exc)))
     return outcomes
@@ -131,7 +132,7 @@ def _each(env: Environment, steps: Sequence[Step], act: Callable[[Context, Step]
 
 def failed(outcomes: Sequence[Outcome]) -> bool:
     """True when any step failed."""
-    return any(o.action == "failed" for o in outcomes)
+    return any(outcome.action == "failed" for outcome in outcomes)
 
 
 def bootstrap(env: Environment, steps: Sequence[Step], *, rotate: bool = False) -> list[Outcome]:
@@ -181,5 +182,6 @@ def check(env: Environment, steps: Sequence[Step]) -> list[Outcome]:
 
 def format_outcomes(outcomes: Sequence[Outcome]) -> str:
     """One line per step for the terminal."""
-    width = max((len(o.step) for o in outcomes), default=0)
-    return "\n".join(f"{o.action:8} {o.step.ljust(width)}  {o.detail}".rstrip() for o in outcomes)
+    width = max((len(outcome.step) for outcome in outcomes), default=0)
+    lines = (f"{outcome.action:8} {outcome.step.ljust(width)}  {outcome.detail}" for outcome in outcomes)
+    return "\n".join(line.rstrip() for line in lines)

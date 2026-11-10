@@ -42,8 +42,9 @@ def test_launch_args_map_every_profile_host_to_the_ingress_ip(page_env):
     env = page_env()
     assert launch_args(env) == []
     env.ingress_ip = lambda: "10.0.0.1"
-    (rules,) = launch_args(env)
-    assert rules.startswith("--host-resolver-rules=MAP ita.example.test 10.0.0.1,MAP kiss.example.test 10.0.0.1")
+    launched = launch_args(env)
+    assert len(launched) == 1
+    assert launched[0].startswith("--host-resolver-rules=MAP ita.example.test 10.0.0.1,MAP kiss.example.test 10.0.0.1")
 
 
 def test_context_args_skip_certificate_checks_only_for_a_local_ca(page_env):
@@ -76,24 +77,24 @@ def test_headless_page_guards_navigation_and_closes_the_browser(monkeypatch, pag
 
 
 def test_redirect_login_logs_in_and_takes_the_browser_cookies(fake_page, page_env):
-    page = fake_page(landings=[APP + "/"], cookies=[COOKIE])
+    page = fake_page(landings=[f"{APP}/"], cookies=[COOKIE])
     http = redirect_login(page, page_env(), APP, "kcc", "pw")
     assert page.actions == [
-        ("goto", APP + "/"),
+        ("goto", f"{APP}/"),
         ("fill", "#username", "kcc"),
         ("fill", "#password", "pw"),
         ("click", "#kc-login"),
     ]
     assert http.cookies.get("session") == "s1"
-    assert page.waits[0](APP + "/zaken") and not page.waits[0]("https://keycloak.example.test/")
+    assert page.waits[0](f"{APP}/zaken") and not page.waits[0]("https://keycloak.example.test/")
 
 
 def test_challenge_login_waits_until_the_signin_callback_is_done(fake_page, page_env):
     page = fake_page()
     challenge_login(page, page_env(), APP, "kcc", "pw")
-    assert page.actions[0] == ("goto", APP + "/api/challenge?returnUrl=%2F")
-    assert not page.waits[0](APP + "/signin-oidc")
-    assert page.waits[0](APP + "/")
+    assert page.actions[0] == ("goto", f"{APP}/api/challenge?returnUrl=%2F")
+    assert not page.waits[0](f"{APP}/signin-oidc")
+    assert page.waits[0](f"{APP}/")
 
 
 def test_configure_totp_submits_the_code_of_the_offered_key(fake_page, monkeypatch):
@@ -127,7 +128,7 @@ def test_wcag_violations_injects_axe_and_runs_the_aa_rules(monkeypatch, fake_pag
     page = fake_page(evaluated=[None, {"violations": [violation]}])
     assert wcag_violations(page) == [violation]
     assert page.actions[0] == ("evaluate", "/* axe */", None)
-    assert page.actions[1][2]["runOnly"]["values"] == accessibility.WCAG_21_AA
+    assert page.actions[1][2]["runOnly"]["values"] == accessibility.WCAG21_AA
     assert describe_violation(violation) == "color-contrast (serious, 2 elements): Contrast"
 
 

@@ -220,12 +220,15 @@ def test_every_component_reports_metrics(grafana: Grafana, podiumd_env: Environm
     otel = grafana.proxy("prometheus", "/api/v1/query", {"query": otel_jobs_query(otel_apps)}) if otel_apps else {}
     no_monitor, no_otel = without_metrics(deployed, grafana.proxy("prometheus", "/api/v1/targets"), otel)
     otel_off = bool(otel_apps) and len(no_otel) == len(otel_apps)
-    missing = no_monitor + ([] if otel_off else no_otel)
+    missing = no_monitor if otel_off else no_monitor + no_otel
     gaps = METRICS_GAPS_BEFORE_4_10 if chart_older_than(podiumd_env, (4, 10, 0)) else {}
     unknown = [c for c in missing if c not in gaps]
     assert not unknown, f"components without metrics in Prometheus: {unknown}"
     if missing:
-        pytest.xfail("; ".join(sorted({gaps[c] for c in missing}) + ([OTEL_OFF] if otel_off else [])))
+        reasons = sorted({gaps[c] for c in missing})
+        if otel_off:
+            reasons.append(OTEL_OFF)
+        pytest.xfail("; ".join(reasons))
     assert not missing, f"components without metrics in Prometheus: {missing}"
     if otel_off:
         pytest.skip(OTEL_OFF)

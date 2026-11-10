@@ -110,7 +110,7 @@ def test_login_after_logout_shows_the_dashboard(
 """)
 def test_unknown_user_stays_on_the_login_form(page: Page, urls: dict[str, str]) -> None:
     """Keycloak refuses a user it does not know with an error on its login form; ZAC stays out of reach."""
-    page.goto(urls["zac"] + "/")
+    page.goto(f"{urls['zac']}/")
     keycloak_login(page, f"{PREFIX}-unknown", "wrong")
     # Keycloak's themes mark the refused field invalid; the message text depends on the locale.
     expect(page.locator("#username")).to_have_attribute("aria-invalid", "true")

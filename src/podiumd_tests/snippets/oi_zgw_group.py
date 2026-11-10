@@ -31,8 +31,8 @@ def _create(params):
         name=params["name"],
         open_zaak_config=OpenZaakConfig.get_solo(),
         zrc_service=zaken,
-        drc_service=Service.objects.get(api_root=root + "documenten/api/v1/"),
-        ztc_service=Service.objects.get(api_root=root + "catalogi/api/v1/"),
+        drc_service=Service.objects.get(api_root=f"{root}documenten/api/v1/"),
+        ztc_service=Service.objects.get(api_root=f"{root}catalogi/api/v1/"),
         # Zaken of an eHerkenning login through Open Zaak 1.20+ filters (TA 141).
         fetch_eherkenning_zaken_with_openzaak_120_params=True,
         # No cached zaak lists: a test's new zaak shows at once.

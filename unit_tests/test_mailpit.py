@@ -50,7 +50,7 @@ def test_received_returns_the_html_and_cleanup_deletes_mails_to_the_address(fake
     assert "to%3A%22x%40example.invalid%22" in sent[-1].url
 
 
-@pytest.mark.parametrize(("present", "registered"), [(frozenset({"mailpit"}), 1), (frozenset(), 0)])
+@pytest.mark.parametrize(("present", "registered"), [(frozenset(("mailpit",)), 1), (frozenset(), 0)])
 def test_forget_mails_only_where_the_environment_has_mailpit(env_factory, profile_factory, present, registered):
     env = env_factory(profile_factory(urls={"mailpit": "https://mailpit.example.test"}))
     env.__dict__["capabilities"] = Capabilities(present, {})

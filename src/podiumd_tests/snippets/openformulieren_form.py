@@ -25,9 +25,9 @@ def run(params):
         prefix = params["prefix"]
         steps = FormDefinition.objects.filter(slug__startswith=prefix, slug__endswith="-step")
         return sorted(
-            {*Form.objects.filter(slug__startswith=prefix).values_list("slug", flat=True)}
+            set(Form.objects.filter(slug__startswith=prefix).values_list("slug", flat=True))
             | {slug.removesuffix("-step") for slug in steps.values_list("slug", flat=True)}
-            | {*Product.objects.filter(name__startswith=prefix).values_list("name", flat=True)}
+            | set(Product.objects.filter(name__startswith=prefix).values_list("name", flat=True))
         )
 
     slug = params["slug"]
@@ -48,7 +48,8 @@ def run(params):
         name=f"{slug} step",
         configuration={"display": "form", "components": params["components"]},
     )
-    form = Form.objects.create(slug=slug, name=slug, active=True, **params["settings"], **_payment(params, slug))
+    payment_fields = _payment(params, slug)
+    form = Form.objects.create(slug=slug, name=slug, active=True, **params["settings"], **payment_fields)
     FormStep.objects.create(form=form, form_definition=definition, order=0, slug="stap")
     FormVariable.objects.create_for_form(form)
     registration = params["registration"]

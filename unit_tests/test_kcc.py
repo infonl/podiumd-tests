@@ -114,13 +114,13 @@ def test_kiss_search_hits_posts_the_query_to_all_sources(response_factory):
 
     hits = kiss_search_hits(SimpleNamespace(post=post), KISS, "dimpact")  # pyright: ignore[reportArgumentType]
     assert hits == [{"_source": {"url_host": "www.dimpact.nl"}}]
-    assert posted == [(KISS + "/api/search", {"query": "dimpact", "page": 1, "filters": []})]
+    assert posted == [(f"{KISS}/api/search", {"query": "dimpact", "page": 1, "filters": []})]
 
 
 def test_search_content_carries_the_title():
     assert vac_data("Afval?")["vraag"] == "Afval?"
     artikel = kennisartikel_data("Afval ophalen")
-    assert artikel["url"] == KENNIS_URL + "Afval%20ophalen"
+    assert artikel["url"] == f"{KENNIS_URL}Afval%20ophalen"
     assert artikel["vertalingen"][0]["titel"] == "Afval ophalen"  # pyright: ignore[reportIndexIssue]
 
 

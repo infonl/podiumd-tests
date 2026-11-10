@@ -26,7 +26,8 @@ def run(params):
         service = config.service if config is not None else None
         linked = service is not None and service.slug == SLUG and service.secret == params.get("token")
         backend = group is None or group.klant_backend == BACKEND
-        return {"present": bool(linked and backend and all(getattr(klanten, k) == v for k, v in KLANTEN.items()))}
+        klanten_set = all(getattr(klanten, field) == value for field, value in KLANTEN.items())
+        return {"present": bool(linked and backend and klanten_set)}
     record = params.get("record") or {}
     if params["action"] == "remove":
         _remove(record, config, klanten)
@@ -41,7 +42,7 @@ def run(params):
     config.save()
     record["subjects"] = record.get("subjects", []) + _subjects(params["subjects"], config)
     if "klanten" not in record:
-        record["klanten"] = {k: getattr(klanten, k) for k in KLANTEN}
+        record["klanten"] = {field: getattr(klanten, field) for field in KLANTEN}
     for field, value in KLANTEN.items():
         setattr(klanten, field, value)
     klanten.save()
@@ -77,7 +78,7 @@ def _service(params, record):
 
 def _snapshot(config):
     fields = config._meta.concrete_fields
-    return {f.attname: getattr(config, f.attname) for f in fields if f.attname != "id"}
+    return {field.attname: getattr(config, field.attname) for field in fields if field.attname != "id"}
 
 
 def _subjects(names, config):

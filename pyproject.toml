@@ -22,13 +22,17 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Same list as podiumd charts/podiumd/bin/requirements.txt; unpinned, as there.
+# Unpinned: run_python_checks upgrades them daily, as CI installs the latest.
 dev = [
     "ruff",
     "pymarkdownlnt",
     "pylint",
     "vulture",
     "isort",
+    "flake8-pyproject",  # flake8 reads [tool.flake8] in pyproject.toml
+    "wemake-python-styleguide",  # flake8 plugin, its own pinned flake8
+    "pip-audit",         # known vulnerabilities in the .venv packages
+    "yamllint",
     "pytest",
     "pytest-cov",        # coverage of the unit tests (run_python_checks)
     "bandit",
@@ -124,6 +128,12 @@ select = [
     "PERF", # perflint
     "PGH",
     "PIE",  # flake8-pie
+    "PL",   # pylint rules in ruff
+    "PLR0904", # preview: too many public methods
+    "PLR0914", # preview: too many locals
+    "PLR6201", # preview: literal membership in a set
+    "PLW0717", # preview: too many statements in a try body
+    "PLW1514", # preview: open() without encoding
     "PT",   # flake8-pytest-style
     "PTH",  # flake8-use-pathlib
     "PYI",
@@ -153,6 +163,11 @@ ignore = [
     "ERA001", # commented-out-code: current hits are prose that resembles code
 ]
 # Allow fix for all enabled rules (when `--fix`) is provided.
+# Preview rules only where selected by code (PLR0904, PLR0914, PLR6201, PLW0717, PLW1514).
+preview = true
+explicit-preview-rules = true
+# The WPS codes in noqa comments belong to flake8 (wemake-python-styleguide), not to ruff.
+external = ["WPS"]
 fixable = ["ALL"]
 unfixable = []
 # Allow unused variables when underscore-prefixed.
@@ -172,12 +187,15 @@ check-typed-exception = true  # Enable additional checks for try-except-pass
 # unpacked vars (RUF059), fixed-argv `git` calls (S603/S607), fake tokens
 # (S106). bandit does not scan tests/ either.
 # podiumd-tests: the same rules apply to unit_tests/.
-"tests/**" = ["S101", "ARG001", "ARG005", "SLF001", "INP001", "PT018", "RUF059", "S603", "S607", "S106"]
-"unit_tests/**" = ["S101", "ARG001", "ARG005", "SLF001", "INP001", "PT018", "RUF059", "S603", "S607", "S106"]
+# PL counts and magic values (PLR2004, PLR0913, PLR0917, PLW0717, PLR0904, PLR0914) and local imports (PLC0415):
+# not enforced for tests.
+"tests/**" = ["S101", "ARG001", "ARG005", "SLF001", "INP001", "PT018", "RUF059", "S603", "S607", "S106", "PLR2004", "PLR0913", "PLR0917", "PLC0415", "PLW0717", "PLR0904", "PLR0914"]
+"unit_tests/**" = ["S101", "ARG001", "ARG005", "SLF001", "INP001", "PT018", "RUF059", "S603", "S607", "S106", "PLR2004", "PLR0913", "PLR0917", "PLC0415", "PLW0717", "PLR0904", "PLR0914"]
 # infra/: scripts that run in the cluster from a ConfigMap, not a package (INP001).
 "infra/**" = ["INP001"]
-# Django snippets: names from their `# include:` lines (F821); Django's documented _meta API (SLF001).
-"src/podiumd_tests/snippets/*.py" = ["F821", "SLF001"]
+# Django snippets: names from their `# include:` lines (F821); Django's documented _meta API (SLF001); imports
+# inside run(), which runs in the component's Django shell (PLC0415).
+"src/podiumd_tests/snippets/*.py" = ["F821", "SLF001", "PLC0415"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -185,9 +203,74 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
 
+# flake8 runs only wemake-python-styleguide (WPS), for what ruff cannot check; read via flake8-pyproject.
+[tool.flake8]
+select = ["WPS"]
+max-line-length = 120
+# Jones complexity of a line (default 14): only the really dense lines
+max-line-complexity = 20
+ignore = [
+    # done by ruff or pylint
+    "WPS210",  # too many locals: PLR0914
+    "WPS211",  # too many arguments: PLR0913, PLR0917
+    "WPS212",  # too many returns: PLR0911
+    "WPS213",  # too many expressions: PLR0915
+    "WPS214",  # too many methods: PLR0904
+    "WPS229",  # too long try body: PLW0717
+    "WPS231",  # cognitive complexity: C901, PLR0912
+    "WPS421",  # print: T201, off on purpose (the CLI prints)
+    "WPS426",  # lambda in a loop: B023 checks the actual late binding
+    "WPS432",  # magic number: PLR2004 (comparisons), elsewhere a named constant is not clearer
+    "WPS441",  # control variable used after its loop: B020, PLW2901 (a comprehension reusing names is no bug)
+    # opinion, or in conflict with this code base
+    "WPS110",  # names like result, data, value: clear in their context
+    "WPS201",  # too many imports: isort force-single-line gives one import per line
+    "WPS202",  # too many module members: modules are the unit of this suite
+    "WPS204",  # overused expression: flags raise X(msg), the pattern ruff EM asks for
+    "WPS226",  # string constant overuse: json keys are data
+    "WPS237",  # complex f-string: a subscript or call in an f-string reads fine
+    "WPS238",  # too many raises: a validating function raises per check
+    "WPS332",  # walrus outside a comprehension: used on purpose (if message := check(...))
+    "WPS407",  # mutable module constant: freezing nested dicts breaks json
+    "WPS420",  # del, pass, global: normal python
+    "WPS430",  # nested function: closures on purpose (callbacks, retries)
+    "WPS504",  # negated condition: flags x if y is not None else None, the natural order
+    "WPS529",  # implicit .get(): flags a dispatch on which keys a dict has; SIM401 catches the if/else default case
+    "WPS501",  # finally without except: a try/finally cleanup is normal python
+    "WPS602",  # staticmethod: a method that needs no instance
+    "WPS615",  # get_x/set_x: names of the APIs these helpers wrap
+    "WPS203",  # too many imported names: the module that wires all bootstrap steps imports them all
+    "WPS322",  # multi-line string layout: scenario texts and Django snippets start on the opening line
+    "WPS412",  # logic in __init__.py: the package's API lives there; a move would leave a re-export facade
+    "WPS462",  # multi-line string not a docstring: Given/When/Then scenarios and Django shell snippets
+]
+# flake8 applies only the longest pattern that matches a file (* matches / too).
+per-file-ignores = [
+    # tests: counts and sizes (asserts, comparisons, line complexity, annotations of fixtures), test idioms (short
+    # names, == [] in an assert, nested classes for fakes, list multiplication, slices, float values), pytest markers
+    # as decorators (WPS216)
+    "tests/*:WPS111,WPS114,WPS118,WPS216,WPS218,WPS219,WPS221,WPS228,WPS230,WPS234,WPS301,WPS324,WPS358,WPS362,WPS431,WPS435,WPS458,WPS520",
+    "unit_tests/*:WPS111,WPS114,WPS118,WPS216,WPS218,WPS219,WPS221,WPS228,WPS230,WPS234,WPS301,WPS324,WPS358,WPS362,WPS431,WPS435,WPS458,WPS520",
+]
+
 # pylint covers checks ruff lacks; overlapping rules are owned by one tool.
 # tests/-only disables live in run_python_checks (TESTS_PYLINT_DISABLE):
 # pylint has no per-directory config.
+
+# Owned by ruff PL (PLR0913, PLR0917, PLR0911, PLR0912, PLR0915, PLR0914, PLR0904, PLR0916, PLC0415, PLW1514).
+[tool.pylint."messages control"]
+disable = [
+    "too-many-arguments",
+    "too-many-positional-arguments",
+    "too-many-return-statements",
+    "too-many-branches",
+    "too-many-statements",
+    "too-many-locals",
+    "too-many-public-methods",
+    "too-many-boolean-expressions",
+    "import-outside-toplevel",
+    "unspecified-encoding",
+]
 
 [tool.pylint.main]
 # podiumd-tests: Django snippets import models that exist only in the component images.

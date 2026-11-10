@@ -60,13 +60,13 @@ def created(path: str) -> dict[str, tuple[int, dict[str, Any]]]:
         (lambda c, r: openzaak.link_document(c, r, {"url": ZAAK}, {"url": "d"}), "zaken/api/v1/zaakinformatieobjecten"),
         (lambda c, r: openzaak.make_besluit(c, r, "bt"), "besluiten/api/v1/besluiten"),
         (lambda c, r: openzaak.make_concept_zaaktype(c, r, "cat"), "catalogi/api/v1/zaaktypen"),
-        (lambda c, r: openklant.make_partij(c, r), "partijen"),
+        (openklant.make_partij, "partijen"),
         (openklant.make_organisatie, "partijen"),
         (lambda c, r: openklant.make_partij_identificator(c, r, {"uuid": "p"}, "bsn", "1"), "partij-identificatoren"),
         (lambda c, r: openklant.make_digitaal_adres(c, r, {"uuid": "p"}, "a@example.invalid"), "digitaleadressen"),
-        (lambda c, r: openklant.make_klantcontact(c, r), "klantcontacten"),
+        (openklant.make_klantcontact, "klantcontacten"),
         (lambda c, r: openklant.make_betrokkene(c, r, {"uuid": "k"}, None), "betrokkenen"),
-        (lambda c, r: openklant.make_actor(c, r), "actoren"),
+        (openklant.make_actor, "actoren"),
         (lambda c, r: openklant.make_internetaak(c, r, {"uuid": "k"}, [{"uuid": "a"}]), "internetaken"),
         (lambda c, r: openklant.make_onderwerpobject(c, r, {"uuid": "k"}, "z"), "onderwerpobjecten"),
         (lambda c, r: objecten_module.make_object(c, r, "ot", {"a": 1}), "objects"),
@@ -148,7 +148,7 @@ def test_zaaktype_parts_and_close_zaak(fake_http):
     assert [s["url"] for s in parts.statustypen] == ["st1", "st2"]
     assert (parts.roltypen, parts.eigenschappen) == ({"initiator": "rt"}, {"e": "eu"})
     assert (parts.informatieobjecttype, parts.besluittype, parts.resultaattypen) == ("iot", "bt", ["rs"])
-    del sent[:]
+    sent.clear()
     assert openzaak.close_zaak(api(), {"url": ZAAK}, parts)["einddatum"] == "2026-10-19"
     assert body(sent[0])["resultaattype"] == "rs"
     assert body(sent[1])["statustype"] == "st2"
@@ -224,7 +224,7 @@ def test_submission_contact_cleanup_deletes_the_tree_by_onderwerp(fake_http):
     assert body(sent[0])["onderwerp"] == "OF-1"
     assert body(sent[3])["onderwerpobjectidentificator"]["codeObjecttype"] == "formulierinzending"
     assert openklant.klantcontacten_about(api(), "OF-1", "x") == [found[1]]
-    del sent[:]
+    sent.clear()
     registry.cleanup()
     assert {("GET", "/klantcontacten/k"), ("GET", "/klantcontacten/new")} <= set(calls(sent))
 

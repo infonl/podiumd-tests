@@ -33,12 +33,13 @@ def run(params):
         return {"present": all(_present(_found(models, *types), types[1]) for _, types in targets)}
     record.setdefault("created", [])
     record.setdefault("changed", [])
-    for target, (catalogus, zaaktype, iot) in targets:
-        _apply(models, record, target, catalogus, zaaktype, iot)
+    for target, types in targets:
+        _apply(models, record, target, types)
     return {"present": True, "record": record}
 
 
-def _apply(models, record, group, catalogus, zaaktype, iot):
+def _apply(models, record, group, types):
+    catalogus, zaaktype, iot = types
     found = _found(models, catalogus, zaaktype, iot)
     if found["catalogus"] is None:
         found["catalogus"] = _create(

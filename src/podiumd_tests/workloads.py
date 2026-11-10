@@ -9,12 +9,12 @@ and only the latest Job of each CronJob counts, as older runs are history.
 from __future__ import annotations
 
 import base64
-import contextlib
 import gzip
 import json
 import re
 
 from contextlib import contextmanager
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -26,6 +26,7 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import metadata_name
+from podiumd_tests.kube import metadata_namespace
 from podiumd_tests.responses import root_answers
 from podiumd_tests.wait import wait_until
 
@@ -42,12 +43,14 @@ if TYPE_CHECKING:
 
 type Item = JsonObject
 
-GOOD_POD_PHASES = frozenset({"Running", "Succeeded"})
+GOOD_POD_PHASES = frozenset(("Running", "Succeeded"))
 # app labels of workloads that are no part of PodiumD. deploy-warmup: podiumd-infra's node pre-scale
 # placeholder during a deploy (scripts/prescale-warmup.sh), whose pause pods are meant to stay Pending.
-FOREIGN_APPS = frozenset({"deploy-warmup"})
+FOREIGN_APPS = frozenset(("deploy-warmup",))
 # Seconds a stopped or restarted component's root gets to answer.
 ROOT_TIMEOUT = 10.0
+# Longest deployed_build entry shown; podiumd-minikube's object map `charts` is longer.
+BUILD_ENTRY_LIMIT = 200
 
 
 def pod_containers(workload: JsonObject, *, with_init: bool) -> list[JsonObject]:
@@ -71,7 +74,7 @@ def component_versions(env: Environment, components: Sequence[str]) -> dict[str,
     states (_image_release); else Helm's app.kubernetes.io/version label, which is the sub-chart's appVersion
     and can lag behind the image.
     """
-    deployments = {metadata_name(d): d for d in env.items("deployments")}
+    deployments = {metadata_name(deployment): deployment for deployment in env.items("deployments")}
     found: dict[str, tuple[int, ...]] = {}
     for component in components:
         workload = _main_deployment(env, deployments, component)
@@ -99,7 +102,7 @@ def image_version(workload: JsonObject) -> tuple[int, ...] | None:
 
 
 def _version(value: str) -> tuple[int, ...] | None:
-    return tuple(int(n) for n in value.split(".")) if re.fullmatch(r"\d+(\.\d+)+", value) else None
+    return tuple(int(part) for part in value.split(".")) if re.fullmatch(r"\d+(\.\d+)+", value) else None
 
 
 # Images without a version variable: the Python package whose __version__ ("v2.4.9") states it.
@@ -123,7 +126,8 @@ def _image_release(env: Environment, component: str, deployment: str) -> str:
     path, package = VERSION_PACKAGES[component]
     code = f"import sys; sys.path.insert(0, {path!r}); import {package}; print({package}.__version__)"
     try:
-        return env.kube.exec(deployment, "python", "-c", code, timeout=60).strip().splitlines()[-1].removeprefix("v")
+        printed = env.kube.exec(deployment, "python", "-c", code, timeout=60)
+        return printed.strip().splitlines()[-1].removeprefix("v")
     except (KubeError, IndexError):
         return ""
 
@@ -147,8 +151,8 @@ def chart_version(env: Environment) -> str | None:
 def deployed_build(env: Environment) -> dict[str, str]:
     """The one-line entries of the ConfigMap named by setting deployed_build ("namespace/name"); {} when unreadable.
 
-    The deployer records there what the chart version hides, such as a local chart checkout. Entries over 200
-    characters (podiumd-minikube's object map `charts`) are left out.
+    The deployer records there what the chart version hides, such as a local chart checkout. Entries over
+    BUILD_ENTRY_LIMIT characters are left out.
     """
     namespace, _, name = env.profile.settings.get("deployed_build", "").partition("/")
     if not name:
@@ -157,10 +161,11 @@ def deployed_build(env: Environment) -> dict[str, str]:
         data = section(env.kube.get_json("configmap", name, namespace=namespace), "data")
     except KubeError:
         return {}
-    return {key: str(value) for key, value in data.items() if "\n" not in str(value) and len(str(value)) <= 200}
+    texts = {key: str(value) for key, value in data.items()}
+    return {key: text for key, text in texts.items() if "\n" not in text and len(text) <= BUILD_ENTRY_LIMIT}
 
 
-def expect_defect(  # pylint: disable=too-many-arguments  # one marker
+def expect_defect(  # noqa: PLR0913  # one marker
     request: pytest.FixtureRequest,
     env: Environment,
     component: str,
@@ -182,12 +187,12 @@ def chart_older_than(env: Environment, version: tuple[int, ...]) -> bool:
 
 
 def _owner_kinds(item: Item) -> set[str]:
-    return {str(o.get("kind")) for o in entries(section(item, "metadata").get("ownerReferences"))}
+    return {str(owner.get("kind")) for owner in entries(section(item, "metadata").get("ownerReferences"))}
 
 
 def _owner_name(item: Item, kind: str) -> str | None:
     owners = entries(section(item, "metadata").get("ownerReferences"))
-    return next((str(o.get("name")) for o in owners if o.get("kind") == kind), None)
+    return next((str(owner.get("name")) for owner in owners if owner.get("kind") == kind), None)
 
 
 def _int(value: object) -> int:
@@ -225,7 +230,7 @@ def run_cronjob(kube: Kube, cronjob: str, job: str, timeout: int = 300) -> None:
 def _job_log(kube: Kube, job: str) -> str:
     """The last lines a Job's container wrote; its previous run when it restarts."""
     for previous in ([], ["--previous"]):
-        with contextlib.suppress(KubeError):
+        with suppress(KubeError):
             if log := kube.run("logs", f"job/{job}", "--tail=60", *previous):
                 return f"log of job/{job}:\n{log}"
     return f"no log of job/{job}"
@@ -264,7 +269,8 @@ def helm_replicas(env: Environment, namespaces: Sequence[str] | None = None) -> 
             for doc in entries(list(yaml.safe_load_all(str(release.get("manifest", ""))))):
                 if doc.get("kind") in {"Deployment", "StatefulSet"}:
                     where = section(doc, "metadata").get("namespace") or release.get("namespace") or namespace
-                    found[f"{where}/{doc['kind']}/{metadata_name(doc)}"] = _int(section(doc, "spec").get("replicas", 1))
+                    replicas = _int(section(doc, "spec").get("replicas", 1))
+                    found[f"{where}/{doc['kind']}/{metadata_name(doc)}"] = replicas
     return found
 
 
@@ -275,22 +281,19 @@ def replica_drift(env: Environment, namespaces: Sequence[str] | None = None) -> 
     Workloads an autoscaler drives are left out.
     """
     wanted = helm_replicas(env, namespaces)
-    targets = [
-        (h, section(section(h, "spec"), "scaleTargetRef")) for h in env.items("horizontalpodautoscalers", namespaces)
-    ]
-    autoscaled = {f"{_namespace(h)}/{ref.get('kind')}/{ref.get('name')}" for h, ref in targets}
+    autoscalers = env.items("horizontalpodautoscalers", namespaces)
+    targets = [(autoscaler, section(section(autoscaler, "spec"), "scaleTargetRef")) for autoscaler in autoscalers]
+    autoscaled = {
+        f"{metadata_namespace(autoscaler)}/{ref.get('kind')}/{ref.get('name')}" for autoscaler, ref in targets
+    }
     found: list[str] = []
     for item in env.workloads(namespaces):
-        key = f"{_namespace(item)}/{item.get('kind')}/{metadata_name(item)}"
+        key = f"{metadata_namespace(item)}/{item.get('kind')}/{metadata_name(item)}"
         if key in wanted and key not in autoscaled:
             live = _int(section(item, "spec").get("replicas", 1))
             if live != wanted[key]:
                 found.append(f"{item.get('kind')}/{metadata_name(item)} {live} (Helm {wanted[key]})")
     return found
-
-
-def _namespace(item: Item) -> str:
-    return str(section(item, "metadata").get("namespace", ""))
 
 
 def unhealthy_pods(pods: Sequence[Item]) -> list[str]:
@@ -311,7 +314,9 @@ def unhealthy_pods(pods: Sequence[Item]) -> list[str]:
         if phase == "Succeeded":
             continue
         containers = entries(status.get("containerStatuses"))
-        found.extend(f"{name}/{c.get('name', '?')}: not ready" for c in containers if not c.get("ready"))
+        found.extend(
+            f"{name}/{container.get('name', '?')}: not ready" for container in containers if not container.get("ready")
+        )
     return found
 
 
@@ -325,26 +330,24 @@ class ClusterState:
 
 def cluster_state(env: Environment) -> ClusterState:
     """The pods (not of Jobs) and nodes now, to compare with a later state."""
-    pods = {
-        str(section(p, "metadata").get("uid")): p for p in entries(env.items("pods")) if "Job" not in _owner_kinds(p)
-    }
-    return ClusterState(pods, frozenset(metadata_name(n) for n in env.kube.items("nodes")))
+    long_running = [pod for pod in entries(env.items("pods")) if "Job" not in _owner_kinds(pod)]
+    pods = {str(section(pod, "metadata").get("uid")): pod for pod in long_running}
+    return ClusterState(pods, frozenset(metadata_name(node) for node in env.kube.items("nodes")))
 
 
 def disruptions(before: ClusterState, after: ClusterState) -> list[str]:
     """Nodes and pods that came or went between two states, and containers that restarted, one line each."""
-    found = [f"node {n} removed" for n in sorted(before.nodes - after.nodes)]
-    found += [f"node {n} added" for n in sorted(after.nodes - before.nodes)]
-    found += [f"pod {_where(p)} gone" for uid, p in before.pods.items() if uid not in after.pods]
+    found = [f"node {node} removed" for node in sorted(before.nodes - after.nodes)]
+    found += [f"node {node} added" for node in sorted(after.nodes - before.nodes)]
+    found += [f"pod {_where(pod)} gone" for uid, pod in before.pods.items() if uid not in after.pods]
     found += [
-        f"pod {_where(p)} started {section(p, 'metadata').get('creationTimestamp')}"
-        for uid, p in after.pods.items()
+        f"pod {_where(pod)} started {section(pod, 'metadata').get('creationTimestamp')}"
+        for uid, pod in after.pods.items()
         if uid not in before.pods
     ]
     for uid, pod in after.pods.items():
-        earlier = {
-            str(c.get("name")): c for c in entries(section(before.pods.get(uid, {}), "status").get("containerStatuses"))
-        }
+        previous = entries(section(before.pods.get(uid, {}), "status").get("containerStatuses"))
+        earlier = {str(container.get("name")): container for container in previous}
         for container in entries(section(pod, "status").get("containerStatuses")):
             name = str(container.get("name"))
             if name not in earlier:
@@ -365,7 +368,7 @@ def _where(pod: Item) -> str:
 
 def _job_failed(job: Item) -> bool:
     conditions = entries(section(job, "status").get("conditions"))
-    return any(c.get("type") == "Failed" and c.get("status") == "True" for c in conditions)
+    return any(condition.get("type") == "Failed" and condition.get("status") == "True" for condition in conditions)
 
 
 KEYCLOAKS = "keycloaks.k8s.keycloak.org"
@@ -377,12 +380,12 @@ def recreate_update_jobs(keycloaks: Sequence[Item]) -> set[str]:
     Any other exit code gives a different RecreateUpdateUsed message, so a broken update Job still counts.
     """
     return {
-        f"{metadata_name(k)}-update-job"
-        for k in keycloaks
-        for c in entries(section(k, "status").get("conditions"))
-        if c.get("type") == "RecreateUpdateUsed"
-        and c.get("status") == "True"
-        and str(c.get("message", "")).startswith("Incompatible changes detected")
+        f"{metadata_name(keycloak)}-update-job"
+        for keycloak in keycloaks
+        for condition in entries(section(keycloak, "status").get("conditions"))
+        if condition.get("type") == "RecreateUpdateUsed"
+        and condition.get("status") == "True"
+        and str(condition.get("message", "")).startswith("Incompatible changes detected")
     }
 
 
@@ -400,9 +403,8 @@ def failed_jobs(jobs: Sequence[Item], keycloaks: Sequence[Item] = ()) -> list[st
         if current is None or created > str(section(current, "metadata").get("creationTimestamp", "")):
             latest[cronjob] = job
     expected = recreate_update_jobs(keycloaks)
-    return sorted(
-        metadata_name(j) for j in [*standalone, *latest.values()] if _job_failed(j) and metadata_name(j) not in expected
-    )
+    counted = (*standalone, *latest.values())
+    return sorted(metadata_name(job) for job in counted if _job_failed(job) and metadata_name(job) not in expected)
 
 
 @contextmanager

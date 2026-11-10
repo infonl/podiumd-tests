@@ -56,9 +56,10 @@ def kiss_register(kiss: requests.Session, kiss_url: str) -> dict[str, str]:
 
     Skips when KISS has none: its klantinteracties proxy answers 400 for an e-Suite register (OpenKlant1).
     """
-    systemen = entries(expect_status(kiss.get(kiss_url + "/api/environment/registers"), 200).json()["systemen"])
+    systemen = entries(expect_status(kiss.get(f"{kiss_url}/api/environment/registers"), 200).json()["systemen"])
     openklant2 = sorted(
-        (s for s in systemen if s.get("registryVersion") == "OpenKlant2"), key=lambda s: not s.get("isDefault")
+        (systeem for systeem in systemen if systeem.get("registryVersion") == "OpenKlant2"),
+        key=lambda systeem: not systeem.get("isDefault"),
     )
     if not openklant2:
         pytest.skip("KISS has no Open Klant 2 register (REGISTERS__<n>__REGISTRY_VERSION=OpenKlant2), only e-Suite")
@@ -163,8 +164,8 @@ def weekday_hours_before(moment: datetime, hours: float) -> datetime:
 
 def kiss_sync_cronjob(env: Environment, source: str) -> str:
     """The name of KISS's elastic-sync CronJob for a search source (vac, kennisbank), e.g. contact-vac-sync."""
-    names = [metadata_name(c) for c in env.items("cronjobs")]
-    return next(n for n in names if n.endswith(f"-{source}-sync"))
+    names = [metadata_name(cronjob) for cronjob in env.items("cronjobs")]
+    return next(name for name in names if name.endswith(f"-{source}-sync"))
 
 
 def kiss_website_crawlers(env: Environment) -> dict[str, str]:
@@ -172,15 +173,18 @@ def kiss_website_crawlers(env: Environment) -> dict[str, str]:
 
     The KISS chart names the Secret with the crawler's crawler.yml after its CronJob.
     """
-    names = [n for n in (metadata_name(c) for c in env.items("cronjobs")) if "-crawler-website-" in n]
-    return {
-        n: str(entries(yaml.safe_load(env.kube.secret_value(n, "crawler.yml")).get("domains"))[0]["url"]) for n in names
-    }
+    cronjobs = [metadata_name(cronjob) for cronjob in env.items("cronjobs")]
+    crawlers: dict[str, str] = {}
+    for name in cronjobs:
+        if "-crawler-website-" in name:
+            crawler = yaml.safe_load(env.kube.secret_value(name, "crawler.yml"))
+            crawlers[name] = str(entries(crawler.get("domains"))[0]["url"])
+    return crawlers
 
 
 def kiss_search_hits(kiss: requests.Session, kiss_url: str, query: str) -> list[JsonObject]:
     """The hits of KISS's search for the query in all its sources."""
-    response = kiss.post(kiss_url + "/api/search", json={"query": query, "page": 1, "filters": []})
+    response = kiss.post(f"{kiss_url}/api/search", json={"query": query, "page": 1, "filters": []})
     return entries(section(expect_status(response, HTTPStatus.OK).json(), "hits").get("hits"))
 
 
@@ -192,15 +196,15 @@ def vac_data(titel: str, antwoord: str = "Antwoord van podiumd-tests.") -> dict[
 def kennisartikel_data(titel: str, tekst: str = "Tekst van podiumd-tests.") -> dict[str, object]:
     """An SDG kennisartikel for Objecten with the title in its Dutch translation, at KENNIS_URL + title."""
     return {
-        "url": KENNIS_URL + quote(titel),
+        "url": f"{KENNIS_URL}{quote(titel)}",
         "uuid": str(uuid.uuid4()),
-        "upnUri": KENNIS_URL + "upn",
+        "upnUri": f"{KENNIS_URL}upn",
         "publicatieDatum": today(),
         "productAanwezig": True,
         "productValtOnder": None,
         "verantwoordelijkeOrganisatie": {
-            "url": KENNIS_URL + "organisatie",
-            "owmsIdentifier": KENNIS_URL + "owms",
+            "url": f"{KENNIS_URL}organisatie",
+            "owmsIdentifier": f"{KENNIS_URL}owms",
             "owmsEndDate": "2099-12-31T00:00:00Z",
         },
         "locaties": None,

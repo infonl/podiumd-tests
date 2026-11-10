@@ -14,6 +14,8 @@ from podiumd_tests.components import deployed_components
 from podiumd_tests.json_data import JsonObject
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.kube import metadata_name
+from podiumd_tests.kube import metadata_namespace
 from podiumd_tests.responses import expect_status
 from podiumd_tests.wait import parse_duration
 
@@ -29,6 +31,8 @@ type Json = dict[str, object]
 
 # kubectl kind of a Prometheus Operator monitor and the scrape pool prefix Prometheus gives its targets.
 MONITOR_POOLS = {"servicemonitors": "serviceMonitor", "podmonitors": "podMonitor"}
+# Index of the monitor name in a scrape pool "<prefix>/<namespace>/<name>/<n>".
+_POOL_MONITOR_NAME = 2
 # A younger pod may not have been collected by Alloy yet.
 MIN_POD_AGE = timedelta(minutes=10)
 # Lines this recent may not be in Loki yet: a pod that logs in bursts would show as missing.
@@ -61,7 +65,7 @@ class Grafana:
 
     def uid(self, kind: str) -> str | None:
         """uid of the first datasource of a type (prometheus, loki, tempo), or None."""
-        return next((str(d["uid"]) for d in self.datasources if d.get("type") == kind), None)
+        return next((str(datasource["uid"]) for datasource in self.datasources if datasource.get("type") == kind), None)
 
     def proxy(self, kind: str, path: str, params: dict[str, str] | None = None) -> Json:
         """GET through the proxy of the datasource of a type; the JSON body."""
@@ -91,10 +95,16 @@ def down_targets(targets_response: JsonObject, prometheus_age: timedelta) -> lis
     interval plus timeout: after a restart, a PodMonitor with a 5m interval stays unknown for up to 5 minutes.
     """
     return [
-        f"{section(t, 'labels').get('job')} {t.get('scrapeUrl')}: {t.get('lastError') or t.get('health')}"
-        for t in _active_targets(targets_response)
-        if t.get("health") == "down" or (t.get("health") != "up" and prometheus_age > _first_scrape_due(t))
+        _target_error(target)
+        for target in _active_targets(targets_response)
+        if target.get("health") == "down"
+        or (target.get("health") != "up" and prometheus_age > _first_scrape_due(target))
     ]
+
+
+def _target_error(target: JsonObject) -> str:
+    error = target.get("lastError") or target.get("health")
+    return f"{section(target, 'labels').get('job')} {target.get('scrapeUrl')}: {error}"
 
 
 def _first_scrape_due(target: JsonObject) -> timedelta:
@@ -108,8 +118,8 @@ def target_count(targets_response: JsonObject) -> int:
 
 def monitors_without_targets(monitors: Sequence[str], targets_response: JsonObject) -> list[str]:
     """Monitors, as "<scrape pool prefix>/<namespace>/<name>", without an active target in a /api/v1/targets body."""
-    pools = {str(t.get("scrapePool")) for t in _active_targets(targets_response)}
-    return [m for m in monitors if not any(p.startswith(f"{m}/") for p in pools)]
+    pools = {str(target.get("scrapePool")) for target in _active_targets(targets_response)}
+    return [monitor for monitor in monitors if not any(pool.startswith(f"{monitor}/") for pool in pools)]
 
 
 def otel_jobs_query(components: Iterable[str]) -> str:
@@ -117,12 +127,12 @@ def otel_jobs_query(components: Iterable[str]) -> str:
 
     An app may name its processes <service>-<role> (Open Inwoner: openinwoner-web, openinwoner-celery-worker).
     """
-    services = sorted(s for c in components for s in COMPONENTS[c].otel_services)
+    services = sorted(service for component in components for service in COMPONENTS[component].otel_services)
     return f'group by (job) ({{job=~"(.+/)?({"|".join(services)})(-.+)?"}})'
 
 
 def _has_otel_job(services: tuple[str, ...], jobs: set[str]) -> bool:
-    return any(job == s or job.startswith(f"{s}-") for s in services for job in jobs)
+    return any(job == service or job.startswith(f"{service}-") for service in services for job in jobs)
 
 
 def without_metrics(
@@ -132,21 +142,27 @@ def without_metrics(
 
     A monitored component needs a ServiceMonitor or PodMonitor named like one of its workloads with a target up.
     """
-    pools = [str(t.get("scrapePool")).split("/") for t in _active_targets(targets_response) if t.get("health") == "up"]
-    up = deployed_components([p[2] for p in pools if len(p) > 2 and p[0] in MONITOR_POOLS.values()])
+    up_targets = (target for target in _active_targets(targets_response) if target.get("health") == "up")
+    pools = [str(target.get("scrapePool")).split("/") for target in up_targets]
+    monitor_pools = [pool for pool in pools if len(pool) > _POOL_MONITOR_NAME and pool[0] in MONITOR_POOLS.values()]
+    up = deployed_components([pool[_POOL_MONITOR_NAME] for pool in monitor_pools])
     results = entries(section(otel_response, "data").get("result"))
-    jobs = {str(section(r, "metric").get("job")).rpartition("/")[2] for r in results}
+    jobs = {str(section(result, "metric").get("job")).rpartition("/")[2] for result in results}
     ordered = sorted(components)
     return (
-        [c for c in ordered if COMPONENTS[c].monitored and c not in up],
-        [c for c in ordered if COMPONENTS[c].otel_services and not _has_otel_job(COMPONENTS[c].otel_services, jobs)],
+        [name for name in ordered if COMPONENTS[name].monitored and name not in up],
+        [
+            name
+            for name in ordered
+            if COMPONENTS[name].otel_services and not _has_otel_job(COMPONENTS[name].otel_services, jobs)
+        ],
     )
 
 
 def pods_in_loki(query_response: JsonObject) -> set[tuple[str, str]]:
     """(namespace, pod) of each series in a Loki `sum by (namespace, pod)` query result."""
-    metrics = (section(r, "metric") for r in entries(section(query_response, "data").get("result")))
-    return {(str(m.get("namespace")), str(m.get("pod"))) for m in metrics}
+    metrics = (section(result, "metric") for result in entries(section(query_response, "data").get("result")))
+    return {(str(metric.get("namespace")), str(metric.get("pod"))) for metric in metrics}
 
 
 def logged_before(timestamped_logs: str, cutoff: datetime) -> bool:
@@ -163,9 +179,9 @@ def running_pods_not_in_loki(
 ) -> list[JsonObject]:
     """Running pods older than MIN_POD_AGE that have no log lines in Loki."""
     return [
-        p
-        for p in pods
-        if section(p, "status").get("phase") == "Running"
-        and now - datetime.fromisoformat(str(section(p, "metadata").get("creationTimestamp"))) >= MIN_POD_AGE
-        and (str(section(p, "metadata").get("namespace")), str(section(p, "metadata").get("name"))) not in in_loki
+        pod
+        for pod in pods
+        if section(pod, "status").get("phase") == "Running"
+        and now - datetime.fromisoformat(str(section(pod, "metadata").get("creationTimestamp"))) >= MIN_POD_AGE
+        and (metadata_namespace(pod), metadata_name(pod)) not in in_loki
     ]

@@ -185,7 +185,7 @@ def test_chart_older_than_holds_also_for_an_unknown_version(env_factory, fake_ru
 def test_deployed_build_reads_the_one_line_entries_of_the_configmap_in_the_setting(
     env_factory, fake_runner, profile_factory
 ):
-    data = {"podiumd": "4.10.0", "monitoring-logging": "checkout x (f054)", "charts": "{" + "x" * 300 + "}"}
+    data = {"podiumd": "4.10.0", "monitoring-logging": "checkout x (f054)", "charts": json.dumps({"chart": "x" * 300})}
     fake_runner.answers["get configmap deployed"] = (0, json.dumps({"data": data}))
     profile = profile_factory(settings={"deployed_build": "ns/deployed"})
     assert deployed_build(env_factory(profile)) == {"podiumd": "4.10.0", "monitoring-logging": "checkout x (f054)"}
@@ -208,13 +208,13 @@ def placed_pod(uid, name, *, node="n1", restarts=0, created="2026-10-15T09:51:00
 
 
 def test_disruptions_name_moved_pods_restarts_and_nodes():
-    before = ClusterState({"a": placed_pod("a", "keycloak-0"), "b": placed_pod("b", "zac-1")}, frozenset({"n1", "n2"}))
+    before = ClusterState({"a": placed_pod("a", "keycloak-0"), "b": placed_pod("b", "zac-1")}, frozenset(("n1", "n2")))
     after = ClusterState(
         {
             "c": placed_pod("c", "keycloak-0", node="n1", created="2026-10-15T09:52:10Z"),
             "b": placed_pod("b", "zac-1", restarts=1),
         },
-        frozenset({"n1"}),
+        frozenset(("n1",)),
     )
     assert disruptions(before, after) == [
         "node n2 removed",
@@ -225,7 +225,7 @@ def test_disruptions_name_moved_pods_restarts_and_nodes():
 
 
 def test_an_unchanged_cluster_has_no_disruptions():
-    state = ClusterState({"a": placed_pod("a", "zac-1")}, frozenset({"n1"}))
+    state = ClusterState({"a": placed_pod("a", "zac-1")}, frozenset(("n1",)))
     assert disruptions(state, state) == []
 
 
@@ -274,4 +274,5 @@ def test_expect_defect_marks_only_an_affected_known_version(monkeypatch, version
     markers = []
     request = SimpleNamespace(applymarker=markers.append)
     workloads.expect_defect(request, None, "zaakbrug", lambda v: v < (1, 27, 0), raises=AssertionError, reason="r")  # pyright: ignore[reportArgumentType]
-    assert [m.kwargs.get("strict") for m in markers] == ([True] if xfail else [])
+    strict = [True] if xfail else []
+    assert [m.kwargs.get("strict") for m in markers] == strict

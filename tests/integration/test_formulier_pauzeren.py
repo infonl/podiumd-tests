@@ -52,7 +52,7 @@ pytestmark = [
     When the inwoner pauses the form and gives an e-mail address
     Then that address receives a mail with a link to Open Formulieren
 """)
-def test_paused_submission_mails_its_resume_link(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_paused_submission_mails_its_resume_link(
     http: requests.Session,
     urls: dict[str, str],
     podiumd_env: Environment,
@@ -89,7 +89,7 @@ REGISTRATION_TIMEOUT = 90
     Then the form shows the saved data
     And completing the form registers a zaak in Open Zaak
 """)
-def test_resume_link_continues_and_completes_the_submission(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_resume_link_continues_and_completes_the_submission(
     http: requests.Session,
     podiumd_env: Environment,
     mailpit: ApiClient,

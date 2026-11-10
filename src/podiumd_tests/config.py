@@ -171,7 +171,7 @@ def _mapping(value: object, where: str) -> dict[str, object]:
     if not isinstance(value, dict):
         msg = f"{where}: expected a mapping"
         raise ProfileError(msg)
-    return {str(k): v for k, v in cast("dict[object, object]", value).items()}
+    return {str(key): item for key, item in cast("dict[object, object]", value).items()}
 
 
 def _optional_text(data: dict[str, object], key: str, where: str) -> str | None:
@@ -196,7 +196,7 @@ def _parse_aks(value: object, where: str) -> AksCluster | None:
     if value is None:
         return None
     data = _mapping(value, where)
-    return AksCluster(*(_required_text(data, k, where) for k in ("subscription", "resource_group", "name")))
+    return AksCluster(*(_required_text(data, key, where) for key in ("subscription", "resource_group", "name")))
 
 
 def _parse_urls(value: object, where: str) -> dict[str, str]:
@@ -224,7 +224,7 @@ def _parse_secrets(value: object, where: str) -> dict[str, SecretSpec]:
             msg = f"{where}.{name}: unknown source {source!r}"
             raise ProfileError(msg)
         option_map = {"value": str(options)} if source == "dev_default" else _mapping(options, f"{where}.{name}")
-        secrets[name] = SecretSpec(name, source, {k: str(v) for k, v in option_map.items()})
+        secrets[name] = SecretSpec(name, source, {key: str(option) for key, option in option_map.items()})
     return secrets
 
 
@@ -279,15 +279,16 @@ def parse_profile(raw: object, *, name: str, path: Path | None = None) -> Profil
     if not isinstance(tiers_raw, list) or not tiers_raw:
         msg = f"{where}: allowed_tiers must be a non-empty list"
         raise ProfileError(msg)
-    tiers = tuple(str(t) for t in cast("list[object]", tiers_raw))
-    unknown = [t for t in tiers if t not in TIERS]
+    tiers = tuple(str(tier) for tier in cast("list[object]", tiers_raw))
+    unknown = [tier for tier in tiers if tier not in TIERS]
     if unknown:
         msg = f"{where}.allowed_tiers: unknown tier(s) {', '.join(unknown)}"
         raise ProfileError(msg)
     secrets = _parse_secrets(data.get("secrets") or {}, f"{where}.secrets")
-    if estate != "minikube" and any(s.source == "dev_default" for s in secrets.values()):
+    if estate != "minikube" and any(secret.source == "dev_default" for secret in secrets.values()):
         msg = f"{where}.secrets: dev_default is only allowed for minikube"
         raise ProfileError(msg)
+    settings = _mapping(data.get("settings") or {}, f"{where}.settings")
     return Profile(
         name=name,
         estate=estate,
@@ -296,7 +297,7 @@ def parse_profile(raw: object, *, name: str, path: Path | None = None) -> Profil
         allowed_tiers=tiers,
         secrets=secrets,
         access=_parse_access(data.get("access"), f"{where}.access"),
-        settings={str(k): str(v) for k, v in _mapping(data.get("settings") or {}, f"{where}.settings").items()},
+        settings={key: str(setting) for key, setting in settings.items()},
         wiring=_wiring(data.get("bootstrap"), estate, f"{where}.bootstrap"),
         path=path,
     )

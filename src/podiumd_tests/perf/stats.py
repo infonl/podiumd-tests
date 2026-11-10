@@ -53,7 +53,8 @@ def read_stats(csv_text: str) -> dict[str, EndpointStats]:
     found: dict[str, EndpointStats] = {}
     for row in csv.DictReader(io.StringIO(csv_text)):
         if row["Name"] != "Aggregated":
-            found[row["Name"]] = EndpointStats(int(row["Request Count"]), int(row["Failure Count"]), float(row["95%"]))
+            requests, failures = int(row["Request Count"]), int(row["Failure Count"])
+            found[row["Name"]] = EndpointStats(requests, failures, float(row["95%"]))
     return found
 
 
@@ -95,7 +96,7 @@ def earlier_stats(run: Path) -> list[dict[str, EndpointStats]]:
 
 def baseline_p95(history: list[dict[str, EndpointStats]], endpoint: str) -> float | None:
     """Median p95 of the endpoint over the newest BASELINE_RUNS runs with it; None below MIN_BASELINE_RUNS runs."""
-    values = [h[endpoint].p95_ms for h in history if endpoint in h and h[endpoint].requests][:BASELINE_RUNS]
+    values = [run[endpoint].p95_ms for run in history if endpoint in run and run[endpoint].requests][:BASELINE_RUNS]
     return statistics.median(values) if len(values) >= MIN_BASELINE_RUNS else None
 
 

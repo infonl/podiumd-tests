@@ -50,7 +50,7 @@ LEASE_SECONDS = 3 * 3600
 def file_lock(path: Path) -> Generator[None]:
     """Hold an exclusive lock on the file (created if absent) while the block runs; other processes wait."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w") as handle:
+    with path.open("w", encoding="utf-8") as handle:
         fcntl.flock(handle, fcntl.LOCK_EX)
         try:
             yield

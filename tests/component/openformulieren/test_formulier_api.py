@@ -123,7 +123,7 @@ def test_form_publishes_its_settings(form: JsonObject) -> None:
     When the visitor uploads a file whose content does not match its name, or without extension
     Then Open Formulieren refuses the file with a reason
 """)
-def test_upload_of_a_false_file_is_refused(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_upload_of_a_false_file_is_refused(
     http: requests.Session,
     urls: dict[str, str],
     podiumd_env: Environment,
@@ -209,7 +209,7 @@ def test_address_search_reaches_pdok(
     submission, headers = start_submission(http, urls["openformulieren"], TEST_FORM)
     forget_submission(podiumd_env, registry, str(submission["id"]))
     found = http.get(
-        urls["openformulieren"] + "/api/v2/geo/address-search", params={"q": PDOK_ADDRESS}, headers=headers
+        f"{urls['openformulieren']}/api/v2/geo/address-search", params={"q": PDOK_ADDRESS}, headers=headers
     )
     labels = [str(a.get("label")) for a in entries(expect_status(found, HTTPStatus.OK).json())]
     assert any("1015CJ Amsterdam" in label for label in labels), labels

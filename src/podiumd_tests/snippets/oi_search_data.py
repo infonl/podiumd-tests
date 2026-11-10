@@ -18,7 +18,7 @@ def run(params):
     tag = params["tag"]
     feedback = Feedback.objects.filter(remark__startswith=tag)
     if params["action"] == "feedback":
-        rows = [{"positive": f.positive, "remark": f.remark, "query": f.search_query} for f in feedback]
+        rows = [{"positive": entry.positive, "remark": entry.remark, "query": entry.search_query} for entry in feedback]
         return {"feedback": rows}
     if params["action"] == "remove":
         Product.objects.filter(slug__startswith=tag).delete()

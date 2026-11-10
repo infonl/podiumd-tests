@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 API = "/api/v1"
 # Open Archiefbeheer from 2.1 runs on Django 5.2, whose admin logout accepts only POST.
-ADMIN_LOGOUT_GET_405 = (2, 1)
+ADMIN_LOGOUT_POST_ONLY = (2, 1)
 
 
 def _credentials(env: Environment, role: str) -> dict[str, str]:
@@ -38,13 +38,13 @@ def _credentials(env: Environment, role: str) -> dict[str, str]:
 def ui_login(page: Page, env: Environment, role: str) -> None:
     """Log the role's test user in through OAB's own login page; the page ends on the vernietigingslijsten."""
     credentials = _credentials(env, role)
-    page.goto(env.profile.urls["openarchiefbeheer"] + "/login")
+    page.goto(f"{env.profile.urls['openarchiefbeheer']}/login")
     # The SPA renders the form after its own requests; filling it earlier loses the input.
     expect(page.get_by_role("button", name="Inloggen")).to_be_enabled()
     # The button is enabled before whoami sets csrftoken; a login without it gets 403 session_expired.
     # Read from the context: OAB's CSP refuses the eval of page.wait_for_function.
     wait_until(
-        lambda: any(c.get("name") == "csrftoken" for c in page.context.cookies()) or None,
+        lambda: any(cookie.get("name") == "csrftoken" for cookie in page.context.cookies()) or None,
         timeout=10,
         interval=0.2,
         description="Open Archiefbeheer sets the csrftoken cookie",
@@ -60,10 +60,10 @@ def login(env: Environment, role: str) -> requests.Session:
     url = env.profile.urls["openarchiefbeheer"]
     http = env.session()
     # whoami sets the csrftoken cookie that the login and every later write must echo.
-    http.get(url + API + "/whoami/")
-    http.headers.update({"X-CSRFToken": http.cookies.get("csrftoken") or "", "Referer": url + "/login"})
+    http.get(f"{url}{API}/whoami/")
+    http.headers.update({"X-CSRFToken": http.cookies.get("csrftoken") or "", "Referer": f"{url}/login"})
     expect_status(
-        http.post(url + API + "/auth/login/", json=_credentials(env, role)), HTTPStatus.OK, HTTPStatus.NO_CONTENT
+        http.post(f"{url}{API}/auth/login/", json=_credentials(env, role)), HTTPStatus.OK, HTTPStatus.NO_CONTENT
     )
     # The login rotates the token.
     http.headers["X-CSRFToken"] = http.cookies.get("csrftoken") or ""
@@ -111,7 +111,7 @@ def expect_admin_logout_bug(request: pytest.FixtureRequest, env: Environment) ->
         request,
         env,
         "openarchiefbeheer",
-        lambda version: version >= ADMIN_LOGOUT_GET_405,
+        lambda version: version >= ADMIN_LOGOUT_POST_ONLY,
         raises=AssertionError,
         reason="[open-archiefbeheer-7] Open Archiefbeheer 2.1.2: the admin's 'Log out' link sends a GET,"
         " which Django 5.2's logout answers with 405; not yet reported upstream",

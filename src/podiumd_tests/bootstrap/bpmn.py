@@ -52,9 +52,8 @@ CONFIGURATION = "/rest/zaaktype-bpmn-configuration"
 
 def bpmn_zaaktype(openzaak: ApiClient) -> JsonObject:
     """The published zaaktype of step openzaak-zaaktype-bpmn, as Open Zaak's Catalogi API shows it."""
-    found = [
-        z for z in openzaak.list(f"{CATALOGI}/zaaktypen", {"identificatie": BPMN_ZAAKTYPE}) if not z.get("concept")
-    ]
+    zaaktypen = openzaak.list(f"{CATALOGI}/zaaktypen", {"identificatie": BPMN_ZAAKTYPE})
+    found = [zaaktype for zaaktype in zaaktypen if not zaaktype.get("concept")]
     if not found:
         msg = f"zaaktype {BPMN_ZAAKTYPE} missing: bootstrap step openzaak-zaaktype-bpmn"
         raise LookupError(msg)
@@ -80,18 +79,6 @@ class ZacBpmnProcess:
     requires: tuple[str, ...] = ("zac", "openzaak", "pabc", "keycloak")
     wiring: bool = False
 
-    def _zac(self, ctx: Context) -> tuple[requests.Session, str]:
-        password = ctx.env.credentials.get(self.admin.store_key)
-        return zac_session(ctx.env, self.admin.username, password), ctx.env.profile.urls["zac"]
-
-    @staticmethod
-    def _openzaak(ctx: Context) -> ApiClient:
-        return openzaak_client(ctx.env, ZGW_CLIENT_ID, ZGW_STORE_KEY, PREFIX)
-
-    def _pabc(self, ctx: Context) -> tuple[requests.Session, str]:
-        password = ctx.env.credentials.get(self.admin.store_key)
-        return admin_session(ctx.env, self.admin.username, password), ctx.env.profile.urls["pabc"]
-
     def is_present(self, ctx: Context, /) -> bool:
         """The process is deployed and linked to the current BPMN test zaaktype, and PABC maps the role."""
         try:
@@ -99,13 +86,14 @@ class ZacBpmnProcess:
         except LookupError:
             return False
         http, zac = self._zac(ctx)
-        keys = {d.get("key") for d in entries(expect_status(http.get(zac + DEFINITIONS), HTTPStatus.OK).json())}
+        definitions = entries(expect_status(http.get(zac + DEFINITIONS), HTTPStatus.OK).json())
+        keys = {definition.get("key") for definition in definitions}
         links = entries(expect_status(http.get(zac + CONFIGURATION), HTTPStatus.OK).json())
         linked = any(
-            c.get("bpmnProcessDefinitionKey") == PROCESS_KEY
-            and c.get("zaaktypeUuid") == zaaktype
-            and not c.get("zaakNietOntvankelijkResultaattype")
-            for c in links
+            link.get("bpmnProcessDefinitionKey") == PROCESS_KEY
+            and link.get("zaaktypeUuid") == zaaktype
+            and not link.get("zaakNietOntvankelijkResultaattype")
+            for link in links
         )
         if PROCESS_KEY not in keys or not linked:
             return False
@@ -166,3 +154,15 @@ class ZacBpmnProcess:
         if entity_type is not None:
             delete_entity_type(pabc, pabc_url, entity_type)
         return ()
+
+    def _zac(self, ctx: Context) -> tuple[requests.Session, str]:
+        password = ctx.env.credentials.get(self.admin.store_key)
+        return zac_session(ctx.env, self.admin.username, password), ctx.env.profile.urls["zac"]
+
+    @staticmethod
+    def _openzaak(ctx: Context) -> ApiClient:
+        return openzaak_client(ctx.env, ZGW_CLIENT_ID, ZGW_STORE_KEY, PREFIX)
+
+    def _pabc(self, ctx: Context) -> tuple[requests.Session, str]:
+        password = ctx.env.credentials.get(self.admin.store_key)
+        return admin_session(ctx.env, self.admin.username, password), ctx.env.profile.urls["pabc"]

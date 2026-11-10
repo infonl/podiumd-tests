@@ -246,7 +246,7 @@ def test_suspended_zaak_resumes_and_cannot_be_suspended_again(
     When the behandelaar extends the zaak by 10 days
     Then the zaak's uiterlijke einddatum afdoening is 10 days later
 """)
-def test_extension_moves_the_planned_and_final_dates(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_extension_moves_the_planned_and_final_dates(
     zac: requests.Session,
     urls: dict[str, str],
     openzaak: ApiClient,
@@ -346,7 +346,7 @@ def test_betrokkenen_with_the_same_and_different_roles_are_listed(
     assert sorted(str(b.get("roltype")) for b in listed) == sorted(str(roltypen[r]["naam"]) for r, _ in wanted)
 
 
-def uploaded_document(  # pylint: disable=too-many-arguments  # fixtures and two choices
+def uploaded_document(
     zac: requests.Session,
     zac_url: str,
     zaak: JsonObject,

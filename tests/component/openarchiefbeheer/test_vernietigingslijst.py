@@ -173,7 +173,7 @@ def _closed_zaak(
 def user_pk(oab: Callable[[str], requests.Session], api: str, role: str, user: str | None = None) -> int:
     """The pk of a test user (default: the role's own) that OAB lists for the assignee role."""
     filter_role = {"reviewer": "main_reviewer", "coreviewer": "co_reviewer"}.get(role, role)
-    users = expect_status(oab("recordmanager").get(api + "/users/", params={"role": filter_role}), HTTPStatus.OK)
+    users = expect_status(oab("recordmanager").get(f"{api}/users/", params={"role": filter_role}), HTTPStatus.OK)
     return next(int(str(u["pk"])) for u in entries(users.json()) if str(u["username"]).endswith(f"-{user or role}"))
 
 
@@ -186,7 +186,7 @@ def rows(response: requests.Response) -> list[JsonObject]:
 def zaken_on(oab: Callable[[str], requests.Session], api: str, lijst: str) -> list[object]:
     """The URLs of the zaken on the list; a zaak taken off keeps its item, with status removed."""
     params = {"item-destruction_list": lijst, "item-status": "suggested"}
-    items = oab("recordmanager").get(api + "/destruction-list-items/", params=params)
+    items = oab("recordmanager").get(f"{api}/destruction-list-items/", params=params)
     return [section(i, "zaak").get("url") for i in rows(items)]
 
 
@@ -216,7 +216,7 @@ def new_list(
         "reviewer": {"user": user_pk(oab, api, "reviewer")},
     }
     created = expect_status(
-        oab("recordmanager").post(api + "/destruction-lists/", json=body), HTTPStatus.CREATED
+        oab("recordmanager").post(f"{api}/destruction-lists/", json=body), HTTPStatus.CREATED
     ).json()
     lijst = str(created["uuid"])
     if ready:
@@ -243,7 +243,7 @@ TAKE_OVER: dict[str, object] = {
 }
 
 
-def respond(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # one flow
+def respond(
     oab: Callable[[str], requests.Session],
     api: str,
     env: Environment,
@@ -257,11 +257,11 @@ def respond(  # pylint: disable=too-many-arguments,too-many-positional-arguments
     OAB processes the response in a background task. When the worker dropped it ([open-archiefbeheer-1]), the test
     processes it and warns, so the flow is still checked.
     """
-    items = rows(oab("recordmanager").get(api + "/review-items/", params={"item-review-review": str(review_pk)}))
+    items = rows(oab("recordmanager").get(f"{api}/review-items/", params={"item-review-review": str(review_pk)}))
     zaak_of = {item["pk"]: section(section(item, "destructionListItem"), "zaak").get("url") for item in items}
     responses = [{"reviewItem": pk, **actions[str(url)]} for pk, url in zaak_of.items()]
     body = {"review": review_pk, "comment": "podiumd-tests", "itemsResponses": responses}
-    expect_status(oab("recordmanager").post(api + "/review-responses/", json=body), HTTPStatus.CREATED)
+    expect_status(oab("recordmanager").post(f"{api}/review-responses/", json=body), HTTPStatus.CREATED)
     try:
         wait_until(lambda: status(oab, api, lijst) == wanted, timeout=60, description=f"list {lijst} {wanted}")
     except WaitTimeoutError:
@@ -282,7 +282,7 @@ def make_final(oab: Callable[[str], requests.Session], api: str, lijst: str) -> 
 def review(oab: Callable[[str], requests.Session], api: str, role: str, lijst: str, **fields: object) -> JsonObject:
     """A review of the list by the role's test user."""
     body = {"destructionList": lijst, "listFeedback": "podiumd-tests", **fields}
-    return expect_status(oab(role).post(api + "/destruction-list-reviews/", json=body), HTTPStatus.CREATED).json()
+    return expect_status(oab(role).post(f"{api}/destruction-list-reviews/", json=body), HTTPStatus.CREATED).json()
 
 
 @INT_142
@@ -292,7 +292,7 @@ def review(oab: Callable[[str], requests.Session], api: str, role: str, lijst: s
 """)
 def test_anonymous_lists_are_refused(http: requests.Session, api: str) -> None:
     """Without a session the vernietigingslijsten are refused (TA int-142)."""
-    expect_status(http.get(api + "/destruction-lists/"), *REFUSED)
+    expect_status(http.get(f"{api}/destruction-lists/"), *REFUSED)
 
 
 @pytest.mark.parametrize("role", sorted(OAB_ROLES))
@@ -306,7 +306,7 @@ def test_anonymous_lists_are_refused(http: requests.Session, api: str) -> None:
 """)
 def test_role_permissions(oab: Callable[[str], requests.Session], api: str, role: str) -> None:
     """Each role's test user has exactly its role's permissions (TA int-142, reg-143 ABC-006/012, reg-166 ABC-036/037)."""
-    me = expect_status(oab(role).get(api + "/whoami/"), HTTPStatus.OK).json()
+    me = expect_status(oab(role).get(f"{api}/whoami/"), HTTPStatus.OK).json()
     assert {k: section(me, "role").get(k) for k in PERMISSIONS[role]} == PERMISSIONS[role]
 
 
@@ -464,7 +464,7 @@ def test_record_manager_takes_the_proposals_over(
     Then the list is ready for review again
     And the zaak in Open Zaak has no archiefactiedatum
 """)
-def test_keeping_forever_empties_the_archiefactiedatum(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_keeping_forever_empties_the_archiefactiedatum(
     oab: Callable[[str], requests.Session],
     api: str,
     closed_zaak: Callable[[], JsonObject],
@@ -682,7 +682,7 @@ def test_only_a_new_list_can_be_deleted(
     Then the answer is accepted
     And the list is ready for review again
 """)
-def test_review_is_processed_after_a_zaak_was_deleted_elsewhere(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_review_is_processed_after_a_zaak_was_deleted_elsewhere(
     oab: Callable[[str], requests.Session],
     api: str,
     closed_zaak: Callable[[], JsonObject],
@@ -699,12 +699,12 @@ def test_review_is_processed_after_a_zaak_was_deleted_elsewhere(  # pylint: disa
     review_pk = reject(oab, api, "reviewer", lijst, [gone, stays])
     delete_zaak(openzaak, str(gone["url"]))
     forget_zaken(podiumd_env, [str(gone["url"])])
-    items = rows(oab("recordmanager").get(api + "/review-items/", params={"item-review-review": str(review_pk)}))
+    items = rows(oab("recordmanager").get(f"{api}/review-items/", params={"item-review-review": str(review_pk)}))
     zaak_of = {item["pk"]: section(section(item, "destructionListItem"), "zaak").get("url") for item in items}
     assert stays["url"] in zaak_of.values()
     responses = [{"reviewItem": pk, **KEEP} for pk, url in zaak_of.items() if url == stays["url"]]
     body = {"review": review_pk, "comment": "podiumd-tests", "itemsResponses": responses}
-    answered = oab("recordmanager").post(api + "/review-responses/", json=body)
+    answered = oab("recordmanager").post(f"{api}/review-responses/", json=body)
     expect_status(answered, HTTPStatus.CREATED)
     wait_until(
         lambda: status(oab, api, lijst) == "ready_to_review", timeout=60, description=f"list {lijst} ready_to_review"
@@ -739,7 +739,7 @@ def test_reviewer_forwards_without_the_coreviewer(
     When the record manager opens the list
     Then the page shows the list's name and the zaak
 """)
-def test_record_manager_creates_a_list_in_the_ui(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_record_manager_creates_a_list_in_the_ui(
     page: Page,
     podiumd_env: Environment,
     oab: Callable[[str], requests.Session],
@@ -765,7 +765,7 @@ def test_record_manager_creates_a_list_in_the_ui(  # pylint: disable=too-many-ar
     dialog.get_by_label("Toelichting").fill("podiumd-tests")
     dialog.get_by_role("button", name="Vernietigingslijst opstellen").click()
     expect(page.get_by_text(naam)).to_be_visible()
-    lijsten = rows(oab("recordmanager").get(api + "/destruction-lists/", params={"name": naam}))
+    lijsten = rows(oab("recordmanager").get(f"{api}/destruction-lists/", params={"name": naam}))
     lijst = next(str(found["uuid"]) for found in lijsten if found.get("name") == naam)
     assert zaken_on(oab, api, lijst) == [zaak["url"]]
     page.get_by_text(naam).click()
@@ -782,7 +782,7 @@ def test_record_manager_creates_a_list_in_the_ui(  # pylint: disable=too-many-ar
     Then the page shows the zaak
     And the page shows the reviewer's proposal
 """)
-def test_record_manager_sees_the_proposals_in_the_ui(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_record_manager_sees_the_proposals_in_the_ui(
     page: Page,
     podiumd_env: Environment,
     oab: Callable[[str], requests.Session],
@@ -849,8 +849,8 @@ def test_coreviewer_feedback_reaches_the_reviewer(
     assign_coreviewer(oab, api, lijst)
     feedback = registry.tagged("medebeoordeling")
     co_review = {"destructionList": lijst, "listFeedback": feedback}
-    expect_status(oab("coreviewer").post(api + "/destruction-list-co-reviews/", json=co_review), HTTPStatus.CREATED)
-    seen = oab("reviewer").get(api + "/destruction-list-co-reviews/", params={"destruction_list__uuid": lijst})
+    expect_status(oab("coreviewer").post(f"{api}/destruction-list-co-reviews/", json=co_review), HTTPStatus.CREATED)
+    seen = oab("reviewer").get(f"{api}/destruction-list-co-reviews/", params={"destruction_list__uuid": lijst})
     assert feedback in [str(r.get("listFeedback")) for r in entries(expect_status(seen, HTTPStatus.OK).json())]
 
 
@@ -922,7 +922,7 @@ DESTRUCTION_FAILS = pytest.mark.xfail(
 REPORT_COLUMNS = ("Zaak Identificatie", "Zaaktype Identificatie", "Resultaat", "Zaak Startdatum", "Zaak Einddatum")
 
 
-def destroy(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # one flow
+def destroy(
     podiumd_env: Environment,
     oab: Callable[[str], requests.Session],
     api: str,
@@ -988,7 +988,7 @@ def report_config(parts: ZaaktypeParts) -> dict[str, object]:
     And the zaak is gone from Open Zaak
     And the destruction report names the zaak with its metadata columns
 """)
-def test_destruction_deletes_the_zaak_and_leaves_a_report(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_destruction_deletes_the_zaak_and_leaves_a_report(
     podiumd_env: Environment,
     oab: Callable[[str], requests.Session],
     api: str,
@@ -1018,7 +1018,7 @@ def test_destruction_deletes_the_zaak_and_leaves_a_report(  # pylint: disable=to
     When the destruction runs
     Then the productaanvraag is gone from Objecten
 """)
-def test_destruction_deletes_the_productaanvraag_of_the_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_destruction_deletes_the_productaanvraag_of_the_zaak(
     podiumd_env: Environment,
     oab: Callable[[str], requests.Session],
     api: str,
@@ -1122,7 +1122,7 @@ def test_short_procedure_list_cannot_go_to_the_archivist(
     lijst = new_list(oab, api, zaak, registry)
     review(oab, api, "reviewer", lijst, decision="accepted")
     body = {"destructionList": lijst, "listFeedback": "podiumd-tests", "decision": "accepted"}
-    response = oab("archivist").post(api + "/destruction-list-reviews/", json=body)
+    response = oab("archivist").post(f"{api}/destruction-list-reviews/", json=body)
     expect_status(response, HTTPStatus.FORBIDDEN, HTTPStatus.BAD_REQUEST)
     assert status(oab, api, lijst) == "ready_to_delete"
 
@@ -1142,7 +1142,7 @@ def test_short_procedure_list_cannot_go_to_the_archivist(
     And the list is deleted
     And the destruction report names the zaak with its metadata columns
 """)
-def test_short_procedure_destruction_leaves_a_report(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_short_procedure_destruction_leaves_a_report(
     podiumd_env: Environment,
     oab: Callable[[str], requests.Session],
     api: str,

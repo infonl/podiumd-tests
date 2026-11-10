@@ -86,7 +86,7 @@ def test_remove_without_record_only_drops_the_key(ctx, fake_http):
 )
 def test_notify_mock_missing(ctx, fake_runner, base, missing):
     context = ctx()
-    fake_runner.answers["printenv NOTIFY_API_BASEURL"] = (0, base + "\n")
+    fake_runner.answers["printenv NOTIFY_API_BASEURL"] = (0, f"{base}\n")
     reason = notify_mock_missing(context.env) or ""
     assert ("https://api.notifynl.nl" in reason) is missing
 

@@ -48,12 +48,15 @@ if TYPE_CHECKING:
 
 # The audit trail names sweep as the actor of its deletions.
 SWEEP_TAG = "podiumd-tests-sweep"
+# Fields that name a swept object, first present one wins.
+_NAME_KEYS = ("url", "slug", "Subject", "ID")
 
 
 def format_swept(swept: list[Swept]) -> str:
     """One line per leftover or skipped kind, and one count of the kept objects, for the terminal."""
-    lines = [f"{s.action:<8} {s.kind:<20} {s.name} {s.detail}".rstrip() for s in swept if s.action != "kept"]
-    kept = Counter(s.kind for s in swept if s.action == "kept")
+    shown = [entry for entry in swept if entry.action != "kept"]
+    lines = [f"{entry.action:<8} {entry.kind:<20} {entry.name} {entry.detail}".rstrip() for entry in shown]
+    kept = Counter(entry.kind for entry in swept if entry.action == "kept")
     if kept:
         kinds = ", ".join(f"{kind} {count}" for kind, count in kept.items())
         lines.append(
@@ -112,7 +115,7 @@ def with_productaanvraag(env: Environment, openzaak: ApiClient, zaken: list[Json
 
     The kenmerk of a productaanvraag that Open Formulieren registers is its public reference, without a run tag.
     """
-    by_url = {str(z["url"]): z for z in zaken}
+    by_url = {str(zaak["url"]): zaak for zaak in zaken}
     for item in objecten_client(env).list("objects", {}):
         if not RUN_TAG.search(json.dumps(item)):
             continue
@@ -192,7 +195,7 @@ class Swept:
 
 
 def _name(item: JsonObject) -> str:
-    return str(item.get("url") or item.get("slug") or item.get("Subject") or item.get("ID") or "?")
+    return str(next((item[key] for key in _NAME_KEYS if item.get(key)), "?"))
 
 
 def _sweep_items(
@@ -218,7 +221,7 @@ def _sweep_items(
 
 def sweep(env: Environment, cutoff: datetime, *, dry_run: bool) -> list[Swept]:
     """Delete (or with dry_run, list) the stale run-tagged objects of every finder, then the test forms."""
-    present = {o.step for o in check(env, STEPS) if o.action == "present"}
+    present = {outcome.step for outcome in check(env, STEPS) if outcome.action == "present"}
     swept: list[Swept] = []
     for finder in FINDERS:
         reason = env.capabilities.skip_reason(finder.component)

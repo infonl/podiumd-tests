@@ -34,7 +34,7 @@ CITED_SHEETS = {
     "Portaal": "Functionele tests Portaal",
     "ZAC": "Functionele tests ZAC",
 }
-CITATION = re.compile(r"\b(" + "|".join(CITED_SHEETS) + r")[- ]r(\d+)\b")
+CITATION = re.compile(rf"\b({'|'.join(CITED_SHEETS)})[- ]r(\d+)\b")
 TEST_FILE = re.compile(r"\btest_\w+\.py\b")
 ROW = re.compile(r"^\| `([^`]+)` \|[^|]*\|[^|]*\| (\w+) \| (.*) \|$")
 REASON_ROW = re.compile(r"^\| ([A-Z]+-\d+(?:, [A-Z]+-\d+)*) \| (.*) \|$")
@@ -54,12 +54,14 @@ def _section(name: str) -> list[str]:
 
 def migration() -> dict[str, tuple[str, str]]:
     """TA spec file name -> (decision, notes) from MIGRATION.md's TA section."""
-    return {Path(m[1]).name: (m[2], m[3]) for line in _section("TA") if (m := ROW.match(line))}
+    rows = (ROW.match(line) for line in _section("TA"))
+    return {Path(match[1]).name: (match[2], match[3]) for match in rows if match}
 
 
 def out_of_scope() -> dict[str, str]:
     """Case id -> why no test covers it, from MIGRATION.md's Draaiboek section."""
-    return {case: m[2] for line in _section("Draaiboek") if (m := REASON_ROW.match(line)) for case in m[1].split(", ")}
+    rows = (REASON_ROW.match(line) for line in _section("Draaiboek"))
+    return {case: match[2] for match in rows if match for case in match[1].split(", ")}
 
 
 def cited(tests: Path) -> dict[tuple[str, int], set[str]]:
@@ -74,7 +76,7 @@ def cited(tests: Path) -> dict[tuple[str, int], set[str]]:
 def _tc_ids(node: ast.AST) -> list[str]:
     """The case ids of a pytest.mark.tc(...) call, or none for any other expression."""
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "tc":
-        return [a.value for a in node.args if isinstance(a, ast.Constant) and isinstance(a.value, str)]
+        return [arg.value for arg in node.args if isinstance(arg, ast.Constant) and isinstance(arg.value, str)]
     return []
 
 
@@ -85,13 +87,16 @@ def marked(tests: Path) -> dict[str, set[str]]:
         tree = ast.parse(path.read_text(encoding="utf-8"))
         module_ids: list[str] = []
         for node in tree.body:
-            if isinstance(node, ast.Assign) and any(getattr(t, "id", "") == "pytestmark" for t in node.targets):
+            if isinstance(node, ast.Assign) and any(
+                getattr(target, "id", "") == "pytestmark" for target in node.targets
+            ):
                 values = node.value.elts if isinstance(node.value, ast.List) else [node.value]
-                module_ids += [i for v in values for i in _tc_ids(v)]
-        functions = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name.startswith("test_")]
+                module_ids += [case for value in values for case in _tc_ids(value)]
+        functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name.startswith("test_")]
         for function in functions:
             # Also the marks of pytest.param(...) in a parametrize decorator.
-            ids = module_ids + [i for d in function.decorator_list for n in ast.walk(d) for i in _tc_ids(n)]
+            decorator_nodes = [node for decorator in function.decorator_list for node in ast.walk(decorator)]
+            ids = module_ids + [case for node in decorator_nodes for case in _tc_ids(node)]
             for case in ids:
                 found[case].add(f"{path.relative_to(tests.parent).as_posix()}::{function.name}")
     return found
@@ -99,7 +104,7 @@ def marked(tests: Path) -> dict[str, set[str]]:
 
 def status(specs: set[str], decisions: dict[str, tuple[str, str]]) -> str:
     """covered, blocked or dropped, from the decisions of the case's TA specs; "" without any."""
-    kinds = {decisions.get(s, ("unknown", ""))[0] for s in specs}
+    kinds = {decisions.get(spec, ("unknown", ""))[0] for spec in specs}
     if kinds & {"port", "merge", "replace"}:
         return "covered"
     if "todo" in kinds:
@@ -108,17 +113,26 @@ def status(specs: set[str], decisions: dict[str, tuple[str, str]]) -> str:
 
 
 def report_row(
-    case: dict[str, Any], specs: set[str], decisions: dict[str, tuple[str, str]], own: set[str], reason: str
+    case: dict[str, Any],
+    specs: set[str],
+    decisions: dict[str, tuple[str, str]],
+    own: set[str],
+    reason: str,
 ) -> tuple[str, str]:
     """The case's status and its report row; reason: why no test covers it, or ""."""
     state = "covered" if own else status(specs, decisions)
     if not state and reason:
         state = "out of scope"
-    state = state or ("not covered" if case["klasse"] in {"A", "B"} else "out of scope")
-    notes = " ".join(decisions[s][1] for s in specs if s in decisions and decisions[s][0] != "drop")
-    names = set(TEST_FILE.findall(notes)) | {t.split("::")[1] for t in own}
-    where = ", ".join(f"`{name}`" for name in sorted(names)) or (reason if state == "out of scope" else "")
-    text = re.sub(r"\s+", " ", str(case["sub"] or case["proces"])).replace("|", "/").replace("<", "&lt;")[:110]
+    if not state:
+        state = "not covered" if case["klasse"] in {"A", "B"} else "out of scope"
+    kept = [decisions[spec] for spec in specs if spec in decisions]
+    notes = " ".join(note for decision, note in kept if decision != "drop")
+    names = set(TEST_FILE.findall(notes)) | {test.split("::")[1] for test in own}
+    where = ", ".join(f"`{name}`" for name in sorted(names))
+    if not where and state == "out of scope":
+        where = reason
+    description = str(case["sub"] or case["proces"])
+    text = re.sub(r"\s+", " ", description).replace("|", "/").replace("<", "&lt;")[:110]
     return state, f"| {case['test_id']} | {case['klasse']} | {state} | {text} | {where} |"
 
 
@@ -132,7 +146,7 @@ def main(ta: Path) -> None:
     rows: list[str] = []
     totals: dict[str, Counter[str]] = defaultdict(Counter)
     for case in catalog["cases"]:
-        specs = {p.split(":")[0] for p in case["poc_dekking"]} | citations.get(
+        specs = {coverage.split(":")[0] for coverage in case["poc_dekking"]} | citations.get(
             (case["sheet"], case["excel_rij"]), set()
         )
         state, row = report_row(
@@ -141,8 +155,10 @@ def main(ta: Path) -> None:
         totals[case["klasse"]][state] += 1
         rows.append(row)
     states = ("covered", "blocked", "dropped", "not covered", "out of scope")
-    summary = ["| Class | " + " | ".join(states) + " |", "|---|" + "---|" * len(states)]
-    summary += [f"| {k} | " + " | ".join(str(totals[k][s]) for s in states) + " |" for k in sorted(totals)]
+    summary = [f"| Class | {' | '.join(states)} |", f"|---|{'---|' * len(states)}"]
+    for klasse in sorted(totals):
+        counts = " | ".join(str(totals[klasse][column]) for column in states)
+        summary.append(f"| {klasse} | {counts} |")
     out = REPO_ROOT / "docs" / "draaiboek-coverage.md"
     out.write_text(
         "# Draaiboek coverage\n\n"

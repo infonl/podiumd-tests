@@ -81,10 +81,10 @@ def test_app_mail_reaches_mailpit(
     When a user opens Mailpit's web interface
     Then the mail is listed by its subject
 """)
-def test_sent_mail_shows_in_the_mailpit_ui(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_sent_mail_shows_in_the_mailpit_ui(
     page: Page, podiumd_env: Environment, mailpit: ApiClient, registry: ResourceRegistry, urls: dict[str, str]
 ) -> None:
     """Mailpit's web interface lists a mail an app sent, by its subject (MK test_mailpit.py)."""
     message, _ = send_and_receive(podiumd_env, mailpit, registry, "openzaak")
-    page.goto(urls["mailpit"] + "/")
+    page.goto(f"{urls['mailpit']}/")
     expect(page.get_by_text(str(message["Subject"])).first).to_be_visible()

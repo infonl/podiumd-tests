@@ -44,7 +44,7 @@ def kept_after_removal(podiumd_env: Environment, submission: str, age_days: int)
     Then Open Formulieren's data removal keeps the submission within the limit
     And deletes it once the limit has passed
 """)
-def test_registered_submission_is_removed_after_the_limit(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_registered_submission_is_removed_after_the_limit(
     http: requests.Session,
     urls: dict[str, str],
     podiumd_env: Environment,

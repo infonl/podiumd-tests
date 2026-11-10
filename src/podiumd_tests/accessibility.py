@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
     from podiumd_tests.json_data import JsonObject
 
-WCAG_21_AA = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]
+WCAG21_AA = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]
 
 
 @cache
@@ -26,7 +26,7 @@ def _axe_script() -> str:
 def wcag_violations(page: Page) -> list[JsonObject]:
     """The WCAG 2.1 AA rules the page violates, as axe-core reports them."""
     page.evaluate(_axe_script())
-    options = {"runOnly": {"type": "tag", "values": WCAG_21_AA}, "resultTypes": ["violations"]}
+    options = {"runOnly": {"type": "tag", "values": WCAG21_AA}, "resultTypes": ["violations"]}
     result = cast("JsonObject", page.evaluate("options => axe.run(document, options)", options))
     return entries(result.get("violations"))
 

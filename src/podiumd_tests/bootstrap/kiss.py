@@ -39,23 +39,9 @@ class KissKanalen:
     requires: tuple[str, ...] = ("kiss", "keycloak")
     wiring: bool = True
 
-    @staticmethod
-    def _allowed(ctx: Context) -> bool:
-        return ctx.env.profile.allows("kiss_kanalen")
-
     def not_allowed(self, ctx: Context) -> str | None:
         """Why the profile does not allow the change, or None."""
         return None if self._allowed(ctx) else f"profile setting kiss_kanalen is off for {ctx.env.profile.name}"
-
-    def _session(self, ctx: Context) -> tuple[requests.Session, str]:
-        kiss = ctx.env.profile.urls["kiss"]
-        password = ctx.env.credentials.get(self.admin.store_key)
-        return challenge_session(ctx.env, kiss, self.admin.username, password), kiss
-
-    @staticmethod
-    def _current(http: requests.Session, kiss: str) -> dict[str, str]:
-        found = get_entries(http, kiss + "/api/KanalenBeheerOverzicht")
-        return {str(k["naam"]): str(k["id"]) for k in found}
 
     def is_present(self, ctx: Context, /) -> bool:
         """Not allowed (nothing to do), or every kanaal of KANALEN exists."""
@@ -71,7 +57,7 @@ class KissKanalen:
         http, kiss = self._session(ctx)
         added = cast("list[str]", json.loads(ctx.store.read().get(STORE_KEY, "[]")))
         for naam in sorted(set(KANALEN) - set(self._current(http, kiss))):
-            expect_status(http.post(kiss + "/api/KanaalToevoegen/", json={"naam": naam}), HTTPStatus.NO_CONTENT)
+            expect_status(http.post(f"{kiss}/api/KanaalToevoegen/", json={"naam": naam}), HTTPStatus.NO_CONTENT)
             added.append(naam)
         return {STORE_KEY: json.dumps(sorted(set(added)))}
 
@@ -85,3 +71,17 @@ class KissKanalen:
                 if naam in current:
                     expect_status(http.delete(f"{kiss}/api/KanaalVerwijderen/{current[naam]}"), HTTPStatus.NO_CONTENT)
         return (STORE_KEY,)
+
+    @staticmethod
+    def _allowed(ctx: Context) -> bool:
+        return ctx.env.profile.allows("kiss_kanalen")
+
+    def _session(self, ctx: Context) -> tuple[requests.Session, str]:
+        kiss = ctx.env.profile.urls["kiss"]
+        password = ctx.env.credentials.get(self.admin.store_key)
+        return challenge_session(ctx.env, kiss, self.admin.username, password), kiss
+
+    @staticmethod
+    def _current(http: requests.Session, kiss: str) -> dict[str, str]:
+        found = get_entries(http, f"{kiss}/api/KanalenBeheerOverzicht")
+        return {str(kanaal["naam"]): str(kanaal["id"]) for kanaal in found}

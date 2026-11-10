@@ -51,8 +51,9 @@ WORLDLINE_REDIRECT = "https://worldline.example.invalid/hostedcheckout/"
 
 def ogone_shasign(params: Mapping[str, object], passphrase: str) -> str:
     """Ogone's SHASIGN: the non-empty parameters sorted by name as NAME=value+passphrase, hashed."""
-    pairs = sorted((k.upper(), str(v).strip()) for k, v in params.items() if k.upper() != "SHASIGN")
-    text = "".join(f"{k}={v}{passphrase}" for k, v in pairs if v)
+    named = ((name.upper(), str(value).strip()) for name, value in params.items())
+    pairs = sorted((name, value) for name, value in named if name != "SHASIGN")
+    text = "".join(f"{name}={value}{passphrase}" for name, value in pairs if value)
     return hashlib.new(OGONE_HASH, text.encode()).hexdigest().upper()
 
 
@@ -70,7 +71,7 @@ def ogone_return_url(request: Mapping[str, str], outcome: str, status: str, pass
 
 def form_fields(request: JsonObject) -> dict[str, str]:
     """The fields of the form a payment request posts (Ogone)."""
-    return {k: str(v) for k, v in section(request, "data").items()}
+    return {name: str(value) for name, value in section(request, "data").items()}
 
 
 def start_payment(http: requests.Session, payment_url: str, headers: Mapping[str, str]) -> JsonObject:

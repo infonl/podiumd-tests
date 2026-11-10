@@ -23,11 +23,12 @@ def _run(params):
     from cms.utils.apphook_reload import mark_urlconf_as_changed
     from open_inwoner.openklant.models import KlantenSysteemConfig
 
-    existing = {p["slug"]: _find(Page, p) for p in params["pages"]}
+    existing = {wanted["slug"]: _find(Page, wanted) for wanted in params["pages"]}
     config = KlantenSysteemConfig.get_solo()
-    missing_configs = [p for p in params["pages"] if _missing_app_config(p)]
+    missing_configs = [wanted for wanted in params["pages"] if _missing_app_config(wanted)]
     if params["action"] == "status":
-        pages = all(page and (page.is_home or not wanted.get("home")) for wanted, page in _pairs(params, existing))
+        pairs = _pairs(params, existing)
+        pages = all(page and (page.is_home or not wanted.get("home")) for wanted, page in pairs)
         present = pages and not missing_configs and bool(config.register_contact_email)
         return {"present": present}
     record = params.get("record") or {}
@@ -35,9 +36,8 @@ def _run(params):
         _remove(Page, params, record, config)
         mark_urlconf_as_changed()
         return {"present": False}
-    for wanted, page in _pairs(params, existing):
-        if page is None:
-            page = _create(wanted, _author(params))
+    for wanted, found in _pairs(params, existing):
+        page = _create(wanted, _author(params)) if found is None else found
         if wanted.get("home") and not page.is_home:
             page.set_as_homepage()
     record.setdefault("app_configs", [])
@@ -112,7 +112,9 @@ def _create(wanted, user):
         from cms.models import PageContent
 
         content = PageContent.admin_manager.filter(page=page, language="nl").latest("pk")
-        api.add_plugin(content.get_placeholders().get(slot=wanted["plugin"]["slot"]), wanted["plugin"]["type"], "nl")
+        plugin = wanted["plugin"]
+        placeholder = content.get_placeholders().get(slot=plugin["slot"])
+        api.add_plugin(placeholder, plugin["type"], "nl")
     _publish(page, user)
     return page
 

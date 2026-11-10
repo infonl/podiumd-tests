@@ -41,7 +41,7 @@ class HostHeaderAdapter(HTTPAdapter):
         self._ip = ip
 
     @override
-    def send(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # HTTPAdapter.send signature
+    def send(
         self,
         request: requests.PreparedRequest,
         stream: bool = False,
@@ -124,7 +124,7 @@ def make_session(
     if not cookies:
         session.cookies.set_policy(DefaultCookiePolicy(allowed_domains=[]))
     if ingress_ip:
-        hosts = {url_host(u) for u in urls.values()}
+        hosts = {url_host(url) for url in urls.values()}
         adapter = HostHeaderAdapter(hosts, ingress_ip)
         session.mount("http://", adapter)
         session.mount("https://", adapter)

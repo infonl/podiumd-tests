@@ -76,7 +76,7 @@ def fixture_first_identificaties(http: requests.Session, urls: dict[str, str], r
     with file_lock(run_dir / "zaakbrug-identificaties.lock"):
         if done.exists():
             return
-        now, url = datetime.now(UTC), urls["zaakbrug"] + ZDS + "/VrijBericht"
+        now, url = datetime.now(UTC), f"{urls['zaakbrug']}{ZDS}/VrijBericht"
         _post(http, url, genereer_zaak_identificatie(now), "genereerZaakIdentificatie_Di02")
         _post(http, url, genereer_document_identificatie(now), "genereerDocumentIdentificatie_Di02")
         done.touch()
@@ -96,7 +96,7 @@ def test_genereer_zaak_identificatie(http: requests.Session, urls: dict[str, str
     """genereerZaakIdentificatie_Di02 answers a new zaak identificatie (stored in ZaakBrug, not in Open Zaak)."""
     answer = _post(
         http,
-        urls["zaakbrug"] + ZDS + "/VrijBericht",
+        f"{urls['zaakbrug']}{ZDS}/VrijBericht",
         genereer_zaak_identificatie(datetime.now(UTC)),
         "genereerZaakIdentificatie_Di02",
     )
@@ -120,11 +120,11 @@ def fixture_zaakbrug_zaak(
         now = datetime.now(UTC)
         base = urls["zaakbrug"] + ZDS
         zaak = zaak_identificatie(
-            _post(http, base + "/VrijBericht", genereer_zaak_identificatie(now), "genereerZaakIdentificatie_Di02")
+            _post(http, f"{base}/VrijBericht", genereer_zaak_identificatie(now), "genereerZaakIdentificatie_Di02")
         )
         assert zaak
         envelope = creeer_zaak(now, zaak, ZAAKBRUG_ZAAKTYPE, INITIATOR_BSN, velden=velden)
-        assert is_bevestiging(_post(http, base + "/OntvangAsynchroon", envelope, "creeerZaak_Lk01"))
+        assert is_bevestiging(_post(http, f"{base}/OntvangAsynchroon", envelope, "creeerZaak_Lk01"))
         found = openzaak.list(f"{ZAKEN}/zaken", {"identificatie": zaak, "bronorganisatie": ZAAKBRUG_BRONORGANISATIE})
         assert found, f"no zaak {zaak} in Open Zaak after creeerZaak"
         url = str(found[0]["url"])
@@ -162,7 +162,7 @@ def test_geef_zaak_details_reads_a_created_zaak(
     """geefZaakdetails_Lv01 reads back a zaak created through creeerZaak (La01 carries its identificatie)."""
     zaak = zaakbrug_zaak().identificatie
     details = geef_zaak_details(datetime.now(UTC), zaak)
-    answer = _post(http, urls["zaakbrug"] + ZDS + "/BeantwoordVraag", details, "geefZaakdetails_Lv01")
+    answer = _post(http, f"{urls['zaakbrug']}{ZDS}/BeantwoordVraag", details, "geefZaakdetails_Lv01")
     assert zaak_identificatie(answer) == zaak
 
 
@@ -183,12 +183,12 @@ def test_voeg_zaakdocument_toe_attaches_a_document(
     base = urls["zaakbrug"] + ZDS
     zaak = zaakbrug_zaak()
     document = document_identificatie(
-        _post(http, base + "/VrijBericht", genereer_document_identificatie(now), "genereerDocumentIdentificatie_Di02")
+        _post(http, f"{base}/VrijBericht", genereer_document_identificatie(now), "genereerDocumentIdentificatie_Di02")
     )
     assert document
     pdf = base64.b64encode(b"%PDF-1.4 ptest").decode()
     envelope = voeg_zaakdocument_toe(now, zaak.identificatie, ZAAKBRUG_ZAAKTYPE, Document(document, ZAAKBRUG_IOT, pdf))
-    assert is_bevestiging(_post(http, base + "/OntvangAsynchroon", envelope, "voegZaakdocumentToe_Lk01"))
+    assert is_bevestiging(_post(http, f"{base}/OntvangAsynchroon", envelope, "voegZaakdocumentToe_Lk01"))
     links = openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": zaak.url})
     assert links, f"no zaakinformatieobject on {zaak.identificatie} after voegZaakdocumentToe"
 
@@ -199,7 +199,7 @@ CREATED = ZaakVelden(kenmerk="K-1", verlenging=(5, "Eerste"))
 
 def _update(http: requests.Session, urls: dict[str, str], zaak: str, old: ZaakVelden, new: ZaakVelden) -> None:
     envelope = update_zaak(datetime.now(UTC), zaak, ZAAKBRUG_ZAAKTYPE, old=old, new=new)
-    assert is_bevestiging(_post(http, urls["zaakbrug"] + ZDS + "/OntvangAsynchroon", envelope, "updateZaak_Lk01"))
+    assert is_bevestiging(_post(http, f"{urls['zaakbrug']}{ZDS}/OntvangAsynchroon", envelope, "updateZaak_Lk01"))
 
 
 @pytest.mark.requires("openzaak")
@@ -286,7 +286,7 @@ def test_status_at_an_existing_datum_status_gezet_is_refused(
     """actualiseerZaakstatus_Lk01 sets status 1; a status 2 with the same datumStatusGezet gets a SOAP Fault."""
     zaak = zaakbrug_zaak()
     gezet = datetime.now(UTC).replace(microsecond=0)
-    endpoint = urls["zaakbrug"] + ZDS + "/OntvangAsynchroon"
+    endpoint = f"{urls['zaakbrug']}{ZDS}/OntvangAsynchroon"
 
     def status(volgnummer: int, omschrijving: str) -> str:
         envelope = actualiseer_zaakstatus(
@@ -320,7 +320,7 @@ def test_definitief_document_is_not_updated(
 ) -> None:
     """A document attached as Definitief can be checked out, but updateZaakdocument_Di02 faults; its titel stays."""
     now = datetime.now(UTC)
-    vrij = urls["zaakbrug"] + ZDS + "/VrijBericht"
+    vrij = f"{urls['zaakbrug']}{ZDS}/VrijBericht"
     zaak = zaakbrug_zaak()
     document = document_identificatie(
         _post(http, vrij, genereer_document_identificatie(now), "genereerDocumentIdentificatie_Di02")
@@ -330,7 +330,7 @@ def test_definitief_document_is_not_updated(
     toe = voeg_zaakdocument_toe(
         now, zaak.identificatie, ZAAKBRUG_ZAAKTYPE, Document(document, ZAAKBRUG_IOT, pdf, status="Definitief")
     )
-    assert is_bevestiging(_post(http, urls["zaakbrug"] + ZDS + "/OntvangAsynchroon", toe, "voegZaakdocumentToe_Lk01"))
+    assert is_bevestiging(_post(http, f"{urls['zaakbrug']}{ZDS}/OntvangAsynchroon", toe, "voegZaakdocumentToe_Lk01"))
     checked_out = checked_out_id(
         _post(http, vrij, geef_zaakdocument_bewerken(now, document), "geefZaakdocumentbewerken_Di02")
     )
@@ -359,7 +359,7 @@ def test_definitief_document_is_not_updated(
     Then ZaakBrug confirms the message
     And the zaak's status in Open Zaak has a statustype of the 2020 version
 """)
-def test_status_on_an_expired_zaaktype_version_uses_that_versions_statustype(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_status_on_an_expired_zaaktype_version_uses_that_versions_statustype(
     http: requests.Session,
     urls: dict[str, str],
     openzaak: ApiClient,
@@ -385,7 +385,7 @@ def test_status_on_an_expired_zaaktype_version_uses_that_versions_statustype(  #
         gezet=datetime.now(UTC).replace(microsecond=0),
     )
     assert is_bevestiging(
-        _post(http, urls["zaakbrug"] + ZDS + "/OntvangAsynchroon", envelope, "actualiseerZaakstatus_Lk01")
+        _post(http, f"{urls['zaakbrug']}{ZDS}/OntvangAsynchroon", envelope, "actualiseerZaakstatus_Lk01")
     )
     statussen = openzaak.list(f"{ZAKEN}/statussen", {"zaak": str(zaak["url"])})
     of_version = strings(expired.get("statustypen"))

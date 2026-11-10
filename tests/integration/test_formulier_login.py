@@ -44,7 +44,7 @@ INWONER, _, BEDRIJF = IDENTITIES
 REGISTRATION_TIMEOUT = 90
 
 
-def submit_after_login(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # one flow
+def submit_after_login(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -87,7 +87,7 @@ def submit_after_login(  # pylint: disable=too-many-arguments,too-many-positiona
     Then a zaak in Open Zaak gets the form as document
     And its initiator is the inwoner, by BSN
 """)
-def test_digid_submission_has_the_inwoner_as_initiator(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_digid_submission_has_the_inwoner_as_initiator(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -115,7 +115,7 @@ def test_digid_submission_has_the_inwoner_as_initiator(  # pylint: disable=too-m
     Then a zaak in Open Zaak gets the form as document
     And its initiator is the company's vestiging, by KvK and vestigingsnummer
 """)
-def test_eherkenning_submission_has_the_vestiging_as_initiator(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_eherkenning_submission_has_the_vestiging_as_initiator(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,

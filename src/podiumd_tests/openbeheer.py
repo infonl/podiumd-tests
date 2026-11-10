@@ -21,5 +21,5 @@ def openbeheer_session(env: Environment, username: str, password: str) -> reques
     http = env.session()
     base_url = env.profile.urls["openbeheer"]
     form_login(http, base_url + LOGIN_PATHS["openbeheer"], username, password)
-    http.headers.update({"X-CSRFToken": http.cookies.get("csrftoken") or "", "Referer": base_url + "/"})
+    http.headers.update({"X-CSRFToken": http.cookies.get("csrftoken") or "", "Referer": f"{base_url}/"})
     return http

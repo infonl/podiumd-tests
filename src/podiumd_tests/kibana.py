@@ -27,7 +27,7 @@ def kibana_status_level(kube: Kube, password: str) -> str | None:
     if service is None:
         return None
     ports = entries(section(service, "spec").get("ports"))
-    scheme = "https" if any(p.get("name") == "https" for p in ports) else "http"
+    scheme = "https" if any(port.get("name") == "https" for port in ports) else "http"
     url = f"{scheme}://localhost:{PORT}/api/status"
     body = kube.run(
         "exec", "-i", f"deploy/{KIBANA}", "--", "curl", "-sSk", "-K", "-", url, stdin=f'user = "elastic:{password}"\n'

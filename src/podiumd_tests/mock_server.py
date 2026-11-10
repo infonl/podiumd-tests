@@ -43,7 +43,11 @@ ROLLOUT_TIMEOUT = 180
 
 def manifests(image: str = "") -> list[dict[str, object]]:
     """The mock server's ConfigMap, Deployment and Service, with server.py; image replaces the default image."""
-    docs = [cast("dict[str, object]", d) for d in yaml.safe_load_all((INFRA / "manifests.yaml").read_text()) if d]
+    docs = [
+        cast("dict[str, object]", manifest)
+        for manifest in yaml.safe_load_all((INFRA / "manifests.yaml").read_text())
+        if manifest
+    ]
     for doc in docs:
         if doc["kind"] == "ConfigMap":
             doc["data"] = {"server.py": (INFRA / "server.py").read_text()}
@@ -98,12 +102,15 @@ class Callback:
     def received(self) -> list[JsonObject]:
         """Everything the mock server got on this path, oldest first."""
         out = self.env.kube.exec(NAME, "sh", "-c", f"cat {RECEIVED_FILE} 2>/dev/null || true")
-        return [e for e in map(_entry, out.splitlines()) if e is not None and e.get("path") == self.path]
+        parsed = map(_entry, out.splitlines())
+        return [entry for entry in parsed if entry is not None and entry.get("path") == self.path]
 
     def wait_for(self, match: Callable[[JsonObject], bool], *, timeout: float, description: str) -> JsonObject:
         """The first received entry that matches; WaitTimeoutError when none arrives in time."""
         return wait_until(
-            lambda: next((e for e in self.received() if match(e)), None), timeout=timeout, description=description
+            lambda: next((entry for entry in self.received() if match(entry)), None),
+            timeout=timeout,
+            description=description,
         )
 
 

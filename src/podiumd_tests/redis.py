@@ -26,7 +26,7 @@ REDIS_CLI = "redis-cli -h $(hostname) -p ${REDIS_PORT:-6379}"
 
 def redis_pods(env: Environment) -> list[JsonObject]:
     """The pods of the redis-ha StatefulSet."""
-    return [p for p in env.items("pods") if section(section(p, "metadata"), "labels").get("app") == REDIS_HA]
+    return [pod for pod in env.items("pods") if section(section(pod, "metadata"), "labels").get("app") == REDIS_HA]
 
 
 def redis_cli(env: Environment, pod: JsonObject, *args: str) -> str:
@@ -55,18 +55,18 @@ def reported_role(env: Environment, pod: JsonObject) -> str:
 def checks_master_role(pod: JsonObject) -> bool:
     """The pod's readiness probe makes a master-labelled pod that reports role:slave NotReady (masterReadinessCheck)."""
     containers = entries(section(pod, "spec").get("containers"))
-    probes = [section(c, "readinessProbe") for c in containers if c.get("name") == REDIS_HA]
-    return any("role:" in str(section(p, "exec").get("command")) for p in probes)
+    probes = [section(container, "readinessProbe") for container in containers if container.get("name") == REDIS_HA]
+    return any("role:" in str(section(probe, "exec").get("command")) for probe in probes)
 
 
 def ready_endpoints(env: Environment, service: str) -> list[str]:
     """The names of the pods behind the Service's ready endpoint addresses."""
-    found = [e for e in env.items("endpoints") if metadata_name(e) == service]
+    found = [endpoint for endpoint in env.items("endpoints") if metadata_name(endpoint) == service]
+    subsets = [subset for endpoint in found for subset in entries(endpoint.get("subsets"))]
     return [
-        str(section(a, "targetRef").get("name"))
-        for e in found
-        for subset in entries(e.get("subsets"))
-        for a in entries(subset.get("addresses"))
+        str(section(address, "targetRef").get("name"))
+        for subset in subsets
+        for address in entries(subset.get("addresses"))
     ]
 
 
@@ -76,7 +76,7 @@ def master_pod(env: Environment, replaced_uid: str | None = None) -> JsonObject 
     With replaced_uid, None also while that pod (by uid: a recreated pod keeps its name) is still behind it.
     """
     behind = ready_endpoints(env, MASTER_SERVICE)
-    pods = {metadata_name(p): p for p in redis_pods(env)}
+    pods = {metadata_name(pod): pod for pod in redis_pods(env)}
     if len(behind) != 1 or behind[0] not in pods:
         return None
     pod = pods[behind[0]]

@@ -48,7 +48,7 @@ def fixture_restricted_objecten(podiumd_env: Environment) -> Iterator[ApiClient]
     params = {"action": "apply", "modules": [OBJECTEN_TOKEN_MODULE], "identifier": "ptest-authz", "secret": secret}
     run_snippet(podiumd_env.kube, deployment, "token_auth", {**params, "object_types": [PERMITTED]})
     headers = {"Authorization": f"Token {secret}", "Content-Crs": "EPSG:4326", "Accept-Crs": "EPSG:4326"}
-    yield ApiClient(podiumd_env.session(cookies=False), podiumd_env.profile.urls["objecten"] + "/api/v2", headers)
+    yield ApiClient(podiumd_env.session(cookies=False), f"{podiumd_env.profile.urls['objecten']}/api/v2", headers)
     run_snippet(
         podiumd_env.kube,
         deployment,

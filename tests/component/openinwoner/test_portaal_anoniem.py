@@ -47,7 +47,7 @@ def test_homepage_is_the_portal(
 ) -> None:
     """The homepage is the themed portal's welkom page (TA reg-83)."""
     need_bootstrap("openinwoner-cms-pages")
-    html = expect_status(http.get(urls["openinwoner"] + "/"), HTTPStatus.OK).text
+    html = expect_status(http.get(f"{urls['openinwoner']}/"), HTTPStatus.OK).text
     assert "openinwoner-theme" in html
     assert re.search("welkom|podiumd", title(html), re.IGNORECASE), title(html)
 
@@ -63,7 +63,7 @@ def test_homepage_is_the_portal(
 """)
 def test_unknown_page_is_404(http: requests.Session, urls: dict[str, str]) -> None:
     """An unknown CMS path answers 404, not an error (TA reg-83)."""
-    expect_status(http.get(urls["openinwoner"] + "/pages/ptest-bestaat-niet/"), HTTPStatus.NOT_FOUND)
+    expect_status(http.get(f"{urls['openinwoner']}/pages/ptest-bestaat-niet/"), HTTPStatus.NOT_FOUND)
 
 
 @pytest.mark.source(
@@ -81,7 +81,7 @@ def test_contact_form_is_open_to_everyone(
 ) -> None:
     """The contact form page shows a form without a login (TA reg-110)."""
     need_bootstrap("openinwoner-cms-pages")
-    html = expect_status(http.get(urls["openinwoner"] + "/contactformulier/"), HTTPStatus.OK).text
+    html = expect_status(http.get(f"{urls['openinwoner']}/contactformulier/"), HTTPStatus.OK).text
     # The contact form page has an empty <title> (also in TA); its heading names it.
     assert re.search(r"<h1[^>]*>\s*Contactformulier", html), "no Contactformulier heading"
     # The fields, not just the form: without its apphook the page renders empty field labels.
@@ -103,5 +103,5 @@ def test_zaken_webhook_refuses_unauthenticated_calls(
     http: requests.Session, urls: dict[str, str], body: dict[str, str]
 ) -> None:
     """Open Inwoner's notifications webhook answers 401 without the subscription's auth (TA reg-65a/b)."""
-    response = http.post(urls["openinwoner"] + "/api/openzaak/notifications/webhook/zaken", json=body)
+    response = http.post(f"{urls['openinwoner']}/api/openzaak/notifications/webhook/zaken", json=body)
     assert expect_status(response, HTTPStatus.UNAUTHORIZED).json()["detail"] == "cannot authenticate subscription"

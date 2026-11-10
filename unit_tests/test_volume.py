@@ -210,7 +210,7 @@ def test_objecten_are_created_in_batches(snippets, profile_factory):
     batches = [(p["start"], p["stop"], p["uuid"]) for name, p in ran if name == "objecten_volume"]
     assert batches == [(0, 200, "ot1"), (200, 400, "ot1"), (400, 450, "ot1")]
     assert kind("objecten").count(env) == 5
-    del ran[:]
+    ran.clear()
     kind("objecten").delete_all(env)
     assert [(name, p["action"]) for name, p in ran] == [
         ("objecttypen_volume", "status"),

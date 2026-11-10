@@ -66,11 +66,11 @@ class KeycloakUser:
         if any(attributes.get(name) != values for name, values in self.attributes.items()):
             return False
         user_id = str(user["id"])
-        roles = {str(r["name"]) for r in admin.realm_roles(self.realm_roles)}
-        groups = {g for g in self.groups if admin.group_id(g)}
+        roles = {str(role["name"]) for role in admin.realm_roles(self.realm_roles)}
+        groups = {group for group in self.groups if admin.group_id(group)}
         if not (roles <= admin.user_realm_roles(user_id) and groups <= admin.user_groups(user_id)):
             return False
-        client_roles = filter(None, (admin.client_role(c, r) for c, r in self.client_roles))
+        client_roles = filter(None, (admin.client_role(client, role) for client, role in self.client_roles))
         return all(str(role["name"]) in admin.user_client_roles(user_id, uuid) for uuid, role in client_roles)
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
@@ -86,7 +86,7 @@ class KeycloakUser:
         realm_roles = admin.realm_roles(self.realm_roles)
         admin.add_realm_roles(user, realm_roles)
         assigned = len(realm_roles)
-        missing = sorted(set(self.realm_roles) - {str(r["name"]) for r in realm_roles})
+        missing = sorted(set(self.realm_roles) - {str(role["name"]) for role in realm_roles})
         for client, role in self.client_roles:
             found = admin.client_role(client, role)
             if found:
@@ -109,15 +109,12 @@ class KeycloakUser:
             )
             raise ValueError(msg)
         if missing:
-            ctx.notes.append("not in realm: " + ", ".join(missing))
+            ctx.notes.append(f"not in realm: {', '.join(missing)}")
         return {self.store_key: password}
 
     def remove(self, ctx: Context, /) -> tuple[str, ...]:
         """Delete the user."""
-        admin = for_environment(ctx.env)
-        user = admin.user_id(self.username)
-        if user:
-            admin.delete_user(user)
+        for_environment(ctx.env).delete_user_named(self.username)
         return (self.store_key,)
 
 
@@ -139,26 +136,6 @@ class KeycloakRoles:
     requires: tuple[str, ...] = ("keycloak",)
     wiring: bool = True
     store_key: str = f"{PREFIX.replace('-', '_')}_keycloak_roles_record"
-
-    def _missing(self, admin: KeycloakAdmin) -> list[str]:
-        """Each wanted role that does not exist, as a record entry."""
-        wanted = sorted({r for u in self.users for r in u.realm_roles})
-        existing = {str(r["name"]) for r in admin.realm_roles(tuple(wanted))}
-        missing = [r for r in wanted if r not in existing]
-        for client_id, role in sorted({cr for u in self.users for cr in u.client_roles}):
-            if admin.client(client_id) and admin.client_role(client_id, role) is None:
-                missing.append(f"{client_id}:{role}")
-        return missing
-
-    @staticmethod
-    def _client_uuid(admin: KeycloakAdmin, entry: str) -> tuple[str, str | None]:
-        """(role, client uuid) of a record entry; the uuid is None for a realm role."""
-        client_id, _, role = entry.rpartition(":")
-        client = admin.client(client_id) if client_id else None
-        return role, str(client["id"]) if client else None
-
-    def _record(self, ctx: Context) -> list[str]:
-        return cast("list[str]", json.loads(ctx.store.read().get(self.store_key, "[]")))
 
     def is_present(self, ctx: Context, /) -> bool:
         """Every wanted role exists."""
@@ -183,3 +160,23 @@ class KeycloakRoles:
             if role and section(role, "attributes").get(PREFIX) == CREATED_BY[PREFIX]:
                 admin.delete_role(name, client_uuid)
         return (self.store_key,)
+
+    def _missing(self, admin: KeycloakAdmin) -> list[str]:
+        """Each wanted role that does not exist, as a record entry."""
+        wanted = sorted({role for user in self.users for role in user.realm_roles})
+        existing = {str(role["name"]) for role in admin.realm_roles(tuple(wanted))}
+        missing = [role for role in wanted if role not in existing]
+        for client_id, role in sorted({client_role for user in self.users for client_role in user.client_roles}):
+            if admin.client(client_id) and admin.client_role(client_id, role) is None:
+                missing.append(f"{client_id}:{role}")
+        return missing
+
+    @staticmethod
+    def _client_uuid(admin: KeycloakAdmin, entry: str) -> tuple[str, str | None]:
+        """(role, client uuid) of a record entry; the uuid is None for a realm role."""
+        client_id, _, role = entry.rpartition(":")
+        client = admin.client(client_id) if client_id else None
+        return role, str(client["id"]) if client else None
+
+    def _record(self, ctx: Context) -> list[str]:
+        return cast("list[str]", json.loads(ctx.store.read().get(self.store_key, "[]")))

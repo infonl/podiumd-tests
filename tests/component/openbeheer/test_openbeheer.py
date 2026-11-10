@@ -48,7 +48,7 @@ def fixture_openbeheer(podiumd_env: Environment, need_bootstrap: Callable[..., N
 """)
 def test_api_needs_a_login(http: requests.Session, urls: dict[str, str]) -> None:
     """Without a session the API refuses to say who is logged in."""
-    response = http.get(urls["openbeheer"] + "/api/v1/whoami/")
+    response = http.get(f"{urls['openbeheer']}/api/v1/whoami/")
     assert response.status_code in REFUSED, describe(response)
 
 
@@ -63,15 +63,15 @@ def test_api_needs_a_login(http: requests.Session, urls: dict[str, str]) -> None
 """)
 def test_keycloak_login_is_the_admin(openbeheer: requests.Session, urls: dict[str, str]) -> None:
     """After the Keycloak login Open Beheer knows the user by its Keycloak username."""
-    whoami = expect_status(openbeheer.get(urls["openbeheer"] + "/api/v1/whoami/"), HTTPStatus.OK).json()
+    whoami = expect_status(openbeheer.get(f"{urls['openbeheer']}/api/v1/whoami/"), HTTPStatus.OK).json()
     assert whoami["username"] == ADMIN.username
 
 
 @pytest.fixture(scope="module", name="catalogi_service")
 def fixture_catalogi_service(openbeheer: requests.Session, urls: dict[str, str]) -> str:
     """URL of Open Beheer's Catalogi service API."""
-    api = urls["openbeheer"] + "/api/v1/service"
-    services = expect_status(openbeheer.get(api + "/choices/"), HTTPStatus.OK).json()
+    api = f"{urls['openbeheer']}/api/v1/service"
+    services = expect_status(openbeheer.get(f"{api}/choices/"), HTTPStatus.OK).json()
     return f"{api}/{next(str(s['value']) for s in entries(services) if 'Catalogi' in str(s['label']))}"
 
 
@@ -146,7 +146,7 @@ def test_zaaktypen_filter_on_a_catalogus_from_its_choices(
     Then Open Zaak has the changed omschrijving
     And Open Zaak lists the new statustype and roltype of the zaaktype
 """)
-def test_beheerder_creates_a_concept_zaaktype_from_the_template_and_changes_it(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_beheerder_creates_a_concept_zaaktype_from_the_template_and_changes_it(
     openbeheer: requests.Session,
     urls: dict[str, str],
     catalogi_service: str,
@@ -158,7 +158,7 @@ def test_beheerder_creates_a_concept_zaaktype_from_the_template_and_changes_it( 
 
     The template leaves omschrijvingGeneriek empty, which the beheerder fills in (Open Zaak requires it).
     """
-    templates = expect_status(openbeheer.get(urls["openbeheer"] + "/api/v1/template/zaaktype/"), HTTPStatus.OK)
+    templates = expect_status(openbeheer.get(f"{urls['openbeheer']}/api/v1/template/zaaktype/"), HTTPStatus.OK)
     basis = next(t for t in entries(templates.json().get("results")) if t.get("naam") == "Basis")
     naam = registry.tagged("zaaktype")
     body = {

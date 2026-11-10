@@ -79,7 +79,7 @@ def overdue_age(env: Environment) -> timedelta:
     And the mail shows no onderwerp of a contactverzoek
     And the second afdeling gets no mail
 """)
-def test_afdeling_gets_one_reminder_for_its_overdue_contactverzoeken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_afdeling_gets_one_reminder_for_its_overdue_contactverzoeken(
     podiumd_env: Environment,
     openklant: ApiClient,
     objecten: ApiClient,
@@ -95,7 +95,9 @@ def test_afdeling_gets_one_reminder_for_its_overdue_contactverzoeken(  # pylint:
     def afdeling(name: str, *, email: bool) -> tuple[JsonObject, str]:
         identificatie = registry.tagged(f"afdeling-{name}")
         address = f"{identificatie}@example.invalid"
-        data = {"naam": identificatie, "identificatie": identificatie} | ({"email": address} if email else {})
+        data = {"naam": identificatie, "identificatie": identificatie}
+        if email:
+            data["email"] = address
         make_object(objecten, registry, afdeling_type, data)
         return make_actor(openklant, registry, "organisatorische_eenheid", identificatie, "afd"), address
 

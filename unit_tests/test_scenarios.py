@@ -42,4 +42,5 @@ def test_scenario_is_dedented_and_stripped():
 )
 def test_scenario_problems(text, problem):
     found = scenario_problems(FakeItem(text))  # pyright: ignore[reportArgumentType]  # duck-typed pytest.Item
-    assert found == ([] if problem is None else [f"t.py::test_x: {problem}"])
+    expected = [] if problem is None else [f"t.py::test_x: {problem}"]
+    assert found == expected

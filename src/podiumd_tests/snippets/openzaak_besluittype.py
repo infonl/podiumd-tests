@@ -21,7 +21,8 @@ def run(params):
     if params["action"] == "status":
         # Every published version: a zaaktype published after bootstrap is not linked yet.
         linked = set(besluittypen.values_list("zaaktypen", flat=True))
-        return {"present": not params["zaaktype"] or all(z.pk in linked for z in zaaktypen.filter(concept=False))}
+        published = zaaktypen.filter(concept=False)
+        return {"present": not params["zaaktype"] or all(zaaktype.pk in linked for zaaktype in published)}
     besluittypen.delete()
     if params["action"] == "remove" or not zaaktypen.exists():
         return {"present": params["action"] != "remove"}

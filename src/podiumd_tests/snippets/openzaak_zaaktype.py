@@ -35,7 +35,8 @@ def run(params):
     # zaaktype is a "foreign key or URL" field; _zaaktype is its local foreign key.
     Zaak.objects.filter(_zaaktype__in=zaaktypen).delete()
     # Documents protect their informatieobjecttype; one per canonical deletes all its versions.
-    canonicals = {e.canonical for e in EnkelvoudigInformatieObject.objects.filter(_informatieobjecttype__in=iots)}
+    documents = EnkelvoudigInformatieObject.objects.filter(_informatieobjecttype__in=iots)
+    canonicals = {document.canonical for document in documents}
     for canonical in canonicals:
         canonical.delete()
     zaaktypen.delete()
@@ -84,7 +85,7 @@ def _create(params, catalogus, versions):
     return {"present": True, "notes": sorted(set(notes))}
 
 
-def _version(params, catalogus, iot, begin, end, suffix):  # pylint: disable=too-many-arguments,too-many-positional-arguments  # one version
+def _version(params, catalogus, iot, begin, end, suffix):  # noqa: PLR0913, PLR0917  # one version
     import datetime as dt
 
     from openzaak.components.catalogi.models import Eigenschap

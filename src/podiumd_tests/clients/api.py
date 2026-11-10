@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 
     from podiumd_tests.json_data import JsonObject
 
+type _Headers = dict[str, str] | Callable[[], dict[str, str]]
+
 MAX_PAGES = 50
 
 
@@ -25,9 +27,7 @@ class ApiClient:
     headers is a dict, or a function that returns them per request (e.g. a fresh ZGW token).
     """
 
-    def __init__(
-        self, http: requests.Session, base_url: str, headers: dict[str, str] | Callable[[], dict[str, str]]
-    ) -> None:
+    def __init__(self, http: requests.Session, base_url: str, headers: _Headers) -> None:
         self.http = http
         self.base_url = base_url.rstrip("/")
         self._headers = headers

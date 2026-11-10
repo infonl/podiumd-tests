@@ -89,28 +89,30 @@ def _openzaak_calls(env: Environment) -> dict[str, Call]:
     documenten = f"{DOCUMENTEN}/enkelvoudiginformatieobjecten"
     ordered = {"pageSize": str(PAGE_SIZE), "ordering": "-auteur", "page": _deep_page(openzaak, documenten)}
     calls: dict[str, Call] = {
-        "oz_zaken": lambda _r: openzaak.request("GET", f"{ZAKEN}/zaken", 200, params={"pageSize": "20"}),
-        "oz_zaaktypen": lambda _r: openzaak.request("GET", f"{CATALOGI}/zaaktypen", 200),
+        "oz_zaken": lambda _registry: openzaak.request("GET", f"{ZAKEN}/zaken", 200, params={"pageSize": "20"}),
+        "oz_zaaktypen": lambda _registry: openzaak.request("GET", f"{CATALOGI}/zaaktypen", 200),
         "oz_zaak_create": lambda registry: make_zaak(openzaak, registry, zaaktype),
         # Mijn zaken: the zaken of one inwoner, a join over every zaak's rollen.
-        "oz_zaken_by_bsn": lambda _r: openzaak.request("GET", f"{ZAKEN}/zaken", 200, params={BSN_FILTER: random_bsn()}),
-        "oz_documenten_ordered": lambda _r: openzaak.request("GET", documenten, 200, params=ordered),
+        "oz_zaken_by_bsn": lambda _registry: openzaak.request(
+            "GET", f"{ZAKEN}/zaken", 200, params={BSN_FILTER: random_bsn()}
+        ),
+        "oz_documenten_ordered": lambda _registry: openzaak.request("GET", documenten, 200, params=ordered),
     }
     if "zac" in env.profile.urls:
         # A client with rights on one zaaktype, as every PodiumD app has: Open Zaak filters by its autorisaties.
         limited = openzaak_client(env, ZGW_PRODUCTAANVRAAG_CLIENT_ID, ZGW_PRODUCTAANVRAAG_STORE_KEY, "perf")
         page = {"pageSize": "20"}
-        calls["oz_zaken_one_zaaktype"] = lambda _r: limited.request("GET", f"{ZAKEN}/zaken", 200, params=page)
+        calls["oz_zaken_one_zaaktype"] = lambda _registry: limited.request("GET", f"{ZAKEN}/zaken", 200, params=page)
     return calls
 
 
 def _openklant_calls(env: Environment) -> dict[str, Call]:
     openklant = openklant_client(env)
     return {
-        "ok2_partijen": lambda _r: openklant.request("GET", "partijen", 200),
+        "ok2_partijen": lambda _registry: openklant.request("GET", "partijen", 200),
         "ok2_klantcontact_create": lambda registry: make_klantcontact(openklant, registry),
         # KISS and the portal find a person's partij by BSN.
-        "ok2_partij_by_bsn": lambda _r: openklant.request(
+        "ok2_partij_by_bsn": lambda _registry: openklant.request(
             "GET", "partij-identificatoren", 200, params={"partijIdentificatorObjectId": random_bsn()}
         ),
     }
@@ -123,7 +125,7 @@ def _objecten_calls(env: Environment) -> dict[str, Call]:
     query = {"type": vac, "data_attr": f"vraag__icontains__{SEARCH_TERM}", "pageSize": "20"}
     return {
         "obj_vac_create": lambda registry: make_object(objecten, registry, vac, vac_data(registry.tagged("perf-vac"))),
-        "obj_vac_search": lambda _r: objecten.request("GET", "objects", 200, params=query),
+        "obj_vac_search": lambda _registry: objecten.request("GET", "objects", 200, params=query),
     }
 
 
@@ -134,15 +136,17 @@ def _search_calls(env: Environment) -> dict[str, Call]:
     if "zac" in urls:
         zac = zac_session(env, ADMIN.username, env.credentials.get(ADMIN.store_key))
         query = {"page": 0, "rows": 10, "type": "ZAAK", "zoeken": {"ALLE": SEARCH_TERM}}
-        calls["zac_search"] = lambda _r: expect_status(zac.put(urls["zac"] + "/rest/zoeken/list", json=query), 200)
+        calls["zac_search"] = lambda _registry: expect_status(
+            zac.put(f"{urls['zac']}/rest/zoeken/list", json=query), 200
+        )
     if "kiss" in urls:
         kiss = challenge_session(env, urls["kiss"], KCC.username, env.credentials.get(KCC.store_key))
         body = {"query": SEARCH_TERM, "page": 1, "filters": []}
-        calls["kiss_search"] = lambda _r: expect_status(kiss.post(urls["kiss"] + "/api/search", json=body), 200)
+        calls["kiss_search"] = lambda _registry: expect_status(kiss.post(f"{urls['kiss']}/api/search", json=body), 200)
     if "openinwoner" in urls:
         portal = env.session()
-        search = urls["openinwoner"] + "/search/"
-        calls["oi_search"] = lambda _r: expect_status(portal.get(search, params={"query": SEARCH_TERM}), 200)
+        search = f"{urls['openinwoner']}/search/"
+        calls["oi_search"] = lambda _registry: expect_status(portal.get(search, params={"query": SEARCH_TERM}), 200)
     return calls
 
 
@@ -156,26 +160,6 @@ class ApiUser(User):
     def __init__(self, environment: LocustEnvironment) -> None:
         super().__init__(environment)
         self.calls = self._calls()
-
-    def _calls(self) -> dict[str, Call]:
-        """The calls of podiumd_tests.perf.ENDPOINTS whose component the environment has."""
-        env = self.env_under_test
-        http = env.session(cookies=False)
-        urls = env.profile.urls
-        calls: dict[str, Call] = {}
-        if "openzaak" in urls:
-            calls |= _openzaak_calls(env)
-        if "openklant" in urls:
-            calls |= _openklant_calls(env)
-        if "objecten" in urls:
-            calls |= _objecten_calls(env)
-        if "api-proxy" in urls:
-            query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": [EREBOS], "fields": ["naam"]}
-            calls["brp_persoon"] = lambda _r: expect_status(brp_personen(http, urls["api-proxy"], query), 200)
-        if "keycloak" in urls:
-            discovery = discovery_url(urls["keycloak"], realm_of(env))
-            calls["kc_discovery"] = lambda _r: expect_status(http.get(discovery), 200)
-        return calls | _search_calls(env)
 
     @task
     def round_of_calls(self) -> None:
@@ -200,3 +184,23 @@ class ApiUser(User):
         self.environment.events.request.fire(
             request_type="API", name=name, response_time=elapsed_ms, response_length=0, exception=error
         )
+
+    def _calls(self) -> dict[str, Call]:
+        """The calls of podiumd_tests.perf.ENDPOINTS whose component the environment has."""
+        env = self.env_under_test
+        http = env.session(cookies=False)
+        urls = env.profile.urls
+        calls: dict[str, Call] = {}
+        if "openzaak" in urls:
+            calls |= _openzaak_calls(env)
+        if "openklant" in urls:
+            calls |= _openklant_calls(env)
+        if "objecten" in urls:
+            calls |= _objecten_calls(env)
+        if "api-proxy" in urls:
+            query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": [EREBOS], "fields": ["naam"]}
+            calls["brp_persoon"] = lambda _registry: expect_status(brp_personen(http, urls["api-proxy"], query), 200)
+        if "keycloak" in urls:
+            discovery = discovery_url(urls["keycloak"], realm_of(env))
+            calls["kc_discovery"] = lambda _registry: expect_status(http.get(discovery), 200)
+        return calls | _search_calls(env)

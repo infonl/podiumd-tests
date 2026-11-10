@@ -125,7 +125,7 @@ def ask_in_mijn_vragen(page: Page, podiumd_env: Environment, vraag: str) -> Loca
     Then Mijn vragen lists the question as unanswered
     And Open Klant has the question as a klantcontact of the inwoner
 """)
-def test_question_shows_in_mijn_vragen(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_question_shows_in_mijn_vragen(
     page: Page,
     podiumd_env: Environment,
     openklant: ApiClient,
@@ -154,7 +154,7 @@ def test_question_shows_in_mijn_vragen(  # pylint: disable=too-many-arguments,to
     When the company sends a question with the contact form
     Then Open Klant has the question as a klantcontact of the company's vestiging
 """)
-def test_company_question_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_company_question_reaches_open_klant(
     page: Page,
     podiumd_env: Environment,
     openklant: ApiClient,
@@ -185,7 +185,7 @@ def test_company_question_reaches_open_klant(  # pylint: disable=too-many-argume
     Then Open Klant has the question with that name and e-mail address
     And the question is linked to no partij
 """)
-def test_anonymous_question_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_anonymous_question_reaches_open_klant(
     page: Page,
     podiumd_env: Environment,
     openklant: ApiClient,
@@ -213,7 +213,7 @@ def test_anonymous_question_reaches_open_klant(  # pylint: disable=too-many-argu
     When the inwoner pages through Mijn vragen in Open Inwoner
     Then every one of the 26 questions is listed
 """)
-def test_mijn_vragen_shows_more_than_one_page_of_questions(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_mijn_vragen_shows_more_than_one_page_of_questions(
     page: Page,
     podiumd_env: Environment,
     openklant: ApiClient,
@@ -263,7 +263,7 @@ def test_mijn_vragen_shows_more_than_one_page_of_questions(  # pylint: disable=t
     Then Mijn vragen shows the question as answered or afgehandeld
     And its detail shows the answer
 """)
-def test_question_answered_in_ita_shows_as_answered(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_question_answered_in_ita_shows_as_answered(
     page: Page,
     podiumd_env: Environment,
     openklant: ApiClient,
@@ -324,7 +324,7 @@ def test_question_answered_in_ita_shows_as_answered(  # pylint: disable=too-many
     When the inwoner asks a question in Mijn vragen
     Then ZAC lists the question among the inwoner's contactmomenten
 """)
-def test_question_from_the_portal_shows_in_zac(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_question_from_the_portal_shows_in_zac(
     page: Page,
     podiumd_env: Environment,
     openklant: ApiClient,
@@ -343,7 +343,7 @@ def test_question_from_the_portal_shows_in_zac(  # pylint: disable=too-many-argu
     asked = datetime.now(tz=UTC)
     ask_in_mijn_vragen(page, podiumd_env, vraag)
     query = {"bsn": INWONER.attributes["bsn"][0], "page": 0}
-    found = zac.put(podiumd_env.profile.urls["zac"] + "/rest/klanten/contactmomenten", json=query)
+    found = zac.put(f"{podiumd_env.profile.urls['zac']}/rest/klanten/contactmomenten", json=query)
     contactmomenten = entries(expect_status(found, HTTPStatus.OK).json()["resultaten"])
     assert any(
         c.get("tekst") == SUBJECT and datetime.fromisoformat(str(c["registratiedatum"])) >= asked
@@ -362,7 +362,7 @@ def test_question_from_the_portal_shows_in_zac(  # pylint: disable=too-many-argu
     When the question's taak is assigned to the KCC medewerker's groep
     Then the KCC medewerker sees the question's text on its detail page in ITA
 """)
-def test_question_from_the_portal_shows_in_full_in_ita(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_question_from_the_portal_shows_in_full_in_ita(
     page: Page,
     podiumd_env: Environment,
     openklant: ApiClient,

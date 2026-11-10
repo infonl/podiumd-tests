@@ -45,11 +45,10 @@ class ServiceReference:
     where: tuple[tuple[str, str], ...] = ()
 
     def __str__(self) -> str:
-        return (
-            f"{self.model}.{self.field}"
-            if self.field
-            else f"{self.model} " + " ".join(f"{k}={v}" for k, v in self.where)
-        )
+        if self.field:
+            return f"{self.model}.{self.field}"
+        conditions = " ".join(f"{key}={value}" for key, value in self.where)
+        return f"{self.model} {conditions}"
 
 
 NOTIFICATIONS = ServiceReference("notifications_api_common.NotificationsConfig", "notifications_api_service")
@@ -96,7 +95,7 @@ def list_path(api_root: str) -> str | None:
 
 
 def _services(env: Environment, component: str, probes: dict[str, str]) -> list[dict[str, object]]:
-    used = [dict(r.where) for r in SERVICE_REFERENCES.get(component, ()) if not r.field]
+    used = [dict(reference.where) for reference in SERVICE_REFERENCES.get(component, ()) if not reference.field]
     found = run_snippet(env.kube, env.deployment_for(component), "zgw_services", {"probes": probes, "used": used})
     return cast("list[dict[str, object]]", found)
 
@@ -112,7 +111,7 @@ def service_problem(service: Mapping[str, object], path: str | None) -> str | No
     if path is not None:
         ok = isinstance(status, int) and HTTPStatus.OK <= status < HTTPStatus.MULTIPLE_CHOICES
         return None if ok else f"{described}, expected 2xx with its credentials"
-    if component_for_host(urlsplit(api_root).hostname or "") not in (None, *GATEWAYS):
+    if component_for_host(urlsplit(api_root).hostname or "") not in {None, *GATEWAYS}:
         return f"{described}: no list endpoint for this API in LIST_PATHS"
     ok = isinstance(status, int) and status < HTTPStatus.INTERNAL_SERVER_ERROR
     return None if ok else f"{described}, expected an answer below 500"
@@ -123,16 +122,21 @@ def service_problems(env: Environment, component: str) -> list[str]:
 
     A Service that no config field references is never called, so its credentials are not asserted.
     """
-    paths = {str(s["uuid"]): list_path(str(s["api_root"])) for s in _services(env, component, {}) if s["referenced"]}
+    referenced = [service for service in _services(env, component, {}) if service["referenced"]]
+    paths = {str(service["uuid"]): list_path(str(service["api_root"])) for service in referenced}
     probed = _services(env, component, {uuid: path or "" for uuid, path in paths.items()})
-    return [p for s in probed if str(s["uuid"]) in paths and (p := service_problem(s, paths[str(s["uuid"])]))]
+    checked = [service for service in probed if str(service["uuid"]) in paths]
+    return [problem for service in checked if (problem := service_problem(service, paths[str(service["uuid"])]))]
 
 
 def reference_problems(env: Environment, component: str) -> list[str]:
     """The component's SERVICE_REFERENCES without rows or with an unset field; [] when all are set."""
     references = SERVICE_REFERENCES[component]
     params: dict[str, object] = {
-        "references": [{"model": r.model, "field": r.field, "where": dict(r.where)} for r in references]
+        "references": [
+            {"model": reference.model, "field": reference.field, "where": dict(reference.where)}
+            for reference in references
+        ]
     }
     found = cast(
         "list[list[str | None]]",

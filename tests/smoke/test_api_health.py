@@ -148,7 +148,9 @@ def test_anonymous_call_is_refused(
 
     POSTs carry a harmless body; they are refused before anything is stored.
     """
-    body = ({"FunctionalRoleNames": ["ptest"]} if component == "pabc" else {}) if method == "POST" else None
+    body = None
+    if method == "POST":
+        body = {"FunctionalRoleNames": ["ptest"]} if component == "pabc" else {}
     response = http.request(method, urls[component] + path, json=body, headers=headers, allow_redirects=False)
     expect_status(response, *REFUSED)
 
@@ -169,5 +171,5 @@ def test_omc_version_answers_to_its_token(
     """OMC answers /Events/Version to a token from its own JWT settings and secret omc_jwt_secret."""
     token = omc_token(podiumd_env, time.time())
     expect_status(
-        http.get(urls["omc"] + "/Events/Version", headers={"Authorization": f"Bearer {token}"}), HTTPStatus.OK
+        http.get(f"{urls['omc']}/Events/Version", headers={"Authorization": f"Bearer {token}"}), HTTPStatus.OK
     )

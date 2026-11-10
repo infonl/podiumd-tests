@@ -73,7 +73,7 @@ def heading(page: Page) -> str:
 """)
 def test_profile_can_be_edited(page: Page, portal: str) -> None:
     """The profile edit form offers e-mail addresses and phone numbers (TA int-105, as formsets in this Open Inwoner)."""
-    page.goto(portal + "/mijn-profiel/edit/")
+    page.goto(f"{portal}/mijn-profiel/edit/")
     expect(page.get_by_role("heading", name="Bewerk contactgegevens")).to_be_visible()
     expect(page.locator('input[name="email_addresses-TOTAL_FORMS"]').first).to_be_attached()
     expect(page.locator('input[name="phone_addresses-TOTAL_FORMS"]').first).to_be_attached()
@@ -91,7 +91,7 @@ def test_profile_can_be_edited(page: Page, portal: str) -> None:
 """)
 def test_profile_edit_refuses_malformed_contact_details(page: Page, portal: str) -> None:
     """A malformed e-mail address and phone number are refused with a message each; the page stays the edit form."""
-    page.goto(portal + "/mijn-profiel/edit/")
+    page.goto(f"{portal}/mijn-profiel/edit/")
     page.locator('input[name="email_addresses-0-value"]').first.fill("geen-e-mailadres")
     page.locator('input[name="phone_addresses-0-value"]').first.fill("12ab")
     page.get_by_role("button", name="Sla wijzigingen op").first.click()
@@ -120,7 +120,7 @@ def test_profile_edit_refuses_malformed_contact_details(page: Page, portal: str)
 """)
 def test_notification_setting_is_saved(page: Page, portal: str) -> None:
     """Switching the zaak notifications setting persists, and switching back too (TA reg-106, reg-165)."""
-    page.goto(portal + "/mijn-profiel/notificaties/")
+    page.goto(f"{portal}/mijn-profiel/notificaties/")
     setting = page.locator('input[name="cases_notifications"]')
     if not setting.count():
         pytest.skip("Open Inwoner offers no zaak notification setting here (SiteConfiguration)")
@@ -130,7 +130,7 @@ def test_notification_setting_is_saved(page: Page, portal: str) -> None:
         if setting.is_checked() != wanted:
             setting.dispatch_event("click")
         page.get_by_role("button", name="Sla wijzigingen op").first.click()
-        page.goto(portal + "/mijn-profiel/notificaties/")
+        page.goto(f"{portal}/mijn-profiel/notificaties/")
         assert page.locator('input[name="cases_notifications"]').is_checked() == wanted
 
 
@@ -202,7 +202,7 @@ def test_second_inwoner_sees_own_profile(
 ) -> None:
     """After logging out, a second inwoner logs in to their own profile (TA reg-114)."""
     need_bootstrap(INWONER2.name)
-    page.goto(portal + "/digid-oidc/logout/")
+    page.goto(f"{portal}/digid-oidc/logout/")
     page.context.clear_cookies()
     portal_login(page, podiumd_env, "digid", INWONER2, "/mijn-profiel/")
     expect(page).to_have_url(re.compile(r"/mijn-profiel/"))
@@ -235,7 +235,7 @@ def test_second_inwoner_sees_own_profile(
     When the inwoner logs in with DigiD
     Then the portal asks for a login again
 """)
-def test_disabled_account_cannot_log_in(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_disabled_account_cannot_log_in(
     page: Page,
     podiumd_env: Environment,
     portal: str,
@@ -250,7 +250,7 @@ def test_disabled_account_cannot_log_in(  # pylint: disable=too-many-arguments,t
     registry.add(f"account {bsn}", lambda: set_account(podiumd_env, bsn, **old))
     page.context.clear_cookies()
     portal_login(page, podiumd_env, "digid", INWONER2, "/mijn-profiel/")
-    page.goto(portal + "/mijn-profiel/")
+    page.goto(f"{portal}/mijn-profiel/")
     assert "/accounts/login/" in page.url
 
 
@@ -269,7 +269,7 @@ def test_disabled_account_cannot_log_in(  # pylint: disable=too-many-arguments,t
     When the inwoner saves a new e-mail address in Mijn profiel
     Then the e-mail address appears as a digitaal adres of the inwoner in Open Klant
 """)
-def test_profile_email_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_profile_email_reaches_open_klant(
     page: Page,
     podiumd_env: Environment,
     openklant: ApiClient,
@@ -324,7 +324,7 @@ def test_profile_email_reaches_open_klant(  # pylint: disable=too-many-arguments
     When the company opens Mijn profiel
     Then the profile shows the KvK number, the company's name and the vestiging's trade name from KvK
 """)
-def test_company_profile_shows_kvk_names(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_company_profile_shows_kvk_names(
     page: Page,
     podiumd_env: Environment,
     portal: str,
@@ -341,7 +341,7 @@ def test_company_profile_shows_kvk_names(  # pylint: disable=too-many-arguments,
     profiel = expect_status(kvk_vestigingsprofiel(http, urls["api-proxy"], vestiging), HTTPStatus.OK).json()
     page.context.clear_cookies()
     portal_login(page, podiumd_env, "eherkenning", BEDRIJF, "/mijn-profiel/")
-    page.goto(portal + "/mijn-profiel/")
+    page.goto(f"{portal}/mijn-profiel/")
     main = page.locator("main")
     for text in (kvk, naam, profiel["eersteHandelsnaam"]):
         expect(main).to_contain_text(text)

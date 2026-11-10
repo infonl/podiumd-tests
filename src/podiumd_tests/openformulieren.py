@@ -52,7 +52,7 @@ def start_submission(http: requests.Session, base_url: str, slug: str) -> tuple[
     return submission, headers
 
 
-def submit(  # pylint: disable=too-many-arguments  # one flow
+def submit(  # noqa: PLR0913  # one flow
     env: Environment,
     http: requests.Session,
     registry: ResourceRegistry,
@@ -73,7 +73,7 @@ def submit(  # pylint: disable=too-many-arguments  # one flow
     return complete_submission(env, http, submission, headers, data, timeout=timeout, registers=registers)
 
 
-def complete_submission(  # pylint: disable=too-many-arguments  # one flow
+def complete_submission(  # noqa: PLR0913  # one flow
     env: Environment,
     http: requests.Session,
     submission: JsonObject,
@@ -103,7 +103,7 @@ def _complete(http: requests.Session, submission_url: str, headers: dict[str, st
         # In a tuple: a Response is falsy for any error status, which wait_until would retry.
         return None if response.status_code == HTTPStatus.TOO_MANY_REQUESTS else (response,)
 
-    (response,) = wait_until(attempt, timeout=timeout, description=f"{submission_url}/_complete not throttled")
+    response = wait_until(attempt, timeout=timeout, description=f"{submission_url}/_complete not throttled")[0]
     return _json(response, HTTPStatus.OK)
 
 
@@ -140,7 +140,7 @@ def download_report(env: Environment, http: requests.Session, status: JsonObject
     clock = Clock()
     start = clock.now()
     for delay in REPORT_RETRIES:
-        clock.sleep(max(0.0, start + delay - clock.now()))
+        clock.sleep(max(0, start + delay - clock.now()))
         at, code = now_iso("milliseconds"), http.get(url).status_code
         lines.append(f"  retry +{delay}s at {at}: HTTP {code}; web pod: {_report_state(env, status)}")
         if code == HTTPStatus.OK:
@@ -203,7 +203,7 @@ def registered_zaak(
     return zaken[0]
 
 
-def make_form(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # mirrors the snippet's parameters
+def make_form(  # noqa: PLR0913, PLR0917  # mirrors the snippet's parameters
     env: Environment,
     registry: ResourceRegistry,
     slug: str,
@@ -220,7 +220,7 @@ def make_form(  # pylint: disable=too-many-arguments,too-many-positional-argumen
     deployment = env.deployment_for("openformulieren")
     params: dict[str, object] = {
         "slug": slug,
-        "components": [dict(c) for c in components],
+        "components": [dict(component) for component in components],
         "registration": dict(registration),
         "auth_backends": list(auth_backends),
         "payment": dict(payment or {}),

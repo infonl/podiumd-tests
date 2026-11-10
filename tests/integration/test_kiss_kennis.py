@@ -54,7 +54,7 @@ pytestmark = [
     When KISS synchronises its search index
     Then the KCC medewerker finds it by its title in KISS's search
 """)
-def test_object_is_found_in_kiss_search(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_object_is_found_in_kiss_search(
     page: Page,
     podiumd_env: Environment,
     objecten: ApiClient,

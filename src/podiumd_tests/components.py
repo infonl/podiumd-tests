@@ -122,6 +122,6 @@ def deployed_components(deployment_names: list[str]) -> set[str]:
     found: set[str] = set()
     for name, component in COMPONENTS.items():
         for prefix in component.deployment_prefixes:
-            if any(d == prefix or d.startswith(f"{prefix}-") for d in deployment_names):
+            if any(deployment == prefix or deployment.startswith(f"{prefix}-") for deployment in deployment_names):
                 found.add(name)
     return found

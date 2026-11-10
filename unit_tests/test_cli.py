@@ -263,7 +263,7 @@ def test_bootstrap_stops_on_a_failed_preflight_and_without_cluster_access(envs, 
 
 
 def test_bootstrap_runs_the_selected_steps_under_the_lock(envs, offline, monkeypatch, capsys):
-    offline.present = frozenset({CLUSTER})
+    offline.present = frozenset((CLUSTER,))
     calls = []
 
     def fake_bootstrap(_env, steps, *, rotate):
@@ -279,7 +279,7 @@ def test_bootstrap_runs_the_selected_steps_under_the_lock(envs, offline, monkeyp
 
 
 def test_unbootstrap_exits_with_config_code_when_a_step_fails(envs, offline, monkeypatch):
-    offline.present = frozenset({CLUSTER})
+    offline.present = frozenset((CLUSTER,))
     monkeypatch.setattr(cli, "unbootstrap", lambda _env, _steps: [Outcome("openklant-token", "failed", "403")])
     assert cli.main([*envs(), "unbootstrap", "--env", "e"]) == cli.EXIT_CONFIG
     assert offline.locks == ["unbootstrap e"]
@@ -359,7 +359,7 @@ JUNIT = (
 )
 def test_run_records_redacted_results_under_the_lock(envs, offline, tmp_path, monkeypatch, exit_code, expected):
     results = tmp_path / "r"
-    offline.present = frozenset({CLUSTER})
+    offline.present = frozenset((CLUSTER,))
 
     def fake_pytest(args):
         junit = Path(next(a for a in args if a.startswith("--junitxml=")).removeprefix("--junitxml="))
@@ -372,7 +372,9 @@ def test_run_records_redacted_results_under_the_lock(envs, offline, tmp_path, mo
         expected
     )
     assert offline.locks == ["run full e"]
-    (run,) = results.glob("*/*/run.json")
+    runs = list(results.glob("*/*/run.json"))
+    assert len(runs) == 1, runs
+    run = runs[0]
     info = json.loads(run.read_text(encoding="utf-8"))
     assert info["selection"][-1] == "-x"
     assert info["versions"] == {}

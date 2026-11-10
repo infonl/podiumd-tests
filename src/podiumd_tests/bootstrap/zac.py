@@ -50,19 +50,19 @@ class ZacPart:
             return section(parameters, self.key)
         items = entries(parameters.get(self.key))
         empty: JsonObject = {}
-        return next((i for i in items if section(i, "planItemDefinition").get("id") == self.plan_item), empty)
+        return next((item for item in items if section(item, "planItemDefinition").get("id") == self.plan_item), empty)
 
     def write(self, parameters: JsonObject, value: JsonObject) -> JsonObject:
         """The parameters with the part set to value."""
         if self.plan_item is None:
             return {**parameters, self.key: value}
         items = entries(parameters.get(self.key))
-        mine = [value if section(i, "planItemDefinition").get("id") == self.plan_item else i for i in items]
+        mine = [value if section(item, "planItemDefinition").get("id") == self.plan_item else item for item in items]
         return {**parameters, self.key: mine}
 
     def is_mine(self, value: JsonObject) -> bool:
         """The value still has what apply set."""
-        return all(value.get(k) == v for k, v in self.wanted.items())
+        return all(value.get(key) == wanted for key, wanted in self.wanted.items())
 
 
 # ZAC's own mail template; GEMEENTE sends from and replies to the environment's municipality address.
@@ -97,22 +97,11 @@ class ZacParameters:
         """Key of the record of old values in the credentials Secret."""
         return f"{PREFIX.replace('-', '_')}_{self.name.replace('-', '_')}_record"
 
-    def _allowed(self, ctx: Context) -> str | None:
-        """The zaaktype identificatie when the profile allows the change, else None."""
-        profile = ctx.env.profile
-        return profile.settings.get("productaanvraag_zaaktype") if profile.allows(self.setting) else None
-
     def not_allowed(self, ctx: Context) -> str | None:
         """Why the profile does not allow the change, or None."""
         if self._allowed(ctx) is None:
             return f"profile setting {self.setting} is off for {ctx.env.profile.name}"
         return None
-
-    def _session(self, ctx: Context) -> requests.Session:
-        return zac_session(ctx.env, self.admin.username, ctx.env.credentials.get(self.admin.store_key))
-
-    def _record(self, ctx: Context) -> dict[str, JsonObject]:
-        return cast("dict[str, JsonObject]", json.loads(ctx.store.read().get(self.store_key, "{}")))
 
     def is_present(self, ctx: Context, /) -> bool:
         """Not allowed (nothing to do), or the part is on for every version of the zaaktype."""
@@ -122,8 +111,8 @@ class ZacParameters:
         http, zac = self._session(ctx), ctx.env.profile.urls["zac"]
         versions = zaakafhandelparameters(http, zac, identificatie)
         return bool(versions) and all(
-            self.part.is_on(self.part.read(_parameters(http, zac, str(section(v, "zaaktype")["uuid"]))))
-            for v in versions
+            self.part.is_on(self.part.read(_parameters(http, zac, str(section(version, "zaaktype")["uuid"]))))
+            for version in versions
         )
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
@@ -165,6 +154,17 @@ class ZacParameters:
                 continue
             _put(http, zac, self.part.write(parameters, {**old, "id": current.get("id")}))
         return (self.store_key,)
+
+    def _allowed(self, ctx: Context) -> str | None:
+        """The zaaktype identificatie when the profile allows the change, else None."""
+        profile = ctx.env.profile
+        return profile.settings.get("productaanvraag_zaaktype") if profile.allows(self.setting) else None
+
+    def _session(self, ctx: Context) -> requests.Session:
+        return zac_session(ctx.env, self.admin.username, ctx.env.credentials.get(self.admin.store_key))
+
+    def _record(self, ctx: Context) -> dict[str, JsonObject]:
+        return cast("dict[str, JsonObject]", json.loads(ctx.store.read().get(self.store_key, "{}")))
 
 
 def _parameters(http: requests.Session, zac: str, uuid: str) -> JsonObject:

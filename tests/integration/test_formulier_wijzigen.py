@@ -54,7 +54,7 @@ KENTEKEN = {"type": "textfield", "key": "kenteken", "label": "Kenteken"}
     And an inwoner submits the changed form
     Then the new zaak has the filled-in kenteken as eigenschap
 """)
-def test_changed_form_registers_the_new_field(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_changed_form_registers_the_new_field(
     http: requests.Session,
     urls: dict[str, str],
     podiumd_env: Environment,

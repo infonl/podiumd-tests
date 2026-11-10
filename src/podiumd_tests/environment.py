@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import contextlib
 import tempfile
 
 from contextlib import ExitStack
 from contextlib import contextmanager
+from contextlib import suppress
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -113,10 +113,8 @@ class Environment:
 
     def items(self, kind: str, namespaces: Sequence[str] | None = None) -> list[dict[str, object]]:
         """Objects of one kind in the given namespaces, by default all of the environment's namespaces."""
-        found: list[dict[str, object]] = []
-        for namespace in self.namespaces if namespaces is None else namespaces:
-            found += self.kube.items(kind, namespace=namespace)
-        return found
+        selected = self.namespaces if namespaces is None else namespaces
+        return [item for namespace in selected for item in self.kube.items(kind, namespace=namespace)]
 
     def workloads(self, namespaces: Sequence[str] | None = None) -> list[dict[str, object]]:
         """The long-running workloads: Deployments and StatefulSets."""
@@ -125,14 +123,14 @@ class Environment:
     @cached_property
     def deployment_names(self) -> list[str]:
         """Names of all deployments in the environment's namespaces; read once."""
-        return [metadata_name(d) for d in self.items("deployments")]
+        return [metadata_name(deployment) for deployment in self.items("deployments")]
 
     @cached_property
     def workload_names(self) -> list[str]:
         """Names of all Deployments and, where listable, StatefulSets (e.g. OpenBao); for capability detection."""
         names = list(self.deployment_names)
-        with contextlib.suppress(KubeError):
-            names += [metadata_name(s) for s in self.items("statefulsets")]
+        with suppress(KubeError):
+            names += [metadata_name(statefulset) for statefulset in self.items("statefulsets")]
         return names
 
     def deployment_for(self, component: str) -> str:
@@ -151,7 +149,7 @@ class Environment:
         try:
             mine = self.deployment_for(component)
             return next(
-                (a for a in DJANGO_APPS if a in self.profile.urls and self.deployment_for(a) == mine), component
+                (app for app in DJANGO_APPS if app in self.profile.urls and self.deployment_for(app) == mine), component
             )
         except KubeError:  # no cluster, or an app without deployment: the profile URL decides
             return component

@@ -8,6 +8,7 @@ from datetime import timedelta
 from datetime import timezone
 
 from podiumd_tests.credentials import Redactor
+from podiumd_tests.results import Counts
 from podiumd_tests.results import Details
 from podiumd_tests.results import Entry
 from podiumd_tests.results import LocalDirSink
@@ -98,6 +99,16 @@ def test_write_run_redacts_secrets(tmp_path):
     assert "- TICKET-2 (1): `tests.smoke.test_up::test_fixed`" in summary
     assert "| no report id | **did not show in 1 of 2 tests** | 2 |" in summary
     assert "- requires: oab (1): `tests.smoke.test_up::test_skip`" in summary
+
+
+def test_summary_table_puts_each_count_under_its_header():
+    info = RunInfo("r", "e", "smoke", "s", "f", 0, [], "c")
+    info.counts = Counts(passed=1, failed=2, errors=3, skipped=4, xfailed=5, xpassed=6, total=21)
+    summary = summary_markdown(info, Details())
+    assert (
+        "| Passed | Failed | Errors | Skipped | XFailed | XPassed | Total |\n|---|---|---|---|---|---|---|\n" in summary
+    )
+    assert "| 1 | 2 | 3 | 4 | 5 | 6 | 21 |" in summary
 
 
 def test_run_tag_marks_resources_of_a_run():

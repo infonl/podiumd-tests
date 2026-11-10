@@ -77,7 +77,7 @@ def test_only_the_beheerder_lists_all_contactverzoeken(
     ita_as: Callable[[KeycloakUser], requests.Session], urls: dict[str, str]
 ) -> None:
     """ITA's list of all internetaken answers the functioneel beheerder and refuses the KCC user."""
-    alle = urls["ita"] + "/api/internetaken"
+    alle = f"{urls['ita']}/api/internetaken"
     expect_status(ita_as(ITA_BEHEERDER).get(alle), HTTPStatus.OK)
     expect_status(ita_as(KCC).get(alle), *REFUSED)
 

@@ -52,8 +52,10 @@ def realm_policy_gaps(realm: JsonObject) -> list[str]:
         gaps.append(f"accessTokenLifespan {realm.get('accessTokenLifespan')} s (at most {MAX_ACCESS_TOKEN_SECONDS})")
     if realm.get("revokeRefreshToken") is not True:
         gaps.append("revokeRefreshToken is off")
-    gaps.extend(f"{e} is off" for e in ("eventsEnabled", "adminEventsEnabled") if realm.get(e) is not True)
-    if realm.get("sslRequired") not in ("external", "all"):
+    gaps.extend(
+        f"{setting} is off" for setting in ("eventsEnabled", "adminEventsEnabled") if realm.get(setting) is not True
+    )
+    if realm.get("sslRequired") not in {"external", "all"}:
         gaps.append(f"sslRequired {realm.get('sslRequired')!r} (external or all)")
     length = re.search(r"length\((\d+)\)", str(realm.get("passwordPolicy") or ""))
     if length is None or int(length[1]) < MIN_PASSWORD_LENGTH:
@@ -96,12 +98,12 @@ def missing_security_headers(response: requests.Response) -> list[str]:
 
     A redirect's HTML body is never rendered, so it cannot be framed: frame protection applies to 2xx only.
     """
-    headers = {k.lower(): v for k, v in response.headers.items()}
+    headers = {name.lower(): value for name, value in response.headers.items()}
     missing: list[str] = []
     if response.url.startswith("https://") and "strict-transport-security" not in headers:
         missing.append("Strict-Transport-Security")
     # An app and its nginx may each send it: "nosniff, nosniff".
-    if {v.strip().lower() for v in headers.get("x-content-type-options", "").split(",")} != {"nosniff"}:
+    if {value.strip().lower() for value in headers.get("x-content-type-options", "").split(",")} != {"nosniff"}:
         missing.append("X-Content-Type-Options: nosniff")
     html = response.ok and not response.is_redirect and headers.get("content-type", "").startswith("text/html")
     framed = "x-frame-options" in headers or "frame-ancestors" in headers.get("content-security-policy", "")
@@ -115,7 +117,7 @@ def insecure_session_cookies(response: requests.Response) -> list[str]:
     found: list[str] = []
     for cookie in cast("list[str]", response.raw.headers.getlist("Set-Cookie")):
         name, _, rest = cookie.partition("=")
-        flags = {f.strip().lower() for f in rest.split(";")[1:]}
+        flags = {flag.strip().lower() for flag in rest.split(";")[1:]}
         if SESSION_COOKIE.search(name) and not {"secure", "httponly"} <= flags:
             found.append(name)
     return found

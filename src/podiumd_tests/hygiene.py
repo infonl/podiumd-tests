@@ -12,6 +12,7 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.kube import metadata_name
+from podiumd_tests.kube import metadata_namespace
 from podiumd_tests.workloads import pod_containers
 
 if TYPE_CHECKING:
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
 
 # Capabilities the baseline level allows a container to add.
 BASELINE_CAPABILITIES = frozenset(
-    {
+    (
         "AUDIT_WRITE",
         "CHOWN",
         "DAC_OVERRIDE",
@@ -35,15 +36,21 @@ BASELINE_CAPABILITIES = frozenset(
         "SETPCAP",
         "SETUID",
         "SYS_CHROOT",
-    }
+    )
 )
+# A disruption budget needs a second replica.
+BUDGET_MIN_REPLICAS = 2
 
 
 def baseline_violations(workload: JsonObject) -> list[str]:
     """What in the workload's pod template breaks the Pod Security Standard "baseline"."""
     name, pod = metadata_name(workload), section(section(section(workload, "spec"), "template"), "spec")
     found = [f"{name}: {key}" for key in ("hostNetwork", "hostPID", "hostIPC") if pod.get(key) is True]
-    found += [f"{name}: hostPath volume {v.get('name')}" for v in entries(pod.get("volumes")) if "hostPath" in v]
+    found += [
+        f"{name}: hostPath volume {volume.get('name')}"
+        for volume in entries(pod.get("volumes"))
+        if "hostPath" in volume
+    ]
     for container in pod_containers(workload, with_init=True):
         where = f"{name}/{container.get('name')}"
         context = section(container, "securityContext")
@@ -53,7 +60,9 @@ def baseline_violations(workload: JsonObject) -> list[str]:
         if added:
             found.append(f"{where}: adds capabilities {sorted(added)}")
         found += [
-            f"{where}: hostPort {p.get('hostPort')}" for p in entries(container.get("ports")) if p.get("hostPort")
+            f"{where}: hostPort {port.get('hostPort')}"
+            for port in entries(container.get("ports"))
+            if port.get("hostPort")
         ]
     return found
 
@@ -74,14 +83,10 @@ def missing_requests(workload: JsonObject) -> list[str]:
     found: list[str] = []
     for container in pod_containers(workload, with_init=False):
         asked = section(section(container, "resources"), "requests")
-        missing = [r for r in ("cpu", "memory") if not asked.get(r)]
+        missing = [resource for resource in ("cpu", "memory") if not asked.get(resource)]
         if missing:
             found.append(f"{metadata_name(workload)}/{container.get('name')}: no {' or '.join(missing)} request")
     return found
-
-
-def _namespace(item: JsonObject) -> object:
-    return section(item, "metadata").get("namespace")
 
 
 def without_disruption_budget(workloads: Sequence[JsonObject], budgets: Sequence[JsonObject]) -> list[str]:
@@ -92,13 +97,13 @@ def without_disruption_budget(workloads: Sequence[JsonObject], budgets: Sequence
     found: list[str] = []
     for workload in workloads:
         replicas = section(workload, "spec").get("replicas", 1)
-        if not isinstance(replicas, int) or replicas < 2:  # a budget needs a second replica
+        if not isinstance(replicas, int) or replicas < BUDGET_MIN_REPLICAS:
             continue
         labels = section(section(section(section(workload, "spec"), "template"), "metadata"), "labels")
         selected = any(
-            _namespace(b) == _namespace(workload)
-            and section(section(section(b, "spec"), "selector"), "matchLabels").items() <= labels.items()
-            for b in budgets
+            metadata_namespace(budget) == metadata_namespace(workload)
+            and section(section(section(budget, "spec"), "selector"), "matchLabels").items() <= labels.items()
+            for budget in budgets
         )
         if not selected:
             found.append(metadata_name(workload))

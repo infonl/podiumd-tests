@@ -60,7 +60,7 @@ def visit(page: Page, base: str, paths: tuple[str, ...]) -> list[str]:
 def test_public_pages_raise_no_policy_violation(page: Page, podiumd_env: Environment) -> None:
     """The homepage, search and contact form raise no CSP or Permissions-Policy violation."""
     base = podiumd_env.profile.urls["openinwoner"]
-    page.goto(base + "/")
+    page.goto(f"{base}/")
     refuse_cookies(page)
     assert not visit(page, base, PUBLIC_PAGES)
 

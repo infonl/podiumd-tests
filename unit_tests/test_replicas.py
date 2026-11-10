@@ -23,7 +23,7 @@ class HoldRecorder:
 def test_replicas_are_switched_on_for_the_block_and_off_after_it(tmp_path, env_factory, profile_factory):
     lock = tmp_path / "lock"
     line = f"{holder('run chaos minikube')} 2026-10-22T10:00:00+00:00"
-    lock.write_text(line + "\n", encoding="utf-8")
+    lock.write_text(f"{line}\n", encoding="utf-8")
     settings = {"replicas_command": "/opt/podiumd-minikube/bin/replicas", "lock_file": str(lock)}
     recorder = HoldRecorder()
     env = env_factory(profile_factory(settings=settings), runner=recorder)
@@ -38,5 +38,5 @@ def test_without_replicas_command_nothing_runs(env_factory, fake_runner):
     env = env_factory()
     assert not switches_replicas(env.profile)
     with several_replicas(env):
-        pass
+        assert fake_runner.calls == []
     assert fake_runner.calls == []

@@ -36,7 +36,7 @@ pytestmark = [
 
 def notification(urls: dict[str, str], root: tuple[str, ...]) -> dict[str, object]:
     """A new-status notification for a zaak that does not exist, with Open Notificaties as these root properties."""
-    zaken = urls["openzaak"] + "/zaken/api/v1/"
+    zaken = f"{urls['openzaak']}/zaken/api/v1/"
     body: dict[str, object] = {
         "kanaal": "zaken",
         "hoofdObject": f"{zaken}zaken/{uuid.uuid4()}",
@@ -58,7 +58,7 @@ def listen(
 ) -> requests.Response:
     """POST a notification to OMC's Events/Listen with the token its abonnement uses, issued now unless given."""
     token = omc_token(podiumd_env, time.time() if issued is None else issued)
-    url = podiumd_env.profile.urls["omc"] + "/Events/Listen"
+    url = f"{podiumd_env.profile.urls['omc']}/Events/Listen"
     return http.post(url, json=body, headers={"Authorization": f"Bearer {token}"})
 
 

@@ -50,9 +50,10 @@ def event(kanaal: str, resource: str, actie: str, hoofd: object) -> Callable[[Js
 
     def match(entry: JsonObject) -> bool:
         body = entry.get("body")
+        if not isinstance(body, dict):
+            return False
         return (
-            isinstance(body, dict)
-            and body.get("kanaal") == kanaal
+            body.get("kanaal") == kanaal
             and body.get("resource") == resource
             and body.get("actie") == actie
             and body.get("hoofdObject") == hoofd
@@ -93,7 +94,7 @@ def test_kenmerk_filter_selects_the_subscriber(
     # A later zaak for the other subscriber: once it arrived, the first one would have too.
     secret = make_zaak(openzaak, registry, zaaktype, vertrouwelijkheidaanduiding="vertrouwelijk")
     notified(vertrouwelijk, event("zaken", "zaak", "create", secret["url"]), "the vertrouwelijk zaak")
-    assert not [e for e in vertrouwelijk.received() if event("zaken", "zaak", "create", open_zaak["url"])(e)]
+    assert not any(event("zaken", "zaak", "create", open_zaak["url"])(e) for e in vertrouwelijk.received())
 
 
 @pytest.mark.core
@@ -152,7 +153,7 @@ def test_every_subscriber_gets_the_notification(
     When a zaak in Open Zaak gets a status, a rol, a change and a document, and loses the rol
     Then the subscriber gets a notification of each change, naming the changed object
 """)
-def test_zaak_changes_are_notified_with_their_resource(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_zaak_changes_are_notified_with_their_resource(
     openzaak: ApiClient,
     opennotificaties: ApiClient,
     registry: ResourceRegistry,

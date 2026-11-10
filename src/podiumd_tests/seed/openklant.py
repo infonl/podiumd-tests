@@ -21,15 +21,18 @@ if TYPE_CHECKING:
 # BSNs of the BRP test set and KvK numbers of the KvK test set are shared by every team;
 # generated numbers keep tests independent of what others left behind.
 _rng = random.SystemRandom()
+# A remainder of 10 has no single-digit check digit.
+_NO_CHECK_DIGIT = 10
 
 
 def random_bsn() -> str:
     """A random 9-digit number that passes the BSN eleven test (elfproef)."""
     while True:
         digits = [_rng.randint(0, 9) for _ in range(8)]
-        total = sum(d * w for d, w in zip(digits, range(9, 1, -1), strict=True))
+        weights = range(9, 1, -1)
+        total = sum(digit * weight for digit, weight in zip(digits, weights, strict=True))
         last = total % 11
-        if last < 10 and digits[0] != 0:  # the check digit is weighted -1
+        if last != _NO_CHECK_DIGIT and digits[0] != 0:  # the check digit is weighted -1
             return "".join(map(str, [*digits, last]))
 
 
@@ -191,7 +194,7 @@ def make_internetaak(
         "nummer": random_nummer(),
         "gevraagdeHandeling": "Terugbellen",
         "aanleidinggevendKlantcontact": ref(klantcontact),
-        "toegewezenAanActoren": [ref(a) for a in actoren],
+        "toegewezenAanActoren": [ref(actor) for actor in actoren],
         "toelichting": registry.tagged("internetaak"),
         "status": "te_verwerken",
     }
@@ -249,7 +252,9 @@ def delete_klantcontact_tree(openklant: ApiClient, url: str) -> None:
 def partijen_of(openklant: ApiClient, object_id: str) -> list[str]:
     """URLs of the partijen identified by a BSN or KvK number."""
     identificatoren = openklant.list("partij-identificatoren", {"partijIdentificatorObjectId": object_id})
-    return list(dict.fromkeys(str(section(i, "identificeerdePartij")["url"]) for i in identificatoren))
+    return list(
+        dict.fromkeys(str(section(identificator, "identificeerdePartij")["url"]) for identificator in identificatoren)
+    )
 
 
 def expanded(openklant: ApiClient, url: str, key: str) -> list[JsonObject]:
@@ -260,7 +265,7 @@ def expanded(openklant: ApiClient, url: str, key: str) -> list[JsonObject]:
 def klantcontacten_about(openklant: ApiClient, onderwerp: str, inhoud: str | None = None) -> list[JsonObject]:
     """The klantcontacten with the onderwerp and, when given, the inhoud."""
     found = openklant.list("klantcontacten", {"onderwerp": onderwerp})
-    return [k for k in found if inhoud is None or k.get("inhoud") == inhoud]
+    return [klantcontact for klantcontact in found if inhoud is None or klantcontact.get("inhoud") == inhoud]
 
 
 def clean_up_klantcontacten(
@@ -270,8 +275,8 @@ def clean_up_klantcontacten(
     registry.add(
         f"klantcontacten {onderwerp} {inhoud or ''}".rstrip(),
         lambda: [
-            delete_klantcontact_tree(openklant, str(k["url"]))
-            for k in klantcontacten_about(openklant, onderwerp, inhoud)
+            delete_klantcontact_tree(openklant, str(klantcontact["url"]))
+            for klantcontact in klantcontacten_about(openklant, onderwerp, inhoud)
         ],
     )
 
@@ -284,7 +289,9 @@ def delete_partij(openklant: ApiClient, partij: str) -> None:
         openklant.get(str(ref["url"])) for ref in entries(openklant.get(partij).get("partijIdentificatoren"))
     ]
     # A sub-identificator (a vestigingsnummer under its kvk_nummer) protects its parent.
-    for identificator in sorted(identificatoren, key=lambda i: i.get("subIdentificatorVan") is None):
+    for identificator in sorted(
+        identificatoren, key=lambda identificator: identificator.get("subIdentificatorVan") is None
+    ):
         openklant.delete(str(identificator["url"]))
     openklant.delete(partij)
 

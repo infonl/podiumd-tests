@@ -74,4 +74,4 @@ def test_challenge_session_logs_in_through_the_challenge_route(env_factory, monk
     logins = []
     monkeypatch.setattr(oidc, "form_login", lambda _http, url, user, password: logins.append((url, user, password)))
     oidc.challenge_session(env_factory(), "https://kiss.test", "u", "p")
-    assert logins == [("https://kiss.test" + oidc.CHALLENGE, "u", "p")]
+    assert logins == [(f"https://kiss.test{oidc.CHALLENGE}", "u", "p")]

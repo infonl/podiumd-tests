@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.component
 
 # Apps that store geometry; their database needs PostGIS.
-SPATIAL = frozenset({"openzaak", "objecten"})
+SPATIAL = frozenset(("openzaak", "objecten"))
 
 
 @pytest.mark.source("MK test_database.py", "The shared Postgres has the databases and extensions the apps need.")

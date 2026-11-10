@@ -88,10 +88,13 @@ def test_person_search(
     """
     body = json.dumps({**query, "fields": ["burgerservicenummer"]}, separators=(",", ":"))
     found = kiss_session(KCC).post(
-        urls["kiss"] + "/api/haalcentraal/brp/personen", data=body, headers={"Content-Type": "application/json"}
+        f"{urls['kiss']}/api/haalcentraal/brp/personen", data=body, headers={"Content-Type": "application/json"}
     )
     bsns = [str(p.get("burgerservicenummer")) for p in entries(expect_status(found, HTTPStatus.OK).json()["personen"])]
-    assert (expected in bsns) if expected else bsns == []
+    if expected:
+        assert expected in bsns
+    else:
+        assert bsns == []
 
 
 @pytest.mark.parametrize(
@@ -121,7 +124,7 @@ def test_company_search(
     found: bool,  # noqa: FBT001  # a parameter
 ) -> None:
     """KISS's KvK search finds the KvK test company, or nothing for an unknown number (404 or no results)."""
-    response = kiss_session(KCC).get(urls["kiss"] + "/api/kvk/v2/zoeken", params=query)
+    response = kiss_session(KCC).get(f"{urls['kiss']}/api/kvk/v2/zoeken", params=query)
     if not found and response.status_code == HTTPStatus.NOT_FOUND:
         return
     numbers = {

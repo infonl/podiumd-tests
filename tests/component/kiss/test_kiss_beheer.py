@@ -85,7 +85,7 @@ def test_beheerder_adds_changes_and_deletes(
     kind: str,
 ) -> None:
     """The KISS beheerder adds an item, renames it, and deletes it; the overview follows each step."""
-    beheer, api = BEHEER[kind], urls["kiss"] + "/api"
+    beheer, api = BEHEER[kind], f"{urls['kiss']}/api"
     kiss = kiss_session(ADMIN)
     name = registry.tagged(kind)
 
@@ -125,7 +125,7 @@ def test_published_bericht_reaches_the_kcc_and_is_marked_read(
 
     Only a redacteur may publish: the KCC is refused.
     """
-    api = urls["kiss"] + "/api"
+    api = f"{urls['kiss']}/api"
     redacteur, kcc = kiss_session(ADMIN), kiss_session(KCC)
     skill = expect_status(redacteur.post(f"{api}/Skills", json={"naam": registry.tagged("skill")}), 201).json()
     registry.add(f"KISS skill {skill['id']}", lambda: redacteur.delete(f"{api}/Skills/{skill['id']}"))

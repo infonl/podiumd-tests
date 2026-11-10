@@ -9,10 +9,11 @@ usage() {
     cat <<'EOF'
 Usage: run_python_checks [-h|--help]
 
-Runs ruff check, shellcheck, ruff format --check, jscpd, pymarkdown,
-vulture, bandit, pylint, basedpyright and pytest (unit_tests/ only, with
-coverage threshold from pyproject.toml),
-fastest first. Stops at the first failure. Upgrades the dev tools in
+Runs ruff check, shellcheck, ruff format --check, flake8
+(wemake-python-styleguide), yamllint, jscpd, pymarkdown, vulture, bandit, pylint,
+basedpyright and pytest (unit_tests/ only, with coverage threshold from
+pyproject.toml), fastest first, then pip-audit on the packages of .venv.
+Stops at the first failure. Upgrades the dev tools in
 .venv first when last upgraded over a day ago.
 EOF
 }
@@ -71,6 +72,14 @@ fi
 echo "=== ruff format --check ==="
 ruff format --check .
 
+# Settings in pyproject.toml [tool.flake8] (flake8-pyproject): only the WPS rules ruff does not have.
+echo "=== flake8 (wemake-python-styleguide) ==="
+flake8 src tests unit_tests infra
+
+# Settings in .yamllint.
+echo "=== yamllint ==="
+git ls-files -z '*.yaml' '*.yml' .yamllint | xargs -0 yamllint --strict
+
 # Weak mode and low thresholds also catch short copies with renamed
 # identifiers. Import lines and typed parameter lines (same-shaped
 # signatures) are not duplication.
@@ -128,9 +137,8 @@ bandit -c pyproject.toml -r "$SRC" -q
 TESTS_PYLINT_DISABLE=missing-function-docstring,wrong-import-position,unused-argument,protected-access
 TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,unused-variable,redefined-outer-name,duplicate-code
 # Not enforced for tests:
-TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,import-outside-toplevel,consider-using-from-import
-TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,use-implicit-booleaness-not-comparison,too-many-positional-arguments
-TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,too-many-arguments,too-many-locals,import-error,superfluous-parens
+TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,consider-using-from-import,use-implicit-booleaness-not-comparison
+TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,import-error,superfluous-parens
 TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,too-many-lines,subprocess-run-check,missing-class-docstring
 TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,useless-return,unnecessary-lambda,too-few-public-methods
 TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,line-too-long,comparison-of-constants
@@ -148,5 +156,15 @@ basedpyright "$SRC" "${TEST_DIRS[@]}"
 # Coverage source and threshold: [tool.coverage] in pyproject.toml.
 echo "=== pytest (unit_tests, with coverage) ==="
 python3 -m pytest -q --cov --cov-report=term-missing:skip-covered unit_tests
+
+# Known vulnerabilities in the packages of .venv. Last: it can fail without a code change (a new advisory), it needs
+# the PyPI vulnerability service. --skip-editable: podiumd-tests itself is not on PyPI. Own cache: pip-audit cannot
+# read the cache entries of a newer pip.
+echo "=== pip-audit (.venv packages) ==="
+if getent ahosts pypi.org > /dev/null; then
+    pip-audit --progress-spinner off --skip-editable --cache-dir .venv/.pip-audit-cache
+else
+    echo "pypi.org not reachable, skipped"
+fi
 
 echo "=== all checks passed ==="

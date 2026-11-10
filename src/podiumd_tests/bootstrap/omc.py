@@ -73,23 +73,22 @@ class OmcAbonnement:
     requires: tuple[str, ...] = ("omc", "opennotificaties")
     wiring: bool = True
 
-    @staticmethod
-    def _record(ctx: Context) -> dict[str, object]:
-        return cast("dict[str, object]", json.loads(ctx.store.read().get(STORE_KEY, "{}")))
-
     def is_present(self, ctx: Context, /) -> bool:
         """The recorded abonnement exists and its token is not about to expire."""
         record = self._record(ctx)
         if not record or float(cast("float", record["expires"])) < time.time() + RENEW_BEFORE:
             return False
-        return opennotificaties_client(ctx.env).request("GET", str(record["url"]), 200, 404).status_code == 200
+        response = opennotificaties_client(ctx.env).request(
+            "GET", str(record["url"]), HTTPStatus.OK, HTTPStatus.NOT_FOUND
+        )
+        return response.status_code == HTTPStatus.OK
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Replace the recorded abonnement with one carrying a fresh token."""
         self.remove(ctx)
         now = time.time()
         body: dict[str, object] = {
-            "callbackUrl": ctx.env.profile.urls["omc"] + "/Events/Listen",
+            "callbackUrl": f"{ctx.env.profile.urls['omc']}/Events/Listen",
             "auth": f"Bearer {omc_token(ctx.env, now)}",
             "kanalen": [{"naam": "zaken", "filters": {}}],
         }
@@ -102,3 +101,7 @@ class OmcAbonnement:
         if record:
             delete_abonnement(opennotificaties_client(ctx.env), str(record["url"]))
         return (STORE_KEY,)
+
+    @staticmethod
+    def _record(ctx: Context) -> dict[str, object]:
+        return cast("dict[str, object]", json.loads(ctx.store.read().get(STORE_KEY, "{}")))

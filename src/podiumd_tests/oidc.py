@@ -54,7 +54,7 @@ class LoginPageError(AssertionError):
 
 def keycloak_hosts(urls: Mapping[str, str]) -> frozenset[str]:
     """Hosts of Keycloak: apps log in through keycloak, Django admins on some estates through keycloak-admin."""
-    return frozenset(url_host(urls[c]) for c in ("keycloak", "keycloak-admin") if c in urls)
+    return frozenset(url_host(urls[component]) for component in ("keycloak", "keycloak-admin") if component in urls)
 
 
 def logs_in_through_keycloak(http: requests.Session, start_url: str, hosts: Collection[str]) -> bool:

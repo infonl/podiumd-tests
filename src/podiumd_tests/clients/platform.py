@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 
 def openzaak_client(
-    env: Environment, client_id: str, store_key: str, run_tag: str, audit: Callable[[], str] = lambda: ""
+    env: Environment, client_id: str, store_key: str, run_tag: str, audit: Callable[[], str] = str
 ) -> ApiClient:
     """Open Zaak's ZGW APIs as one of the suite's clients, with a fresh token per request.
 
@@ -42,14 +42,14 @@ def openzaak_client(
 def opennotificaties_client(env: Environment) -> ApiClient:
     """Open Notificaties as the suite's own client ptest-bootstrap-nrc."""
     secret = env.credentials.get(NRC_STORE_KEY)
-    url = env.profile.urls["opennotificaties"] + "/api/v1"
+    url = f"{env.profile.urls['opennotificaties']}/api/v1"
     return ApiClient(env.session(cookies=False), url, lambda: zgw_headers(zgw_jwt(NRC_CLIENT_ID, secret)))
 
 
 def openklant_client(env: Environment) -> ApiClient:
     """Open Klant's klantinteracties API with the suite's own token."""
     token = env.credentials.get(OPENKLANT_STORE_KEY)
-    url = env.profile.urls["openklant"] + "/klantinteracties/api/v1"
+    url = f"{env.profile.urls['openklant']}/klantinteracties/api/v1"
     return ApiClient(env.session(cookies=False), url, {"Authorization": f"Token {token}"})
 
 
@@ -64,17 +64,17 @@ def objecten_client(env: Environment, token_key: str = OBJECTEN_STORE_KEY) -> Ap
     """Objecten API with the suite's own token, or with the secret token_key (e.g. an app's token)."""
     token = env.credentials.get(token_key)
     headers = {"Authorization": f"Token {token}", "Content-Crs": "EPSG:4326", "Accept-Crs": "EPSG:4326"}
-    return ApiClient(env.session(cookies=False), env.profile.urls["objecten"] + "/api/v2", headers)
+    return ApiClient(env.session(cookies=False), f"{env.profile.urls['objecten']}/api/v2", headers)
 
 
 def objecttypen_client(env: Environment) -> ApiClient:
     """Objecttypen API with the suite's own token."""
     token = env.credentials.get(OBJECTTYPEN_STORE_KEY)
     return ApiClient(
-        env.session(cookies=False), env.profile.urls["objecttypen"] + "/api/v2", {"Authorization": f"Token {token}"}
+        env.session(cookies=False), f"{env.profile.urls['objecttypen']}/api/v2", {"Authorization": f"Token {token}"}
     )
 
 
 def mailpit_client(env: Environment) -> ApiClient:
     """The environment's Mailpit API."""
-    return ApiClient(env.session(cookies=False), env.profile.urls["mailpit"] + "/api/v1", {})
+    return ApiClient(env.session(cookies=False), f"{env.profile.urls['mailpit']}/api/v1", {})

@@ -112,24 +112,12 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
     # Parameters known only at run time, e.g. a stored secret or an in-cluster URL.
     context_params: Callable[[Context], dict[str, object]] | None = None
 
-    def _run(self, ctx: Context, action: str, **extra: object) -> dict[str, object]:
-        deployment = ctx.env.deployment_for(self.requires[0])
-        runtime = self.context_params(ctx) if self.context_params else {}
-        params = {**self.params, **runtime, "action": action, **extra}
-        return cast("dict[str, object]", run_snippet(ctx.env.kube, deployment, self.snippet, params))
-
-    def _refused(self, ctx: Context) -> bool:
-        return self.opt_in is not None and not ctx.env.profile.allows(self.opt_in)
-
     def is_present(self, ctx: Context, /) -> bool:
         """Not allowed (nothing to do), or the objects exist and what the step stores is in the credentials Secret."""
         if self._refused(ctx):
             return True
         stored = self.store_key is None or self.store_key in ctx.store.read()
         return bool(self._run(ctx, "status")["present"]) and stored
-
-    def _stored_record(self, ctx: Context) -> object:
-        return json.loads(ctx.store.read().get(self.store_key or "", "{}"))
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Create the objects: with a new random secret, or extending the stored record."""
@@ -146,16 +134,28 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
         self._apply(ctx, secret=secret)
         return {self.store_key: secret}
 
-    def _apply(self, ctx: Context, **extra: object) -> dict[str, object]:
-        """Run apply; the snippet's "notes" go to the step's outcome."""
-        result = self._run(ctx, "apply", **extra)
-        ctx.notes.extend(str(n) for n in cast("list[object]", result.get("notes") or []))
-        return result
-
     def remove(self, ctx: Context, /) -> tuple[str, ...]:
         """Delete the objects, or undo what the stored record lists."""
         self._run(ctx, "remove", **({"record": self._stored_record(ctx)} if self.record else {}))
         return () if self.store_key is None else (self.store_key,)
+
+    def _run(self, ctx: Context, action: str, **extra: object) -> dict[str, object]:
+        deployment = ctx.env.deployment_for(self.requires[0])
+        runtime = self.context_params(ctx) if self.context_params else {}
+        params = {**self.params, **runtime, "action": action, **extra}
+        return cast("dict[str, object]", run_snippet(ctx.env.kube, deployment, self.snippet, params))
+
+    def _refused(self, ctx: Context) -> bool:
+        return self.opt_in is not None and not ctx.env.profile.allows(self.opt_in)
+
+    def _stored_record(self, ctx: Context) -> object:
+        return json.loads(ctx.store.read().get(self.store_key or "", "{}"))
+
+    def _apply(self, ctx: Context, **extra: object) -> dict[str, object]:
+        """Run apply; the snippet's "notes" go to the step's outcome."""
+        result = self._run(ctx, "apply", **extra)
+        ctx.notes.extend(str(note) for note in cast("list[object]", result.get("notes") or []))
+        return result
 
 
 # The groep of the KCC test user in ITA: ITA shows a contactverzoek only to members of the
@@ -183,10 +183,6 @@ class ItaMedewerker:
     def identificatie(self) -> str:
         """The user's samaccountname."""
         return self.user.attributes["samaccountname"][0]
-
-    def _found(self, ctx: Context) -> list[JsonObject]:
-        query = {"data_attr": f"identificatie__exact__{self.identificatie}"}
-        return objecten_client(ctx.env).list("objects", query)
 
     def is_present(self, ctx: Context, /) -> bool:
         """A Medewerker object with the user's identificatie exists."""
@@ -216,6 +212,10 @@ class ItaMedewerker:
             objecten_client(ctx.env).delete(str(found["url"]))
         return ()
 
+    def _found(self, ctx: Context) -> list[JsonObject]:
+        query = {"data_attr": f"identificatie__exact__{self.identificatie}"}
+        return objecten_client(ctx.env).list("objects", query)
+
 
 @dataclass(frozen=True)
 class OpenKlantActor:
@@ -237,16 +237,6 @@ class OpenKlantActor:
     def email(self) -> str:
         """The test user's e-mail, which ITA and KISS match the actor on."""
         return user_email(f"{PREFIX}-{self.user}")
-
-    def _api(self, ctx: Context) -> tuple[requests.Session, str, dict[str, str]]:
-        url = ctx.env.profile.urls["openklant"] + "/klantinteracties/api/v1/actoren"
-        return ctx.env.session(), url, {"Authorization": f"Token {ctx.store.read()[OPENKLANT_STORE_KEY]}"}
-
-    def _uuids(self, ctx: Context) -> list[str]:
-        http, url, headers = self._api(ctx)
-        params = {"actoridentificatorObjectId": self.email}
-        response = expect_status(http.get(url, params=params, headers=headers), HTTPStatus.OK)
-        return [str(a["uuid"]) for a in entries(cast("dict[str, object]", response.json()).get("results"))]
 
     def is_present(self, ctx: Context, /) -> bool:
         """An actor with the user's e-mail exists."""
@@ -279,6 +269,16 @@ class OpenKlantActor:
             expect_status(http.delete(f"{url}/{uuid}", headers=headers), HTTPStatus.NO_CONTENT)
         return ()
 
+    def _api(self, ctx: Context) -> tuple[requests.Session, str, dict[str, str]]:
+        url = f"{ctx.env.profile.urls['openklant']}/klantinteracties/api/v1/actoren"
+        return ctx.env.session(), url, {"Authorization": f"Token {ctx.store.read()[OPENKLANT_STORE_KEY]}"}
+
+    def _uuids(self, ctx: Context) -> list[str]:
+        http, url, headers = self._api(ctx)
+        params = {"actoridentificatorObjectId": self.email}
+        response = expect_status(http.get(url, params=params, headers=headers), HTTPStatus.OK)
+        return [str(actor["uuid"]) for actor in entries(cast("dict[str, object]", response.json()).get("results"))]
+
 
 def openformulieren_params(ctx: Context) -> dict[str, object]:
     """The ZGW client secret, and Open Zaak's URL as Open Formulieren calls it.
@@ -304,7 +304,7 @@ def openinwoner_openklant_params(ctx: Context) -> dict[str, object]:
         msg = "no Open Klant actor for the KCC test user: run bootstrap step openklant-actor-kcc first"
         raise LookupError(msg)
     return {
-        "api_root": ctx.env.profile.urls["openklant"] + "/klantinteracties/api/v1/",
+        "api_root": f"{ctx.env.profile.urls['openklant']}/klantinteracties/api/v1/",
         "token": ctx.store.read().get(OPENKLANT_OPENINWONER_STORE_KEY, ""),
         "config": {
             "mijn_vragen_kanaal": "contactformulier",
@@ -318,7 +318,7 @@ def openinwoner_openklant_params(ctx: Context) -> dict[str, object]:
     }
 
 
-def django_user_step(  # pylint: disable=too-many-arguments  # mirrors the snippet's parameters
+def django_user_step(  # noqa: PLR0913  # mirrors the snippet's parameters
     component: str,
     key: str,
     groups: tuple[str, ...] = (),
@@ -351,7 +351,7 @@ def django_secret_key(component: str, key: str, kind: str = "password") -> str:
     return f"{PREFIX.replace('-', '_')}_{component}_{key}_{kind}"
 
 
-def openzaak_client_step(  # pylint: disable=too-many-arguments  # mirrors the snippet's parameters
+def openzaak_client_step(  # noqa: PLR0913  # mirrors the snippet's parameters
     name: str,
     client_id: str,
     store_key: str,
@@ -363,6 +363,7 @@ def openzaak_client_step(  # pylint: disable=too-many-arguments  # mirrors the s
     catalogi_scopes: tuple[str, ...] = CATALOGI_SCOPES,
 ) -> SnippetStep:
     """A ZGW client in Open Zaak with rights on the test catalogus only."""
+    granted = ZGW_COMPONENTS if components is None else components
     params: dict[str, object] = {
         "client_id": client_id,
         "scopes": {"ztc": list(catalogi_scopes)},
@@ -372,7 +373,7 @@ def openzaak_client_step(  # pylint: disable=too-many-arguments  # mirrors the s
             "owns": owns_catalogus,
             "max_va": max_va,
             "exclude": list(exclude),
-            "components": {c: list(p) for c, p in (ZGW_COMPONENTS if components is None else components).items()},
+            "components": {component: list(prefixes) for component, prefixes in granted.items()},
         },
     }
     return SnippetStep(name, ("openzaak",), "zgw_client", store_key, params)
@@ -593,10 +594,10 @@ class OpenInwonerPartijen:
         openklant = openklant_client(ctx.env)
         # A vestiging's partij goes first: its identificator protects the kvk_nummer's.
         for key in ("vestigingsnummer", "bsn", "kvk"):
-            for user in IDENTITIES:
-                for number in user.attributes.get(key, []):
-                    for partij in partijen_of(openklant, number):
-                        delete_partij(openklant, partij)
+            numbers = [number for user in IDENTITIES for number in user.attributes.get(key, [])]
+            for number in numbers:
+                for partij in partijen_of(openklant, number):
+                    delete_partij(openklant, partij)
         return ()
 
 
@@ -818,8 +819,8 @@ STEPS: tuple[Step, ...] = (
                 },
             },
             "eherkenning_site": True,
-            "accounts": [openinwoner_account(u) for u in IDENTITIES if "bsn" in u.attributes],
-            "identities": [openinwoner_number(u) for u in IDENTITIES],
+            "accounts": [openinwoner_account(user) for user in IDENTITIES if "bsn" in user.attributes],
+            "identities": [openinwoner_number(user) for user in IDENTITIES],
         },
         record=True,
         wiring=True,
@@ -873,7 +874,7 @@ STEPS: tuple[Step, ...] = (
         {"name": f"{PREFIX}-openzaak"},
         record=True,
         wiring=True,
-        context_params=lambda ctx: {"zaken_url": ctx.env.profile.urls["openzaak"] + "/zaken/api/v1/"},
+        context_params=lambda ctx: {"zaken_url": f"{ctx.env.profile.urls['openzaak']}/zaken/api/v1/"},
     ),
     # Open Inwoner scans uploads with the environment's ClamAV (profile setting clamav), for TA 123.
     SnippetStep(

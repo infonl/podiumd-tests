@@ -48,7 +48,7 @@ FAILED = re.compile(r"/(accounts/login|login/failure)/")
     Then the portal does not show a login or failure page
     And the browser has an Open Inwoner session
 """)
-def test_login_through_the_keycloak_mock_starts_a_session(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_login_through_the_keycloak_mock_starts_a_session(
     page: Page,
     podiumd_env: Environment,
     need_bootstrap: Callable[..., None],
@@ -80,8 +80,8 @@ def test_logout_ends_the_session(page: Page, podiumd_env: Environment, need_boot
     portal = podiumd_env.profile.urls["openinwoner"]
     portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
     expect(page).to_have_url(re.compile(r"/mijn-zaken/"))
-    page.goto(portal + "/digid-oidc/logout/")
-    page.goto(portal + "/mijn-zaken/")
+    page.goto(f"{portal}/digid-oidc/logout/")
+    page.goto(f"{portal}/mijn-zaken/")
     expect(page).to_have_url(re.compile(r"/accounts/login/\?next=/mijn-zaken/"))
 
 
@@ -101,7 +101,7 @@ def test_logout_ends_the_session(page: Page, podiumd_env: Environment, need_boot
     Then each login succeeds
     And Open Inwoner has one account for that BSN or KvK number
 """)
-def test_second_login_reuses_the_account(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_second_login_reuses_the_account(
     page: Page,
     podiumd_env: Environment,
     need_bootstrap: Callable[..., None],

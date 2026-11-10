@@ -182,26 +182,27 @@ def fixture_need_bootstrap(
     present.mkdir(exist_ok=True)
 
     def need(*names: str) -> None:
-        wanted = [s for s in STEPS if s.name in names and not (present / s.name).exists()]
-        unknown = set(names) - {s.name for s in STEPS}
+        wanted = [step for step in STEPS if step.name in names and not (present / step.name).exists()]
+        unknown = set(names) - {step.name for step in STEPS}
         if unknown:
             pytest.fail(f"unknown bootstrap steps: {', '.join(sorted(unknown))}")
         outcomes = check(podiumd_env, wanted)
-        skipped = [o for o in outcomes if o.action == "skipped"]
+        skipped = [outcome for outcome in outcomes if outcome.action == "skipped"]
         if skipped:  # e.g. wiring off for the profile, or the component is absent
-            pytest.skip("; ".join(f"bootstrap step {o.step}: {o.detail}" for o in skipped))
-        missing = [s for s, o in zip(wanted, outcomes, strict=True) if o.action != "present"]
+            pytest.skip("; ".join(f"bootstrap step {outcome.step}: {outcome.detail}" for outcome in skipped))
+        missing = [step for step, outcome in zip(wanted, outcomes, strict=True) if outcome.action != "present"]
         name = podiumd_env.profile.name
         if missing and not auto:
-            steps = ", ".join(s.name for s in missing)
+            steps = ", ".join(step.name for step in missing)
             pytest.fail(f"bootstrap missing on {name} ({steps}): run `podiumd-tests bootstrap --env {name}`")
         if missing:
             reason = refusal(podiumd_env.profile)
             if reason:
                 pytest.fail(f"--auto-bootstrap refused: {reason}")
-            failed_steps = [o for o in bootstrap(podiumd_env, missing) if o.action != "created"]
+            failed_steps = [outcome for outcome in bootstrap(podiumd_env, missing) if outcome.action != "created"]
             if failed_steps:
-                pytest.fail("--auto-bootstrap: " + "; ".join(f"{o.step} {o.action}: {o.detail}" for o in failed_steps))
+                failures = "; ".join(f"{outcome.step} {outcome.action}: {outcome.detail}" for outcome in failed_steps)
+                pytest.fail(f"--auto-bootstrap: {failures}")
         for step in wanted:
             (present / step.name).touch()
 
@@ -262,7 +263,7 @@ def fixture_current_test(request: pytest.FixtureRequest) -> Iterator[None]:
     _CURRENT_TEST.reset(token)
 
 
-def _zgw_client(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixture plumbing
+def _zgw_client(  # noqa: PLR0913, PLR0917  # fixture plumbing
     run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None], step: str, client_id: str, key: str
 ) -> ApiClient:
     need_bootstrap(step)
@@ -470,10 +471,10 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     switch runs once, apart from parallel tests. A test without a valid source marker, or with a malformed
     scenario, stops the run.
     """
-    problems = [p for item in items for p in [*source_problems(item), *scenario_problems(item)]]
+    problems = [problem for item in items for problem in (*source_problems(item), *scenario_problems(item))]
     if problems:
         raise pytest.UsageError("\n".join(problems))
-    switching = any("several_replicas" in getattr(i, "fixturenames", ()) for i in items) and switches_replicas(
+    switching = any("several_replicas" in getattr(test, "fixturenames", ()) for test in items) and switches_replicas(
         _environment(config).profile
     )
     for item in items:
@@ -481,7 +482,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             item.add_marker(pytest.mark.destructive)
         if item.get_closest_marker("destructive"):
             item.add_marker(pytest.mark.xdist_group("destructive"))
-        item.user_properties += [("source", s) for s in sources(item)]
+        item.user_properties += [("source", source) for source in sources(item)]
         if text := scenario(item):
             item.user_properties.append(("scenario", text))
 
@@ -514,7 +515,11 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
     A hook rather than an autouse fixture: it runs before any fixture, also
     before module- or session-scoped ones that would need the capability.
     """
-    needed = [str(c) for m in item.iter_markers("requires") for c in cast("tuple[object, ...]", m.args)]
+    needed = [
+        str(capability)
+        for marker in item.iter_markers("requires")
+        for capability in cast("tuple[object, ...]", marker.args)
+    ]
     if needed:
         reason = _environment(item.config).capabilities.skip_reason(*needed)
         if reason:

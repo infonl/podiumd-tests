@@ -34,12 +34,12 @@ def grafana_login(page: Page, env: Environment, username: str, password: str) ->
     """Log in to Grafana through Keycloak; Grafana's own view of the logged-in user, with its org role."""
     grafana = env.profile.urls["grafana"]
     page.context.clear_cookies()
-    page.goto(grafana + "/login/generic_oauth")
+    page.goto(f"{grafana}/login/generic_oauth")
     keycloak_login(page, username, password)
     page.wait_for_url(lambda url: url_host(url) == url_host(grafana) and "/login" not in url)
     http = browser_session(page, env)
-    user = expect_status(http.get(grafana + "/api/user"), HTTPStatus.OK).json()
-    orgs = expect_status(http.get(grafana + "/api/user/orgs"), HTTPStatus.OK).json()
+    user = expect_status(http.get(f"{grafana}/api/user"), HTTPStatus.OK).json()
+    orgs = expect_status(http.get(f"{grafana}/api/user/orgs"), HTTPStatus.OK).json()
     return {**user, "role": next((o["role"] for o in orgs if o.get("orgId") == user.get("orgId")), None)}
 
 
@@ -76,7 +76,7 @@ def test_recreated_keycloak_user_logs_in_to_the_same_grafana_user(
             "Grafana's admin login is needed to remove the test's Grafana user: secrets grafana_username/password"
         )
     settings = expect_status(
-        podiumd_env.session().get(grafana + "/api/admin/settings", auth=auth), HTTPStatus.OK
+        podiumd_env.session().get(f"{grafana}/api/admin/settings", auth=auth), HTTPStatus.OK
     ).json()
     if section(settings, "auth.generic_oauth").get("enabled") != "true":
         pytest.skip("Grafana's Keycloak login is off here (auth.generic_oauth.enabled)")
@@ -96,7 +96,7 @@ def test_recreated_keycloak_user_logs_in_to_the_same_grafana_user(
 
     registry.add(f"grafana user {username}", remove_grafana_user)
     first_id = make_user(admin, username, password, "editor")
-    registry.add(f"keycloak user {username}", lambda: [admin.delete_user(u) for u in [admin.user_id(username)] if u])
+    registry.add(f"keycloak user {username}", lambda: admin.delete_user_named(username))
     first = grafana_login(page, podiumd_env, username, password)
     assert first["role"] == "Editor", first
 

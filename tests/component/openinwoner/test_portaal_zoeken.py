@@ -61,7 +61,7 @@ def fixture_categories(
 
 def hits(http: requests.Session, urls: dict[str, str], **params: str) -> list[str]:
     """The names of the test's products on the results page of a search."""
-    html = expect_status(http.get(urls["openinwoner"] + "/search/", params=params), HTTPStatus.OK).text
+    html = expect_status(http.get(f"{urls['openinwoner']}/search/", params=params), HTTPStatus.OK).text
     # Shown when Elasticsearch refuses the query, e.g. an index created without Open Inwoner's mapping.
     assert "zoekfunctie is tijdelijk niet beschikbaar" not in html, "Open Inwoner's search failed (search error)"
     return sorted(set(re.findall(rf"(?:Paspoort|Grofvuil) \w+{SUFFIX}", html)))
@@ -84,7 +84,7 @@ def hits(http: requests.Session, urls: dict[str, str], **params: str) -> list[st
 """)
 def test_search_answers(http: requests.Session, urls: dict[str, str], query: str) -> None:
     """Search answers with its form; a query without hits says so (TA int-107, reg-161c/d)."""
-    html = expect_status(http.get(urls["openinwoner"] + "/search/", params={"query": query}), HTTPStatus.OK).text
+    html = expect_status(http.get(f"{urls['openinwoner']}/search/", params={"query": query}), HTTPStatus.OK).text
     assert 'name="query"' in html
     if "geen" in query:
         assert "We konden geen zoekresultaten vinden" in html
@@ -161,7 +161,7 @@ def test_feedback_on_a_search_is_stored(
 """)
 def test_no_results_suggest_what_was_meant(http: requests.Session, urls: dict[str, str]) -> None:
     """A misspelt search without hits suggests the product that was probably meant."""
-    html = expect_status(http.get(urls["openinwoner"] + "/search/", params={"query": "Pasport"}), HTTPStatus.OK).text
+    html = expect_status(http.get(f"{urls['openinwoner']}/search/", params={"query": "Pasport"}), HTTPStatus.OK).text
     assert "We konden geen zoekresultaten vinden" in html
     assert PASPOORT in html
 
@@ -182,13 +182,13 @@ def test_no_results_suggest_what_was_meant(http: requests.Session, urls: dict[st
 """)
 def test_search_can_be_switched_off(http: requests.Session, urls: dict[str, str], podiumd_env: Environment) -> None:
     """With search switched off in the admin, the search page and links to it answer 404, and the form is gone."""
-    search = urls["openinwoner"] + "/search/"
+    search = f"{urls['openinwoner']}/search/"
 
     def search_answers(status: HTTPStatus) -> bool:
         return http.get(search, params={"query": PASPOORT}).status_code == status
 
     def form_shown() -> bool:
-        return 'id="search-form"' in expect_status(http.get(urls["openinwoner"] + "/"), HTTPStatus.OK).text
+        return 'id="search-form"' in expect_status(http.get(f"{urls['openinwoner']}/"), HTTPStatus.OK).text
 
     old = set_site_configuration(podiumd_env, search_enabled=False)
     try:

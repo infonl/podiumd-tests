@@ -23,9 +23,9 @@ def test_ui_login_fills_the_form_once_the_spa_enabled_it(monkeypatch, fake_page,
     oab.ui_login(page, page_env(), "record-manager")
     assert enabled == ["button:Inloggen"]
     assert page.actions == [
-        ("goto", OAB + "/login"),
+        ("goto", f"{OAB}/login"),
         ("fill", "label:Gebruikersnaam", f"{PREFIX}-record-manager"),
-        ("fill", "label:Wachtwoord", "pw-" + django_secret_key("openarchiefbeheer", "record-manager")),
+        ("fill", "label:Wachtwoord", f"pw-{django_secret_key('openarchiefbeheer', 'record-manager')}"),
         ("click", "button:Inloggen"),
     ]
     assert page.waits == ["**/destruction-lists"]

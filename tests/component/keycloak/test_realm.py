@@ -133,7 +133,7 @@ def test_password_guessing_locks_the_user_out(
         "code_challenge": "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
         "code_challenge_method": "S256",
     }
-    login = realm_url(urls["keycloak"], realm, "/protocol/openid-connect/auth?" + urlencode(query))
+    login = realm_url(urls["keycloak"], realm, f"/protocol/openid-connect/auth?{urlencode(query)}")
     for _ in range(int(str(admin.representation()["failureFactor"]))):
         with pytest.raises(TokenError, match="refused the login"):
             form_login(podiumd_env.session(), login, username, "ptest-wrong-password")

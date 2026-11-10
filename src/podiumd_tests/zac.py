@@ -49,7 +49,7 @@ def zac_session(env: Environment, username: str, password: str) -> requests.Sess
 def user_groups(http: requests.Session, zac_url: str) -> list[str]:
     """The ids of the groups ZAC knows the session's user in."""
     user = expect_status(http.get(f"{zac_url}/rest/identity/loggedInUser"), HTTPStatus.OK).json()
-    return [str(g) for g in user["groupIds"]]
+    return [str(group) for group in user["groupIds"]]
 
 
 def zaakafhandelparameters(http: requests.Session, zac_url: str, identificatie: str | None = None) -> list[JsonObject]:
@@ -59,9 +59,10 @@ def zaakafhandelparameters(http: requests.Session, zac_url: str, identificatie: 
     """
     found = get_entries(http, f"{zac_url}/rest/zaakafhandelparameters")
     return [
-        p
-        for p in found
-        if p.get("id") is not None and identificatie in {None, section(p, "zaaktype").get("identificatie")}
+        parameters
+        for parameters in found
+        if parameters.get("id") is not None
+        and identificatie in {None, section(parameters, "zaaktype").get("identificatie")}
     ]
 
 
@@ -77,8 +78,8 @@ NOT_REQUIRED_FOR_VALIDE = {
 
 def inrichtingscheck_problems(check: JsonObject) -> list[str]:
     """The fields of ZAC's inrichtingscheck of one zaaktype that make it invalid, and its warnings."""
-    problems = [k for k, v in check.items() if v is False and k not in NOT_REQUIRED_FOR_VALIDE]
-    problems += [f"{k}={v}" for k, v in check.items() if k.startswith("aantal") and v != 1]
+    problems = [field for field, value in check.items() if value is False and field not in NOT_REQUIRED_FOR_VALIDE]
+    problems += [f"{field}={value}" for field, value in check.items() if field.startswith("aantal") and value != 1]
     if check.get("resultaattypesMetVerplichtBesluit") and not check.get("besluittypeAanwezig"):
         problems.append("besluittypeAanwezig")
     if check.get("heeftWaarschuwingen"):
@@ -96,7 +97,9 @@ def confirmation_sent(confirmation: JsonObject) -> bool:
 def confirmation_on(http: requests.Session, zac_url: str, identificatie: str) -> bool:
     """ZAC sends its ontvangstbevestiging for productaanvragen of every version of the zaaktype."""
     found = zaakafhandelparameters(http, zac_url, identificatie)
-    return bool(found) and all(confirmation_sent(section(p, "automaticEmailConfirmation")) for p in found)
+    return bool(found) and all(
+        confirmation_sent(section(parameters, "automaticEmailConfirmation")) for parameters in found
+    )
 
 
 def zaak_body(parameters: JsonObject, **fields: object) -> JsonObject:
@@ -165,7 +168,7 @@ def productaanvraag_zaak(
 
     def started() -> JsonObject | None:
         zaken = openzaak.list(f"{ZAKEN}/zaken", {"startdatum__gte": since})
-        return next((z for z in zaken if kenmerk in str(z.get("toelichting") or "")), None)
+        return next((zaak for zaak in zaken if kenmerk in str(zaak.get("toelichting") or "")), None)
 
     def delete() -> None:
         zaak = started()
@@ -192,13 +195,13 @@ def reindex_zaken(env: Environment) -> None:
 def search(http: requests.Session, zac_url: str, **query: object) -> JsonObject:
     """The first page of ZAC's search (rows 10 unless given) with these RestZoekParameters, as the session's user."""
     body = {"page": 0, "rows": 10, **query}
-    return cast("JsonObject", expect_status(http.put(zac_url + "/rest/zoeken/list", json=body), HTTPStatus.OK).json())
+    return cast("JsonObject", expect_status(http.put(f"{zac_url}/rest/zoeken/list", json=body), HTTPStatus.OK).json())
 
 
 def zaak_listed(http: requests.Session, zac_url: str, identificatie: str, **flags: bool) -> bool:
     """ZAC's search for zaken lists the zaak; flags are its alleen* filters (alleenOpenstaandeZaken: werkvoorraad)."""
     found = search(http, zac_url, type="ZAAK", zoeken={"ZAAK_IDENTIFICATIE": identificatie}, **flags)
-    return any(r.get("identificatie") == identificatie for r in entries(found["resultaten"]))
+    return any(resultaat.get("identificatie") == identificatie for resultaat in entries(found["resultaten"]))
 
 
 def open_task(http: requests.Session, zac_url: str, zaak_uuid: str, name: str) -> JsonObject:
@@ -206,7 +209,8 @@ def open_task(http: requests.Session, zac_url: str, zaak_uuid: str, name: str) -
 
     def found() -> JsonObject | None:
         tasks = get_entries(http, f"{zac_url}/rest/taken/zaak/{zaak_uuid}")
-        return next((t for t in tasks if t.get("naam") == name and t.get("status") != "AFGEROND"), None)
+        open_tasks = (task for task in tasks if task.get("status") != "AFGEROND")
+        return next((task for task in open_tasks if task.get("naam") == name), None)
 
     return wait_until(found, timeout=TASK_TIMEOUT, description=f"open task {name!r} on zaak {zaak_uuid}")
 

@@ -29,7 +29,7 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("keycloak-admin")]
 
 # Hardcoded-role mapper types, and the master realm role names that are admin by name.
 ROLE_MAPPER = "oidc-hardcoded-role-idp-mapper"
-ADMIN_ROLES = frozenset({"admin"})
+ADMIN_ROLES = frozenset(("admin",))
 
 
 def _grants_admin(mapper: JsonObject) -> bool:
@@ -48,12 +48,6 @@ def _admin_role_providers(admin: KeycloakAdmin) -> list[JsonObject]:
     if not providers:
         pytest.skip("no identity provider in the master realm grants a Keycloak admin role")
     return providers
-
-
-def _delete_user(admin: KeycloakAdmin, username: str) -> None:
-    user_id = admin.user_id(username)
-    if user_id:
-        admin.delete_user(user_id)
 
 
 @pytest.mark.source(
@@ -87,7 +81,7 @@ def test_admin_role_identity_provider_allows_admin_role_mapping(podiumd_env: Env
     Then the admin console opens
     And the user exists in the realm master with the admin role
 """)
-def test_admin_identity_provider_login_gets_the_admin_role(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_admin_identity_provider_login_gets_the_admin_role(
     page: Page,
     urls: dict[str, str],
     podiumd_env: Environment,
@@ -101,9 +95,9 @@ def test_admin_identity_provider_login_gets_the_admin_role(  # pylint: disable=t
     admin = for_environment(podiumd_env, "master")
     alias = str(_admin_role_providers(admin)[0]["alias"])
     # A brokered user of an earlier login holds an OTP credential, and the login would ask for a code instead.
-    _delete_user(admin, username)
-    registry.add(f"brokered master realm user {username}", lambda: _delete_user(admin, username))
-    console = urls["keycloak-admin"] + "/admin/master/console/"
+    admin.delete_user_named(username)
+    registry.add(f"brokered master realm user {username}", lambda: admin.delete_user_named(username))
+    console = f"{urls['keycloak-admin']}/admin/master/console/"
     page.goto(console)
     page.locator(f"#social-{alias}").click()
     keycloak_login(page, username, password)

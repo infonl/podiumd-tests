@@ -82,7 +82,7 @@ def test_apply_switches_it_on_and_records_the_old_value(ctx, fake_http):
 def test_apply_leaves_a_confirmation_that_is_on(ctx, fake_http):
     sent = fake_http(answers({"enabled": True, "templateName": "Eigen", "emailSender": "x@gemeente.nl", "id": 1}))
     assert json.loads(STEP.apply(ctx())[STORE_KEY]) == {}
-    assert not [s for s in sent if s.method == "PUT"]
+    assert all(s.method != "PUT" for s in sent)
 
 
 def test_apply_fails_without_zaakafhandelparameters(ctx, fake_http):
@@ -102,7 +102,7 @@ def test_remove_leaves_a_value_someone_else_changed(ctx, fake_http):
     sent = fake_http(answers({**WANTED, "templateName": "Eigen", "id": 1}))
     context = ctx(record={UUID: OFF})
     STEP.remove(context)
-    assert not [s for s in sent if s.method == "PUT"]
+    assert all(s.method != "PUT" for s in sent)
     assert "changed by someone else" in context.notes[0]
 
 

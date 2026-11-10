@@ -47,7 +47,7 @@ pytestmark = [
     When a productaanvraag is added to Objecten
     Then ZAC starts a zaak in Open Zaak that names the productaanvraag's kenmerk
 """)
-def test_productaanvraag_becomes_a_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_productaanvraag_becomes_a_zaak(
     objecten: ApiClient,
     openzaak_productaanvraag: ApiClient,
     registry: ResourceRegistry,
@@ -72,7 +72,7 @@ def test_productaanvraag_becomes_a_zaak(  # pylint: disable=too-many-arguments,t
     When the form's productaanvraag makes ZAC start a zaak
     Then the submitter receives a mail with the zaaknummer
 """)
-def test_zac_mails_the_initiator_an_ontvangstbevestiging(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_zac_mails_the_initiator_an_ontvangstbevestiging(
     podiumd_env: Environment,
     objecten: ApiClient,
     openzaak_productaanvraag: ApiClient,
@@ -101,7 +101,7 @@ def test_zac_mails_the_initiator_an_ontvangstbevestiging(  # pylint: disable=too
     Then ZAC starts a zaak for it in Open Zaak
     And the zaak is in ZAC's werkvoorraad
 """)
-def test_new_form_becomes_a_zac_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_new_form_becomes_a_zac_zaak(
     podiumd_env: Environment,
     http: requests.Session,
     zac: requests.Session,

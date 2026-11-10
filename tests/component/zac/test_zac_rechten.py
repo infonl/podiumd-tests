@@ -37,7 +37,7 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "ke
     When the klantcontactmedewerker opens the same zaak
     Then ZAC refuses access
 """)
-def test_user_without_zac_roles_cannot_read_a_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_user_without_zac_roles_cannot_read_a_zaak(
     zac: requests.Session,
     podiumd_env: Environment,
     urls: dict[str, str],

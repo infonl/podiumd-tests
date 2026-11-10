@@ -36,7 +36,7 @@ class CredentialStore:
 
     def remove(self, *keys: str) -> None:
         """Drop keys; the Secret itself is deleted when nothing is left."""
-        remaining = {k: v for k, v in self.read().items() if k not in keys}
+        remaining = {key: value for key, value in self.read().items() if key not in keys}
         # apply would merge stringData into the old keys, so the Secret is recreated instead.
         self.kube.delete("secret", STORE_NAME)
         if remaining:

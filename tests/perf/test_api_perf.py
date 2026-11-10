@@ -65,7 +65,7 @@ def fixture_stats(
     # Runs compare only with runs of the same load, calls and volume data (seed-volume).
     calls = sorted(e for e, c in ENDPOINTS.items() if c in podiumd_env.profile.urls)
     settings = {"users": users, "duration": duration, "calls": calls, "volume": counts(podiumd_env)}
-    (directory / SETTINGS).write_text(json.dumps(settings, sort_keys=True) + "\n", encoding="utf-8")
+    (directory / SETTINGS).write_text(f"{json.dumps(settings, sort_keys=True)}\n", encoding="utf-8")
     command = locust_command(LOCUSTFILE, users, duration, directory / "locust", podiumd_env.profile.name)
     # Users finish their round, so every write is deleted.
     command += ["--stop-timeout", "60", "--podiumd-run-tag", run_tag]

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import uuid
-import xml.etree.ElementTree as ET  # nosec B405  # parses ZaakBrug's own answer
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from typing import NamedTuple
+from xml.etree.ElementTree import fromstring  # nosec B405  # parses ZaakBrug's own answer
 
 from podiumd_tests.workloads import expect_defect
 
@@ -114,11 +114,11 @@ def genereer_document_identificatie(now: datetime, gemeentecode: str = GEMEENTEC
 
 def document_identificatie(answer: str) -> str | None:
     """The document identificatie in a genereerDocumentIdentificatie answer, or None."""
-    found = ET.fromstring(answer).find(f".//{{{ZKN}}}document/{{{ZKN}}}identificatie")  # noqa: S314  # nosec B314
+    found = fromstring(answer).find(f".//{{{ZKN}}}document/{{{ZKN}}}identificatie")  # noqa: S314  # nosec B314
     return found.text if found is not None else None
 
 
-def creeer_zaak(  # pylint: disable=too-many-arguments  # one message
+def creeer_zaak(  # noqa: PLR0913  # one message
     now: datetime,
     zaak: str,
     zaaktype_code: str,
@@ -153,7 +153,7 @@ def _zaak_velden(now: datetime, zaak: str, velden: ZaakVelden) -> str:
 <ZKN:registratiedatum>{now:%Y%m%d}</ZKN:registratiedatum>{velden.verlenging_xml()}"""
 
 
-def _zaak_wijziging(  # pylint: disable=too-many-arguments  # one message
+def _zaak_wijziging(  # noqa: PLR0913  # one message
     now: datetime,
     zaak: str,
     zaaktype_code: str,
@@ -179,7 +179,7 @@ def _zaak_wijziging(  # pylint: disable=too-many-arguments  # one message
 {objects}</ZKN:zakLk01></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
 
 
-def update_zaak(  # pylint: disable=too-many-arguments  # one message
+def update_zaak(  # noqa: PLR0913  # one message
     now: datetime,
     zaak: str,
     zaaktype_code: str,
@@ -192,7 +192,7 @@ def update_zaak(  # pylint: disable=too-many-arguments  # one message
     return _zaak_wijziging(now, zaak, zaaktype_code, old=(old, ""), new=(new, ""), gemeentecode=gemeentecode)
 
 
-def actualiseer_zaakstatus(  # pylint: disable=too-many-arguments  # one message
+def actualiseer_zaakstatus(  # noqa: PLR0913  # one message
     now: datetime,
     zaak: str,
     zaaktype_code: str,
@@ -277,7 +277,7 @@ def geef_zaakdocument_bewerken(now: datetime, document: str, gemeentecode: str =
     return _vrij_bericht("geefZaakdocumentbewerken_Di02", "geefZaakdocumentbewerken", now, gemeentecode, body)
 
 
-def update_zaakdocument(  # pylint: disable=too-many-arguments  # one message
+def update_zaakdocument(  # noqa: PLR0913  # one message
     now: datetime, zaak: str, document: str, checkout: str, *, titel: str, gemeentecode: str = GEMEENTECODE
 ) -> str:
     """An updateZaakdocument_Di02 envelope: give the checked-out document a new titel."""
@@ -304,13 +304,13 @@ def cancel_checkout(now: datetime, document: str, checkout: str, gemeentecode: s
 
 def checked_out_id(answer: str) -> str | None:
     """The checkedOutId in a geefZaakdocumentbewerken answer, or None."""
-    found = ET.fromstring(answer).find(f".//{{{ZKN}}}checkedOutId")  # noqa: S314  # nosec B314  # ZaakBrug's own answer
+    found = fromstring(answer).find(f".//{{{ZKN}}}checkedOutId")  # noqa: S314  # nosec B314  # ZaakBrug's own answer
     return found.text if found is not None else None
 
 
 def is_fault(answer: str) -> bool:
     """True when the ZDS answer is a SOAP Fault (ZaakBrug answers its Fo03 faults with HTTP 200)."""
-    return ET.fromstring(answer).find(".//{http://schemas.xmlsoap.org/soap/envelope/}Fault") is not None  # noqa: S314  # nosec B314
+    return fromstring(answer).find(".//{http://schemas.xmlsoap.org/soap/envelope/}Fault") is not None  # noqa: S314  # nosec B314
 
 
 def zaak_identificatie(answer: str) -> str | None:
@@ -318,7 +318,7 @@ def zaak_identificatie(answer: str) -> str | None:
 
     genereerZaakIdentificatie answers it under zaak/identificatie; geefZaakdetails (La01) under object/identificatie.
     """
-    root = ET.fromstring(answer)  # noqa: S314  # nosec B314  # ZaakBrug's own answer
+    root = fromstring(answer)  # noqa: S314  # nosec B314  # ZaakBrug's own answer
     for path in (f".//{{{ZKN}}}zaak/{{{ZKN}}}identificatie", f".//{{{ZKN}}}object/{{{ZKN}}}identificatie"):
         found = root.find(path)
         if found is not None and found.text:
@@ -328,7 +328,7 @@ def zaak_identificatie(answer: str) -> str | None:
 
 def is_bevestiging(answer: str) -> bool:
     """True when the ZDS answer is a Bv03 confirmation (not an Fo03 fault)."""
-    code = ET.fromstring(answer).find(f".//{{{STUF}}}berichtcode")  # noqa: S314  # nosec B314  # ZaakBrug's own answer
+    code = fromstring(answer).find(f".//{{{STUF}}}berichtcode")  # noqa: S314  # nosec B314  # ZaakBrug's own answer
     return code is not None and code.text == "Bv03"
 
 

@@ -56,9 +56,7 @@ class ResourceRegistry:
         """Register a deleter for a created resource."""
         self._entries.append(_Entry(description, delete))
 
-    def add_snippet(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # run_snippet's parameters
-        self, description: str, kube: Kube, deployment: str, name: str, params: dict[str, object]
-    ) -> None:
+    def add_snippet(self, description: str, kube: Kube, deployment: str, name: str, params: dict[str, object]) -> None:
         """Register a snippet as deleter; cleanup runs consecutive snippets of one deployment in one Django shell.
 
         The snippet must be safe to run twice: when the shell fails, cleanup runs each snippet of it again.
@@ -71,9 +69,10 @@ class ResourceRegistry:
 
     def cleanup(self) -> list[str]:
         """Delete everything; return the descriptions kept (with keep=True) or raise CleanupError."""
-        entries, self._entries = self._entries, []
+        entries = self._entries
+        self._entries = []
         if self.keep:
-            return [e.description for e in entries]
+            return [entry.description for entry in entries]
         errors: list[str] = []
         for _, group in groupby(reversed(entries), _batch_key):
             batch = list(group)
@@ -85,7 +84,8 @@ class ResourceRegistry:
                 except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught  # collect all, report together
                     errors.append(f"{entry.description}: {type(exc).__name__}: {exc}")
         if errors:
-            raise CleanupError("cleanup failed for: " + "; ".join(errors))
+            msg = f"cleanup failed for: {'; '.join(errors)}"
+            raise CleanupError(msg)
         return []
 
 
@@ -96,9 +96,9 @@ def _batch_key(entry: _Entry) -> object:
 
 def _run_batch(batch: Sequence[_Entry]) -> bool:
     """Run the entries' snippets in one Django shell; False when that failed, to run each and report which one."""
-    snippets = [e.snippet for e in batch if e.snippet]
+    snippets = [entry.snippet for entry in batch if entry.snippet]
     try:
-        run_snippets(snippets[0].kube, snippets[0].deployment, [(s.name, s.params) for s in snippets])
+        run_snippets(snippets[0].kube, snippets[0].deployment, [(snippet.name, snippet.params) for snippet in snippets])
     except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught  # each deleter again reports the error
         return False
     return True

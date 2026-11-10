@@ -54,7 +54,7 @@ REGISTRATION_TIMEOUT = 90
     And the filled-in name is its initiator
     And the inwoner can download the form as PDF
 """)
-def test_submission_creates_a_zaak_with_the_form_pdf(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_submission_creates_a_zaak_with_the_form_pdf(
     podiumd_env: Environment,
     openzaak: ApiClient,
     registry: ResourceRegistry,

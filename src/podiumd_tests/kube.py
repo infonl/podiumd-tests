@@ -93,21 +93,6 @@ class Kube:
         """One object as a dict, or None when it does not exist."""
         return self._get_object(("get", kind, name, "--ignore-not-found", "-o", "json"), namespace)
 
-    def _get_object(
-        self, args: tuple[str, ...], namespace: str | None, *, all_namespaces: bool = False
-    ) -> dict[str, object] | None:
-        out = self.run(*args, namespace=namespace, all_namespaces=all_namespaces)
-        if not out.strip():
-            return None
-        command = self.command(*args, namespace=namespace, all_namespaces=all_namespaces)
-        try:
-            data: object = json.loads(out)
-        except json.JSONDecodeError as exc:
-            raise KubeError(command, f"invalid JSON: {exc}") from exc
-        if not isinstance(data, dict):
-            raise KubeError(command, "expected a JSON object")
-        return cast("dict[str, object]", data)
-
     def items(
         self, kind: str, *, namespace: str | None = None, all_namespaces: bool = False
     ) -> list[dict[str, object]]:
@@ -177,6 +162,21 @@ class Kube:
             raise KubeError(self.command("get", "secret", name, namespace=namespace), f"no key {key!r}")
         return data[key]
 
+    def _get_object(
+        self, args: tuple[str, ...], namespace: str | None, *, all_namespaces: bool = False
+    ) -> dict[str, object] | None:
+        out = self.run(*args, namespace=namespace, all_namespaces=all_namespaces)
+        if not out.strip():
+            return None
+        command = self.command(*args, namespace=namespace, all_namespaces=all_namespaces)
+        try:
+            data: object = json.loads(out)
+        except json.JSONDecodeError as exc:
+            raise KubeError(command, f"invalid JSON: {exc}") from exc
+        if not isinstance(data, dict):
+            raise KubeError(command, "expected a JSON object")
+        return cast("dict[str, object]", data)
+
 
 def forwarded_port(command: Sequence[str], process: subprocess.Popen[str], timeout: int) -> int:
     """The local port `kubectl port-forward` reports; KubeError when it exits or reports none in time.
@@ -218,7 +218,7 @@ def cluster_service(url: str) -> tuple[str, str, int] | None:
 
 def decode_secret_data(data: Mapping[str, object]) -> dict[str, str]:
     """The base64 `data` of a Secret, decoded."""
-    return {k: base64.b64decode(str(v)).decode() for k, v in data.items()}
+    return {key: base64.b64decode(str(value)).decode() for key, value in data.items()}
 
 
 def django_values(output: str) -> list[str]:
@@ -235,6 +235,11 @@ def django_values(output: str) -> list[str]:
 def metadata_name(item: Mapping[str, object]) -> str:
     """metadata.name of a Kubernetes object, or an empty string."""
     return str(section(item, "metadata").get("name", ""))
+
+
+def metadata_namespace(item: Mapping[str, object]) -> str:
+    """metadata.namespace of a Kubernetes object, or an empty string."""
+    return str(section(item, "metadata").get("namespace", ""))
 
 
 def refresh_context(command: Sequence[str], runner: Runner = run_process) -> None:

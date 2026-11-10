@@ -59,7 +59,8 @@ class GatewayUser(User):
 
     def __init__(self, environment: LocustEnvironment) -> None:
         super().__init__(environment)
-        component, path, self.status = GATEWAY_SCENARIOS[self.scenario]
+        component, path, status = GATEWAY_SCENARIOS[self.scenario]
+        self.status = status
         self.http = self.env_under_test.session(cookies=False)
         root = self.env_under_test.profile.urls[component]
         self.urls = [root + path]

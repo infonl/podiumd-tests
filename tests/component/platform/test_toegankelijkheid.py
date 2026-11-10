@@ -43,7 +43,7 @@ pytestmark = [
     When the page is rendered in a browser
     Then an axe-core scan finds no critical WCAG 2.1 AA violation
 """)
-def test_page_has_no_critical_wcag_violation(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_page_has_no_critical_wcag_violation(
     page: Page,
     urls: dict[str, str],
     need_bootstrap: Callable[..., None],

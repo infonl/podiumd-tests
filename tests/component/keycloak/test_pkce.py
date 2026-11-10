@@ -66,7 +66,7 @@ def fixture_keycloak_admin(podiumd_env: Environment) -> KeycloakAdmin:
 """)
 def test_pabc_challenge_sends_a_pkce_code_challenge(http: requests.Session, urls: dict[str, str]) -> None:
     """PABC's login challenge points at Keycloak with client pabc and an S256 code challenge."""
-    response = http.get(urls["pabc"] + "/api/challenge", params={"returnUrl": "/"}, allow_redirects=False)
+    response = http.get(f"{urls['pabc']}/api/challenge", params={"returnUrl": "/"}, allow_redirects=False)
     location = response.headers["Location"]  # 401 for a non-browser request, 302 for a browser
     assert url_host(location) == url_host(urls["keycloak"])
     query = parse_qs(urlsplit(location).query)
@@ -103,7 +103,7 @@ ZAC_PKCE_OFF = (
 
 def zac_login_query(http: requests.Session, urls: dict[str, str]) -> dict[str, list[str]]:
     """The query of the Keycloak URL ZAC's root redirects an anonymous browser to."""
-    response = http.get(urls["zac"] + "/", allow_redirects=False)
+    response = http.get(f"{urls['zac']}/", allow_redirects=False)
     location = response.headers.get("Location", "")
     assert url_host(location) == url_host(urls["keycloak"]), f"ZAC's root does not redirect to Keycloak: {location!r}"
     return parse_qs(urlsplit(location).query)
@@ -148,4 +148,5 @@ def test_zac_client_and_zac_agree_on_pkce(
         pytest.skip("no Keycloak client zac in this realm")
     sends = bool(zac_login_query(http, urls).get("code_challenge"))
     method = section(client, "attributes").get("pkce.code.challenge.method") or ""
-    assert method == ("S256" if sends else ""), f"ZAC sends a challenge: {sends}; client zac requires: {method!r}"
+    required = "S256" if sends else ""
+    assert method == required, f"ZAC sends a challenge: {sends}; client zac requires: {method!r}"

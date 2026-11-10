@@ -59,7 +59,7 @@ def fixture_kiss(page: Page, podiumd_env: Environment, need_bootstrap: Callable[
 """)
 def test_kcc_user_is_a_klantcontactmedewerker(kiss: requests.Session, urls: dict[str, str]) -> None:
     """KISS knows the logged-in user as a klantcontactmedewerker (TA smoke 113)."""
-    me = expect_status(kiss.get(urls["kiss"] + "/api/me"), HTTPStatus.OK).json()
+    me = expect_status(kiss.get(f"{urls['kiss']}/api/me"), HTTPStatus.OK).json()
     assert me["isLoggedIn"]
     assert me["isKcm"]
 
@@ -81,7 +81,7 @@ def test_kcc_user_is_a_klantcontactmedewerker(kiss: requests.Session, urls: dict
 def test_kiss_renders_for_the_kcc_user(kiss: requests.Session, page: Page, urls: dict[str, str]) -> None:
     """After the login KISS's single-page app renders its search and navigation (TA smoke 06, reg-100)."""
     del kiss  # logs the page in
-    page.goto(urls["kiss"] + "/")
+    page.goto(f"{urls['kiss']}/")
     expect(page.get_by_role("banner").get_by_role("button", name="Zoeken")).to_be_visible()
     expect(page.get_by_role("link", name="Uitloggen")).to_be_visible()
 
@@ -118,7 +118,7 @@ def test_person_unknown_to_kiss_is_found_in_the_brp(kiss: requests.Session, urls
     """
     query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": [EREBOS], "fields": ["naam"]}
     found = kiss.post(
-        urls["kiss"] + "/api/haalcentraal/brp/personen",
+        f"{urls['kiss']}/api/haalcentraal/brp/personen",
         data=json.dumps(query, separators=(",", ":")),
         headers={"Content-Type": "application/json"},
     )
@@ -135,7 +135,7 @@ def test_person_unknown_to_kiss_is_found_in_the_brp(kiss: requests.Session, urls
 """)
 def test_company_unknown_to_kiss_is_found_in_the_kvk(kiss: requests.Session, urls: dict[str, str]) -> None:
     """KISS finds a company by KvK number through its KvK proxy."""
-    found = expect_status(kiss.get(urls["kiss"] + "/api/kvk/v2/zoeken", params={"kvkNummer": KVK_TEST_NUMMER}), 200)
+    found = expect_status(kiss.get(f"{urls['kiss']}/api/kvk/v2/zoeken", params={"kvkNummer": KVK_TEST_NUMMER}), 200)
     assert KVK_TEST_NUMMER in {str(r.get("kvkNummer")) for r in entries(found.json()["resultaten"])}
 
 
@@ -150,7 +150,7 @@ def test_company_unknown_to_kiss_is_found_in_the_kvk(kiss: requests.Session, url
     When the medewerker registers a klantcontact on that kanaal through KISS
     Then the klantcontact is in Open Klant on exactly that kanaal
 """)
-def test_klantcontact_keeps_the_kanaal_chosen_in_kiss(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_klantcontact_keeps_the_kanaal_chosen_in_kiss(
     kiss: requests.Session,
     urls: dict[str, str],
     openklant: ApiClient,
@@ -160,7 +160,7 @@ def test_klantcontact_keeps_the_kanaal_chosen_in_kiss(  # pylint: disable=too-ma
 ) -> None:
     """A klantcontact registered through KISS on a kanaal KISS offers lands in Open Klant on exactly that kanaal."""
     need_bootstrap("kiss-kanalen")
-    offered = {str(k["naam"]) for k in get_entries(kiss, urls["kiss"] + "/api/KanalenContactmomentKeuzelijst")}
+    offered = {str(k["naam"]) for k in get_entries(kiss, f"{urls['kiss']}/api/KanalenContactmomentKeuzelijst")}
     if kanaal not in offered:
         pytest.skip(
             f"KISS offers no kanaal {kanaal}: add it in KISS (Beheer, Kanalen) or set profile setting kiss_kanalen"

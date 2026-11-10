@@ -27,7 +27,7 @@ def test_cilium_and_hubble_are_present_when_their_pods_and_relay_run(fake_runner
             "get services": items({"metadata": {"name": "hubble-relay"}}),
         }
     )
-    assert detect_network(Kube("ctx", "podiumd", fake_runner)) == (frozenset({"cilium", "hubble"}), {})
+    assert detect_network(Kube("ctx", "podiumd", fake_runner)) == (frozenset(("cilium", "hubble")), {})
 
 
 def test_a_cluster_without_cilium_says_why(fake_runner, profile_factory):
@@ -81,7 +81,7 @@ def test_drops_name_the_pods_and_count_retries(tmp_path, fake_runner):
     fake_runner.answers["get pods -o json --all-namespaces"] = items(pod)
     path = tmp_path / "cilium-drops.jsonl"
     lines = [{"time": f"t{i}", **drop("Policy denied")} for i in range(3)]
-    path.write_text("".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8")
+    path.write_text("".join(f"{json.dumps(line)}\n" for line in lines), encoding="utf-8")
     assert describe_drops(Kube("ctx", "podiumd", fake_runner), path) == [
         "t0 podiumd/openzaak-1 -> 10.0.0.2:7800 Policy denied (3x)"
     ]
@@ -112,12 +112,12 @@ class FakeMonitor:
 def test_recorded_drops_writes_policy_drops_of_every_agent(tmp_path, fake_runner, monkeypatch):
     fake_runner.answers["get pods -l k8s-app=cilium"] = items(agent("cilium-a"), agent("cilium-b"))
     monitors = {
-        "cilium-a": FakeMonitor([json.dumps(drop("Policy denied")) + "\n", "chatter\n"]),
-        "cilium-b": FakeMonitor([json.dumps(drop("Unsupported L3 protocol")) + "\n"]),
+        "cilium-a": FakeMonitor([f"{json.dumps(drop('Policy denied'))}\n", "chatter\n"]),
+        "cilium-b": FakeMonitor([f"{json.dumps(drop('Unsupported L3 protocol'))}\n"]),
     }
     monkeypatch.setattr(cilium, "start_monitor", lambda _kube, pod: monitors[pod])
     path = tmp_path / "cilium-drops.jsonl"
-    with cilium.recorded_drops(Kube("ctx", "podiumd", fake_runner), path):
+    with cilium.recorded_drops(Kube("ctx", "podiumd", fake_runner), path):  # noqa: WPS328  # enter and exit are under test
         pass
     recorded = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
     assert [r["reason"] for r in recorded] == ["Policy denied"]

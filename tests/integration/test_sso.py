@@ -80,7 +80,7 @@ def fixture_sso_admins(http: requests.Session, urls: dict[str, str], podiumd_env
     Then Keycloak asks for no new login
     And the admin is in the app's Django admin
 """)
-def test_one_login_opens_every_admin(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_one_login_opens_every_admin(
     page: Page,
     urls: dict[str, str],
     podiumd_env: Environment,
@@ -115,7 +115,7 @@ def test_one_login_opens_every_admin(  # pylint: disable=too-many-arguments,too-
     And opens the Django admin again
     Then the admin is asked to log in again
 """)
-def test_admin_logout_returns_to_the_login(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_admin_logout_returns_to_the_login(
     page: Page,
     urls: dict[str, str],
     podiumd_env: Environment,
@@ -135,5 +135,5 @@ def test_admin_logout_returns_to_the_login(  # pylint: disable=too-many-argument
     keycloak_login(page, ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
     page.wait_for_url(lambda url: in_admin(url, admin))
     page.get_by_role("button", name=LOGOUT).or_(page.get_by_role("link", name=LOGOUT)).first.click()
-    page.goto(admin + "/admin/")
+    page.goto(f"{admin}/admin/")
     assert "login" in page.url or url_host(page.url) == url_host(urls["keycloak"]), f"still in the admin: {page.url}"

@@ -22,7 +22,9 @@ ENDPOINTS = {
 def run(params):
     from mozilla_django_oidc_db.models import OIDCClient
 
-    clients = {c.identifier: c for c in OIDCClient.objects.filter(identifier__in=list(params["clients"]))}
+    clients = {
+        client.identifier: client for client in OIDCClient.objects.filter(identifier__in=list(params["clients"]))
+    }
     if params["action"] == "status":
         return {"present": _present(params, clients)}
     record = params.get("record") or {}
@@ -57,7 +59,9 @@ def _clients(params, clients, record):
         if client.pk and identifier not in record["clients"]:
             # Every stored field except the key: what remove puts back.
             fields = client._meta.concrete_fields
-            record["clients"][identifier] = {f.attname: getattr(client, f.attname) for f in fields if f.attname != "id"}
+            record["clients"][identifier] = {
+                column.attname: getattr(client, column.attname) for column in fields if column.attname != "id"
+            }
         client.oidc_provider = provider
         client.oidc_rp_client_id = params["client_id"]
         client.oidc_rp_client_secret = params["secret"]
@@ -81,7 +85,7 @@ def _site(record):
 
 def _accounts(identities):
     """The Open Inwoner accounts with the identities' bsn or kvk."""
-    from django.db.models import Q
+    from django.db.models import Q  # noqa: WPS347  # Django's query object
     from open_inwoner.accounts.models import User
 
     query = Q(pk__in=[])
@@ -144,7 +148,7 @@ def _present(params, clients):
     if params.get("accounts"):
         from open_inwoner.accounts.models import User
 
-        if not all(User.objects.filter(bsn=u["bsn"]).exists() for u in params["accounts"]):
+        if not all(User.objects.filter(bsn=account["bsn"]).exists() for account in params["accounts"]):
             return False
     return True
 

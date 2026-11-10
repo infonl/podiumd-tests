@@ -55,7 +55,10 @@ def service(api_root, status, auth_type="zgw", uuid="u1", *, referenced=True):
 )
 def test_service_problem(api_root, path, status, problem):
     found = service_problem(service(api_root, status), path)
-    assert found == problem if problem is None else problem in str(found)
+    if problem is None:
+        assert found is None
+    else:
+        assert problem in str(found)
 
 
 def test_service_problems_probe_each_referenced_service_on_its_list_path(page_env):

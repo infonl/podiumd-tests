@@ -104,16 +104,21 @@ def zaaktype_parts(openzaak: ApiClient, zaaktype: JsonObject) -> ZaaktypeParts:
     """Look up the statustypen, roltypen, informatieobjecttype, eigenschappen, besluittype and resultaattypen."""
     url = str(zaaktype["url"])
     statustypen = sorted(
-        openzaak.list(f"{CATALOGI}/statustypen", {"zaaktype": url}), key=lambda s: int(str(s["volgnummer"]))
+        openzaak.list(f"{CATALOGI}/statustypen", {"zaaktype": url}),
+        key=lambda statustype: int(str(statustype["volgnummer"])),
     )
     roltypen = {
-        str(r["omschrijvingGeneriek"]): str(r["url"]) for r in openzaak.list(f"{CATALOGI}/roltypen", {"zaaktype": url})
+        str(roltype["omschrijvingGeneriek"]): str(roltype["url"])
+        for roltype in openzaak.list(f"{CATALOGI}/roltypen", {"zaaktype": url})
     }
     eigenschappen = {
-        str(e["naam"]): str(e["url"]) for e in openzaak.list(f"{CATALOGI}/eigenschappen", {"zaaktype": url})
+        str(eigenschap["naam"]): str(eigenschap["url"])
+        for eigenschap in openzaak.list(f"{CATALOGI}/eigenschappen", {"zaaktype": url})
     }
     besluittypen = openzaak.list(f"{CATALOGI}/besluittypen", {"zaaktypen": url})
-    resultaattypen = [str(r["url"]) for r in openzaak.list(f"{CATALOGI}/resultaattypen", {"zaaktype": url})]
+    resultaattypen = [
+        str(resultaattype["url"]) for resultaattype in openzaak.list(f"{CATALOGI}/resultaattypen", {"zaaktype": url})
+    ]
     iots = strings(zaaktype.get("informatieobjecttypen"))
     return ZaaktypeParts(
         url, statustypen, roltypen, iots[0], eigenschappen, str(besluittypen[0]["url"]), resultaattypen
@@ -210,7 +215,7 @@ def make_document_in_parts(
     body = _document_body(registry, informatieobjecttype, len(content), formaat="application/octet-stream", **fields)
     document = _create(openzaak, registry, f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", body)
     # The parts are multipart uploads: the client's JSON Content-Type must not go along.
-    headers = {k: v for k, v in openzaak.headers().items() if k.lower() != "content-type"}
+    headers = {name: value for name, value in openzaak.headers().items() if name.lower() != "content-type"}
     offset = 0
     for part in entries(document.get("bestandsdelen")):
         size = int(str(part["omvang"]))

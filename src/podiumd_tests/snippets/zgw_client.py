@@ -54,7 +54,7 @@ def _zaaktype_rights_present(applicaties, zaaktypen_params):
     base = zaaktypen_params["base_url"].rstrip("/")
     versions = ZaakType.objects.filter(identificatie__in=zaaktypen_params["identificaties"], concept=False)
     granted = set(rights.filter(component="zrc").values_list("zaaktype", flat=True))
-    if not versions.exists() or any(base + z.get_absolute_api_url() not in granted for z in versions):
+    if not versions.exists() or any(base + zaaktype.get_absolute_api_url() not in granted for zaaktype in versions):
         return False
     return not zaaktypen_params.get("document_scopes") or rights.filter(component="drc").exists()
 
@@ -85,8 +85,8 @@ def _zaaktype_autorisaties(applicatie, zaaktypen_params):
                     "max_vertrouwelijkheidaanduiding": zaaktypen_params["max_va"],
                 },
             )
-    missing = sorted(set(wanted) - {z.identificatie for z in found})
-    return [f"no published zaaktype {i}" for i in missing]
+    missing = sorted(set(wanted) - {zaaktype.identificatie for zaaktype in found})
+    return [f"no published zaaktype {identificatie}" for identificatie in missing]
 
 
 def _catalogi(catalogus_params):
@@ -127,7 +127,9 @@ def _catalogus_autorisaties(applicatie, catalogus_params):
     excluded = catalogus_params["exclude"]
     for component, prefixes in catalogus_params["components"].items():
         scopes = sorted(
-            label for label in labels if label.startswith(tuple(prefixes)) and not any(w in label for w in excluded)
+            label
+            for label in labels
+            if label.startswith(tuple(prefixes)) and not any(exclusion in label for exclusion in excluded)
         )
         if scopes:
             CatalogusAutorisatie.objects.create(

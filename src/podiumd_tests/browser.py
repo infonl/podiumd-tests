@@ -40,7 +40,7 @@ NETWORK_RETRIES = 2
 NETWORK_PAUSE_MS = 1000
 
 
-def retry_network_change[T](page: Page, navigate: Callable[[], T], what: str) -> T:
+def retry_network_change[ResultT](page: Page, navigate: Callable[[], ResultT], what: str) -> ResultT:
     """Run a navigation; repeat it up to NETWORK_RETRIES times when a host network change aborted it."""
     for attempt in count(1):
         try:
@@ -74,8 +74,9 @@ def launch_args(env: Environment) -> list[str]:
     ip = env.ingress_ip()
     if ip is None:
         return []
-    hosts = sorted({url_host(u) for u in env.profile.urls.values()})
-    return ["--host-resolver-rules=" + ",".join(f"MAP {h} {ip}" for h in hosts)]
+    hosts = sorted({url_host(url) for url in env.profile.urls.values()})
+    rules = ",".join(f"MAP {host} {ip}" for host in hosts)
+    return [f"--host-resolver-rules={rules}"]
 
 
 def context_args(env: Environment) -> dict[str, object]:
@@ -117,7 +118,7 @@ def configure_totp(page: Page) -> None:
 
 def redirect_login(page: Page, env: Environment, app_url: str, username: str, password: str) -> requests.Session:
     """Log in to an app whose pages redirect to Keycloak (ZAC); returns browser_session(page, env)."""
-    page.goto(app_url + "/")
+    page.goto(f"{app_url}/")
     keycloak_login(page, username, password)
     page.wait_for_url(lambda url: url_host(url) == url_host(app_url))
     return browser_session(page, env)
@@ -142,7 +143,8 @@ def browser_session(page: Page, env: Environment) -> requests.Session:
     """
     http = env.session()
     for cookie in page.context.cookies():
-        name, value, domain = str(cookie.get("name")), str(cookie.get("value")), cookie.get("domain") or ""
+        name, value = str(cookie.get("name")), str(cookie.get("value"))
+        domain = cookie.get("domain") or ""
         http.cookies.set(name, value, domain=domain)  # pyright: ignore[reportUnknownMemberType]  # untyped **kwargs in the stubs
     return http
 
@@ -150,9 +152,9 @@ def browser_session(page: Page, env: Environment) -> requests.Session:
 def share_cookies(http: requests.Session, page: Page) -> None:
     """Give the browser the session's cookies, e.g. a login made without a browser (the reverse of browser_session)."""
     cookies = [
-        {"name": c.name, "value": str(c.value), "domain": c.domain, "path": c.path or "/"}
-        for c in http.cookies
-        if c.domain
+        {"name": cookie.name, "value": str(cookie.value), "domain": cookie.domain, "path": cookie.path or "/"}
+        for cookie in http.cookies
+        if cookie.domain
     ]
     page.context.add_cookies(cookies)  # pyright: ignore[reportArgumentType]  # Playwright's TypedDict
 

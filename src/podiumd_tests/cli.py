@@ -119,7 +119,8 @@ def cmd_env_show(args: argparse.Namespace) -> int:
     print("secrets (a missing one skips its tests; PODIUMD_TESTS_SECRET_<NAME> overrides):")
     for name, spec in sorted(profile.secrets.items()):
         # dev_default's option is the value itself.
-        where = " ".join(f"{k}={v}" for k, v in sorted(spec.options.items()) if spec.source != "dev_default")
+        options = {} if spec.source == "dev_default" else spec.options
+        where = " ".join(f"{option}={value}" for option, value in sorted(options.items()))
         print(f"  {name:28} {spec.source} {where}".rstrip())
     return EXIT_OK
 
@@ -136,7 +137,8 @@ def ingress_hosts(kube: Kube) -> list[str]:
         for item in items:
             spec = section(item, "spec")
             # Ingress rules are objects with a host; HTTPRoute hostnames are plain strings.
-            hosts += strings([r.get("host") for r in entries(spec.get("rules"))]) + strings(spec.get("hostnames"))
+            rule_hosts = strings([rule.get("host") for rule in entries(spec.get("rules"))])
+            hosts += rule_hosts + strings(spec.get("hostnames"))
     return sorted(set(hosts))
 
 
@@ -152,7 +154,7 @@ def configured_hosts(kube: Kube) -> list[str]:
     for kind in ("deployments", "configmaps"):
         for item in kube.items(kind):
             found.update(CONFIGURED_HOST.findall(json.dumps([item.get("spec"), item.get("data")])))
-    return sorted(h for h in found if ".svc" not in h)
+    return sorted(host for host in found if ".svc" not in host)
 
 
 def draft_profile(estate: str, context: str, namespace: str, hosts: list[str], scheme: str) -> dict[str, object]:
@@ -182,16 +184,16 @@ def cmd_env_init(args: argparse.Namespace) -> int:
         return EXIT_CONFIG
     kube = Kube(args.context, args.namespace)
     hosts = ingress_hosts(kube)
-    if not any(component_for_host(h) for h in hosts):
+    if not any(component_for_host(host) for host in hosts):
         hosts = configured_hosts(kube)
     draft = draft_profile(args.estate, args.context, args.namespace, hosts, args.scheme)
     header = "# Draft from `podiumd-tests env init`; review urls, add secrets and allowed_tiers.\n"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(header + yaml.safe_dump(draft, sort_keys=False), encoding="utf-8")
-    unmapped = [h for h in hosts if component_for_host(h) is None]
+    unmapped = [host for host in hosts if component_for_host(host) is None]
     print(f"wrote {target} ({len(draft['urls'])} component URLs)")  # pyright: ignore[reportArgumentType]
     if unmapped:
-        print("hosts not mapped to a component: " + ", ".join(unmapped))
+        print(f"hosts not mapped to a component: {', '.join(unmapped)}")
     return EXIT_OK
 
 
@@ -201,27 +203,29 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     checks = doctor.run_checks(env)
     print(doctor.format_checks(checks))
     if args.json:
-        Path(args.json).write_text(json.dumps([asdict(c) for c in checks], indent=2) + "\n", encoding="utf-8")
+        report = json.dumps([asdict(check) for check in checks], indent=2)
+        Path(args.json).write_text(f"{report}\n", encoding="utf-8")
     return EXIT_CONFIG if doctor.failed(checks) else EXIT_OK
 
 
 def _defines_test(node_id: str) -> bool:
     """Whether the node id's file defines its test function; pytest on xdist runs nothing for an unknown one."""
-    name = node_id.split("::")[-1].split("[")[0]
-    source = (REPO_ROOT / node_id.split("::")[0]).read_text(encoding="utf-8")
+    name = node_id.rsplit("::", maxsplit=1)[-1].split("[", maxsplit=1)[0]
+    source = (REPO_ROOT / node_id.split("::", maxsplit=1)[0]).read_text(encoding="utf-8")
     return re.search(rf"^\s*(?:async\s+)?def {re.escape(name)}\(", source, re.MULTILINE) is not None
 
 
 def pytest_selection(profile: Profile, tier_name: str, run_id: str, junit: Path, args: argparse.Namespace) -> list[str]:
     """The pytest arguments of a run: the tier's paths and markers, the run tag and the results files."""
     tier = TIERS[tier_name]
-    paths = [str(REPO_ROOT / p) for p in tier.paths if (REPO_ROOT / p).is_dir()]
-    given = [a for a in args.pytest_args if not a.startswith("-") and (REPO_ROOT / a.split("::")[0]).exists()]
-    outside = [a for a in given if not any((REPO_ROOT / a).resolve().is_relative_to(p) for p in paths)]
+    paths = [str(REPO_ROOT / path) for path in tier.paths if (REPO_ROOT / path).is_dir()]
+    positional = [arg for arg in args.pytest_args if not arg.startswith("-")]
+    given = [arg for arg in positional if (REPO_ROOT / arg.split("::")[0]).exists()]
+    outside = [arg for arg in given if not any((REPO_ROOT / arg).resolve().is_relative_to(path) for path in paths)]
     if outside:
         msg = f"not in tier {tier_name}: {', '.join(outside)} (its paths: {', '.join(tier.paths)})"
         raise ProfileError(msg)
-    unknown = [a for a in given if "::" in a and not _defines_test(a)]
+    unknown = [arg for arg in given if "::" in arg and not _defines_test(arg)]
     if unknown:
         msg = (
             f"no such test: {', '.join(unknown)} (a node id names a test function, without the report's @group suffix)"
@@ -253,7 +257,7 @@ def _preflight_ok(env: Environment, args: argparse.Namespace) -> bool:
         return True
     checks = doctor.run_checks(env)
     if doctor.failed(checks):
-        print(doctor.format_checks([c for c in checks if c.status == "fail"]), file=sys.stderr)
+        print(doctor.format_checks([check for check in checks if check.status == "fail"]), file=sys.stderr)
         return False
     return True
 
@@ -319,7 +323,7 @@ def cmd_sweep(args: argparse.Namespace) -> int:
         with held(env, f"sweep {env.profile.name}"):
             swept = sweep(env, cutoff, dry_run=False)
     print(format_swept(swept))
-    return EXIT_CONFIG if any(s.action == "failed" for s in swept) else EXIT_OK
+    return EXIT_CONFIG if any(swept_object.action == "failed" for swept_object in swept) else EXIT_OK
 
 
 def _volume_env(args: argparse.Namespace) -> Environment | int:
@@ -359,11 +363,11 @@ def selected_steps(names: list[str] | None) -> tuple[Step, ...]:
     """All steps, or only the named ones; ProfileError for an unknown name."""
     if not names:
         return STEPS
-    unknown = sorted(set(names) - {s.name for s in STEPS})
+    unknown = sorted(set(names) - {step.name for step in STEPS})
     if unknown:
-        msg = f"unknown bootstrap steps: {', '.join(unknown)} (known: {', '.join(s.name for s in STEPS)})"
+        msg = f"unknown bootstrap steps: {', '.join(unknown)} (known: {', '.join(step.name for step in STEPS)})"
         raise ProfileError(msg)
-    return tuple(s for s in STEPS if s.name in names)
+    return tuple(step for step in STEPS if step.name in names)
 
 
 def _versions(env: Environment) -> dict[str, str]:
@@ -431,7 +435,8 @@ def _run_tier(args: argparse.Namespace) -> int:
         if written.exists():
             written.write_text(env.redactor.redact(written.read_text(encoding="utf-8")), encoding="utf-8")
     if junit.exists():
-        info.counts, details = parse_junit(junit.read_text(encoding="utf-8"))
+        counts, details = parse_junit(junit.read_text(encoding="utf-8"))
+        info.counts = counts
     after = _cluster_state(env)
     if before and after:
         details.disruptions = disruptions(before, after)

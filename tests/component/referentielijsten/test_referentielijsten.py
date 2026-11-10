@@ -34,7 +34,7 @@ pytestmark = [
 """)
 def test_api_cannot_be_written(http: requests.Session, urls: dict[str, str]) -> None:
     """Tabellen are maintained in the admin: the API refuses a new tabel."""
-    response = http.post(urls["referentielijsten"] + "/api/v1/tabellen", json={"code": "ptest", "naam": "ptest"})
+    response = http.post(f"{urls['referentielijsten']}/api/v1/tabellen", json={"code": "ptest", "naam": "ptest"})
     assert response.status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN, HTTPStatus.METHOD_NOT_ALLOWED}, (
         describe(response)
     )
@@ -62,8 +62,8 @@ def test_items_of_a_tabel_are_listed(
         ),
     )
     run_snippet(podiumd_env.kube, deployment, "referentielijsten_tabel", params)
-    api = urls["referentielijsten"] + "/api/v1"
-    tabellen = expect_status(http.get(api + "/tabellen", params={"code": code}), HTTPStatus.OK).json()
+    api = f"{urls['referentielijsten']}/api/v1"
+    tabellen = expect_status(http.get(f"{api}/tabellen", params={"code": code}), HTTPStatus.OK).json()
     assert code in {t.get("code") for t in entries(tabellen.get("results"))}
-    found = expect_status(http.get(api + "/items", params={"tabel__code": code}), HTTPStatus.OK).json()
+    found = expect_status(http.get(f"{api}/items", params={"tabel__code": code}), HTTPStatus.OK).json()
     assert sorted((i["code"], i["naam"]) for i in entries(found.get("results"))) == [("ja", "Ja"), ("nee", "Nee")]

@@ -191,7 +191,7 @@ def test_initiator_with_only_a_phone_number_gets_an_sms(
     When Notify reports to OMC that the e-mail was delivered
     Then OMC registers a klantcontact about the zaak in Open Klant
 """)
-def test_delivery_receipt_becomes_a_klantcontact(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_delivery_receipt_becomes_a_klantcontact(
     podiumd_env: Environment,
     http: requests.Session,
     openzaak: ApiClient,
@@ -231,7 +231,7 @@ def test_delivery_receipt_becomes_a_klantcontact(  # pylint: disable=too-many-ar
     }
     token = omc_token(podiumd_env, time.time())
     confirm = http.post(
-        podiumd_env.profile.urls["omc"] + "/Notify/Confirm", json=receipt, headers={"Authorization": f"Bearer {token}"}
+        f"{podiumd_env.profile.urls['omc']}/Notify/Confirm", json=receipt, headers={"Authorization": f"Bearer {token}"}
     )
     expect_status(confirm, HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.ACCEPTED)
     wait_until(

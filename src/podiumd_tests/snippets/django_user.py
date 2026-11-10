@@ -8,7 +8,7 @@ out and reported. A user model without username (Open Inwoner) logs in with the 
 
 
 def run(params):
-    import importlib.util
+    from importlib.util import find_spec
 
     from django.contrib.auth import get_user_model
     from django.contrib.auth.models import Group
@@ -33,10 +33,10 @@ def run(params):
         Token.objects.create(user=user, key=params["secret"])
     groups = list(Group.objects.filter(name__in=params["groups"]))
     user.groups.set(groups)
-    if importlib.util.find_spec("axes") is not None:
+    if find_spec("axes") is not None:
         from axes.utils import reset
 
         reset(username=login)  # clear login lockouts of an earlier user with this name
-    found = {g.name for g in groups}
-    missing = [g for g in params["groups"] if g not in found]
-    return {"present": True, "notes": [f"no group {g}" for g in missing]}
+    found = {group.name for group in groups}
+    missing = [group for group in params["groups"] if group not in found]
+    return {"present": True, "notes": [f"no group {group}" for group in missing]}

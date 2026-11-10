@@ -5,12 +5,12 @@ A plain install and Microsoft's AKS build both run the agent as DaemonSet cilium
 
 from __future__ import annotations
 
-import contextlib
 import json
 import os
 import threading
 
 from contextlib import contextmanager
+from contextlib import suppress
 from datetime import UTC
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -46,7 +46,7 @@ def detect_network(kube: Kube) -> tuple[frozenset[str], dict[str, str]]:
     """The present network capabilities (cilium, hubble), and why the others are absent."""
     try:
         agents = agent_pods(kube)
-        services = {metadata_name(s) for s in kube.items("services", namespace=NAMESPACE)}
+        services = {metadata_name(service) for service in kube.items("services", namespace=NAMESPACE)}
     except KubeError as exc:
         reason = f"cannot read namespace {NAMESPACE}: {exc}"
         return frozenset(), {CILIUM: reason, HUBBLE: reason}
@@ -78,41 +78,52 @@ def recorded_drops(kube: Kube, path: Path) -> Generator[None]:
     reinstalls often); its cilium-dbg should exit on EPIPE/SIGHUP (upstream).
     """
     pods = agent_pods(kube)
-    monitors = [start_monitor(kube, metadata_name(p)) for p in pods]
+    monitors = [start_monitor(kube, metadata_name(pod)) for pod in pods]
     lock = threading.Lock()
     with path.open("w", encoding="utf-8") as out:
 
         def copy(monitor: Monitor) -> None:
-            for line in monitor.lines():
-                event = policy_drop(line)
-                if event is not None:
-                    with lock:
-                        out.write(json.dumps({"time": datetime.now(UTC).isoformat(timespec="seconds"), **event}) + "\n")
-                        out.flush()
+            for record in _drop_records(monitor):
+                with lock:
+                    out.write(record)
+                    out.flush()
 
-        threads = [threading.Thread(target=copy, args=(m,), daemon=True) for m in monitors]
+        threads = [threading.Thread(target=copy, args=(monitor,), daemon=True) for monitor in monitors]
         for thread in threads:
             thread.start()
         try:
             yield
         finally:
-            for monitor in monitors:
-                monitor.stop()
-            for pod in pods:
-                with contextlib.suppress(KubeError):
-                    kube.run(
-                        "exec",
-                        metadata_name(pod),
-                        "-c",
-                        "cilium-agent",
-                        "--",
-                        "pkill",
-                        "-f",
-                        " ".join(MONITOR),
-                        namespace=NAMESPACE,
-                    )
+            _stop_monitors(kube, pods, monitors)
             for thread in threads:
                 thread.join(5)
+
+
+def _drop_records(monitor: Monitor) -> Generator[str]:
+    """Each policy drop of the monitor as a JSON line, with the time it was read."""
+    for line in monitor.lines():
+        event = policy_drop(line)
+        if event is not None:
+            stamped = {"time": datetime.now(UTC).isoformat(timespec="seconds"), **event}
+            yield f"{json.dumps(stamped)}\n"
+
+
+def _stop_monitors(kube: Kube, pods: list[JsonObject], monitors: list[Monitor]) -> None:
+    for monitor in monitors:
+        monitor.stop()
+    for pod in pods:
+        with suppress(KubeError):
+            kube.run(
+                "exec",
+                metadata_name(pod),
+                "-c",
+                "cilium-agent",
+                "--",
+                "pkill",
+                "-f",
+                " ".join(MONITOR),
+                namespace=NAMESPACE,
+            )
 
 
 MONITOR = ("cilium-dbg", "monitor", "--type", "drop", "--json")
@@ -127,7 +138,7 @@ class Monitor:
 
     def lines(self) -> Generator[str]:
         """The monitor's output lines until it stops; killing kubectl closes the pty and ends the stream."""
-        with contextlib.suppress(OSError), os.fdopen(self._master, encoding="utf-8", errors="replace") as reader:
+        with suppress(OSError), os.fdopen(self._master, encoding="utf-8", errors="replace") as reader:
             yield from reader
 
     def stop(self) -> None:
@@ -170,16 +181,21 @@ def describe_drops(kube: Kube, path: Path) -> list[str]:
     if not events:
         return []
     pods = {
-        str(section(p, "status").get("podIP")): f"{section(p, 'metadata').get('namespace')}/{metadata_name(p)}"
-        for p in kube.items("pods", all_namespaces=True)
+        str(section(pod, "status").get("podIP")): f"{section(pod, 'metadata').get('namespace')}/{metadata_name(pod)}"
+        for pod in kube.items("pods", all_namespaces=True)
     }
     seen: dict[str, tuple[str, int]] = {}
     for event in events:
         summary = section(event, "summary")
         l3, l4 = section(summary, "l3"), section(summary, "l4")
-        source, destination = (pods.get(str(l3.get(k)), str(l3.get(k, "?"))) for k in ("src", "dst"))
+        source, destination = (_endpoint(pods, l3, end) for end in ("src", "dst"))
         port = f":{l4['dst']}" if l4.get("dst") else ""
         key = f"{source} -> {destination}{port} {event.get('reason')}"
         first, count = seen.get(key, (str(event.get("time")), 0))
         seen[key] = (first, count + 1)
     return [f"{first} {key} ({count}x)" for key, (first, count) in seen.items()]
+
+
+def _endpoint(pods: dict[str, str], l3: JsonObject, end: str) -> str:
+    """namespace/pod of the src or dst address, else the address."""
+    return pods.get(str(l3.get(end)), str(l3.get(end, "?")))

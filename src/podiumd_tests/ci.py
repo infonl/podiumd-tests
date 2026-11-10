@@ -42,6 +42,6 @@ def publish_summary(summary: Path, environ: Mapping[str, str] | None = None) -> 
     kind = runner(environ)
     if kind == "github" and environ.get("GITHUB_STEP_SUMMARY"):
         with open(environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:  # noqa: PTH123  # a path string
-            handle.write(summary.read_text(encoding="utf-8") + "\n")
+            handle.write(f"{summary.read_text(encoding='utf-8')}\n")
     elif kind == "azure":
         print(f"##vso[task.uploadsummary]{summary.resolve()}", flush=True)

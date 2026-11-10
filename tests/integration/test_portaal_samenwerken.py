@@ -71,7 +71,7 @@ def test_begeleider_starts_a_samenwerking(
     page.context.clear_cookies()
 
     begeleider_login(page, podiumd_env)
-    page.goto(portal + CONTACTS + "create/")
+    page.goto(f"{portal}{CONTACTS}create/")
     page.locator('input[name="first_name"]').fill("PodiumD")
     page.locator('input[name="last_name"]').fill(who)
     page.locator('input[name="email"]').fill(user_email(identity.username))
@@ -87,7 +87,7 @@ def test_begeleider_starts_a_samenwerking(
 
     title = registry.tagged("samenwerking")
     begeleider_login(page, podiumd_env)
-    page.goto(portal + SAMENWERKEN + "create/")
+    page.goto(f"{portal}{SAMENWERKEN}create/")
     page.locator('input[name="title"]').fill(title)
     page.locator('[name="goal"]').fill("Samen een doel halen")
     # A read-only flatpickr field: set the date through flatpickr, which formats it for the form.

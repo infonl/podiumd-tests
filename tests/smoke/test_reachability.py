@@ -92,5 +92,5 @@ def test_root_answers(http: requests.Session, urls: dict[str, str], component: s
 """)
 def test_django_admin_login_page(http: requests.Session, urls: dict[str, str], component: str) -> None:
     """The admin login page renders (MK/PI admin login reachable, 00h, 00l, 81)."""
-    response = expect_status(http.get(urls[component] + "/admin/login/"), HTTPStatus.OK)
+    response = expect_status(http.get(f"{urls[component]}/admin/login/"), HTTPStatus.OK)
     assert "login" in response.url

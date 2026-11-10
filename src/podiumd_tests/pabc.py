@@ -41,7 +41,7 @@ def login(page: Page, env: Environment, username: str, password: str) -> request
     """Log in to PABC through Keycloak; AssertionError when PABC keeps no session."""
     pabc_url = env.profile.urls["pabc"]
     api = challenge_login(page, env, pabc_url, username, password)
-    me = cast("JsonObject", api.get(pabc_url + "/api/me").json())
+    me = cast("JsonObject", api.get(f"{pabc_url}/api/me").json())
     if not me.get("isLoggedIn"):
         msg = f"PABC login as {username} kept no session: /api/me says isLoggedIn false"
         raise AssertionError(msg)
@@ -84,7 +84,7 @@ def delete_entity_type(pabc: requests.Session, pabc_url: str, entity_type: str) 
 
 def ensure_domain(pabc: requests.Session, pabc_url: str, name: str, entity_types: list[str]) -> str:
     """The domain of this name, created if missing, holding these entity types (PABC ids); its id."""
-    found = next((d for d in get_entries(pabc, pabc_url + DOMAINS) if d.get("name") == name), None)
+    found = next((existing for existing in get_entries(pabc, pabc_url + DOMAINS) if existing.get("name") == name), None)
     if found is None:
         body = {"name": name, "description": "podiumd-tests"}
         found = cast("JsonObject", expect_status(pabc.post(pabc_url + DOMAINS, json=body), HTTPStatus.CREATED).json())
@@ -94,17 +94,22 @@ def ensure_domain(pabc: requests.Session, pabc_url: str, name: str, entity_types
     return domain
 
 
-def ensure_functional_role(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # one mapping set
+def ensure_functional_role(  # noqa: PLR0913, PLR0917  # one mapping set
     pabc: requests.Session, pabc_url: str, name: str, application: str, roles: tuple[str, ...], domain: str
 ) -> None:
     """The functional role of this name, created if missing, mapped to these application roles in the domain."""
-    found = next((r for r in get_entries(pabc, pabc_url + FUNCTIONAL_ROLES) if r.get("name") == name), None)
+    found = next(
+        (existing for existing in get_entries(pabc, pabc_url + FUNCTIONAL_ROLES) if existing.get("name") == name), None
+    )
     if found is None:
         response = pabc.post(pabc_url + FUNCTIONAL_ROLES, json={"name": name})
         found = cast("JsonObject", expect_status(response, HTTPStatus.CREATED).json())
-    mapped = {str(m.get("applicationRoleId")) for m in entries(found.get("mappings")) if m.get("domain")}
+    mapped = {
+        str(mapping.get("applicationRoleId")) for mapping in entries(found.get("mappings")) if mapping.get("domain")
+    }
     for role in get_entries(pabc, pabc_url + APPLICATION_ROLES):
-        if role.get("name") in roles and role.get("application") == application and str(role["id"]) not in mapped:
+        wanted = role.get("name") in roles and role.get("application") == application
+        if wanted and str(role["id"]) not in mapped:
             body = {"applicationRoleId": role["id"], "domainId": domain, "isAllEntityTypes": False}
             expect_status(
                 pabc.post(f"{pabc_url}{FUNCTIONAL_ROLES}/{found['id']}/mappings", json=body), HTTPStatus.CREATED
@@ -113,8 +118,8 @@ def ensure_functional_role(  # pylint: disable=too-many-arguments,too-many-posit
 
 def domain_mappings(pabc: requests.Session, pabc_url: str, role: str) -> int:
     """How many mappings to a single domain the functional role of this name has; 0 when it does not exist."""
-    roles = [r for r in get_entries(pabc, pabc_url + FUNCTIONAL_ROLES) if r.get("name") == role]
-    return sum(1 for r in roles for m in entries(r.get("mappings")) if m.get("domain"))
+    roles = [found for found in get_entries(pabc, pabc_url + FUNCTIONAL_ROLES) if found.get("name") == role]
+    return sum(1 for found in roles for mapping in entries(found.get("mappings")) if mapping.get("domain"))
 
 
 def delete_functional_role_and_domain(pabc: requests.Session, pabc_url: str, role: str, domain: str) -> None:

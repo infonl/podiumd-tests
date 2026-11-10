@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 
 ENV_PREFIX = "PODIUMD_TESTS_SECRET_"
 REDACTED = "***"
+# Shorter values would mask ordinary text.
+MIN_SECRET_LENGTH = 4
 
 
 class SecretError(Exception):
@@ -37,7 +39,7 @@ class Redactor:
 
     def add(self, value: str) -> None:
         """Remember a secret value so it gets masked."""
-        if len(value) >= 4:  # very short values would mask ordinary text
+        if len(value) >= MIN_SECRET_LENGTH:
             self._values.add(value)
 
     def redact(self, text: str) -> str:
@@ -96,13 +98,18 @@ class SecretResolver:
 
     def configured(self, name: str) -> bool:
         """True when the secret has a source: the profile, its env var, or the credentials Secret."""
-        return name in self._profile.secrets or bool(self._environ.get(env_var_name(name))) or name in self._bootstrap()
+        overridden = bool(self._environ.get(env_var_name(name)))
+        return name in self._profile.secrets or overridden or name in self._bootstrap()
 
     def forget(self, *names: str) -> None:
         """Drop these secrets and the credentials Secret's contents from the cache, after bootstrap changed them."""
         self._stored = None
         for name in names:
             self._cache.pop(name, None)
+
+    def optional(self, name: str) -> str | None:
+        """Value of a secret that an environment may lack; None when it has no source."""
+        return self.get(name) if self.configured(name) else None
 
     def _bootstrap(self) -> dict[str, str]:
         """Contents of the credentials Secret, read once; empty without cluster access."""
@@ -113,16 +120,12 @@ class SecretResolver:
                 self._stored = {}
         return self._stored
 
-    def optional(self, name: str) -> str | None:
-        """Value of a secret that an environment may lack; None when it has no source."""
-        return self.get(name) if self.configured(name) else None
-
     def _is_dev_default(self, name: str) -> bool:
         spec = self._profile.secrets.get(name)
         return spec is not None and spec.source == "dev_default" and not self._environ.get(env_var_name(name))
 
     def _dev_defaults(self) -> set[str]:
-        return {s.options["value"] for s in self._profile.secrets.values() if s.source == "dev_default"}
+        return {spec.options["value"] for spec in self._profile.secrets.values() if spec.source == "dev_default"}
 
     def _resolve(self, name: str) -> str:
         override = self._environ.get(env_var_name(name))

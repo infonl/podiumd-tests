@@ -5,8 +5,6 @@ import socket
 import subprocess
 import time
 
-from contextlib import contextmanager
-
 import pytest
 import requests
 
@@ -261,7 +259,7 @@ REFUSED = requests.exceptions.ConnectionError()
     ],
     ids=["tls", "timeout", "refused", "server-error"],
 )
-def test_url_check_names_the_failure(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_url_check_names_the_failure(
     profile_factory, fake_runner, env_factory, monkeypatch, response_factory, answer, status, detail
 ):
     fake_runner.answers.update(HEALTHY)
@@ -291,10 +289,8 @@ def test_failed_port_forward_fails_the_urls(profile_factory, fake_runner, env_fa
     fake_runner.answers.update(HEALTHY)
     env = env_factory(profile_factory())
 
-    @contextmanager
     def console_urls():
         raise KubeError(["kubectl", "port-forward"], "no pods")
-        yield {}
 
     monkeypatch.setattr(env, "console_urls", console_urls)
     assert statuses(doctor.run_checks(env, which=which_all))["port-forward"] == "fail"

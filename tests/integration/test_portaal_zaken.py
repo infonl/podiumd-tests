@@ -119,7 +119,7 @@ def log_in(page: Page, podiumd_env: Environment, who: str = "inwoner") -> None:
     When the inwoner searches on the zaaknummer
     Then the portal opens that zaak
 """)
-def test_search_on_a_zaaknummer_opens_the_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_search_on_a_zaaknummer_opens_the_zaak(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -188,7 +188,7 @@ PHONES = {
     Then Mijn zaken lists the zaak
     And the page fits the width of the screen
 """)
-def test_inwoners_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_inwoners_zaak_is_in_mijn_zaken(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -215,7 +215,7 @@ def test_inwoners_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,t
     When the company logs in to Open Inwoner with eHerkenning
     Then Mijn zaken lists the zaak
 """)
-def test_bedrijfs_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_bedrijfs_zaak_is_in_mijn_zaken(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -241,7 +241,7 @@ def test_bedrijfs_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,t
     When the inwoner or company opens the zaak in Mijn zaken
     Then the zaak shows its current status
 """)
-def test_zaak_shows_its_current_status(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_zaak_shows_its_current_status(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -274,7 +274,7 @@ def test_zaak_shows_its_current_status(  # pylint: disable=too-many-arguments,to
     Then the zaak shows the document
     And the document downloads with its content
 """)
-def test_zaak_document_can_be_downloaded(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_zaak_document_can_be_downloaded(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -294,7 +294,7 @@ def test_zaak_document_can_be_downloaded(  # pylint: disable=too-many-arguments,
     href = page.locator(f'a[href*="{str(document["url"]).rsplit("/", 1)[-1]}"]').first.get_attribute("href")
     assert href, "no download link for the document"
     download = browser_session(page, podiumd_env).get(
-        re.sub(r"^/", podiumd_env.profile.urls["openinwoner"] + "/", href)
+        re.sub(r"^/", f"{podiumd_env.profile.urls['openinwoner']}/", href)
     )
     assert inhoud in download.text
 
@@ -313,7 +313,7 @@ def test_zaak_document_can_be_downloaded(  # pylint: disable=too-many-arguments,
     When the inwoner uploads a file on the zaak in Mijn zaken
     Then the file is a document of the zaak in Open Zaak
 """)
-def test_uploaded_document_reaches_the_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_uploaded_document_reaches_the_zaak(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -346,7 +346,7 @@ def test_uploaded_document_reaches_the_zaak(  # pylint: disable=too-many-argumen
     When the inwoner or company uploads a test virus file on the zaak in Mijn zaken
     Then the zaak gets no document
 """)
-def test_infected_upload_is_refused(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_infected_upload_is_refused(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -374,7 +374,7 @@ def test_infected_upload_is_refused(  # pylint: disable=too-many-arguments,too-m
     When the inwoner chooses an .html file to upload on the zaak in Mijn zaken
     Then the upload button stays disabled
 """)
-def test_refused_file_type_cannot_be_uploaded(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_refused_file_type_cannot_be_uploaded(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -417,7 +417,7 @@ def documents_of(openzaak: ApiClient, zaak: JsonObject) -> list[str]:
     Then Open Klant has one klantcontact about the zaak
     And it holds the question and the zaaknummer
 """)
-def test_question_about_a_zaak_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_question_about_a_zaak_reaches_open_klant(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -465,7 +465,7 @@ def test_question_about_a_zaak_reaches_open_klant(  # pylint: disable=too-many-a
     When the inwoner logs in to Open Inwoner with DigiD
     Then Mijn zaken lists the zaak
 """)
-def test_zaak_started_in_zac_shows_in_mijn_zaken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_zaak_started_in_zac_shows_in_mijn_zaken(
     page: Page,
     podiumd_env: Environment,
     zac: requests.Session,

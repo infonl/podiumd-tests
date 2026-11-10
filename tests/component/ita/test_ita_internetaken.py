@@ -139,7 +139,7 @@ def test_claimed_internetaak_is_on_my_list(
     """A claimed internetaak is assigned to the user's actor and on the user's list (TA int-74, reg-73)."""
     claim(ita, urls, taak)
     assert entries(openklant.get(f"internetaken/{taak['uuid']}")["toegewezenAanActoren"])
-    mine = get_entries(ita, urls["ita"] + "/api/internetaken/aan-mij-toegewezen")
+    mine = get_entries(ita, f"{urls['ita']}/api/internetaken/aan-mij-toegewezen")
     assert taak["uuid"] in {str(t.get("uuid")) for t in mine}
 
 
@@ -182,7 +182,7 @@ def test_answering_an_internetaak_registers_a_klantcontact(
 """)
 def test_kanalen_answer_the_kcc_user(ita: requests.Session, urls: dict[str, str]) -> None:
     """With a login, ITA lists its kanalen (TA smoke 72; anonymous it refuses, test_api_health)."""
-    assert isinstance(expect_status(ita.get(urls["ita"] + "/api/kanalen"), HTTPStatus.OK).json(), list)
+    assert isinstance(expect_status(ita.get(f"{urls['ita']}/api/kanalen"), HTTPStatus.OK).json(), list)
 
 
 @pytest.mark.parametrize("soort", ["Afdeling", "Groep"])
@@ -201,7 +201,7 @@ def test_kanalen_answer_the_kcc_user(ita: requests.Session, urls: dict[str, str]
     Then the contactverzoek is assigned to it in Open Klant
     And its groepsmailbox gets the mail "Contactverzoek Doorgestuurd" with the klantcontact's nummer, where mail is tested
 """)
-def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(
     ita: requests.Session,
     urls: dict[str, str],
     podiumd_env: Environment,
@@ -252,7 +252,7 @@ def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(  # pylint: 
     Then ITA writes an entry in its logboek in Objecten
     And KISS reads the same entries with its own Objecten token
 """)
-def test_kiss_reads_itas_logboek(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_kiss_reads_itas_logboek(
     ita: requests.Session,
     urls: dict[str, str],
     podiumd_env: Environment,
@@ -281,7 +281,7 @@ def test_kiss_reads_itas_logboek(  # pylint: disable=too-many-arguments,too-many
     When the medewerker opens the contactverzoek in ITA
     Then the detail page shows its onderwerp, vraag, toelichting and the klant's name
 """)
-def test_contactverzoek_from_kiss_shows_in_full_in_ita(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_contactverzoek_from_kiss_shows_in_full_in_ita(
     ita: requests.Session,
     urls: dict[str, str],
     openklant: ApiClient,
@@ -316,7 +316,7 @@ def test_contactverzoek_from_kiss_shows_in_full_in_ita(  # pylint: disable=too-m
     Then ITA refuses it
     And the contactverzoek stays unassigned in Open Klant
 """)
-def test_forward_to_an_afdeling_without_mailbox_is_refused(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_forward_to_an_afdeling_without_mailbox_is_refused(
     ita: requests.Session,
     urls: dict[str, str],
     podiumd_env: Environment,
@@ -356,7 +356,7 @@ def test_forward_to_an_afdeling_without_mailbox_is_refused(  # pylint: disable=t
     And refuses one outside the medewerker's afdelingen and groepen
     And answers 404 to an unknown nummer
 """)
-def test_contactverzoek_is_found_by_its_klantcontactnummer(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_contactverzoek_is_found_by_its_klantcontactnummer(
     ita: requests.Session,
     urls: dict[str, str],
     openklant: ApiClient,
@@ -456,7 +456,7 @@ def test_a_verwerkt_contactverzoek_is_read_only(
     Then ITA marks them in time, almost overdue and overdue
     And weekends do not count towards the afhandeltermijn
 """)
-def test_werklijst_shows_the_urgency_of_each_contactverzoek(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_werklijst_shows_the_urgency_of_each_contactverzoek(
     podiumd_env: Environment,
     ita: requests.Session,
     urls: dict[str, str],
@@ -478,6 +478,6 @@ def test_werklijst_shows_the_urgency_of_each_contactverzoek(  # pylint: disable=
         clean_up_logboek(objecten, registry, logboek_type, str(taak["uuid"]))
         claim(ita, urls, taak)
         expected[str(taak["uuid"])] = status
-    mine = {str(t.get("uuid")): t for t in get_entries(ita, urls["ita"] + "/api/internetaken/aan-mij-toegewezen")}
+    mine = {str(t.get("uuid")): t for t in get_entries(ita, f"{urls['ita']}/api/internetaken/aan-mij-toegewezen")}
     found = {uuid: section(mine.get(uuid, {}), "urgentie").get("status") for uuid in expected}
     assert found == expected, {uuid: mine.get(uuid, {}).get("urgentie") for uuid in expected}

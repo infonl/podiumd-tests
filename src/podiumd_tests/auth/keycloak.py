@@ -46,11 +46,12 @@ def totp(secret: str, at: float | None = None) -> str:
     """The RFC 6238 code of a base32 secret (spaces allowed) at a time, default now."""
     compact = secret.replace(" ", "").upper()
     key = base64.b32decode(compact + "=" * (-len(compact) % 8))
-    digest = hmac.new(
-        key, struct.pack(">Q", int(time.time() if at is None else at) // TOTP_PERIOD), hashlib.sha1
-    ).digest()
-    offset = digest[-1] & 0x0F
-    code = (struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF) % 10**TOTP_DIGITS
+    moment = time.time() if at is None else at
+    counter = struct.pack(">Q", int(moment) // TOTP_PERIOD)
+    digest = hmac.new(key, counter, hashlib.sha1).digest()
+    offset = digest[-1] & 0xF
+    truncated = struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
+    code = truncated % 10**TOTP_DIGITS
     return str(code).zfill(TOTP_DIGITS)
 
 
@@ -131,5 +132,6 @@ def form_login(http: requests.Session, start_url: str, username: str, password: 
     )
     if form_post:
         fields = dict(re.findall(r'NAME="([^"]+)"\s+VALUE="([^"]*)"', form_post[2], re.IGNORECASE))
-        response = http.post(html.unescape(form_post[1]), data={k: html.unescape(v) for k, v in fields.items()})
+        form_data = {name: html.unescape(field_value) for name, field_value in fields.items()}
+        response = http.post(html.unescape(form_post[1]), data=form_data)
     return response

@@ -22,6 +22,7 @@ import re
 import time
 import uuid
 
+from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -61,17 +62,32 @@ class Handler(BaseHTTPRequestHandler):
             # One write per request under a lock: parallel requests never interleave lines.
             with WRITE_LOCK, RECEIVED.open("a", encoding="utf-8") as handle:
                 entry["status"] = self._status(entry)
-                handle.write(json.dumps(entry) + "\n")
+                handle.write(f"{json.dumps(entry)}\n")
         except OSError:
             # Not recorded (e.g. a full disk): say so instead of dropping the connection.
             self.send_response(507)
             self.end_headers()
             return
-        if entry["status"] == 201:
+        if entry["status"] == HTTPStatus.CREATED:
             self._notify_created(entry["id"], parsed if isinstance(parsed, dict) else {})
         else:
             self.send_response(entry["status"])
             self.end_headers()
+
+    def do_GET(self):  # http.server's method name
+        notification = NOTIFICATION.search(self.path)
+        if notification and notification[1] in NOTIFICATIONS:
+            self._json(200, NOTIFICATIONS[notification[1]])
+            return
+        found = HOSTED_CHECKOUT.match(self.path)
+        if found and found[1] and (CHECKOUTS / f"{found[1]}.json").exists():
+            self._json(200, self._checkout_status(found[1]))
+            return
+        self.send_response(200 if self.path == "/healthz" else 404)
+        self.end_headers()
+
+    def log_message(self, *_args):
+        """Keep the pod log quiet; the file is the record."""
 
     def _status(self, entry):
         """The answer to a POST; called under WRITE_LOCK."""
@@ -142,21 +158,6 @@ class Handler(BaseHTTPRequestHandler):
             return {"status": status}
         payment = {"id": f"{checkout_id}_0", "status": status}
         return {"status": "PAYMENT_CREATED", "createdPaymentOutput": {"payment": payment}}
-
-    def do_GET(self):  # http.server's method name
-        notification = NOTIFICATION.search(self.path)
-        if notification and notification[1] in NOTIFICATIONS:
-            self._json(200, NOTIFICATIONS[notification[1]])
-            return
-        found = HOSTED_CHECKOUT.match(self.path)
-        if found and found[1] and (CHECKOUTS / f"{found[1]}.json").exists():
-            self._json(200, self._checkout_status(found[1]))
-            return
-        self.send_response(200 if self.path == "/healthz" else 404)
-        self.end_headers()
-
-    def log_message(self, *_args):
-        """Keep the pod log quiet; the file is the record."""
 
 
 if __name__ == "__main__":

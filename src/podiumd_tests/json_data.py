@@ -25,11 +25,11 @@ def entries(value: object) -> list[JsonObject]:
     """The objects in a JSON list; anything else gives an empty list."""
     if not isinstance(value, list):
         return []
-    return [cast("JsonObject", e) for e in cast("list[object]", value) if isinstance(e, dict)]
+    return [cast("JsonObject", entry) for entry in cast("list[object]", value) if isinstance(entry, dict)]
 
 
 def strings(value: object) -> list[str]:
     """The strings in a JSON list; anything else gives an empty list."""
     if not isinstance(value, list):
         return []
-    return [e for e in cast("list[object]", value) if isinstance(e, str)]
+    return [entry for entry in cast("list[object]", value) if isinstance(entry, str)]

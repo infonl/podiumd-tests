@@ -50,7 +50,8 @@ def test_return_url_is_the_outcomes_url_with_the_feedback(outcome, base):
 
 def test_payment_return_reads_the_forms_action_params(response_factory):
     params = {"of_payment_status": "completed"}
-    location = "https://of.test/form/?" + urlencode({"_of_action": "payment", "_of_action_params": json.dumps(params)})
+    query = urlencode({"_of_action": "payment", "_of_action_params": json.dumps(params)})
+    location = f"https://of.test/form/?{query}"
     response = response_factory(status=302)
     response.headers["Location"] = location
 

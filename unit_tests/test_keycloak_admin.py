@@ -111,6 +111,15 @@ def test_single_calls_use_their_admin_paths(admin):
     assert sent[-1].headers["Authorization"] == "Bearer t"
 
 
+@pytest.mark.parametrize(
+    ("found", "expected"), [([{"id": "u1"}], ["GET /users", "DELETE /users/u1"]), ([], ["GET /users"])]
+)
+def test_delete_user_named_deletes_only_an_existing_user(admin, found, expected):
+    keycloak, sent = admin({("GET", "/users"): (200, found), ("DELETE", "/users/u1"): (204, None)})
+    keycloak.delete_user_named("ptest-u")
+    assert calls(sent) == expected
+
+
 def test_server_info_is_outside_the_realm(fake_http):
     sent = fake_http({**TOKEN, "GET /admin/serverinfo": (200, {"systemInfo": {}})})
     assert KeycloakAdmin(requests.Session(), KC, "master", ("admin", "pw")).server_info() == {"systemInfo": {}}

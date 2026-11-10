@@ -24,9 +24,13 @@ if TYPE_CHECKING:
     from podiumd_tests.bootstrap import Context
     from podiumd_tests.json_data import JsonObject
 
+type _AppClient = tuple[str, tuple[str, ...], bool]
+type _Scope = tuple[str, list[JsonObject]]
+type _ClientScopes = tuple[JsonObject, tuple[str, ...], str | None]
+
 # Keycloak client per app (component), the scopes its users log in with, and whether the
 # app's profile URL must be a redirect URI of the client.
-CLIENTS: dict[str, tuple[str, tuple[str, ...], bool]] = {
+CLIENTS: dict[str, _AppClient] = {
     "openinwoner": ("openinwoner", ("bsn", "eherkenning"), True),
     "openformulieren": ("openformulieren", ("bsn", "eherkenning"), False),
 }
@@ -51,14 +55,14 @@ def _attribute_mapper(name: str, attribute: str, claim: str) -> JsonObject:
 
 # The claims Open Inwoner reads (identity_settings in openinwoner_oidc_mock). A dot in a claim
 # name is escaped, or Keycloak nests the claim at the dot.
-SCOPES: dict[str, tuple[str, list[JsonObject]]] = {
+SCOPES: dict[str, _Scope] = {
     "bsn": ("DigiD BSN claim", [_attribute_mapper("bsn-claim", "bsn", "bsn")]),
     "eherkenning": (
         "eHerkenning claims (KvK, vestiging, namequalifier)",
         [
             _attribute_mapper("kvk-claim", "kvk", "urn:etoegang:core:LegalSubjectID"),
             _attribute_mapper(
-                "vestigingsnr-claim", "vestigingsnummer", "urn:etoegang:1\\.9:ServiceRestriction:Vestigingsnr"
+                "vestigingsnr-claim", "vestigingsnummer", r"urn:etoegang:1\.9:ServiceRestriction:Vestigingsnr"
             ),
             {
                 "name": "namequalifier-claim",
@@ -87,9 +91,9 @@ def _scope_body(name: str, description: str) -> JsonObject:
     }
 
 
-def _clients(ctx: Context, admin: KeycloakAdmin) -> list[tuple[JsonObject, tuple[str, ...], str | None]]:
+def _clients(ctx: Context, admin: KeycloakAdmin) -> list[_ClientScopes]:
     """(client, scopes, redirect URI or None) for each app the environment has; skipped apps get a note."""
-    found: list[tuple[JsonObject, tuple[str, ...], str | None]] = []
+    found: list[_ClientScopes] = []
     for component, (client_id, scopes, redirect) in CLIENTS.items():
         if ctx.env.capabilities.skip_reason(component):
             continue
@@ -97,7 +101,7 @@ def _clients(ctx: Context, admin: KeycloakAdmin) -> list[tuple[JsonObject, tuple
         if client is None:
             ctx.notes.append(f"realm {admin.realm} has no client {client_id}")
             continue
-        found.append((client, scopes, ctx.env.profile.urls[component] + "/*" if redirect else None))
+        found.append((client, scopes, f"{ctx.env.profile.urls[component]}/*" if redirect else None))
     return found
 
 
@@ -118,7 +122,8 @@ class KeycloakOidcMock:
         admin = for_environment(ctx.env)
         scopes = admin.client_scopes()
         for name, (_, mappers) in SCOPES.items():
-            if name not in scopes or {str(m["name"]) for m in mappers} - set(admin.scope_mappers(scopes[name])):
+            mapper_names = {str(mapper["name"]) for mapper in mappers}
+            if name not in scopes or mapper_names - set(admin.scope_mappers(scopes[name])):
                 return False
         for client, wanted, redirect in _clients(ctx, admin):
             if set(wanted) - admin.client_scope_names(str(client["id"])):
@@ -186,7 +191,7 @@ def _undo_clients(admin: KeycloakAdmin, record: dict[str, object], scopes: dict[
                 admin.set_optional_scope(str(client["id"]), scopes[name], attached=False)
         if client_id in redirects:
             uris = cast("list[str]", client.get("redirectUris") or [])
-            admin.update_client({**client, "redirectUris": [u for u in uris if u != redirects[client_id]]})
+            admin.update_client({**client, "redirectUris": [uri for uri in uris if uri != redirects[client_id]]})
 
 
 def _undo_scopes(admin: KeycloakAdmin, record: dict[str, object], scopes: dict[str, str]) -> None:

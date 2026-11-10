@@ -11,7 +11,7 @@ import requests
 from podiumd_tests.json_data import JsonObject
 from podiumd_tests.json_data import entries
 
-REFUSED = frozenset({HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN})
+REFUSED = frozenset((HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN))
 # Characters of the body an unexpected status reports: enough for an API error's detail.
 BODY_EXCERPT = 300
 
@@ -30,7 +30,7 @@ def describe(response: requests.Response) -> str:
 def expect_status(response: requests.Response, *expected: int) -> requests.Response:
     """The response, when its status is one of expected; UnexpectedStatusError otherwise."""
     if response.status_code not in expected:
-        msg = f"{describe(response)}, expected {' or '.join(str(e) for e in expected)}"
+        msg = f"{describe(response)}, expected {' or '.join(str(status) for status in expected)}"
         body = " ".join(response.text.split())[:BODY_EXCERPT]
         raise UnexpectedStatusError(f"{msg}: {body}" if body else msg)
     return response
@@ -43,7 +43,7 @@ def is_server_error(response: requests.Response) -> bool:
 
 def get_root(session: requests.Session, base_url: str, timeout: float | tuple[float, float]) -> requests.Response:
     """GET the root of a component, following redirects (R14: only the final answer counts)."""
-    return session.get(base_url + "/", timeout=timeout)
+    return session.get(f"{base_url}/", timeout=timeout)
 
 
 def root_answers(session: requests.Session, base_url: str, timeout: float) -> bool:

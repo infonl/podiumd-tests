@@ -11,7 +11,8 @@ if TYPE_CHECKING:
 
 class FakeKube:
     def __init__(self, out):
-        self.out, self.calls = out, []
+        self.out = out
+        self.calls = []
 
     def run(self, *args, **kwargs):
         self.calls.append((args, kwargs))
@@ -20,7 +21,8 @@ class FakeKube:
 
 class FakeEnv:
     def __init__(self, objects, out=""):
-        self.objects, self.kube = objects, FakeKube(out)
+        self.objects = objects
+        self.kube = FakeKube(out)
 
     def items(self, kind):
         return self.objects.get(kind, [])

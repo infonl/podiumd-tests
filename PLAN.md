@@ -320,13 +320,18 @@ Why this layout:
 1. `ruff check`
 2. `shellcheck`
 3. `ruff format --check`
-4. `jscpd` (weak mode, `--min-lines 4 --min-tokens 35`, the same ignore pattern)
-5. `pymarkdown` (`-d md013,md014`, `plugins.md024.siblings_only`)
-6. `vulture` (with the generated TypedDict whitelist)
-7. `bandit -c pyproject.toml`
-8. `pylint src`, then `pylint tests unit_tests` with the same `TESTS_PYLINT_DISABLE` list
-9. `basedpyright` (`typeCheckingMode = "strict"`, relaxed under the test directories)
-10. `pytest` on `unit_tests`
+4. `flake8` with wemake-python-styleguide (`[tool.flake8]`: only the WPS rules ruff lacks)
+5. `yamllint --strict` on the tracked YAML files (`.yamllint`)
+6. `jscpd` (weak mode, `--min-lines 4 --min-tokens 35`, the same ignore pattern)
+7. `pymarkdown` (`-d md013,md014`, `plugins.md024.siblings_only`)
+8. `vulture` (with the generated TypedDict whitelist)
+9. `bandit -c pyproject.toml`
+10. `pylint src`, then `pylint tests unit_tests` with the same `TESTS_PYLINT_DISABLE` list
+11. `basedpyright` (`typeCheckingMode = "strict"`, relaxed under the test directories)
+12. `pytest` on `unit_tests`
+13. `pip-audit` on the `.venv` packages (skipped when pypi.org is unreachable)
+
+Ruff `PL` owns the count rules, so pylint disables them (`[tool.pylint."messages control"]`).
 
 **Copied from podiumd `bin/pyproject.toml` as-is:**
 

@@ -46,7 +46,7 @@ def portal_login(page: Page, env: Environment, method: str, user: KeycloakUser, 
 
 def ask_anonymously(page: Page, env: Environment, subject: str, vraag: str, email: str) -> None:
     """Ask a question in the contact form without a login, as "Anoniem Test" with this e-mail address."""
-    page.goto(env.profile.urls["openinwoner"] + "/contactformulier/")
+    page.goto(f"{env.profile.urls['openinwoner']}/contactformulier/")
     refuse_cookies(page)
     form = page.locator("#contactmoment-form")
     form.locator('select[name="subject"]').select_option(label=subject)
@@ -65,7 +65,7 @@ def begeleider_login(page: Page, env: Environment) -> None:
     posts it itself, with the CSRF token of the contact form page.
     """
     portal = env.profile.urls["openinwoner"]
-    page.goto(portal + "/contactformulier/")
+    page.goto(f"{portal}/contactformulier/")
     body = {
         "csrfmiddlewaretoken": page.locator('input[name="csrfmiddlewaretoken"]').first.input_value(),
         "username": str(OI_BEGELEIDER.params["email"]),
@@ -73,7 +73,7 @@ def begeleider_login(page: Page, env: Environment) -> None:
     }
     page.evaluate(
         "([url, body]) => fetch(url, {method: 'POST', body: new URLSearchParams(body), redirect: 'manual'})",
-        [portal + "/accounts/login/", body],
+        [f"{portal}/accounts/login/", body],
     )
     refuse_cookies(page)
 
@@ -107,7 +107,7 @@ def choose_document(page: Page, name: str, content: bytes) -> Locator:
 def upload_document(page: Page, name: str, content: bytes) -> None:
     """Upload a file with the form on the zaak status page the browser shows; returns when Open Inwoner answered."""
     button = choose_document(page, name, content)
-    with page.expect_response(lambda r: r.request.method == "POST" and "/document-form/" in r.url):
+    with page.expect_response(lambda response: response.request.method == "POST" and "/document-form/" in response.url):
         button.click()
 
 

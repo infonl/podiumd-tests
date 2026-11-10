@@ -26,5 +26,8 @@ class FakeItem:
 )
 def test_source_problems(markers, problem):
     found = source_problems(FakeItem(*markers))  # pyright: ignore[reportArgumentType]  # duck-typed pytest.Item
-    assert found == ([] if problem is None else [found[0]])
-    assert problem is None or problem in found[0]
+    if problem is None:
+        assert found == []
+    else:
+        assert len(found) == 1, found
+        assert problem in found[0]

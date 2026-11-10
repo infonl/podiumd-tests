@@ -7,6 +7,9 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import pytest
 
+# @pytest.mark.source(origin, reason)
+SOURCE_ARGS = 2
+
 # First word of an origin: the source repository (MIGRATION.md), a component's own one, a draaiboek case, or this suite.
 ORIGINS = {
     "TA": "icatt-menselijk-digitaal/podiumd-testautomation",
@@ -23,7 +26,7 @@ ORIGINS = {
 
 def sources(item: pytest.Item) -> list[str]:
     """The test's sources as "origin: reason", nearest marker first."""
-    return [f"{m.args[0]}: {m.args[1]}" for m in item.iter_markers("source")]
+    return [f"{marker.args[0]}: {marker.args[1]}" for marker in item.iter_markers("source")]
 
 
 def source_problems(item: pytest.Item) -> list[str]:
@@ -34,7 +37,8 @@ def source_problems(item: pytest.Item) -> list[str]:
     problems: list[str] = []
     for marker in markers:
         args = marker.args
-        if len(args) != 2 or not all(isinstance(a, str) and a.strip() for a in args):  # pyright: ignore[reportUnknownVariableType]
+        texts = all(isinstance(arg, str) and arg.strip() for arg in args)  # pyright: ignore[reportUnknownVariableType]
+        if len(args) != SOURCE_ARGS or not texts:
             problems.append(f"{item.nodeid}: source needs two texts, origin and reason: {args!r}")
         elif str(args[0]).split()[0] not in ORIGINS:
             problems.append(f"{item.nodeid}: source origin {args[0]!r} starts with none of {', '.join(ORIGINS)}")

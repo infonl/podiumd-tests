@@ -53,7 +53,7 @@ EINDSTATUS = "Afgehandeld"
 
 
 @pytest.fixture(name="bpmn_zaak")
-def fixture_bpmn_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def fixture_bpmn_zaak(
     zac: requests.Session,
     urls: dict[str, str],
     openzaak: ApiClient,

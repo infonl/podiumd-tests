@@ -50,7 +50,7 @@ def test_django_admin_is_not_public(http: requests.Session, urls: dict[str, str]
 
     Redirects are followed: an edge can first send an old host to the current one (objecttypen to objecten).
     """
-    response = http.get(urls[component] + "/admin/")
+    response = http.get(f"{urls[component]}/admin/")
     if response.history:
         assert LOGIN.search(response.url), f"{[r.url for r in response.history]} -> {response.url}"
         return

@@ -65,7 +65,7 @@ OTP_SUBJECT = "Mede-ondertekentoegangscode"
     When the co-signer logs in with DigiD, enters the code mailed to them and signs
     Then the form is registered by e-mail
 """)
-def test_cosigned_form_is_registered(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_cosigned_form_is_registered(
     page: Page,
     http: requests.Session,
     urls: dict[str, str],

@@ -33,7 +33,7 @@ def run(params):
             "on_disk": on_disk,
             "modified": storage.get_modified_time(name).isoformat() if on_disk else "",
             "pod": socket.gethostname(),
-            "same_name": [str(r.submission.uuid) for r in same_name],
+            "same_name": [str(other.submission.uuid) for other in same_name],
         }
     import re
 

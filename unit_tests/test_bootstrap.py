@@ -291,7 +291,7 @@ def test_keycloak_user_fails_when_the_realm_has_none_of_its_roles(env_factory, f
 
 
 @pytest.mark.parametrize(("mapped", "present"), [([], False), ([{"name": "Behandelaar"}], True)])
-def test_keycloak_user_is_present_only_with_the_realms_wanted_roles(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_keycloak_user_is_present_only_with_the_realms_wanted_roles(
     env_factory, fake_runner, profile_factory, fake_http, mapped, present
 ):
     ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
@@ -307,7 +307,7 @@ def test_keycloak_user_is_present_only_with_the_realms_wanted_roles(  # pylint: 
 
 
 @pytest.mark.parametrize(("mapped", "present"), [([], False), ([{"name": "administrator"}], True)])
-def test_keycloak_user_is_present_only_with_the_realms_wanted_client_roles(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_keycloak_user_is_present_only_with_the_realms_wanted_client_roles(
     env_factory, fake_runner, profile_factory, fake_http, mapped, present
 ):
     # A client role the realm gets later (a redeploy that imports roles) makes the step apply again.
@@ -335,7 +335,7 @@ def test_keycloak_user_remove_deletes_only_an_existing_user(env_factory, fake_ru
     [((), {}), ((keycloak_password_key("kcc"),), {"samaccountname": ["someone-else"]})],
     ids=["no-password-stored", "other-attribute"],
 )
-def test_keycloak_user_is_absent_without_its_password_or_attributes(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_keycloak_user_is_absent_without_its_password_or_attributes(
     env_factory, fake_runner, profile_factory, fake_http, stored_keys, attributes
 ):
     ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
@@ -484,7 +484,7 @@ def test_openformulieren_params_prefer_the_internal_open_zaak_url(env_factory, f
 
 
 @pytest.mark.parametrize("actoren", [[{"uuid": "a1"}], []])
-def test_openinwoner_openklant_params_send_questions_to_the_kcc_actor(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_openinwoner_openklant_params_send_questions_to_the_kcc_actor(
     env_factory, fake_runner, profile_factory, fake_http, actoren
 ):
     env = cluster_env(env_factory, fake_runner, profile_factory, urls={"openklant": OK})

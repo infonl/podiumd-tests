@@ -83,13 +83,16 @@ class Payer:
     def __init__(
         self, env: Environment, openzaak: ApiClient, registry: ResourceRegistry, form: tuple[str, str]
     ) -> None:
-        self.backend, slug = form
-        self.env, self.http, self.openzaak = env, env.session(), openzaak
+        backend, slug = form
+        self.backend = backend
+        self.env = env
+        self.http = env.session()
+        self.openzaak = openzaak
         data = {"omschrijving": slug, **NAW_DATA}
         self.status = submit(env, self.http, registry, slug, data, timeout=REGISTRATION_TIMEOUT, registers=False)
         # The zaak of the pre-registration, deleted with the submission.
         self.zaak = registered_zaak(env, openzaak, registry, self.status)
-        _, self.headers = form_and_headers(self.http, env.profile.urls["openformulieren"], slug)
+        self.headers = form_and_headers(self.http, env.profile.urls["openformulieren"], slug)[1]
 
     @property
     def secret(self) -> str:
@@ -263,7 +266,7 @@ def test_paid_form_registers_a_zaak(
     And after a failed payment the inwoner can start a new payment
     And the registration keeps waiting
 """)
-def test_unpaid_form_tells_the_inwoner_and_registers_nothing(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures and parameters
+def test_unpaid_form_tells_the_inwoner_and_registers_nothing(
     podiumd_env: Environment,
     openzaak: ApiClient,
     registry: ResourceRegistry,

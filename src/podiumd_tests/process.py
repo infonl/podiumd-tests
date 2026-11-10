@@ -63,8 +63,8 @@ def start_process(
     )
 
 
-def run_checked[E: ProcessError](
-    runner: Runner, command: Sequence[str], timeout: int, error: type[E] = ProcessError, stdin: str | None = None
+def run_checked[ErrorT: ProcessError](
+    runner: Runner, command: Sequence[str], timeout: int, error: type[ErrorT] = ProcessError, stdin: str | None = None
 ) -> str:
     """stdout of a command; `error` when it is missing, times out or exits non-zero."""
     try:

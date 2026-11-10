@@ -23,7 +23,7 @@ from podiumd_tests.kube import cluster_service
 if TYPE_CHECKING:
     from podiumd_tests.config import Profile
 
-COMPONENTS_WITH_DEPLOYMENT = frozenset(n for n, c in COMPONENTS.items() if c.deployment_prefixes)
+COMPONENTS_WITH_DEPLOYMENT = frozenset(name for name, component in COMPONENTS.items() if component.deployment_prefixes)
 CLUSTER = "cluster"
 NETWORK = (CILIUM, HUBBLE)
 
@@ -37,14 +37,15 @@ class Capabilities:
 
     def missing(self, *needed: str) -> list[str]:
         """The needed capabilities that are absent."""
-        return [n for n in needed if n not in self.present]
+        return [name for name in needed if name not in self.present]
 
     def skip_reason(self, *needed: str) -> str | None:
         """Skip reason when any needed capability is absent, else None."""
         absent = self.missing(*needed)
         if not absent:
             return None
-        return "requires: " + ", ".join(f"{n} ({self.reasons.get(n, 'not detected')})" for n in absent)
+        explained = ", ".join(f"{name} ({self.reasons.get(name, 'not detected')})" for name in absent)
+        return f"requires: {explained}"
 
 
 def detect(
@@ -61,16 +62,20 @@ def detect(
     if deployment_names is None:
         reasons[CLUSTER] = f"kube API of context {profile.kube.context} not reachable from this console"
         reasons.update(dict.fromkeys(NETWORK, "kube API not reachable"))
-        in_cluster = {c for c in configured if cluster_service(profile.urls[c])}
+        in_cluster = {component for component in configured if cluster_service(profile.urls[component])}
         reasons.update(dict.fromkeys(in_cluster, "in-cluster URL, and the kube API is not reachable"))
         return Capabilities(frozenset(configured - in_cluster), reasons)
     deployed = deployed_components(deployment_names)
-    namespaces = " or ".join(n for n in (profile.kube.namespace, profile.kube.monitoring_namespace) if n)
+    namespaces = " or ".join(
+        namespace for namespace in (profile.kube.namespace, profile.kube.monitoring_namespace) if namespace
+    )
     # Components without their own deployment (e.g. keycloak-admin) follow their URL only.
     for component in configured - deployed:
         if component in COMPONENTS_WITH_DEPLOYMENT:
             reasons[component] = f"no deployment in namespace {namespaces}"
-    present = {c for c in configured if c in deployed or c not in COMPONENTS_WITH_DEPLOYMENT}
+    present = {
+        component for component in configured if component in deployed or component not in COMPONENTS_WITH_DEPLOYMENT
+    }
     present.add(CLUSTER)
     present |= network[0]
     reasons.update(network[1])

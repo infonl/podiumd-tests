@@ -36,7 +36,7 @@ OMSCHRIJVING = {"type": "textfield", "key": "omschrijving", "label": "Omschrijvi
     When an inwoner submits the form
     Then the registration address receives a mail with the filled-in value
 """)
-def test_email_registration_mails_the_submission(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_email_registration_mails_the_submission(
     http: requests.Session,
     urls: dict[str, str],
     podiumd_env: Environment,
@@ -60,7 +60,7 @@ def test_email_registration_mails_the_submission(  # pylint: disable=too-many-ar
     When an inwoner submits the form with their e-mail address
     Then the inwoner receives a confirmation mail with the filled-in value
 """)
-def test_confirmation_mail_summarises_the_submission(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_confirmation_mail_summarises_the_submission(
     http: requests.Session,
     urls: dict[str, str],
     podiumd_env: Environment,

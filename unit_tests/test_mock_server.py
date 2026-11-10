@@ -27,7 +27,7 @@ def test_manifests_carry_the_mock_server_code_and_the_managed_by_label():
 
 def test_callback_reads_only_its_own_path(env_factory, fake_runner):
     lines = [{"path": "/run1/abc", "body": {"actie": "create"}}, {"path": "/run1/other", "body": {}}]
-    fake_runner.answers[f"exec deploy/{NAME}"] = (0, "\n".join(json.dumps(line) for line in lines) + "\n")
+    fake_runner.answers[f"exec deploy/{NAME}"] = (0, "".join(f"{json.dumps(line)}\n" for line in lines))
     callback = Callback(env_factory(), "/run1/abc")
     assert callback.received() == [lines[0]]
     assert (
@@ -84,7 +84,8 @@ def test_remove_deletes_service_first(env_factory, fake_runner):
 
 def test_callback_skips_a_line_cut_short(env_factory, fake_runner):
     good = {"path": "/run1/abc", "body": {}}
-    fake_runner.answers[f"exec deploy/{NAME}"] = (0, json.dumps(good) + '\n{"path": "/run1/abc", "bo')
+    cut_short = '{"path": "/run1/abc", "bo'
+    fake_runner.answers[f"exec deploy/{NAME}"] = (0, "\n".join([json.dumps(good), cut_short]))
     assert Callback(env_factory(), "/run1/abc").received() == [good]
 
 
@@ -117,7 +118,7 @@ def test_notify_notification_is_recorded_with_an_id_and_answers_a_get():
     handler = mock_server_handler("/notify/v2/notifications/sms")
     sent = []
     handler._json = lambda status, body: sent.append((status, body))  # pylint: disable=protected-access
-    handler._notify_created("0" * 8 + "-0000-0000-0000-" + "0" * 12, {"template_id": "t", "phone_number": "0612345678"})  # pylint: disable=protected-access
+    handler._notify_created("00000000-0000-0000-0000-000000000000", {"template_id": "t", "phone_number": "0612345678"})  # pylint: disable=protected-access
     status, body = sent[0]
     assert status == 201
     assert body["content"]["subject"] == "ptest sms t"

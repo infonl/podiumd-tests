@@ -160,7 +160,7 @@ def form_starts(podiumd_env: Environment, http: requests.Session, registry: Reso
     And Mijn zaken says that not all zaken could be fetched
     And ZAC refuses to start a new zaak but itself keeps answering
 """)
-def test_without_open_zaak_the_apps_say_so(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_without_open_zaak_the_apps_say_so(
     page: Page,
     http: requests.Session,
     podiumd_env: Environment,
@@ -174,7 +174,7 @@ def test_without_open_zaak_the_apps_say_so(  # pylint: disable=too-many-argument
     portal_login(page, podiumd_env, "digid", INWONER, "/")
     with component_down(podiumd_env, http, "openzaak"):
         form_starts(podiumd_env, http, registry)
-        response = page.goto(podiumd_env.profile.urls["openinwoner"] + "/mijn-zaken/")
+        response = page.goto(f"{podiumd_env.profile.urls['openinwoner']}/mijn-zaken/")
         assert response is not None and response.status < HTTPStatus.INTERNAL_SERVER_ERROR, "Mijn zaken fails"
         # Mijn zaken loads the zaken after the page, and retries twice before it gives up.
         expect(page.get_by_text("Niet alle zaken konden worden opgehaald")).to_be_visible(
@@ -230,7 +230,7 @@ def test_forms_start_without_open_klant_or_open_notificaties(
     And KISS answers
     And ZAC starts a new zaak
 """)
-def test_without_objecten_the_portal_kiss_and_zac_work(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_without_objecten_the_portal_kiss_and_zac_work(
     page: Page,
     http: requests.Session,
     urls: dict[str, str],
@@ -242,7 +242,7 @@ def test_without_objecten_the_portal_kiss_and_zac_work(  # pylint: disable=too-m
     need_bootstrap(INWONER.name, *WIRING)
     with component_down(podiumd_env, http, "objecten"):
         portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
-        assert not is_server_error(http.get(urls["kiss"] + "/", timeout=ROOT_TIMEOUT)), "KISS fails without Objecten"
+        assert not is_server_error(http.get(f"{urls['kiss']}/", timeout=ROOT_TIMEOUT)), "KISS fails without Objecten"
         assert zac_zaak()["identificatie"]
 
 
@@ -298,7 +298,7 @@ def test_form_mail_is_sent_after_a_mail_outage(
     And the mail server is started again
     Then the ontvangstbevestiging with the zaaknummer arrives
 """)
-def test_zac_mail_is_sent_after_a_mail_outage(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_zac_mail_is_sent_after_a_mail_outage(
     http: requests.Session,
     podiumd_env: Environment,
     objecten: ApiClient,
@@ -360,7 +360,7 @@ def test_without_open_klant_a_zaak_with_a_person_cannot_be_opened(
     expect_status(send_with_person(zac, zac_url, EREBOS, make_initiator), HTTPStatus.OK)
     with component_down(podiumd_env, http, "openklant"):
         opened = zac.get(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}", timeout=DOWN_COMPONENT_TIMEOUT)
-        assert opened.status_code in (HTTPStatus.INTERNAL_SERVER_ERROR, HTTPStatus.GATEWAY_TIMEOUT), describe(opened)
+        assert opened.status_code in {HTTPStatus.INTERNAL_SERVER_ERROR, HTTPStatus.GATEWAY_TIMEOUT}, describe(opened)
         if opened.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:
             assert opened.json().get("message") == "msg.error.server.generic"
         assert root_answers(zac, zac_url, ROOT_TIMEOUT), "ZAC itself fails without Open Klant"
@@ -380,7 +380,7 @@ def test_without_open_klant_a_zaak_with_a_person_cannot_be_opened(
     And its mail stays unsent in Open Inwoner's mail queue
     And the mail arrives once the mail server is back and the queue is retried
 """)
-def test_portal_mail_waits_in_the_queue_during_a_mail_outage(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_portal_mail_waits_in_the_queue_during_a_mail_outage(
     page: Page,
     http: requests.Session,
     podiumd_env: Environment,
@@ -438,7 +438,7 @@ def test_portal_mail_waits_in_the_queue_during_a_mail_outage(  # pylint: disable
     And the mail server is started again
     Then the groep receives the mail about the forwarded contactverzoek
 """)
-def test_ita_mail_is_sent_after_a_mail_outage(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_ita_mail_is_sent_after_a_mail_outage(
     page: Page,
     http: requests.Session,
     podiumd_env: Environment,

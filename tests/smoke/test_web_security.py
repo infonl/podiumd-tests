@@ -77,7 +77,7 @@ def test_security_headers(
     if component == "openbao" and chart_older_than(podiumd_env, (4, 10, 1)):
         reason = "[podiumd-chart-23] podiumd before 4.10.1 sets no custom_response_headers for OpenBao: no nosniff"
         request.applymarker(pytest.mark.xfail(strict=False, reason=f"{reason} (helm-charts #664)"))
-    response = http.get(public_url(podiumd_env, urls, component) + "/", allow_redirects=False)
+    response = http.get(f"{public_url(podiumd_env, urls, component)}/", allow_redirects=False)
     assert not missing_security_headers(response), f"{describe(response)} lacks {missing_security_headers(response)}"
 
 
@@ -90,7 +90,7 @@ def test_session_cookies_are_secure(
     http: requests.Session, podiumd_env: Environment, urls: dict[str, str], component: str
 ) -> None:
     """Session, auth and token cookies the root sets are Secure and HttpOnly."""
-    response = http.get(public_url(podiumd_env, urls, component) + "/", allow_redirects=False)
+    response = http.get(f"{public_url(podiumd_env, urls, component)}/", allow_redirects=False)
     assert not insecure_session_cookies(response), insecure_session_cookies(response)
 
 
@@ -104,7 +104,7 @@ def test_foreign_origin_gets_no_cors_access(
     http: requests.Session, podiumd_env: Environment, urls: dict[str, str], component: str
 ) -> None:
     """Neither a preflight nor a GET from a foreign origin is allowed to read the root."""
-    url = public_url(podiumd_env, urls, component) + "/"
+    url = f"{public_url(podiumd_env, urls, component)}/"
     preflight = http.options(url, headers={"Origin": FOREIGN_ORIGIN, "Access-Control-Request-Method": "GET"})
     get = http.get(url, headers={"Origin": FOREIGN_ORIGIN}, allow_redirects=False)
     for response in (preflight, get):

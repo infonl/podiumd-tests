@@ -33,7 +33,7 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("kiss")]
 """)
 def test_challenge_redirects_to_keycloak(http: requests.Session, urls: dict[str, str]) -> None:
     """The login challenge redirects to the Keycloak auth endpoint (TA reg-100)."""
-    response = http.get(urls["kiss"] + "/api/challenge", params={"returnUrl": "/"}, allow_redirects=False)
+    response = http.get(f"{urls['kiss']}/api/challenge", params={"returnUrl": "/"}, allow_redirects=False)
     assert response.is_redirect, describe(response)
     location = response.headers["Location"]
     assert url_host(location) == url_host(urls["keycloak"])

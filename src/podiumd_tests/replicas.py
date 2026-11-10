@@ -46,13 +46,19 @@ def several_replicas(env: Environment) -> Generator[None]:
     if hold:
         os.environ[HOLD_ENV] = hold
     try:
-        run_checked(env.kube.runner, [*command, "on"], TIMEOUT)
-        try:
+        with _switched_on(env, command):
             yield
-        finally:
-            run_checked(env.kube.runner, [*command, "off"], TIMEOUT)
     finally:
         if previous is None:
             os.environ.pop(HOLD_ENV, None)
         else:
             os.environ[HOLD_ENV] = previous
+
+
+@contextmanager
+def _switched_on(env: Environment, command: list[str]) -> Generator[None]:
+    run_checked(env.kube.runner, [*command, "on"], TIMEOUT)
+    try:
+        yield
+    finally:
+        run_checked(env.kube.runner, [*command, "off"], TIMEOUT)

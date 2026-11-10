@@ -12,10 +12,13 @@ def run(params):
 
     kanaal_model = apps.get_model("datamodel", "Kanaal")
     wanted = params["kanalen"]
-    existing = {k.naam: k for k in kanaal_model.objects.filter(naam__in=list(wanted))}
+    existing = {kanaal.naam: kanaal for kanaal in kanaal_model.objects.filter(naam__in=list(wanted))}
 
     if params["action"] == "status":
-        present = all(n in existing and set(f) <= set(existing[n].filters) for n, f in wanted.items())
+        kanalen_present = set(wanted) <= set(existing)
+        present = kanalen_present and all(
+            set(filters) <= set(existing[naam].filters) for naam, filters in wanted.items()
+        )
         return {"present": present}
 
     record = params.get("record") or {}
@@ -27,7 +30,7 @@ def run(params):
         for naam, filters in added.items():
             kanaal = existing.get(naam)
             if kanaal is not None and naam not in created:
-                kanaal.filters = [f for f in kanaal.filters if f not in filters]
+                kanaal.filters = [kanaal_filter for kanaal_filter in kanaal.filters if kanaal_filter not in filters]
                 kanaal.save()
         return {"present": False}
 
@@ -37,10 +40,11 @@ def run(params):
             kanaal_model.objects.create(naam=naam, documentatie_link="", filters=list(filters))
             created.add(naam)
             continue
-        missing = [f for f in filters if f not in kanaal.filters]
+        missing = [kanaal_filter for kanaal_filter in filters if kanaal_filter not in kanaal.filters]
         if missing:
             kanaal.filters = [*kanaal.filters, *missing]
             kanaal.save()
             added.setdefault(naam, set()).update(missing)
-    record = {"created": sorted(created), "filters": {n: sorted(f) for n, f in sorted(added.items())}}
+    added_filters = {naam: sorted(filters) for naam, filters in sorted(added.items())}
+    record = {"created": sorted(created), "filters": added_filters}
     return {"present": True, "record": record}

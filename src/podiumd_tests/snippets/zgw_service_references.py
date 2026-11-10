@@ -12,5 +12,5 @@ def run(params):
     for reference in params["references"]:
         rows = apps.get_model(reference["model"])._default_manager.filter(**reference["where"])
         services = [getattr(row, reference["field"]) if reference["field"] else row for row in rows]
-        found.append([s.slug or s.label if s else None for s in services])
+        found.append([service.slug or service.label if service else None for service in services])
     return found
