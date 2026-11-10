@@ -95,6 +95,8 @@ select = [
     "A",     # flake8-builtins
     "AIR",
     # "ANN", # flake8-annotations
+    "ANN201", # return type of a public function
+    "ANN202", # return type of a private function
     "ARG",
     "ASYNC",
     "B",    # flake8-bugbear
@@ -191,15 +193,16 @@ check-typed-exception = true  # Enable additional checks for try-except-pass
 # tests/: pytest asserts (S101), no __init__.py (INP001), unused unpacked vars (RUF059), fixed-argv `git` calls
 # (S603/S607). bandit does not scan tests/ either.
 # The same rules apply to unit_tests/.
-# PL counts and magic values (PLR2004, PLR0913, PLR0917, PLW0717, PLR0904, PLR0914) and local imports (PLC0415):
-# not enforced for tests.
-"tests/**" = ["S101", "INP001", "RUF059", "S603", "S607", "PLR2004", "PLR0913", "PLR0917", "PLC0415", "PLW0717", "PLR0904", "PLR0914"]
-"unit_tests/**" = ["S101", "INP001", "RUF059", "S603", "S607", "PLR2004", "PLR0913", "PLR0917", "PLC0415", "PLW0717", "PLR0904", "PLR0914"]
+# PL counts and magic values (PLR2004, PLR0913, PLR0917, PLW0717, PLR0904, PLR0914), local imports (PLC0415) and
+# return types (ANN201, ANN202): not enforced for tests.
+"tests/**" = ["ANN201", "ANN202", "S101", "INP001", "RUF059", "S603", "S607", "PLR2004", "PLR0913", "PLR0917", "PLC0415", "PLW0717", "PLR0904", "PLR0914"]
+"unit_tests/**" = ["ANN201", "ANN202", "S101", "INP001", "RUF059", "S603", "S607", "PLR2004", "PLR0913", "PLR0917", "PLC0415", "PLW0717", "PLR0904", "PLR0914"]
 # infra/: scripts that run in the cluster from a ConfigMap, not a package (INP001).
 "infra/**" = ["INP001"]
 # Django snippets: names from their `# include:` lines (F821); Django's documented _meta API (SLF001); imports
-# inside run(), which runs in the component's Django shell (PLC0415).
-"src/podiumd_tests/snippets/*.py" = ["F821", "SLF001", "PLC0415"]
+# inside run(), which runs in the component's Django shell (PLC0415); no return types (ANN201, ANN202): no type
+# checker runs on them, as their models exist only in the component images.
+"src/podiumd_tests/snippets/*.py" = ["F821", "SLF001", "PLC0415", "ANN201", "ANN202"]
 
 [tool.ruff.format]
 quote-style = "double"

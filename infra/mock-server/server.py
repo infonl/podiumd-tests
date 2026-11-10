@@ -40,7 +40,7 @@ NOTIFICATIONS: dict[str, dict] = {}
 class Handler(BaseHTTPRequestHandler):
     """POST: record, then 204 (Notify: 201) with Authorization and 403 without. GET /healthz: 200."""
 
-    def do_POST(self):  # http.server's method name
+    def do_POST(self) -> None:  # http.server's method name
         length = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(length).decode("utf-8", errors="replace")
         if HOSTED_CHECKOUT.match(self.path):
@@ -74,7 +74,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(entry["status"])
             self.end_headers()
 
-    def do_GET(self):  # http.server's method name
+    def do_GET(self) -> None:  # http.server's method name
         notification = NOTIFICATION.search(self.path)
         if notification and notification[1] in NOTIFICATIONS:
             self.send_json(200, NOTIFICATIONS[notification[1]])
@@ -86,10 +86,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200 if self.path == "/healthz" else 404)
         self.end_headers()
 
-    def log_message(self, *_args):
+    def log_message(self, *_args) -> None:
         """Keep the pod log quiet; the file is the record."""
 
-    def answer_status(self, entry):
+    def answer_status(self, entry) -> int:
         """The answer to a POST; called under WRITE_LOCK."""
         if not entry["authorization"]:
             return 403
@@ -102,7 +102,7 @@ class Handler(BaseHTTPRequestHandler):
             return 500
         return 204
 
-    def notify_created(self, notification_id, request):
+    def notify_created(self, notification_id, request) -> None:
         template = request.get("template_id")
         kind = "sms" if self.path.endswith("/sms") else "email"
         subject = f"ptest {kind} {template}"
@@ -129,7 +129,7 @@ class Handler(BaseHTTPRequestHandler):
             },
         )
 
-    def send_json(self, status, body):
+    def send_json(self, status, body) -> None:
         payload = json.dumps(body).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -137,7 +137,7 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
-    def _create_checkout(self, request):
+    def _create_checkout(self, request) -> None:
         checkout_id, mac = uuid.uuid4().hex, uuid.uuid4().hex
         reference = request["order"]["references"]["merchantReference"]
         checkout = {
@@ -152,7 +152,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(201, {**body, "redirectUrl": redirect})
 
 
-def _checkout_status(checkout_id):
+def _checkout_status(checkout_id) -> dict[str, object]:
     status_file = CHECKOUTS / f"{checkout_id}.status"
     status = status_file.read_text(encoding="utf-8").strip() if status_file.exists() else "IN_PROGRESS"
     if status in {"IN_PROGRESS", "CANCELLED_BY_CONSUMER"}:
