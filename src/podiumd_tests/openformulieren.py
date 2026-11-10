@@ -85,9 +85,8 @@ def complete_submission(  # noqa: PLR0913  # one flow
 ) -> JsonObject:
     """Fill the submission's single step with data, complete it and return its final status (see submit)."""
     step = entries(submission["steps"])[0]
-    expect_status(
-        http.put(str(step["url"]), json={"data": dict(data)}, headers=headers), HTTPStatus.CREATED, HTTPStatus.OK
-    )
+    response = http.put(str(step["url"]), json={"data": dict(data)}, headers=headers)
+    expect_status(response, HTTPStatus.CREATED, HTTPStatus.OK)
     complete = _complete(http, str(submission["url"]), headers, timeout=timeout)
     status = _processed(http, str(complete["statusUrl"]), str(submission["id"]), timeout=timeout)
     if registers:

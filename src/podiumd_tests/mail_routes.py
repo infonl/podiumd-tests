@@ -59,6 +59,13 @@ def is_internal(host: str, internal: frozenset[str]) -> bool:
     return host.lower().rstrip(".") in internal
 
 
+def _texts(kind: str, data: JsonObject) -> dict[str, str]:
+    """Return the values of a Secret's data, decoded, or of a ConfigMap's."""
+    if kind == "secret":
+        return decode_secret_data(data)
+    return {var: str(host) for var, host in data.items()}
+
+
 class _Sources:
     """The mail host values of ConfigMaps and Secrets, each fetched once."""
 
@@ -71,7 +78,7 @@ class _Sources:
         key = (kind, namespace, name)
         if key not in self.cache:
             data = section(self.env.kube.get_optional(kind, name, namespace=namespace) or {}, "data")
-            values = decode_secret_data(data) if kind == "secret" else {var: str(host) for var, host in data.items()}
+            values = _texts(kind, data)
             # Only mail host values are kept; nothing else of a Secret leaves this class.
             self.cache[key] = {var: host for var, host in values.items() if var in MAIL_HOST_VARS}
         return self.cache[key]

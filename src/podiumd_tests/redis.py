@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.kube import metadata_labels
 from podiumd_tests.kube import metadata_name
 
 if TYPE_CHECKING:
@@ -26,7 +27,7 @@ REDIS_CLI = "redis-cli -h $(hostname) -p ${REDIS_PORT:-6379}"
 
 def redis_pods(env: Environment) -> list[JsonObject]:
     """Return the pods of the redis-ha StatefulSet."""
-    return [pod for pod in env.items("pods") if section(section(pod, "metadata"), "labels").get("app") == REDIS_HA]
+    return [pod for pod in env.items("pods") if metadata_labels(pod).get("app") == REDIS_HA]
 
 
 def redis_cli(env: Environment, pod: JsonObject, *args: str) -> str:

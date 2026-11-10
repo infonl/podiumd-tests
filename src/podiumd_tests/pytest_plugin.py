@@ -297,7 +297,7 @@ def fixture_openzaak_noauth(run_tag: str, podiumd_env: Environment, need_bootstr
 
 
 @pytest.fixture(scope="session", name="openzaak_productaanvraag")
-def fixture_openzaak_productaanvraag(
+def fixture_openzaak_productaanvraag(  # noqa: WPS118  # fixture_<name> of fixture openzaak_productaanvraag
     run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None]
 ) -> ApiClient:
     """Open Zaak as the client that may only read and delete zaken of the productaanvraag zaaktype."""
@@ -382,7 +382,9 @@ def fixture_productaanvraagtype(podiumd_env: Environment) -> str:
 
 
 @pytest.fixture(scope="session", name="productaanvraag_objecttype")
-def fixture_productaanvraag_objecttype(podiumd_env: Environment) -> str:
+def fixture_productaanvraag_objecttype(  # noqa: WPS118  # fixture_<name> of fixture productaanvraag_objecttype
+    podiumd_env: Environment,
+) -> str:
     """Return the productaanvraag objecttype's URL as Objecten knows it."""
     return objecttype_url(podiumd_env, names.PRODUCTAANVRAAG_OBJECTTYPE)
 
@@ -563,4 +565,5 @@ def requiring(
 
     For tests parametrized per component, e.g. [requiring(c, c) for c in COMPONENTS].
     """
-    return pytest.param(*values, id=test_id or component, marks=[pytest.mark.requires(component), *marks])
+    all_marks = [pytest.mark.requires(component), *marks]
+    return pytest.param(*values, id=test_id or component, marks=all_marks)

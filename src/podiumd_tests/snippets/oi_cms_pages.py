@@ -9,6 +9,8 @@ pages it authored), contact_email (KlantenSysteemConfig.register_contact_email w
 ({"app_configs": [[apphook, config pk]], "contact_email": old value}), which remove undoes.
 """
 
+from itertools import starmap
+
 
 def run(params):
     from django.db import transaction
@@ -28,7 +30,7 @@ def _run(params):
     missing_configs = [wanted for wanted in params["pages"] if _missing_app_config(wanted)]
     if params["action"] == "status":
         pairs = _pairs(params, existing)
-        pages = all(page and (page.is_home or not wanted.get("home")) for wanted, page in pairs)
+        pages = all(starmap(_in_place, pairs))
         present = pages and not missing_configs and bool(config.register_contact_email)
         return {"present": present}
     record = params.get("record") or {}
@@ -51,6 +53,10 @@ def _run(params):
     # The running web processes load apphook URLs once; this makes them reload on their next request.
     mark_urlconf_as_changed()
     return {"present": True, "record": record}
+
+
+def _in_place(wanted, page):
+    return page and (page.is_home or not wanted.get("home"))
 
 
 def _pairs(params, existing):

@@ -92,7 +92,7 @@ def destroy_now(env: Environment, lijst: str) -> None:
     run_snippet(env.kube, env.deployment_for("openarchiefbeheer"), "oab_destroy_now", {"uuid": lijst})
 
 
-def queues_review_response_on_commit(env: Environment) -> bool:
+def queues_review_after_commit(env: Environment) -> bool:
     """Whether OAB queues process_review_response only after the review response is committed."""
     return bool(
         run_snippet(env.kube, env.deployment_for("openarchiefbeheer"), "oab_review_response", {"action": "on_commit"})

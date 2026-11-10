@@ -126,7 +126,7 @@ def test_delete_functional_roles_and_domain_deletes_each_named_one(fake_http):
             "DELETE /api/v1/domains/d-1": (204, None),
         }
     )
-    pabc.delete_functional_roles_and_domain(requests.Session(), PABC, ("a", "b"), "ptest")
+    pabc.delete_roles_and_domain(requests.Session(), PABC, ("a", "b"), "ptest")
     assert [s.url.removeprefix(PABC) for s in sent if s.method == "DELETE"] == [
         "/api/v1/functional-roles/f-1",
         "/api/v1/functional-roles/f-2",

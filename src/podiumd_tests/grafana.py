@@ -65,7 +65,8 @@ class Grafana:
 
     def uid(self, kind: str) -> str | None:
         """uid of the first datasource of a type (prometheus, loki, tempo), or None."""
-        return next((str(datasource["uid"]) for datasource in self.datasources if datasource.get("type") == kind), None)
+        uids = (str(datasource["uid"]) for datasource in self.datasources if datasource.get("type") == kind)
+        return next(uids, None)
 
     def proxy(self, kind: str, path: str, params: dict[str, str] | None = None) -> Json:
         """GET through the proxy of the datasource of a type; the JSON body."""
@@ -144,10 +145,12 @@ def without_metrics(
     """
     up_targets = (target for target in _active_targets(targets_response) if target.get("health") == "up")
     pools = [str(target.get("scrapePool")).split("/") for target in up_targets]
-    monitor_pools = [pool for pool in pools if len(pool) > _POOL_MONITOR_NAME and pool[0] in MONITOR_POOLS.values()]
+    monitors = set(MONITOR_POOLS.values())
+    monitor_pools = [pool for pool in pools if len(pool) > _POOL_MONITOR_NAME and pool[0] in monitors]
     up = deployed_components([pool[_POOL_MONITOR_NAME] for pool in monitor_pools])
     results = entries(section(otel_response, "data").get("result"))
-    jobs = {str(section(result, "metric").get("job")).rpartition("/")[2] for result in results}
+    paths = (str(section(result, "metric").get("job")) for result in results)
+    jobs = {path.rpartition("/")[2] for path in paths}
     ordered = sorted(components)
     return (
         [name for name in ordered if COMPONENTS[name].monitored and name not in up],

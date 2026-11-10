@@ -111,7 +111,8 @@ def relations(zaak: JsonObject) -> list[tuple[object, object]]:
 """)
 def test_relevante_andere_zaken(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
     """A zaak refers to two vervolgzaken, one of which refers to a third (TA reg-28, 59)."""
-    hoofd, a, b, b1 = (make_zaak(openzaak, registry, parts.zaaktype) for _ in range(4))
+    hoofd = make_zaak(openzaak, registry, parts.zaaktype)
+    a, b, b1 = (make_zaak(openzaak, registry, parts.zaaktype) for _ in range(3))
     openzaak.patch(str(b["url"]), {"relevanteAndereZaken": [{"url": b1["url"], "aardRelatie": "vervolg"}]})
     relaties = [{"url": z["url"], "aardRelatie": "vervolg"} for z in (a, b)]
     openzaak.patch(str(hoofd["url"]), {"relevanteAndereZaken": relaties})

@@ -72,7 +72,8 @@ class KeycloakUser:
         if not (roles <= admin.user_realm_roles(user_id) and groups <= admin.user_groups(user_id)):
             return False
         client_roles = filter(None, starmap(admin.client_role, self.client_roles))
-        return all(str(role["name"]) in admin.user_client_roles(user_id, uuid) for uuid, role in client_roles)
+        held = admin.user_client_roles
+        return all(str(role["name"]) in held(user_id, uuid) for uuid, role in client_roles)
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Create or update the user with a new password and the wanted roles and groups that exist.

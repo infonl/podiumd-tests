@@ -65,7 +65,8 @@ class GatewayUser(User):
         root = self.env_under_test.profile.urls[component]
         self.urls = [root + path]
         if self.scenario == "kiss_page":
-            self.urls += [root + asset for asset in ASSET.findall(self.http.get(self.urls[0]).text)]
+            page = self.http.get(self.urls[0]).text
+            self.urls += [root + asset for asset in ASSET.findall(page)]
 
     @task
     def request(self) -> None:

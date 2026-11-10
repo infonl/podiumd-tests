@@ -58,6 +58,7 @@ def test_unhealthy_pods_skips_job_pods_and_terminating_pods():
     pods = [
         pod("ok"),
         pod("sidecar-down", ready=False),
+        pod("done", phase="Succeeded", ready=False),
         pod("pending", phase="Pending"),
         pod("config-xyz", phase="Failed", owner="Job"),
         pod("old", phase="Failed", deleting=True),

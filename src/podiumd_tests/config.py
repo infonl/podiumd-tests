@@ -224,7 +224,8 @@ def _parse_secrets(value: object, where: str) -> dict[str, SecretSpec]:
             msg = f"{where}.{name}: unknown source {source!r}"
             raise ProfileError(msg)
         option_map = {"value": str(options)} if source == "dev_default" else _mapping(options, f"{where}.{name}")
-        secrets[name] = SecretSpec(name, source, {key: str(option) for key, option in option_map.items()})
+        options = {key: str(option) for key, option in option_map.items()}
+        secrets[name] = SecretSpec(name, source, options)
     return secrets
 
 

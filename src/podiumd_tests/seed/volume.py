@@ -157,7 +157,9 @@ class KissSource:
     sync: str
 
 
-def _one_by_one(creator: Callable[[Environment], Callable[[int], None]]) -> Callable[[Environment, range, int], None]:
+def _one_by_one(
+    creator: Callable[[Environment], Callable[[int], None]],
+) -> Callable[[Environment, range, int], None]:
     """Create through an API, one object per call, `parallel` calls at a time."""
 
     def create(env: Environment, missing: range, parallel: int) -> None:
@@ -200,7 +202,8 @@ def _count_zaken(env: Environment) -> int:
     zaaktype = _volume_zaaktype(openzaak)
     if zaaktype is None:
         return 0
-    return int(str(openzaak.get(f"{ZAKEN}/zaken", {"zaaktype": zaaktype, "pageSize": "1"}).get("count", 0)))
+    page = openzaak.get(f"{ZAKEN}/zaken", {"zaaktype": zaaktype, "pageSize": "1"})
+    return int(str(page.get("count", 0)))
 
 
 def _zaak_creator(env: Environment) -> Callable[[int], None]:
@@ -270,7 +273,8 @@ def _user_creator(env: Environment) -> Callable[[int], None]:
 
     def create(index: int) -> None:
         persoon = corpus().persoon(index)
-        username = f"{VOLUME_TAG}-{persoon['voornaam']}.{persoon['achternaam']}.{index}".lower().replace(" ", "")
+        name = f"{persoon['voornaam']}.{persoon['achternaam']}"
+        username = f"{VOLUME_TAG}-{name}.{index}".lower().replace(" ", "")
         # A fresh admin token per user: the master realm's tokens expire within minutes.
         admin = for_environment(env)
         user = admin.create_user(username, admin.new_password(), {}, (persoon["voornaam"], persoon["achternaam"]))

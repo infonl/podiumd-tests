@@ -87,7 +87,8 @@ def earlier_stats(run: Path) -> list[dict[str, EndpointStats]]:
     found: list[dict[str, EndpointStats]] = []
     for other in sorted(run.parent.parent.glob(f"*/*_{env}_perf_*"), reverse=True):
         perf = other / "perf"
-        if other.name >= run.name or not (perf / STATS).is_file() or not (perf / SETTINGS).is_file():
+        complete = (perf / STATS).is_file() and (perf / SETTINGS).is_file()
+        if other.name >= run.name or not complete:
             continue
         if (perf / SETTINGS).read_text(encoding="utf-8") == settings:
             found.append(read_stats((perf / STATS).read_text(encoding="utf-8")))
@@ -96,7 +97,8 @@ def earlier_stats(run: Path) -> list[dict[str, EndpointStats]]:
 
 def baseline_p95(history: list[dict[str, EndpointStats]], endpoint: str) -> float | None:
     """Median p95 of the endpoint over the newest BASELINE_RUNS runs with it; None below MIN_BASELINE_RUNS runs."""
-    values = [run[endpoint].p95_ms for run in history if endpoint in run and run[endpoint].requests][:BASELINE_RUNS]
+    measured = [run[endpoint] for run in history if endpoint in run and run[endpoint].requests]
+    values = [endpoint_stats.p95_ms for endpoint_stats in measured[:BASELINE_RUNS]]
     return statistics.median(values) if len(values) >= MIN_BASELINE_RUNS else None
 
 

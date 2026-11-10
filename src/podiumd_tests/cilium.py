@@ -19,6 +19,7 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import metadata_name
+from podiumd_tests.kube import metadata_namespace
 from podiumd_tests.process import start_process
 
 if TYPE_CHECKING:
@@ -93,9 +94,7 @@ def recorded_drops(kube: Kube, path: Path) -> Generator[None]:
         try:
             yield
         finally:
-            _stop_monitors(kube, pods, monitors)
-            for thread in threads:
-                thread.join(5)
+            _stop_monitors(kube, pods, monitors, threads)
 
 
 def _drop_records(monitor: Monitor) -> Generator[str]:
@@ -107,7 +106,9 @@ def _drop_records(monitor: Monitor) -> Generator[str]:
             yield f"{json.dumps(stamped)}\n"
 
 
-def _stop_monitors(kube: Kube, pods: list[JsonObject], monitors: list[Monitor]) -> None:
+def _stop_monitors(
+    kube: Kube, pods: list[JsonObject], monitors: list[Monitor], readers: list[threading.Thread]
+) -> None:
     for monitor in monitors:
         monitor.stop()
     for pod in pods:
@@ -123,6 +124,8 @@ def _stop_monitors(kube: Kube, pods: list[JsonObject], monitors: list[Monitor]) 
                 " ".join(MONITOR),
                 namespace=NAMESPACE,
             )
+    for reader in readers:
+        reader.join(5)
 
 
 MONITOR = ("cilium-dbg", "monitor", "--type", "drop", "--json")
@@ -166,7 +169,8 @@ def policy_drop(line: str) -> JsonObject | None:
         found = entries([json.loads(line)])
     except json.JSONDecodeError:
         return None
-    return found[0] if found and str(found[0].get("reason", "")).startswith("Policy") else None
+    event: JsonObject = found[0] if found else {}
+    return event if str(event.get("reason", "")).startswith("Policy") else None
 
 
 def describe_drops(kube: Kube, path: Path) -> list[str]:
@@ -180,7 +184,7 @@ def describe_drops(kube: Kube, path: Path) -> list[str]:
     if not events:
         return []
     pods = {
-        str(section(pod, "status").get("podIP")): f"{section(pod, 'metadata').get('namespace')}/{metadata_name(pod)}"
+        str(section(pod, "status").get("podIP")): f"{metadata_namespace(pod)}/{metadata_name(pod)}"
         for pod in kube.items("pods", all_namespaces=True)
     }
     seen: dict[str, tuple[str, int]] = {}

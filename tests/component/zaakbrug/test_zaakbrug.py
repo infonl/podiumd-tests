@@ -35,8 +35,8 @@ from podiumd_tests.zaakbrug import document_identificatie
 from podiumd_tests.zaakbrug import expect_expired_version_bug
 from podiumd_tests.zaakbrug import geef_zaak_details
 from podiumd_tests.zaakbrug import geef_zaakdocument_bewerken
-from podiumd_tests.zaakbrug import genereer_document_identificatie
-from podiumd_tests.zaakbrug import genereer_zaak_identificatie
+from podiumd_tests.zaakbrug import genereer_document_id
+from podiumd_tests.zaakbrug import genereer_zaak_id
 from podiumd_tests.zaakbrug import is_bevestiging
 from podiumd_tests.zaakbrug import is_fault
 from podiumd_tests.zaakbrug import soap_action
@@ -77,8 +77,8 @@ def fixture_first_identificaties(http: requests.Session, urls: dict[str, str], r
         if done.exists():
             return
         now, url = datetime.now(UTC), f"{urls['zaakbrug']}{ZDS}/VrijBericht"
-        _post(http, url, genereer_zaak_identificatie(now), "genereerZaakIdentificatie_Di02")
-        _post(http, url, genereer_document_identificatie(now), "genereerDocumentIdentificatie_Di02")
+        _post(http, url, genereer_zaak_id(now), "genereerZaakIdentificatie_Di02")
+        _post(http, url, genereer_document_id(now), "genereerDocumentIdentificatie_Di02")
         done.touch()
 
 
@@ -97,7 +97,7 @@ def test_genereer_zaak_identificatie(http: requests.Session, urls: dict[str, str
     answer = _post(
         http,
         f"{urls['zaakbrug']}{ZDS}/VrijBericht",
-        genereer_zaak_identificatie(datetime.now(UTC)),
+        genereer_zaak_id(datetime.now(UTC)),
         "genereerZaakIdentificatie_Di02",
     )
     assert zaak_identificatie(answer)
@@ -120,7 +120,7 @@ def fixture_zaakbrug_zaak(
         now = datetime.now(UTC)
         base = urls["zaakbrug"] + ZDS
         zaak = zaak_identificatie(
-            _post(http, f"{base}/VrijBericht", genereer_zaak_identificatie(now), "genereerZaakIdentificatie_Di02")
+            _post(http, f"{base}/VrijBericht", genereer_zaak_id(now), "genereerZaakIdentificatie_Di02")
         )
         assert zaak
         envelope = creeer_zaak(now, zaak, ZAAKBRUG_ZAAKTYPE, INITIATOR_BSN, velden=velden)
@@ -183,7 +183,7 @@ def test_voeg_zaakdocument_toe_attaches_a_document(
     base = urls["zaakbrug"] + ZDS
     zaak = zaakbrug_zaak()
     document = document_identificatie(
-        _post(http, f"{base}/VrijBericht", genereer_document_identificatie(now), "genereerDocumentIdentificatie_Di02")
+        _post(http, f"{base}/VrijBericht", genereer_document_id(now), "genereerDocumentIdentificatie_Di02")
     )
     assert document
     pdf = base64.b64encode(b"%PDF-1.4 ptest").decode()
@@ -323,7 +323,7 @@ def test_definitief_document_is_not_updated(
     vrij = f"{urls['zaakbrug']}{ZDS}/VrijBericht"
     zaak = zaakbrug_zaak()
     document = document_identificatie(
-        _post(http, vrij, genereer_document_identificatie(now), "genereerDocumentIdentificatie_Di02")
+        _post(http, vrij, genereer_document_id(now), "genereerDocumentIdentificatie_Di02")
     )
     assert document
     pdf = base64.b64encode(b"%PDF-1.4 ptest").decode()

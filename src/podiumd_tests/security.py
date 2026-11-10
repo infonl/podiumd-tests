@@ -68,13 +68,15 @@ def realm_policy_gaps(realm: JsonObject) -> list[str]:
 def _policy_rules(policy: str) -> dict[str, int]:
     """Return the counted rules of a Keycloak passwordPolicy, e.g. {"length": 12, "digits": 1}."""
     rules = dict(re.findall(r"(\w+)\((\d+)\)", policy))
-    return {rule: int(count) for rule, count in rules.items() if rule in {*PASSWORD_CLASSES, "length", "maxLength"}}
+    counted = {*PASSWORD_CLASSES, "length", "maxLength"}
+    return {rule: int(count) for rule, count in rules.items() if rule in counted}
 
 
 def _password(rules: dict[str, int], broken: str | None = None) -> str:
     """Return a random password that meets the rules, except the broken one, which it misses by one."""
     counts = {rule: rules.get(rule, 1) - (rule == broken) for rule in PASSWORD_CLASSES}
-    chars = [secrets.choice(PASSWORD_CLASSES[rule]) for rule, count in counts.items() for _ in range(count)]
+    picks = [rule for rule, count in counts.items() for _ in range(count)]
+    chars = [secrets.choice(PASSWORD_CLASSES[rule]) for rule in picks]
     wanted = max(rules.get("length", 0), PASSWORD_LENGTH)
     length = rules["length"] - 1 if broken == "length" else wanted
     filler = PASSWORD_CLASSES["upperCase" if broken == "lowerCase" else "lowerCase"]
@@ -103,7 +105,8 @@ def missing_security_headers(response: requests.Response) -> list[str]:
     if response.url.startswith("https://") and "strict-transport-security" not in headers:
         missing.append("Strict-Transport-Security")
     # An app and its nginx may each send it: "nosniff, nosniff".
-    if {value.strip().lower() for value in headers.get("x-content-type-options", "").split(",")} != {"nosniff"}:
+    options = headers.get("x-content-type-options", "").split(",")
+    if {option.strip().lower() for option in options} != {"nosniff"}:
         missing.append("X-Content-Type-Options: nosniff")
     html = response.ok and not response.is_redirect and headers.get("content-type", "").startswith("text/html")
     framed = "x-frame-options" in headers or "frame-ancestors" in headers.get("content-security-policy", "")

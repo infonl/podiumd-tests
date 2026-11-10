@@ -13,7 +13,7 @@ from podiumd_tests.zaakbrug import cancel_checkout
 from podiumd_tests.zaakbrug import checked_out_id
 from podiumd_tests.zaakbrug import creeer_zaak
 from podiumd_tests.zaakbrug import geef_zaakdocument_bewerken
-from podiumd_tests.zaakbrug import genereer_zaak_identificatie
+from podiumd_tests.zaakbrug import genereer_zaak_id
 from podiumd_tests.zaakbrug import is_bevestiging
 from podiumd_tests.zaakbrug import is_fault
 from podiumd_tests.zaakbrug import update_zaak
@@ -28,7 +28,7 @@ def test_zds_answer_gives_the_zaak_identificatie():
     )
     assert zaak_identificatie(answer) == "ZK2026-00001"
     assert zaak_identificatie("<Envelope/>") is None
-    envelope = genereer_zaak_identificatie(datetime(2026, 1, 2, 3, 4, 5, 670000, tzinfo=UTC))
+    envelope = genereer_zaak_id(datetime(2026, 1, 2, 3, 4, 5, 670000, tzinfo=UTC))
     assert "<StUF:organisatie>1900</StUF:organisatie>" in envelope
     assert "<StUF:tijdstipBericht>2026010203040567</StUF:tijdstipBericht>" in envelope
 

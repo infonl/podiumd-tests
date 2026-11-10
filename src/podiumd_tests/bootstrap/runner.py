@@ -149,7 +149,8 @@ def bootstrap(env: Environment, steps: Sequence[Step], *, rotate: bool = False) 
         if values:
             ctx.store.write(values)
             ctx.env.credentials.forget(*values)
-        return Outcome(step.name, "created", "; ".join([", ".join(sorted(values)), *ctx.notes]))
+        stored = ", ".join(sorted(values))
+        return Outcome(step.name, "created", "; ".join([stored, *ctx.notes]))
 
     return _each(env, steps, apply)
 

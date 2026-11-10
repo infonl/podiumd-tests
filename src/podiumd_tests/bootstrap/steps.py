@@ -113,7 +113,8 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
     def _apply(self, ctx: Context, **extra: object) -> dict[str, object]:
         """Run apply; the snippet's "notes" go to the step's outcome."""
         result = self._run(ctx, "apply", **extra)
-        ctx.notes.extend(str(note) for note in cast("list[object]", result.get("notes") or []))
+        notes = cast("list[object]", result.get("notes") or [])
+        ctx.notes.extend(str(note) for note in notes)
         return result
 
 
@@ -237,7 +238,8 @@ class OpenKlantActor:
         http, url, headers = _actoren_api(ctx)
         params = {"actoridentificatorObjectId": self.email}
         response = expect_status(http.get(url, params=params, headers=headers), HTTPStatus.OK)
-        return [str(actor["uuid"]) for actor in entries(cast("dict[str, object]", response.json()).get("results"))]
+        actors = entries(cast("dict[str, object]", response.json()).get("results"))
+        return [str(actor["uuid"]) for actor in actors]
 
 
 def openformulieren_params(ctx: Context) -> dict[str, object]:
@@ -265,7 +267,7 @@ def openinwoner_openklant_params(ctx: Context) -> dict[str, object]:
         raise LookupError(msg)
     return {
         "api_root": f"{ctx.env.profile.urls['openklant']}/klantinteracties/api/v1/",
-        "token": ctx.store.read().get(names.OPENKLANT_OPENINWONER_STORE_KEY, ""),
+        "token": ctx.store.read().get(names.OPENKLANT_OI_STORE_KEY, ""),
         "config": {
             "mijn_vragen_kanaal": "contactformulier",
             "mijn_vragen_actor": str(actor[0]["uuid"]),
@@ -897,8 +899,8 @@ STEPS: tuple[Step, ...] = (
         "openklant-token-openinwoner",
         ("openklant",),
         "token_auth",
-        names.OPENKLANT_OPENINWONER_STORE_KEY,
-        {"modules": ("openklant.components.token.models",), "identifier": names.OPENKLANT_OPENINWONER_STORE_KEY},
+        names.OPENKLANT_OI_STORE_KEY,
+        {"modules": ("openklant.components.token.models",), "identifier": names.OPENKLANT_OI_STORE_KEY},
         wiring=True,
     ),
     SnippetStep(

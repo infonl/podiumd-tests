@@ -79,7 +79,8 @@ NOT_REQUIRED_FOR_VALIDE = {
 def inrichtingscheck_problems(check: JsonObject) -> list[str]:
     """Return the fields of ZAC's inrichtingscheck of one zaaktype that make it invalid, and its warnings."""
     problems = [field for field, value in check.items() if value is False and field not in NOT_REQUIRED_FOR_VALIDE]
-    problems += [f"{field}={value}" for field, value in check.items() if field.startswith("aantal") and value != 1]
+    counts = {field: value for field, value in check.items() if field.startswith("aantal")}
+    problems += [f"{field}={value}" for field, value in counts.items() if value != 1]
     if check.get("resultaattypesMetVerplichtBesluit") and not check.get("besluittypeAanwezig"):
         problems.append("besluittypeAanwezig")
     if check.get("heeftWaarschuwingen"):

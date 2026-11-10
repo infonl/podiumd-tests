@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.kube import condition_true
 from podiumd_tests.kube import metadata_name
 
 if TYPE_CHECKING:
@@ -28,8 +29,7 @@ class Marker:
 
 def is_established(crd: JsonObject) -> bool:
     """Whether the CRD has condition Established=True."""
-    conditions = entries(section(crd, "status").get("conditions"))
-    return any(condition.get("type") == "Established" and condition.get("status") == "True" for condition in conditions)
+    return condition_true(crd, "Established")
 
 
 def storage_schema(crd: JsonObject) -> JsonObject:

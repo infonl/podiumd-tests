@@ -163,7 +163,10 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
         return next((role for role in roles if role.get("name") == name), None)
 
     def create_role(
-        self, name: str, client_uuid: str | None = None, attributes: dict[str, list[str]] | None = None
+        self,
+        name: str,
+        client_uuid: str | None = None,
+        attributes: dict[str, list[str]] | None = None,
     ) -> None:
         """Create a realm role, or a role of the client with this uuid."""
         path = f"/clients/{client_uuid}/roles" if client_uuid else "/roles"
@@ -232,7 +235,8 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
 
     def client_scopes(self) -> dict[str, str]:
         """Client scope name -> id."""
-        return {str(scope["name"]): str(scope["id"]) for scope in cast("list[JsonObject]", self._get("/client-scopes"))}
+        scopes = cast("list[JsonObject]", self._get("/client-scopes"))
+        return {str(scope["name"]): str(scope["id"]) for scope in scopes}
 
     def create_client_scope(self, scope: JsonObject) -> str:
         """Create a client scope; its id."""
@@ -270,14 +274,19 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
         self._send("PUT" if attached else "DELETE", f"/clients/{client_uuid}/optional-client-scopes/{scope_id}", None)
 
     def _get(self, path: str, params: dict[str, str] | None = None) -> object:
-        return expect_status(self.http.get(self.base + path, params=params, headers=self.headers), HTTPStatus.OK).json()
+        response = self.http.get(self.base + path, params=params, headers=self.headers)
+        return expect_status(response, HTTPStatus.OK).json()
 
     def _send(self, method: str, path: str, body: object, *expected: int) -> None:
         response = self.http.request(method, self.base + path, json=body, headers=self.headers)
         expect_status(response, *(expected or (HTTPStatus.NO_CONTENT,)))
 
 
-def _user_body(username: str, attributes: dict[str, list[str]], name: tuple[str, str] | None) -> JsonObject:
+def _user_body(
+    username: str,
+    attributes: dict[str, list[str]],
+    name: tuple[str, str] | None,
+) -> JsonObject:
     """Return an enabled user without required actions, by default named PodiumD <username>."""
     first, last = name or ("PodiumD", username)
     return {

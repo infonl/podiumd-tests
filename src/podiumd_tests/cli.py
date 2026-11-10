@@ -135,7 +135,8 @@ def configured_hosts(kube: Kube) -> list[str]:
     found: set[str] = set()
     for kind in ("deployments", "configmaps"):
         for item in kube.items(kind):
-            found.update(CONFIGURED_HOST.findall(json.dumps([item.get("spec"), item.get("data")])))
+            text = json.dumps([item.get("spec"), item.get("data")])
+            found.update(CONFIGURED_HOST.findall(text))
     return sorted(host for host in found if ".svc" not in host)
 
 

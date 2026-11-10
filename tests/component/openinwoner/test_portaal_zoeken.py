@@ -40,7 +40,8 @@ pytestmark = [
 # Words that occur only in the test's own products; a hex suffix keeps runs apart. Their first
 # letters differ: the index also matches word prefixes (edge n-grams).
 SUFFIX = secrets.token_hex(3)
-PASPOORT, GROFVUIL, KEYWORD, BOTH = (f"{w}{SUFFIX}" for w in ("paspoort", "grofvuil", "reisdocument", "beide"))
+PASPOORT, GROFVUIL = f"paspoort{SUFFIX}", f"grofvuil{SUFFIX}"
+KEYWORD, BOTH = f"reisdocument{SUFFIX}", f"beide{SUFFIX}"
 # Each Open Inwoner process caches SiteConfiguration for SOLO_CACHE_TIMEOUT (5 s) in local memory.
 SOLO_TIMEOUT = 30
 
@@ -168,6 +169,12 @@ def test_no_results_suggest_what_was_meant(http: requests.Session, urls: dict[st
     assert PASPOORT in html
 
 
+def _restore_search(podiumd_env: Environment, old: dict[str, object], search_on: Callable[[], bool]) -> None:
+    """Set the search settings back and wait until the search answers again."""
+    set_site_configuration(podiumd_env, **old)
+    wait_until(search_on, timeout=SOLO_TIMEOUT, description="search back on")
+
+
 @pytest.mark.tc("OI-098", "OI-099")
 @pytest.mark.source(
     "draaiboek OI-098", "After search is switched off in the admin, the end user cannot use the search function."
@@ -200,5 +207,4 @@ def test_search_can_be_switched_off(http: requests.Session, urls: dict[str, str]
             description="search off",
         )
     finally:
-        set_site_configuration(podiumd_env, **old)
-        wait_until(lambda: search_answers(HTTPStatus.OK), timeout=SOLO_TIMEOUT, description="search back on")
+        _restore_search(podiumd_env, old, lambda: search_answers(HTTPStatus.OK))

@@ -135,7 +135,8 @@ def report_row(
     if not where and state == "out of scope":
         where = reason
     description = str(case["sub"] or case["proces"])
-    text = re.sub(r"\s+", " ", description).replace("|", "/").replace("<", "&lt;")[:110]
+    text = re.sub(r"\s+", " ", description)
+    text = text.replace("|", "/").replace("<", "&lt;")[:110]
     return state, f"| {case['test_id']} | {case['klasse']} | {state} | {text} | {where} |"
 
 

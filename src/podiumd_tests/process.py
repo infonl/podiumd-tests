@@ -34,7 +34,8 @@ class ProcessError(Exception):
         self.command: str = shlex.join(command)
         # kubectl repeats client-side noise (E1005 memcache...) before the real error, and kubectl exec
         # ends with its own exit-code line after the program's error; keep the last real line.
-        lines = [line for line in detail.strip().splitlines() if line.strip() and not KUBECTL_EXEC_EXIT.match(line)]
+        written = detail.strip().splitlines()
+        lines = [line for line in written if line.strip() and not KUBECTL_EXEC_EXIT.match(line)]
         # A Python program may log warnings after its exception; the exception is the real error.
         errors = [line for line in lines if PYTHON_EXCEPTION.match(line)]
         super().__init__(f"{self.command}: {(errors or lines or ['failed'])[-1]}")
@@ -48,7 +49,10 @@ def run_process(args: Sequence[str], timeout: int, stdin: str | None = None) -> 
 
 
 def start_process(
-    args: Sequence[str], stdin: int | None = None, stdout: int | None = None, stderr: int | None = None
+    args: Sequence[str],
+    stdin: int | None = None,
+    stdout: int | None = None,
+    stderr: int | None = None,
 ) -> subprocess.Popen[str]:
     """Start a fixed argv in the background, never through a shell.
 

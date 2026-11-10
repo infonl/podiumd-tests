@@ -19,6 +19,7 @@ from podiumd_tests.auth.keycloak_admin import realm_of
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from collections.abc import Sequence
 
     from podiumd_tests.auth.keycloak_admin import KeycloakAdmin
     from podiumd_tests.bootstrap.runner import Context
@@ -120,17 +121,7 @@ class KeycloakOidcMock:
     def is_present(self, ctx: Context, /) -> bool:  # noqa: PLR6301  # a Step method
         """Both scopes with all their mappers exist, and every app's client has its scopes and redirect URI."""
         admin = for_environment(ctx.env)
-        scopes = admin.client_scopes()
-        for name, (_, mappers) in SCOPES.items():
-            mapper_names = {str(mapper["name"]) for mapper in mappers}
-            if name not in scopes or mapper_names - set(admin.scope_mappers(scopes[name])):
-                return False
-        for client, wanted, redirect in _clients(ctx, admin):
-            if set(wanted) - admin.client_scope_names(str(client["id"])):
-                return False
-            if redirect and redirect not in cast("list[str]", client.get("redirectUris") or []):
-                return False
-        return True
+        return _scopes_complete(admin) and all(_client_complete(admin, *found) for found in _clients(ctx, admin))
 
     def apply(self, ctx: Context, /) -> dict[str, str]:  # noqa: PLR6301  # a Step method
         """Add what is missing, and extend the stored record with it."""
@@ -161,6 +152,23 @@ class KeycloakOidcMock:
         return (KEYCLOAK_STORE_KEY,)
 
 
+def _scopes_complete(admin: KeycloakAdmin) -> bool:
+    """Both scopes exist with all their mappers."""
+    scopes = admin.client_scopes()
+    for name, (_, mappers) in SCOPES.items():
+        mapper_names = {str(mapper["name"]) for mapper in mappers}
+        if name not in scopes or mapper_names - set(admin.scope_mappers(scopes[name])):
+            return False
+    return True
+
+
+def _client_complete(admin: KeycloakAdmin, client: JsonObject, wanted: tuple[str, ...], redirect: str | None) -> bool:
+    """Return whether the client has its scopes and, when it needs one, the redirect URI."""
+    if set(wanted) - admin.client_scope_names(str(client["id"])):
+        return False
+    return not redirect or redirect in cast("list[str]", client.get("redirectUris") or [])
+
+
 def _ensure_scopes(admin: KeycloakAdmin, record: dict[str, object]) -> dict[str, str]:
     """Create missing scopes and mappers, recording them; every scope name -> id."""
     created = cast("list[str]", record.setdefault("scopes", []))
@@ -170,13 +178,19 @@ def _ensure_scopes(admin: KeycloakAdmin, record: dict[str, object]) -> dict[str,
         if name not in scopes:
             scopes[name] = admin.create_client_scope(_scope_body(name, description))
             created.append(name)
-        existing = admin.scope_mappers(scopes[name])
-        for mapper in mappers:
-            if mapper["name"] not in existing:
-                admin.add_scope_mapper(scopes[name], mapper)
-                if name not in created:
-                    added.setdefault(name, []).append(str(mapper["name"]))
+        new = _add_missing_mappers(admin, scopes[name], mappers)
+        if new and name not in created:
+            added.setdefault(name, []).extend(new)
     return scopes
+
+
+def _add_missing_mappers(admin: KeycloakAdmin, scope: str, mappers: Sequence[JsonObject]) -> list[str]:
+    """Add the mappers the scope lacks; their names."""
+    existing = admin.scope_mappers(scope)
+    missing = [mapper for mapper in mappers if mapper["name"] not in existing]
+    for mapper in missing:
+        admin.add_scope_mapper(scope, mapper)
+    return [str(mapper["name"]) for mapper in missing]
 
 
 def _undo_clients(admin: KeycloakAdmin, record: dict[str, object], scopes: dict[str, str]) -> None:
@@ -184,26 +198,34 @@ def _undo_clients(admin: KeycloakAdmin, record: dict[str, object], scopes: dict[
     attached = cast("dict[str, list[str]]", record.get("attached") or {})
     for client_id in sorted(set(attached) | set(redirects)):
         client = admin.client(client_id)
-        if client is None:
-            continue
-        for name in attached.get(client_id, []):
-            if name in scopes:
-                admin.set_optional_scope(str(client["id"]), scopes[name], attached=False)
-        if client_id in redirects:
-            uris = cast("list[str]", client.get("redirectUris") or [])
-            admin.update_client({**client, "redirectUris": [uri for uri in uris if uri != redirects[client_id]]})
+        if client is not None:
+            scope_ids = [scopes[name] for name in attached.get(client_id, []) if name in scopes]
+            _undo_client(admin, client, scope_ids, redirects.get(client_id))
+
+
+def _undo_client(admin: KeycloakAdmin, client: JsonObject, scope_ids: list[str], redirect: str | None) -> None:
+    """Detach the scopes from the client and drop the redirect URI."""
+    for scope_id in scope_ids:
+        admin.set_optional_scope(str(client["id"]), scope_id, attached=False)
+    if redirect is not None:
+        uris = cast("list[str]", client.get("redirectUris") or [])
+        admin.update_client({**client, "redirectUris": [uri for uri in uris if uri != redirect]})
 
 
 def _undo_scopes(admin: KeycloakAdmin, record: dict[str, object], scopes: dict[str, str]) -> None:
     for name, mapper_names in cast("dict[str, list[str]]", record.get("mappers") or {}).items():
         if name in scopes:
-            existing = admin.scope_mappers(scopes[name])
-            for mapper in mapper_names:
-                if mapper in existing:
-                    admin.delete_scope_mapper(scopes[name], existing[mapper])
+            _delete_mappers(admin, scopes[name], mapper_names)
     for name in cast("list[str]", record.get("scopes") or []):
         if name in scopes:
             admin.delete_client_scope(scopes[name])
+
+
+def _delete_mappers(admin: KeycloakAdmin, scope: str, mapper_names: list[str]) -> None:
+    existing = admin.scope_mappers(scope)
+    for mapper in mapper_names:
+        if mapper in existing:
+            admin.delete_scope_mapper(scope, existing[mapper])
 
 
 def oidc_params(component: str) -> Callable[[Context], dict[str, object]]:

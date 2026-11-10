@@ -182,7 +182,8 @@ def _add_case(case: ET.Element, counts: Counts, details: Details) -> None:
     """Count one junit testcase and list it under its outcome."""
     counts.total += 1
     test_id = f"{case.get('classname', '')}::{case.get('name', '')}".strip(":")
-    properties = [(prop.get("name"), prop.get("value") or "") for prop in case.iter("property")]
+    elements = case.iter("property")
+    properties = [(prop.get("name"), prop.get("value") or "") for prop in elements]
     found = [value for name, value in properties if name == "source"]
     failure = case.find("failure")
     problem = case.find("error") if failure is None else failure
@@ -229,6 +230,11 @@ REPORT_ID = re.compile(r"^\[([a-z0-9-]+)\]")
 STRICT_XPASS = "[XPASS(strict)] "
 
 
+def _shown_first(report: tuple[str, list[bool]]) -> tuple[bool, str]:
+    """Sort key: reports whose defect did not show in some test first, then by id."""
+    return all(report[1]), report[0]
+
+
 def known_defects(details: Details) -> list[str]:
     """Table rows per bug report: whether its tests still fail; reports whose defect did not show first."""
     shown: dict[str, list[bool]] = {}
@@ -245,7 +251,7 @@ def known_defects(details: Details) -> list[str]:
             return "**did not show**"
         return f"**did not show in {outcomes.count(False)} of {len(outcomes)} tests**"
 
-    ordered = sorted(shown.items(), key=lambda item: (all(item[1]), item[0]))
+    ordered = sorted(shown.items(), key=_shown_first)
     return [f"| {report} | {result(outcomes)} | {len(outcomes)} |" for report, outcomes in ordered]
 
 
@@ -264,7 +270,8 @@ _COUNT_COLUMNS = {
 def summary_markdown(info: RunInfo, details: Details) -> str:
     """Human-readable summary.md of one run; results/README.md explains the outcomes."""
     build = "; ".join(f"{name} {version}" for name, version in sorted(info.build.items()))
-    versions = ", ".join(f"{name} {version}" for name, version in sorted(info.versions.items())) or "unknown"
+    pairs = sorted(info.versions.items())
+    versions = ", ".join(f"{name} {version}" for name, version in pairs) or "unknown"
     lines = [
         f"# {info.env} {info.tier} {info.run_id}",
         "",

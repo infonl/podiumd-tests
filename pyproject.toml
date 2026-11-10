@@ -216,7 +216,13 @@ line-ending = "auto"
 select = ["WPS"]
 max-line-length = 120
 # Jones complexity of a line (default 14): only the really dense lines
-max-line-complexity = 20
+max-line-complexity = 18
+max-cognitive-average = 6
+max-name-length = 30
+max-tuple-unpack-length = 3
+max-except-exceptions = 2
+max-lines-in-finally = 1
+max-noqa-comments = 5
 ignore = [
     # done by ruff or pylint
     "WPS210",  # too many locals: PLR0914
@@ -239,6 +245,8 @@ ignore = [
 ]
 # flake8 applies only the longest pattern that matches a file (* matches / too).
 per-file-ignores = [
+    # its name is part of a test id (unit_tests/test_snippets.py)
+    "src/podiumd_tests/snippets/openformulieren_objects_backends.py:WPS118",
     # tests: counts and sizes (asserts, comparisons, line complexity, annotations of fixtures), test idioms (short
     # names, == [] in an assert, nested classes for fakes, list multiplication, slices, float values), pytest markers
     # as decorators (WPS216), multi-line strings: Given/When/Then scenarios and pytester conftests (WPS322, WPS462)

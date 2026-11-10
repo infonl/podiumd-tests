@@ -78,7 +78,8 @@ class Environment:
         ref = self.profile.access.ca_bundle
         if ref is None:
             return None
-        bundle = str(section(self.kube.get_json("configmap", ref.configmap), "data").get(ref.key) or "")
+        configmap = self.kube.get_json("configmap", ref.configmap)
+        bundle = str(section(configmap, "data").get(ref.key) or "")
         if not bundle:
             raise KubeError(self.kube.command("get", "configmap", ref.configmap), f"no key {ref.key}")
         path = Path(tempfile.gettempdir()) / f"podiumd-tests-{self.profile.name}-ca.pem"

@@ -79,4 +79,4 @@ KISS_OBJECTTYPES = ("VAC", "Kennisartikel")
 OPENKLANT_STORE_KEY = "ptest_bootstrap_openklant_token"
 OPENVTB_STORE_KEY = "ptest_bootstrap_openvtb_token"
 # Open Inwoner's token in Open Klant (wiring W6).
-OPENKLANT_OPENINWONER_STORE_KEY = "ptest_bootstrap_openklant_openinwoner_token"
+OPENKLANT_OI_STORE_KEY = "ptest_bootstrap_openklant_openinwoner_token"

@@ -132,9 +132,8 @@ class MockServer:
         code = cast("dict[str, object]", config_map.get("data") or {}).get("server.py")
         ready = cast("dict[str, object]", deployment.get("status") or {}).get("readyReplicas")
         wanted = _container(manifests(_image(ctx.env))[1])["image"]
-        return (
-            code == (INFRA / "server.py").read_text() and bool(ready) and _container(deployment).get("image") == wanted
-        )
+        same_image = _container(deployment).get("image") == wanted
+        return code == (INFRA / "server.py").read_text() and bool(ready) and same_image
 
     def apply(self, ctx: Context, /) -> dict[str, str]:  # noqa: PLR6301  # a Step method
         """Apply the manifests, restart on new code, and wait until the Deployment is ready."""

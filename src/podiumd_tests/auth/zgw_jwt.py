@@ -43,7 +43,8 @@ def hs256_jwt(payload: Mapping[str, object], secret: str, header: Mapping[str, o
 def unsigned_jwt(payload: Mapping[str, object]) -> str:
     """Return a JWT with this payload, alg none and an empty signature."""
     header = json.dumps({"typ": "JWT", "alg": "none"}).encode()
-    return b".".join([_b64url(header), _b64url(json.dumps(payload).encode()), b""]).decode()
+    body = _b64url(json.dumps(payload).encode())
+    return b".".join([_b64url(header), body, b""]).decode()
 
 
 def zgw_jwt(client_id: str, secret: str, *, issued_at: int | None = None, user: str | None = None) -> str:

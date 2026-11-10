@@ -26,7 +26,7 @@ from podiumd_tests.pabc import add_zaaktype_entity_type
 from podiumd_tests.pabc import admin_session
 from podiumd_tests.pabc import application_roles
 from podiumd_tests.pabc import delete_entity_type
-from podiumd_tests.pabc import delete_functional_roles_and_domain
+from podiumd_tests.pabc import delete_roles_and_domain
 from podiumd_tests.pabc import domain_mappings
 from podiumd_tests.pabc import ensure_domain
 from podiumd_tests.pabc import ensure_functional_role
@@ -105,8 +105,8 @@ class ZacBpmnProcess:
         if PROCESS_KEY not in keys or not linked:
             return False
         pabc, pabc_url = self._pabc(ctx)
-        wanted = mappable_roles(pabc, pabc_url)
-        return all(domain_mappings(pabc, pabc_url, name) >= len(roles) for name, roles in wanted.items())
+        wanted = mappable_roles(pabc, pabc_url).items()
+        return all(domain_mappings(pabc, pabc_url, name) >= len(roles) for name, roles in wanted)
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Map the functional roles in PABC, deploy the process and its forms, and link it to the zaaktype."""
@@ -149,7 +149,7 @@ class ZacBpmnProcess:
             ctx.notes.append(f"process {PROCESS_KEY} not deleted: HTTP {deleted.status_code}")
         ctx.notes.append(f"zaaktype-bpmn-configuration of {BPMN_ZAAKTYPE} stays: ZAC 5.9 has no call to delete it")
         pabc, pabc_url = self._pabc(ctx)
-        delete_functional_roles_and_domain(pabc, pabc_url, ZAC_FUNCTIONAL_ROLES, ZAC_DOMAIN)
+        delete_roles_and_domain(pabc, pabc_url, ZAC_FUNCTIONAL_ROLES, ZAC_DOMAIN)
         entity_type = zaaktype_entity_type(pabc, pabc_url, BPMN_ZAAKTYPE)
         if entity_type is not None:
             delete_entity_type(pabc, pabc_url, entity_type)

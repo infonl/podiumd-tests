@@ -72,10 +72,14 @@ def unpinned_images(workload: JsonObject) -> list[str]:
     found: list[str] = []
     for container in pod_containers(workload, with_init=True):
         image = str(container.get("image") or "")
-        reference = image.rsplit("/", 1)[-1]
-        if "@sha256:" not in image and (":" not in reference or reference.endswith(":latest")):
+        if _unpinned(image):
             found.append(f"{metadata_name(workload)}/{container.get('name')}: {image}")
     return found
+
+
+def _unpinned(image: str) -> bool:
+    reference = image.rsplit("/", 1)[-1]
+    return "@sha256:" not in image and (":" not in reference or reference.endswith(":latest"))
 
 
 def missing_requests(workload: JsonObject) -> list[str]:
@@ -94,17 +98,20 @@ def without_disruption_budget(workloads: Sequence[JsonObject], budgets: Sequence
 
     A budget selects by its matchLabels only; matchExpressions are not evaluated.
     """
-    found: list[str] = []
-    for workload in workloads:
-        replicas = section(workload, "spec").get("replicas", 1)
-        if not isinstance(replicas, int) or replicas < BUDGET_MIN_REPLICAS:
-            continue
-        labels = section(section(section(section(workload, "spec"), "template"), "metadata"), "labels")
-        selected = any(
-            metadata_namespace(budget) == metadata_namespace(workload)
-            and section(section(section(budget, "spec"), "selector"), "matchLabels").items() <= labels.items()
-            for budget in budgets
-        )
-        if not selected:
-            found.append(metadata_name(workload))
-    return found
+    replicated = [workload for workload in workloads if _replicated(workload)]
+    return [metadata_name(workload) for workload in replicated if not _budgeted(workload, budgets)]
+
+
+def _replicated(workload: JsonObject) -> bool:
+    replicas = section(workload, "spec").get("replicas", 1)
+    return isinstance(replicas, int) and replicas >= BUDGET_MIN_REPLICAS
+
+
+def _budgeted(workload: JsonObject, budgets: Sequence[JsonObject]) -> bool:
+    """Whether a PodDisruptionBudget in the workload's namespace selects its pods."""
+    labels = section(section(section(section(workload, "spec"), "template"), "metadata"), "labels")
+    return any(
+        metadata_namespace(budget) == metadata_namespace(workload)
+        and section(section(section(budget, "spec"), "selector"), "matchLabels").items() <= labels.items()
+        for budget in budgets
+    )

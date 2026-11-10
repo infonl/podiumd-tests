@@ -16,7 +16,7 @@ from podiumd_tests.bootstrap.keycloak import KeycloakRoles
 from podiumd_tests.bootstrap.keycloak import KeycloakUser
 from podiumd_tests.bootstrap.keycloak import keycloak_password_key
 from podiumd_tests.bootstrap.names import OBJECTEN_STORE_KEY
-from podiumd_tests.bootstrap.names import OPENKLANT_OPENINWONER_STORE_KEY
+from podiumd_tests.bootstrap.names import OPENKLANT_OI_STORE_KEY
 from podiumd_tests.bootstrap.names import OPENKLANT_STORE_KEY
 from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.oidc_mock import KEYCLOAK_STORE_KEY
@@ -489,7 +489,7 @@ def test_openinwoner_openklant_params_send_questions_to_the_kcc_actor(
     env_factory, fake_runner, profile_factory, fake_http, actoren
 ):
     env = cluster_env(env_factory, fake_runner, profile_factory, urls={"openklant": OK})
-    values = {OPENKLANT_STORE_KEY: "tok", OPENKLANT_OPENINWONER_STORE_KEY: "oi-tok"}
+    values = {OPENKLANT_STORE_KEY: "tok", OPENKLANT_OI_STORE_KEY: "oi-tok"}
     fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (0, stored(values))
     fake_http({f"GET {ACTOREN}": (200, actoren)})
     ctx = Context(env, CredentialStore(env.kube))

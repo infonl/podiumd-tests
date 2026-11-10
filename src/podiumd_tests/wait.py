@@ -23,7 +23,8 @@ def parse_duration(text: str) -> timedelta:
     if not DURATION.fullmatch(text.strip()):
         msg = f"duration {text!r}: expected numbers with s, m, h or d, e.g. 24h"
         raise ValueError(msg)
-    parts = [timedelta(**{_UNITS[unit]: int(amount)}) for amount, unit in _PART.findall(text)]
+    found = _PART.findall(text)
+    parts = [timedelta(**{_UNITS[unit]: int(amount)}) for amount, unit in found]
     return sum(parts, timedelta())
 
 

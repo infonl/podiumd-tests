@@ -52,10 +52,14 @@ SWEEP_TAG = "podiumd-tests-sweep"
 _NAME_KEYS = ("url", "slug", "Subject", "ID")
 
 
+def _line(entry: Swept) -> str:
+    return f"{entry.action:<8} {entry.kind:<20} {entry.name} {entry.detail}".rstrip()
+
+
 def format_swept(swept: list[Swept]) -> str:
     """One line per leftover or skipped kind, and one count of the kept objects, for the terminal."""
     shown = [entry for entry in swept if entry.action != "kept"]
-    lines = [f"{entry.action:<8} {entry.kind:<20} {entry.name} {entry.detail}".rstrip() for entry in shown]
+    lines = [_line(entry) for entry in shown]
     kept = Counter(entry.kind for entry in swept if entry.action == "kept")
     if kept:
         kinds = ", ".join(f"{kind} {count}" for kind, count in kept.items())
@@ -198,6 +202,9 @@ def _name(item: JsonObject) -> str:
     return str(next((item[key] for key in _NAME_KEYS if item.get(key)), "?"))
 
 
+_DELETE_ERRORS = (AssertionError, OSError, ValueError)
+
+
 def _sweep_items(
     kind: str, items: list[JsonObject], delete: Callable[[JsonObject], None], cutoff: datetime, *, dry_run: bool
 ) -> list[Swept]:
@@ -212,7 +219,7 @@ def _sweep_items(
             continue
         try:
             delete(item)
-        except (AssertionError, OSError, ValueError) as exc:
+        except _DELETE_ERRORS as exc:
             swept.append(Swept(kind, _name(item), "failed", f"{type(exc).__name__}: {exc}"))
         else:
             swept.append(Swept(kind, _name(item), "deleted"))

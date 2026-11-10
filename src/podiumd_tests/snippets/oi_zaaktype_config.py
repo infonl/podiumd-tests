@@ -30,7 +30,8 @@ def run(params):
         with contextlib.suppress(LookupError, OSError):
             targets.append((other, _types(build_client(other.ztc_service), params)))
     if params["action"] == "status":
-        return {"present": all(_present(_found(models, *types), types[1]) for _, types in targets)}
+        present = all(_target_present(models, types) for _, types in targets)
+        return {"present": present}
     record.setdefault("created", [])
     record.setdefault("changed", [])
     for target, types in targets:
@@ -123,9 +124,7 @@ def _found(models, catalogus, zaaktype, iot):
 def _present(found, zaaktype):
     if found["zaaktype"] is None or found["iot"] is None:
         return False
-    enabled = all(
-        getattr(found[key], field) == value for key, fields in ENABLED.items() for field, value in fields.items()
-    )
+    enabled = all(_fields_set(found[key], fields) for key, fields in ENABLED.items())
     return enabled and zaaktype["uuid"] in _value(found["iot"], "zaaktype_uuids")
 
 
@@ -136,7 +135,8 @@ def _create(models, record, key, **fields):
 
 
 def _enable(record, key, instance, fields):
-    old = {field: _value(instance, field) for field, value in fields.items() if _value(instance, field) != value}
+    current = {field: _value(instance, field) for field in fields}
+    old = {field: found for field, found in current.items() if found != fields[field]}
     if not old:
         return
     if [key, instance.pk] not in record["created"]:
@@ -144,6 +144,14 @@ def _enable(record, key, instance, fields):
     for field in old:
         setattr(instance, field, fields[field])
     instance.save()
+
+
+def _target_present(models, types):
+    return _present(_found(models, *types), types[1])
+
+
+def _fields_set(instance, fields):
+    return all(getattr(instance, field) == value for field, value in fields.items())
 
 
 def _value(instance, field):

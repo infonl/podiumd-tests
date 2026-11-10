@@ -95,8 +95,9 @@ def solve_captcha(page: Page) -> None:
     if not match:
         msg = f"no sum in Open Inwoner's captcha: {question!r}"
         raise AssertionError(msg)
-    first, operator, second = int(match[1]), match[2], int(match[3])
-    page.locator('input[name="captcha"]').fill(str(first + second if operator == "+" else first - second))
+    first, second = int(match[1]), int(match[3])
+    answer = first + second if match[2] == "+" else first - second
+    page.locator('input[name="captcha"]').fill(str(answer))
 
 
 def choose_document(page: Page, name: str, content: bytes) -> Locator:

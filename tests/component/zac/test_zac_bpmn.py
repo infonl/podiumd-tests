@@ -34,7 +34,8 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "pa
 
 FEATURE = "ZAC features/9-bpmn.feature"
 # The process's tasks (src/podiumd_tests/bpmn/ptestBpmnProcess.bpmn) and the test zaaktype's last statustype.
-INTAKE, SELECT, SIGN, SUMMARY = "Intake", "Select documents to sign", "Sign the selected documents", "Summary"
+INTAKE, SELECT = "Intake", "Select documents to sign"
+SIGN, SUMMARY = "Sign the selected documents", "Summary"
 EINDSTATUS = "Afgehandeld"
 
 

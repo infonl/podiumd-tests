@@ -110,10 +110,11 @@ class ZacParameters:
             return True
         http, zac = self._session(ctx), ctx.env.profile.urls["zac"]
         versions = zaakafhandelparameters(http, zac, identificatie)
-        return bool(versions) and all(
-            self.part.is_on(self.part.read(_parameters(http, zac, str(section(version, "zaaktype")["uuid"]))))
-            for version in versions
-        )
+        for version in versions:
+            uuid = str(section(version, "zaaktype")["uuid"])
+            if not self.part.is_on(self.part.read(_parameters(http, zac, uuid))):
+                return False
+        return bool(versions)
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Switch the part on where it is off; record the old value of what it changed."""

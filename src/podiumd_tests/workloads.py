@@ -25,6 +25,8 @@ from podiumd_tests.json_data import JsonObject
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import KubeError
+from podiumd_tests.kube import condition_true
+from podiumd_tests.kube import metadata_labels
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.kube import metadata_namespace
 from podiumd_tests.responses import root_answers
@@ -82,7 +84,7 @@ def component_versions(env: Environment, components: Sequence[str]) -> dict[str,
             continue
         version = image_version(workload)
         if version is None:
-            label = str(section(section(workload, "metadata"), "labels").get("app.kubernetes.io/version", ""))
+            label = str(metadata_labels(workload).get("app.kubernetes.io/version", ""))
             version = _version(_image_release(env, component, metadata_name(workload))) or _version(label)
         if version:
             found[component] = version
@@ -102,7 +104,9 @@ def image_version(workload: JsonObject) -> tuple[int, ...] | None:
 
 
 def _version(value: str) -> tuple[int, ...] | None:
-    return tuple(int(part) for part in value.split(".")) if re.fullmatch(r"\d+(\.\d+)+", value) else None
+    if not re.fullmatch(r"\d+(\.\d+)+", value):
+        return None
+    return tuple(int(part) for part in value.split("."))
 
 
 # Images without a version variable: the Python package whose __version__ ("v2.4.9") states it.
@@ -143,7 +147,7 @@ def chart_version(env: Environment) -> str | None:
     except KubeError:
         return None
     for config_map in config_maps:
-        labels = section(section(config_map, "metadata"), "labels")
+        labels = metadata_labels(config_map)
         if labels.get("app.kubernetes.io/name") == "podiumd" and labels.get("app.kubernetes.io/version"):
             return str(labels["app.kubernetes.io/version"])
     return None
@@ -163,7 +167,8 @@ def deployed_build(env: Environment) -> dict[str, str]:
     except KubeError:
         return {}
     texts = {key: str(value) for key, value in data.items()}
-    return {key: text for key, text in texts.items() if "\n" not in text and len(text) <= BUILD_ENTRY_LIMIT}
+    short = {key: text for key, text in texts.items() if len(text) <= BUILD_ENTRY_LIMIT}
+    return {key: text for key, text in short.items() if "\n" not in text}
 
 
 def expect_defect(  # noqa: PLR0913  # one marker
@@ -201,7 +206,8 @@ def _owner_kinds(item: Item) -> set[str]:
 
 def _owner_name(item: Item, kind: str) -> str | None:
     owners = entries(section(item, "metadata").get("ownerReferences"))
-    return next((str(owner.get("name")) for owner in owners if owner.get("kind") == kind), None)
+    names = (str(owner.get("name")) for owner in owners if owner.get("kind") == kind)
+    return next(names, None)
 
 
 def _int(value: object) -> int:
@@ -247,7 +253,7 @@ def _job_log(kube: Kube, job: str) -> str:
 
 
 def _foreign(item: Item) -> bool:
-    return section(section(item, "metadata"), "labels").get("app") in FOREIGN_APPS
+    return metadata_labels(item).get("app") in FOREIGN_APPS
 
 
 def unready_workloads(items: Sequence[Item]) -> list[str]:
@@ -302,7 +308,8 @@ def replica_drift(env: Environment, namespaces: Sequence[str] | None = None) -> 
         if key in wanted and key not in autoscaled:
             live = _int(section(item, "spec").get("replicas", 1))
             if live != wanted[key]:
-                found.append(f"{item.get('kind')}/{metadata_name(item)} {live} (Helm {wanted[key]})")
+                name = f"{item.get('kind')}/{metadata_name(item)}"
+                found.append(f"{name} {live} (Helm {wanted[key]})")
     return found
 
 
@@ -349,7 +356,8 @@ def disruptions(before: ClusterState, after: ClusterState) -> list[str]:
     """Nodes and pods that came or went between two states, and containers that restarted, one line each."""
     found = [f"node {node} removed" for node in sorted(before.nodes - after.nodes)]
     found += [f"node {node} added" for node in sorted(after.nodes - before.nodes)]
-    found += [f"pod {_where(pod)} gone" for uid, pod in before.pods.items() if uid not in after.pods]
+    gone = [pod for uid, pod in before.pods.items() if uid not in after.pods]
+    found += [f"pod {_where(pod)} gone" for pod in gone]
     found += [
         f"pod {_where(pod)} started {section(pod, 'metadata').get('creationTimestamp')}"
         for uid, pod in after.pods.items()
@@ -377,8 +385,7 @@ def _where(pod: Item) -> str:
 
 
 def _job_failed(job: Item) -> bool:
-    conditions = entries(section(job, "status").get("conditions"))
-    return any(condition.get("type") == "Failed" and condition.get("status") == "True" for condition in conditions)
+    return condition_true(job, "Failed")
 
 
 KEYCLOAKS = "keycloaks.k8s.keycloak.org"

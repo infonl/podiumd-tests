@@ -97,8 +97,9 @@ def _batch_key(entry: _Entry) -> object:
 def _run_batch(batch: Sequence[_Entry]) -> bool:
     """Run the entries' snippets in one Django shell; False when that failed, to run each and report which one."""
     snippets = [entry.snippet for entry in batch if entry.snippet]
+    calls = [(snippet.name, snippet.params) for snippet in snippets]
     try:
-        run_snippets(snippets[0].kube, snippets[0].deployment, [(snippet.name, snippet.params) for snippet in snippets])
+        run_snippets(snippets[0].kube, snippets[0].deployment, calls)
     except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught  # each deleter again reports the error
         return False
     return True

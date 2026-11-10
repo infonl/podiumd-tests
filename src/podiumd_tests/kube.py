@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 from typing import cast
 from urllib.parse import urlsplit
 
+from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.process import ProcessError
 from podiumd_tests.process import Runner
@@ -32,6 +33,8 @@ if TYPE_CHECKING:
     from collections.abc import Generator
     from collections.abc import Mapping
     from collections.abc import Sequence
+
+    from podiumd_tests.json_data import JsonObject
 
 DEFAULT_TIMEOUT = 30
 # Django project path in every Maykin image (Open Zaak, Open Klant, Objecten, Open Inwoner).
@@ -152,8 +155,7 @@ class Kube:
         try:
             yield forwarded_port(command, process, timeout)
         finally:
-            process.terminate()
-            process.wait(timeout)
+            _stop(process, timeout)
 
     def secret_value(self, name: str, key: str, *, namespace: str | None = None) -> str:
         """Return the decoded value of one key of a Kubernetes secret, in the profile namespace unless given."""
@@ -176,6 +178,11 @@ class Kube:
         if not isinstance(data, dict):
             raise KubeError(command, "expected a JSON object")
         return cast("dict[str, object]", data)
+
+
+def _stop(process: subprocess.Popen[str], timeout: int) -> None:
+    process.terminate()
+    process.wait(timeout)
 
 
 def forwarded_port(command: Sequence[str], process: subprocess.Popen[str], timeout: int) -> int:
@@ -238,6 +245,19 @@ def django_values(output: str) -> list[str]:
 def metadata_name(item: Mapping[str, object]) -> str:
     """metadata.name of a Kubernetes object, or an empty string."""
     return str(section(item, "metadata").get("name", ""))
+
+
+def metadata_labels(item: Mapping[str, object]) -> JsonObject:
+    """metadata.labels of a Kubernetes object, or an empty mapping."""
+    return section(section(item, "metadata"), "labels")
+
+
+def condition_true(item: Mapping[str, object], kind: str) -> bool:
+    """Whether the object's status has the condition of this type with status True."""
+    matching = [
+        condition for condition in entries(section(item, "status").get("conditions")) if condition.get("type") == kind
+    ]
+    return any(condition.get("status") == "True" for condition in matching)
 
 
 def metadata_namespace(item: Mapping[str, object]) -> str:

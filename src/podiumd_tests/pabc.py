@@ -76,7 +76,8 @@ def zaaktype_entity_type(pabc: requests.Session, pabc_url: str, omschrijving: st
 def add_zaaktype_entity_type(pabc: requests.Session, pabc_url: str, omschrijving: str) -> str:
     """Make a zaaktype known to PABC, so roles on all entity types cover it; its id."""
     body = {"entityTypeId": omschrijving, "type": "ZAAKTYPE", "name": omschrijving}
-    return str(expect_status(pabc.post(pabc_url + ENTITY_TYPES, json=body), HTTPStatus.CREATED).json()["id"])
+    response = pabc.post(pabc_url + ENTITY_TYPES, json=body)
+    return str(expect_status(response, HTTPStatus.CREATED).json()["id"])
 
 
 def delete_entity_type(pabc: requests.Session, pabc_url: str, entity_type: str) -> None:
@@ -86,10 +87,11 @@ def delete_entity_type(pabc: requests.Session, pabc_url: str, entity_type: str) 
 
 def ensure_domain(pabc: requests.Session, pabc_url: str, name: str, entity_types: list[str]) -> str:
     """Return the domain of this name, created if missing, holding these entity types (PABC ids); its id."""
-    found = next((existing for existing in get_entries(pabc, pabc_url + DOMAINS) if existing.get("name") == name), None)
+    domains = get_entries(pabc, pabc_url + DOMAINS)
+    found = next((existing for existing in domains if existing.get("name") == name), None)
     if found is None:
-        body = {"name": name, "description": "podiumd-tests"}
-        found = cast("JsonObject", expect_status(pabc.post(pabc_url + DOMAINS, json=body), HTTPStatus.CREATED).json())
+        response = pabc.post(pabc_url + DOMAINS, json={"name": name, "description": "podiumd-tests"})
+        found = cast("JsonObject", expect_status(response, HTTPStatus.CREATED).json())
     domain = str(found["id"])
     for entity_type in set(entity_types) - set(strings(found.get("entityTypes"))):
         expect_status(pabc.post(f"{pabc_url}{DOMAINS}/{domain}/entity-types/{entity_type}"), HTTPStatus.NO_CONTENT)
@@ -133,9 +135,7 @@ def domain_mappings(pabc: requests.Session, pabc_url: str, role: str) -> int:
     return sum(1 for found in roles for mapping in entries(found.get("mappings")) if mapping.get("domain"))
 
 
-def delete_functional_roles_and_domain(
-    pabc: requests.Session, pabc_url: str, roles: Iterable[str], domain: str
-) -> None:
+def delete_roles_and_domain(pabc: requests.Session, pabc_url: str, roles: Iterable[str], domain: str) -> None:
     """Delete the functional roles (with their mappings) and then the domain of these names, where they exist."""
     for path, names in ((FUNCTIONAL_ROLES, set(roles)), (DOMAINS, {domain})):
         for found in get_entries(pabc, pabc_url + path):

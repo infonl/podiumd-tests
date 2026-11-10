@@ -9,7 +9,8 @@ def run(params):
     from django.db.models import Q  # noqa: WPS347  # Django's name
     from django_yubin.models import Message
 
-    mails = Message.objects.filter(Q(to_address__contains=params["text"]) | Q(_message_data__contains=params["text"]))
+    text = params["text"]
+    mails = Message.objects.filter(Q(to_address__contains=text) | Q(_message_data__contains=text))
     if params["action"] == "status":
         return {"status": [mail.get_status_display() for mail in mails]}
     if params["action"] == "retry":

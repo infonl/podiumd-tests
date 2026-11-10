@@ -65,14 +65,12 @@ class HostHeaderAdapter(HTTPAdapter):
         try:
             response = super().send(request, stream=stream, timeout=timeout, verify=verify, cert=cert, proxies=proxies)
         finally:
-            # Redirects copy this request; a stale Host header must not follow them to another host.
-            request.url = original
-            request.headers.pop("Host")
+            _restore(request, original)
         response.url = original
         return response
 
     @override
-    def build_connection_pool_key_attributes(
+    def build_connection_pool_key_attributes(  # noqa: WPS118  # requests' HTTPAdapter method
         self,
         request: requests.PreparedRequest,
         verify: bool | str,
@@ -90,6 +88,15 @@ class HostHeaderAdapter(HTTPAdapter):
         return host_params, pool_kwargs
 
 
+def _restore(request: requests.PreparedRequest, url: str) -> None:
+    """Put the request's URL back and drop its Host header.
+
+    Redirects copy this request; a stale Host header must not follow them to another host.
+    """
+    request.url = url
+    request.headers.pop("Host")
+
+
 class TimeoutSession(requests.Session):
     """A session with a default timeout, so no call can hang forever."""
 
@@ -105,7 +112,11 @@ class TimeoutSession(requests.Session):
 
 
 def make_session(
-    urls: Mapping[str, str], ingress_ip: str | None = None, *, cookies: bool = True, verify: str | None = None
+    urls: Mapping[str, str],
+    ingress_ip: str | None = None,
+    *,
+    cookies: bool = True,
+    verify: str | None = None,
 ) -> requests.Session:
     """Return a session for the profile URLs; with ingress_ip, profile hosts are reached through that IP.
 
