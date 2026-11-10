@@ -183,7 +183,7 @@ def cmd_env_init(args: argparse.Namespace) -> int:
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Run the preflight checks and print them."""
     env = Environment(_load(args))
-    checks = doctor.run_checks(env)
+    checks = doctor.run_checks(env, infra=True)
     print(doctor.checklist(checks))
     if args.json:
         report = json.dumps([asdict(check) for check in checks], indent=2)
@@ -239,10 +239,10 @@ def pytest_selection(
     return [*selection, *args.pytest_args]
 
 
-def _is_preflight_ok(env: Environment, args: argparse.Namespace) -> bool:
+def _is_preflight_ok(env: Environment, args: argparse.Namespace, *, infra: bool = False) -> bool:
     if args.skip_doctor:
         return True
-    checks = doctor.run_checks(env)
+    checks = doctor.run_checks(env, infra=infra)
     if doctor.has_failure(checks):
         print(doctor.checklist([check for check in checks if check.status == "fail"]), file=sys.stderr)
         return False
@@ -384,7 +384,7 @@ def _run_tier(args: argparse.Namespace) -> int:
         return EXIT_NOT_ALLOWED
     env = Environment(profile)
     with group("doctor"):
-        preflight = _is_preflight_ok(env, args)
+        preflight = _is_preflight_ok(env, args, infra=args.tier != "smoke")
     if not preflight:
         return EXIT_CONFIG
     info = results.RunInfo(

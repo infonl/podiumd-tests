@@ -9,6 +9,8 @@ import pytest
 import requests
 
 from podiumd_tests import doctor
+from podiumd_tests.bootstrap import runner
+from podiumd_tests.bootstrap.runner import Outcome
 from podiumd_tests.credentials import env_var_name
 from podiumd_tests.kube import KubeError
 
@@ -23,6 +25,12 @@ def workload(kind, name, wanted, ready):
 
 def statuses(checks):
     return {c.name: c.status for c in checks}
+
+
+@pytest.fixture(autouse=True)
+def installed_browser(fake_runner, tmp_path):
+    """playwright's dry run names a browser directory that exists, unless a test answers otherwise."""
+    fake_runner.answers["install --dry-run chromium"] = (0, f"Chrome\n  Install location:    {tmp_path}\n")
 
 
 def test_missing_context_fails_in_host_header_mode(profile_factory, fake_runner, env_factory):
@@ -303,3 +311,54 @@ def test_secrets_resolve_or_fail_with_the_cluster(profile_factory, fake_runner, 
     checks = {c.name: c for c in doctor.run_checks(env, which=which_all)}
     assert (checks["secret pw"].status, checks["secret pw"].detail) == ("ok", "k8s_secret")
     assert checks["secret gone"].status == "fail"
+
+
+def test_a_browser_build_missing_from_disk_fails_with_the_install_command(fake_runner, env_factory, tmp_path):
+    (tmp_path / "chromium-1254").mkdir()
+    shell = tmp_path / "chromium_headless_shell-1254"
+    fake_runner.answers["install --dry-run chromium"] = (
+        0,
+        f"Install location: {tmp_path / 'chromium-1254'}\nInstall location: {shell}\n",
+    )
+    checks = doctor.run_checks(env_factory(), which=which_all)
+    browser = next(c for c in checks if c.name == "browser")
+    assert (browser.status, browser.detail) == ("fail", "not installed: chromium_headless_shell-1254")
+    assert "-m playwright install chromium" in browser.hint
+
+
+def _healthy(fake_runner):
+    fake_runner.answers.update(
+        {
+            "config get-contexts": (0, "ctx\n"),
+            "get --raw /readyz": (0, "ok"),
+            "get lease podiumd-tests-lock": (0, ""),
+            "get namespace podiumd": (0, "namespace/podiumd"),
+            "get deployments": (0, json.dumps({"items": []})),
+            "get statefulsets": (0, json.dumps({"items": []})),
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    ("action", "status"), [("present", "ok"), ("missing", "fail"), ("skipped", "skip"), ("failed", "warn")]
+)
+def test_the_infra_check_reports_the_mock_server_step(
+    action, status, profile_factory, fake_runner, env_factory, monkeypatch
+):
+    _healthy(fake_runner)
+    monkeypatch.setattr(runner, "check", lambda _env, steps: [Outcome(steps[0].name, action, "why")])
+    profile = profile_factory(urls={}, allowed_tiers=["smoke", "core"])
+    checks = doctor.run_checks(env_factory(profile), which=which_all, infra=True)
+    check = next(c for c in checks if c.name == "bootstrap infra-mock-server")
+    assert check.status == status
+    if status == "fail":
+        assert check.hint == "run `podiumd-tests bootstrap --env test-env --step infra-mock-server`"
+    assert doctor.has_failure(checks) is (status == "fail")
+
+
+def test_the_infra_check_skips_a_smoke_only_environment_and_runs_only_when_asked(fake_runner, env_factory, monkeypatch):
+    _healthy(fake_runner)
+    monkeypatch.setattr(runner, "check", lambda _env, _steps: pytest.fail("a smoke-only environment is not checked"))
+    checks = doctor.run_checks(env_factory(), which=which_all, infra=True)
+    assert statuses(checks)["bootstrap infra-mock-server"] == "skip"
+    assert "bootstrap infra-mock-server" not in statuses(doctor.run_checks(env_factory(), which=which_all))

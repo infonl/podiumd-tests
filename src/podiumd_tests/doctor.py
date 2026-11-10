@@ -6,18 +6,23 @@ Any fail means exit code 2.
 
 from __future__ import annotations
 
+import re
+import shlex
 import shutil
 import socket
+import sys
 import threading
 import time
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Literal
 
 import requests
 
+from podiumd_tests.bootstrap import runner
 from podiumd_tests.cilium import CILIUM
 from podiumd_tests.cilium import HUBBLE
 from podiumd_tests.cilium import agent_pods
@@ -27,6 +32,9 @@ from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import context_names
 from podiumd_tests.kube import refresh_context
 from podiumd_tests.lock import lease_holder
+from podiumd_tests.mock_server import MockServer
+from podiumd_tests.process import ProcessError
+from podiumd_tests.process import run_checked
 from podiumd_tests.responses import get_root
 from podiumd_tests.responses import is_server_error
 from podiumd_tests.responses import url_host
@@ -48,6 +56,8 @@ DNS_TIMEOUT = 12.0
 HTTP_TIMEOUT = (5, 10)  # connect, read
 DOWN_HINT = "environment down or DNS removed? (scheduled shutdown)"
 SYMBOLS: dict[Status, str] = {"ok": "✔", "warn": "!", "fail": "✘", "skip": "-"}
+BROWSER_INSTALL = (sys.executable, "-m", "playwright", "install", "chromium")
+INSTALL_LOCATION = re.compile(r"Install location:\s+(\S+)")
 
 
 @dataclass(frozen=True)
@@ -288,10 +298,47 @@ def _cilium(env: Environment) -> Check:
     return Check("cilium", "ok", f"{len(agents)} agents ready; {hubble}")
 
 
+def _browser(env: Environment) -> Check:
+    """Check that the browser builds the installed playwright needs are on disk; a new playwright needs new ones."""
+    dry_run = [*BROWSER_INSTALL[:-1], "--dry-run", BROWSER_INSTALL[-1]]
+    hint = f"run `{shlex.join(BROWSER_INSTALL)}`"
+    try:
+        planned = run_checked(env.kube.runner, dry_run, 60)
+    except ProcessError as exc:
+        return Check("browser", "fail", str(exc), hint)
+    locations = [Path(found) for found in INSTALL_LOCATION.findall(planned)]
+    missing = [location.name for location in locations if not location.is_dir()]
+    if missing:
+        return Check("browser", "fail", f"not installed: {', '.join(missing)}", hint)
+    return Check("browser", "ok", ", ".join(location.name for location in locations))
+
+
+def _infra(env: Environment) -> Check:
+    """Check that the mock server runs this checkout's code; a change in infra/ needs its bootstrap step again."""
+    step = MockServer()
+    name = f"bootstrap {step.name}"
+    if env.profile.is_smoke_only:
+        return Check(name, "skip", f"{env.profile.name} is smoke-only: never bootstrapped")
+    outcome = runner.check(env, [step])[0]
+    if outcome.action == "present":
+        return Check(name, "ok", "current")
+    if outcome.action == "missing":
+        hint = f"run `podiumd-tests bootstrap --env {env.profile.name} --step {step.name}`"
+        return Check(name, "fail", "missing, or older than infra/ in this checkout", hint)
+    return Check(name, "skip" if outcome.action == "skipped" else "warn", outcome.detail)
+
+
 def run_checks(
-    env: Environment, which: Callable[[str], str | None] = shutil.which, resolve: Resolver = _getaddrinfo
+    env: Environment,
+    which: Callable[[str], str | None] = shutil.which,
+    resolve: Resolver = _getaddrinfo,
+    *,
+    infra: bool = False,
 ) -> list[Check]:
-    """Run all preflight checks; dependent checks are skipped after a failure."""
+    """Run all preflight checks; dependent checks are skipped after a failure.
+
+    infra: also check podiumd-tests' own infra (the mock server), which tiers beyond smoke need; bootstrap creates it.
+    """
     checks = [Check("profile", "ok", str(env.profile.path or env.profile.name))]
     checks.append(_kubectl(which))
     if any(check.status == "fail" and check.name == "tool kubectl" for check in checks):
@@ -307,8 +354,11 @@ def run_checks(
     checks += _secrets(env, cluster_ok=cluster_ok)
     # Without cluster access the capabilities come from the profile alone (and "cluster" is absent).
     checks.append(_capabilities(env))
+    checks.append(_browser(env))
     if cluster_ok:
         checks.append(_cilium(env))
+        if infra:
+            checks.append(_infra(env))
     return [Check(check.name, check.status, env.redactor.redact(check.detail), check.hint) for check in checks]
 
 

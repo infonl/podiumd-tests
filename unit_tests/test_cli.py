@@ -185,6 +185,7 @@ class Offline:
     present: frozenset[str] = frozenset()
     checks: list[Check] = field(default_factory=lambda: [Check("kubectl", "ok")])
     locks: list[str] = field(default_factory=list[str])
+    infra: list[bool] = field(default_factory=list[bool])
 
 
 @pytest.fixture
@@ -204,7 +205,12 @@ def offline(monkeypatch, env_factory):
 
     monkeypatch.setattr(cli, "Environment", environment)
     monkeypatch.setattr(cli, "held", held)
-    monkeypatch.setattr(doctor, "run_checks", lambda _env: state.checks)
+
+    def run_checks(_env, *, infra=False):
+        state.infra.append(infra)
+        return state.checks
+
+    monkeypatch.setattr(doctor, "run_checks", run_checks)
     return state
 
 
@@ -248,6 +254,7 @@ def test_doctor_writes_the_checks_as_json_and_fails_on_a_failed_check(envs, offl
         "hint": "az login",
     }
     assert "hint: az login" in capsys.readouterr().out
+    assert offline.infra == [True]
 
 
 @pytest.mark.usefixtures("offline")
@@ -260,6 +267,7 @@ def test_bootstrap_stops_on_a_failed_preflight_and_without_cluster_access(envs, 
     offline.checks = [Check("cluster", "fail", "no access")]
     assert cli.main([*envs(), "bootstrap", "--env", "e"]) == cli.EXIT_CONFIG
     assert "no access" in capsys.readouterr().err
+    assert offline.infra == [False]  # bootstrap creates the infra, so its preflight does not ask for it
     assert cli.main([*envs(), "unbootstrap", "--env", "e", "--skip-doctor"]) == cli.EXIT_CONFIG
     assert "bootstrap needs kubectl access to e: requires: cluster (kubectl failed)" in capsys.readouterr().err
     assert offline.locks == []
@@ -343,6 +351,7 @@ def test_run_stops_on_a_failed_preflight(envs, offline, tmp_path, monkeypatch):
     offline.checks = [Check("cluster", "fail")]
     monkeypatch.setattr(pytest, "main", lambda _args: pytest.fail("pytest must not run"))
     assert cli.main([*envs(), "run", "--env", "e", "--results-dir", str(tmp_path / "r")]) == cli.EXIT_CONFIG
+    assert offline.infra == [False]  # a smoke run needs no bootstrapped infra
 
 
 JUNIT = (
