@@ -14,13 +14,12 @@ REPORTS = (
 OPTIONS = {"report_component_problems": {"component_types": (), "check_html_usage": False}}
 
 
-def run(params):
+def run(_params):
     import contextlib
     import importlib
     import io
     import sys
 
-    del params
     sys.path.insert(0, "/app/bin")
     results = {}
     for name in REPORTS:

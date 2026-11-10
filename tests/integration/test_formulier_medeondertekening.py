@@ -56,6 +56,18 @@ TIMEOUT = 90
 OTP_SUBJECT = "Mede-ondertekentoegangscode"
 
 
+def _log_in_as_cosigner(page: Page, podiumd_env: Environment, otp_mail: Callable[[], str]) -> None:
+    """Log the co-signer in with DigiD and enter the one-time code that otp_mail returns."""
+    refuse_cookies(page)
+    page.locator('a[href*="/digid_oidc/start"]').click()
+    keycloak_login(page, COSIGNER.username, podiumd_env.credentials.get(COSIGNER.store_key))
+    otp = re.search(r"is:\s*(?:<[^>]+>\s*)*([0-9-]+)", otp_mail())
+    assert otp, "no code in the mail with the one-time code"
+    refuse_cookies(page)
+    page.get_by_label("Eénmalige toegangscode").fill(otp[1])
+    page.get_by_role("button", name="Bevestigen").click()
+
+
 @pytest.mark.tc("OF-011", "OF-012", "OF-043", "OF-044", "OF-045", "OF-046")
 @pytest.mark.scenario("""
     Given a form in Open Formulieren that needs a co-signer
@@ -96,17 +108,9 @@ def test_cosigned_form_is_registered(
     assert link, "no link in the co-sign request"
     assert not mailpit.get("search", {"query": f'to:"{registratie}"'}).get("messages"), "registered before co-signing"
     page.goto(html.unescape(link[1]))
-    refuse_cookies(page)
-    page.locator('a[href*="/digid_oidc/start"]').click()
-    keycloak_login(page, COSIGNER.username, podiumd_env.credentials.get(COSIGNER.store_key))
-    otp = re.search(
-        r"is:\s*(?:<[^>]+>\s*)*([0-9-]+)",
-        received(mailpit, registry, timeout=TIMEOUT, to=cosigner, subject=OTP_SUBJECT),
+    _log_in_as_cosigner(
+        page, podiumd_env, lambda: received(mailpit, registry, timeout=TIMEOUT, to=cosigner, subject=OTP_SUBJECT)
     )
-    assert otp, "no code in the mail with the one-time code"
-    refuse_cookies(page)
-    page.get_by_label("Eénmalige toegangscode").fill(otp[1])
-    page.get_by_role("button", name="Bevestigen").click()
     expect(page.get_by_text(omschrijving)).to_be_visible()
     page.get_by_role("checkbox").check()
     page.get_by_role("button", name=re.compile(r"Confirm|Bevestigen")).click()

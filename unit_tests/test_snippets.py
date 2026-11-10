@@ -24,7 +24,8 @@ def test_snippet_compiles_and_defines_run(name):
     tree = ast.parse(snippet_source(name))
     functions = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
     assert "run" in functions
-    assert [a.arg for a in functions["run"].args.args] == ["params"]
+    # One parameter, the params dict; _params in a snippet that reads none.
+    assert [a.arg for a in functions["run"].args.args] in (["params"], ["_params"])
 
 
 def test_snippet_source_puts_its_includes_first():

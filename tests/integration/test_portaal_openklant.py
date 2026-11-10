@@ -252,6 +252,46 @@ def test_mijn_vragen_shows_more_than_one_page_of_questions(
     wait_until(walk, timeout=60, description=f"every {tag} question in Mijn vragen")
 
 
+def _answer_in_ita(
+    page: Page,
+    podiumd_env: Environment,
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    question: JsonObject,
+    taak: JsonObject,
+    antwoord: str,
+) -> str:
+    """Answer the question in ITA as the KCC user; the uuid of the inwoner's partij."""
+    page.context.clear_cookies()
+    ita = kcc_login(page, podiumd_env, "ita")
+    # The answer goes on the question's kanaal: Mijn vragen shows answers of that kanaal only.
+    antwoord_body = klantcontact_body(
+        registry, kanaal=question["kanaal"], onderwerp=antwoord, inhoud=f"Antwoord {antwoord}"
+    )
+    partij = str(section(expanded(openklant, str(question["url"]), "hadBetrokkenen")[0], "wasPartij")["uuid"])
+    body = {
+        "interneTaakId": taak["uuid"],
+        "aanleidinggevendKlantcontactUuid": question["uuid"],
+        # ITA links the answer to this partij; Mijn vragen lists only klantcontacten of the inwoner's partij.
+        "partijUuid": partij,
+        # ITA numbers the klantcontact itself.
+        "klantcontactRequest": {k: v for k, v in antwoord_body.items() if k != "nummer"},
+    }
+    add_klantcontact(ita, podiumd_env.profile.urls["ita"], body)
+    return partij
+
+
+def _expect_answered(page: Page, podiumd_env: Environment, vraag: str, antwoord: str) -> None:
+    """Mijn vragen shows the question answered, and its page the answer."""
+    page.context.clear_cookies()
+    portal_login(page, podiumd_env, "digid", INWONER, MIJN_VRAGEN)
+    card = page.locator(".card", has_text=vraag)
+    # From 2.5.0 a question whose interne taken are all verwerkt shows Afgehandeld instead.
+    expect(card).to_contain_text(re.compile(r"Beantwoord|Afgehandeld"))
+    card.locator("a").first.click()
+    expect(page.locator("main")).to_contain_text(f"Antwoord {antwoord}")
+
+
 @pytest.mark.requires("ita", "objecten")
 @pytest.mark.source(
     "TA interaction/181-keten-ita-contactmoment-portaal-beantwoord.spec.ts",
@@ -288,32 +328,11 @@ def test_question_answered_in_ita_shows_as_answered(
     clean_up_logboek(objecten, registry, objecttype_url(podiumd_env, "Activiteitenlog"), str(taak["uuid"]))
     antwoord = registry.tagged("ita-antwoord")
     clean_up_klantcontacten(openklant, registry, antwoord)
-    page.context.clear_cookies()
-    ita = kcc_login(page, podiumd_env, "ita")
-    # The answer goes on the question's kanaal: Mijn vragen shows answers of that kanaal only.
-    antwoord_body = klantcontact_body(
-        registry, kanaal=question["kanaal"], onderwerp=antwoord, inhoud=f"Antwoord {antwoord}"
-    )
-    partij = str(section(expanded(openklant, str(question["url"]), "hadBetrokkenen")[0], "wasPartij")["uuid"])
-    body = {
-        "interneTaakId": taak["uuid"],
-        "aanleidinggevendKlantcontactUuid": question["uuid"],
-        # ITA links the answer to this partij; Mijn vragen lists only klantcontacten of the inwoner's partij.
-        "partijUuid": partij,
-        # ITA numbers the klantcontact itself.
-        "klantcontactRequest": {k: v for k, v in antwoord_body.items() if k != "nummer"},
-    }
-    add_klantcontact(ita, podiumd_env.profile.urls["ita"], body)
+    partij = _answer_in_ita(page, podiumd_env, openklant, registry, question, taak, antwoord)
     # ITA has no call to close the taak; KCC closes it as it does in ITA's UI.
     close_internetaak(openklant, taak)
     forget_questions(podiumd_env, partij)
-    page.context.clear_cookies()
-    portal_login(page, podiumd_env, "digid", INWONER, MIJN_VRAGEN)
-    card = page.locator(".card", has_text=vraag)
-    # From 2.5.0 a question whose interne taken are all verwerkt shows Afgehandeld instead.
-    expect(card).to_contain_text(re.compile(r"Beantwoord|Afgehandeld"))
-    card.locator("a").first.click()
-    expect(page.locator("main")).to_contain_text(f"Antwoord {antwoord}")
+    _expect_answered(page, podiumd_env, vraag, antwoord)
 
 
 @pytest.mark.tc("ZAC-067")

@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
     from playwright.sync_api import Page
 
+    from podiumd_tests.bootstrap.keycloak import KeycloakUser
     from podiumd_tests.environment import Environment
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -45,6 +46,58 @@ CONTACTS = "/mijn-profiel/contacts/"
 SAMENWERKEN = "/samenwerken/"
 
 
+def _prepare(
+    page: Page, podiumd_env: Environment, registry: ResourceRegistry, method: str, identity: KeycloakUser
+) -> None:
+    """Drop the begeleider's plans, contacts and mails, also after the test, and give the identity an account."""
+    reset_begeleider(podiumd_env)
+    registry.add("plans and contacts of the begeleider", lambda: reset_begeleider(podiumd_env))
+    # Open Inwoner mails both sides about the contact request.
+    forget_mails(podiumd_env, registry, f'to:"{OI_BEGELEIDER.params["email"]}"')
+    forget_mails(podiumd_env, registry, f'to:"{user_email(identity.username)}" subject:"contactpersoon"')
+    # The first login makes the identity's account, which the begeleider finds by its e-mail address.
+    portal_login(page, podiumd_env, method, identity, CONTACTS)
+    page.context.clear_cookies()
+
+
+def _add_contact(page: Page, podiumd_env: Environment, who: str, identity: KeycloakUser) -> None:
+    """The begeleider adds the identity's account as a contact, found by its e-mail address."""
+    begeleider_login(page, podiumd_env)
+    page.goto(f"{podiumd_env.profile.urls['openinwoner']}{CONTACTS}create/")
+    page.locator('input[name="first_name"]').fill("PodiumD")
+    page.locator('input[name="last_name"]').fill(who)
+    page.locator('input[name="email"]').fill(user_email(identity.username))
+    # Clearing the cookies before the POST's answer could log out before the form is saved.
+    with page.expect_navigation():
+        page.locator('form:has(input[name="email"]) [type="submit"]').click()
+    page.context.clear_cookies()
+
+
+def _approve_contact(page: Page, podiumd_env: Environment, method: str, identity: KeycloakUser) -> None:
+    """The identity approves the begeleider's contact request."""
+    portal_login(page, podiumd_env, method, identity, CONTACTS)
+    with page.expect_navigation():
+        page.locator('button[name="contact_approve"]').first.click()
+    page.context.clear_cookies()
+
+
+def _make_plan(page: Page, podiumd_env: Environment, title: str) -> None:
+    """The begeleider makes a samenwerking with its only contact."""
+    begeleider_login(page, podiumd_env)
+    page.goto(f"{podiumd_env.profile.urls['openinwoner']}{SAMENWERKEN}create/")
+    page.locator('input[name="title"]').fill(title)
+    page.locator('[name="goal"]').fill("Samen een doel halen")
+    # A read-only flatpickr field: set the date through flatpickr, which formats it for the form.
+    end_date = (datetime.now(tz=UTC) + timedelta(days=30)).date().isoformat()
+    page.locator('input[name="end_date"]').evaluate("(field, date) => field._flatpickr.setDate(date, true)", end_date)
+    # The begeleider's only contact, after the reset. The checkbox is hidden behind its label,
+    # which is empty for a company: its account has no name.
+    page.locator('input[name="plan_contacts"]').first.dispatch_event("click")
+    with page.expect_navigation():
+        page.locator('form:has(input[name="title"]) [type="submit"]').click()
+    page.context.clear_cookies()
+
+
 @pytest.mark.tc("OI-089", "OI-090")
 @pytest.mark.parametrize("who", sorted(LOGINS))
 @pytest.mark.scenario("""
@@ -60,45 +113,10 @@ def test_begeleider_starts_a_samenwerking(
     """A plan the begeleider makes with the identity as contact shows in the identity's Samenwerken."""
     identity, method = LOGINS[who]
     need_bootstrap(identity.name, OI_BEGELEIDER.name, "openinwoner-oidc-mock", "openinwoner-cms-pages")
-    portal = podiumd_env.profile.urls["openinwoner"]
-    reset_begeleider(podiumd_env)
-    registry.add("plans and contacts of the begeleider", lambda: reset_begeleider(podiumd_env))
-    # Open Inwoner mails both sides about the contact request.
-    forget_mails(podiumd_env, registry, f'to:"{OI_BEGELEIDER.params["email"]}"')
-    forget_mails(podiumd_env, registry, f'to:"{user_email(identity.username)}" subject:"contactpersoon"')
-    # The first login makes the identity's account, which the begeleider finds by its e-mail address.
-    portal_login(page, podiumd_env, method, identity, CONTACTS)
-    page.context.clear_cookies()
-
-    begeleider_login(page, podiumd_env)
-    page.goto(f"{portal}{CONTACTS}create/")
-    page.locator('input[name="first_name"]').fill("PodiumD")
-    page.locator('input[name="last_name"]').fill(who)
-    page.locator('input[name="email"]').fill(user_email(identity.username))
-    # Clearing the cookies before the POST's answer could log out before the form is saved.
-    with page.expect_navigation():
-        page.locator('form:has(input[name="email"]) [type="submit"]').click()
-    page.context.clear_cookies()
-
-    portal_login(page, podiumd_env, method, identity, CONTACTS)
-    with page.expect_navigation():
-        page.locator('button[name="contact_approve"]').first.click()
-    page.context.clear_cookies()
-
+    _prepare(page, podiumd_env, registry, method, identity)
+    _add_contact(page, podiumd_env, who, identity)
+    _approve_contact(page, podiumd_env, method, identity)
     title = registry.tagged("samenwerking")
-    begeleider_login(page, podiumd_env)
-    page.goto(f"{portal}{SAMENWERKEN}create/")
-    page.locator('input[name="title"]').fill(title)
-    page.locator('[name="goal"]').fill("Samen een doel halen")
-    # A read-only flatpickr field: set the date through flatpickr, which formats it for the form.
-    end_date = (datetime.now(tz=UTC) + timedelta(days=30)).date().isoformat()
-    page.locator('input[name="end_date"]').evaluate("(field, date) => field._flatpickr.setDate(date, true)", end_date)
-    # The begeleider's only contact, after the reset. The checkbox is hidden behind its label,
-    # which is empty for a company: its account has no name.
-    page.locator('input[name="plan_contacts"]').first.dispatch_event("click")
-    with page.expect_navigation():
-        page.locator('form:has(input[name="title"]) [type="submit"]').click()
-    page.context.clear_cookies()
-
+    _make_plan(page, podiumd_env, title)
     portal_login(page, podiumd_env, method, identity, SAMENWERKEN)
     expect(page.locator("main")).to_contain_text(title)

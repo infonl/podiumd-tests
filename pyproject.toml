@@ -221,9 +221,7 @@ ignore = [
     # done by ruff or pylint
     "WPS210",  # too many locals: PLR0914
     "WPS211",  # too many arguments: PLR0913, PLR0917
-    "WPS213",  # too many expressions: PLR0915
     "WPS214",  # too many methods: PLR0904
-    "WPS229",  # too long try body: PLW0717
     "WPS231",  # cognitive complexity: C901, PLR0912
     "WPS421",  # print: T201, off on purpose (the CLI prints)
     "WPS432",  # magic number: PLR2004 (comparisons), elsewhere a named constant is not clearer
@@ -235,14 +233,9 @@ ignore = [
     "WPS204",  # overused expression: flags raise X(msg), the pattern ruff EM asks for
     "WPS226",  # string constant overuse: json keys are data
     "WPS237",  # complex f-string: a subscript or call in an f-string reads fine
-    "WPS238",  # too many raises: a validating function raises per check
-    "WPS332",  # walrus outside a comprehension: used on purpose (if message := check(...))
     "WPS407",  # mutable module constant: freezing nested dicts breaks json
-    "WPS420",  # del, pass, global: normal python
     "WPS430",  # nested function: closures on purpose (callbacks, retries)
-    "WPS504",  # negated condition: flags x if y is not None else None, the natural order
     "WPS529",  # implicit .get(): flags a dispatch on which keys a dict has; SIM401 catches the if/else default case
-    "WPS602",  # staticmethod: a method that needs no instance
 ]
 # flake8 applies only the longest pattern that matches a file (* matches / too).
 per-file-ignores = [

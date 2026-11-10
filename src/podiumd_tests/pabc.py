@@ -106,7 +106,8 @@ def ensure_functional_role(  # noqa: PLR0913, PLR0917  # one mapping set
 ) -> None:
     """Ensure the functional role of this name, mapped to these application roles in the domain."""
     known = application_roles(pabc, pabc_url, application)
-    if missing := set(roles) - {str(role.get("name")) for role in known}:
+    missing = set(roles) - {str(role.get("name")) for role in known}
+    if missing:
         msg = f"PABC has no application role {', '.join(sorted(missing))} of {application}: add it to PABC's dataset"
         raise LookupError(msg)
     found = next(

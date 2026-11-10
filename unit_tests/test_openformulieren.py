@@ -73,8 +73,7 @@ def test_submit_waits_out_the_completion_throttle(fake_http, env, fake_runner, m
     class Throttled:
         """fake_http's answer table; _complete answers 429 first."""
 
-        @staticmethod
-        def get(key, default=None):
+        def get(self, key, default=None):  # noqa: PLR6301  # fakes the answer table's get
             return next(completions) if key == "POST /api/v2/submissions/s1/_complete" else table.get(key, default)
 
     sent = fake_http(Throttled())

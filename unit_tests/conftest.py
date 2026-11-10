@@ -65,7 +65,7 @@ def make_response(status=200, body=b"", url="https://app.example.test/", json_bo
     response = requests.Response()
     response.status_code = status
     response.url = url
-    response.raw = io.BytesIO(json.dumps(json_body).encode() if json_body is not None else body)
+    response.raw = io.BytesIO(body if json_body is None else json.dumps(json_body).encode())
     response.encoding = "utf-8"
     return response
 
@@ -231,8 +231,7 @@ def fake_page():
 class FakeCredentials:
     """Answers every secret key with "pw-<key>"."""
 
-    @staticmethod
-    def get(key):
+    def get(self, key):  # noqa: PLR6301  # fakes SecretResolver.get
         return f"pw-{key}"
 
 

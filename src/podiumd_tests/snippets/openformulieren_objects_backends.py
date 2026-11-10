@@ -5,11 +5,10 @@ configured objecttype, catalogus and types through the live APIs.
 """
 
 
-def run(params):
+def run(_params):
     from openforms.forms.models import FormRegistrationBackend
     from openforms.registrations.contrib.objects_api.config import ObjectsAPIOptionsSerializer
 
-    del params  # run() takes params like every snippet; this one has none
     backends = FormRegistrationBackend.objects.filter(
         backend="objects_api", form__active=True, form___is_deleted=False
     ).select_related("form")

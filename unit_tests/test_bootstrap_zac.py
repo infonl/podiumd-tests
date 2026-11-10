@@ -30,7 +30,7 @@ def ctx(env_factory, profile_factory, fake_runner, monkeypatch):
         settings = {"productaanvraag_zaaktype": "zt-1", "zac_email_confirmation": allowed}
         environ = {env_var_name(ADMIN.store_key): "pw"}
         env = env_factory(profile_factory(urls={"zac": ZAC}, settings=settings), environ)
-        secret = {"data": {STORE_KEY: _b64(json.dumps(record))}} if record is not None else {}
+        secret = {} if record is None else {"data": {STORE_KEY: _b64(json.dumps(record))}}
         fake_runner.answers["get secret podiumd-tests-credentials"] = (0, json.dumps({"kind": "Secret", **secret}))
         monkeypatch.setattr(zac_step, "zac_session", lambda *_: requests.Session())
         return Context(env, CredentialStore(env.kube))

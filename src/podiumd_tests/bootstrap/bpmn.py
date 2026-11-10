@@ -89,7 +89,7 @@ class ZacBpmnProcess:
     def is_present(self, ctx: Context, /) -> bool:
         """Return whether the process is deployed, linked to the BPMN test zaaktype, and PABC maps the roles."""
         try:
-            zaaktype = uuid_of(bpmn_zaaktype(self._openzaak(ctx))["url"])
+            zaaktype = uuid_of(bpmn_zaaktype(_openzaak(ctx))["url"])
         except LookupError:
             return False
         http, zac = self._zac(ctx)
@@ -110,7 +110,7 @@ class ZacBpmnProcess:
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Map the functional roles in PABC, deploy the process and its forms, and link it to the zaaktype."""
-        zaaktype = bpmn_zaaktype(self._openzaak(ctx))
+        zaaktype = bpmn_zaaktype(_openzaak(ctx))
         self._map_roles(ctx, str(zaaktype["omschrijving"]))
         http, zac = self._zac(ctx)
         process = FILES / f"{PROCESS_KEY}.bpmn"
@@ -159,10 +159,6 @@ class ZacBpmnProcess:
         password = ctx.env.credentials.get(self.admin.store_key)
         return zac_session(ctx.env, self.admin.username, password), ctx.env.profile.urls["zac"]
 
-    @staticmethod
-    def _openzaak(ctx: Context) -> ApiClient:
-        return openzaak_client(ctx.env, ZGW_CLIENT_ID, ZGW_STORE_KEY, PREFIX)
-
     def _pabc(self, ctx: Context) -> tuple[requests.Session, str]:
         password = ctx.env.credentials.get(self.admin.store_key)
         return admin_session(ctx.env, self.admin.username, password), ctx.env.profile.urls["pabc"]
@@ -177,5 +173,10 @@ class ZacBpmnProcess:
         wanted = mappable_roles(pabc, pabc_url)
         for name, roles in wanted.items():
             ensure_functional_role(pabc, pabc_url, name, ZAC_APPLICATION, roles, domain)
-        if left_out := sorted(set(ZAC_FUNCTIONAL_ROLES) - set(wanted)):
+        left_out = sorted(set(ZAC_FUNCTIONAL_ROLES) - set(wanted))
+        if left_out:
             ctx.notes.append(f"not mapped, PABC lacks their application roles: {', '.join(left_out)}")
+
+
+def _openzaak(ctx: Context) -> ApiClient:
+    return openzaak_client(ctx.env, ZGW_CLIENT_ID, ZGW_STORE_KEY, PREFIX)

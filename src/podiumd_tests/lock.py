@@ -193,9 +193,15 @@ def held(env: Environment, what: str) -> Generator[None]:
     if lock is not None:
         _take_file(lock, who)
     try:
-        if kube is not None:
-            take_lease(kube, who, int(settings.get("lock_lease_seconds", LEASE_SECONDS)))
-        with _interrupt_on_sigterm(lambda: _release(kube, lock, who)):
+        with _leased(kube, who, settings), _interrupt_on_sigterm(lambda: _release(kube, lock, who)):
             yield
     finally:
         _release(kube, lock, who)
+
+
+@contextmanager
+def _leased(kube: Kube | None, who: str, settings: dict[str, str]) -> Generator[None]:
+    """Hold the lease while the block runs, with cluster access; _release returns it."""
+    if kube is not None:
+        take_lease(kube, who, int(settings.get("lock_lease_seconds", LEASE_SECONDS)))
+    yield

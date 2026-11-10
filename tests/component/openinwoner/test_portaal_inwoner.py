@@ -254,6 +254,15 @@ def test_disabled_account_cannot_log_in(
     assert "/accounts/login/" in page.url
 
 
+def _save_profile_email(page: Page, podiumd_env: Environment, adres: str) -> None:
+    """Log the second inwoner in and save this e-mail address in the profile."""
+    page.context.clear_cookies()
+    portal_login(page, podiumd_env, "digid", INWONER2, "/mijn-profiel/edit/")
+    page.locator('input[name="email_addresses-0-value"]').first.fill(adres)
+    page.get_by_role("button", name="Sla wijzigingen op").first.click()
+    page.wait_for_url(lambda url: "/mijn-profiel/edit/" not in url)
+
+
 @pytest.mark.tc("OI-023")
 @pytest.mark.core
 @pytest.mark.requires("openklant")
@@ -288,11 +297,7 @@ def test_profile_email_reaches_open_klant(
         f"digitaal adres {adres}",
         lambda: [openklant.delete(str(a["url"])) for a in openklant.list("digitaleadressen", {"adres": adres})],
     )
-    page.context.clear_cookies()
-    portal_login(page, podiumd_env, "digid", INWONER2, "/mijn-profiel/edit/")
-    page.locator('input[name="email_addresses-0-value"]').first.fill(adres)
-    page.get_by_role("button", name="Sla wijzigingen op").first.click()
-    page.wait_for_url(lambda url: "/mijn-profiel/edit/" not in url)
+    _save_profile_email(page, podiumd_env, adres)
 
     def stored() -> bool:
         return any(

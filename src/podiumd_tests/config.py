@@ -260,6 +260,18 @@ def _wiring(value: object, estate: str, where: str) -> bool:
     return wiring
 
 
+def _parse_tiers(value: object, where: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or not value:
+        msg = f"{where}: allowed_tiers must be a non-empty list"
+        raise ProfileError(msg)
+    tiers = tuple(str(tier) for tier in cast("list[object]", value))
+    unknown = [tier for tier in tiers if tier not in TIERS]
+    if unknown:
+        msg = f"{where}.allowed_tiers: unknown tier(s) {', '.join(unknown)}"
+        raise ProfileError(msg)
+    return tiers
+
+
 def parse_profile(raw: object, *, name: str, path: Path | None = None) -> Profile:
     """Validate raw YAML data and turn it into a Profile."""
     where = str(path or name)
@@ -275,15 +287,7 @@ def parse_profile(raw: object, *, name: str, path: Path | None = None) -> Profil
         monitoring_namespace=_optional_text(kube_map, "monitoring_namespace", f"{where}.kube"),
         aks=_parse_aks(kube_map.get("aks"), f"{where}.kube.aks"),
     )
-    tiers_raw = data.get("allowed_tiers")
-    if not isinstance(tiers_raw, list) or not tiers_raw:
-        msg = f"{where}: allowed_tiers must be a non-empty list"
-        raise ProfileError(msg)
-    tiers = tuple(str(tier) for tier in cast("list[object]", tiers_raw))
-    unknown = [tier for tier in tiers if tier not in TIERS]
-    if unknown:
-        msg = f"{where}.allowed_tiers: unknown tier(s) {', '.join(unknown)}"
-        raise ProfileError(msg)
+    tiers = _parse_tiers(data.get("allowed_tiers"), where)
     secrets = _parse_secrets(data.get("secrets") or {}, f"{where}.secrets")
     if estate != "minikube" and any(secret.source == "dev_default" for secret in secrets.values()):
         msg = f"{where}.secrets: dev_default is only allowed for minikube"

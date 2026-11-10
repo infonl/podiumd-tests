@@ -58,7 +58,7 @@ class Kube:
         """Full kubectl argv for the given arguments."""
         if all_namespaces:
             return ["kubectl", "--context", self.context, *args, "--all-namespaces"]
-        ns = namespace if namespace is not None else self.namespace
+        ns = self.namespace if namespace is None else namespace
         return ["kubectl", "--context", self.context, "--namespace", ns, *args]
 
     def run(
@@ -194,16 +194,19 @@ def forwarded_port(command: Sequence[str], process: subprocess.Popen[str], timeo
     threading.Thread(target=drain, daemon=True).start()
     seen: list[str] = []
     deadline = time.monotonic() + timeout
-    while (remaining := deadline - time.monotonic()) > 0:
+    remaining = deadline - time.monotonic()
+    while remaining > 0:
         try:
             line = lines.get(timeout=remaining)
         except queue.Empty:
             break
         if not line:
             raise KubeError(command, "".join(seen) or "exited")
-        if match := FORWARDING.match(line.strip()):
+        match = FORWARDING.match(line.strip())
+        if match:
             return int(match.group(1))
         seen.append(line)
+        remaining = deadline - time.monotonic()
     raise KubeError(command, f"no forwarded port within {timeout}s")
 
 

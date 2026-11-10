@@ -23,7 +23,7 @@ def run(params):
     klanten = KlantenSysteemConfig.get_solo()
     group = ZGWApiGroupConfig.objects.filter(name=params.get("group")).first()
     if params["action"] == "status":
-        service = config.service if config is not None else None
+        service = None if config is None else config.service
         linked = service is not None and service.slug == SLUG and service.secret == params.get("token")
         backend = group is None or group.klant_backend == BACKEND
         klanten_set = all(getattr(klanten, field) == value for field, value in KLANTEN.items())

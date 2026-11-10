@@ -65,7 +65,7 @@ def test_invalid_zaak_names_the_field(
         "omschrijving": registry.tagged("zaak"),
     }
     if value is None:
-        del body[field]
+        body.pop(field)
     else:
         body[field] = value
     response = openzaak.request("POST", f"{ZAKEN}/zaken", 400, json=body)

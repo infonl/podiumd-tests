@@ -335,10 +335,8 @@ def test_definitief_document_is_not_updated(
         _post(http, vrij, geef_zaakdocument_bewerken(now, document), "geefZaakdocumentbewerken_Di02")
     )
     assert checked_out
+    update = update_zaakdocument(now, zaak.identificatie, document, checked_out, titel="gewijzigd door podiumd-tests")
     try:
-        update = update_zaakdocument(
-            now, zaak.identificatie, document, checked_out, titel="gewijzigd door podiumd-tests"
-        )
         assert is_fault(_post(http, vrij, update, "updateZaakdocument_Di02"))
     finally:
         _post(http, vrij, cancel_checkout(now, document, checked_out), "cancelCheckout_Di02")

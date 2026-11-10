@@ -147,10 +147,7 @@ class Environment:
         Open Object's Keycloak client accepts only objecten's host as redirect URI.
         """
         try:
-            mine = self.deployment_for(component)
-            return next(
-                (app for app in DJANGO_APPS if app in self.profile.urls and self.deployment_for(app) == mine), component
-            )
+            return self._sharing_deployment(component)
         except KubeError:  # no cluster, or an app without deployment: the profile URL decides
             return component
 
@@ -162,3 +159,10 @@ class Environment:
         except KubeError:
             return detect(self.profile, None)
         return detect(self.profile, names, detect_network(self.kube))
+
+    def _sharing_deployment(self, component: str) -> str:
+        """Return the first Django app of the profile that runs on the component's deployment, else the component."""
+        mine = self.deployment_for(component)
+        return next(
+            (app for app in DJANGO_APPS if app in self.profile.urls and self.deployment_for(app) == mine), component
+        )

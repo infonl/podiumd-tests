@@ -96,7 +96,7 @@ def test_present_needs_the_process_a_link_and_the_pabc_roles(monkeypatch, keys, 
     http = SimpleNamespace(get=lambda url: FakeResponse(status_code=200, body=answers[url.removeprefix("https://zac")]))
     step = ZacBpmnProcess(ADMIN)
     monkeypatch.setattr(ZacBpmnProcess, "_zac", lambda _self, _ctx: (http, "https://zac"))
-    monkeypatch.setattr(ZacBpmnProcess, "_openzaak", staticmethod(lambda _ctx: FakeOpenZaak([ZAAKTYPE])))
+    monkeypatch.setattr(bpmn, "_openzaak", lambda _ctx: FakeOpenZaak([ZAAKTYPE]))
     monkeypatch.setattr(ZacBpmnProcess, "_pabc", lambda _self, _ctx: (None, "https://pabc"))
     monkeypatch.setattr(bpmn, "application_roles", lambda _pabc, _url, _app: [{"name": n} for n in known])
     monkeypatch.setattr(bpmn, "domain_mappings", mappings)
@@ -104,5 +104,5 @@ def test_present_needs_the_process_a_link_and_the_pabc_roles(monkeypatch, keys, 
 
 
 def test_present_is_false_without_the_zaaktype(monkeypatch):
-    monkeypatch.setattr(ZacBpmnProcess, "_openzaak", staticmethod(lambda _ctx: FakeOpenZaak([])))
+    monkeypatch.setattr(bpmn, "_openzaak", lambda _ctx: FakeOpenZaak([]))
     assert ZacBpmnProcess(ADMIN).is_present(None) is False  # pyright: ignore[reportArgumentType]

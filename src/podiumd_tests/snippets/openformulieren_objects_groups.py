@@ -4,12 +4,11 @@ Returns [{group, errors}]; errors is [] when the group lists objects and objectt
 """
 
 
-def run(params):
+def run(_params):
     from openforms.contrib.objects_api.clients import get_objects_client
     from openforms.contrib.objects_api.clients import get_objecttypes_client
     from openforms.contrib.objects_api.models import ObjectsAPIGroupConfig
 
-    del params  # run() takes params like every snippet; this one has none
     found = []
     for group in ObjectsAPIGroupConfig.objects.order_by("identifier"):
         errors = [

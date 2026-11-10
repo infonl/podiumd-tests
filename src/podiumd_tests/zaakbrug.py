@@ -115,7 +115,7 @@ def genereer_document_identificatie(now: datetime, gemeentecode: str = GEMEENTEC
 def document_identificatie(answer: str) -> str | None:
     """Return the document identificatie in a genereerDocumentIdentificatie answer, or None."""
     found = fromstring(answer).find(f".//{{{ZKN}}}document/{{{ZKN}}}identificatie")  # noqa: S314  # nosec B314
-    return found.text if found is not None else None
+    return None if found is None else found.text
 
 
 def creeer_zaak(  # noqa: PLR0913  # one message
@@ -305,7 +305,7 @@ def cancel_checkout(now: datetime, document: str, checkout: str, gemeentecode: s
 def checked_out_id(answer: str) -> str | None:
     """Return the checkedOutId in a geefZaakdocumentbewerken answer, or None."""
     found = fromstring(answer).find(f".//{{{ZKN}}}checkedOutId")  # noqa: S314  # nosec B314  # ZaakBrug's own answer
-    return found.text if found is not None else None
+    return None if found is None else found.text
 
 
 def is_fault(answer: str) -> bool:

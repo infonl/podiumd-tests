@@ -67,7 +67,7 @@ class HostHeaderAdapter(HTTPAdapter):
         finally:
             # Redirects copy this request; a stale Host header must not follow them to another host.
             request.url = original
-            del request.headers["Host"]
+            request.headers.pop("Host")
         response.url = original
         return response
 

@@ -728,6 +728,19 @@ def test_reviewer_forwards_without_the_coreviewer(
     assert status(oab, api, lijst) == "internally_reviewed"
 
 
+def _compose_list(page: Page, identificatie: str, naam: str) -> None:
+    """Select the zaak, name the new list, assign the test reviewer and submit the dialog."""
+    page.get_by_role("row", name=identificatie).get_by_role("checkbox").check()
+    page.get_by_role("button", name="Vernietigingslijst opstellen").last.click()
+    dialog = page.get_by_role("dialog")
+    dialog.get_by_label("Naam").fill(naam)
+    dialog.get_by_role("combobox", name="Reviewer").click()
+    # The options are a listbox without option roles.
+    dialog.get_by_role("listbox").get_by_text(f"{PREFIX}-reviewer", exact=True).click()
+    dialog.get_by_label("Toelichting").fill("podiumd-tests")
+    dialog.get_by_role("button", name="Vernietigingslijst opstellen").click()
+
+
 @pytest.mark.ui
 @pytest.mark.tc("ABC-002")
 @REG_143
@@ -755,15 +768,7 @@ def test_record_manager_creates_a_list_in_the_ui(
     page.goto(
         f"{podiumd_env.profile.urls['openarchiefbeheer']}/destruction-lists/create?identificatie__icontains={identificatie}"
     )
-    page.get_by_role("row", name=identificatie).get_by_role("checkbox").check()
-    page.get_by_role("button", name="Vernietigingslijst opstellen").last.click()
-    dialog = page.get_by_role("dialog")
-    dialog.get_by_label("Naam").fill(naam)
-    dialog.get_by_role("combobox", name="Reviewer").click()
-    # The options are a listbox without option roles.
-    dialog.get_by_role("listbox").get_by_text(f"{PREFIX}-reviewer", exact=True).click()
-    dialog.get_by_label("Toelichting").fill("podiumd-tests")
-    dialog.get_by_role("button", name="Vernietigingslijst opstellen").click()
+    _compose_list(page, identificatie, naam)
     expect(page.get_by_text(naam)).to_be_visible()
     lijsten = rows(oab("recordmanager").get(f"{api}/destruction-lists/", params={"name": naam}))
     lijst = next(str(found["uuid"]) for found in lijsten if found.get("name") == naam)

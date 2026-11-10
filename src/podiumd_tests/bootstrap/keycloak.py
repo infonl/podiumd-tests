@@ -147,14 +147,14 @@ class KeycloakRoles:
         admin = for_environment(ctx.env)
         missing = self._missing(admin)
         for entry in missing:
-            admin.create_role(*self._client_uuid(admin, entry), CREATED_BY)
+            admin.create_role(*_client_uuid(admin, entry), CREATED_BY)
         return {self.store_key: json.dumps(self._record(ctx) + missing)}
 
     def remove(self, ctx: Context, /) -> tuple[str, ...]:
         """Delete the recorded roles that still carry CREATED_BY."""
         admin = for_environment(ctx.env)
         for entry in self._record(ctx):
-            name, client_uuid = self._client_uuid(admin, entry)
+            name, client_uuid = _client_uuid(admin, entry)
             if client_uuid is None and ":" in entry:
                 continue
             role = admin.role(name, client_uuid)
@@ -172,12 +172,12 @@ class KeycloakRoles:
                 missing.append(f"{client_id}:{role}")
         return missing
 
-    @staticmethod
-    def _client_uuid(admin: KeycloakAdmin, entry: str) -> tuple[str, str | None]:
-        """(role, client uuid) of a record entry; the uuid is None for a realm role."""
-        client_id, _, role = entry.rpartition(":")
-        client = admin.client(client_id) if client_id else None
-        return role, str(client["id"]) if client else None
-
     def _record(self, ctx: Context) -> list[str]:
         return cast("list[str]", json.loads(ctx.store.read().get(self.store_key, "[]")))
+
+
+def _client_uuid(admin: KeycloakAdmin, entry: str) -> tuple[str, str | None]:
+    """(role, client uuid) of a record entry; the uuid is None for a realm role."""
+    client_id, _, role = entry.rpartition(":")
+    client = admin.client(client_id) if client_id else None
+    return role, str(client["id"]) if client else None

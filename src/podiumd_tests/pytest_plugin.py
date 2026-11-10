@@ -501,7 +501,8 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         if item.get_closest_marker("destructive"):
             item.add_marker(pytest.mark.xdist_group("destructive"))
         item.user_properties += [("source", source) for source in sources(item)]
-        if text := scenarios.scenario(item):
+        text = scenarios.scenario(item)
+        if text:
             item.user_properties.append(("scenario", text))
 
 
@@ -514,7 +515,8 @@ def pytest_runtest_makereport(
     if call.when == "call" and report.passed and hasattr(report, "wasxfail"):
         # junit writes the properties of the teardown report, which copies the item's.
         item.user_properties.append(("xpass", str(report.wasxfail)))
-    if call.when == "call" and (text := scenarios.scenario(item)):
+    text = scenarios.scenario(item) if call.when == "call" else ""
+    if text:
         # pytest-html shows a report's extras (its extras.html() shape) in the row's detail.
         extra = {
             "name": None,

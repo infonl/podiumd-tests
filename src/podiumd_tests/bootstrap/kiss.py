@@ -39,24 +39,24 @@ class KissKanalen:
     requires: tuple[str, ...] = ("kiss", "keycloak")
     wiring: bool = True
 
-    def not_allowed(self, ctx: Context) -> str | None:
+    def not_allowed(self, ctx: Context) -> str | None:  # noqa: PLR6301  # a Step method
         """Why the profile does not allow the change, or None."""
-        return None if self._allowed(ctx) else f"profile setting kiss_kanalen is off for {ctx.env.profile.name}"
+        return None if _allowed(ctx) else f"profile setting kiss_kanalen is off for {ctx.env.profile.name}"
 
     def is_present(self, ctx: Context, /) -> bool:
         """Not allowed (nothing to do), or every kanaal of KANALEN exists."""
-        if not self._allowed(ctx):
+        if not _allowed(ctx):
             return True
-        return set(KANALEN) <= set(self._current(*self._session(ctx)))
+        return set(KANALEN) <= set(_current(*self._session(ctx)))
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Add the missing kanalen; record the ones added."""
-        if not self._allowed(ctx):
+        if not _allowed(ctx):
             ctx.notes.append("not allowed: profile setting kiss_kanalen is off")
             return {}
         http, kiss = self._session(ctx)
         added = cast("list[str]", json.loads(ctx.store.read().get(STORE_KEY, "[]")))
-        for naam in sorted(set(KANALEN) - set(self._current(http, kiss))):
+        for naam in sorted(set(KANALEN) - set(_current(http, kiss))):
             expect_status(http.post(f"{kiss}/api/KanaalToevoegen/", json={"naam": naam}), HTTPStatus.NO_CONTENT)
             added.append(naam)
         return {STORE_KEY: json.dumps(sorted(set(added)))}
@@ -66,22 +66,22 @@ class KissKanalen:
         added = cast("list[str]", json.loads(ctx.store.read().get(STORE_KEY, "[]")))
         if added:
             http, kiss = self._session(ctx)
-            current = self._current(http, kiss)
+            current = _current(http, kiss)
             for naam in added:
                 if naam in current:
                     expect_status(http.delete(f"{kiss}/api/KanaalVerwijderen/{current[naam]}"), HTTPStatus.NO_CONTENT)
         return (STORE_KEY,)
-
-    @staticmethod
-    def _allowed(ctx: Context) -> bool:
-        return ctx.env.profile.allows("kiss_kanalen")
 
     def _session(self, ctx: Context) -> tuple[requests.Session, str]:
         kiss = ctx.env.profile.urls["kiss"]
         password = ctx.env.credentials.get(self.admin.store_key)
         return challenge_session(ctx.env, kiss, self.admin.username, password), kiss
 
-    @staticmethod
-    def _current(http: requests.Session, kiss: str) -> dict[str, str]:
-        found = get_entries(http, f"{kiss}/api/KanalenBeheerOverzicht")
-        return {str(kanaal["naam"]): str(kanaal["id"]) for kanaal in found}
+
+def _current(http: requests.Session, kiss: str) -> dict[str, str]:
+    found = get_entries(http, f"{kiss}/api/KanalenBeheerOverzicht")
+    return {str(kanaal["naam"]): str(kanaal["id"]) for kanaal in found}
+
+
+def _allowed(ctx: Context) -> bool:
+    return ctx.env.profile.allows("kiss_kanalen")

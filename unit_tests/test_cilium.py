@@ -118,7 +118,7 @@ def test_recorded_drops_writes_policy_drops_of_every_agent(tmp_path, fake_runner
     monkeypatch.setattr(cilium, "start_monitor", lambda _kube, pod: monitors[pod])
     path = tmp_path / "cilium-drops.jsonl"
     with cilium.recorded_drops(Kube("ctx", "podiumd", fake_runner), path):  # noqa: WPS328  # enter and exit are under test
-        pass
+        ...
     recorded = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
     assert [r["reason"] for r in recorded] == ["Policy denied"]
     assert "time" in recorded[0]

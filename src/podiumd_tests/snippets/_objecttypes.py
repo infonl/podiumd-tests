@@ -8,10 +8,11 @@ def objecttype_models():
     """(ObjectType, its version model) of this app's Objecttypen API."""
     try:
         from objecttypes.core.models import ObjectType
-        from objecttypes.core.models import ObjectVersion
     except ImportError:
         from objects.core.models import ObjectType
         from objects.core.models import ObjectTypeVersion as ObjectVersion
+    else:
+        from objecttypes.core.models import ObjectVersion
     return ObjectType, ObjectVersion
 
 

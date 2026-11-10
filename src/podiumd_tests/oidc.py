@@ -84,6 +84,12 @@ def keycloak_login_realm(response: requests.Response, hosts: Collection[str]) ->
     if not match:
         msg = f"not an OIDC auth endpoint: {response.url}"
         raise LoginPageError(msg)
+    _check_login_form(response)
+    return match["realm"]
+
+
+def _check_login_form(response: requests.Response) -> None:
+    """LoginPageError unless the page has a login form that posts to its own host."""
     if not LOGIN_FORM.search(response.text):
         msg = f"no login form on {response.url}"
         raise LoginPageError(msg)
@@ -92,7 +98,6 @@ def keycloak_login_realm(response: requests.Response, hosts: Collection[str]) ->
         # Keycloak then misses its login cookie: "Restart login cookie not found".
         msg = f"login form on {url_host(response.url)} posts to {url_host(action)}"
         raise LoginPageError(msg)
-    return match["realm"]
 
 
 def challenge_session(env: Environment, app_url: str, username: str, password: str) -> requests.Session:

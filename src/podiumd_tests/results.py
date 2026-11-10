@@ -174,32 +174,41 @@ def parse_junit(xml_text: str) -> tuple[Counts, Details]:
     details = Details()
     root = ET.fromstring(xml_text)  # nosec B314  # noqa: S314
     for case in root.iter("testcase"):
-        counts.total += 1
-        test_id = f"{case.get('classname', '')}::{case.get('name', '')}".strip(":")
-        problem = case.find("failure") if case.find("failure") is not None else case.find("error")
-        skipped = case.find("skipped")
-        properties = [(prop.get("name"), prop.get("value") or "") for prop in case.iter("property")]
-        xpass = next((value for name, value in properties if name == "xpass"), None)
-        found = [value for name, value in properties if name == "source"]
+        _add_case(case, counts, details)
+    return counts, details
+
+
+def _add_case(case: ET.Element, counts: Counts, details: Details) -> None:
+    """Count one junit testcase and list it under its outcome."""
+    counts.total += 1
+    test_id = f"{case.get('classname', '')}::{case.get('name', '')}".strip(":")
+    properties = [(prop.get("name"), prop.get("value") or "") for prop in case.iter("property")]
+    found = [value for name, value in properties if name == "source"]
+    failure = case.find("failure")
+    problem = case.find("error") if failure is None else failure
+    if problem is not None:
+        if problem.tag == "failure":
+            counts.failed += 1
+        else:
+            counts.errors += 1
         story = next((value for name, value in properties if name == "scenario"), "")
-        if problem is not None:
-            if problem.tag == "failure":
-                counts.failed += 1
-            else:
-                counts.errors += 1
-            details.failures.append(Entry(test_id, _first_line(problem.get("message")), found, story))
-        elif skipped is not None and skipped.get("type") == "pytest.xfail":
+        details.failures.append(Entry(test_id, _first_line(problem.get("message")), found, story))
+        return
+    skipped = case.find("skipped")
+    if skipped is not None:
+        if skipped.get("type") == "pytest.xfail":
             counts.xfailed += 1
             details.xfailed.append(Entry(test_id, _first_line(skipped.get("message")), found))
-        elif skipped is not None:
+        else:
             counts.skipped += 1
             details.skipped.append(Entry(test_id, _first_line(skipped.get("message"))))
-        elif xpass is not None:
-            counts.xpassed += 1
-            details.xpassed.append(Entry(test_id, _first_line(xpass), found))
-        else:
-            counts.passed += 1
-    return counts, details
+        return
+    xpass = next((value for name, value in properties if name == "xpass"), None)
+    if xpass is None:
+        counts.passed += 1
+        return
+    counts.xpassed += 1
+    details.xpassed.append(Entry(test_id, _first_line(xpass), found))
 
 
 def _by_message(entries: list[Entry]) -> list[str]:
@@ -272,7 +281,8 @@ def summary_markdown(info: RunInfo, details: Details) -> str:
         f"|{'---|' * len(_COUNT_COLUMNS)}",
         f"| {' | '.join(str(getattr(info.counts, count)) for count in _COUNT_COLUMNS)} |",
     ]
-    if rows := known_defects(details):
+    rows = known_defects(details)
+    if rows:
         lines += ["", "## Known defects", "", "| Report | Result | Tests |", "|---|---|---|", *rows]
     if details.disruptions:
         lines += ["", "## Pods replaced or restarted during the run", ""]
@@ -288,10 +298,12 @@ def summary_markdown(info: RunInfo, details: Details) -> str:
     for title, entries in sections:
         if entries:
             lines += ["", f"## {title}", "", *_by_message(entries)]
-    if sourced := [entry for entry in (*details.xpassed, *details.xfailed, *details.failures) if entry.sources]:
+    sourced = [entry for entry in (*details.xpassed, *details.xfailed, *details.failures) if entry.sources]
+    if sourced:
         lines += ["", "## Sources of the failed and known-defect tests", ""]
         lines += [f"- `{entry.test_id}`: {'; '.join(entry.sources)}" for entry in sourced]
-    if told := [failure for failure in details.failures if failure.scenario]:
+    told = [failure for failure in details.failures if failure.scenario]
+    if told:
         lines += ["", "## Scenarios of the failed tests", ""]
         for entry in told:
             lines.extend((f"`{entry.test_id}`", "", "```gherkin", entry.scenario, "```", ""))

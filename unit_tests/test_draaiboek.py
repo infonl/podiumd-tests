@@ -64,8 +64,8 @@ def test_a_reason_makes_an_uncovered_case_out_of_scope_but_never_hides_a_test():
     assert report_row(case, set(), DECISIONS, {"tests/test_x.py::test_a"}, "unclear")[0] == "covered"
 
 
-def test_main_writes_the_report_with_totals_per_class(tmp_path, monkeypatch, capsys):
-    ta = tmp_path / "ta"
+def _ta_checkout(ta):
+    """A TA checkout with one spec and three ZAC cases, one of them covered by another spec."""
     (ta / "test-catalog").mkdir(parents=True)
     (ta / "tests").mkdir()
     (ta / "tests" / "b.spec.ts").write_text('test("ZAC r7", () => {});\n', encoding="utf-8")
@@ -76,6 +76,11 @@ def test_main_writes_the_report_with_totals_per_class(tmp_path, monkeypatch, cap
         {**case, "test_id": "ZAC-3", "klasse": "C", "excel_rij": 9},
     ]
     (ta / "test-catalog" / "cases.yaml").write_text(yaml.safe_dump({"cases": cases}), encoding="utf-8")
+    return ta
+
+
+def test_main_writes_the_report_with_totals_per_class(tmp_path, monkeypatch, capsys):
+    ta = _ta_checkout(tmp_path / "ta")
     repo = tmp_path / "repo"
     (repo / "docs").mkdir(parents=True)
     (repo / "tests").mkdir()

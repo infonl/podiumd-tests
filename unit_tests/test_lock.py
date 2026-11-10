@@ -71,7 +71,7 @@ def test_a_held_lock_file_refuses_and_names_its_holder(tmp_path, profile_factory
     lock.write_text("podiumd-minikube deploy 2026-10-07T10:00:00\n", encoding="utf-8")
     env = Environment(profile_factory(settings={"lock_file": str(lock)}), fake_runner, environ={})
     with pytest.raises(LockBusyError, match="held by: podiumd-minikube deploy"), held(env, "bootstrap"):  # noqa: WPS328  # enter is under test
-        pass
+        ...
     assert lock.exists()
 
 

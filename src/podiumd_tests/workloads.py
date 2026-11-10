@@ -127,9 +127,10 @@ def _image_release(env: Environment, component: str, deployment: str) -> str:
     code = f"import sys; sys.path.insert(0, {path!r}); import {package}; print({package}.__version__)"
     try:
         printed = env.kube.exec(deployment, "python", "-c", code, timeout=60)
-        return printed.strip().splitlines()[-1].removeprefix("v")
-    except (KubeError, IndexError):
+    except KubeError:
         return ""
+    lines = printed.strip().splitlines()
+    return lines[-1].removeprefix("v") if lines else ""
 
 
 def chart_version(env: Environment) -> str | None:
@@ -239,7 +240,8 @@ def _job_log(kube: Kube, job: str) -> str:
     """Return the last lines a Job's container wrote; its previous run when it restarts."""
     for previous in ([], ["--previous"]):
         with suppress(KubeError):
-            if log := kube.run("logs", f"job/{job}", "--tail=60", *previous):
+            log = kube.run("logs", f"job/{job}", "--tail=60", *previous)
+            if log:
                 return f"log of job/{job}:\n{log}"
     return f"no log of job/{job}"
 

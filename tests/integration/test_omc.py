@@ -76,7 +76,8 @@ def inwoner_zaak(
 ) -> Callable[[str], JsonObject]:
     """A zaak whose initiator is a partij with only this digitaal adres (an e-mail address or phone number)."""
     need_bootstrap("omc-abonnement", "infra-mock-server")
-    if reason := notify_mock_missing(podiumd_env):
+    reason = notify_mock_missing(podiumd_env)
+    if reason:
         pytest.skip(reason)
 
     def make(adres: str) -> JsonObject:
@@ -201,7 +202,8 @@ def test_delivery_receipt_becomes_a_klantcontact(
     inwoner_zaak: Callable[[str], JsonObject],
 ) -> None:
     """Notify's delivery receipt for OMC's mail makes OMC register a klantcontact about the zaak in Open Klant."""
-    if reason := omc_actor_missing(podiumd_env, openklant):
+    reason = omc_actor_missing(podiumd_env, openklant)
+    if reason:
         pytest.skip(reason)
     adres = email_address(registry)
     zaak = inwoner_zaak(adres)

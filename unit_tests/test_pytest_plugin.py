@@ -305,8 +305,8 @@ def test_fixed():
     assert '<property name="xpass" value="known defect ZAC-1"' in junit.read_text(encoding="utf-8")
 
 
-def test_zac_and_zaaktype_fixtures(pytester, monkeypatch, fake_http):
-    fake_http({"/catalogi/api/v1/zaaktypen": (200, {"results": [{"url": "zt-1"}], "next": None})})
+def _fake_zac_and_open_zaak(monkeypatch):
+    """Replace the ZAC and Open Zaak calls of the fixtures; the list collects the deleted zaak URLs."""
     deleted = []
     monkeypatch.setattr(runner, "check", lambda _env, steps: [Outcome(s.name, "present") for s in steps])
     monkeypatch.setattr(pytest_plugin, "zac_session", lambda _env, user, password: f"{user}:{password}")
@@ -320,6 +320,12 @@ def test_zac_and_zaaktype_fixtures(pytester, monkeypatch, fake_http):
         lambda _zac, _url, _parameters, **fields: {"uuid": "u1", "identificatie": "ZAAK-1", **fields},
     )
     monkeypatch.setattr(pytest_plugin, "delete_zaak", lambda _client, url, **_options: deleted.append(url))
+    return deleted
+
+
+def test_zac_and_zaaktype_fixtures(pytester, monkeypatch, fake_http):
+    fake_http({"/catalogi/api/v1/zaaktypen": (200, {"results": [{"url": "zt-1"}], "next": None})})
+    deleted = _fake_zac_and_open_zaak(monkeypatch)
     pytester.makeconftest(WRITABLE_CONFTEST)
     pytester.makepyfile(
         """

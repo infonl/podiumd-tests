@@ -73,9 +73,9 @@ class OmcAbonnement:
     requires: tuple[str, ...] = ("omc", "opennotificaties")
     wiring: bool = True
 
-    def is_present(self, ctx: Context, /) -> bool:
+    def is_present(self, ctx: Context, /) -> bool:  # noqa: PLR6301  # a Step method
         """Return whether the recorded abonnement exists and its token is not about to expire."""
-        record = self._record(ctx)
+        record = _record(ctx)
         if not record or float(cast("float", record["expires"])) < time.time() + RENEW_BEFORE:
             return False
         response = opennotificaties_client(ctx.env).request(
@@ -95,13 +95,13 @@ class OmcAbonnement:
         created = opennotificaties_client(ctx.env).post("abonnement", body)
         return {STORE_KEY: json.dumps({"url": created["url"], "expires": now + VALIDITY})}
 
-    def remove(self, ctx: Context, /) -> tuple[str, ...]:
+    def remove(self, ctx: Context, /) -> tuple[str, ...]:  # noqa: PLR6301  # a Step method
         """Delete the recorded abonnement."""
-        record = self._record(ctx)
+        record = _record(ctx)
         if record:
             delete_abonnement(opennotificaties_client(ctx.env), str(record["url"]))
         return (STORE_KEY,)
 
-    @staticmethod
-    def _record(ctx: Context) -> dict[str, object]:
-        return cast("dict[str, object]", json.loads(ctx.store.read().get(STORE_KEY, "{}")))
+
+def _record(ctx: Context) -> dict[str, object]:
+    return cast("dict[str, object]", json.loads(ctx.store.read().get(STORE_KEY, "{}")))

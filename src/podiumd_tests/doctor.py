@@ -73,15 +73,17 @@ def _cluster(env: Environment) -> list[Check]:
         known = context_names(env.kube.runner)
     except KubeError as exc:
         return [Check("kube context", "fail", str(exc))]
-    refreshed = _refresh(env) if context not in known else ""
+    refreshed = "" if context in known else _refresh(env)
     if context not in known and not refreshed:
         hint = "add it with `az aks get-credentials` or `minikube start`; without it cluster tests skip"
         return [Check("kube context", no_access, f"{context} not in kubeconfig", hint)]
     checks = [Check("kube context", "ok", context)]
     unreachable = _api_error(env)
     # A new cluster (fresh install, minikube restart) has a new API address under the same context name.
-    if unreachable and not refreshed and (refreshed := _refresh(env)):
-        unreachable = _api_error(env)
+    if unreachable and not refreshed:
+        refreshed = _refresh(env)
+        if refreshed:
+            unreachable = _api_error(env)
     if unreachable:
         checks.append(Check("kube API", no_access, unreachable, "cluster stopped or deleted? (scheduled shutdown)"))
         return checks

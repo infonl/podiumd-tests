@@ -50,10 +50,14 @@ def ask_anonymously(page: Page, env: Environment, subject: str, vraag: str, emai
     refuse_cookies(page)
     form = page.locator("#contactmoment-form")
     form.locator('select[name="subject"]').select_option(label=subject)
-    form.locator('input[name="first_name"]').fill("Anoniem")
-    form.locator('input[name="last_name"]').fill("Test")
-    form.locator('input[name="email"]').fill(email)
-    form.locator('textarea[name="question"]').fill(vraag)
+    fields = {
+        'input[name="first_name"]': "Anoniem",
+        'input[name="last_name"]': "Test",
+        'input[name="email"]': email,
+        'textarea[name="question"]': vraag,
+    }
+    for selector, text in fields.items():
+        form.locator(selector).fill(text)
     solve_captcha(page)
     form.get_by_role("button", name="Verzenden").click()
 

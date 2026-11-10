@@ -78,9 +78,9 @@ def test_kcc_user_is_a_klantcontactmedewerker(kiss: requests.Session, urls: dict
     When the medewerker opens KISS's home page
     Then the page shows the Zoeken button and the Uitloggen link
 """)
-def test_kiss_renders_for_the_kcc_user(kiss: requests.Session, page: Page, urls: dict[str, str]) -> None:
+@pytest.mark.usefixtures("kiss")  # logs the page in
+def test_kiss_renders_for_the_kcc_user(page: Page, urls: dict[str, str]) -> None:
     """After the login KISS's single-page app renders its search and navigation (TA smoke 06, reg-100)."""
-    del kiss  # logs the page in
     page.goto(f"{urls['kiss']}/")
     expect(page.get_by_role("banner").get_by_role("button", name="Zoeken")).to_be_visible()
     expect(page.get_by_role("link", name="Uitloggen")).to_be_visible()

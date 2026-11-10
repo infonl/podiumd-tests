@@ -130,11 +130,11 @@ def test_results_filter_on_onderwerp(http: requests.Session, urls: dict[str, str
     When the visitor gives positive feedback with a remark on the results
     Then Open Inwoner stores the feedback with the search it was given on
 """)
+@pytest.mark.usefixtures("categories")  # results to give feedback on
 def test_feedback_on_a_search_is_stored(
-    http: requests.Session, urls: dict[str, str], podiumd_env: Environment, run_tag: str, categories: dict[str, str]
+    http: requests.Session, urls: dict[str, str], podiumd_env: Environment, run_tag: str
 ) -> None:
     """Feedback given on a results page is kept with the search it was given on."""
-    del categories  # results to give feedback on
     search = f"{urls['openinwoner']}/search/?query={PASPOORT}"
     page = expect_status(http.get(search), HTTPStatus.OK).text
     token = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', page)

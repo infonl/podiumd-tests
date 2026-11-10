@@ -45,8 +45,7 @@ def agent_pods(kube: Kube) -> list[JsonObject]:
 def detect_network(kube: Kube) -> tuple[frozenset[str], dict[str, str]]:
     """Return the present network capabilities (cilium, hubble), and why the others are absent."""
     try:
-        agents = agent_pods(kube)
-        services = {metadata_name(service) for service in kube.items("services", namespace=NAMESPACE)}
+        agents, services = agent_pods(kube), kube.items("services", namespace=NAMESPACE)
     except KubeError as exc:
         reason = f"cannot read namespace {NAMESPACE}: {exc}"
         return frozenset(), {CILIUM: reason, HUBBLE: reason}
@@ -56,7 +55,7 @@ def detect_network(kube: Kube) -> tuple[frozenset[str], dict[str, str]]:
         present.add(CILIUM)
     else:
         reasons[CILIUM] = f"no pods {AGENT_SELECTOR} in {NAMESPACE}"
-    if HUBBLE_RELAY in services:
+    if HUBBLE_RELAY in {metadata_name(service) for service in services}:
         present.add(HUBBLE)
     else:
         reasons[HUBBLE] = f"no Service {HUBBLE_RELAY} in {NAMESPACE}"

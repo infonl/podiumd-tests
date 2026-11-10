@@ -62,6 +62,8 @@ if TYPE_CHECKING:
     from podiumd_tests.bootstrap.runner import Outcome
     from podiumd_tests.bootstrap.runner import Step
 
+type _AddParser = Callable[..., argparse.ArgumentParser]
+
 # Options a pipeline sets in the environment: PODIUMD_TESTS_<OPTION> (secrets have their own prefix).
 ENV_OPTION_PREFIX = "PODIUMD_TESTS_"
 EXIT_OK = 0
@@ -370,7 +372,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         return code
     # The smoke tier shows what a chaos test left broken: a component at 0 replicas, an unhealthy pod.
     smoke = _run_tier(argparse.Namespace(**{**vars(args), "tier": "smoke", "pytest_args": []}))
-    return code if code != EXIT_OK else smoke
+    return smoke if code == EXIT_OK else code
 
 
 def _run_tier(args: argparse.Namespace) -> int:
@@ -441,10 +443,65 @@ def _cluster_state(env: Environment) -> workloads.ClusterState | None:
         return None
 
 
-def _add_volume_commands(add_parser: Callable[..., argparse.ArgumentParser]) -> None:
+def _from_env(option: str, default: str | None = None) -> str | None:
+    """PODIUMD_TESTS_<OPTION> from the environment, for pipelines, else the default."""
+    return os.environ.get(ENV_OPTION_PREFIX + option.upper().replace("-", "_"), default)
+
+
+def _env_command(add_parser: _AddParser, name: str, help_text: str) -> argparse.ArgumentParser:
+    """Return a subcommand with --env, required unless PODIUMD_TESTS_ENV is set."""
+    parser = add_parser(name, help=help_text)
+    default = _from_env("env")
+    parser.add_argument("--env", required=default is None, default=default, help="profile name (or PODIUMD_TESTS_ENV)")
+    return parser
+
+
+def _add_profile_commands(add_parser: _AddParser) -> None:
+    """Add the env list, show and init subcommands."""
+    env = add_parser("env", help="environment profiles").add_subparsers(dest="env_command", required=True)
+    env.add_parser("list", help="list profiles").set_defaults(func=cmd_env_list)
+    show = env.add_parser("show", help="show one profile")
+    show.add_argument("env", help="profile name")
+    show.set_defaults(func=cmd_env_show)
+    _add_env_init_command(env.add_parser)
+
+
+def _add_env_init_command(add_parser: _AddParser) -> None:
+    """Add the env init subcommand."""
+    init = add_parser("init", help="draft a profile from the cluster's ingresses and HTTPRoutes")
+    init.add_argument("name", help="profile name")
+    init.add_argument("--estate", choices=config.ESTATES, required=True)
+    init.add_argument("--context", required=True, help="kube context")
+    init.add_argument("--namespace", default="podiumd", help="application namespace (default: podiumd)")
+    init.add_argument("--scheme", choices=("https", "http"), default="https", help="URL scheme (default: https)")
+    init.add_argument("--force", action="store_true", help="overwrite an existing profile")
+    init.set_defaults(func=cmd_env_init)
+
+
+def _add_doctor_command(add_parser: _AddParser) -> None:
+    """Add the doctor subcommand."""
+    doc = _env_command(add_parser, "doctor", "preflight checks for an environment")
+    doc.add_argument("--json", help="also write the checks to this JSON file")
+    doc.set_defaults(func=cmd_doctor)
+
+
+def _add_bootstrap_commands(add_parser: _AddParser) -> None:
+    """Add the bootstrap and unbootstrap subcommands."""
+    boot = _env_command(add_parser, "bootstrap", "create test-only credentials and wiring, named ptest-bootstrap-*")
+    boot.add_argument("--rotate", action="store_true", help="recreate every step with new credentials")
+    boot.add_argument("--skip-doctor", action="store_true")
+    boot.add_argument("--step", action="append", help="only this step (repeatable; default: all)")
+    boot.set_defaults(func=cmd_bootstrap)
+
+    unboot = _env_command(add_parser, "unbootstrap", "remove everything bootstrap created")
+    unboot.add_argument("--skip-doctor", action="store_true")
+    unboot.add_argument("--step", action="append", help="only this step (repeatable; default: all)")
+    unboot.set_defaults(func=cmd_unbootstrap)
+
+
+def _add_volume_commands(add_parser: _AddParser) -> None:
     """Add the seed-volume and unseed-volume subcommands."""
-    vol = add_parser("seed-volume", help="top up the perf tier's volume data, tagged ptest-volume")
-    _add_env(vol)
+    vol = _env_command(add_parser, "seed-volume", "top up the perf tier's volume data, tagged ptest-volume")
     vol.add_argument("--scale", choices=["smoke", "perf"], default="smoke", help="counts to reach (default: smoke)")
     vol.add_argument("--parallel", type=int, default=8, help="concurrent creates (default 8)")
     vol.add_argument(
@@ -453,29 +510,37 @@ def _add_volume_commands(add_parser: Callable[..., argparse.ArgumentParser]) -> 
     vol.add_argument("--skip-doctor", action="store_true")
     vol.set_defaults(func=cmd_seed_volume)
 
-    unvol = add_parser("unseed-volume", help="delete all volume data")
-    _add_env(unvol)
+    unvol = _env_command(add_parser, "unseed-volume", "delete all volume data")
     unvol.add_argument("--skip-doctor", action="store_true")
     unvol.set_defaults(func=cmd_unseed_volume)
 
 
-def _from_env(option: str, default: str | None = None) -> str | None:
-    """PODIUMD_TESTS_<OPTION> from the environment, for pipelines, else the default."""
-    return os.environ.get(ENV_OPTION_PREFIX + option.upper().replace("-", "_"), default)
+def _add_sweep_command(add_parser: _AddParser) -> None:
+    """Add the sweep subcommand."""
+    swp = _env_command(add_parser, "sweep", "delete run-tagged objects that test runs left behind")
+    swp.add_argument(
+        "--older-than", default="24h", help="only runs that started before this age: 30m, 24h, 7d (default: 24h)"
+    )
+    swp.add_argument("--dry-run", action="store_true", help="list what would be deleted")
+    swp.add_argument("--skip-doctor", action="store_true")
+    swp.set_defaults(func=cmd_sweep)
 
 
-def _add_env(parser: argparse.ArgumentParser) -> None:
-    """--env, required unless PODIUMD_TESTS_ENV is set."""
-    default = _from_env("env")
-    parser.add_argument("--env", required=default is None, default=default, help="profile name (or PODIUMD_TESTS_ENV)")
-
-
-def _add_results_dir(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
+def _add_run_command(add_parser: _AddParser) -> None:
+    """Add the run subcommand."""
+    run = _env_command(add_parser, "run", "run a tier against an environment")
+    run.add_argument(
+        "--tier", choices=sorted(TIERS), default=_from_env("tier", "smoke"), help="tier to run (default: smoke)"
+    )
+    run.add_argument(
         "--results-dir",
         default=_from_env("results-dir", str(config.REPO_ROOT / "results")),
         help="results directory (default: results/)",
     )
+    run.add_argument("--keep-data", action="store_true", help="skip cleanup of created resources")
+    run.add_argument("--skip-doctor", action="store_true")
+    run.add_argument("pytest_args", nargs=argparse.REMAINDER, help="extra pytest arguments after --")
+    run.set_defaults(func=cmd_run)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -490,61 +555,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=_from_env("envs-dir", str(config.default_envs_dir())),
         help="profile directory (default: envs/)",
     )
-    commands = parser.add_subparsers(dest="command", required=True)
-
-    env = commands.add_parser("env", help="environment profiles").add_subparsers(dest="env_command", required=True)
-    env.add_parser("list", help="list profiles").set_defaults(func=cmd_env_list)
-    show = env.add_parser("show", help="show one profile")
-    show.add_argument("env", help="profile name")
-    show.set_defaults(func=cmd_env_show)
-    init = env.add_parser("init", help="draft a profile from the cluster's ingresses and HTTPRoutes")
-    init.add_argument("name", help="profile name")
-    init.add_argument("--estate", choices=config.ESTATES, required=True)
-    init.add_argument("--context", required=True, help="kube context")
-    init.add_argument("--namespace", default="podiumd", help="application namespace (default: podiumd)")
-    init.add_argument("--scheme", choices=("https", "http"), default="https", help="URL scheme (default: https)")
-    init.add_argument("--force", action="store_true", help="overwrite an existing profile")
-    init.set_defaults(func=cmd_env_init)
-
-    doc = commands.add_parser("doctor", help="preflight checks for an environment")
-    _add_env(doc)
-    doc.add_argument("--json", help="also write the checks to this JSON file")
-    doc.set_defaults(func=cmd_doctor)
-
-    boot = commands.add_parser("bootstrap", help="create test-only credentials and wiring, named ptest-bootstrap-*")
-    _add_env(boot)
-    boot.add_argument("--rotate", action="store_true", help="recreate every step with new credentials")
-    boot.add_argument("--skip-doctor", action="store_true")
-    boot.add_argument("--step", action="append", help="only this step (repeatable; default: all)")
-    boot.set_defaults(func=cmd_bootstrap)
-
-    unboot = commands.add_parser("unbootstrap", help="remove everything bootstrap created")
-    _add_env(unboot)
-    unboot.add_argument("--skip-doctor", action="store_true")
-    unboot.add_argument("--step", action="append", help="only this step (repeatable; default: all)")
-    unboot.set_defaults(func=cmd_unbootstrap)
-
-    _add_volume_commands(commands.add_parser)
-
-    swp = commands.add_parser("sweep", help="delete run-tagged objects that test runs left behind")
-    _add_env(swp)
-    swp.add_argument(
-        "--older-than", default="24h", help="only runs that started before this age: 30m, 24h, 7d (default: 24h)"
-    )
-    swp.add_argument("--dry-run", action="store_true", help="list what would be deleted")
-    swp.add_argument("--skip-doctor", action="store_true")
-    swp.set_defaults(func=cmd_sweep)
-
-    run = commands.add_parser("run", help="run a tier against an environment")
-    _add_env(run)
-    run.add_argument(
-        "--tier", choices=sorted(TIERS), default=_from_env("tier", "smoke"), help="tier to run (default: smoke)"
-    )
-    _add_results_dir(run)
-    run.add_argument("--keep-data", action="store_true", help="skip cleanup of created resources")
-    run.add_argument("--skip-doctor", action="store_true")
-    run.add_argument("pytest_args", nargs=argparse.REMAINDER, help="extra pytest arguments after --")
-    run.set_defaults(func=cmd_run)
+    add_parser = parser.add_subparsers(dest="command", required=True).add_parser
+    for add_commands in (
+        _add_profile_commands,
+        _add_doctor_command,
+        _add_bootstrap_commands,
+        _add_volume_commands,
+        _add_sweep_command,
+        _add_run_command,
+    ):
+        add_commands(add_parser)
     return parser
 
 
