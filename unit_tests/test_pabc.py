@@ -102,6 +102,38 @@ def test_ensure_functional_role_maps_only_the_missing_application_roles(fake_htt
     assert pabc.domain_mappings(requests.Session(), PABC, "ptest-zac") == 1
 
 
+def test_ensure_functional_role_refuses_an_application_role_pabc_lacks(fake_http):
+    fake_http(
+        {
+            "GET /api/v1/functional-roles": (200, [{"id": "f-1", "name": "ptest-zac", "mappings": []}]),
+            "GET /api/v1/application-roles": (200, [{"id": "a-1", "name": "behandelaar", "application": "zac"}]),
+        }
+    )
+    with pytest.raises(LookupError, match="no application role brp_zoeken of zac"):
+        pabc.ensure_functional_role(requests.Session(), PABC, "ptest-zac", "zac", ("behandelaar", "brp_zoeken"), "d")
+
+
+def test_delete_functional_roles_and_domain_deletes_each_named_one(fake_http):
+    sent = fake_http(
+        {
+            "GET /api/v1/functional-roles": (
+                200,
+                [{"id": "f-1", "name": "a"}, {"id": "f-2", "name": "b"}, {"id": "f-3", "name": "c"}],
+            ),
+            "GET /api/v1/domains": (200, [{"id": "d-1", "name": "ptest"}]),
+            "DELETE /api/v1/functional-roles/f-1": (204, None),
+            "DELETE /api/v1/functional-roles/f-2": (204, None),
+            "DELETE /api/v1/domains/d-1": (204, None),
+        }
+    )
+    pabc.delete_functional_roles_and_domain(requests.Session(), PABC, ("a", "b"), "ptest")
+    assert [s.url.removeprefix(PABC) for s in sent if s.method == "DELETE"] == [
+        "/api/v1/functional-roles/f-1",
+        "/api/v1/functional-roles/f-2",
+        "/api/v1/domains/d-1",
+    ]
+
+
 def test_mapped_application_roles_of_one_entity_type():
     decision = {
         "results": [

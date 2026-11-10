@@ -14,7 +14,7 @@ Verdict: **port** (worth a test here), **maybe** (only under a condition), **no*
 | KISS | klantinteractie-servicesysteem/KISS-frontend @ 90a79fa | `Kiss.Bff.EndToEndTest`: Playwright (C#), ~120 scenarios | port, largest gain |
 | ITA | interne-taak-afhandeling/ITA @ 54056be | `InterneTaakAfhandeling.EndToEndTest`: Playwright (C#), ~140 scenarios | port, largest gain |
 | ZaakBrug | wearefrank/zaakbrug @ cdd465f | `e2e/SoapUI/zaakbrug-e2e-soapui-project.xml`: 127 ZDS cases against Open Zaak | port a selection |
-| ZAC | infonl/dimpact-zaakafhandelcomponent @ v5.9.1 | `src/e2e/features` and `src/e2e/bdd`: Cucumber and playwright-bdd, 29 scenarios against a live ZAC | ported 2026-11-04, see below |
+| ZAC | infonl/dimpact-zaakafhandelcomponent @ v5.9.1 | `src/e2e/features` and `src/e2e/bdd`: Cucumber and playwright-bdd, 29 scenarios against a live ZAC; `src/main/resources/policies`: OPA rights per role | ported 2026-11-04, see below; the policies in `test_zac_rollen.py` |
 | ZGW Office Add-in | infonl/zgw-office-addin @ 3b74f94 | `e2e/tests`: Playwright, 10 tests (Office mocked) | maybe |
 | Open Beheer | maykinmedia/open-beheer @ 7ce9f34 | ~25 Gherkin Playwright scenarios (VCR against Open Zaak) | port the write path |
 | Open Archiefbeheer | maykinmedia/open-archiefbeheer @ 7d77889 | ~60 Gherkin Playwright scenarios (Open Zaak mocked) | port 3, rest covered |

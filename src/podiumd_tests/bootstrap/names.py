@@ -32,11 +32,19 @@ TEST_BESLUITTYPE = "ptest-bootstrap-besluit"
 BPMN_ZAAKTYPE = "ptest-bootstrap-bpmn"
 BPMN_IOT = "ptest-bootstrap-bpmn-bijlage"
 BPMN_BESLUITTYPE = "ptest-bootstrap-bpmn-besluit"
-# ZAC's rights on podiumd-tests' own zaaktypen, apart from the estate's PABC dataset: a realm role of the test
-# admin, PABC's functional role of that name, and PABC's domain of those zaaktypen.
-ZAC_FUNCTIONAL_ROLE = "ptest-bootstrap-zac"
+# ZAC's rights on podiumd-tests' own zaaktypen, apart from the estate's PABC dataset: realm roles of test users,
+# PABC's functional roles of those names mapped to ZAC application roles, in PABC's domain of those zaaktypen.
 ZAC_DOMAIN = "ptest-bootstrap"
-ZAC_APPLICATION_ROLES = ("behandelaar", "coordinator")
+# The test admin's realm role.
+ZAC_FUNCTIONAL_ROLE = "ptest-bootstrap-zac"
+# ZAC's base roles from fewest to most rights; since ZAC 5.9 each has the rights of the ones before it.
+ZAC_BASE_ROLES = ("raadpleger", "behandelaar", "coordinator", "recordmanager", "beheerder")
+# brp_zoeken is a plus role: without a base role ZAC 5.9.1 refuses the user.
+ZAC_FUNCTIONAL_ROLES = {
+    ZAC_FUNCTIONAL_ROLE: ("behandelaar", "coordinator"),
+    **{f"{ZAC_FUNCTIONAL_ROLE}-{role}": (role,) for role in ZAC_BASE_ROLES},
+    f"{ZAC_FUNCTIONAL_ROLE}-brp-zoeken": ("brp_zoeken",),
+}
 # ZaakBrug drives ZDS, whose StUF zaaktype code is at most 10 characters; the klacht id (22) is too long.
 ZAAKBRUG_ZAAKTYPE = "ZBTESTPT"
 ZAAKBRUG_IOT = "ptest-bootstrap-zb-bijlage"

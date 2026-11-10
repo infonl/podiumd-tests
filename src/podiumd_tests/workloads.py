@@ -180,6 +180,14 @@ def expect_defect(  # noqa: PLR0913  # one marker
         request.applymarker(pytest.mark.xfail(strict=True, raises=raises, reason=reason))
 
 
+def skip_older_than(env: Environment, component: str, version: tuple[int, ...], behaviour: str) -> None:
+    """Skip the test when the deployed component is older than `version`; an unknown version runs it."""
+    found = component_versions(env, [component]).get(component)
+    if found is not None and found < version:
+        shown = ".".join(map(str, found))
+        pytest.skip(f"{component} {shown} is older than {'.'.join(map(str, version))}: {behaviour}")
+
+
 def chart_older_than(env: Environment, version: tuple[int, ...]) -> bool:
     """Whether the deployed podiumd chart is older than `version`; True when its version is unknown."""
     found = _version(chart_version(env) or "")

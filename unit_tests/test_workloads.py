@@ -22,6 +22,7 @@ from podiumd_tests.workloads import recreate_update_jobs
 from podiumd_tests.workloads import replica_drift
 from podiumd_tests.workloads import run_cronjob
 from podiumd_tests.workloads import scaled
+from podiumd_tests.workloads import skip_older_than
 from podiumd_tests.workloads import unhealthy_pods
 from podiumd_tests.workloads import unready_workloads
 
@@ -276,3 +277,14 @@ def test_expect_defect_marks_only_an_affected_known_version(monkeypatch, version
     workloads.expect_defect(request, None, "zaakbrug", lambda v: v < (1, 27, 0), raises=AssertionError, reason="r")  # pyright: ignore[reportArgumentType]
     strict = [True] if xfail else []
     assert [m.kwargs.get("strict") for m in markers] == strict
+
+
+@pytest.mark.parametrize(("version", "skipped"), [((5, 9, 0), True), ((5, 9, 1), False), (None, False)])
+def test_skip_older_than_runs_a_newer_or_unknown_version(monkeypatch, env_factory, version, skipped):
+    found = {} if version is None else {"zac": version}
+    monkeypatch.setattr(workloads, "component_versions", lambda _env, _components: found)
+    if skipped:
+        with pytest.raises(pytest.skip.Exception, match=r"zac 5\.9\.0 is older than 5\.9\.1: rules"):
+            skip_older_than(env_factory(), "zac", (5, 9, 1), "rules")
+    else:
+        skip_older_than(env_factory(), "zac", (5, 9, 1), "rules")

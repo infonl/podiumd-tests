@@ -50,6 +50,7 @@ from podiumd_tests.bootstrap.names import ZAAKBRUG_VERSIES_IOT
 from podiumd_tests.bootstrap.names import ZAAKBRUG_VERSIES_ZAAKTYPE
 from podiumd_tests.bootstrap.names import ZAAKBRUG_ZAAKTYPE
 from podiumd_tests.bootstrap.names import ZAC_FUNCTIONAL_ROLE
+from podiumd_tests.bootstrap.names import ZAC_FUNCTIONAL_ROLES
 from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_COMPONENTS
 from podiumd_tests.bootstrap.names import ZGW_NOAUTH_CLIENT_ID
@@ -441,6 +442,13 @@ KCC = KeycloakUser(
     # ITA refuses a login without it ("Verwachtewaarde voor de samaccountname ontbreekt").
     attributes={"samaccountname": [f"{PREFIX}-kcc"]},
 )
+# One user per ZAC application role of step zac-bpmn-process, with only that realm role; keycloak-roles creates
+# the realm roles, so the users need wiring.
+ZAC_ROLE_USERS = {
+    roles[0]: KeycloakUser(name.removeprefix(f"{PREFIX}-"), realm_roles=(name,), wiring=True)
+    for name, roles in ZAC_FUNCTIONAL_ROLES.items()
+    if name != ZAC_FUNCTIONAL_ROLE
+}
 # ITA's functioneel beheerder: Alle contactverzoeken, reopening a closed contactverzoek.
 ITA_BEHEERDER = KeycloakUser(
     "ita-beheerder",
@@ -791,10 +799,11 @@ STEPS: tuple[Step, ...] = (
     # Open Archiefbeheer role users (TA seed-oab-users: recordmanager-test, reviewer-test, ...);
     # OAB logs them in locally, as in podiumd-minikube.
     *(django_user_step("openarchiefbeheer", key, (group,)) for key, group in OAB_ROLES.items()),
-    KeycloakRoles((KCC, ADMIN, ITA_BEHEERDER)),
+    KeycloakRoles((KCC, ADMIN, ITA_BEHEERDER, *ZAC_ROLE_USERS.values())),
     KCC,
     ADMIN,
     ITA_BEHEERDER,
+    *ZAC_ROLE_USERS.values(),
     OpenKlantActor("kcc"),
     ItaMedewerker(KCC),
     *IDENTITIES,

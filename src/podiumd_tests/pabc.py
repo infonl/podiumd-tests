@@ -16,6 +16,8 @@ from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     import requests
 
     from playwright.sync_api import Page
@@ -94,10 +96,19 @@ def ensure_domain(pabc: requests.Session, pabc_url: str, name: str, entity_types
     return domain
 
 
+def application_roles(pabc: requests.Session, pabc_url: str, application: str) -> list[JsonObject]:
+    """PABC's application roles of an application."""
+    return [role for role in get_entries(pabc, pabc_url + APPLICATION_ROLES) if role.get("application") == application]
+
+
 def ensure_functional_role(  # noqa: PLR0913, PLR0917  # one mapping set
     pabc: requests.Session, pabc_url: str, name: str, application: str, roles: tuple[str, ...], domain: str
 ) -> None:
     """The functional role of this name, created if missing, mapped to these application roles in the domain."""
+    known = application_roles(pabc, pabc_url, application)
+    if missing := set(roles) - {str(role.get("name")) for role in known}:
+        msg = f"PABC has no application role {', '.join(sorted(missing))} of {application}: add it to PABC's dataset"
+        raise LookupError(msg)
     found = next(
         (existing for existing in get_entries(pabc, pabc_url + FUNCTIONAL_ROLES) if existing.get("name") == name), None
     )
@@ -107,9 +118,8 @@ def ensure_functional_role(  # noqa: PLR0913, PLR0917  # one mapping set
     mapped = {
         str(mapping.get("applicationRoleId")) for mapping in entries(found.get("mappings")) if mapping.get("domain")
     }
-    for role in get_entries(pabc, pabc_url + APPLICATION_ROLES):
-        wanted = role.get("name") in roles and role.get("application") == application
-        if wanted and str(role["id"]) not in mapped:
+    for role in known:
+        if role.get("name") in roles and str(role["id"]) not in mapped:
             body = {"applicationRoleId": role["id"], "domainId": domain, "isAllEntityTypes": False}
             expect_status(
                 pabc.post(f"{pabc_url}{FUNCTIONAL_ROLES}/{found['id']}/mappings", json=body), HTTPStatus.CREATED
@@ -122,11 +132,13 @@ def domain_mappings(pabc: requests.Session, pabc_url: str, role: str) -> int:
     return sum(1 for found in roles for mapping in entries(found.get("mappings")) if mapping.get("domain"))
 
 
-def delete_functional_role_and_domain(pabc: requests.Session, pabc_url: str, role: str, domain: str) -> None:
-    """Delete the functional role (with its mappings) and then the domain of these names, where they exist."""
-    for path, name in ((FUNCTIONAL_ROLES, role), (DOMAINS, domain)):
+def delete_functional_roles_and_domain(
+    pabc: requests.Session, pabc_url: str, roles: Iterable[str], domain: str
+) -> None:
+    """Delete the functional roles (with their mappings) and then the domain of these names, where they exist."""
+    for path, names in ((FUNCTIONAL_ROLES, set(roles)), (DOMAINS, {domain})):
         for found in get_entries(pabc, pabc_url + path):
-            if found.get("name") == name:
+            if found.get("name") in names:
                 expect_status(pabc.delete(f"{pabc_url}{path}/{found['id']}"), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
 
 

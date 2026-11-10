@@ -20,6 +20,8 @@ from podiumd_tests import results
 from podiumd_tests.bootstrap import bootstrap
 from podiumd_tests.bootstrap import check
 from podiumd_tests.bootstrap import refusal
+from podiumd_tests.bootstrap.bpmn import bpmn_zaaktype
+from podiumd_tests.bootstrap.bpmn import uuid_of
 from podiumd_tests.bootstrap.names import PRODUCTAANVRAAG_OBJECTTYPE
 from podiumd_tests.bootstrap.names import TEST_ZAAKTYPE
 from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
@@ -461,6 +463,27 @@ def fixture_zac_zaak(
         return zaak
 
     return start
+
+
+@pytest.fixture(name="bpmn_zaak")
+def fixture_bpmn_zaak(  # noqa: PLR0913, PLR0917  # fixtures
+    zac: requests.Session,
+    urls: dict[str, str],
+    openzaak: ApiClient,
+    zac_group: str,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+) -> JsonObject:
+    """A zaak of the BPMN test zaaktype started in ZAC; cleanup deletes it and its documents from Open Zaak."""
+    need_bootstrap("zac-bpmn-process")
+    zaaktype = bpmn_zaaktype(openzaak)
+    parameters = {"zaaktype": {"uuid": uuid_of(zaaktype["url"]), "omschrijving": zaaktype["omschrijving"]}}
+    zaak = create_zaak(
+        zac, urls["zac"], {**parameters, "defaultGroepId": zac_group}, omschrijving=registry.tagged("bpmn")
+    )
+    url = f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}"
+    registry.add(f"zaak {zaak['identificatie']}", lambda: delete_zaak(openzaak, url, with_documents=True))
+    return zaak
 
 
 @pytest.hookimpl(tryfirst=True)  # before xdist reads the groups

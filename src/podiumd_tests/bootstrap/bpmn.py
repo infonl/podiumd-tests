@@ -2,9 +2,9 @@
 
 ZAC (5.9) starts a BPMN process for a zaaktype with a zaaktype-bpmn-configuration; the process and its form.io
 forms are uploaded through ZAC's admin API, as ZAC's own integration tests do. ZAC asks PABC for the user's rights
-on the zaaktype by the user's realm roles: the step gives the test admin's realm role ptest-bootstrap-zac
-ZAC's behandelaar and coordinator roles in PABC domain ptest-bootstrap, which holds only this zaaktype, so the
-rights do not depend on the estate's PABC dataset.
+on the zaaktype by the user's realm roles: the step maps the functional roles ZAC_FUNCTIONAL_ROLES (realm roles
+of the test admin and the ZAC role users) to ZAC's application roles in PABC domain ptest-bootstrap, which holds
+only this zaaktype, so the rights do not depend on the estate's PABC dataset.
 """
 
 from __future__ import annotations
@@ -16,17 +16,17 @@ from typing import TYPE_CHECKING
 
 from podiumd_tests.bootstrap.names import BPMN_ZAAKTYPE
 from podiumd_tests.bootstrap.names import PREFIX
-from podiumd_tests.bootstrap.names import ZAC_APPLICATION_ROLES
 from podiumd_tests.bootstrap.names import ZAC_DOMAIN
-from podiumd_tests.bootstrap.names import ZAC_FUNCTIONAL_ROLE
+from podiumd_tests.bootstrap.names import ZAC_FUNCTIONAL_ROLES
 from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.clients.platform import openzaak_client
 from podiumd_tests.json_data import entries
 from podiumd_tests.pabc import add_zaaktype_entity_type
 from podiumd_tests.pabc import admin_session
+from podiumd_tests.pabc import application_roles
 from podiumd_tests.pabc import delete_entity_type
-from podiumd_tests.pabc import delete_functional_role_and_domain
+from podiumd_tests.pabc import delete_functional_roles_and_domain
 from podiumd_tests.pabc import domain_mappings
 from podiumd_tests.pabc import ensure_domain
 from podiumd_tests.pabc import ensure_functional_role
@@ -45,6 +45,7 @@ if TYPE_CHECKING:
     from podiumd_tests.json_data import JsonObject
 
 PROCESS_KEY = "ptestBpmnProcess"
+ZAC_APPLICATION = "zaakafhandelcomponent"
 FILES = Path(__file__).parent.parent / "bpmn"
 DEFINITIONS = "/rest/bpmn-process-definitions"
 CONFIGURATION = "/rest/zaaktype-bpmn-configuration"
@@ -58,6 +59,12 @@ def bpmn_zaaktype(openzaak: ApiClient) -> JsonObject:
         msg = f"zaaktype {BPMN_ZAAKTYPE} missing: bootstrap step openzaak-zaaktype-bpmn"
         raise LookupError(msg)
     return found[0]
+
+
+def mappable_roles(pabc: requests.Session, pabc_url: str) -> dict[str, tuple[str, ...]]:
+    """ZAC_FUNCTIONAL_ROLES whose application roles PABC has; podiumd chart 4.9's dataset lacks brp_zoeken."""
+    known = {str(role.get("name")) for role in application_roles(pabc, pabc_url, ZAC_APPLICATION)}
+    return {name: roles for name, roles in ZAC_FUNCTIONAL_ROLES.items() if set(roles) <= known}
 
 
 def uuid_of(url: object) -> str:
@@ -80,7 +87,7 @@ class ZacBpmnProcess:
     wiring: bool = False
 
     def is_present(self, ctx: Context, /) -> bool:
-        """The process is deployed and linked to the current BPMN test zaaktype, and PABC maps the role."""
+        """The process is deployed and linked to the current BPMN test zaaktype, and PABC maps the roles."""
         try:
             zaaktype = uuid_of(bpmn_zaaktype(self._openzaak(ctx))["url"])
         except LookupError:
@@ -98,20 +105,13 @@ class ZacBpmnProcess:
         if PROCESS_KEY not in keys or not linked:
             return False
         pabc, pabc_url = self._pabc(ctx)
-        return domain_mappings(pabc, pabc_url, ZAC_FUNCTIONAL_ROLE) >= len(ZAC_APPLICATION_ROLES)
+        wanted = mappable_roles(pabc, pabc_url)
+        return all(domain_mappings(pabc, pabc_url, name) >= len(roles) for name, roles in wanted.items())
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
-        """Give the test admin rights in PABC, deploy the process and its forms, and link it to the zaaktype."""
-        openzaak = self._openzaak(ctx)
-        zaaktype = bpmn_zaaktype(openzaak)
-        pabc, pabc_url = self._pabc(ctx)
-        entity_type = zaaktype_entity_type(pabc, pabc_url, str(zaaktype["omschrijving"]))
-        if entity_type is None:
-            entity_type = add_zaaktype_entity_type(pabc, pabc_url, str(zaaktype["omschrijving"]))
-        domain = ensure_domain(pabc, pabc_url, ZAC_DOMAIN, [entity_type])
-        ensure_functional_role(
-            pabc, pabc_url, ZAC_FUNCTIONAL_ROLE, "zaakafhandelcomponent", ZAC_APPLICATION_ROLES, domain
-        )
+        """Map the functional roles in PABC, deploy the process and its forms, and link it to the zaaktype."""
+        zaaktype = bpmn_zaaktype(self._openzaak(ctx))
+        self._map_roles(ctx, str(zaaktype["omschrijving"]))
         http, zac = self._zac(ctx)
         process = FILES / f"{PROCESS_KEY}.bpmn"
         body = {"filename": process.name, "content": process.read_text(encoding="utf-8")}
@@ -140,7 +140,7 @@ class ZacBpmnProcess:
         }
 
     def remove(self, ctx: Context, /) -> tuple[str, ...]:
-        """Delete the forms, the process, PABC's functional role, domain and entity type; the zaaktype link stays."""
+        """Delete the forms, the process, PABC's functional roles, domain and entity type; the zaaktype link stays."""
         http, zac = self._zac(ctx)
         for form in sorted(FILES.glob("*.json")):
             http.delete(f"{zac}{DEFINITIONS}/{PROCESS_KEY}/forms/{form.stem}")
@@ -149,7 +149,7 @@ class ZacBpmnProcess:
             ctx.notes.append(f"process {PROCESS_KEY} not deleted: HTTP {deleted.status_code}")
         ctx.notes.append(f"zaaktype-bpmn-configuration of {BPMN_ZAAKTYPE} stays: ZAC 5.9 has no call to delete it")
         pabc, pabc_url = self._pabc(ctx)
-        delete_functional_role_and_domain(pabc, pabc_url, ZAC_FUNCTIONAL_ROLE, ZAC_DOMAIN)
+        delete_functional_roles_and_domain(pabc, pabc_url, ZAC_FUNCTIONAL_ROLES, ZAC_DOMAIN)
         entity_type = zaaktype_entity_type(pabc, pabc_url, BPMN_ZAAKTYPE)
         if entity_type is not None:
             delete_entity_type(pabc, pabc_url, entity_type)
@@ -166,3 +166,16 @@ class ZacBpmnProcess:
     def _pabc(self, ctx: Context) -> tuple[requests.Session, str]:
         password = ctx.env.credentials.get(self.admin.store_key)
         return admin_session(ctx.env, self.admin.username, password), ctx.env.profile.urls["pabc"]
+
+    def _map_roles(self, ctx: Context, omschrijving: str) -> None:
+        """Map the functional roles PABC can map to their application roles in domain ZAC_DOMAIN of the zaaktype."""
+        pabc, pabc_url = self._pabc(ctx)
+        entity_type = zaaktype_entity_type(pabc, pabc_url, omschrijving)
+        if entity_type is None:
+            entity_type = add_zaaktype_entity_type(pabc, pabc_url, omschrijving)
+        domain = ensure_domain(pabc, pabc_url, ZAC_DOMAIN, [entity_type])
+        wanted = mappable_roles(pabc, pabc_url)
+        for name, roles in wanted.items():
+            ensure_functional_role(pabc, pabc_url, name, ZAC_APPLICATION, roles, domain)
+        if left_out := sorted(set(ZAC_FUNCTIONAL_ROLES) - set(wanted)):
+            ctx.notes.append(f"not mapped, PABC lacks their application roles: {', '.join(left_out)}")
