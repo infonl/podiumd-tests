@@ -115,6 +115,8 @@ select = [
     "FIX",  # flake8-fixme: a TODO, FIXME or XXX is an issue or a fix, not a comment
     "FLY",  # pyflint
     "FURB", # refurb
+    "FURB113", # preview: repeated append
+    "FURB140", # preview: reimplemented starmap
     "G",    # flake8-logging-format
     "I",    # isort
     "ICN",  # flake8-import-conventions
@@ -133,6 +135,7 @@ select = [
     "PLR0914", # preview: too many locals
     "PLR6201", # preview: literal membership in a set
     "PLW0717", # preview: too many statements in a try body
+    "PLR6301", # preview: method without self
     "PLW1514", # preview: open() without encoding
     "PT",   # flake8-pytest-style
     "PTH",  # flake8-use-pathlib
@@ -141,6 +144,7 @@ select = [
     "RET",  # flake8-return
     "RSE",  # flake8-raise
     "RUF",  # ruff
+    "RUF039", # preview: regex pattern not a raw string
     "S",    # flake8-bandit
     "SIM",  # flake8-simplify
     "SLF",  # flake8-self
@@ -164,7 +168,8 @@ ignore = [
     "ERA001", # commented-out-code: current hits are prose that resembles code
 ]
 # Allow fix for all enabled rules (when `--fix`) is provided.
-# Preview rules only where selected by code (PLR0904, PLR0914, PLR6201, PLW0717, PLW1514).
+# Preview rules only where selected by code (FURB113, FURB140, PLR0904, PLR0914, PLR6201, PLR6301, PLW0717, PLW1514,
+# RUF039).
 preview = true
 explicit-preview-rules = true
 # The WPS codes in noqa comments belong to flake8 (wemake-python-styleguide), not to ruff.

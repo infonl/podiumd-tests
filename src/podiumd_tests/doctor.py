@@ -85,16 +85,19 @@ def _cluster(env: Environment) -> list[Check]:
     if unreachable:
         checks.append(Check("kube API", no_access, unreachable, "cluster stopped or deleted? (scheduled shutdown)"))
         return checks
-    checks.append(Check("kube API", "ok", f"readyz; context rewritten by {refreshed}" if refreshed else "readyz"))
-    checks.append(_lock(env))
+    checks.extend(
+        (
+            Check("kube API", "ok", f"readyz; context rewritten by {refreshed}" if refreshed else "readyz"),
+            _lock(env),
+        )
+    )
     for namespace in env.namespaces:
         try:
             env.kube.run("get", "namespace", namespace, "-o", "name")
         except KubeError as exc:
             checks.append(Check(f"namespace {namespace}", "fail", str(exc)))
             continue
-        checks.append(Check(f"namespace {namespace}", "ok"))
-        checks.append(_workloads(env, namespace))
+        checks.extend((Check(f"namespace {namespace}", "ok"), _workloads(env, namespace)))
     return checks
 
 

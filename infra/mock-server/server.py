@@ -81,7 +81,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         found = HOSTED_CHECKOUT.match(self.path)
         if found and found[1] and (CHECKOUTS / f"{found[1]}.json").exists():
-            self._json(200, self._checkout_status(found[1]))
+            self._json(200, _checkout_status(found[1]))
             return
         self.send_response(200 if self.path == "/healthz" else 404)
         self.end_headers()
@@ -151,13 +151,14 @@ class Handler(BaseHTTPRequestHandler):
         body = {"hostedCheckoutId": checkout_id, "RETURNMAC": mac, "merchantReference": reference}
         self._json(201, {**body, "redirectUrl": redirect})
 
-    def _checkout_status(self, checkout_id):
-        status_file = CHECKOUTS / f"{checkout_id}.status"
-        status = status_file.read_text(encoding="utf-8").strip() if status_file.exists() else "IN_PROGRESS"
-        if status in {"IN_PROGRESS", "CANCELLED_BY_CONSUMER"}:
-            return {"status": status}
-        payment = {"id": f"{checkout_id}_0", "status": status}
-        return {"status": "PAYMENT_CREATED", "createdPaymentOutput": {"payment": payment}}
+
+def _checkout_status(checkout_id):
+    status_file = CHECKOUTS / f"{checkout_id}.status"
+    status = status_file.read_text(encoding="utf-8").strip() if status_file.exists() else "IN_PROGRESS"
+    if status in {"IN_PROGRESS", "CANCELLED_BY_CONSUMER"}:
+        return {"status": status}
+    payment = {"id": f"{checkout_id}_0", "status": status}
+    return {"status": "PAYMENT_CREATED", "createdPaymentOutput": {"payment": payment}}
 
 
 if __name__ == "__main__":

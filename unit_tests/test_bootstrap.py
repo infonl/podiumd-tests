@@ -132,7 +132,7 @@ class OptInStep(FakeStep):
 
     present: bool = True
 
-    def not_allowed(self, _ctx):
+    def not_allowed(self, _ctx):  # noqa: PLR6301  # the optional Step method
         return "profile setting fake_opt_in is off"
 
 

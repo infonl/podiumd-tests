@@ -56,7 +56,7 @@ def test_payment_return_reads_the_forms_action_params(response_factory):
     response.headers["Location"] = location
 
     class Http:
-        def get(self, url, *, allow_redirects):
+        def get(self, url, *, allow_redirects):  # noqa: PLR6301  # fakes Session.get
             assert (url, allow_redirects) == ("https://of.test/payment/1/return", False)
             return response
 

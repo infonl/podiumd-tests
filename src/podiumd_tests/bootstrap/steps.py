@@ -218,6 +218,11 @@ class ItaMedewerker:
         return objecten_client(ctx.env).list("objects", query)
 
 
+def _actoren_api(ctx: Context) -> tuple[requests.Session, str, dict[str, str]]:
+    url = f"{ctx.env.profile.urls['openklant']}/klantinteracties/api/v1/actoren"
+    return ctx.env.session(), url, {"Authorization": f"Token {ctx.store.read()[OPENKLANT_STORE_KEY]}"}
+
+
 @dataclass(frozen=True)
 class OpenKlantActor:
     """Open Klant medewerker actor for a Keycloak test user, matched by e-mail (TA seed-ita-medewerker-actor).
@@ -246,7 +251,7 @@ class OpenKlantActor:
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Recreate the actor."""
         self.remove(ctx)
-        http, url, headers = self._api(ctx)
+        http, url, headers = _actoren_api(ctx)
         body = {
             "naam": f"{PREFIX}-{self.user}",
             "soortActor": "medewerker",
@@ -265,17 +270,13 @@ class OpenKlantActor:
         """Delete the user's actors."""
         if OPENKLANT_STORE_KEY not in ctx.store.read():
             return ()
-        http, url, headers = self._api(ctx)
+        http, url, headers = _actoren_api(ctx)
         for uuid in self._uuids(ctx):
             expect_status(http.delete(f"{url}/{uuid}", headers=headers), HTTPStatus.NO_CONTENT)
         return ()
 
-    def _api(self, ctx: Context) -> tuple[requests.Session, str, dict[str, str]]:
-        url = f"{ctx.env.profile.urls['openklant']}/klantinteracties/api/v1/actoren"
-        return ctx.env.session(), url, {"Authorization": f"Token {ctx.store.read()[OPENKLANT_STORE_KEY]}"}
-
     def _uuids(self, ctx: Context) -> list[str]:
-        http, url, headers = self._api(ctx)
+        http, url, headers = _actoren_api(ctx)
         params = {"actoridentificatorObjectId": self.email}
         response = expect_status(http.get(url, params=params, headers=headers), HTTPStatus.OK)
         return [str(actor["uuid"]) for actor in entries(cast("dict[str, object]", response.json()).get("results"))]
@@ -587,15 +588,15 @@ class OpenInwonerPartijen:
     requires: tuple[str, ...] = ("openinwoner", "openklant")
     wiring: bool = True
 
-    def is_present(self, _ctx: Context, /) -> bool:
+    def is_present(self, _ctx: Context, /) -> bool:  # noqa: PLR6301  # a Step method
         """Always: Open Inwoner creates the partijen."""
         return True
 
-    def apply(self, _ctx: Context, /) -> dict[str, str]:
+    def apply(self, _ctx: Context, /) -> dict[str, str]:  # noqa: PLR6301  # a Step method
         """Nothing."""
         return {}
 
-    def remove(self, ctx: Context, /) -> tuple[str, ...]:
+    def remove(self, ctx: Context, /) -> tuple[str, ...]:  # noqa: PLR6301  # a Step method
         """Delete the partijen identified by a test identity's vestigingsnummer, bsn or kvk."""
         if OPENKLANT_STORE_KEY not in ctx.store.read():
             return ()

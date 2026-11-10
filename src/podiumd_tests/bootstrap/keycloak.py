@@ -6,6 +6,7 @@ import json
 
 from dataclasses import dataclass
 from dataclasses import field
+from itertools import starmap
 from typing import TYPE_CHECKING
 from typing import cast
 
@@ -70,7 +71,7 @@ class KeycloakUser:
         groups = {group for group in self.groups if admin.group_id(group)}
         if not (roles <= admin.user_realm_roles(user_id) and groups <= admin.user_groups(user_id)):
             return False
-        client_roles = filter(None, (admin.client_role(client, role) for client, role in self.client_roles))
+        client_roles = filter(None, starmap(admin.client_role, self.client_roles))
         return all(str(role["name"]) in admin.user_client_roles(user_id, uuid) for uuid, role in client_roles)
 
     def apply(self, ctx: Context, /) -> dict[str, str]:

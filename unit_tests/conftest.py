@@ -213,7 +213,7 @@ class FakePage:  # pylint: disable=too-many-instance-attributes  # one per Page 
         return self.evaluated.pop(0) if self.evaluated else None
 
     @contextmanager
-    def expect_navigation(self):
+    def expect_navigation(self):  # noqa: PLR6301  # fakes Page.expect_navigation
         yield
 
     @contextmanager

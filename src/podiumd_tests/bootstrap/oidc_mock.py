@@ -117,7 +117,7 @@ class KeycloakOidcMock:
     requires: tuple[str, ...] = ("keycloak",)
     wiring: bool = True
 
-    def is_present(self, ctx: Context, /) -> bool:
+    def is_present(self, ctx: Context, /) -> bool:  # noqa: PLR6301  # a Step method
         """Both scopes with all their mappers exist, and every app's client has its scopes and redirect URI."""
         admin = for_environment(ctx.env)
         scopes = admin.client_scopes()
@@ -132,7 +132,7 @@ class KeycloakOidcMock:
                 return False
         return True
 
-    def apply(self, ctx: Context, /) -> dict[str, str]:
+    def apply(self, ctx: Context, /) -> dict[str, str]:  # noqa: PLR6301  # a Step method
         """Add what is missing, and extend the stored record with it."""
         admin = for_environment(ctx.env)
         record = _record(ctx)
@@ -150,7 +150,7 @@ class KeycloakOidcMock:
                 redirects[client_id] = redirect
         return {KEYCLOAK_STORE_KEY: json.dumps(record, sort_keys=True)}
 
-    def remove(self, ctx: Context, /) -> tuple[str, ...]:
+    def remove(self, ctx: Context, /) -> tuple[str, ...]:  # noqa: PLR6301  # a Step method
         """Undo exactly what the record lists."""
         record = _record(ctx)
         if record:

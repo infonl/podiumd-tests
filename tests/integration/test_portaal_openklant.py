@@ -311,7 +311,7 @@ def test_question_answered_in_ita_shows_as_answered(
     portal_login(page, podiumd_env, "digid", INWONER, MIJN_VRAGEN)
     card = page.locator(".card", has_text=vraag)
     # From 2.5.0 a question whose interne taken are all verwerkt shows Afgehandeld instead.
-    expect(card).to_contain_text(re.compile("Beantwoord|Afgehandeld"))
+    expect(card).to_contain_text(re.compile(r"Beantwoord|Afgehandeld"))
     card.locator("a").first.click()
     expect(page.locator("main")).to_contain_text(f"Antwoord {antwoord}")
 

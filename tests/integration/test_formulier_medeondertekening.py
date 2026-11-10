@@ -109,5 +109,5 @@ def test_cosigned_form_is_registered(
     page.get_by_role("button", name="Bevestigen").click()
     expect(page.get_by_text(omschrijving)).to_be_visible()
     page.get_by_role("checkbox").check()
-    page.get_by_role("button", name=re.compile("Confirm|Bevestigen")).click()
+    page.get_by_role("button", name=re.compile(r"Confirm|Bevestigen")).click()
     assert omschrijving in received(mailpit, registry, timeout=TIMEOUT, to=registratie)

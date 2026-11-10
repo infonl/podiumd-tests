@@ -49,7 +49,7 @@ def test_homepage_is_the_portal(
     need_bootstrap("openinwoner-cms-pages")
     html = expect_status(http.get(f"{urls['openinwoner']}/"), HTTPStatus.OK).text
     assert "openinwoner-theme" in html
-    assert re.search("welkom|podiumd", title(html), re.IGNORECASE), title(html)
+    assert re.search(r"welkom|podiumd", title(html), re.IGNORECASE), title(html)
 
 
 @pytest.mark.source(

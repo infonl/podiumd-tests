@@ -168,10 +168,10 @@ class FakeAdmin:
     def count_users(self, _tag):
         return len(self.created)
 
-    def group_id(self, _name):
+    def group_id(self, _name):  # noqa: PLR6301  # fakes KeycloakAdmin.group_id
         return "g1"
 
-    def new_password(self):
+    def new_password(self):  # noqa: PLR6301  # fakes KeycloakAdmin.new_password
         return "pw"
 
     def create_user(self, username, _password, _attributes, _names):

@@ -24,4 +24,4 @@ def is_no_route(response: requests.Response) -> bool:
     except ValueError:
         return False
     message = cast("dict[str, object]", body).get("error_msg") if isinstance(body, dict) else None
-    return isinstance(message, str) and re.search("route", message, re.IGNORECASE) is not None
+    return isinstance(message, str) and re.search(r"route", message, re.IGNORECASE) is not None

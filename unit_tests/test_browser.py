@@ -60,11 +60,11 @@ def test_headless_page_guards_navigation_and_closes_the_browser(monkeypatch, pag
             calls.append(("launch", args))
             return self
 
-        def new_context(self, **kwargs):
+        def new_context(self, **kwargs):  # noqa: PLR6301  # fakes Browser.new_context
             calls.append(("context", kwargs))
             return type("C", (), {"new_page": lambda _s: page})()
 
-        def close(self):
+        def close(self):  # noqa: PLR6301  # fakes Browser.close
             calls.append("close")
 
     playwright = type("P", (), {"chromium": Chromium()})()

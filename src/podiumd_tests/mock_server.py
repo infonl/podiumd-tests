@@ -122,7 +122,7 @@ class MockServer:
     requires: tuple[str, ...] = ("cluster",)
     wiring: bool = False
 
-    def is_present(self, ctx: Context, /) -> bool:
+    def is_present(self, ctx: Context, /) -> bool:  # noqa: PLR6301  # a Step method
         """The ConfigMap holds the current server.py and the Deployment has a ready replica."""
         kube = ctx.env.kube
         config_map = kube.get_optional("configmap", NAME)
@@ -136,7 +136,7 @@ class MockServer:
             code == (INFRA / "server.py").read_text() and bool(ready) and _container(deployment).get("image") == wanted
         )
 
-    def apply(self, ctx: Context, /) -> dict[str, str]:
+    def apply(self, ctx: Context, /) -> dict[str, str]:  # noqa: PLR6301  # a Step method
         """Apply the manifests, restart on new code, and wait until the Deployment is ready."""
         kube = ctx.env.kube
         for manifest in manifests(_image(ctx.env)):
@@ -147,7 +147,7 @@ class MockServer:
         )
         return {}
 
-    def remove(self, ctx: Context, /) -> tuple[str, ...]:
+    def remove(self, ctx: Context, /) -> tuple[str, ...]:  # noqa: PLR6301  # a Step method
         """Delete the manifests' objects."""
         for manifest in reversed(manifests()):
             ctx.env.kube.delete(str(manifest["kind"]).lower(), metadata_name(manifest))

@@ -40,7 +40,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.ui, pytest.mark.requires("key
 
 BUSY_APP_TIMEOUT = 240
 # The logout control of the Django admins, in Dutch or English.
-LOGOUT = re.compile("Afmelden|Uitloggen|Log out", re.IGNORECASE)
+LOGOUT = re.compile(r"Afmelden|Uitloggen|Log out", re.IGNORECASE)
 
 
 def in_admin(url: str, app_url: str) -> bool:
