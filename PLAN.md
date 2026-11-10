@@ -329,7 +329,7 @@ Why this layout:
 10. `pylint src`, then `pylint tests unit_tests` with the same `TESTS_PYLINT_DISABLE` list
 11. `basedpyright` (`typeCheckingMode = "strict"`, relaxed under the test directories)
 12. `pytest` on `unit_tests`
-13. `pip-audit` on the `.venv` packages (skipped when pypi.org is unreachable)
+13. `pip-audit` on the `.venv` packages, a warning only (skipped when pypi.org is unreachable); the `pip-audit` workflow runs it weekly and on `pyproject.toml` changes
 
 Ruff `PL` owns the count rules, so pylint disables them (`[tool.pylint."messages control"]`).
 

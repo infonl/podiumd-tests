@@ -10,8 +10,8 @@ Usage: run_python_checks [-h|--help]
 Runs ruff check, shellcheck, actionlint, ruff format --check, flake8
 (wemake-python-styleguide), yamllint, jscpd, pymarkdown, vulture, bandit, pylint,
 basedpyright and pytest (unit_tests/ only, with coverage threshold from
-pyproject.toml), fastest first, then pip-audit on the packages of .venv.
-Stops at the first failure. Upgrades the dev tools in
+pyproject.toml), fastest first, stopping at the first failure. Then pip-audit
+on the packages of .venv, which only warns. Upgrades the dev tools in
 .venv first when last upgraded over a day ago.
 EOF
 }
@@ -156,14 +156,15 @@ basedpyright "$SRC" "${TEST_DIRS[@]}"
 echo "=== pytest (unit_tests, with coverage) ==="
 python3 -m pytest -q --cov --cov-report=term-missing:skip-covered unit_tests
 
-# Known vulnerabilities in the packages of .venv. Last: it can fail without a code change (a new advisory), it needs
-# the PyPI vulnerability service. --skip-editable: podiumd-tests itself is not on PyPI. Own cache: pip-audit cannot
-# read the cache entries of a newer pip.
-echo "=== pip-audit (.venv packages) ==="
-if getent ahosts pypi.org > /dev/null; then
-    pip-audit --progress-spinner off --skip-editable --cache-dir .venv/.pip-audit-cache
+# Known vulnerabilities in the packages of .venv, as a warning: a new advisory appears without a code change and must
+# not block a commit; the pip-audit workflow reports it. --skip-editable: podiumd-tests itself is not on PyPI. Own
+# cache: pip-audit cannot read the cache entries of a newer pip.
+echo "=== pip-audit (.venv packages, warning only) ==="
+if python3 -c 'import socket; socket.create_connection(("pypi.org", 443), 5).close()' 2> /dev/null; then
+    pip-audit --progress-spinner off --skip-editable --cache-dir .venv/.pip-audit-cache ||
+        echo "WARNING: pip-audit found known vulnerabilities: upgrade the package named above"
 else
-    echo "pypi.org not reachable, skipped"
+    echo "WARNING: pypi.org not reachable, pip-audit skipped"
 fi
 
 echo "=== all checks passed ==="
