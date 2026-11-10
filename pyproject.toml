@@ -326,6 +326,8 @@ exclude = [
     "src/podiumd_tests/perf/*locustfile.py",
 ]
 typeCheckingMode = "strict"
+# The oldest Python of requires-python; the .venv may run a newer one.
+pythonVersion = "3.12"
 reportUnusedImport = false  # done by ruff F401
 reportUntypedBaseClass = false # done by ruff N801
 reportUnnecessaryTypeIgnoreComment = "error"
