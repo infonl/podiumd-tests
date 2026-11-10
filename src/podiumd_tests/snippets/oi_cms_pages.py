@@ -38,6 +38,13 @@ def _run(params):
         _remove(Page, params, record, config)
         mark_urlconf_as_changed()
         return {"present": False}
+    _apply(params, existing, missing_configs, config, record)
+    # The running web processes load apphook URLs once; this makes them reload on their next request.
+    mark_urlconf_as_changed()
+    return {"present": True, "record": record}
+
+
+def _apply(params, existing, missing_configs, config, record):
     for wanted, found in _pairs(params, existing):
         page = _create(wanted, _author(params)) if found is None else found
         if wanted.get("home") and not page.is_home:
@@ -50,9 +57,6 @@ def _run(params):
         record.setdefault("contact_email", config.register_contact_email)
         config.register_contact_email = params["contact_email"]
         config.save()
-    # The running web processes load apphook URLs once; this makes them reload on their next request.
-    mark_urlconf_as_changed()
-    return {"present": True, "record": record}
 
 
 def _in_place(wanted, page):

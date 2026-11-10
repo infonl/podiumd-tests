@@ -75,14 +75,7 @@ class ResourceRegistry:
             return [entry.description for entry in entries]
         errors: list[str] = []
         for _, group in groupby(reversed(entries), _batch_key):
-            batch = list(group)
-            if len(batch) > 1 and _run_batch(batch):
-                continue
-            for entry in batch:
-                try:
-                    entry.delete()
-                except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught  # collect all, report together
-                    errors.append(f"{entry.description}: {type(exc).__name__}: {exc}")
+            errors.extend(_delete_batch(list(group)))
         if errors:
             msg = f"cleanup failed for: {'; '.join(errors)}"
             raise CleanupError(msg)
@@ -92,6 +85,19 @@ class ResourceRegistry:
 def _batch_key(entry: _Entry) -> object:
     """Snippets of one deployment share a key; any other entry has its own."""
     return (id(entry.snippet.kube), entry.snippet.deployment) if entry.snippet else id(entry)
+
+
+def _delete_batch(batch: list[_Entry]) -> list[str]:
+    """Delete the entries, in one Django shell when they are snippets of one deployment; the errors."""
+    if len(batch) > 1 and _run_batch(batch):
+        return []
+    errors: list[str] = []
+    for entry in batch:
+        try:
+            entry.delete()
+        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught  # collect all, report together
+            errors.append(f"{entry.description}: {type(exc).__name__}: {exc}")
+    return errors
 
 
 def _run_batch(batch: Sequence[_Entry]) -> bool:

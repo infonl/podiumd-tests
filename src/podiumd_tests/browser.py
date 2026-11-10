@@ -39,13 +39,17 @@ NETWORK_RETRIES = 2
 NETWORK_PAUSE_MS = 1000
 
 
+def _retryable(exc: PlaywrightError, attempt: int) -> bool:
+    return NETWORK_CHANGED in exc.message and attempt <= NETWORK_RETRIES
+
+
 def retry_network_change[ResultT](page: Page, navigate: Callable[[], ResultT], what: str) -> ResultT:
     """Run a navigation; repeat it up to NETWORK_RETRIES times when a host network change aborted it."""
     for attempt in count(1):
         try:
             return navigate()
         except PlaywrightError as exc:
-            if NETWORK_CHANGED not in exc.message or attempt > NETWORK_RETRIES:
+            if not _retryable(exc, attempt):
                 raise
             warnings.warn(f"{what}: {NETWORK_CHANGED}, retry {attempt} of {NETWORK_RETRIES}", stacklevel=2)
             page.wait_for_timeout(NETWORK_PAUSE_MS)

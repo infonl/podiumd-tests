@@ -23,23 +23,12 @@ def run(params):
     klanten = KlantenSysteemConfig.get_solo()
     group = ZGWApiGroupConfig.objects.filter(name=params.get("group")).first()
     if params["action"] == "status":
-        service = None if config is None else config.service
-        linked = service is not None and service.slug == SLUG and service.secret == params.get("token")
-        backend = group is None or group.klant_backend == BACKEND
-        klanten_set = all(getattr(klanten, field) == value for field, value in KLANTEN.items())
-        return {"present": bool(linked and backend and klanten_set)}
+        return {"present": _present(params, config, klanten, group)}
     record = params.get("record") or {}
     if params["action"] == "remove":
         _remove(record, config, klanten)
         return {"present": False}
-    service = _service(params, record)
-    if "config" not in record:
-        record["config"] = _snapshot(config) if config else None
-    config = config or OpenKlant2Config()
-    config.service = service
-    for field, value in params["config"].items():
-        setattr(config, field, value)
-    config.save()
+    config = _configure(params, record, config or OpenKlant2Config(), existed=config is not None)
     record["subjects"] = record.get("subjects", []) + _subjects(params["subjects"], config)
     if "klanten" not in record:
         record["klanten"] = {field: getattr(klanten, field) for field in KLANTEN}
@@ -51,6 +40,26 @@ def run(params):
         group.klant_backend = BACKEND
         group.save()
     return {"present": True, "record": record}
+
+
+def _present(params, config, klanten, group):
+    service = None if config is None else config.service
+    linked = service is not None and service.slug == SLUG and service.secret == params.get("token")
+    backend = group is None or group.klant_backend == BACKEND
+    klanten_set = all(getattr(klanten, field) == value for field, value in KLANTEN.items())
+    return bool(linked and backend and klanten_set)
+
+
+def _configure(params, record, config, *, existed):
+    """Point the Open Klant 2 config at the service with the contact flow settings; record its old fields once."""
+    service = _service(params, record)
+    if "config" not in record:
+        record["config"] = _snapshot(config) if existed else None
+    config.service = service
+    for field, value in params["config"].items():
+        setattr(config, field, value)
+    config.save()
+    return config
 
 
 def _service(params, record):

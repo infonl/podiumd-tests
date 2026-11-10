@@ -93,14 +93,16 @@ def _cluster(env: Environment) -> list[Check]:
             _lock(env),
         )
     )
-    for namespace in env.namespaces:
-        try:
-            env.kube.run("get", "namespace", namespace, "-o", "name")
-        except KubeError as exc:
-            checks.append(Check(f"namespace {namespace}", "fail", str(exc)))
-            continue
-        checks.extend((Check(f"namespace {namespace}", "ok"), _workloads(env, namespace)))
+    checks.extend(check for namespace in env.namespaces for check in _namespace(env, namespace))
     return checks
+
+
+def _namespace(env: Environment, namespace: str) -> list[Check]:
+    try:
+        env.kube.run("get", "namespace", namespace, "-o", "name")
+    except KubeError as exc:
+        return [Check(f"namespace {namespace}", "fail", str(exc))]
+    return [Check(f"namespace {namespace}", "ok"), _workloads(env, namespace)]
 
 
 def _refresh(env: Environment) -> str:
@@ -247,25 +249,23 @@ def _not_deployed(env: Environment) -> dict[str, str]:
 
 
 def _secrets(env: Environment, *, cluster_ok: bool) -> list[Check]:
-    checks: list[Check] = []
     absent = _not_deployed(env) if cluster_ok else {}
-    for name in env.credentials.names:
-        spec = env.profile.secrets[name]
-        if not cluster_ok and spec.needs_cluster:
-            checks.append(Check(f"secret {name}", "skip", "no cluster"))
-            continue
-        # The deployment or Secret it is read from names its component (contact-web: kiss, omc: omc).
-        owners = deployed_components([spec.options.get("deployment") or spec.options.get("name") or ""])
-        if owners & absent.keys():
-            checks.append(Check(f"secret {name}", "skip", absent[min(owners & absent.keys())]))
-            continue
-        try:
-            env.credentials.get(name)
-        except SecretError as exc:
-            checks.append(Check(f"secret {name}", "fail", str(exc)))
-        else:
-            checks.append(Check(f"secret {name}", "ok", env.profile.secrets[name].source))
-    return checks
+    return [_secret(env, name, absent, cluster_ok=cluster_ok) for name in env.credentials.names]
+
+
+def _secret(env: Environment, name: str, absent: dict[str, str], *, cluster_ok: bool) -> Check:
+    spec = env.profile.secrets[name]
+    if not cluster_ok and spec.needs_cluster:
+        return Check(f"secret {name}", "skip", "no cluster")
+    # The deployment or Secret it is read from names its component (contact-web: kiss, omc: omc).
+    owners = deployed_components([spec.options.get("deployment") or spec.options.get("name") or ""])
+    if owners & absent.keys():
+        return Check(f"secret {name}", "skip", absent[min(owners & absent.keys())])
+    try:
+        env.credentials.get(name)
+    except SecretError as exc:
+        return Check(f"secret {name}", "fail", str(exc))
+    return Check(f"secret {name}", "ok", env.profile.secrets[name].source)
 
 
 def _capabilities(env: Environment) -> Check:

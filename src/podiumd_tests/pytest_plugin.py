@@ -151,6 +151,26 @@ def fixture_run_dir(request: pytest.FixtureRequest, tmp_path_factory: pytest.Tem
     return base.parent if hasattr(request.config, "workerinput") else base
 
 
+def _missing(env: Environment, wanted: list[runner.Step]) -> list[runner.Step]:
+    """Return the wanted steps that are not in place; skips the test when check skips one."""
+    outcomes = runner.check(env, wanted)
+    skipped = [outcome for outcome in outcomes if outcome.action == "skipped"]
+    if skipped:  # e.g. wiring off for the profile, or the component is absent
+        pytest.skip("; ".join(f"bootstrap step {outcome.step}: {outcome.detail}" for outcome in skipped))
+    return [step for step, outcome in zip(wanted, outcomes, strict=True) if outcome.action != "present"]
+
+
+def _auto_bootstrap(env: Environment, missing: list[runner.Step]) -> None:
+    """Apply the missing steps (--auto-bootstrap); fails the test when bootstrap is refused or a step fails."""
+    reason = runner.refusal(env.profile)
+    if reason:
+        pytest.fail(f"--auto-bootstrap refused: {reason}")
+    failed_steps = [outcome for outcome in runner.bootstrap(env, missing) if outcome.action != "created"]
+    if failed_steps:
+        failures = "; ".join(f"{outcome.step} {outcome.action}: {outcome.detail}" for outcome in failed_steps)
+        pytest.fail(f"--auto-bootstrap: {failures}")
+
+
 @pytest.fixture(scope="session", name="need_bootstrap")
 def fixture_need_bootstrap(
     request: pytest.FixtureRequest, run_dir: Path, podiumd_env: Environment
@@ -169,25 +189,13 @@ def fixture_need_bootstrap(
         unknown = set(step_names) - {step.name for step in STEPS}
         if unknown:
             pytest.fail(f"unknown bootstrap steps: {', '.join(sorted(unknown))}")
-        outcomes = runner.check(podiumd_env, wanted)
-        skipped = [outcome for outcome in outcomes if outcome.action == "skipped"]
-        if skipped:  # e.g. wiring off for the profile, or the component is absent
-            pytest.skip("; ".join(f"bootstrap step {outcome.step}: {outcome.detail}" for outcome in skipped))
-        missing = [step for step, outcome in zip(wanted, outcomes, strict=True) if outcome.action != "present"]
+        missing = _missing(podiumd_env, wanted)
         name = podiumd_env.profile.name
         if missing and not auto:
             steps = ", ".join(step.name for step in missing)
             pytest.fail(f"bootstrap missing on {name} ({steps}): run `podiumd-tests bootstrap --env {name}`")
         if missing:
-            reason = runner.refusal(podiumd_env.profile)
-            if reason:
-                pytest.fail(f"--auto-bootstrap refused: {reason}")
-            failed_steps = [
-                outcome for outcome in runner.bootstrap(podiumd_env, missing) if outcome.action != "created"
-            ]
-            if failed_steps:
-                failures = "; ".join(f"{outcome.step} {outcome.action}: {outcome.detail}" for outcome in failed_steps)
-                pytest.fail(f"--auto-bootstrap: {failures}")
+            _auto_bootstrap(podiumd_env, missing)
         for step in wanted:
             (present / step.name).touch()
 

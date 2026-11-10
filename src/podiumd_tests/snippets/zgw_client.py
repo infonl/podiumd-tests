@@ -21,12 +21,7 @@ def run(params):
     secrets = JWTSecret.objects.filter(identifier=client_id)
     catalogus_params = params.get("catalogus")
     if params["action"] == "status":
-        present = applicaties.exists() and secrets.exists()
-        if catalogus_params and not _catalogi(catalogus_params).exists():
-            present = False
-        if params.get("zaaktypen") and not _zaaktype_rights_present(applicaties, params["zaaktypen"]):
-            present = False
-        return {"present": bool(present)}
+        return {"present": _present(params, applicaties, secrets)}
     if params["action"] == "remove":
         removed = applicaties.delete()[0] + secrets.delete()[0]
         if catalogus_params and catalogus_params["owns"]:
@@ -42,6 +37,16 @@ def run(params):
     notes = _zaaktype_autorisaties(applicatie, params["zaaktypen"]) if params.get("zaaktypen") else []
     JWTSecret.objects.update_or_create(identifier=client_id, defaults={"secret": params["secret"]})
     return {"present": True, "notes": notes}
+
+
+def _present(params, applicaties, secrets):
+    present = applicaties.exists() and secrets.exists()
+    catalogus_params = params.get("catalogus")
+    if catalogus_params and not _catalogi(catalogus_params).exists():
+        present = False
+    if params.get("zaaktypen") and not _zaaktype_rights_present(applicaties, params["zaaktypen"]):
+        present = False
+    return bool(present)
 
 
 def _zaaktype_rights_present(applicaties, zaaktypen_params):

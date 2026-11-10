@@ -41,13 +41,17 @@ MIN_CERT_DAYS = 14
 SESSION_COOKIE = re.compile(r"session|auth|token", re.IGNORECASE)
 
 
+def _brute_force_gaps(realm: JsonObject) -> list[str]:
+    if realm.get("bruteForceProtected") is not True:
+        return ["bruteForceProtected is off"]
+    if not 0 < int(cast("int", realm.get("failureFactor") or 0)) <= MAX_FAILURE_FACTOR:
+        return [f"failureFactor {realm.get('failureFactor')} (at most {MAX_FAILURE_FACTOR})"]
+    return []
+
+
 def realm_policy_gaps(realm: JsonObject) -> list[str]:
     """Where a realm representation falls short of podiumd's realm templates; empty when it does not."""
-    gaps: list[str] = []
-    if realm.get("bruteForceProtected") is not True:
-        gaps.append("bruteForceProtected is off")
-    elif not 0 < int(cast("int", realm.get("failureFactor") or 0)) <= MAX_FAILURE_FACTOR:
-        gaps.append(f"failureFactor {realm.get('failureFactor')} (at most {MAX_FAILURE_FACTOR})")
+    gaps = _brute_force_gaps(realm)
     if int(cast("int", realm.get("accessTokenLifespan") or 0)) > MAX_ACCESS_TOKEN_SECONDS:
         gaps.append(f"accessTokenLifespan {realm.get('accessTokenLifespan')} s (at most {MAX_ACCESS_TOKEN_SECONDS})")
     if realm.get("revokeRefreshToken") is not True:

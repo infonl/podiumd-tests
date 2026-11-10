@@ -280,13 +280,20 @@ def helm_replicas(env: Environment, namespaces: Sequence[str] | None = None) -> 
     for namespace in env.namespaces if namespaces is None else namespaces:
         releases = env.kube.get_json("secrets", "-l", "owner=helm,status=deployed", namespace=namespace)
         for secret in entries(releases.get("items")):
-            data = base64.b64decode(base64.b64decode(str(section(secret, "data").get("release", ""))))
-            release = section({"release": json.loads(gzip.decompress(data))}, "release")
-            for doc in entries(list(yaml.safe_load_all(str(release.get("manifest", ""))))):
-                if doc.get("kind") in {"Deployment", "StatefulSet"}:
-                    where = section(doc, "metadata").get("namespace") or release.get("namespace") or namespace
-                    replicas = _int(section(doc, "spec").get("replicas", 1))
-                    found[f"{where}/{doc['kind']}/{metadata_name(doc)}"] = replicas
+            found.update(_release_replicas(secret, namespace))
+    return found
+
+
+def _release_replicas(secret: Item, namespace: str) -> dict[str, int]:
+    """Replicas of the Deployments and StatefulSets of the Helm release in this Secret."""
+    data = base64.b64decode(base64.b64decode(str(section(secret, "data").get("release", ""))))
+    release = section({"release": json.loads(gzip.decompress(data))}, "release")
+    found: dict[str, int] = {}
+    for doc in entries(list(yaml.safe_load_all(str(release.get("manifest", ""))))):
+        if doc.get("kind") in {"Deployment", "StatefulSet"}:
+            where = section(doc, "metadata").get("namespace") or release.get("namespace") or namespace
+            key = f"{where}/{doc['kind']}/{metadata_name(doc)}"
+            found[key] = _int(section(doc, "spec").get("replicas", 1))
     return found
 
 
@@ -320,21 +327,27 @@ def unhealthy_pods(pods: Sequence[Item]) -> list[str]:
     """
     found: list[str] = []
     for pod in pods:
-        if "Job" in _owner_kinds(pod) or section(pod, "metadata").get("deletionTimestamp") or _foreign(pod):
-            continue
-        status = section(pod, "status")
-        phase = str(status.get("phase", "Unknown"))
-        name = metadata_name(pod)
-        if phase not in GOOD_POD_PHASES:
-            found.append(f"{name}: phase {phase}")
-            continue
-        if phase == "Succeeded":
-            continue
-        containers = entries(status.get("containerStatuses"))
-        found.extend(
-            f"{name}/{container.get('name', '?')}: not ready" for container in containers if not container.get("ready")
-        )
+        if not _left_out(pod):
+            found += _pod_problems(pod)
     return found
+
+
+def _left_out(pod: Item) -> bool:
+    deleted = bool(section(pod, "metadata").get("deletionTimestamp"))
+    return "Job" in _owner_kinds(pod) or deleted or _foreign(pod)
+
+
+def _pod_problems(pod: Item) -> list[str]:
+    status = section(pod, "status")
+    phase = str(status.get("phase", "Unknown"))
+    name = metadata_name(pod)
+    if phase not in GOOD_POD_PHASES:
+        return [f"{name}: phase {phase}"]
+    if phase == "Succeeded":
+        return []
+    containers = entries(status.get("containerStatuses"))
+    unready = [container.get("name", "?") for container in containers if not container.get("ready")]
+    return [f"{name}/{container}: not ready" for container in unready]
 
 
 @dataclass(frozen=True)

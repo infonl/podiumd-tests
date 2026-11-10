@@ -114,12 +114,18 @@ def workload_routes(env: Environment) -> list[MailRoute]:
         pod = section(section(section(workload, "spec"), "template"), "spec")
         for container in entries(pod.get("containers")):
             where = f"{metadata_name(workload)}/{container.get('name')}"
-            for env_from in entries(container.get("envFrom")):
-                hosts = sources.env_from(env_from, namespace)
-                routes += [MailRoute(f"{where} {var}", host) for var, host in hosts]
-            for var in entries(container.get("env")):
-                if var.get("name") in MAIL_HOST_VARS:
-                    routes.append(MailRoute(f"{where} {var['name']}", sources.value(var, namespace)))
+            routes += _container_routes(sources, where, container, namespace)
+    return routes
+
+
+def _container_routes(sources: _Sources, where: str, container: JsonObject, namespace: str) -> list[MailRoute]:
+    routes: list[MailRoute] = []
+    for env_from in entries(container.get("envFrom")):
+        hosts = sources.env_from(env_from, namespace)
+        routes += [MailRoute(f"{where} {var}", host) for var, host in hosts]
+    for var in entries(container.get("env")):
+        if var.get("name") in MAIL_HOST_VARS:
+            routes.append(MailRoute(f"{where} {var['name']}", sources.value(var, namespace)))
     return routes
 
 

@@ -199,6 +199,11 @@ def forwarded_port(command: Sequence[str], process: subprocess.Popen[str], timeo
         lines.put("")
 
     threading.Thread(target=drain, daemon=True).start()
+    return _reported_port(command, lines, timeout)
+
+
+def _reported_port(command: Sequence[str], lines: queue.Queue[str], timeout: int) -> int:
+    """Return the port in the first "Forwarding from" line; KubeError at the end of the output or after timeout."""
     seen: list[str] = []
     deadline = time.monotonic() + timeout
     remaining = deadline - time.monotonic()
@@ -207,14 +212,25 @@ def forwarded_port(command: Sequence[str], process: subprocess.Popen[str], timeo
             line = lines.get(timeout=remaining)
         except queue.Empty:
             break
-        if not line:
-            raise KubeError(command, "".join(seen) or "exited")
-        match = FORWARDING.match(line.strip())
-        if match:
-            return int(match.group(1))
-        seen.append(line)
+        port = _forwarding_port(command, line, seen)
+        if port is not None:
+            return port
         remaining = deadline - time.monotonic()
     raise KubeError(command, f"no forwarded port within {timeout}s")
+
+
+def _forwarding_port(command: Sequence[str], line: str, seen: list[str]) -> int | None:
+    """Return the port of a "Forwarding from" line; KubeError at the end of the output ("").
+
+    Any other line goes to seen, for that error.
+    """
+    if not line:
+        raise KubeError(command, "".join(seen) or "exited")
+    match = FORWARDING.match(line.strip())
+    if match:
+        return int(match.group(1))
+    seen.append(line)
+    return None
 
 
 def cluster_service(url: str) -> tuple[str, str, int] | None:

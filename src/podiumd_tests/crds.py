@@ -57,13 +57,14 @@ def has_field(schema: JsonObject, path: str) -> bool:
 def wrong_markers(crds: Iterable[JsonObject], markers: Sequence[Marker], version: tuple[int, ...]) -> list[str]:
     """Return the markers up to `version` the CRDs break, as "<crd>: lacks|has <path>" or "<crd>: not installed"."""
     schemas = {metadata_name(crd): storage_schema(crd) for crd in crds}
-    wrong: list[str] = []
-    for marker in markers:
-        if marker.since > version:
-            continue
-        schema = schemas.get(marker.crd)
-        if schema is None:
-            wrong.append(f"{marker.crd}: not installed")
-        elif has_field(schema, marker.path) != marker.present:
-            wrong.append(f"{marker.crd}: {'lacks' if marker.present else 'has'} {marker.path}")
-    return list(dict.fromkeys(wrong))
+    wrong = (_marker_problem(schemas, marker) for marker in markers if marker.since <= version)
+    return list(dict.fromkeys(problem for problem in wrong if problem))
+
+
+def _marker_problem(schemas: dict[str, JsonObject], marker: Marker) -> str | None:
+    schema = schemas.get(marker.crd)
+    if schema is None:
+        return f"{marker.crd}: not installed"
+    if has_field(schema, marker.path) != marker.present:
+        return f"{marker.crd}: {'lacks' if marker.present else 'has'} {marker.path}"
+    return None

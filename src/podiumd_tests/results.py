@@ -288,6 +288,12 @@ def summary_markdown(info: RunInfo, details: Details) -> str:
         f"|{'---|' * len(_COUNT_COLUMNS)}",
         f"| {' | '.join(str(getattr(info.counts, count)) for count in _COUNT_COLUMNS)} |",
     ]
+    return "\n".join([*lines, *_detail_lines(details), ""])
+
+
+def _detail_lines(details: Details) -> list[str]:
+    """Return the sections of summary.md after the counts; only those with content."""
+    lines: list[str] = []
     rows = known_defects(details)
     if rows:
         lines += ["", "## Known defects", "", "| Report | Result | Tests |", "|---|---|---|", *rows]
@@ -309,13 +315,17 @@ def summary_markdown(info: RunInfo, details: Details) -> str:
     if sourced:
         lines += ["", "## Sources of the failed and known-defect tests", ""]
         lines += [f"- `{entry.test_id}`: {'; '.join(entry.sources)}" for entry in sourced]
+    return lines + _scenario_lines(details)
+
+
+def _scenario_lines(details: Details) -> list[str]:
     told = [failure for failure in details.failures if failure.scenario]
-    if told:
-        lines += ["", "## Scenarios of the failed tests", ""]
-        for entry in told:
-            lines.extend((f"`{entry.test_id}`", "", "```gherkin", entry.scenario, "```", ""))
-        lines.pop()
-    return "\n".join([*lines, ""])
+    if not told:
+        return []
+    lines = ["", "## Scenarios of the failed tests", ""]
+    for entry in told:
+        lines.extend((f"`{entry.test_id}`", "", "```gherkin", entry.scenario, "```", ""))
+    return lines[:-1]
 
 
 def write_run(sink: ResultsSink, directory: str, info: RunInfo, details: Details, redactor: Redactor) -> None:

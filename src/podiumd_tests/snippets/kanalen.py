@@ -27,24 +27,36 @@ def run(params):
 
     if params["action"] == "remove":
         kanaal_model.objects.filter(naam__in=sorted(created)).delete()
-        for naam, filters in added.items():
-            kanaal = existing.get(naam)
-            if kanaal is not None and naam not in created:
-                kanaal.filters = [kanaal_filter for kanaal_filter in kanaal.filters if kanaal_filter not in filters]
-                kanaal.save()
+        _remove_filters(existing, added, created)
         return {"present": False}
 
     for naam, filters in wanted.items():
-        kanaal = existing.get(naam)
-        if kanaal is None:
-            kanaal_model.objects.create(naam=naam, documentatie_link="", filters=list(filters))
+        missing = _add(kanaal_model, existing.get(naam), naam, filters)
+        if missing is None:
             created.add(naam)
-            continue
-        missing = [kanaal_filter for kanaal_filter in filters if kanaal_filter not in kanaal.filters]
-        if missing:
-            kanaal.filters = [*kanaal.filters, *missing]
-            kanaal.save()
+        elif missing:
             added.setdefault(naam, set()).update(missing)
     added_filters = {naam: sorted(filters) for naam, filters in sorted(added.items())}
     record = {"created": sorted(created), "filters": added_filters}
     return {"present": True, "record": record}
+
+
+def _remove_filters(existing, added, created):
+    """Take the added filters off the kanalen that apply did not create."""
+    for naam, filters in added.items():
+        kanaal = existing.get(naam)
+        if kanaal is not None and naam not in created:
+            kanaal.filters = [kanaal_filter for kanaal_filter in kanaal.filters if kanaal_filter not in filters]
+            kanaal.save()
+
+
+def _add(kanaal_model, kanaal, naam, filters):
+    """Create the kanaal (None), or add the filters it lacks (those filters)."""
+    if kanaal is None:
+        kanaal_model.objects.create(naam=naam, documentatie_link="", filters=list(filters))
+        return None
+    missing = [kanaal_filter for kanaal_filter in filters if kanaal_filter not in kanaal.filters]
+    if missing:
+        kanaal.filters = [*kanaal.filters, *missing]
+        kanaal.save()
+    return missing

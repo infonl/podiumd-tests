@@ -208,22 +208,33 @@ _DELETE_ERRORS = (AssertionError, OSError, ValueError)
 def _sweep_items(
     kind: str, items: list[JsonObject], delete: Callable[[JsonObject], None], cutoff: datetime, *, dry_run: bool
 ) -> list[Swept]:
-    swept: list[Swept] = []
-    for item in items:
-        if not is_stale(item, cutoff):
-            if RUN_TAG.search(json.dumps(item)):
-                swept.append(Swept(kind, _name(item), "kept"))
-            continue
-        if dry_run:
-            swept.append(Swept(kind, _name(item), "found"))
-            continue
-        try:
-            delete(item)
-        except _DELETE_ERRORS as exc:
-            swept.append(Swept(kind, _name(item), "failed", f"{type(exc).__name__}: {exc}"))
-        else:
-            swept.append(Swept(kind, _name(item), "deleted"))
-    return swept
+    swept = [_swept(kind, item, delete, cutoff, dry_run=dry_run) for item in items]
+    return [entry for entry in swept if entry is not None]
+
+
+def _swept(
+    kind: str, item: JsonObject, delete: Callable[[JsonObject], None], cutoff: datetime, *, dry_run: bool
+) -> Swept | None:
+    """Return what happened to one object; None for a fresh one without the run tag."""
+    if not is_stale(item, cutoff):
+        return Swept(kind, _name(item), "kept") if RUN_TAG.search(json.dumps(item)) else None
+    if dry_run:
+        return Swept(kind, _name(item), "found")
+    try:
+        delete(item)
+    except _DELETE_ERRORS as exc:
+        return Swept(kind, _name(item), "failed", f"{type(exc).__name__}: {exc}")
+    return Swept(kind, _name(item), "deleted")
+
+
+def _skip_reason(env: Environment, finder: Finder, present: set[str]) -> str | None:
+    """Why the finder cannot run: its component, bootstrap step or profile setting is missing; else None."""
+    reason = env.capabilities.skip_reason(finder.component)
+    if reason is None and finder.step and finder.step not in present:
+        reason = f"bootstrap step {finder.step} missing"
+    if reason is None and finder.setting and not env.profile.settings.get(finder.setting):
+        reason = f"profile {env.profile.name} has no settings.{finder.setting}"
+    return reason
 
 
 def sweep(env: Environment, cutoff: datetime, *, dry_run: bool) -> list[Swept]:
@@ -231,11 +242,7 @@ def sweep(env: Environment, cutoff: datetime, *, dry_run: bool) -> list[Swept]:
     present = {outcome.step for outcome in check(env, STEPS) if outcome.action == "present"}
     swept: list[Swept] = []
     for finder in FINDERS:
-        reason = env.capabilities.skip_reason(finder.component)
-        if reason is None and finder.step and finder.step not in present:
-            reason = f"bootstrap step {finder.step} missing"
-        if reason is None and finder.setting and not env.profile.settings.get(finder.setting):
-            reason = f"profile {env.profile.name} has no settings.{finder.setting}"
+        reason = _skip_reason(env, finder, present)
         if reason:
             swept.append(Swept(finder.kind, "", "skipped", reason))
             continue

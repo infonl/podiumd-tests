@@ -88,21 +88,32 @@ def marked(tests: Path) -> dict[str, set[str]]:
     found: dict[str, set[str]] = defaultdict(set)
     for path in sorted(tests.rglob("test_*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        module_ids: list[str] = []
-        for node in tree.body:
-            if isinstance(node, ast.Assign) and any(
-                getattr(target, "id", "") == "pytestmark" for target in node.targets
-            ):
-                values = node.value.elts if isinstance(node.value, ast.List) else [node.value]
-                module_ids += [case for value in values for case in _tc_ids(value)]
+        module_ids = _module_ids(tree)
         functions = [node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name.startswith("test_")]
         for function in functions:
-            # Also the marks of pytest.param(...) in a parametrize decorator.
-            decorator_nodes = [node for decorator in function.decorator_list for node in ast.walk(decorator)]
-            ids = module_ids + [case for node in decorator_nodes for case in _tc_ids(node)]
-            for case in ids:
+            for case in module_ids + _function_ids(function):
                 found[case].add(f"{path.relative_to(tests.parent).as_posix()}::{function.name}")
     return found
+
+
+def _module_ids(tree: ast.Module) -> list[str]:
+    """Return the case ids of the module's pytestmark."""
+    ids: list[str] = []
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and _assigns_pytestmark(node):
+            values = node.value.elts if isinstance(node.value, ast.List) else [node.value]
+            ids += [case for value in values for case in _tc_ids(value)]
+    return ids
+
+
+def _assigns_pytestmark(node: ast.Assign) -> bool:
+    return any(getattr(target, "id", "") == "pytestmark" for target in node.targets)
+
+
+def _function_ids(function: ast.FunctionDef) -> list[str]:
+    """Return the case ids of the test's decorators, also the marks of pytest.param(...) in a parametrize decorator."""
+    decorator_nodes = [node for decorator in function.decorator_list for node in ast.walk(decorator)]
+    return [case for node in decorator_nodes for case in _tc_ids(node)]
 
 
 def status(specs: set[str], decisions: dict[str, tuple[str, str]]) -> str:
