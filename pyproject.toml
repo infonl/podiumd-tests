@@ -79,9 +79,10 @@ markers = [
 source = ["src/podiumd_tests"]
 # Same excludes as the static checks: snippets run inside the components, the locustfiles under Locust.
 omit = ["*/snippets/*.py", "*/perf/*locustfile.py"]
+branch = true
 
 [tool.coverage.report]
-fail_under = 95
+fail_under = 96
 
 [tool.ruff]
 # Shared with [tool.ruff.format] and pylint max-line-length.
