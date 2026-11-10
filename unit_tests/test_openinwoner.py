@@ -43,7 +43,8 @@ def test_portal_login_logs_in_and_closes_the_cookie_banner(fake_page, env):
     assert ("fill", "#password", f"pw-{user.store_key}") in page.actions
     assert page.actions[-1] == ("click", BANNER)
     landed = page.waits[0]
-    assert landed(f"{PORTAL}/zaken") and not landed(f"{PORTAL}/digid-oidc/callback/?code=1")
+    assert landed(f"{PORTAL}/zaken")
+    assert not landed(f"{PORTAL}/digid-oidc/callback/?code=1")
 
 
 def test_a_first_eherkenning_login_completes_the_registration(fake_page, env):

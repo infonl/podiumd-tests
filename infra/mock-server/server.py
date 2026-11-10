@@ -61,7 +61,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             # One write per request under a lock: parallel requests never interleave lines.
             with WRITE_LOCK, RECEIVED.open("a", encoding="utf-8") as handle:
-                entry["status"] = self._status(entry)
+                entry["status"] = self.answer_status(entry)
                 handle.write(f"{json.dumps(entry)}\n")
         except OSError:
             # Not recorded (e.g. a full disk): say so instead of dropping the connection.
@@ -69,7 +69,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
         if entry["status"] == HTTPStatus.CREATED:
-            self._notify_created(entry["id"], parsed if isinstance(parsed, dict) else {})
+            self.notify_created(entry["id"], parsed if isinstance(parsed, dict) else {})
         else:
             self.send_response(entry["status"])
             self.end_headers()
@@ -77,11 +77,11 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):  # http.server's method name
         notification = NOTIFICATION.search(self.path)
         if notification and notification[1] in NOTIFICATIONS:
-            self._json(200, NOTIFICATIONS[notification[1]])
+            self.send_json(200, NOTIFICATIONS[notification[1]])
             return
         found = HOSTED_CHECKOUT.match(self.path)
         if found and found[1] and (CHECKOUTS / f"{found[1]}.json").exists():
-            self._json(200, _checkout_status(found[1]))
+            self.send_json(200, _checkout_status(found[1]))
             return
         self.send_response(200 if self.path == "/healthz" else 404)
         self.end_headers()
@@ -89,7 +89,7 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_args):
         """Keep the pod log quiet; the file is the record."""
 
-    def _status(self, entry):
+    def answer_status(self, entry):
         """The answer to a POST; called under WRITE_LOCK."""
         if not entry["authorization"]:
             return 403
@@ -102,7 +102,7 @@ class Handler(BaseHTTPRequestHandler):
             return 500
         return 204
 
-    def _notify_created(self, notification_id, request):
+    def notify_created(self, notification_id, request):
         template = request.get("template_id")
         kind = "sms" if self.path.endswith("/sms") else "email"
         subject = f"ptest {kind} {template}"
@@ -118,7 +118,7 @@ class Handler(BaseHTTPRequestHandler):
             "subject": subject,
             "created_at": time.strftime("%Y-%m-%dT%H:%M:%S.000000Z", time.gmtime()),
         }
-        self._json(
+        self.send_json(
             201,
             {
                 "id": notification_id,
@@ -129,7 +129,7 @@ class Handler(BaseHTTPRequestHandler):
             },
         )
 
-    def _json(self, status, body):
+    def send_json(self, status, body):
         payload = json.dumps(body).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -149,7 +149,7 @@ class Handler(BaseHTTPRequestHandler):
         (CHECKOUTS / f"{checkout_id}.json").write_text(json.dumps(checkout), encoding="utf-8")
         redirect = f"https://worldline.example.invalid/hostedcheckout/{checkout_id}"
         body = {"hostedCheckoutId": checkout_id, "RETURNMAC": mac, "merchantReference": reference}
-        self._json(201, {**body, "redirectUrl": redirect})
+        self.send_json(201, {**body, "redirectUrl": redirect})
 
 
 def _checkout_status(checkout_id):

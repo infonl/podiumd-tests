@@ -108,7 +108,8 @@ def test_identificator_register_follows_its_kind(fake_http, kind, objecttype, re
 def test_random_numbers_have_their_format():
     bsn = openklant.random_bsn()
     weighted = sum(int(d) * w for d, w in zip(bsn, [9, 8, 7, 6, 5, 4, 3, 2, -1], strict=True))
-    assert len(bsn) == 9 and weighted % 11 == 0
+    assert len(bsn) == 9
+    assert weighted % 11 == 0
     assert len(openklant.random_kvk_nummer()) == 8
     assert len(openklant.random_nummer()) == 10
 
@@ -293,4 +294,5 @@ def test_document_in_parts_uploads_each_part_without_json_content_type(fake_http
     uploads = sent[1:]
     assert [u.url for u in uploads] == [p["url"] for p in parts]
     assert all("multipart/form-data" in u.headers["Content-Type"] for u in uploads)
-    assert b"abc" in uploads[0].body and b"de" in uploads[1].body
+    assert b"abc" in uploads[0].body
+    assert b"de" in uploads[1].body

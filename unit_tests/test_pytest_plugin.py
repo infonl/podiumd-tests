@@ -320,7 +320,7 @@ def test_zac_and_zaaktype_fixtures(pytester, monkeypatch, fake_http):
         "create_zaak",
         lambda _zac, _url, _parameters, **fields: {"uuid": "u1", "identificatie": "ZAAK-1", **fields},
     )
-    monkeypatch.setattr(pytest_plugin, "delete_zaak", lambda _client, url, with_documents: deleted.append(url))
+    monkeypatch.setattr(pytest_plugin, "delete_zaak", lambda _client, url, **_options: deleted.append(url))
     pytester.makeconftest(WRITABLE_CONFTEST)
     pytester.makepyfile(
         """

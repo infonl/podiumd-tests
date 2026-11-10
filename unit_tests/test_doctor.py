@@ -46,7 +46,7 @@ def test_missing_context_only_warns_in_direct_mode(profile_factory, fake_runner,
 
 
 def test_missing_kubectl_stops_early(env_factory):
-    checks = doctor.run_checks(env_factory(), which=lambda tool: None)
+    checks = doctor.run_checks(env_factory(), which=lambda _tool: None)
     assert statuses(checks) == {"profile": "ok", "tool kubectl": "fail", "cluster": "skip"}
 
 

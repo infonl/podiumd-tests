@@ -30,7 +30,8 @@ NOW = datetime(2026, 10, 7, 12, 30, tzinfo=UTC)
 
 def test_run_id_carries_its_start_minute():
     run_id = new_run_id(NOW)
-    assert run_id.startswith("2610071230") and len(run_id) == 14
+    assert run_id.startswith("2610071230")
+    assert len(run_id) == 14
     assert run_started(run_id) == NOW
     assert run_started("a1b2c3") is None
     assert run_started("260000000000aa") is None  # month 00

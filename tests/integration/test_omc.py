@@ -74,7 +74,7 @@ def inwoner_zaak(
     registry: ResourceRegistry,
     parts: ZaaktypeParts,
 ) -> Callable[[str], JsonObject]:
-    """A zaak whose initiator is a partij with only this digitaal adres (EMAIL or SMS)."""
+    """A zaak whose initiator is a partij with only this digitaal adres (an e-mail address or phone number)."""
     need_bootstrap("omc-abonnement", "infra-mock-server")
     if reason := notify_mock_missing(podiumd_env):
         pytest.skip(reason)

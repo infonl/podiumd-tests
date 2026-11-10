@@ -1,5 +1,6 @@
 """Offline fakes for the unit tests: no cluster, no network."""
 
+import io
 import json
 import subprocess
 
@@ -64,7 +65,7 @@ def make_response(status=200, body=b"", url="https://app.example.test/", json_bo
     response = requests.Response()
     response.status_code = status
     response.url = url
-    response._content = json.dumps(json_body).encode() if json_body is not None else body
+    response.raw = io.BytesIO(json.dumps(json_body).encode() if json_body is not None else body)
     response.encoding = "utf-8"
     return response
 

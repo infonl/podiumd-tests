@@ -175,7 +175,8 @@ def test_without_open_zaak_the_apps_say_so(
     with component_down(podiumd_env, http, "openzaak"):
         form_starts(podiumd_env, http, registry)
         response = page.goto(f"{podiumd_env.profile.urls['openinwoner']}/mijn-zaken/")
-        assert response is not None and response.status < HTTPStatus.INTERNAL_SERVER_ERROR, "Mijn zaken fails"
+        assert response is not None, "Mijn zaken fails"
+        assert response.status < HTTPStatus.INTERNAL_SERVER_ERROR, "Mijn zaken fails"
         # Mijn zaken loads the zaken after the page, and retries twice before it gives up.
         expect(page.get_by_text("Niet alle zaken konden worden opgehaald")).to_be_visible(
             timeout=FETCH_RETRY_TIMEOUT_MS

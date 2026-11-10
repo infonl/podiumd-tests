@@ -105,20 +105,20 @@ def test_fail_first_path_fails_the_first_notification_only():
     handler = mock_server_handler("/ptest-x/fail-first/abc")
     check = {"authorization": "Bearer t", "body": {"kanaal": "test"}}
     notification = {"authorization": "Bearer t", "body": {"kanaal": "zaken"}}
-    assert [handler._status(e) for e in (check, notification, notification)] == [204, 500, 204]  # pylint: disable=protected-access
+    assert [handler.answer_status(e) for e in (check, notification, notification)] == [204, 500, 204]
 
 
 def test_mock_server_refuses_without_authorization_and_answers_notify():
-    assert mock_server_handler("/ptest-x/abc")._status({"authorization": None, "body": None}) == 403  # pylint: disable=protected-access
+    assert mock_server_handler("/ptest-x/abc").answer_status({"authorization": None, "body": None}) == 403
     notify = mock_server_handler("/ptest-x/notify/v2/notifications/email")
-    assert notify._status({"authorization": "ApiKey-v1 k", "body": {}}) == 201  # pylint: disable=protected-access
+    assert notify.answer_status({"authorization": "ApiKey-v1 k", "body": {}}) == 201
 
 
 def test_notify_notification_is_recorded_with_an_id_and_answers_a_get():
     handler = mock_server_handler("/notify/v2/notifications/sms")
     sent = []
-    handler._json = lambda status, body: sent.append((status, body))  # pylint: disable=protected-access
-    handler._notify_created("00000000-0000-0000-0000-000000000000", {"template_id": "t", "phone_number": "0612345678"})  # pylint: disable=protected-access
+    handler.send_json = lambda status, body: sent.append((status, body))
+    handler.notify_created("00000000-0000-0000-0000-000000000000", {"template_id": "t", "phone_number": "0612345678"})
     status, body = sent[0]
     assert status == 201
     assert body["content"]["subject"] == "ptest sms t"

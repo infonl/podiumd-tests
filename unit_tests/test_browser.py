@@ -85,7 +85,8 @@ def test_redirect_login_logs_in_and_takes_the_browser_cookies(fake_page, page_en
         ("click", "#kc-login"),
     ]
     assert http.cookies.get("session") == "s1"
-    assert page.waits[0](f"{APP}/zaken") and not page.waits[0]("https://keycloak.example.test/")
+    assert page.waits[0](f"{APP}/zaken")
+    assert not page.waits[0]("https://keycloak.example.test/")
 
 
 def test_challenge_login_waits_until_the_signin_callback_is_done(fake_page, page_env):
