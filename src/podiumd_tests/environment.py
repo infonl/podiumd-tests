@@ -46,10 +46,10 @@ class Environment:
     """Profile plus the kubectl, credentials and HTTP access built from it."""
 
     def __init__(self, profile: Profile, runner: Runner = run_process, environ: dict[str, str] | None = None) -> None:
-        self.profile = profile
-        self.kube = Kube(profile.kube.context, profile.kube.namespace, runner)
-        self.redactor = Redactor()
-        self.credentials = SecretResolver(profile, self.kube, self.redactor, environ)
+        self.profile: Profile = profile
+        self.kube: Kube = Kube(profile.kube.context, profile.kube.namespace, runner)
+        self.redactor: Redactor = Redactor()
+        self.credentials: SecretResolver = SecretResolver(profile, self.kube, self.redactor, environ)
 
     @property
     def namespaces(self) -> list[str]:

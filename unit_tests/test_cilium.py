@@ -99,8 +99,8 @@ def test_an_empty_recording_means_no_drops(tmp_path, fake_runner):
 
 class FakeMonitor:
     def __init__(self, lines):
-        self._lines = lines
-        self.stopped = False
+        self._lines: list[str] = lines
+        self.stopped: bool = False
 
     def lines(self):
         yield from self._lines

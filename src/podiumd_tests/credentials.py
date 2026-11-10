@@ -64,10 +64,10 @@ class SecretResolver:
         redactor: Redactor,
         environ: dict[str, str] | None = None,
     ) -> None:
-        self._profile = profile
-        self._kube = kube
-        self._redactor = redactor
-        self._environ = dict(os.environ) if environ is None else environ
+        self._profile: Profile = profile
+        self._kube: Kube = kube
+        self._redactor: Redactor = redactor
+        self._environ: dict[str, str] = dict(os.environ) if environ is None else environ
         self._cache: dict[str, str] = {}
         self._stored: dict[str, str] | None = None
 

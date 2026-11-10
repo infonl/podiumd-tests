@@ -7,10 +7,10 @@ from podiumd_tests.scenarios import scenario_problems
 
 
 class FakeItem:
-    nodeid = "t.py::test_x"
+    nodeid: str = "t.py::test_x"
 
     def __init__(self, text=None):
-        self.marker = None if text is None else pytest.mark.scenario(text).mark
+        self.marker: pytest.Mark | None = None if text is None else pytest.mark.scenario(text).mark
 
     def get_closest_marker(self, _name):
         return self.marker

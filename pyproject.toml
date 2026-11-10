@@ -333,6 +333,7 @@ reportInvalidCast = "error"
 reportExplicitAny = "error"
 reportUnusedParameter = "error"
 reportPrivateLocalImportUsage = "error"
+reportUnannotatedClassAttribute = "error"
 
 # tests/: fakes, parametrize args and monkeypatch lambdas are unannotated
 # and scripts load as ModuleType, so Unknown types remain. A fake is cast to

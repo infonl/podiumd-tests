@@ -31,7 +31,7 @@ class ProcessError(Exception):
     """An external command failed. The message holds the command line, so it can be pasted and rerun."""
 
     def __init__(self, command: Sequence[str], detail: str) -> None:
-        self.command = shlex.join(command)
+        self.command: str = shlex.join(command)
         # kubectl repeats client-side noise (E1005 memcache...) before the real error, and kubectl exec
         # ends with its own exit-code line after the program's error; keep the last real line.
         lines = [line for line in detail.strip().splitlines() if line.strip() and not KUBECTL_EXEC_EXIT.match(line)]

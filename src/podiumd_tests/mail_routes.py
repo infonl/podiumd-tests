@@ -63,7 +63,7 @@ class _Sources:
     """The mail host values of ConfigMaps and Secrets, each fetched once."""
 
     def __init__(self, env: Environment) -> None:
-        self.env = env
+        self.env: Environment = env
         self.cache: dict[tuple[str, str, str], dict[str, str]] = {}
 
     def get(self, kind: str, namespace: str, name: str) -> dict[str, str]:

@@ -46,7 +46,7 @@ class LocalDirSink:
     """Results in a local directory, by default results/ in the repository."""
 
     def __init__(self, root: Path) -> None:
-        self.root = root
+        self.root: Path = root
 
     def write_text(self, relative_path: str, content: str) -> None:
         """Write one text file at a path relative to the sink root."""

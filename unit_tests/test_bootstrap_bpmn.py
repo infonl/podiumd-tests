@@ -21,7 +21,7 @@ ZAAKTYPE = {
 
 class FakeOpenZaak:
     def __init__(self, zaaktypen):
-        self.zaaktypen = zaaktypen
+        self.zaaktypen: list[dict[str, object]] = zaaktypen
 
     def list(self, _path, _params):
         return self.zaaktypen

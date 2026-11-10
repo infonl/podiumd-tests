@@ -7,7 +7,7 @@ from podiumd_tests.auth import django_admin
 
 class FakeCredentials:
     def __init__(self, **values):
-        self.values = values
+        self.values: dict[str, str] = values
 
     def optional(self, name):
         return self.values.get(name)

@@ -50,9 +50,9 @@ class Kube:
     """kubectl bound to one context and default namespace."""
 
     def __init__(self, context: str, namespace: str, runner: Runner = run_process) -> None:
-        self.context = context
-        self.namespace = namespace
-        self.runner = runner
+        self.context: str = context
+        self.namespace: str = namespace
+        self.runner: Runner = runner
 
     def command(self, *args: str, namespace: str | None = None, all_namespaces: bool = False) -> list[str]:
         """Full kubectl argv for the given arguments."""

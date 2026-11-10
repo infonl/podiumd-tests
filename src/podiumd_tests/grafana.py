@@ -47,9 +47,9 @@ class Grafana:
     """Calls to Grafana; datasources are found by type, as their names differ per estate."""
 
     def __init__(self, http: requests.Session, base: str, auth: tuple[str, str] | None = None) -> None:
-        self.http = http
-        self.base = base
-        self.auth = auth
+        self.http: requests.Session = http
+        self.base: str = base
+        self.auth: tuple[str, str] | None = auth
         self.datasources: list[Json] = []
 
     def get(self, path: str, params: dict[str, str] | None = None) -> requests.Response:

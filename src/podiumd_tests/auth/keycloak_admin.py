@@ -40,12 +40,12 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
     """Admin calls on one realm, with a token of an admin user in the master realm."""
 
     def __init__(self, http: requests.Session, url: str, realm: str, admin: tuple[str, str]) -> None:
-        self.http = http
-        self.realm = realm
-        self.url = url
-        self.base = admin_realm_url(url, realm)
+        self.http: requests.Session = http
+        self.realm: str = realm
+        self.url: str = url
+        self.base: str = admin_realm_url(url, realm)
         token = password_grant(http, url, "master", PasswordLogin("admin-cli", *admin))
-        self.headers = {"Authorization": f"Bearer {token}"}
+        self.headers: dict[str, str] = {"Authorization": f"Bearer {token}"}
 
     def server_info(self) -> JsonObject:
         """GET /admin/serverinfo: the server's version, themes and providers."""

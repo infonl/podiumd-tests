@@ -13,7 +13,7 @@ class HoldRecorder:
     """Records each command with the lock hold it saw in the process environment."""
 
     def __init__(self):
-        self.calls = []
+        self.calls: list[tuple[list[str], str | None]] = []
 
     def __call__(self, args, _timeout, _stdin=None):
         self.calls.append((list(args), os.environ.get(HOLD_ENV)))

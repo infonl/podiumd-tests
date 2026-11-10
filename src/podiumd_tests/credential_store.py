@@ -23,7 +23,7 @@ class CredentialStore:
     """Read and write the bootstrap credentials Secret."""
 
     def __init__(self, kube: Kube) -> None:
-        self.kube = kube
+        self.kube: Kube = kube
 
     def read(self) -> dict[str, str]:
         """All stored values; empty when the Secret does not exist."""

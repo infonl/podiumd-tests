@@ -44,8 +44,8 @@ class ResourceRegistry:
     """Created resources of one test, with their deleters."""
 
     def __init__(self, run_tag: str, *, keep: bool = False) -> None:
-        self.run_tag = run_tag
-        self.keep = keep
+        self.run_tag: str = run_tag
+        self.keep: bool = keep
         self._entries: list[_Entry] = []
 
     def tagged(self, name: str) -> str:

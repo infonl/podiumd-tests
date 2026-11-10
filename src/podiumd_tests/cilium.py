@@ -133,8 +133,8 @@ class Monitor:
     """A cilium-dbg monitor on one agent pod, read over a pty so the remote gets SIGHUP when kubectl stops."""
 
     def __init__(self, process: subprocess.Popen[str], master: int) -> None:
-        self._process = process
-        self._master = master  # the pty master; lines() owns and closes it
+        self._process: subprocess.Popen[str] = process
+        self._master: int = master  # the pty master; lines() owns and closes it
 
     def lines(self) -> Generator[str]:
         """The monitor's output lines until it stops; killing kubectl closes the pty and ends the stream."""

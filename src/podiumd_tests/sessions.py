@@ -37,8 +37,8 @@ class HostHeaderAdapter(HTTPAdapter):
 
     def __init__(self, hosts: set[str], ip: str) -> None:
         super().__init__()
-        self._hosts = hosts
-        self._ip = ip
+        self._hosts: set[str] = hosts
+        self._ip: str = ip
 
     @override
     def send(
@@ -95,7 +95,7 @@ class TimeoutSession(requests.Session):
 
     def __init__(self, timeout: float = DEFAULT_TIMEOUT) -> None:
         super().__init__()
-        self.default_timeout = timeout
+        self.default_timeout: float = timeout
 
     @override
     def request(self, method: str | bytes, url: str | bytes, *args: object, **kwargs: object) -> requests.Response:

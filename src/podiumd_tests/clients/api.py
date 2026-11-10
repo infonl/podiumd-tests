@@ -28,9 +28,9 @@ class ApiClient:
     """
 
     def __init__(self, http: requests.Session, base_url: str, headers: _Headers) -> None:
-        self.http = http
-        self.base_url = base_url.rstrip("/")
-        self._headers = headers
+        self.http: requests.Session = http
+        self.base_url: str = base_url.rstrip("/")
+        self._headers: _Headers = headers
 
     def url(self, path: str) -> str:
         """Absolute URL of a path below the API root; absolute URLs pass unchanged."""

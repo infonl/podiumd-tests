@@ -22,9 +22,9 @@ class FakeRunner:
     """Answers commands by the first matching argv fragment; records every call."""
 
     def __init__(self, answers=None):
-        self.answers = answers or {}
-        self.calls = []
-        self.stdins = []
+        self.answers: dict[str, tuple[int, str]] = answers or {}
+        self.calls: list[list[str]] = []
+        self.stdins: list[str | None] = []
 
     def __call__(
         self, args: Sequence[str], _timeout: int, stdin: str | None = None
@@ -125,8 +125,8 @@ class FakeLocator:
     """A Playwright locator that records its actions on the FakePage; key names what it locates."""
 
     def __init__(self, page, key):
-        self.page = page
-        self.key = key
+        self.page: FakePage = page
+        self.key: str = key
 
     @property
     def first(self):
@@ -170,14 +170,14 @@ class FakePage:  # pylint: disable=too-many-instance-attributes  # one per Page 
     """
 
     def __init__(self, url="about:blank", texts=None, landings=(), evaluated=(), cookies=(), errors=()):
-        self.url = url
-        self.errors = list(errors)
-        self.texts = texts or {}
-        self.landings = list(landings)
-        self.evaluated = list(evaluated)
-        self.actions = []
-        self.waits = []
-        self.context = SimpleNamespace(cookies=lambda: list(cookies))
+        self.url: str = url
+        self.errors: list[str] = list(errors)
+        self.texts: dict[str, str] = texts or {}
+        self.landings: list[str] = list(landings)
+        self.evaluated: list[object] = list(evaluated)
+        self.actions: list[tuple[object, ...]] = []
+        self.waits: list[object] = []
+        self.context: SimpleNamespace = SimpleNamespace(cookies=lambda: list(cookies))
 
     def locator(self, selector):
         return FakeLocator(self, selector)

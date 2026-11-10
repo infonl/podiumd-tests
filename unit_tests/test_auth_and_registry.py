@@ -161,8 +161,10 @@ class FakeBrowser:
     """A session that answers GET and each POST with the next page."""
 
     def __init__(self, response_factory, *pages):
-        self.pages = [response_factory(body=page.encode(), url=f"{KC}/page{i}") for i, page in enumerate(pages)]
-        self.posts = []
+        self.pages: list[requests.Response] = [
+            response_factory(body=page.encode(), url=f"{KC}/page{i}") for i, page in enumerate(pages)
+        ]
+        self.posts: list[tuple[str, dict[str, str]]] = []
 
     def get(self, _url):
         return self.pages.pop(0)

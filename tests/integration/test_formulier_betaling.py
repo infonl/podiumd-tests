@@ -44,6 +44,8 @@ from podiumd_tests.workloads import component_versions
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    import requests
+
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
@@ -84,15 +86,17 @@ class Payer:
         self, env: Environment, openzaak: ApiClient, registry: ResourceRegistry, form: tuple[str, str]
     ) -> None:
         backend, slug = form
-        self.backend = backend
-        self.env = env
-        self.http = env.session()
-        self.openzaak = openzaak
+        self.backend: str = backend
+        self.env: Environment = env
+        self.http: requests.Session = env.session()
+        self.openzaak: ApiClient = openzaak
         data = {"omschrijving": slug, **NAW_DATA}
-        self.status = submit(env, self.http, registry, slug, data, timeout=REGISTRATION_TIMEOUT, registers=False)
+        self.status: JsonObject = submit(
+            env, self.http, registry, slug, data, timeout=REGISTRATION_TIMEOUT, registers=False
+        )
         # The zaak of the pre-registration, deleted with the submission.
-        self.zaak = registered_zaak(env, openzaak, registry, self.status)
-        self.headers = form_and_headers(self.http, env.profile.urls["openformulieren"], slug)[1]
+        self.zaak: JsonObject = registered_zaak(env, openzaak, registry, self.status)
+        self.headers: dict[str, str] = form_and_headers(self.http, env.profile.urls["openformulieren"], slug)[1]
 
     @property
     def secret(self) -> str:

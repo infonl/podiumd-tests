@@ -6,10 +6,10 @@ from podiumd_tests.sources import source_problems
 
 
 class FakeItem:
-    nodeid = "t.py::test_x"
+    nodeid: str = "t.py::test_x"
 
     def __init__(self, *markers):
-        self.markers = markers
+        self.markers: tuple[pytest.Mark, ...] = markers
 
     def iter_markers(self, _name):
         return iter(self.markers)
