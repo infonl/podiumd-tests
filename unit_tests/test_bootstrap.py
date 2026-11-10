@@ -816,6 +816,8 @@ def test_an_opt_in_step_does_nothing_unless_the_profile_allows_it(env_factory, f
 SNIPPET_STEPS = [replace(step, context_params=None) for step in STEPS if isinstance(step, SnippetStep)]
 # Steps behind an opt-in setting that is off run no shell.
 RUNNING = [step for step in SNIPPET_STEPS if step.opt_in is None]
+# One deployment per component here: objecttypen and objecten share one on Open Object.
+K = len({step.requires[0] for step in RUNNING})
 DEPLOYMENTS = sorted({prefix for component in COMPONENTS.values() for prefix in component.deployment_prefixes})
 VOLATILE = ("action", "secret", "record", "stored")
 
@@ -832,12 +834,16 @@ class SnippetCluster:
         self.calls: list[tuple[str, str]] = []
         self.objects: set[str] = set()
         self.secret: dict[str, str] = {}
+        # Steps whose status fails, by their snippet's identifier or username param.
+        self.broken: set[str] = set()
 
     def __call__(self, args, _timeout, stdin=None):
         line = " ".join(args)
         if "exec -i deploy/" in line:
             self.shells.append(line.split("deploy/")[1].split()[0])
             values = [self._run(name, params) for name, _, params in snippet_calls(stdin)]
+            if None in values:
+                return subprocess.CompletedProcess(list(args), 1, "", "Traceback: DoesNotExist")
             out = "".join(f"PTEST_VALUE={json.dumps(value)}\n" for value in values)
             return subprocess.CompletedProcess(list(args), 0, out, "")
         return subprocess.CompletedProcess(list(args), 0, self._kubectl(line, stdin), "")
@@ -862,6 +868,8 @@ class SnippetCluster:
         key = _object_key(name, params)
         action = params["action"]
         self.calls.append((name, action))
+        if self.broken & {params.get("identifier"), params.get("username")}:
+            return None
         if action == "status":
             return {"present": key in self.objects}
         if action == "ensure" and key in self.objects and params["stored"]:
@@ -903,18 +911,144 @@ def test_ensure_runs_status_then_apply_only_when_missing():
     assert log == ["status", "status", "apply", "status", "apply"]
 
 
-def test_fresh_bootstrap_runs_one_shell_per_snippet_step(env, cluster):
-    outcomes = bootstrap(env, SNIPPET_STEPS)
-    assert {o.action for o in outcomes if o.step in {s.name for s in RUNNING}} == {"created"}
+@dataclass(frozen=True)
+class PlainStep:
+    """A snippet step without ensure and batched status: is_present, then apply."""
+
+    step: SnippetStep
+
+    @property
+    def name(self):
+        return self.step.name
+
+    @property
+    def requires(self):
+        return self.step.requires
+
+    @property
+    def wiring(self):
+        return self.step.wiring
+
+    def is_present(self, ctx):
+        return self.step.is_present(ctx)
+
+    def apply(self, ctx):
+        return self.step.apply(ctx)
+
+    def remove(self, ctx):
+        return self.step.remove(ctx)
+
+
+def _bootstrapped(env, cluster, steps, *, rotate=False):
+    outcomes = [(o.step, o.action, o.detail) for o in bootstrap(env, steps, rotate=rotate)]
+    return outcomes, set(cluster.objects), set(cluster.secret)
+
+
+def _state(cluster):
+    return set(cluster.objects), dict(cluster.secret), set(cluster.broken)
+
+
+def _restore(cluster, state):
+    objects, secret, broken = state
+    cluster.objects = set(objects)
+    cluster.secret = dict(secret)
+    cluster.broken = set(broken)
+    cluster.shells.clear()
+
+
+SCENARIOS = {
+    "fresh": (),
+    "everything": RUNNING,
+    "all but openzaak-client": RUNNING[1:],
+    "all but the last": RUNNING[:-1],
+    "every other": RUNNING[::2],
+}
+
+
+@pytest.mark.parametrize("present", SCENARIOS.values(), ids=SCENARIOS.keys())
+@pytest.mark.parametrize("secrets", [True, False], ids=["stored", "objects-only"])
+@pytest.mark.parametrize("rotate", [False, True])
+def test_bootstrap_outcomes_and_objects_are_those_of_is_present_then_apply(env, cluster, present, secrets, rotate):
+    cluster.make_present(present)
+    if not secrets:
+        cluster.secret.clear()
+    before = _state(cluster)
+    expected = _bootstrapped(env, cluster, [PlainStep(step) for step in SNIPPET_STEPS], rotate=rotate)
+    plain_shells = len(cluster.shells)
+    _restore(cluster, before)
+    assert _bootstrapped(env, cluster, SNIPPET_STEPS, rotate=rotate) == expected
+    assert len(cluster.shells) <= plain_shells
+
+
+@pytest.mark.parametrize("present", SCENARIOS.values(), ids=SCENARIOS.keys())
+def test_check_outcomes_are_those_of_is_present(env, cluster, present):
+    cluster.make_present(present)
+    cluster.broken.add(OPENKLANT_STORE_KEY)
+
+    def outcomes(steps):
+        return [(o.step, o.action, o.detail) for o in check(env, steps)]
+
+    assert outcomes(SNIPPET_STEPS) == outcomes([PlainStep(step) for step in SNIPPET_STEPS])
+
+
+def test_fresh_bootstrap_runs_one_status_shell_and_one_shell_per_step(env, cluster):
+    bootstrap(env, SNIPPET_STEPS)
+    assert len(cluster.shells) == 1 + len(RUNNING)
+
+
+def test_after_a_created_step_each_snippet_step_runs_one_shell(env, cluster):
+    bootstrap(env, [FakeStep("mock-server"), *SNIPPET_STEPS])
     assert len(cluster.shells) == len(RUNNING)
     assert {action for _, action in cluster.calls} == {"ensure"}
 
 
-def test_rebootstrap_finds_every_snippet_step_present(env, cluster):
+def test_rebootstrap_runs_one_shell_per_deployment(env, cluster):
     cluster.make_present(RUNNING)
     outcomes = bootstrap(env, SNIPPET_STEPS)
     assert {o.action for o in outcomes} == {"present"}
-    assert len(cluster.shells) == len(RUNNING)
+    assert len(cluster.shells) == K
+    assert sorted(cluster.shells) == sorted({step.requires[0] for step in RUNNING})
+
+
+def test_a_failed_step_ends_the_batches(env, cluster):
+    cluster.make_present(RUNNING)
+    cluster.broken.add(OPENKLANT_STORE_KEY)
+    outcomes = {o.step: o for o in bootstrap(env, SNIPPET_STEPS)}
+    assert outcomes["openklant-token"].action == "failed"
+    assert "DoesNotExist" in outcomes["openklant-token"].detail
+    assert {o.action for name, o in outcomes.items() if name != "openklant-token"} == {"present"}
+
+
+def test_check_runs_one_shell_per_deployment(env, cluster):
+    cluster.make_present(RUNNING[1:])
+    outcomes = check(env, SNIPPET_STEPS)
+    assert [o.step for o in outcomes if o.action == "missing"] == [RUNNING[0].name]
+    assert len(cluster.shells) == K
+    assert {action for _, action in cluster.calls} == {"status"}
+
+
+def test_a_failed_batch_checks_each_step_alone_and_names_the_broken_one(env, cluster):
+    cluster.make_present(RUNNING)
+    cluster.broken.add(OPENKLANT_STORE_KEY)
+    outcomes = {o.step: o for o in check(env, SNIPPET_STEPS)}
+    assert outcomes["openklant-token"].action == "failed"
+    assert {o.action for name, o in outcomes.items() if name != "openklant-token"} == {"present"}
+    assert cluster.shells.count("openklant") == 3
+
+
+def test_a_step_whose_params_fail_checks_itself(env, cluster):
+    def no_actor(_ctx):
+        msg = "no Open Klant actor for the KCC test user"
+        raise LookupError(msg)
+
+    steps = [replace(s, context_params=no_actor) if s.name == "openklant-token" else s for s in SNIPPET_STEPS]
+    cluster.make_present(RUNNING)
+    outcomes = {o.step: o for o in check(env, steps)}
+    assert (outcomes["openklant-token"].action, outcomes["openklant-token"].detail) == (
+        "failed",
+        "no Open Klant actor for the KCC test user",
+    )
+    assert len(cluster.shells) == K
 
 
 def test_ensure_makes_a_new_secret_when_the_objects_exist_without_it(env, cluster):
@@ -937,3 +1071,20 @@ def test_check_reports_missing_and_present(env, cluster):
     cluster.make_present(RUNNING[:1])
     outcomes = check(env, SNIPPET_STEPS[:2])
     assert [o.action for o in outcomes] == ["present", "missing"]
+
+
+def test_a_step_after_a_created_one_checks_itself_again(env, cluster):
+    # The second finds what the first created: a status can depend on an earlier step.
+    first = SnippetStep("first", ("openzaak",), "zgw_client", None, {"client_id": "shared"})
+    outcomes = bootstrap(env, [first, replace(first, name="second")])
+    assert [o.action for o in outcomes] == ["created", "present"]
+    assert len(cluster.shells) == 3
+
+
+def test_a_skipped_step_stays_out_of_the_batch(env, cluster):
+    cluster.make_present(RUNNING[:2])
+    skipped = replace(RUNNING[2], requires=("openzaak", "elsewhere"))
+    outcomes = check(env, [*RUNNING[:2], skipped])
+    assert [o.action for o in outcomes] == ["present", "present", "skipped"]
+    assert len(cluster.calls) == 2
+    assert len(cluster.shells) == 1

@@ -45,6 +45,7 @@ if TYPE_CHECKING:
 
     from podiumd_tests.bootstrap.runner import Context
     from podiumd_tests.bootstrap.runner import Step
+    from podiumd_tests.django_snippets import SnippetCall
     from podiumd_tests.json_data import JsonObject
 
 
@@ -75,8 +76,16 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
         """Not allowed (nothing to do), or the objects exist and what the step stores is in the credentials Secret."""
         if self._is_refused(ctx):
             return True
+        return self.is_present_in(ctx, self._run(ctx, "status"))
+
+    def status_call(self, ctx: Context, /) -> tuple[str, SnippetCall] | None:
+        """Return is_present's snippet call and its deployment; None when not allowed (present without a shell)."""
+        return None if self._is_refused(ctx) else self._call(ctx, "status")
+
+    def is_present_in(self, ctx: Context, status: object, /) -> bool:
+        """Return is_present for the result of status_call."""
         stored = self._is_stored(ctx)
-        return bool(self._run(ctx, "status")["present"]) and stored
+        return bool(cast("dict[str, object]", status)["present"]) and stored
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Create the objects: with a new random secret, or extending the stored record."""
@@ -96,11 +105,14 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
         self._run(ctx, "remove", **({"record": self._stored_record(ctx)} if self.record else {}))
         return () if self.store_key is None else (self.store_key,)
 
-    def _run(self, ctx: Context, action: str, **extra: object) -> dict[str, object]:
+    def _call(self, ctx: Context, action: str, **extra: object) -> tuple[str, SnippetCall]:
         deployment = ctx.env.deployment_for(self.requires[0])
         runtime = self.context_params(ctx) if self.context_params else {}
-        params = {**self.params, **runtime, "action": action, **extra}
-        return cast("dict[str, object]", run_snippet(ctx.env.kube, deployment, self.snippet, params))
+        return deployment, (self.snippet, {**self.params, **runtime, "action": action, **extra})
+
+    def _run(self, ctx: Context, action: str, **extra: object) -> dict[str, object]:
+        deployment, (snippet, params) = self._call(ctx, action, **extra)
+        return cast("dict[str, object]", run_snippet(ctx.env.kube, deployment, snippet, params))
 
     def _is_refused(self, ctx: Context) -> bool:
         return self.opt_in is not None and not ctx.env.profile.is_allowed(self.opt_in)

@@ -12,7 +12,7 @@ from itertools import groupby
 from typing import TYPE_CHECKING
 
 from podiumd_tests.django_snippets import run_snippet
-from podiumd_tests.django_snippets import run_snippets
+from podiumd_tests.django_snippets import try_snippets
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -104,8 +104,4 @@ def _run_batch(entries: Sequence[_Entry]) -> bool:  # noqa: FNE005  # runs the s
     """Run the entries' snippets in one Django shell; False when that failed, to run each and report which one."""
     snippets = [entry.snippet for entry in entries if entry.snippet]
     calls = [(snippet.name, snippet.params) for snippet in snippets]
-    try:
-        run_snippets(snippets[0].kube, snippets[0].deployment, calls)
-    except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught  # each deleter again reports the error
-        return False
-    return True
+    return try_snippets(snippets[0].kube, snippets[0].deployment, calls) is not None

@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import time
 
+from collections import defaultdict
+from contextlib import suppress
 from dataclasses import dataclass
 from dataclasses import field
 from dataclasses import replace
@@ -24,6 +26,7 @@ from podiumd_tests.auth.keycloak import TokenError
 from podiumd_tests.capabilities import CLUSTER
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.credentials import SecretError
+from podiumd_tests.django_snippets import try_snippets
 from podiumd_tests.process import ProcessError
 
 if TYPE_CHECKING:
@@ -31,6 +34,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from podiumd_tests.config import Profile
+    from podiumd_tests.django_snippets import SnippetCall
     from podiumd_tests.environment import Environment
 
 Action = Literal["created", "present", "removed", "absent", "skipped", "missing", "failed"]
@@ -87,12 +91,23 @@ class Step(Protocol):
 
 
 @runtime_checkable
-class Ensures(Protocol):  # pylint: disable=too-few-public-methods  # an optional Step method
-    """A step that checks and applies in one go, e.g. in one Django shell."""
+class SnippetChecks(Step, Protocol):
+    """Optional Step methods of a step checked by a Django snippet: one shell for check and apply, batched status."""
 
     def ensure(self, ctx: Context, /) -> dict[str, str] | None:
         """Apply unless is_present; return the credentials to store, None when present."""
         ...
+
+    def status_call(self, ctx: Context, /) -> tuple[str, SnippetCall] | None:
+        """Return is_present's snippet call and its deployment; None when is_present needs no shell."""
+        ...
+
+    def is_present_in(self, ctx: Context, status: object, /) -> bool:
+        """Return is_present for the result of status_call."""
+        ...
+
+
+type _Calls = list[tuple[SnippetChecks, SnippetCall]]
 
 
 @dataclass(frozen=True)
@@ -130,9 +145,7 @@ def _each(env: Environment, steps: Sequence[Step], act: Callable[[Context, Step]
     ctx = Context(env, CredentialStore(env.kube))
     outcomes: list[Outcome] = []
     for step in steps:
-        reason = env.capabilities.skip_reason(CLUSTER, *step.requires)
-        if step.wiring and not env.profile.wiring:
-            reason = f"wiring is off for {env.profile.name} (profile bootstrap.wiring)"
+        reason = _skip_reason(env, step)
         if reason:
             outcomes.append(Outcome(step.name, "skipped", reason))
             continue
@@ -146,6 +159,76 @@ def _each(env: Environment, steps: Sequence[Step], act: Callable[[Context, Step]
     return outcomes
 
 
+def _skip_reason(env: Environment, step: Step) -> str | None:
+    if step.wiring and not env.profile.wiring:
+        return f"wiring is off for {env.profile.name} (profile bootstrap.wiring)"
+    return env.capabilities.skip_reason(CLUSTER, *step.requires)
+
+
+class _Statuses:
+    """is_present of snippet steps from one Django shell per deployment, until a step may have changed something.
+
+    A status can depend on what an earlier step creates (a group, a zaaktype, a stored secret), so once a step
+    is created or fails, the remaining steps check themselves again.
+    """
+
+    def __init__(self, steps: Sequence[Step]) -> None:
+        self._steps: Sequence[Step] = steps
+        # Per step name: its deployment and the status calls of that deployment's steps.
+        self._batches: dict[str, tuple[str, _Calls]] | None = None
+        self._present: dict[str, bool] = {}
+        self._valid: bool = True
+
+    def is_present(self, ctx: Context, step: Step) -> bool | None:
+        """Return is_present of the step from its deployment's batch; None when no batch has it."""
+        if not self._valid or not isinstance(step, SnippetChecks):
+            return None
+        if self._batches is None:
+            self._batches = _batches(ctx, self._steps)
+        batch = self._batches.get(step.name)
+        if batch:
+            deployment, calls = batch
+            for member, _ in calls:
+                self._batches.pop(member.name)
+            self._present.update(_batch_status(ctx, deployment, calls))
+        return self._present.get(step.name)
+
+    def invalidate(self) -> None:
+        """Forget the batches: a step may have changed what the remaining ones check."""
+        self._valid = False
+
+
+def _batches(ctx: Context, steps: Sequence[Step]) -> dict[str, tuple[str, _Calls]]:
+    """Return per step name its deployment and that deployment's status calls; only deployments with several."""
+    calls: defaultdict[str, _Calls] = defaultdict(list)
+    checked = (step for step in steps if isinstance(step, SnippetChecks))
+    for step in checked:
+        found = _status_call(ctx, step)
+        if found:
+            calls[found[0]].append((step, found[1]))
+    several = {deployment: group for deployment, group in calls.items() if len(group) > 1}
+    return {step.name: (deployment, group) for deployment, group in several.items() for step, _ in group}
+
+
+def _status_call(ctx: Context, step: SnippetChecks) -> tuple[str, SnippetCall] | None:
+    """Return the step's status call; None when it will not run, needs no shell or fails (it reports that itself)."""
+    if _skip_reason(ctx.env, step):
+        return None
+    with suppress(*_STEP_ERRORS):
+        return None if not_allowed(ctx, step) else step.status_call(ctx)
+    return None
+
+
+def _batch_status(ctx: Context, deployment: str, calls: _Calls) -> dict[str, bool]:
+    """Return is_present per step name from one Django shell; empty when it failed, so each step checks itself."""
+    statuses = try_snippets(ctx.env.kube, deployment, [call for _, call in calls])
+    present: dict[str, bool] = {}
+    for (step, _), status in zip(calls, statuses or [], strict=False):
+        with suppress(*_STEP_ERRORS):  # the step reports it when it runs
+            present[step.name] = step.is_present_in(ctx, status)
+    return present
+
+
 def has_failure(outcomes: Sequence[Outcome]) -> bool:
     """Return True when any step failed."""
     return any(outcome.action == "failed" for outcome in outcomes)
@@ -153,14 +236,20 @@ def has_failure(outcomes: Sequence[Outcome]) -> bool:
 
 def bootstrap(env: Environment, steps: Sequence[Step], *, rotate: bool = False) -> list[Outcome]:
     """Apply every applicable step that is not in place (all of them with rotate)."""
+    statuses = _Statuses(steps)
 
     def apply(ctx: Context, step: Step) -> Outcome:
         reason = not_allowed(ctx, step)
         if reason:
             return Outcome(step.name, "skipped", reason)
-        values = _apply_missing(ctx, step, rotate=rotate)
+        try:
+            values = _apply_missing(ctx, step, statuses, rotate=rotate)
+        except _STEP_ERRORS:
+            statuses.invalidate()
+            raise
         if values is None:
             return Outcome(step.name, "present")
+        statuses.invalidate()
         if values:
             ctx.store.write(values)
             ctx.env.credentials.forget(*values)
@@ -170,14 +259,16 @@ def bootstrap(env: Environment, steps: Sequence[Step], *, rotate: bool = False) 
     return _each(env, steps, apply)
 
 
-def _apply_missing(ctx: Context, step: Step, *, rotate: bool) -> dict[str, str] | None:
+def _apply_missing(ctx: Context, step: Step, statuses: _Statuses, *, rotate: bool) -> dict[str, str] | None:
     """Apply the step unless it is present (always with rotate); the credentials to store, None when present."""
-    if not rotate and isinstance(step, Ensures):
-        ctx.notes.clear()
-        return step.ensure(ctx)
-    if not rotate and step.is_present(ctx):
+    present = False if rotate else statuses.is_present(ctx, step)
+    if present is None and not isinstance(step, SnippetChecks):
+        present = step.is_present(ctx)
+    if present:
         return None
     ctx.notes.clear()
+    if present is None and isinstance(step, SnippetChecks):
+        return step.ensure(ctx)
     return step.apply(ctx)
 
 
@@ -197,12 +288,16 @@ def unbootstrap(env: Environment, steps: Sequence[Step]) -> list[Outcome]:
 
 def check(env: Environment, steps: Sequence[Step]) -> list[Outcome]:
     """Whether every applicable step is in place; changes nothing."""
+    statuses = _Statuses(steps)
 
     def present(ctx: Context, step: Step) -> Outcome:
         reason = not_allowed(ctx, step)
         if reason:
             return Outcome(step.name, "skipped", reason)
-        return Outcome(step.name, "present" if step.is_present(ctx) else "missing")
+        found = statuses.is_present(ctx, step)
+        if found is None:
+            found = step.is_present(ctx)
+        return Outcome(step.name, "present" if found else "missing")
 
     return _each(env, steps, present)
 

@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
     from podiumd_tests.kube import Kube
 
-type _Call = tuple[str, dict[str, object]]
+type SnippetCall = tuple[str, dict[str, object]]
 
 INCLUDE = re.compile(r"^# include: (\w+)$", re.MULTILINE)
 # Each snippet runs in its own namespace: snippets define the same names (run, helpers).
@@ -50,7 +50,7 @@ def _call_source(name: str, params: dict[str, object]) -> str:
     return f"{source}\n\n{snippet_source('_ensure')}" if params.get("action") == "ensure" else source
 
 
-def run_snippets(kube: Kube, deployment: str, calls: Sequence[_Call], timeout: int = 120) -> list[object]:
+def run_snippets(kube: Kube, deployment: str, calls: Sequence[SnippetCall], timeout: int = 120) -> list[object]:
     """Run (name, params) snippets in order in one Django shell of a deployment; their run() results.
 
     One shell saves Django's start, which takes seconds per call (Open Inwoner: 6 s).
@@ -58,6 +58,14 @@ def run_snippets(kube: Kube, deployment: str, calls: Sequence[_Call], timeout: i
     batch = [[f"snippets/{name}.py", _call_source(name, params), params] for name, params in calls]
     code = _CALLS.format(calls=json.dumps(batch))
     return [json.loads(value) for value in django_values(kube.exec_django_shell(deployment, code, timeout))]
+
+
+def try_snippets(kube: Kube, deployment: str, calls: Sequence[SnippetCall]) -> list[object] | None:
+    """Return run_snippets' results; None when the shell failed, so the caller runs each call alone to name it."""
+    try:
+        return run_snippets(kube, deployment, calls)
+    except Exception:  # noqa: BLE001  # pylint: disable=broad-exception-caught  # each call alone reports the error
+        return None
 
 
 def run_snippet(kube: Kube, deployment: str, name: str, params: dict[str, object], timeout: int = 120) -> object:
