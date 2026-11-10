@@ -89,15 +89,15 @@ class Callback:
     env: Environment
     path: str
 
-    @classmethod
-    def new(cls, env: Environment, run_tag: str, *, fail_first: bool = False) -> Callback:
-        """Return a callback path of its own, under the run tag; fail_first: the first notification gets 500."""
-        return cls(env, f"/{run_tag}{'/fail-first' if fail_first else ''}/{secrets.token_hex(6)}")
-
     @property
     def url(self) -> str:
         """URL the platform reaches the callback on from inside the cluster."""
         return mock_server_root(self.env) + self.path
+
+    @classmethod
+    def new(cls, env: Environment, run_tag: str, *, fail_first: bool = False) -> Callback:
+        """Return a callback path of its own, under the run tag; fail_first: the first notification gets 500."""
+        return cls(env, f"/{run_tag}{'/fail-first' if fail_first else ''}/{secrets.token_hex(6)}")
 
     def received(self) -> list[JsonObject]:
         """Everything the mock server got on this path, oldest first."""

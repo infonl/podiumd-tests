@@ -57,21 +57,6 @@ class Environment:
         extra = self.profile.kube.monitoring_namespace
         return [self.profile.kube.namespace, *([extra] if extra else [])]
 
-    def ingress_ip(self) -> str | None:
-        """External IP of the ingress service in host-header mode; None in direct mode."""
-        ref = self.profile.access.ingress_service
-        if self.profile.access.mode != "host-header" or ref is None:
-            return None
-        ip = self.kube.run(
-            "get", "svc", ref.name, "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}", namespace=ref.namespace
-        ).strip()
-        if not ip:
-            raise KubeError(
-                self.kube.command("get", "svc", ref.name, namespace=ref.namespace),
-                "no external IP: on minikube, run `minikube tunnel`",
-            )
-        return ip
-
     @cached_property
     def ca_file(self) -> str | None:
         """File with the profile's access.ca_bundle, fetched from the cluster once; None: the system's CAs."""
@@ -89,6 +74,43 @@ class Environment:
             handle.write(bundle)
         Path(handle.name).replace(path)
         return str(path)
+
+    @cached_property
+    def deployment_names(self) -> list[str]:
+        """Names of all deployments in the environment's namespaces; read once."""
+        return [metadata_name(deployment) for deployment in self.items("deployments")]
+
+    @cached_property
+    def workload_names(self) -> list[str]:
+        """Names of all Deployments and, where listable, StatefulSets (e.g. OpenBao); for capability detection."""
+        names = list(self.deployment_names)
+        with suppress(KubeError):
+            names += [metadata_name(statefulset) for statefulset in self.items("statefulsets")]
+        return names
+
+    @cached_property
+    def capabilities(self) -> Capabilities:
+        """Capabilities detected from profile and cluster; profile only when the cluster is unreachable."""
+        try:
+            names: list[str] | None = self.workload_names
+        except KubeError:
+            return detect(self.profile, None)
+        return detect(self.profile, names, detect_network(self.kube))
+
+    def ingress_ip(self) -> str | None:
+        """External IP of the ingress service in host-header mode; None in direct mode."""
+        ref = self.profile.access.ingress_service
+        if self.profile.access.mode != "host-header" or ref is None:
+            return None
+        ip = self.kube.run(
+            "get", "svc", ref.name, "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}", namespace=ref.namespace
+        ).strip()
+        if not ip:
+            raise KubeError(
+                self.kube.command("get", "svc", ref.name, namespace=ref.namespace),
+                "no external IP: on minikube, run `minikube tunnel`",
+            )
+        return ip
 
     def peer_certificate(self, url: str) -> dict[str, object]:
         """Return the verified certificate the host of an https profile URL presents."""
@@ -121,19 +143,6 @@ class Environment:
         """Return the long-running workloads: Deployments and StatefulSets."""
         return [item for kind in WORKLOAD_KINDS for item in self.items(kind, namespaces)]
 
-    @cached_property
-    def deployment_names(self) -> list[str]:
-        """Names of all deployments in the environment's namespaces; read once."""
-        return [metadata_name(deployment) for deployment in self.items("deployments")]
-
-    @cached_property
-    def workload_names(self) -> list[str]:
-        """Names of all Deployments and, where listable, StatefulSets (e.g. OpenBao); for capability detection."""
-        names = list(self.deployment_names)
-        with suppress(KubeError):
-            names += [metadata_name(statefulset) for statefulset in self.items("statefulsets")]
-        return names
-
     def deployment_for(self, component: str) -> str:
         """Return the main deployment of a component, e.g. "notificaties" for opennotificaties on podiumd-infra."""
         for prefix in COMPONENTS[component].deployment_prefixes:
@@ -151,15 +160,6 @@ class Environment:
             return self._sharing_deployment(component)
         except KubeError:  # no cluster, or an app without deployment: the profile URL decides
             return component
-
-    @cached_property
-    def capabilities(self) -> Capabilities:
-        """Capabilities detected from profile and cluster; profile only when the cluster is unreachable."""
-        try:
-            names: list[str] | None = self.workload_names
-        except KubeError:
-            return detect(self.profile, None)
-        return detect(self.profile, names, detect_network(self.kube))
 
     def _sharing_deployment(self, component: str) -> str:
         """Return the first Django app of the profile that runs on the component's deployment, else the component."""

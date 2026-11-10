@@ -34,6 +34,7 @@ dev = [
     "flake8-pyproject",  # flake8 reads [tool.flake8] in pyproject.toml
     "wemake-python-styleguide",  # flake8 plugin, its own pinned flake8
     "flake8-bugbear",    # flake8 plugin: B907 and B042, which ruff lacks
+    "flake8-class-attributes-order",  # flake8 plugin: CCE001, class member order
     "pip-audit",         # known vulnerabilities in the .venv packages
     "deptry",            # dependencies declared and imported agree
     "yamllint",
@@ -182,7 +183,7 @@ ignore = [
 preview = true
 explicit-preview-rules = true
 # These codes in noqa comments belong to flake8 plugins, not to ruff.
-external = ["WPS", "B907", "B042"]
+external = ["WPS", "CCE", "B907", "B042"]
 fixable = ["ALL"]
 unfixable = []
 # Allow unused variables when underscore-prefixed.
@@ -219,7 +220,9 @@ line-ending = "auto"
 
 # flake8 runs wemake-python-styleguide (WPS) and plugin rules ruff cannot check; read via flake8-pyproject.
 [tool.flake8]
-select = ["WPS", "B907", "B042"]
+select = ["WPS", "CCE", "B907", "B042"]
+# CCE001: magic methods right after __init__, as WPS338 wants; non-strict mode.
+class-attributes-order = "docstring,pass,meta_class,nested_class,constant,field,outer_field,if,expression,__new__,__init__,__post_init__,magic_method,property_method,static_method,class_method,method,protected_property_method,protected_static_method,protected_class_method,protected_method,private_property_method,private_static_method,private_class_method,private_method"
 max-line-length = 120
 # Jones complexity of a line (default 14): only the really dense lines
 max-line-complexity = 18

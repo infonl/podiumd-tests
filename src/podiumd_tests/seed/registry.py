@@ -48,6 +48,9 @@ class ResourceRegistry:
         self.keep: bool = keep
         self._entries: list[_Entry] = []
 
+    def __len__(self) -> int:
+        return len(self._entries)
+
     def tagged(self, name: str) -> str:
         """Return a name carrying the run tag, so sweep can find leftovers."""
         return f"{self.run_tag}-{name}"
@@ -63,9 +66,6 @@ class ResourceRegistry:
         """
         snippet = _Snippet(kube, deployment, name, params)
         self._entries.append(_Entry(description, lambda: run_snippet(kube, deployment, name, params), snippet))
-
-    def __len__(self) -> int:
-        return len(self._entries)
 
     def cleanup(self) -> list[str]:
         """Delete everything; return the descriptions kept (with keep=True) or raise CleanupError."""
