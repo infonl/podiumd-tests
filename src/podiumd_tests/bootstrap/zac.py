@@ -45,7 +45,7 @@ class ZacPart:
     plan_item: str | None = None
 
     def read(self, parameters: JsonObject) -> JsonObject:
-        """The part's current value."""
+        """Return the part's current value."""
         if self.plan_item is None:
             return section(parameters, self.key)
         items = entries(parameters.get(self.key))
@@ -53,7 +53,7 @@ class ZacPart:
         return next((item for item in items if section(item, "planItemDefinition").get("id") == self.plan_item), empty)
 
     def write(self, parameters: JsonObject, value: JsonObject) -> JsonObject:
-        """The parameters with the part set to value."""
+        """Return the parameters with the part set to value."""
         if self.plan_item is None:
             return {**parameters, self.key: value}
         items = entries(parameters.get(self.key))
@@ -61,7 +61,7 @@ class ZacPart:
         return {**parameters, self.key: mine}
 
     def is_mine(self, value: JsonObject) -> bool:
-        """The value still has what apply set."""
+        """Return whether the value still has what apply set."""
         return all(value.get(key) == wanted for key, wanted in self.wanted.items())
 
 
@@ -156,7 +156,7 @@ class ZacParameters:
         return (self.store_key,)
 
     def _allowed(self, ctx: Context) -> str | None:
-        """The zaaktype identificatie when the profile allows the change, else None."""
+        """Return the zaaktype identificatie when the profile allows the change, else None."""
         profile = ctx.env.profile
         return profile.settings.get("productaanvraag_zaaktype") if profile.allows(self.setting) else None
 
@@ -168,7 +168,7 @@ class ZacParameters:
 
 
 def _parameters(http: requests.Session, zac: str, uuid: str) -> JsonObject:
-    """The zaakafhandelparameters of one zaaktype version, complete for a PUT."""
+    """Return the zaakafhandelparameters of one zaaktype version, complete for a PUT."""
     return cast(
         "JsonObject", expect_status(http.get(f"{zac}/rest/zaakafhandelparameters/{uuid}"), HTTPStatus.OK).json()
     )

@@ -55,7 +55,7 @@ class KeycloakUser:
         return keycloak_password_key(self.key)
 
     def is_present(self, ctx: Context, /) -> bool:
-        """The user exists with the wanted attributes, roles and groups that the realm has.
+        """Return whether the user exists with the wanted attributes, roles and groups that the realm has.
 
         Its password must be in the credentials Secret. A role or group the realm gets later makes the step apply again.
         """

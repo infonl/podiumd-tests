@@ -38,12 +38,12 @@ HUBBLE_RELAY = "hubble-relay"
 
 
 def agent_pods(kube: Kube) -> list[JsonObject]:
-    """The Cilium agent pods, one per node."""
+    """Return the Cilium agent pods, one per node."""
     return entries(kube.get_json("pods", "-l", AGENT_SELECTOR, namespace=NAMESPACE).get("items"))
 
 
 def detect_network(kube: Kube) -> tuple[frozenset[str], dict[str, str]]:
-    """The present network capabilities (cilium, hubble), and why the others are absent."""
+    """Return the present network capabilities (cilium, hubble), and why the others are absent."""
     try:
         agents = agent_pods(kube)
         services = {metadata_name(service) for service in kube.items("services", namespace=NAMESPACE)}
@@ -137,7 +137,7 @@ class Monitor:
         self._master: int = master  # the pty master; lines() owns and closes it
 
     def lines(self) -> Generator[str]:
-        """The monitor's output lines until it stops; killing kubectl closes the pty and ends the stream."""
+        """Yield the monitor's output lines until it stops; killing kubectl closes the pty and ends the stream."""
         with suppress(OSError), os.fdopen(self._master, encoding="utf-8", errors="replace") as reader:
             yield from reader
 
@@ -160,7 +160,7 @@ def start_monitor(kube: Kube, pod: str) -> Monitor:
 
 
 def policy_drop(line: str) -> JsonObject | None:
-    """The monitor event of a policy denial; None for other drops (e.g. IPv6 router solicitations) and chatter."""
+    """Return the monitor event of a policy drop; None for other drops (e.g. IPv6 router solicitations) and chatter."""
     if not line.startswith("{"):
         return None
     try:

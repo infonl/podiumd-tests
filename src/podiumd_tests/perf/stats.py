@@ -36,7 +36,7 @@ class EndpointStats:
 
 
 def thresholds(path: Path, endpoint: str) -> Threshold:
-    """The endpoint's threshold: perf.yaml's defaults with its entry under `endpoints` on top."""
+    """Return the endpoint's threshold: perf.yaml's defaults with its entry under `endpoints` on top."""
     data = cast("dict[str, object]", yaml.safe_load(path.read_text(encoding="utf-8")))
     endpoints = cast("dict[str, dict[str, float]]", data.get("endpoints") or {})
     merged = {**cast("dict[str, float]", data["defaults"]), **endpoints.get(endpoint, {})}
@@ -59,7 +59,7 @@ def read_stats(csv_text: str) -> dict[str, EndpointStats]:
 
 
 def violations(stats: EndpointStats, threshold: Threshold) -> list[str]:
-    """What the stats exceed of the threshold; empty when they meet it."""
+    """Return what the stats exceed of the threshold; empty when they meet it."""
     found: list[str] = []
     if stats.requests == 0:
         return ["no requests"]
@@ -78,7 +78,7 @@ MIN_BASELINE_RUNS = 3
 
 
 def earlier_stats(run: Path) -> list[dict[str, EndpointStats]]:
-    """The stats of earlier perf runs of the same environment with the same settings.json, newest first.
+    """Return the stats of earlier perf runs of the same environment with the same settings.json, newest first.
 
     run is this run's directory, <results>/<yyyy-mm>/<start>_<env>_perf_<run id>; its perf/ holds both files.
     """
@@ -101,7 +101,7 @@ def baseline_p95(history: list[dict[str, EndpointStats]], endpoint: str) -> floa
 
 
 def slowdown_limit(threshold: Threshold, baseline_ms: float) -> float:
-    """The highest p95 that is no slowdown: above both max_slowdown times and min_slowdown_ms more than the baseline.
+    """Return the highest p95 that is no slowdown: above both max_slowdown times and min_slowdown_ms over the baseline.
 
     The margin keeps noise on small numbers (a p95 of 130 ms becoming 260 ms) from counting as a slowdown.
     """

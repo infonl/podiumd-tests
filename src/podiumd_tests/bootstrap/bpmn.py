@@ -52,7 +52,7 @@ CONFIGURATION = "/rest/zaaktype-bpmn-configuration"
 
 
 def bpmn_zaaktype(openzaak: ApiClient) -> JsonObject:
-    """The published zaaktype of step openzaak-zaaktype-bpmn, as Open Zaak's Catalogi API shows it."""
+    """Return the published zaaktype of step openzaak-zaaktype-bpmn, as Open Zaak's Catalogi API shows it."""
     zaaktypen = openzaak.list(f"{CATALOGI}/zaaktypen", {"identificatie": BPMN_ZAAKTYPE})
     found = [zaaktype for zaaktype in zaaktypen if not zaaktype.get("concept")]
     if not found:
@@ -68,7 +68,7 @@ def mappable_roles(pabc: requests.Session, pabc_url: str) -> dict[str, tuple[str
 
 
 def uuid_of(url: object) -> str:
-    """The last path part of a ZGW resource URL."""
+    """Return the last path part of a ZGW resource URL."""
     return str(url).rstrip("/").rsplit("/", 1)[-1]
 
 
@@ -87,7 +87,7 @@ class ZacBpmnProcess:
     wiring: bool = False
 
     def is_present(self, ctx: Context, /) -> bool:
-        """The process is deployed and linked to the current BPMN test zaaktype, and PABC maps the roles."""
+        """Return whether the process is deployed, linked to the BPMN test zaaktype, and PABC maps the roles."""
         try:
             zaaktype = uuid_of(bpmn_zaaktype(self._openzaak(ctx))["url"])
         except LookupError:

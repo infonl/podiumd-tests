@@ -20,12 +20,12 @@ if TYPE_CHECKING:
 
 
 def user_email(username: str) -> str:
-    """The e-mail address create_user gives a user; Open Klant actors are matched on it."""
+    """Return the e-mail address create_user gives a user; Open Klant actors are matched on it."""
     return f"{username}@example.invalid"
 
 
 def realm_of(env: Environment) -> str:
-    """The realm the applications log in to (settings.keycloak_realm, default podiumd)."""
+    """Return the realm the applications log in to (settings.keycloak_realm, default podiumd)."""
     return env.profile.settings.get("keycloak_realm", "podiumd")
 
 
@@ -53,11 +53,11 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
         return cast("JsonObject", expect_status(self.http.get(url, headers=self.headers), HTTPStatus.OK).json())
 
     def representation(self) -> JsonObject:
-        """The realm's own settings, e.g. smtpServer."""
+        """Return the realm's own settings, e.g. smtpServer."""
         return cast("JsonObject", self._get(""))
 
     def user(self, username: str) -> JsonObject | None:
-        """The user with exactly this username, or None."""
+        """Return the user with exactly this username, or None."""
         users = cast("list[JsonObject]", self._get("/users", {"username": username, "exact": "true"}))
         return users[0] if users else None
 
@@ -67,7 +67,7 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
         return str(user["id"]) if user else None
 
     def users(self, search: str) -> list[JsonObject]:
-        """The users whose username, e-mail or name contains the text."""
+        """Return the users whose username, e-mail or name contains the text."""
         count = self.count_users(search)
         return cast(
             "list[JsonObject]",
@@ -116,7 +116,7 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
         return user_id
 
     def new_password(self) -> str:
-        """A random password that the realm's passwordPolicy accepts."""
+        """Return a random password that the realm's passwordPolicy accepts."""
         return conforming_password(str(self.representation().get("passwordPolicy") or ""))
 
     def password_refusal(self, user_id: str, password: str) -> str | None:
@@ -144,20 +144,20 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
             self.delete_user(user_id)
 
     def identity_providers(self) -> list[JsonObject]:
-        """The realm's identity providers (brokering)."""
+        """Return the realm's identity providers (brokering)."""
         return cast("list[JsonObject]", self._get("/identity-provider/instances"))
 
     def identity_provider_mappers(self, alias: str) -> list[JsonObject]:
-        """The mappers of one identity provider."""
+        """Return the mappers of one identity provider."""
         return cast("list[JsonObject]", self._get(f"/identity-provider/instances/{alias}/mappers"))
 
     def realm_roles(self, names: tuple[str, ...]) -> list[JsonObject]:
-        """The realm roles with these names that exist."""
+        """Return the realm roles with these names that exist."""
         roles = cast("list[JsonObject]", self._get("/roles"))
         return [role for role in roles if role.get("name") in names]
 
     def role(self, name: str, client_uuid: str | None = None) -> JsonObject | None:
-        """A realm role, or a role of the client with this uuid, with its attributes; None when absent."""
+        """Return a realm role, or a role of the client with this uuid, with its attributes; None when absent."""
         path = f"/clients/{client_uuid}/roles" if client_uuid else "/roles"
         roles = cast("list[JsonObject]", self._get(path, {"search": name, "briefRepresentation": "false"}))
         return next((role for role in roles if role.get("name") == name), None)
@@ -190,7 +190,7 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
             self._send("POST", f"/users/{user_id}/role-mappings/realm", roles)
 
     def client(self, client_id: str) -> JsonObject | None:
-        """The client with this clientId, or None."""
+        """Return the client with this clientId, or None."""
         clients = cast("list[JsonObject]", self._get("/clients", {"clientId": client_id}))
         return clients[0] if clients else None
 
@@ -227,7 +227,7 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
         self._send("PUT", f"/clients/{client['id']}", client)
 
     def client_secret(self, client_uuid: str) -> str:
-        """A confidential client's secret."""
+        """Return a confidential client's secret."""
         return str(cast("JsonObject", self._get(f"/clients/{client_uuid}/client-secret"))["value"])
 
     def client_scopes(self) -> dict[str, str]:
@@ -278,7 +278,7 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
 
 
 def _user_body(username: str, attributes: dict[str, list[str]], name: tuple[str, str] | None) -> JsonObject:
-    """An enabled user without required actions, by default named PodiumD <username>."""
+    """Return an enabled user without required actions, by default named PodiumD <username>."""
     first, last = name or ("PodiumD", username)
     return {
         "username": username,

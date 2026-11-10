@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 def objecttype_url(env: Environment, name: str) -> str:
-    """The URL Objecten knows an objecttype by; LookupError when it has none.
+    """Return the URL Objecten knows an objecttype by; LookupError when it has none.
 
     Open Object serves its objecttypes on its own API.
     """
@@ -41,7 +41,7 @@ def make_object(
     data: Mapping[str, object],
     start_at: str | None = None,
 ) -> JsonObject:
-    """An object of an objecttype (its URL as Objecten knows it), version 1, valid from start_at (default today)."""
+    """Create an object of an objecttype (the URL Objecten knows), version 1, valid from start_at (default today)."""
     record = {"typeVersion": 1, "data": data, "startAt": start_at or today()}
     body: dict[str, object] = {"type": objecttype, "record": record}
     created = objecten.post("objects", body)
@@ -53,7 +53,7 @@ def make_object(
 def make_productaanvraag(
     objecten: ApiClient, registry: ResourceRegistry, objecttype: str, productaanvraagtype: str, kenmerk: str
 ) -> JsonObject:
-    """A productaanvraag object as Open Formulieren's objects API registration writes it."""
+    """Create a productaanvraag object as Open Formulieren's objects API registration writes it."""
     data: dict[str, object] = {
         "bron": {"naam": "Open Formulieren", "kenmerk": kenmerk},
         "type": productaanvraagtype,

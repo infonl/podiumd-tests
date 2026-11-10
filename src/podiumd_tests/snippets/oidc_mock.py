@@ -84,7 +84,7 @@ def _site(record):
 
 
 def _accounts(identities):
-    """The Open Inwoner accounts with the identities' bsn or kvk."""
+    """Return the Open Inwoner accounts with the identities' bsn or kvk."""
     from django.db.models import Q  # noqa: WPS347  # Django's query object
     from open_inwoner.accounts.models import User
 

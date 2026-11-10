@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 def openbeheer_session(env: Environment, username: str, password: str) -> requests.Session:
-    """A session on Open Beheer's API, logged in through its OIDC login (cookie authentication).
+    """Return a session on Open Beheer's API, logged in through its OIDC login (cookie authentication).
 
     Its writes need Django's CSRF token and a Referer of Open Beheer itself, which the session sends.
     """

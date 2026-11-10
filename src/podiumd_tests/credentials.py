@@ -97,7 +97,7 @@ class SecretResolver:
             self._redactor.add(value)
 
     def configured(self, name: str) -> bool:
-        """True when the secret has a source: the profile, its env var, or the credentials Secret."""
+        """Return True when the secret has a source: the profile, its env var, or the credentials Secret."""
         overridden = bool(self._environ.get(env_var_name(name)))
         return name in self._profile.secrets or overridden or name in self._bootstrap()
 

@@ -44,7 +44,7 @@ KENNIS_URL = "https://example.invalid/"
 
 
 def kcc_login(page: Page, env: Environment, component: str, user: KeycloakUser = KCC) -> requests.Session:
-    """A test user's session (default the KCC user) in KISS ("kiss") or ITA ("ita"), logged in in the browser.
+    """Return a test user's session (default the KCC user) in KISS ("kiss") or ITA ("ita"), logged in in the browser.
 
     ITA starts a login only for a browser navigation; KISS also takes oidc.challenge_session.
     """
@@ -52,7 +52,7 @@ def kcc_login(page: Page, env: Environment, component: str, user: KeycloakUser =
 
 
 def kiss_register(kiss: requests.Session, kiss_url: str) -> dict[str, str]:
-    """The header that sends a KISS proxy call to its Open Klant 2 register, the default one first.
+    """Return the header that sends a KISS proxy call to its Open Klant 2 register, the default one first.
 
     Skips when KISS has none: its klantinteracties proxy answers 400 for an e-Suite register (OpenKlant1).
     """
@@ -146,12 +146,12 @@ def ita_afhandeltermijn_hours(env: Environment) -> int:
 
 
 def ita_bijna_verlopen_hours(env: Environment) -> int:
-    """The weekday hours before the afhandeltermijn ends in which ITA marks a contactverzoek almost overdue."""
+    """Return the weekday hours before the afhandeltermijn ends in which ITA marks a contactverzoek almost overdue."""
     return _ita_hours(env, "Urgentie__BijnaVerlopenDrempelUren", ITA_BIJNA_VERLOPEN_HOURS)
 
 
 def weekday_hours_before(moment: datetime, hours: float) -> datetime:
-    """The moment `hours` weekday hours (Monday to Friday, UTC) before `moment`, as ITA counts its afhandeltermijn."""
+    """Return the moment `hours` weekday hours (Mon-Fri, UTC) before `moment`, as ITA counts its afhandeltermijn."""
     left = timedelta(hours=hours)
     end, day = moment, moment.replace(hour=0, minute=0, second=0, microsecond=0)
     while True:
@@ -163,7 +163,7 @@ def weekday_hours_before(moment: datetime, hours: float) -> datetime:
 
 
 def kiss_sync_cronjob(env: Environment, source: str) -> str:
-    """The name of KISS's elastic-sync CronJob for a search source (vac, kennisbank), e.g. contact-vac-sync."""
+    """Return the name of KISS's elastic-sync CronJob for a search source (vac, kennisbank), e.g. contact-vac-sync."""
     names = [metadata_name(cronjob) for cronjob in env.items("cronjobs")]
     return next(name for name in names if name.endswith(f"-{source}-sync"))
 
@@ -183,18 +183,18 @@ def kiss_website_crawlers(env: Environment) -> dict[str, str]:
 
 
 def kiss_search_hits(kiss: requests.Session, kiss_url: str, query: str) -> list[JsonObject]:
-    """The hits of KISS's search for the query in all its sources."""
+    """Return the hits of KISS's search for the query in all its sources."""
     response = kiss.post(f"{kiss_url}/api/search", json={"query": query, "page": 1, "filters": []})
     return entries(section(expect_status(response, HTTPStatus.OK).json(), "hits").get("hits"))
 
 
 def vac_data(titel: str, antwoord: str = "Antwoord van podiumd-tests.") -> dict[str, object]:
-    """A VAC (vraag-antwoordcombinatie) for Objecten with the title as its question."""
+    """Return a VAC (vraag-antwoordcombinatie) for Objecten with the title as its question."""
     return {"vraag": titel, "antwoord": antwoord, "doelgroep": "eu-burger", "status": "actief"}
 
 
 def kennisartikel_data(titel: str, tekst: str = "Tekst van podiumd-tests.") -> dict[str, object]:
-    """An SDG kennisartikel for Objecten with the title in its Dutch translation, at KENNIS_URL + title."""
+    """Return an SDG kennisartikel for Objecten with the title in its Dutch translation, at KENNIS_URL + title."""
     return {
         "url": f"{KENNIS_URL}{quote(titel)}",
         "uuid": str(uuid.uuid4()),

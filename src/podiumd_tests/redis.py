@@ -25,7 +25,7 @@ REDIS_CLI = "redis-cli -h $(hostname) -p ${REDIS_PORT:-6379}"
 
 
 def redis_pods(env: Environment) -> list[JsonObject]:
-    """The pods of the redis-ha StatefulSet."""
+    """Return the pods of the redis-ha StatefulSet."""
     return [pod for pod in env.items("pods") if section(section(pod, "metadata"), "labels").get("app") == REDIS_HA]
 
 
@@ -47,20 +47,20 @@ def redis_cli(env: Environment, pod: JsonObject, *args: str) -> str:
 
 
 def reported_role(env: Environment, pod: JsonObject) -> str:
-    """The role (master or slave) the pod's Redis reports in INFO replication."""
+    """Return the role (master or slave) the pod's Redis reports in INFO replication."""
     found = re.search(r"^role:(\w+)", redis_cli(env, pod, "INFO", "replication"), re.MULTILINE)
     return found.group(1) if found else ""
 
 
 def checks_master_role(pod: JsonObject) -> bool:
-    """The pod's readiness probe makes a master-labelled pod that reports role:slave NotReady (masterReadinessCheck)."""
+    """Return whether a master-labelled pod reporting role:slave goes NotReady (masterReadinessCheck)."""
     containers = entries(section(pod, "spec").get("containers"))
     probes = [section(container, "readinessProbe") for container in containers if container.get("name") == REDIS_HA]
     return any("role:" in str(section(probe, "exec").get("command")) for probe in probes)
 
 
 def ready_endpoints(env: Environment, service: str) -> list[str]:
-    """The names of the pods behind the Service's ready endpoint addresses."""
+    """Return the names of the pods behind the Service's ready endpoint addresses."""
     found = [endpoint for endpoint in env.items("endpoints") if metadata_name(endpoint) == service]
     subsets = [subset for endpoint in found for subset in entries(endpoint.get("subsets"))]
     return [
@@ -71,7 +71,7 @@ def ready_endpoints(env: Environment, service: str) -> list[str]:
 
 
 def master_pod(env: Environment, replaced_uid: str | None = None) -> JsonObject | None:
-    """The one pod behind redis-ha-master if its Redis reports role:master, else None.
+    """Return the one pod behind redis-ha-master if its Redis reports role:master, else None.
 
     With replaced_uid, None also while that pod (by uid: a recreated pod keeps its name) is still behind it.
     """

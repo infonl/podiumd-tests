@@ -89,7 +89,7 @@ SERVICE_REFERENCES: dict[str, tuple[ServiceReference, ...]] = {
 
 
 def list_path(api_root: str) -> str | None:
-    """The LIST_PATHS endpoint of the API at api_root, or None for an API not in it."""
+    """Return the LIST_PATHS endpoint of the API at api_root, or None for an API not in it."""
     url = urlsplit(api_root)
     before_api, has_api, _ = url.path.partition("/api/")
     name = before_api.strip("/") if has_api else ""
@@ -132,7 +132,7 @@ def service_problems(env: Environment, component: str) -> list[str]:
 
 
 def reference_problems(env: Environment, component: str) -> list[str]:
-    """The component's SERVICE_REFERENCES without rows or with an unset field; [] when all are set."""
+    """Return the component's SERVICE_REFERENCES without rows or with an unset field; [] when all are set."""
     references = SERVICE_REFERENCES[component]
     params: dict[str, object] = {
         "references": [

@@ -33,7 +33,7 @@ def is_established(crd: JsonObject) -> bool:
 
 
 def storage_schema(crd: JsonObject) -> JsonObject:
-    """The openAPIV3Schema of the CRD's storage version; empty when it has none."""
+    """Return the openAPIV3Schema of the CRD's storage version; empty when it has none."""
     for version in entries(section(crd, "spec").get("versions")):
         if version.get("storage") is True:
             return section(section(version, "schema"), "openAPIV3Schema")
@@ -55,7 +55,7 @@ def has_field(schema: JsonObject, path: str) -> bool:
 
 
 def wrong_markers(crds: Iterable[JsonObject], markers: Sequence[Marker], version: tuple[int, ...]) -> list[str]:
-    """The markers up to `version` that the CRDs break, as "<crd>: lacks|has <path>" or "<crd>: not installed"."""
+    """Return the markers up to `version` the CRDs break, as "<crd>: lacks|has <path>" or "<crd>: not installed"."""
     schemas = {metadata_name(crd): storage_schema(crd) for crd in crds}
     wrong: list[str] = []
     for marker in markers:

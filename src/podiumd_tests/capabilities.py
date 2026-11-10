@@ -36,7 +36,7 @@ class Capabilities:
     reasons: dict[str, str]
 
     def missing(self, *needed: str) -> list[str]:
-        """The needed capabilities that are absent."""
+        """Return the needed capabilities that are absent."""
         return [name for name in needed if name not in self.present]
 
     def skip_reason(self, *needed: str) -> str | None:

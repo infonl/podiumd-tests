@@ -34,7 +34,7 @@ REPORT_RETRIES = (2, 5, 10, 30)
 
 
 def form_and_headers(http: requests.Session, base_url: str, slug: str) -> tuple[JsonObject, dict[str, str]]:
-    """The form, and the headers the session's writes to Open Formulieren's API need."""
+    """Return the form, and the headers the session's writes to Open Formulieren's API need."""
     form_response = expect_status(http.get(f"{base_url}/api/v2/forms/{slug}"), HTTPStatus.OK)
     # Every write echoes the CSRF token that API responses carry in this header.
     headers = {"X-CSRFToken": form_response.headers.get("X-CSRFToken", ""), "Referer": f"{base_url}/{slug}/"}
@@ -124,7 +124,7 @@ def wait_for_registration(env: Environment, submission: str, *, timeout: float) 
 
 
 def download_report(env: Environment, http: requests.Session, status: JsonObject) -> bytes:
-    """The submission's PDF report through the inwoner's download link.
+    """Return the submission's PDF report through the inwoner's download link.
 
     A failed download fails the test, after retries that record when the web pod serves the file
     (a 404 although the worker wrote it: NFS cache or another test's same-named report).
@@ -161,7 +161,7 @@ def registration_state(env: Environment, submission: str) -> dict[str, str]:
 
 
 def _processed(http: requests.Session, status_url: str, submission: str, *, timeout: float) -> JsonObject:
-    """The submission's public status once Open Formulieren processed it; AssertionError when that failed."""
+    """Return the submission's public status once Open Formulieren processed it; AssertionError when that failed."""
 
     def finished() -> JsonObject | None:
         status = _json(http.get(status_url), HTTPStatus.OK)
@@ -182,7 +182,7 @@ def _processed(http: requests.Session, status_url: str, submission: str, *, time
 def registered_zaak(
     env: Environment, openzaak: ApiClient, registry: ResourceRegistry, status: JsonObject
 ) -> JsonObject:
-    """The zaak a submission registered; cleanup deletes the submission, then the zaak.
+    """Return the zaak a submission registered; cleanup deletes the submission, then the zaak.
 
     Open Zaak reissues a deleted zaak's identificatie, and Open Formulieren refuses to register a
     zaak whose identificatie a remaining submission holds as public reference: in the reverse
@@ -213,7 +213,7 @@ def make_form(  # noqa: PLR0913, PLR0917  # mirrors the snippet's parameters
     payment: Mapping[str, object] | None = None,
     **settings: object,
 ) -> None:
-    """A one-step test form (snippet openformulieren_form) that cleanup deletes with its submissions.
+    """Create a one-step test form (snippet openformulieren_form) that cleanup deletes with its submissions.
 
     payment: {"backend", "merchant", "price"} for a form that asks for a payment.
     """
@@ -240,14 +240,14 @@ def _removal(slug: str) -> dict[str, object]:
 
 
 def tagged_forms(env: Environment) -> list[str]:
-    """The slugs of the forms, steps and products whose name starts with ptest-, bootstrap ones included."""
+    """Return the slugs of the forms, steps and products whose name starts with ptest-, bootstrap ones included."""
     params: dict[str, object] = {"prefix": TAG_PREFIX, "action": "list"}
     found = run_snippet(env.kube, env.deployment_for("openformulieren"), "openformulieren_form", params)
     return [str(slug) for slug in cast("list[object]", found)]
 
 
 def redacteur_session(env: Environment) -> requests.Session:
-    """A session on Open Formulieren's API as the test form editor (bootstrap OF_REDACTEUR), by its API token."""
+    """Return a session on Open Formulieren's API as the test form editor (bootstrap OF_REDACTEUR), by its API token."""
     http = env.session()
     http.headers["Authorization"] = f"Token {env.credentials.get(str(OF_REDACTEUR.store_key))}"
     return http

@@ -101,21 +101,21 @@ class Corpus:
     scenarios: list[str]
 
     def persoon(self, index: int) -> dict[str, str]:
-        """The index-th persoon, wrapping around."""
+        """Return the index-th persoon, wrapping around."""
         return self.personen[index % len(self.personen)]
 
     def organisatie(self, index: int) -> str:
-        """The index-th organisatie's name, wrapping around."""
+        """Return the index-th organisatie's name, wrapping around."""
         return self.organisaties[index % len(self.organisaties)]["naam"]
 
     def scenario(self, index: int) -> str:
-        """The index-th zaak scenario, wrapping around."""
+        """Return the index-th zaak scenario, wrapping around."""
         return self.scenarios[index % len(self.scenarios)]
 
 
 @cache
 def corpus() -> Corpus:
-    """The corpus, read once."""
+    """Return the corpus, read once."""
     text = files("podiumd_tests.seed").joinpath("volume_corpus.yaml").read_text(encoding="utf-8")
     data = cast("dict[str, list[object]]", yaml.safe_load(text))
     personen = cast("list[dict[str, str]]", data["personen"])
@@ -169,7 +169,7 @@ def _one_by_one(creator: Callable[[Environment], Callable[[int], None]]) -> Call
 
 
 def _per_thread(make: Callable[[], ApiClient]) -> Callable[[], ApiClient]:
-    """A client per worker thread: requests sessions are not thread-safe."""
+    """Return a client per worker thread: requests sessions are not thread-safe."""
     local = threading.local()
 
     def client() -> ApiClient:
@@ -493,7 +493,7 @@ _UNCOUNTABLE = (ProcessError, SecretError, AssertionError, LookupError, requests
 
 
 def counts(env: Environment) -> dict[str, int | None]:
-    """The volume objects per kind the environment has now; None where they cannot be counted."""
+    """Return the volume objects per kind the environment has now; None where they cannot be counted."""
     found: dict[str, int | None] = {}
     for kind in KINDS:
         try:

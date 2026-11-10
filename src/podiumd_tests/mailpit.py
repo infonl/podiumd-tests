@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 def wait_for_mail(
     mailpit: ApiClient, *, timeout: float, subject: str | None = None, to: str | None = None
 ) -> JsonObject:
-    """The first message with exactly this subject and/or to this address; WaitTimeoutError if none arrives in time."""
+    """Return the first message with exactly this subject and/or to this address; WaitTimeoutError if none arrives."""
     criteria = (("subject", subject), ("to", to))
     query = " ".join(f'{field}:"{value}"' for field, value in criteria if value)
 
@@ -41,7 +41,7 @@ def delete_message(mailpit: ApiClient, message_id: str) -> None:
 def received(
     mailpit: ApiClient, registry: ResourceRegistry, *, timeout: float, to: str, subject: str | None = None
 ) -> str:
-    """The HTML of the first mail to the address (wait_for_mail); cleanup deletes every mail to the address."""
+    """Return the HTML of the first mail to the address (wait_for_mail); cleanup deletes every mail to the address."""
     message = wait_for_mail(mailpit, timeout=timeout, to=to, subject=subject)
     registry.add(f"mail to {to}", lambda: delete_mails(mailpit, f'to:"{to}"'))
     return str(mailpit.get(f"message/{message['ID']}").get("HTML"))

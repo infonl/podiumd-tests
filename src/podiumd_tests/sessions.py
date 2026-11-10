@@ -107,7 +107,7 @@ class TimeoutSession(requests.Session):
 def make_session(
     urls: Mapping[str, str], ingress_ip: str | None = None, *, cookies: bool = True, verify: str | None = None
 ) -> requests.Session:
-    """A session for the profile URLs; with ingress_ip, profile hosts are reached through that IP.
+    """Return a session for the profile URLs; with ingress_ip, profile hosts are reached through that IP.
 
     verify: CA bundle file for https; None uses the system's CAs.
 
@@ -129,7 +129,7 @@ def make_session(
 
 
 def peer_certificate(url: str, ingress_ip: str | None = None, ca_file: str | None = None) -> dict[str, object]:
-    """The certificate the host of an https URL presents, verified for that host; through ingress_ip if given."""
+    """Return the certificate the host of an https URL presents, verified for that host; through ingress_ip if given."""
     parts = urlsplit(url)
     host = parts.hostname or ""
     context = ssl.create_default_context(cafile=ca_file)

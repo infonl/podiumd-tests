@@ -216,7 +216,7 @@ def _defines_test(node_id: str) -> bool:
 
 
 def pytest_selection(profile: Profile, tier_name: str, run_id: str, junit: Path, args: argparse.Namespace) -> list[str]:
-    """The pytest arguments of a run: the tier's paths and markers, the run tag and the results files."""
+    """Return the pytest arguments of a run: the tier's paths and markers, the run tag and the results files."""
     tier = TIERS[tier_name]
     paths = [str(REPO_ROOT / path) for path in tier.paths if (REPO_ROOT / path).is_dir()]
     positional = [arg for arg in args.pytest_args if not arg.startswith("-")]
@@ -263,7 +263,7 @@ def _preflight_ok(env: Environment, args: argparse.Namespace) -> bool:
 
 
 def _bootstrap_env(args: argparse.Namespace) -> Environment | int:
-    """The environment for bootstrap and unbootstrap, or the exit code that stops them."""
+    """Return the environment for bootstrap and unbootstrap, or the exit code that stops them."""
     profile = _load(args)
     env = Environment(profile)
     if not _preflight_ok(env, args):
@@ -327,7 +327,7 @@ def cmd_sweep(args: argparse.Namespace) -> int:
 
 
 def _volume_env(args: argparse.Namespace) -> Environment | int:
-    """The environment for seed-volume and unseed-volume, or the exit code that stops them."""
+    """Return the environment for seed-volume and unseed-volume, or the exit code that stops them."""
     profile = _load(args)
     if "perf" not in profile.allowed_tiers:
         print(f"refused: {profile.name} does not allow tier perf (allowed_tiers), so no volume data", file=sys.stderr)
@@ -371,7 +371,7 @@ def selected_steps(names: list[str] | None) -> tuple[Step, ...]:
 
 
 def _versions(env: Environment) -> dict[str, str]:
-    """The deployed components' versions for run.json; none when the cluster is unreachable."""
+    """Return the deployed components' versions for run.json; none when the cluster is unreachable."""
     try:
         found = component_versions(env, sorted(COMPONENTS))
     except KubeError:
@@ -458,7 +458,7 @@ def _cluster_state(env: Environment) -> ClusterState | None:
 
 
 def _add_volume_commands(add_parser: Callable[..., argparse.ArgumentParser]) -> None:
-    """The seed-volume and unseed-volume subcommands."""
+    """Add the seed-volume and unseed-volume subcommands."""
     vol = add_parser("seed-volume", help="top up the perf tier's volume data, tagged ptest-volume")
     _add_env(vol)
     vol.add_argument("--scale", choices=["smoke", "perf"], default="smoke", help="counts to reach (default: smoke)")
@@ -495,7 +495,7 @@ def _add_results_dir(parser: argparse.ArgumentParser) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """The argument parser of `podiumd-tests`."""
+    """Return the argument parser of `podiumd-tests`."""
     parser = argparse.ArgumentParser(
         prog="podiumd-tests",
         description=__doc__,

@@ -54,7 +54,7 @@ BUILD_ENTRY_LIMIT = 200
 
 
 def pod_containers(workload: JsonObject, *, with_init: bool) -> list[JsonObject]:
-    """The containers of a Deployment's or StatefulSet's pod template, init containers first when asked."""
+    """Return the containers of a Deployment's or StatefulSet's pod template, init containers first when asked."""
     pod = section(section(section(workload, "spec"), "template"), "spec")
     found = entries(pod.get("containers"))
     return [*entries(pod.get("initContainers")), *found] if with_init else found
@@ -90,7 +90,7 @@ def component_versions(env: Environment, components: Sequence[str]) -> dict[str,
 
 
 def image_version(workload: JsonObject) -> tuple[int, ...] | None:
-    """The first version image tag of the workload's containers: "repo:v0.27.0@sha256:..." -> (0, 27, 0)."""
+    """Return the first version image tag of the workload's containers: "repo:v0.27.0@sha256:..." -> (0, 27, 0)."""
     for container in pod_containers(workload, with_init=False):
         name = str(container.get("image")).partition("@")[0]
         # "repo@sha256:..." has no tag; a ":" before the last "/" is a registry port.
@@ -110,7 +110,7 @@ VERSION_PACKAGES = {"openinwoner": ("/app/src", "open_inwoner")}
 
 
 def _image_release(env: Environment, component: str, deployment: str) -> str:
-    """The version a deployment's image states, or "" when the pod cannot tell.
+    """Return the version a deployment's image states, or "" when the pod cannot tell.
 
     Maykin images set RELEASE, ZAC sets VERSION_NUMBER; Open Inwoner sets RELEASE empty.
     """
@@ -133,7 +133,7 @@ def _image_release(env: Environment, component: str, deployment: str) -> str:
 
 
 def chart_version(env: Environment) -> str | None:
-    """The podiumd chart's version: Helm's app.kubernetes.io/version label on podiumd's own ConfigMaps.
+    """Return the podiumd chart's version: Helm's app.kubernetes.io/version label on podiumd's own ConfigMaps.
 
     None when no ConfigMap has it or the cluster is unreachable.
     """
@@ -149,7 +149,7 @@ def chart_version(env: Environment) -> str | None:
 
 
 def deployed_build(env: Environment) -> dict[str, str]:
-    """The one-line entries of the ConfigMap named by setting deployed_build ("namespace/name"); {} when unreadable.
+    """Return the one-line entries of the ConfigMap setting deployed_build names ("namespace/name"); {} when unreadable.
 
     The deployer records there what the chart version hides, such as a local chart checkout. Entries over
     BUILD_ENTRY_LIMIT characters are left out.
@@ -236,7 +236,7 @@ def run_cronjob(kube: Kube, cronjob: str, job: str, timeout: int = 300) -> None:
 
 
 def _job_log(kube: Kube, job: str) -> str:
-    """The last lines a Job's container wrote; its previous run when it restarts."""
+    """Return the last lines a Job's container wrote; its previous run when it restarts."""
     for previous in ([], ["--previous"]):
         with suppress(KubeError):
             if log := kube.run("logs", f"job/{job}", "--tail=60", *previous):
@@ -337,7 +337,7 @@ class ClusterState:
 
 
 def cluster_state(env: Environment) -> ClusterState:
-    """The pods (not of Jobs) and nodes now, to compare with a later state."""
+    """Return the pods (not of Jobs) and nodes now, to compare with a later state."""
     long_running = [pod for pod in entries(env.items("pods")) if "Job" not in _owner_kinds(pod)]
     pods = {str(section(pod, "metadata").get("uid")): pod for pod in long_running}
     return ClusterState(pods, frozenset(metadata_name(node) for node in env.kube.items("nodes")))

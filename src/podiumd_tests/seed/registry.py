@@ -49,7 +49,7 @@ class ResourceRegistry:
         self._entries: list[_Entry] = []
 
     def tagged(self, name: str) -> str:
-        """A name carrying the run tag, so sweep can find leftovers."""
+        """Return a name carrying the run tag, so sweep can find leftovers."""
         return f"{self.run_tag}-{name}"
 
     def add(self, description: str, delete: Callable[[], object]) -> None:

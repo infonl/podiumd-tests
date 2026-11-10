@@ -53,7 +53,7 @@ def retry_network_change[ResultT](page: Page, navigate: Callable[[], ResultT], w
 
 
 def guard_navigation(page: Page) -> Page:
-    """The page, whose goto and reload are repeated when a host network change aborted them."""
+    """Return the page, whose goto and reload are repeated when a host network change aborted them."""
 
     def retried[**ParamsP](
         name: str, navigate: Callable[ParamsP, Response | None]

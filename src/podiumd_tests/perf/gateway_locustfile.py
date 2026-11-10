@@ -69,7 +69,7 @@ class GatewayUser(User):
 
     @task
     def request(self) -> None:
-        """The scenario's URLs in order, timed as one request."""
+        """Request the scenario's URLs in order, timed as one request."""
         started = time.perf_counter()
         error = None
         try:

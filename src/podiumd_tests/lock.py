@@ -99,7 +99,7 @@ def _lease(kube: Kube, who: str, seconds: int, now: datetime) -> dict[str, objec
 
 
 def lease_holder(kube: Kube, now: datetime | None = None) -> str | None:
-    """The holder and start of the unexpired lease, or None when no run holds it."""
+    """Return the holder and start of the unexpired lease, or None when no run holds it."""
     found = kube.get_optional("lease", LEASE)
     if found is None:
         return None
@@ -134,7 +134,7 @@ def release_lease(kube: Kube, who: str) -> None:
 
 
 def running_hold(lock: Path) -> str | None:
-    """The lock file's line while a running podiumd-tests process of this user@host holds it, else None."""
+    """Return the lock file's line while a running podiumd-tests process of this user@host holds it, else None."""
     try:
         line = lock.read_text(encoding="utf-8").strip()
     except FileNotFoundError:

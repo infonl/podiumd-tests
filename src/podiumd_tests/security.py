@@ -66,13 +66,13 @@ def realm_policy_gaps(realm: JsonObject) -> list[str]:
 
 
 def _policy_rules(policy: str) -> dict[str, int]:
-    """The counted rules of a Keycloak passwordPolicy, e.g. {"length": 12, "digits": 1}."""
+    """Return the counted rules of a Keycloak passwordPolicy, e.g. {"length": 12, "digits": 1}."""
     rules = dict(re.findall(r"(\w+)\((\d+)\)", policy))
     return {rule: int(count) for rule, count in rules.items() if rule in {*PASSWORD_CLASSES, "length", "maxLength"}}
 
 
 def _password(rules: dict[str, int], broken: str | None = None) -> str:
-    """A random password that meets the rules, except the broken one, which it misses by one."""
+    """Return a random password that meets the rules, except the broken one, which it misses by one."""
     counts = {rule: rules.get(rule, 1) - (rule == broken) for rule in PASSWORD_CLASSES}
     chars = [secrets.choice(PASSWORD_CLASSES[rule]) for rule, count in counts.items() for _ in range(count)]
     wanted = max(rules.get("length", 0), PASSWORD_LENGTH)
@@ -83,7 +83,7 @@ def _password(rules: dict[str, int], broken: str | None = None) -> str:
 
 
 def conforming_password(policy: str) -> str:
-    """A random password that a realm with this passwordPolicy accepts."""
+    """Return a random password that a realm with this passwordPolicy accepts."""
     return _password(_policy_rules(policy))
 
 
@@ -94,7 +94,7 @@ def policy_breaking_passwords(policy: str) -> dict[str, str]:
 
 
 def missing_security_headers(response: requests.Response) -> list[str]:
-    """The baseline headers the response lacks: HSTS and nosniff always, frame protection on an HTML page.
+    """Return the baseline headers the response lacks: HSTS and nosniff always, frame protection on an HTML page.
 
     A redirect's HTML body is never rendered, so it cannot be framed: frame protection applies to 2xx only.
     """
@@ -124,7 +124,7 @@ def insecure_session_cookies(response: requests.Response) -> list[str]:
 
 
 def foreign_origin_allowed(response: requests.Response, origin: str) -> bool:
-    """The response lets a page on origin read it: the origin echoed, or any origin with credentials."""
+    """Return whether the response lets a page on origin read it: the origin echoed, or any origin with credentials."""
     allowed = response.headers.get("Access-Control-Allow-Origin")
     credentials = response.headers.get("Access-Control-Allow-Credentials", "").lower() == "true"
     return allowed == origin or (allowed == "*" and credentials)

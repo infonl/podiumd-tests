@@ -90,7 +90,7 @@ class Environment:
         return str(path)
 
     def peer_certificate(self, url: str) -> dict[str, object]:
-        """The verified certificate the host of an https profile URL presents."""
+        """Return the verified certificate the host of an https profile URL presents."""
         return peer_certificate(url, self.ingress_ip(), self.ca_file)
 
     def session(self, *, cookies: bool = True) -> requests.Session:
@@ -99,7 +99,7 @@ class Environment:
 
     @contextmanager
     def console_urls(self) -> Generator[dict[str, str]]:
-        """The profile URLs as this console reaches them: an in-cluster URL of a present component via port-forward."""
+        """Yield the profile URLs as this console reaches them: a present component's in-cluster URL by port-forward."""
         urls = dict(self.profile.urls)
         with ExitStack() as forwards:
             for component, url in self.profile.urls.items():
@@ -117,7 +117,7 @@ class Environment:
         return [item for namespace in selected for item in self.kube.items(kind, namespace=namespace)]
 
     def workloads(self, namespaces: Sequence[str] | None = None) -> list[dict[str, object]]:
-        """The long-running workloads: Deployments and StatefulSets."""
+        """Return the long-running workloads: Deployments and StatefulSets."""
         return [item for kind in WORKLOAD_KINDS for item in self.items(kind, namespaces)]
 
     @cached_property
@@ -134,7 +134,7 @@ class Environment:
         return names
 
     def deployment_for(self, component: str) -> str:
-        """The main deployment of a component, e.g. "notificaties" for opennotificaties on podiumd-infra."""
+        """Return the main deployment of a component, e.g. "notificaties" for opennotificaties on podiumd-infra."""
         for prefix in COMPONENTS[component].deployment_prefixes:
             if prefix in self.deployment_names:
                 return prefix
@@ -142,7 +142,7 @@ class Environment:
         raise KubeError(self.kube.command("get", "deployments"), msg)
 
     def admin_of(self, component: str) -> str:
-        """The Django app whose admin serves this one's: objecten for objecttypen on Open Object, else itself.
+        """Return the Django app whose admin serves this one's: objecten for objecttypen on Open Object, else itself.
 
         Open Object's Keycloak client accepts only objecten's host as redirect URI.
         """

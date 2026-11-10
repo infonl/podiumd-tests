@@ -42,7 +42,7 @@ ROLLOUT_TIMEOUT = 180
 
 
 def manifests(image: str = "") -> list[dict[str, object]]:
-    """The mock server's ConfigMap, Deployment and Service, with server.py; image replaces the default image."""
+    """Return the mock server's ConfigMap, Deployment and Service, with server.py; image replaces the default image."""
     docs = [
         cast("dict[str, object]", manifest)
         for manifest in yaml.safe_load_all((INFRA / "manifests.yaml").read_text())
@@ -64,7 +64,7 @@ def _container(deployment: JsonObject) -> dict[str, object]:
 
 
 def _image(env: Environment) -> str:
-    """The profile's settings.mock_server_image (a registry the cluster's policy allows), or the default."""
+    """Return the profile's settings.mock_server_image (a registry the cluster's policy allows), or the default."""
     return env.profile.settings.get("mock_server_image", "")
 
 
@@ -78,7 +78,7 @@ def _entry(line: str) -> JsonObject | None:
 
 
 def mock_server_root(env: Environment) -> str:
-    """The root URL the platform reaches the mock server on from inside the cluster."""
+    """Return the root URL the platform reaches the mock server on from inside the cluster."""
     return f"http://{NAME}.{env.profile.kube.namespace}"
 
 
@@ -91,7 +91,7 @@ class Callback:
 
     @classmethod
     def new(cls, env: Environment, run_tag: str, *, fail_first: bool = False) -> Callback:
-        """A callback path of its own, under the run tag; fail_first: the first notification gets 500."""
+        """Return a callback path of its own, under the run tag; fail_first: the first notification gets 500."""
         return cls(env, f"/{run_tag}{'/fail-first' if fail_first else ''}/{secrets.token_hex(6)}")
 
     @property
@@ -106,7 +106,7 @@ class Callback:
         return [entry for entry in parsed if entry is not None and entry.get("path") == self.path]
 
     def wait_for(self, match: Callable[[JsonObject], bool], *, timeout: float, description: str) -> JsonObject:
-        """The first received entry that matches; WaitTimeoutError when none arrives in time."""
+        """Return the first received entry that matches; WaitTimeoutError when none arrives in time."""
         return wait_until(
             lambda: next((entry for entry in self.received() if match(entry)), None),
             timeout=timeout,
@@ -123,7 +123,7 @@ class MockServer:
     wiring: bool = False
 
     def is_present(self, ctx: Context, /) -> bool:  # noqa: PLR6301  # a Step method
-        """The ConfigMap holds the current server.py and the Deployment has a ready replica."""
+        """Return whether the ConfigMap holds the current server.py and the Deployment has a ready replica."""
         kube = ctx.env.kube
         config_map = kube.get_optional("configmap", NAME)
         deployment = kube.get_optional("deployment", NAME)

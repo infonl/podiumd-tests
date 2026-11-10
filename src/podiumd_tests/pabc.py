@@ -51,7 +51,7 @@ def login(page: Page, env: Environment, username: str, password: str) -> request
 
 
 def admin_session(env: Environment, username: str, password: str) -> requests.Session:
-    """A PABC management session, logged in through headless Chromium: PABC's login needs a page navigation.
+    """Return a PABC management session, logged in through headless Chromium: PABC's login needs a page navigation.
 
     The login runs in its own thread: Playwright's sync API refuses a thread with a running asyncio loop, which a
     pytest worker has after a browser test (bootstrap checks of need_bootstrap).
@@ -85,7 +85,7 @@ def delete_entity_type(pabc: requests.Session, pabc_url: str, entity_type: str) 
 
 
 def ensure_domain(pabc: requests.Session, pabc_url: str, name: str, entity_types: list[str]) -> str:
-    """The domain of this name, created if missing, holding these entity types (PABC ids); its id."""
+    """Return the domain of this name, created if missing, holding these entity types (PABC ids); its id."""
     found = next((existing for existing in get_entries(pabc, pabc_url + DOMAINS) if existing.get("name") == name), None)
     if found is None:
         body = {"name": name, "description": "podiumd-tests"}
@@ -104,7 +104,7 @@ def application_roles(pabc: requests.Session, pabc_url: str, application: str) -
 def ensure_functional_role(  # noqa: PLR0913, PLR0917  # one mapping set
     pabc: requests.Session, pabc_url: str, name: str, application: str, roles: tuple[str, ...], domain: str
 ) -> None:
-    """The functional role of this name, created if missing, mapped to these application roles in the domain."""
+    """Ensure the functional role of this name, mapped to these application roles in the domain."""
     known = application_roles(pabc, pabc_url, application)
     if missing := set(roles) - {str(role.get("name")) for role in known}:
         msg = f"PABC has no application role {', '.join(sorted(missing))} of {application}: add it to PABC's dataset"
@@ -143,7 +143,7 @@ def delete_functional_roles_and_domain(
 
 
 def mapped_application_roles(decision: JsonObject, entity_type: str) -> set[str]:
-    """The application roles a decision of PABC gives for an entity type (its entityTypeId)."""
+    """Return the application roles a decision of PABC gives for an entity type (its entityTypeId)."""
     return {
         str(role.get("name"))
         for result in entries(decision.get("results"))

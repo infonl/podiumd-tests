@@ -66,7 +66,7 @@ def run(params):
 
 
 def _options(registration):
-    """The registration backend's options with the pk or identifier of the API group they name."""
+    """Return the registration backend's options with the pk or identifier of the API group they name."""
     from openforms.registrations.contrib.zgw_apis.models import ZGWApiGroupConfig
 
     options = dict(registration["options"])
@@ -98,7 +98,7 @@ def _status(params, forms):
 
 
 def _payment(params, slug):
-    """The Form fields of a form that asks for a payment."""
+    """Return the Form fields of a form that asks for a payment."""
     from openforms.products.models import Product
 
     payment = params.get("payment")

@@ -44,7 +44,7 @@ REASON_ROW = re.compile(r"^\| ([A-Z]+-\d+(?:, [A-Z]+-\d+)*) \| (.*) \|$")
 
 
 def _section(name: str) -> list[str]:
-    """The lines of a MIGRATION.md section."""
+    """Return the lines of a MIGRATION.md section."""
     lines: list[str] = []
     current = ""
     for line in (REPO_ROOT / "MIGRATION.md").read_text(encoding="utf-8").splitlines():
@@ -77,7 +77,7 @@ def cited(tests: Path) -> dict[tuple[str, int], set[str]]:
 
 
 def _tc_ids(node: ast.AST) -> list[str]:
-    """The case ids of a pytest.mark.tc(...) call, or none for any other expression."""
+    """Return the case ids of a pytest.mark.tc(...) call, or none for any other expression."""
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "tc":
         return [arg.value for arg in node.args if isinstance(arg, ast.Constant) and isinstance(arg.value, str)]
     return []
@@ -122,7 +122,7 @@ def report_row(
     own: set[str],
     reason: str,
 ) -> tuple[str, str]:
-    """The case's status and its report row; reason: why no test covers it, or ""."""
+    """Return the case's status and its report row; reason: why no test covers it, or ""."""
     state = "covered" if own else status(specs, decisions)
     if not state and reason:
         state = "out of scope"

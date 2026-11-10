@@ -112,7 +112,7 @@ def upload_document(page: Page, name: str, content: bytes) -> None:
 
 
 def virus_scan_enabled(env: Environment) -> bool:
-    """True when Open Inwoner scans uploads with ClamAV."""
+    """Return True when Open Inwoner scans uploads with ClamAV."""
     return bool(run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_virus_scan", {"action": "read"}))
 
 

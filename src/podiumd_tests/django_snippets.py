@@ -39,7 +39,7 @@ for _name, _source, _params in _json.loads({calls!r}):
 
 
 def snippet_source(name: str) -> str:
-    """The source of snippets/<name>.py, after the snippets its `# include: <name>` lines name."""
+    """Return the source of snippets/<name>.py, after the snippets its `# include: <name>` lines name."""
     source = resources.files("podiumd_tests.snippets").joinpath(f"{name}.py").read_text(encoding="utf-8")
     included = [snippet_source(include) for include in INCLUDE.findall(source)]
     return "\n\n".join([*included, source])

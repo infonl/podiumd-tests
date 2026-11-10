@@ -68,13 +68,13 @@ RUN_TAG = re.compile(rf"\b{TAG_PREFIX}(\d{{10}}[0-9a-f]{{4}}|[0-9a-f]{{6}})(?![0
 
 
 def new_run_id(now: datetime | None = None) -> str:
-    """A run id for a run that starts now."""
+    """Return a run id for a run that starts now."""
     started = (now or datetime.now(UTC)).astimezone(UTC)
     return f"{started:%y%m%d%H%M}{secrets.token_hex(2)}"
 
 
 def run_started(run_id: str) -> datetime | None:
-    """The start minute a run id carries; None for a legacy id or one whose digits are no date."""
+    """Return the start minute a run id carries; None for a legacy id or one whose digits are no date."""
     found = RUN_ID.fullmatch(run_id)
     try:
         return datetime.strptime(found.group(1), "%y%m%d%H%M").replace(tzinfo=UTC) if found else None
@@ -166,7 +166,7 @@ def _first_line(text: str | None) -> str:
 
 
 def parse_junit(xml_text: str) -> tuple[Counts, Details]:
-    """Counts and the tests per outcome from a pytest junit.xml.
+    """Return the counts and the tests per outcome from a pytest junit.xml.
 
     pytest writes a non-strict xpass as a pass; the pytest plugin adds the property "xpass" with its reason.
     """
@@ -306,5 +306,5 @@ def write_run(sink: ResultsSink, directory: str, info: RunInfo, details: Details
 
 
 def now_iso(timespec: str = "seconds") -> str:
-    """Current UTC time, ISO 8601, to the given precision (datetime.isoformat timespec)."""
+    """Return the current UTC time, ISO 8601, to the given precision (datetime.isoformat timespec)."""
     return datetime.now(UTC).isoformat(timespec=timespec)

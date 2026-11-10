@@ -28,7 +28,7 @@ def describe(response: requests.Response) -> str:
 
 
 def expect_status(response: requests.Response, *expected: int) -> requests.Response:
-    """The response, when its status is one of expected; UnexpectedStatusError otherwise."""
+    """Return the response, when its status is one of expected; UnexpectedStatusError otherwise."""
     if response.status_code not in expected:
         msg = f"{describe(response)}, expected {' or '.join(str(status) for status in expected)}"
         body = " ".join(response.text.split())[:BODY_EXCERPT]
@@ -37,7 +37,7 @@ def expect_status(response: requests.Response, *expected: int) -> requests.Respo
 
 
 def is_server_error(response: requests.Response) -> bool:
-    """True for a 5xx status: the component (or its ingress) is broken, whatever the client sent."""
+    """Return True for a 5xx status: the component (or its ingress) is broken, whatever the client sent."""
     return response.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR
 
 
@@ -55,12 +55,12 @@ def root_answers(session: requests.Session, base_url: str, timeout: float) -> bo
 
 
 def url_host(url: str) -> str:
-    """The hostname of a URL, or "" when it has none."""
+    """Return the hostname of a URL, or "" when it has none."""
     return urlsplit(url).hostname or ""
 
 
 def get_entries(http: requests.Session, url: str) -> list[JsonObject]:
-    """The objects GET url answers with 200: a JSON array, or one under results or items (PABC)."""
+    """Return the objects GET url answers with 200: a JSON array, or one under results or items (PABC)."""
     body: object = expect_status(http.get(url), HTTPStatus.OK).json()
     if isinstance(body, dict):
         found = cast("JsonObject", body)

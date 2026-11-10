@@ -78,7 +78,7 @@ def _environment(environment: LocustEnvironment, **_kwargs: object) -> None:
 
 
 def _deep_page(openzaak: ApiClient, path: str) -> str:
-    """The page Open Zaak's own benchmark reads (34 of 100), or the last one when there are fewer."""
+    """Return the page Open Zaak's own benchmark reads (34 of 100), or the last one when there are fewer."""
     count = int(str(openzaak.get(path, {"pageSize": str(PAGE_SIZE)})["count"]))
     return str(max(1, min(DEEP_PAGE, -(-count // PAGE_SIZE))))
 
@@ -130,7 +130,7 @@ def _objecten_calls(env: Environment) -> dict[str, Call]:
 
 
 def _search_calls(env: Environment) -> dict[str, Call]:
-    """Searches as users do them: ZAC's (Solr) and KISS's (Elasticsearch) logged in, the portal's anonymous."""
+    """Return the searches users do: ZAC's (Solr) and KISS's (Elasticsearch) logged in, the portal's anonymous."""
     urls = env.profile.urls
     calls: dict[str, Call] = {}
     if "zac" in urls:
@@ -186,7 +186,7 @@ class ApiUser(User):
         )
 
     def _calls(self) -> dict[str, Call]:
-        """The calls of podiumd_tests.perf.ENDPOINTS whose component the environment has."""
+        """Return the calls of podiumd_tests.perf.ENDPOINTS whose component the environment has."""
         env = self.env_under_test
         http = env.session(cookies=False)
         urls = env.profile.urls

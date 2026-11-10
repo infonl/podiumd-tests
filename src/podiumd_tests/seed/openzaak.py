@@ -67,7 +67,7 @@ def delete_zaak(openzaak: ApiClient, url: str, *, with_documents: bool = False) 
 
 
 def make_zaak(openzaak: ApiClient, registry: ResourceRegistry, zaaktype: str, **fields: object) -> JsonObject:
-    """A zaak of a zaaktype whose omschrijving carries the run tag; fields override the defaults."""
+    """Create a zaak of a zaaktype whose omschrijving carries the run tag; fields override the defaults."""
     body: dict[str, object] = {
         "bronorganisatie": TEST_CATALOGUS_RSIN,
         "verantwoordelijkeOrganisatie": TEST_CATALOGUS_RSIN,
@@ -128,7 +128,7 @@ def zaaktype_parts(openzaak: ApiClient, zaaktype: JsonObject) -> ZaaktypeParts:
 def make_status(
     openzaak: ApiClient, zaak: JsonObject, statustype: str, toelichting: str = "", gezet: datetime | None = None
 ) -> JsonObject:
-    """A status of a zaak, set now or at gezet; deleted with the zaak."""
+    """Create a status of a zaak, set now or at gezet; deleted with the zaak."""
     body = {
         "zaak": zaak["url"],
         "statustype": statustype,
@@ -163,7 +163,7 @@ def make_rol(
     betrokkene_type: str = "natuurlijk_persoon",
     **identificatie: object,
 ) -> JsonObject:
-    """A rol on a zaak; identificatie is the betrokkeneIdentificatie (e.g. inpBsn=...)."""
+    """Create a rol on a zaak; identificatie is the betrokkeneIdentificatie (e.g. inpBsn=...)."""
     body: dict[str, object] = {
         "zaak": zaak["url"],
         "betrokkeneType": betrokkene_type,
@@ -177,7 +177,7 @@ def make_rol(
 def _document_body(
     registry: ResourceRegistry, informatieobjecttype: str, size: int, **fields: object
 ) -> dict[str, object]:
-    """An enkelvoudig informatieobject of size bytes whose titel carries the run tag; fields override the defaults."""
+    """Build an enkelvoudig informatieobject of size bytes whose titel carries the run tag; fields override defaults."""
     return {
         "bronorganisatie": TEST_CATALOGUS_RSIN,
         "creatiedatum": today(),
@@ -201,7 +201,7 @@ def make_document(
     inhoud: str = "podiumd-tests",
     **fields: object,
 ) -> JsonObject:
-    """An enkelvoudig informatieobject with text inhoud whose titel carries the run tag."""
+    """Create an enkelvoudig informatieobject with text inhoud whose titel carries the run tag."""
     content = inhoud.encode()
     body = _document_body(registry, informatieobjecttype, len(content), **fields)
     body = {"inhoud": base64.b64encode(content).decode(), **body}
@@ -211,7 +211,7 @@ def make_document(
 def make_document_in_parts(
     openzaak: ApiClient, registry: ResourceRegistry, informatieobjecttype: str, content: bytes, **fields: object
 ) -> JsonObject:
-    """A document created without inhoud whose bestandsdelen carry content; it stays locked (unlock merges them)."""
+    """Create a document without inhoud whose bestandsdelen carry content; it stays locked (unlock merges them)."""
     body = _document_body(registry, informatieobjecttype, len(content), formaat="application/octet-stream", **fields)
     document = _create(openzaak, registry, f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", body)
     # The parts are multipart uploads: the client's JSON Content-Type must not go along.
@@ -233,7 +233,7 @@ def make_document_in_parts(
 def link_document(
     openzaak: ApiClient, registry: ResourceRegistry, zaak: JsonObject, document: JsonObject
 ) -> JsonObject:
-    """A zaakinformatieobject linking a document to a zaak."""
+    """Create a zaakinformatieobject linking a document to a zaak."""
     body = {"zaak": zaak["url"], "informatieobject": document["url"], "titel": registry.tagged("koppeling")}
     return _create(openzaak, registry, f"{ZAKEN}/zaakinformatieobjecten", body)
 
@@ -255,7 +255,7 @@ def delete_documents_of(openzaak: ApiClient, zaak: str) -> None:
 
 
 def make_besluit(openzaak: ApiClient, registry: ResourceRegistry, besluittype: str, **fields: object) -> JsonObject:
-    """A besluit of a besluittype whose toelichting carries the run tag."""
+    """Create a besluit of a besluittype whose toelichting carries the run tag."""
     body: dict[str, object] = {
         "verantwoordelijkeOrganisatie": TEST_CATALOGUS_RSIN,
         "besluittype": besluittype,
@@ -270,7 +270,7 @@ def make_besluit(openzaak: ApiClient, registry: ResourceRegistry, besluittype: s
 def make_concept_zaaktype(
     openzaak: ApiClient, registry: ResourceRegistry, catalogus: str, **fields: object
 ) -> JsonObject:
-    """A concept zaaktype in a catalogus; concepts can be deleted, published zaaktypen cannot."""
+    """Create a concept zaaktype in a catalogus; concepts can be deleted, published zaaktypen cannot."""
     body: dict[str, object] = {
         "identificatie": registry.tagged(f"zaaktype-{secrets.token_hex(3)}"),
         "omschrijving": "podiumd-tests concept",

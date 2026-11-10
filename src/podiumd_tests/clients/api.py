@@ -37,7 +37,7 @@ class ApiClient:
         return path if path.startswith(("http://", "https://")) else f"{self.base_url}/{path.lstrip('/')}"
 
     def headers(self) -> dict[str, str]:
-        """The headers for the next request."""
+        """Return the headers for the next request."""
         return self._headers() if callable(self._headers) else self._headers
 
     def request(self, method: str, path: str, *expected: int, **kwargs: object) -> requests.Response:

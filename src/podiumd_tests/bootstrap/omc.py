@@ -32,7 +32,7 @@ RENEW_BEFORE = 7 * 24 * 3600
 
 
 def omc_setting(env: Environment, var: str) -> str:
-    """An environment variable of the OMC pod, e.g. NOTIFY_API_BASEURL."""
+    """Return an environment variable of the OMC pod, e.g. NOTIFY_API_BASEURL."""
     return env.kube.exec(env.deployment_for("omc"), "printenv", var).strip()
 
 
@@ -53,7 +53,7 @@ def omc_actor_missing(env: Environment, openklant: ApiClient) -> str | None:
 
 
 def omc_token(env: Environment, now: float) -> str:
-    """A token OMC's Events/Listen and Notify/Confirm accept, valid for VALIDITY from now."""
+    """Return a token OMC's Events/Listen and Notify/Confirm accept, valid for VALIDITY from now."""
     payload = {
         "iss": omc_setting(env, "OMC_AUTH_JWT_ISSUER"),
         "aud": omc_setting(env, "OMC_AUTH_JWT_AUDIENCE"),
@@ -74,7 +74,7 @@ class OmcAbonnement:
     wiring: bool = True
 
     def is_present(self, ctx: Context, /) -> bool:
-        """The recorded abonnement exists and its token is not about to expire."""
+        """Return whether the recorded abonnement exists and its token is not about to expire."""
         record = self._record(ctx)
         if not record or float(cast("float", record["expires"])) < time.time() + RENEW_BEFORE:
             return False

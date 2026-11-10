@@ -64,13 +64,13 @@ def ogone_feedback(order_id: str, status: str, passphrase: str) -> dict[str, str
 
 
 def ogone_return_url(request: Mapping[str, str], outcome: str, status: str, passphrase: str) -> str:
-    """The URL Ogone sends the browser back to after the payment request: the outcome's return URL with feedback."""
+    """Return the URL Ogone sends the browser back to after the payment: the outcome's return URL with feedback."""
     url = request[RETURN_URLS[outcome]]
     return f"{url}{'&' if '?' in url else '?'}{urlencode(ogone_feedback(request['ORDERID'], status, passphrase))}"
 
 
 def form_fields(request: JsonObject) -> dict[str, str]:
-    """The fields of the form a payment request posts (Ogone)."""
+    """Return the fields of the form a payment request posts (Ogone)."""
     return {name: str(value) for name, value in section(request, "data").items()}
 
 

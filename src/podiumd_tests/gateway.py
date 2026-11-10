@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 
 def is_no_route(response: requests.Response) -> bool:
-    """True for APISIX's own 404 about a missing route: the request reached no upstream.
+    """Return True for APISIX's own 404 about a missing route: the request reached no upstream.
 
     A 404 from the upstream itself (e.g. an unknown KVK number) is not "no route".
     """

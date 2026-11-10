@@ -70,7 +70,7 @@ def logs_in_through_keycloak(http: requests.Session, start_url: str, hosts: Coll
 
 
 def keycloak_login_realm(response: requests.Response, hosts: Collection[str]) -> str:
-    """The realm of the Keycloak login form that a redirect chain ended on; LoginPageError otherwise.
+    """Return the realm of the Keycloak login form that a redirect chain ended on; LoginPageError otherwise.
 
     Keycloak sends a client it refuses (unknown redirect URI, invalid_scope) back to the app or to an error page.
     A form that posts to another host (the realm's frontendUrl) cannot log in.
@@ -96,7 +96,7 @@ def keycloak_login_realm(response: requests.Response, hosts: Collection[str]) ->
 
 
 def challenge_session(env: Environment, app_url: str, username: str, password: str) -> requests.Session:
-    """A session on an ASP.NET app with a /api/challenge route (KISS), logged in through Keycloak's form.
+    """Return a session on an ASP.NET app with a /api/challenge route (KISS), logged in through Keycloak's form.
 
     ITA starts a login only for a browser navigation: kcc.kcc_login.
     """

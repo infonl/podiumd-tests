@@ -56,7 +56,7 @@ def ui_login(page: Page, env: Environment, role: str) -> None:
 
 
 def login(env: Environment, role: str) -> requests.Session:
-    """A session of the role's test user (bootstrap OAB_ROLES); its CSRF token rides along on every request."""
+    """Return a session of the role's test user (bootstrap OAB_ROLES); its CSRF token rides along on every request."""
     url = env.profile.urls["openarchiefbeheer"]
     http = env.session()
     # whoami sets the csrftoken cookie that the login and every later write must echo.

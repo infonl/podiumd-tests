@@ -43,7 +43,7 @@ BUDGET_MIN_REPLICAS = 2
 
 
 def baseline_violations(workload: JsonObject) -> list[str]:
-    """What in the workload's pod template breaks the Pod Security Standard "baseline"."""
+    """Return what in the workload's pod template breaks the Pod Security Standard "baseline"."""
     name, pod = metadata_name(workload), section(section(section(workload, "spec"), "template"), "spec")
     found = [f"{name}: {key}" for key in ("hostNetwork", "hostPID", "hostIPC") if pod.get(key) is True]
     found += [

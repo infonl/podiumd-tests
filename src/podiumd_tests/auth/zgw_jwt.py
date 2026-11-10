@@ -32,7 +32,7 @@ def zgw_headers(token: str) -> dict[str, str]:
 
 
 def hs256_jwt(payload: Mapping[str, object], secret: str, header: Mapping[str, object] | None = None) -> str:
-    """An HS256-signed JWT with this payload; header adds to typ and alg."""
+    """Return an HS256-signed JWT with this payload; header adds to typ and alg."""
     full_header = {"typ": "JWT", "alg": "HS256", **(header or {})}
     encoded_header = _b64url(json.dumps(full_header).encode())
     signing_input = b".".join([encoded_header, _b64url(json.dumps(payload).encode())])
@@ -41,7 +41,7 @@ def hs256_jwt(payload: Mapping[str, object], secret: str, header: Mapping[str, o
 
 
 def unsigned_jwt(payload: Mapping[str, object]) -> str:
-    """A JWT with this payload, alg none and an empty signature."""
+    """Return a JWT with this payload, alg none and an empty signature."""
     header = json.dumps({"typ": "JWT", "alg": "none"}).encode()
     return b".".join([_b64url(header), _b64url(json.dumps(payload).encode()), b""]).decode()
 

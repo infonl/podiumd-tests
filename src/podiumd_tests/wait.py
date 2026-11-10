@@ -19,7 +19,7 @@ _UNITS = {"s": "seconds", "m": "minutes", "h": "hours", "d": "days"}
 
 
 def parse_duration(text: str) -> timedelta:
-    """A duration such as 30s, 1m30s, 24h or 7d (Prometheus format); ValueError otherwise."""
+    """Parse a duration such as 30s, 1m30s, 24h or 7d (Prometheus format); ValueError otherwise."""
     if not DURATION.fullmatch(text.strip()):
         msg = f"duration {text!r}: expected numbers with s, m, h or d, e.g. 24h"
         raise ValueError(msg)
@@ -64,7 +64,7 @@ def wait_until[ResultT](
 
 
 def _attempt[ResultT](probe: Callable[[], ResultT | None]) -> tuple[ResultT | None, str]:
-    """The probe's value and how the attempt ended."""
+    """Return the probe's value and how the attempt ended."""
     try:
         value = probe()
     except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught  # any failure means "not yet"

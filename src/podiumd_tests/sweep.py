@@ -66,7 +66,7 @@ def format_swept(swept: list[Swept]) -> str:
 
 
 def is_stale(item: object, cutoff: datetime) -> bool:
-    """The item carries a run tag of a run that started before cutoff (a legacy tag always counts)."""
+    """Return whether the item carries a run tag of a run that started before cutoff (a legacy tag always counts)."""
     for tag in RUN_TAG.findall(json.dumps(item)):
         started = run_started(tag)
         if started is None or started < cutoff:
@@ -111,7 +111,7 @@ def _openzaak_productaanvraag(env: Environment) -> ApiClient:
 
 
 def with_productaanvraag(env: Environment, openzaak: ApiClient, zaken: list[JsonObject]) -> list[JsonObject]:
-    """The zaken, each started for a run-tagged productaanvraag with that object under "productaanvraag".
+    """Return the zaken, each started for a run-tagged productaanvraag with that object under "productaanvraag".
 
     The kenmerk of a productaanvraag that Open Formulieren registers is its public reference, without a run tag.
     """

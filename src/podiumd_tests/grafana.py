@@ -78,7 +78,7 @@ class Grafana:
 
 
 def grafana_auth(credentials: SecretResolver) -> tuple[str, str] | None:
-    """Basic auth from the secrets grafana_username and grafana_password; None for anonymous access."""
+    """Return basic auth from the secrets grafana_username and grafana_password; None for anonymous access."""
     username = credentials.optional("grafana_username")
     password = credentials.optional("grafana_password")
     return (username, password) if username and password else None
@@ -112,12 +112,12 @@ def _first_scrape_due(target: JsonObject) -> timedelta:
 
 
 def target_count(targets_response: JsonObject) -> int:
-    """Number of active scrape targets in a /api/v1/targets body."""
+    """Return the number of active scrape targets in a /api/v1/targets body."""
     return len(_active_targets(targets_response))
 
 
 def monitors_without_targets(monitors: Sequence[str], targets_response: JsonObject) -> list[str]:
-    """Monitors, as "<scrape pool prefix>/<namespace>/<name>", without an active target in a /api/v1/targets body."""
+    """Return the monitors ("<scrape pool prefix>/<namespace>/<name>") without an active target in the targets body."""
     pools = {str(target.get("scrapePool")) for target in _active_targets(targets_response)}
     return [monitor for monitor in monitors if not any(pool.startswith(f"{monitor}/") for pool in pools)]
 
@@ -138,7 +138,7 @@ def _has_otel_job(services: tuple[str, ...], jobs: set[str]) -> bool:
 def without_metrics(
     components: Iterable[str], targets_response: JsonObject, otel_response: JsonObject
 ) -> tuple[list[str], list[str]]:
-    """Monitored and OTEL components without series, from a /api/v1/targets body and an otel_jobs_query result.
+    """Return monitored and OTEL components without series, from a /api/v1/targets body and an otel_jobs_query result.
 
     A monitored component needs a ServiceMonitor or PodMonitor named like one of its workloads with a target up.
     """
@@ -177,7 +177,7 @@ def logged_before(timestamped_logs: str, cutoff: datetime) -> bool:
 def running_pods_not_in_loki(
     pods: Sequence[JsonObject], in_loki: set[tuple[str, str]], now: datetime
 ) -> list[JsonObject]:
-    """Running pods older than MIN_POD_AGE that have no log lines in Loki."""
+    """Return running pods older than MIN_POD_AGE that have no log lines in Loki."""
     return [
         pod
         for pod in pods

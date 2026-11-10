@@ -39,13 +39,13 @@ class ZaakVelden:
     verlenging: tuple[int, str] | None = None
 
     def kenmerk_xml(self) -> str:
-        """The kenmerk element; it comes before startdatum."""
+        """Return the kenmerk element; it comes before startdatum."""
         if self.kenmerk is None:
             return ""
         return f"<ZKN:kenmerk><ZKN:kenmerk>{self.kenmerk}</ZKN:kenmerk><ZKN:bron>ptest</ZKN:bron></ZKN:kenmerk>"
 
     def verlenging_xml(self) -> str:
-        """The verlenging element; it comes after registratiedatum."""
+        """Return the verlenging element; it comes after registratiedatum."""
         if self.verlenging is None:
             return ""
         duur, reden = self.verlenging
@@ -70,7 +70,7 @@ def soap_action(message: str) -> dict[str, str]:
 
 
 def _stuurgegevens(berichtcode: str, now: datetime, gemeentecode: str, *, rest: str) -> str:
-    """The StUF stuurgegevens shared by the ZDS messages; rest adds elements after the standard ones.
+    """Return the StUF stuurgegevens shared by the ZDS messages; rest adds elements after the standard ones.
 
     tijdstipBericht has 16 digits (hundredths of a second); more fails ZaakBrug's XML validation.
     """
@@ -85,7 +85,7 @@ def _stuurgegevens(berichtcode: str, now: datetime, gemeentecode: str, *, rest: 
 
 
 def _isvan_zaaktype(code: str, verwerkingssoort: str) -> str:
-    """The isVan reference to a zaaktype by its code, shared by creeerZaak and voegZaakdocumentToe."""
+    """Return the isVan reference to a zaaktype by its code, shared by creeerZaak and voegZaakdocumentToe."""
     return f"""<ZKN:isVan StUF:entiteittype="ZAKZKT" StUF:verwerkingssoort="{verwerkingssoort}">
 <ZKN:gerelateerde StUF:entiteittype="ZKT" StUF:verwerkingssoort="{verwerkingssoort}">
 <ZKN:omschrijving>podiumd-tests</ZKN:omschrijving><ZKN:code>{code}</ZKN:code>
@@ -93,7 +93,7 @@ def _isvan_zaaktype(code: str, verwerkingssoort: str) -> str:
 
 
 def genereer_zaak_identificatie(now: datetime, gemeentecode: str = GEMEENTECODE) -> str:
-    """A genereerZaakIdentificatie_Di02 envelope, for the VrijBericht endpoint."""
+    """Return a genereerZaakIdentificatie_Di02 envelope, for the VrijBericht endpoint."""
     stuurgegevens = _stuurgegevens(
         "Di02", now, gemeentecode, rest="<StUF:functie>genereerZaakidentificatie</StUF:functie>"
     )
@@ -103,7 +103,7 @@ def genereer_zaak_identificatie(now: datetime, gemeentecode: str = GEMEENTECODE)
 
 
 def genereer_document_identificatie(now: datetime, gemeentecode: str = GEMEENTECODE) -> str:
-    """A genereerDocumentIdentificatie_Di02 envelope, for the VrijBericht endpoint."""
+    """Return a genereerDocumentIdentificatie_Di02 envelope, for the VrijBericht endpoint."""
     stuurgegevens = _stuurgegevens(
         "Di02", now, gemeentecode, rest="<StUF:functie>genereerDocumentidentificatie</StUF:functie>"
     )
@@ -113,7 +113,7 @@ def genereer_document_identificatie(now: datetime, gemeentecode: str = GEMEENTEC
 
 
 def document_identificatie(answer: str) -> str | None:
-    """The document identificatie in a genereerDocumentIdentificatie answer, or None."""
+    """Return the document identificatie in a genereerDocumentIdentificatie answer, or None."""
     found = fromstring(answer).find(f".//{{{ZKN}}}document/{{{ZKN}}}identificatie")  # noqa: S314  # nosec B314
     return found.text if found is not None else None
 
@@ -127,7 +127,7 @@ def creeer_zaak(  # noqa: PLR0913  # one message
     *,
     velden: ZaakVelden = NO_VELDEN,
 ) -> str:
-    """A creeerZaak_Lk01 envelope for the OntvangAsynchroon endpoint: one zaak of zaaktype_code with an initiator.
+    """Return a creeerZaak_Lk01 envelope for the OntvangAsynchroon endpoint: a zaak of zaaktype_code with an initiator.
 
     zaaktype_code is the zaaktype identificatie and is at most 10 characters (the StUF code limit).
     """
@@ -147,7 +147,7 @@ def creeer_zaak(  # noqa: PLR0913  # one message
 
 
 def _zaak_velden(now: datetime, zaak: str, velden: ZaakVelden) -> str:
-    """The zaak object's own fields in StUF order: identificatie, omschrijving, kenmerk, dates, verlenging."""
+    """Return the zaak object's own fields in StUF order: identificatie, omschrijving, kenmerk, dates, verlenging."""
     return f"""<ZKN:identificatie>{zaak}</ZKN:identificatie><ZKN:omschrijving>podiumd-tests ZaakBrug</ZKN:omschrijving>
 {velden.kenmerk_xml()}<ZKN:startdatum>{now:%Y%m%d}</ZKN:startdatum>
 <ZKN:registratiedatum>{now:%Y%m%d}</ZKN:registratiedatum>{velden.verlenging_xml()}"""
@@ -162,7 +162,7 @@ def _zaak_wijziging(  # noqa: PLR0913  # one message
     new: tuple[ZaakVelden, str],
     gemeentecode: str,
 ) -> str:
-    """A zakLk01 envelope (mutatiesoort W): the zaak as it was (old), then as it becomes, each with extra elements."""
+    """Return a zakLk01 envelope (mutatiesoort W): the old zaak, then as it becomes, each with extra elements."""
     stuurgegevens = _stuurgegevens("Lk01", now, gemeentecode, rest="<StUF:entiteittype>ZAK</StUF:entiteittype>")
     objects = "".join(
         f"""<ZKN:object StUF:sleutelVerzendend="{zaak}" StUF:entiteittype="ZAK" StUF:verwerkingssoort="W">
@@ -188,7 +188,7 @@ def update_zaak(  # noqa: PLR0913  # one message
     new: ZaakVelden,
     gemeentecode: str = GEMEENTECODE,
 ) -> str:
-    """An updateZaak_Lk01 envelope for the OntvangAsynchroon endpoint: the zaak as it was (old), then as it becomes."""
+    """Return an updateZaak_Lk01 envelope for the OntvangAsynchroon endpoint: the old zaak, then as it becomes."""
     return _zaak_wijziging(now, zaak, zaaktype_code, old=(old, ""), new=(new, ""), gemeentecode=gemeentecode)
 
 
@@ -202,7 +202,7 @@ def actualiseer_zaakstatus(  # noqa: PLR0913  # one message
     gezet: datetime,
     gemeentecode: str = GEMEENTECODE,
 ) -> str:
-    """An actualiseerZaakstatus_Lk01 envelope for the OntvangAsynchroon endpoint: give the zaak a new status."""
+    """Return an actualiseerZaakstatus_Lk01 envelope for the OntvangAsynchroon endpoint: give the zaak a new status."""
     zonder = (
         '<ZKN:heeft StUF:entiteittype="ZAKSTT" StUF:verwerkingssoort="T" xsi:nil="true" StUF:noValue="geenWaarde"/>'
     )
@@ -218,7 +218,7 @@ def actualiseer_zaakstatus(  # noqa: PLR0913  # one message
 
 
 def geef_zaak_details(now: datetime, zaak: str, gemeentecode: str = GEMEENTECODE) -> str:
-    """A geefZaakdetails_Lv01 envelope for the BeantwoordVraag endpoint: read one zaak by identificatie."""
+    """Return a geefZaakdetails_Lv01 envelope for the BeantwoordVraag endpoint: read one zaak by identificatie."""
     stuurgegevens = _stuurgegevens("Lv01", now, gemeentecode, rest="<StUF:entiteittype>ZAK</StUF:entiteittype>")
     return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
  xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -237,7 +237,7 @@ def geef_zaak_details(now: datetime, zaak: str, gemeentecode: str = GEMEENTECODE
 def voeg_zaakdocument_toe(
     now: datetime, zaak: str, zaaktype_code: str, document: Document, gemeentecode: str = GEMEENTECODE
 ) -> str:
-    """A voegZaakdocumentToe_Lk01 envelope: attach one document to a zaak."""
+    """Return a voegZaakdocumentToe_Lk01 envelope: attach one document to a zaak."""
     stuurgegevens = _stuurgegevens("Lk01", now, gemeentecode, rest="<StUF:entiteittype>EDC</StUF:entiteittype>")
     return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
  xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}" xmlns:xmime="http://www.w3.org/2005/05/xmlmime"
@@ -260,7 +260,7 @@ def voeg_zaakdocument_toe(
 
 
 def _vrij_bericht(message: str, functie: str, now: datetime, gemeentecode: str, body: str) -> str:
-    """A ZDS vrij bericht (Di02) envelope for the VrijBericht endpoint, with this body after its stuurgegevens."""
+    """Return a vrij bericht (Di02) envelope for the VrijBericht endpoint, with this body after its stuurgegevens."""
     stuurgegevens = _stuurgegevens("Di02", now, gemeentecode, rest=f"<StUF:functie>{functie}</StUF:functie>")
     return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
  xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -270,7 +270,7 @@ def _vrij_bericht(message: str, functie: str, now: datetime, gemeentecode: str, 
 
 
 def geef_zaakdocument_bewerken(now: datetime, document: str, gemeentecode: str = GEMEENTECODE) -> str:
-    """A geefZaakdocumentbewerken_Di02 envelope: check the document out for editing (answer: checkedOutId)."""
+    """Return a geefZaakdocumentbewerken_Di02 envelope: check the document out for editing (answer: checkedOutId)."""
     body = f"""<ZKN:edcLv01 StUF:entiteittype="EDC" StUF:functie="selectie">
 <ZKN:parameters><StUF:indicatorAfnemerIndicatie>false</StUF:indicatorAfnemerIndicatie></ZKN:parameters>
 <ZKN:gelijk StUF:entiteittype="EDC"><ZKN:identificatie>{document}</ZKN:identificatie></ZKN:gelijk></ZKN:edcLv01>"""
@@ -280,7 +280,7 @@ def geef_zaakdocument_bewerken(now: datetime, document: str, gemeentecode: str =
 def update_zaakdocument(  # noqa: PLR0913  # one message
     now: datetime, zaak: str, document: str, checkout: str, *, titel: str, gemeentecode: str = GEMEENTECODE
 ) -> str:
-    """An updateZaakdocument_Di02 envelope: give the checked-out document a new titel."""
+    """Return an updateZaakdocument_Di02 envelope: give the checked-out document a new titel."""
     body = f"""<ZKN:parameters><ZKN:checkedOutId>{checkout}</ZKN:checkedOutId></ZKN:parameters>
 <ZKN:edcLk02 StUF:entiteittype="EDC" StUF:functie="update"><ZKN:parameters><StUF:mutatiesoort>W</StUF:mutatiesoort>
 </ZKN:parameters><ZKN:object StUF:entiteittype="EDC" StUF:verwerkingssoort="W">
@@ -295,7 +295,7 @@ def update_zaakdocument(  # noqa: PLR0913  # one message
 
 
 def cancel_checkout(now: datetime, document: str, checkout: str, gemeentecode: str = GEMEENTECODE) -> str:
-    """A cancelCheckout_Di02 envelope: release a checked-out document."""
+    """Return a cancelCheckout_Di02 envelope: release a checked-out document."""
     body = f"""<ZKN:parameters><ZKN:checkedOutId>{checkout}</ZKN:checkedOutId></ZKN:parameters>
 <ZKN:document StUF:entiteittype="EDC" StUF:verwerkingssoort="W" StUF:functie="entiteit">
 <ZKN:identificatie>{document}</ZKN:identificatie></ZKN:document>"""
@@ -303,18 +303,18 @@ def cancel_checkout(now: datetime, document: str, checkout: str, gemeentecode: s
 
 
 def checked_out_id(answer: str) -> str | None:
-    """The checkedOutId in a geefZaakdocumentbewerken answer, or None."""
+    """Return the checkedOutId in a geefZaakdocumentbewerken answer, or None."""
     found = fromstring(answer).find(f".//{{{ZKN}}}checkedOutId")  # noqa: S314  # nosec B314  # ZaakBrug's own answer
     return found.text if found is not None else None
 
 
 def is_fault(answer: str) -> bool:
-    """True when the ZDS answer is a SOAP Fault (ZaakBrug answers its Fo03 faults with HTTP 200)."""
+    """Return True when the ZDS answer is a SOAP Fault (ZaakBrug answers its Fo03 faults with HTTP 200)."""
     return fromstring(answer).find(".//{http://schemas.xmlsoap.org/soap/envelope/}Fault") is not None  # noqa: S314  # nosec B314
 
 
 def zaak_identificatie(answer: str) -> str | None:
-    """The zaak identificatie in a ZDS answer, or None.
+    """Return the zaak identificatie in a ZDS answer, or None.
 
     genereerZaakIdentificatie answers it under zaak/identificatie; geefZaakdetails (La01) under object/identificatie.
     """
@@ -327,7 +327,7 @@ def zaak_identificatie(answer: str) -> str | None:
 
 
 def is_bevestiging(answer: str) -> bool:
-    """True when the ZDS answer is a Bv03 confirmation (not an Fo03 fault)."""
+    """Return True when the ZDS answer is a Bv03 confirmation (not an Fo03 fault)."""
     code = fromstring(answer).find(f".//{{{STUF}}}berichtcode")  # noqa: S314  # nosec B314  # ZaakBrug's own answer
     return code is not None and code.text == "Bv03"
 

@@ -39,7 +39,7 @@ class MailRoute:
 
 
 def mail_stays_internal(profile: Profile) -> bool:
-    """True when the environment's mail may only go to SMTP servers inside the cluster."""
+    """Return True when the environment's mail may only go to SMTP servers inside the cluster."""
     return MAIL_STAYS_INTERNAL_BY_ESTATE[profile.estate]
 
 
@@ -55,7 +55,7 @@ def cluster_hosts(env: Environment) -> frozenset[str]:
 
 
 def is_internal(host: str, internal: frozenset[str]) -> bool:
-    """The host is a cluster Service or no server at all."""
+    """Return whether the host is a cluster Service or no server at all."""
     return host.lower().rstrip(".") in internal
 
 
@@ -67,7 +67,7 @@ class _Sources:
         self.cache: dict[tuple[str, str, str], dict[str, str]] = {}
 
     def get(self, kind: str, namespace: str, name: str) -> dict[str, str]:
-        """The mail host keys of a ConfigMap or Secret ("configmap", "secret")."""
+        """Return the mail host keys of a ConfigMap or Secret ("configmap", "secret")."""
         key = (kind, namespace, name)
         if key not in self.cache:
             data = section(self.env.kube.get_optional(kind, name, namespace=namespace) or {}, "data")
@@ -77,7 +77,7 @@ class _Sources:
         return self.cache[key]
 
     def value(self, var: JsonObject, namespace: str) -> str:
-        """An env entry's value: literal or from a ConfigMap or Secret key."""
+        """Return an env entry's value: literal or from a ConfigMap or Secret key."""
         if "value" in var:
             return str(var["value"])
         value_from = section(var, "valueFrom")
@@ -89,7 +89,7 @@ class _Sources:
         return ""
 
     def env_from(self, env_from: JsonObject, namespace: str) -> list[tuple[str, str]]:
-        """The mail host keys of an envFrom entry's ConfigMap and Secret."""
+        """Return the mail host keys of an envFrom entry's ConfigMap and Secret."""
         found: list[tuple[str, str]] = []
         for kind, key in (("configmap", "configMapRef"), ("secret", "secretRef")):
             ref = section(env_from, key)
@@ -99,7 +99,7 @@ class _Sources:
 
 
 def workload_routes(env: Environment) -> list[MailRoute]:
-    """The SMTP hosts the containers of every Deployment and StatefulSet get."""
+    """Return the SMTP hosts the containers of every Deployment and StatefulSet get."""
     sources = _Sources(env)
     routes: list[MailRoute] = []
     for workload in env.workloads():
@@ -117,7 +117,7 @@ def workload_routes(env: Environment) -> list[MailRoute]:
 
 
 def realm_routes(admins: list[KeycloakAdmin]) -> list[MailRoute]:
-    """The SMTP host of each Keycloak realm; a realm without one sends no mail."""
+    """Return the SMTP host of each Keycloak realm; a realm without one sends no mail."""
     return [
         MailRoute(f"keycloak realm {admin.realm}", str(section(admin.representation(), "smtpServer").get("host", "")))
         for admin in admins

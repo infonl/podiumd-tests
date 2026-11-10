@@ -313,7 +313,7 @@ def run_checks(
 
 
 def failed(checks: list[Check]) -> bool:
-    """True when any check failed."""
+    """Return True when any check failed."""
     return any(check.status == "fail" for check in checks)
 
 

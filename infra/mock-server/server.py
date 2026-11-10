@@ -90,7 +90,7 @@ class Handler(BaseHTTPRequestHandler):
         """Keep the pod log quiet; the file is the record."""
 
     def answer_status(self, entry) -> int:
-        """The answer to a POST; called under WRITE_LOCK."""
+        """Return the answer to a POST; called under WRITE_LOCK."""
         if not entry["authorization"]:
             return 403
         if "/v2/notifications/" in self.path:

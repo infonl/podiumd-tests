@@ -24,7 +24,7 @@ def _axe_script() -> str:
 
 
 def wcag_violations(page: Page) -> list[JsonObject]:
-    """The WCAG 2.1 AA rules the page violates, as axe-core reports them."""
+    """Return the WCAG 2.1 AA rules the page violates, as axe-core reports them."""
     page.evaluate(_axe_script())
     options = {"runOnly": {"type": "tag", "values": WCAG21_AA}, "resultTypes": ["violations"]}
     result = cast("JsonObject", page.evaluate("options => axe.run(document, options)", options))

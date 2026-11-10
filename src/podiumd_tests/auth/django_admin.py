@@ -48,7 +48,7 @@ def admin_login(session: requests.Session, base_url: str, username: str, passwor
 
 
 def is_logged_in(response: requests.Response, username: str) -> bool:
-    """True when the page shows the admin for username, and no login form."""
+    """Return True when the page shows the admin for username, and no login form."""
     body = re.sub(r"\s+", " ", response.text)
     return response.ok and f"<strong>{username}</strong>" in body and 'name="auth-username"' not in body
 
@@ -56,7 +56,7 @@ def is_logged_in(response: requests.Response, username: str) -> bool:
 def superuser_login(
     env: Environment, credentials: SecretResolver, component: str
 ) -> tuple[requests.Session, requests.Response]:
-    """A session logged in to the app's admin as its local superuser, with the page it landed on.
+    """Return a session logged in to the app's admin as its local superuser, with the page it landed on.
 
     Skips where the admin logs in through Keycloak only (settings.django_admin_sso_only) or there is no local account.
     """

@@ -70,7 +70,7 @@ class Step(Protocol):
         ...
 
     def is_present(self, ctx: Context, /) -> bool:
-        """True when the step's objects and stored credentials are in place."""
+        """Return True when the step's objects and stored credentials are in place."""
         ...
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
@@ -131,7 +131,7 @@ def _each(env: Environment, steps: Sequence[Step], act: Callable[[Context, Step]
 
 
 def failed(outcomes: Sequence[Outcome]) -> bool:
-    """True when any step failed."""
+    """Return True when any step failed."""
     return any(outcome.action == "failed" for outcome in outcomes)
 
 

@@ -13,7 +13,7 @@ KEYWORDS = ("Given", "When", "Then", "And", "But")
 
 
 def scenario(item: pytest.Item) -> str:
-    """The test's scenario from its nearest marker, dedented; "" without one."""
+    """Return the test's scenario from its nearest marker, dedented; "" without one."""
     marker = item.get_closest_marker("scenario")
     if marker is None or not marker.args:
         return ""

@@ -25,7 +25,7 @@ ORIGINS = {
 
 
 def sources(item: pytest.Item) -> list[str]:
-    """The test's sources as "origin: reason", nearest marker first."""
+    """Return the test's sources as "origin: reason", nearest marker first."""
     return [f"{marker.args[0]}: {marker.args[1]}" for marker in item.iter_markers("source")]
 
 

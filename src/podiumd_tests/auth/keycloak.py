@@ -43,7 +43,7 @@ def admin_realm_url(keycloak_url: str, realm: str) -> str:
 
 
 def totp(secret: str, at: float | None = None) -> str:
-    """The RFC 6238 code of a base32 secret (spaces allowed) at a time, default now."""
+    """Return the RFC 6238 code of a base32 secret (spaces allowed) at a time, default now."""
     compact = secret.replace(" ", "").upper()
     key = base64.b32decode(compact + "=" * (-len(compact) % 8))
     moment = time.time() if at is None else at
@@ -105,7 +105,7 @@ def password_grant(session: requests.Session, keycloak_url: str, realm: str, log
 
 
 def login_form_action(page_text: str) -> str | None:
-    """The URL Keycloak's login form posts to; None when the page has no login form."""
+    """Return the URL Keycloak's login form posts to; None when the page has no login form."""
     form = re.search(r'<form[^>]*id="kc-form-login"[^>]*>', page_text)
     action = re.search(r'action="([^"]+)"', form[0]) if form else None
     return html.unescape(action[1]) if action else None

@@ -76,5 +76,5 @@ def objecttypen_client(env: Environment) -> ApiClient:
 
 
 def mailpit_client(env: Environment) -> ApiClient:
-    """The environment's Mailpit API."""
+    """Return the environment's Mailpit API."""
     return ApiClient(env.session(cookies=False), f"{env.profile.urls['mailpit']}/api/v1", {})

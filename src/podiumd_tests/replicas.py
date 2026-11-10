@@ -32,7 +32,7 @@ def switches_replicas(profile: Profile) -> bool:
 
 @contextmanager
 def several_replicas(env: Environment) -> Generator[None]:
-    """Runs `<replicas_command> on` before the block and `off` after it; a no-op without replicas_command.
+    """Run `<replicas_command> on` before the block and `off` after it; a no-op without replicas_command.
 
     A podiumd-tests run holding settings.lock_file passes its hold on, so the command does not wait for it.
     """

@@ -96,7 +96,7 @@ class Kube:
     def items(
         self, kind: str, *, namespace: str | None = None, all_namespaces: bool = False
     ) -> list[dict[str, object]]:
-        """The items of a `kubectl get <kind>` list."""
+        """Return the items of a `kubectl get <kind>` list."""
         items = self.get_json(kind, namespace=namespace, all_namespaces=all_namespaces).get("items", [])
         return cast("list[dict[str, object]]", items) if isinstance(items, list) else []
 
@@ -105,7 +105,7 @@ class Kube:
         self.run("get", "--raw", "/readyz", f"--request-timeout={timeout}s", timeout=timeout + 5)
 
     def logs(self, deployment: str, *, since: str, container: str | None = None) -> str:
-        """The log lines a deployment's pod wrote in the last `since` (e.g. "5m")."""
+        """Return the log lines a deployment's pod wrote in the last `since` (e.g. "5m")."""
         args = ["logs", f"deployment/{deployment}", f"--since={since}"]
         return self.run(*args, *([f"--container={container}"] if container else []))
 
@@ -141,7 +141,7 @@ class Kube:
     def port_forward(
         self, service: str, port: int, *, namespace: str | None = None, timeout: int = DEFAULT_TIMEOUT
     ) -> Generator[int]:
-        """A free local port forwarded to a Service's port while the context is open."""
+        """Yield a free local port forwarded to a Service's port while the context is open."""
         command = self.command(
             "port-forward", f"service/{service}", f":{port}", "--address=127.0.0.1", namespace=namespace
         )
@@ -156,7 +156,7 @@ class Kube:
             process.wait(timeout)
 
     def secret_value(self, name: str, key: str, *, namespace: str | None = None) -> str:
-        """Decoded value of one key of a Kubernetes secret, in the profile namespace unless given."""
+        """Return the decoded value of one key of a Kubernetes secret, in the profile namespace unless given."""
         data = decode_secret_data(section(self.get_json("secret", name, namespace=namespace), "data"))
         if key not in data:
             raise KubeError(self.command("get", "secret", name, namespace=namespace), f"no key {key!r}")
@@ -179,7 +179,7 @@ class Kube:
 
 
 def forwarded_port(command: Sequence[str], process: subprocess.Popen[str], timeout: int) -> int:
-    """The local port `kubectl port-forward` reports; KubeError when it exits or reports none in time.
+    """Return the local port `kubectl port-forward` reports; KubeError when it exits or reports none in time.
 
     A thread keeps reading its output: kubectl blocks once a full pipe holds its "Handling connection" lines.
     """
@@ -217,12 +217,12 @@ def cluster_service(url: str) -> tuple[str, str, int] | None:
 
 
 def decode_secret_data(data: Mapping[str, object]) -> dict[str, str]:
-    """The base64 `data` of a Secret, decoded."""
+    """Return the base64 `data` of a Secret, decoded."""
     return {key: base64.b64decode(str(value)).decode() for key, value in data.items()}
 
 
 def django_values(output: str) -> list[str]:
-    """The values a Django shell printed as print("PTEST_VALUE=" + value), in order."""
+    """Return the values a Django shell printed as print("PTEST_VALUE=" + value), in order."""
     values = [
         line.removeprefix(DJANGO_VALUE_MARKER) for line in output.splitlines() if line.startswith(DJANGO_VALUE_MARKER)
     ]

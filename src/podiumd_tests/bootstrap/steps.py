@@ -186,7 +186,7 @@ class ItaMedewerker:
         return self.user.attributes["samaccountname"][0]
 
     def is_present(self, ctx: Context, /) -> bool:
-        """A Medewerker object with the user's identificatie exists."""
+        """Return whether a Medewerker object with the user's identificatie exists."""
         return OBJECTEN_STORE_KEY in ctx.store.read() and bool(self._found(ctx))
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
@@ -245,7 +245,7 @@ class OpenKlantActor:
         return user_email(f"{PREFIX}-{self.user}")
 
     def is_present(self, ctx: Context, /) -> bool:
-        """An actor with the user's e-mail exists."""
+        """Return whether an actor with the user's e-mail exists."""
         return OPENKLANT_STORE_KEY in ctx.store.read() and bool(self._uuids(ctx))
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
@@ -283,7 +283,7 @@ class OpenKlantActor:
 
 
 def openformulieren_params(ctx: Context) -> dict[str, object]:
-    """The ZGW client secret, and Open Zaak's URL as Open Formulieren calls it.
+    """Return the ZGW client secret, and Open Zaak's URL as Open Formulieren calls it.
 
     Default: the profile URL, which is also the URL Open Zaak puts in its own resources; a
     different api_root would not match the zaaktype URLs Open Zaak returns.
@@ -329,7 +329,7 @@ def django_user_step(  # noqa: PLR0913  # mirrors the snippet's parameters
     fields: dict[str, str] | None = None,
     api_token: bool = False,
 ) -> SnippetStep:
-    """A local Django user ptest-bootstrap-<key> in a component, with groups and a random password or API token."""
+    """Return a component's local Django user ptest-bootstrap-<key>, with groups and a random password or API token."""
     username = f"{PREFIX}-{key}"
     params: dict[str, object] = {
         "username": username,
@@ -364,7 +364,7 @@ def openzaak_client_step(  # noqa: PLR0913  # mirrors the snippet's parameters
     components: dict[str, tuple[str, ...]] | None = None,
     catalogi_scopes: tuple[str, ...] = CATALOGI_SCOPES,
 ) -> SnippetStep:
-    """A ZGW client in Open Zaak with rights on the test catalogus only."""
+    """Return a ZGW client in Open Zaak with rights on the test catalogus only."""
     granted = ZGW_COMPONENTS if components is None else components
     params: dict[str, object] = {
         "client_id": client_id,
@@ -382,7 +382,7 @@ def openzaak_client_step(  # noqa: PLR0913  # mirrors the snippet's parameters
 
 
 def token_step(component: str, modules: tuple[str, ...], store_key: str, **extra: object) -> SnippetStep:
-    """A TokenAuth step in the first of the token models modules the app has; the identifier is its store key."""
+    """Return a TokenAuth step in the first of the token models modules the app has; the identifier is its store key."""
     params: dict[str, object] = {"modules": modules, "identifier": store_key, **extra}
     return SnippetStep(f"{component}-token", (component,), "token_auth", store_key, params)
 
@@ -572,7 +572,7 @@ OF_LOA = {"claim_path": ["authsp_level"], "default": LOA_DEFAULT, "value_mapping
 
 
 def openinwoner_number(user: KeycloakUser) -> dict[str, str]:
-    """The bsn or kvk an Open Inwoner account of a test identity is found by."""
+    """Return the bsn or kvk an Open Inwoner account of a test identity is found by."""
     key = "bsn" if "bsn" in user.attributes else "kvk"
     return {key: user.attributes[key][0]}
 
@@ -589,7 +589,7 @@ class OpenInwonerPartijen:
     wiring: bool = True
 
     def is_present(self, _ctx: Context, /) -> bool:  # noqa: PLR6301  # a Step method
-        """Always: Open Inwoner creates the partijen."""
+        """Return True: Open Inwoner creates the partijen."""
         return True
 
     def apply(self, _ctx: Context, /) -> dict[str, str]:  # noqa: PLR6301  # a Step method
@@ -611,7 +611,7 @@ class OpenInwonerPartijen:
 
 
 def openinwoner_account(user: KeycloakUser) -> dict[str, str]:
-    """The Open Inwoner account prepared for a DigiD test identity: its bsn, e-mail and name.
+    """Return the Open Inwoner account prepared for a DigiD test identity: its bsn, e-mail and name.
 
     The DigiD login uses it as a complete profile; for eHerkenning Open Inwoner always
     creates its own account, so none is prepared.

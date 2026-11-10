@@ -101,7 +101,7 @@ ENVIRONMENT_KEY = pytest.StashKey[Environment]()
 
 
 def _environment(config: pytest.Config) -> Environment:
-    """The environment under test, from --podiumd-env; built once per run."""
+    """Return the environment under test, from --podiumd-env; built once per run."""
     if ENVIRONMENT_KEY not in config.stash:
         name: str | None = config.getoption("--podiumd-env")
         if not name:
@@ -113,7 +113,7 @@ def _environment(config: pytest.Config) -> Environment:
 
 @pytest.fixture(scope="session", name="podiumd_env")
 def fixture_podiumd_env(request: pytest.FixtureRequest) -> Environment:
-    """The environment under test, from --podiumd-env."""
+    """Return the environment under test, from --podiumd-env."""
     return _environment(request.config)
 
 
@@ -138,13 +138,13 @@ def fixture_credentials(podiumd_env: Environment) -> SecretResolver:
 
 @pytest.fixture(scope="session", name="caps")
 def fixture_caps(podiumd_env: Environment) -> Capabilities:
-    """Detected capabilities of the environment."""
+    """Return the detected capabilities of the environment."""
     return podiumd_env.capabilities
 
 
 @pytest.fixture(scope="session", name="urls")
 def fixture_urls(podiumd_env: Environment) -> Iterator[dict[str, str]]:
-    """Base URL per component, as this console reaches it."""
+    """Yield the base URL per component, as this console reaches it."""
     with podiumd_env.console_urls() as urls:
         yield urls
 
@@ -165,7 +165,7 @@ def fixture_run_tag(request: pytest.FixtureRequest) -> str:
 
 @pytest.fixture(scope="session", name="run_dir")
 def fixture_run_dir(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory) -> Path:
-    """A directory that every pytest-xdist worker of this run shares."""
+    """Return a directory that every pytest-xdist worker of this run shares."""
     base = tmp_path_factory.getbasetemp()
     return base.parent if hasattr(request.config, "workerinput") else base
 
@@ -280,7 +280,7 @@ def fixture_openzaak(run_tag: str, podiumd_env: Environment, need_bootstrap: Cal
 
 @pytest.fixture(scope="session", name="zgw_secret")
 def fixture_zgw_secret(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> str:
-    """The secret of the suite's own ZGW client, for tests that build their own tokens."""
+    """Return the secret of the suite's own ZGW client, for tests that build their own tokens."""
     need_bootstrap("openzaak-client")
     return podiumd_env.credentials.get(ZGW_STORE_KEY)
 
@@ -325,7 +325,7 @@ def fixture_opennotificaties(podiumd_env: Environment, need_bootstrap: Callable[
 
 @pytest.fixture(scope="session", name="test_zaaktype")
 def fixture_test_zaaktype(openzaak: ApiClient, need_bootstrap: Callable[..., None]) -> JsonObject:
-    """The published test zaaktype in the test catalogus (bootstrap step openzaak-zaaktype)."""
+    """Return the published test zaaktype in the test catalogus (bootstrap step openzaak-zaaktype)."""
     need_bootstrap("openzaak-zaaktype")
     found = openzaak.list(f"{CATALOGI}/zaaktypen", {"identificatie": TEST_ZAAKTYPE})
     return found[0]
@@ -333,7 +333,7 @@ def fixture_test_zaaktype(openzaak: ApiClient, need_bootstrap: Callable[..., Non
 
 @pytest.fixture(scope="session", name="parts")
 def fixture_parts(openzaak: ApiClient, test_zaaktype: JsonObject) -> ZaaktypeParts:
-    """The statustypen, roltypen and other types of the test zaaktype."""
+    """Return the statustypen, roltypen and other types of the test zaaktype."""
     return zaaktype_parts(openzaak, test_zaaktype)
 
 
@@ -349,7 +349,7 @@ def fixture_registry(request: pytest.FixtureRequest, run_tag: str) -> Iterator[R
 
 @pytest.fixture(scope="session", name="mailpit")
 def fixture_mailpit(podiumd_env: Environment) -> ApiClient:
-    """The environment's Mailpit API."""
+    """Return the environment's Mailpit API."""
     return mailpit_client(podiumd_env)
 
 
@@ -366,20 +366,20 @@ def fixture_pabc_api_key(credentials: SecretResolver) -> str:
 def fixture_new_callback(
     run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None]
 ) -> Callable[..., Callback]:
-    """Makes callback paths of this test's own on the mock server (infra/mock-server); takes fail_first."""
+    """Make callback paths of this test's own on the mock server (infra/mock-server); takes fail_first."""
     need_bootstrap("infra-mock-server")
     return functools.partial(Callback.new, podiumd_env, run_tag)
 
 
 @pytest.fixture(name="callback")
 def fixture_callback(new_callback: Callable[..., Callback]) -> Callback:
-    """A callback path of this test's own on the mock server."""
+    """Return a callback path of this test's own on the mock server."""
     return new_callback()
 
 
 @pytest.fixture(scope="session", name="productaanvraagtype")
 def fixture_productaanvraagtype(podiumd_env: Environment) -> str:
-    """The productaanvraagtype ZAC starts zaken for (profile setting productaanvraag_type); skips without it."""
+    """Return the productaanvraagtype ZAC starts zaken for (profile setting productaanvraag_type); skips without it."""
     found = podiumd_env.profile.settings.get("productaanvraag_type")
     if not found:
         pytest.skip(f"profile {podiumd_env.profile.name} has no settings.productaanvraag_type")
@@ -388,7 +388,7 @@ def fixture_productaanvraagtype(podiumd_env: Environment) -> str:
 
 @pytest.fixture(scope="session", name="productaanvraag_objecttype")
 def fixture_productaanvraag_objecttype(podiumd_env: Environment) -> str:
-    """The productaanvraag objecttype's URL as Objecten knows it."""
+    """Return the productaanvraag objecttype's URL as Objecten knows it."""
     return objecttype_url(podiumd_env, PRODUCTAANVRAAG_OBJECTTYPE)
 
 
@@ -409,7 +409,7 @@ def fixture_ontvangstbevestiging(
 def fixture_kiss_session(
     podiumd_env: Environment, urls: dict[str, str], need_bootstrap: Callable[..., None]
 ) -> Callable[[KeycloakUser], requests.Session]:
-    """A KISS session of a test user, logged in through Keycloak without a browser."""
+    """Return a KISS session of a test user, logged in through Keycloak without a browser."""
 
     def login(user: KeycloakUser) -> requests.Session:
         need_bootstrap(user.name)
@@ -420,14 +420,14 @@ def fixture_kiss_session(
 
 @pytest.fixture(name="zac")
 def fixture_zac(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> requests.Session:
-    """The test admin's session on ZAC's REST API."""
+    """Return the test admin's session on ZAC's REST API."""
     need_bootstrap(ADMIN.name)
     return zac_session(podiumd_env, ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
 
 
 @pytest.fixture(name="zac_group")
 def fixture_zac_group(zac: requests.Session, urls: dict[str, str]) -> str:
-    """A group of the test admin, to assign zaken and taken to together with the admin."""
+    """Return a group of the test admin, to assign zaken and taken to together with the admin."""
     return user_groups(zac, urls["zac"])[0]
 
 
@@ -474,7 +474,7 @@ def fixture_bpmn_zaak(  # noqa: PLR0913, PLR0917  # fixtures
     registry: ResourceRegistry,
     need_bootstrap: Callable[..., None],
 ) -> JsonObject:
-    """A zaak of the BPMN test zaaktype started in ZAC; cleanup deletes it and its documents from Open Zaak."""
+    """Start a zaak of the BPMN test zaaktype in ZAC; cleanup deletes it and its documents from Open Zaak."""
     need_bootstrap("zac-bpmn-process")
     zaaktype = bpmn_zaaktype(openzaak)
     parameters = {"zaaktype": {"uuid": uuid_of(zaaktype["url"]), "omschrijving": zaaktype["omschrijving"]}}
@@ -550,7 +550,7 @@ def pytest_runtest_setup(item: pytest.Item) -> None:
 
 
 def public_url(podiumd_env: Environment, urls: dict[str, str], component: str) -> str:
-    """The component's URL; skips when the profile reaches it in the cluster (no public host).
+    """Return the component's URL; skips when the profile reaches it in the cluster (no public host).
 
     The profile URL decides: `urls` holds the port-forwarded 127.0.0.1 URL of an in-cluster component.
     """
@@ -562,7 +562,7 @@ def public_url(podiumd_env: Environment, urls: dict[str, str], component: str) -
 def requiring(
     component: str, *values: object, test_id: str | None = None, marks: Sequence[pytest.MarkDecorator] = ()
 ) -> ParameterSet:
-    """A pytest.param with these values that skips unless the environment has the component; marks add to that.
+    """Return a pytest.param with these values that skips unless the environment has the component; marks add to that.
 
     For tests parametrized per component, e.g. [requiring(c, c) for c in COMPONENTS].
     """

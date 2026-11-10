@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 
 def locust_command(locustfile: Path, users: str, run_time: str, csv_prefix: Path, env: str) -> list[str]:
-    """A headless Locust run of the locustfile against the environment, its CSVs at csv_prefix."""
+    """Return a headless Locust run of the locustfile against the environment, its CSVs at csv_prefix."""
     command = [sys.executable, "-m", "locust", "-f", str(locustfile), "--headless", "--only-summary"]
     command += ["--users", users, "--spawn-rate", users, "--run-time", run_time, "--exit-code-on-error", "0"]
     return [*command, "--csv", str(csv_prefix), "--podiumd-env", env]

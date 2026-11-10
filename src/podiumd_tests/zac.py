@@ -40,14 +40,14 @@ TASK_TIMEOUT = 30
 
 
 def zac_session(env: Environment, username: str, password: str) -> requests.Session:
-    """A session on ZAC's REST API, logged in through Keycloak's form."""
+    """Return a session on ZAC's REST API, logged in through Keycloak's form."""
     http = env.session()
     form_login(http, env.profile.urls["zac"] + LOGIN_PATHS["zac"], username, password)
     return http
 
 
 def user_groups(http: requests.Session, zac_url: str) -> list[str]:
-    """The ids of the groups ZAC knows the session's user in."""
+    """Return the ids of the groups ZAC knows the session's user in."""
     user = expect_status(http.get(f"{zac_url}/rest/identity/loggedInUser"), HTTPStatus.OK).json()
     return [str(group) for group in user["groupIds"]]
 
@@ -77,7 +77,7 @@ NOT_REQUIRED_FOR_VALIDE = {
 
 
 def inrichtingscheck_problems(check: JsonObject) -> list[str]:
-    """The fields of ZAC's inrichtingscheck of one zaaktype that make it invalid, and its warnings."""
+    """Return the fields of ZAC's inrichtingscheck of one zaaktype that make it invalid, and its warnings."""
     problems = [field for field, value in check.items() if value is False and field not in NOT_REQUIRED_FOR_VALIDE]
     problems += [f"{field}={value}" for field, value in check.items() if field.startswith("aantal") and value != 1]
     if check.get("resultaattypesMetVerplichtBesluit") and not check.get("besluittypeAanwezig"):
@@ -113,7 +113,7 @@ def zaak_body(parameters: JsonObject, **fields: object) -> JsonObject:
 
 
 def create_zaak(http: requests.Session, zac_url: str, parameters: JsonObject, **fields: object) -> JsonObject:
-    """A zaak started in ZAC (zaak_body), as ZAC shows it."""
+    """Return a zaak started in ZAC (zaak_body), as ZAC shows it."""
     response = http.post(f"{zac_url}/rest/zaken/zaak", json=zaak_body(parameters, **fields))
     created = cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
     if "uuid" in created:
@@ -158,7 +158,7 @@ def send_with_person(
 def productaanvraag_zaak(
     openzaak: ApiClient, registry: ResourceRegistry, kenmerk: str, timeout: float = PRODUCTAANVRAAG_TIMEOUT
 ) -> JsonObject:
-    """The zaak ZAC starts for a productaanvraag, with its kenmerk in the toelichting; cleanup deletes it.
+    """Return the zaak ZAC starts for a productaanvraag, with its kenmerk in the toelichting; cleanup deletes it.
 
     openzaak: a client that may read and delete zaken of the zaaktype (bootstrap openzaak-client-productaanvraag).
     """
@@ -193,7 +193,7 @@ def reindex_zaken(env: Environment) -> None:
 
 
 def search(http: requests.Session, zac_url: str, **query: object) -> JsonObject:
-    """The first page of ZAC's search (rows 10 unless given) with these RestZoekParameters, as the session's user."""
+    """Return page 1 of ZAC's search (rows 10 unless given) with these RestZoekParameters, as the session's user."""
     body = {"page": 0, "rows": 10, **query}
     return cast("JsonObject", expect_status(http.put(f"{zac_url}/rest/zoeken/list", json=body), HTTPStatus.OK).json())
 
