@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 
 from typing import TYPE_CHECKING
-from typing import Any
 from typing import cast
 
 from podiumd_tests.auth.keycloak_admin import user_email
@@ -22,6 +21,7 @@ if TYPE_CHECKING:
 
     from podiumd_tests.bootstrap.keycloak import KeycloakUser
     from podiumd_tests.environment import Environment
+    from podiumd_tests.json_data import JsonObject
 
 INWONER, _, BEDRIJF = IDENTITIES
 # The portal's kinds of user: their test identity and login method.
@@ -144,9 +144,7 @@ def set_site_configuration(env: Environment, **fields: object) -> dict[str, obje
     return cast("dict[str, object]", run_snippet(env.kube, deployment, "oi_site_configuration", {"fields": fields}))
 
 
-def search_data(
-    env: Environment, action: str, tag: str, products: list[dict[str, object]] | None = None
-) -> dict[str, Any]:
+def search_data(env: Environment, action: str, tag: str, products: list[dict[str, object]] | None = None) -> JsonObject:
     """Seed, read or remove the search test data whose slugs and remarks start with the tag (snippet oi_search_data)."""
     params: dict[str, object] = {"action": action, "tag": tag, "products": products or []}
-    return cast("dict[str, Any]", run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_search_data", params))
+    return cast("JsonObject", run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_search_data", params))

@@ -12,7 +12,6 @@ import warnings
 from contextlib import contextmanager
 from itertools import count
 from typing import TYPE_CHECKING
-from typing import Any
 
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
@@ -55,17 +54,20 @@ def retry_network_change[ResultT](page: Page, navigate: Callable[[], ResultT], w
 
 def guard_navigation(page: Page) -> Page:
     """The page, whose goto and reload are repeated when a host network change aborted them."""
-    goto, reload = page.goto, page.reload
 
-    def retried_goto(url: str, **kwargs: Any) -> Response | None:
-        return retry_network_change(page, lambda: goto(url, **kwargs), f"goto {url}")
+    def retried[**ParamsP](
+        name: str, navigate: Callable[ParamsP, Response | None]
+    ) -> Callable[ParamsP, Response | None]:
+        def run(*args: ParamsP.args, **kwargs: ParamsP.kwargs) -> Response | None:
+            # goto names its target; reload the current page.
+            target = kwargs.get("url", args[0] if args else page.url)
+            return retry_network_change(page, lambda: navigate(*args, **kwargs), f"{name} {target}")
 
-    def retried_reload(**kwargs: Any) -> Response | None:
-        return retry_network_change(page, lambda: reload(**kwargs), f"reload {page.url}")
+        return run
 
     # Instance attributes over the bound methods: every caller of page.goto gets the retry.
-    setattr(page, "goto", retried_goto)  # noqa: B010
-    setattr(page, "reload", retried_reload)  # noqa: B010
+    setattr(page, "goto", retried("goto", page.goto))  # noqa: B010
+    setattr(page, "reload", retried("reload", page.reload))  # noqa: B010
     return page
 
 

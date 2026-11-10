@@ -7,6 +7,7 @@ import requests
 
 from podiumd_tests import zac
 from podiumd_tests.clients.api import ApiClient
+from podiumd_tests.oidc import LOGIN_PATHS
 from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import inrichtingscheck_problems
@@ -144,7 +145,7 @@ def test_zac_session_logs_in_through_keycloak(env_factory, profile_factory, monk
     logins = []
     monkeypatch.setattr(zac, "form_login", lambda _http, url, user, password: logins.append((url, user, password)))
     zac.zac_session(env_factory(profile_factory(urls={"zac": ZAC})), "u", "p")
-    assert logins == [(ZAC + zac.LOGIN_PATHS["zac"], "u", "p")]
+    assert logins == [(ZAC + LOGIN_PATHS["zac"], "u", "p")]
 
 
 def test_zaak_listed_searches_by_identificatie_with_the_flags(fake_http):

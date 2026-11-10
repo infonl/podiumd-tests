@@ -4,7 +4,6 @@ import json
 
 from contextlib import contextmanager
 from types import SimpleNamespace
-from typing import Any
 from typing import cast
 
 import pytest
@@ -95,7 +94,7 @@ def snippets(monkeypatch):
     return install
 
 
-def posted(sent, path: str) -> list[dict[str, Any]]:
+def posted(sent, path: str) -> list[dict[str, object]]:
     return [json.loads(s.body) for s in sent if s.method == "POST" and s.url == f"{API}/{path}"]
 
 

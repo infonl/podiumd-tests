@@ -6,6 +6,7 @@ import json
 
 from dataclasses import dataclass
 from dataclasses import field
+from typing import override
 
 import pytest
 
@@ -532,6 +533,7 @@ def test_a_failing_step_does_not_stop_the_others(env_factory, fake_runner, profi
     env = cluster_env(env_factory, fake_runner, profile_factory)
 
     class Broken(FakeStep):
+        @override
         def remove(self, _ctx):
             raise KubeError(["kubectl", "exec"], "DisallowedHost: example.com")
 

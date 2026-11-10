@@ -68,7 +68,6 @@ OTP_SUBJECT = "Mede-ondertekentoegangscode"
 def test_cosigned_form_is_registered(
     page: Page,
     http: requests.Session,
-    urls: dict[str, str],
     podiumd_env: Environment,
     mailpit: ApiClient,
     registry: ResourceRegistry,

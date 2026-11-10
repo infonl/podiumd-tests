@@ -73,13 +73,13 @@ def inwoner_zaak(
     openklant: ApiClient,
     registry: ResourceRegistry,
     parts: ZaaktypeParts,
-) -> Callable[[tuple[str, str], str], JsonObject]:
+) -> Callable[[str], JsonObject]:
     """A zaak whose initiator is a partij with only this digitaal adres (EMAIL or SMS)."""
     need_bootstrap("omc-abonnement", "infra-mock-server")
     if reason := notify_mock_missing(podiumd_env):
         pytest.skip(reason)
 
-    def make(channel: tuple[str, str], adres: str) -> JsonObject:
+    def make(adres: str) -> JsonObject:
         bsn = random_bsn()
         partij = make_partij(openklant, registry)
         make_partij_identificator(openklant, registry, partij, "bsn", bsn)
@@ -117,11 +117,11 @@ def test_new_zaak_mails_the_initiator(
     openzaak: ApiClient,
     registry: ResourceRegistry,
     parts: ZaaktypeParts,
-    inwoner_zaak: Callable[[tuple[str, str], str], JsonObject],
+    inwoner_zaak: Callable[[str], JsonObject],
 ) -> None:
     """The first status of an inwoner's zaak makes OMC send the zaak-created e-mail."""
     adres = email_address(registry)
-    make_status(openzaak, inwoner_zaak(EMAIL, adres), str(parts.statustypen[0]["url"]))
+    make_status(openzaak, inwoner_zaak(adres), str(parts.statustypen[0]["url"]))
     notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_ZAAKCREATE")
 
 
@@ -135,12 +135,12 @@ def test_next_status_mails_a_zaak_update(
     openzaak: ApiClient,
     registry: ResourceRegistry,
     parts: ZaaktypeParts,
-    inwoner_zaak: Callable[[tuple[str, str], str], JsonObject],
+    inwoner_zaak: Callable[[str], JsonObject],
 ) -> None:
     """A later status that does not close the zaak makes OMC send the zaak-updated e-mail."""
     assert len(parts.statustypen) >= 3, "the test zaaktype needs a status between the first and the eindstatus"
     adres = email_address(registry)
-    zaak = inwoner_zaak(EMAIL, adres)
+    zaak = inwoner_zaak(adres)
     make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
     notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_ZAAKCREATE")
     make_status(openzaak, zaak, str(parts.statustypen[1]["url"]))
@@ -157,11 +157,11 @@ def test_closing_the_zaak_mails_a_zaak_close(
     openzaak: ApiClient,
     registry: ResourceRegistry,
     parts: ZaaktypeParts,
-    inwoner_zaak: Callable[[tuple[str, str], str], JsonObject],
+    inwoner_zaak: Callable[[str], JsonObject],
 ) -> None:
     """The eindstatus makes OMC send the zaak-closed e-mail."""
     adres = email_address(registry)
-    zaak = inwoner_zaak(EMAIL, adres)
+    zaak = inwoner_zaak(adres)
     make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
     notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_ZAAKCREATE")
     close_zaak(openzaak, zaak, parts)
@@ -177,12 +177,12 @@ def test_initiator_with_only_a_phone_number_gets_an_sms(
     podiumd_env: Environment,
     openzaak: ApiClient,
     parts: ZaaktypeParts,
-    inwoner_zaak: Callable[[tuple[str, str], str], JsonObject],
+    inwoner_zaak: Callable[[str], JsonObject],
 ) -> None:
     """An initiator whose only digitaal adres is a telefoonnummer gets the zaak-created SMS."""
     # In international form: OMC sends a national 06 number as +316.
     adres = f"+316{uuid.uuid4().int % 10**8:08d}"
-    make_status(openzaak, inwoner_zaak(SMS, adres), str(parts.statustypen[0]["url"]))
+    make_status(openzaak, inwoner_zaak(adres), str(parts.statustypen[0]["url"]))
     notify_request(podiumd_env, SMS, adres, "NOTIFY_TEMPLATEID_SMS_ZAAKCREATE")
 
 
@@ -198,13 +198,13 @@ def test_delivery_receipt_becomes_a_klantcontact(
     openklant: ApiClient,
     registry: ResourceRegistry,
     parts: ZaaktypeParts,
-    inwoner_zaak: Callable[[tuple[str, str], str], JsonObject],
+    inwoner_zaak: Callable[[str], JsonObject],
 ) -> None:
     """Notify's delivery receipt for OMC's mail makes OMC register a klantcontact about the zaak in Open Klant."""
     if reason := omc_actor_missing(podiumd_env, openklant):
         pytest.skip(reason)
     adres = email_address(registry)
-    zaak = inwoner_zaak(EMAIL, adres)
+    zaak = inwoner_zaak(adres)
     about = {"onderwerpobjectidentificatorObjectId": str(zaak["uuid"])}
     registry.add(
         f"klantcontacten about {zaak['uuid']}",

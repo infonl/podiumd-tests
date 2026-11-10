@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
 from podiumd_tests.openinwoner import search_data
 from podiumd_tests.openinwoner import set_site_configuration
 from podiumd_tests.responses import expect_status
@@ -55,7 +57,7 @@ def fixture_categories(
         {"name": f"Grofvuil {GROFVUIL} {BOTH}", "category": f"Afval {SUFFIX}"},
     ]
     created = search_data(podiumd_env, "apply", tag, products)
-    yield dict(created["categories"])
+    yield {name: str(slug) for name, slug in section(created, "categories").items()}
     search_data(podiumd_env, "remove", tag)
 
 
@@ -140,9 +142,9 @@ def test_feedback_on_a_search_is_stored(
     remark = f"{run_tag}-zoeken nuttig"
     form = {"csrfmiddlewaretoken": token[1], "positive": "true", "remark": remark}
     expect_status(http.post(search, data=form, headers={"Referer": search}), HTTPStatus.OK)
-    stored = search_data(podiumd_env, "feedback", f"{run_tag}-zoeken")["feedback"]
+    stored = entries(search_data(podiumd_env, "feedback", f"{run_tag}-zoeken")["feedback"])
     assert [(f["positive"], f["remark"]) for f in stored] == [(True, remark)]
-    assert PASPOORT in stored[0]["query"]
+    assert PASPOORT in str(stored[0]["query"])
 
 
 @pytest.mark.tc("OI-097")

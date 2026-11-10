@@ -51,7 +51,7 @@ class Capabilities:
 def detect(
     profile: Profile,
     deployment_names: list[str] | None,
-    network: tuple[frozenset[str], dict[str, str]] = (frozenset(), {}),
+    network: tuple[frozenset[str], dict[str, str]] | None = None,
 ) -> Capabilities:
     """Capabilities of an environment; with deployment_names=None (cluster unreadable) the profile alone decides.
 
@@ -77,6 +77,7 @@ def detect(
         component for component in configured if component in deployed or component not in COMPONENTS_WITH_DEPLOYMENT
     }
     present.add(CLUSTER)
-    present |= network[0]
-    reasons.update(network[1])
+    if network:
+        present |= network[0]
+        reasons.update(network[1])
     return Capabilities(frozenset(present), reasons)

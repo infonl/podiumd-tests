@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ import pytest
 import yaml
 
 from podiumd_tests import cli
+from podiumd_tests import doctor
 from podiumd_tests.bootstrap import Outcome
 from podiumd_tests.capabilities import CLUSTER
 from podiumd_tests.capabilities import Capabilities
@@ -102,7 +104,7 @@ def test_run_keeps_screenshots_of_failed_browser_tests_but_no_traces(tmp_path, p
     ],
 )
 def test_parallel_tiers_run_on_xdist_workers(tmp_path, profile_factory, monkeypatch, tier, settings, workers):
-    monkeypatch.setattr(cli.os, "cpu_count", lambda: 24)
+    monkeypatch.setattr(os, "cpu_count", lambda: 24)
     args = cli.build_parser().parse_args(["run", "--env", "x", "--tier", tier])
     selection = cli.pytest_selection(
         profile_factory(settings=settings), tier, "2610071230a3f1", tmp_path / "j.xml", args
@@ -202,7 +204,7 @@ def offline(monkeypatch, env_factory):
 
     monkeypatch.setattr(cli, "Environment", environment)
     monkeypatch.setattr(cli, "held", held)
-    monkeypatch.setattr(cli.doctor, "run_checks", lambda _env: state.checks)
+    monkeypatch.setattr(doctor, "run_checks", lambda _env: state.checks)
     return state
 
 
@@ -248,7 +250,8 @@ def test_doctor_writes_the_checks_as_json_and_fails_on_a_failed_check(envs, offl
     assert "hint: az login" in capsys.readouterr().out
 
 
-def test_bootstrap_refuses_a_smoke_only_environment(envs, offline, capsys):
+@pytest.mark.usefixtures("offline")
+def test_bootstrap_refuses_a_smoke_only_environment(envs, capsys):
     assert cli.main([*envs("smoke"), "bootstrap", "--env", "e"]) == cli.EXIT_NOT_ALLOWED
     assert "refused: e is smoke-only" in capsys.readouterr().err
 
@@ -338,7 +341,7 @@ def test_volume_commands_seed_and_unseed_under_the_lock(envs, offline, monkeypat
 
 def test_run_stops_on_a_failed_preflight(envs, offline, tmp_path, monkeypatch):
     offline.checks = [Check("cluster", "fail")]
-    monkeypatch.setattr(cli.pytest, "main", lambda _args: pytest.fail("pytest must not run"))
+    monkeypatch.setattr(pytest, "main", lambda _args: pytest.fail("pytest must not run"))
     assert cli.main([*envs(), "run", "--env", "e", "--results-dir", str(tmp_path / "r")]) == cli.EXIT_CONFIG
 
 
@@ -366,7 +369,7 @@ def test_run_records_redacted_results_under_the_lock(envs, offline, tmp_path, mo
         junit.write_text(JUNIT, encoding="utf-8")
         return exit_code
 
-    monkeypatch.setattr(cli.pytest, "main", fake_pytest)
+    monkeypatch.setattr(pytest, "main", fake_pytest)
     monkeypatch.setattr(cli, "publish_summary", lambda _summary: None)
     assert cli.main([*envs(), "run", "--env", "e", "--tier", "full", "--results-dir", str(results), "--", "-x"]) == (
         expected

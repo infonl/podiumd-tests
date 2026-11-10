@@ -83,8 +83,8 @@ class HostHeaderAdapter(HTTPAdapter):
         host = request.headers.get("Host")
         if host and host_params["scheme"] == "https":
             name = urlsplit(f"//{host}").hostname
-            # urllib3 pool keys the requests stubs leave out of _PoolKwargs.
-            extra = cast("dict[str, object]", pool_kwargs)
+            # urllib3 pool keys the requests stubs leave out of _PoolKwargs; it is type-check-only, so not extendable.
+            extra = cast("dict[str, object]", pool_kwargs)  # pyright: ignore[reportInvalidCast]
             extra["server_hostname"] = name
             extra["assert_hostname"] = name
         return host_params, pool_kwargs
@@ -97,11 +97,8 @@ class TimeoutSession(requests.Session):
         super().__init__()
         self.default_timeout = timeout
 
-    # Narrows the long keyword list of requests.Session.request, hence the pyright ignore.
     @override
-    def request(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, method: str | bytes, url: str | bytes, *args: object, **kwargs: object
-    ) -> requests.Response:
+    def request(self, method: str | bytes, url: str | bytes, *args: object, **kwargs: object) -> requests.Response:
         """Send a request, with the default timeout unless one is given."""
         kwargs.setdefault("timeout", self.default_timeout)
         return super().request(method, url, *args, **kwargs)  # pyright: ignore[reportArgumentType]

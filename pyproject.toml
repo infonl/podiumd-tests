@@ -326,12 +326,21 @@ exclude = [
 typeCheckingMode = "strict"
 reportUnusedImport = false  # done by ruff F401
 reportUntypedBaseClass = false # done by ruff N801
+reportUnnecessaryTypeIgnoreComment = "error"
+reportImplicitOverride = "error"
+reportCallInDefaultInitializer = "error"
+reportInvalidCast = "error"
+reportExplicitAny = "error"
+reportUnusedParameter = "error"
+reportPrivateLocalImportUsage = "error"
 
 # tests/: fakes, parametrize args and monkeypatch lambdas are unannotated
-# and scripts load as ModuleType, so Unknown types remain.
+# and scripts load as ModuleType, so Unknown types remain. A fake is cast to
+# the type it stands in for, which reportInvalidCast rejects.
 # The same relaxations apply to unit_tests/.
 [[tool.basedpyright.executionEnvironments]]
 root = "tests"
+reportInvalidCast = false
 reportMissingParameterType = false
 reportUnknownLambdaType = false
 reportUnknownArgumentType = false
@@ -341,6 +350,7 @@ reportUnknownVariableType = false
 
 [[tool.basedpyright.executionEnvironments]]
 root = "unit_tests"
+reportInvalidCast = false
 reportMissingParameterType = false
 reportUnknownLambdaType = false
 reportUnknownArgumentType = false

@@ -73,7 +73,6 @@ def test_productaanvraag_becomes_a_zaak(
     Then the submitter receives a mail with the zaaknummer
 """)
 def test_zac_mails_the_initiator_an_ontvangstbevestiging(
-    podiumd_env: Environment,
     objecten: ApiClient,
     openzaak_productaanvraag: ApiClient,
     openklant: ApiClient,

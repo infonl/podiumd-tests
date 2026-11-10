@@ -4,7 +4,6 @@ import base64
 import json
 
 from types import SimpleNamespace
-from typing import Any
 from typing import cast
 
 import pytest
@@ -12,6 +11,8 @@ import requests
 
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.environment import Environment
+from podiumd_tests.json_data import JsonObject
+from podiumd_tests.json_data import section
 from podiumd_tests.seed import objecten as objecten_module
 from podiumd_tests.seed import openklant
 from podiumd_tests.seed import openzaak
@@ -35,15 +36,15 @@ def calls(sent) -> list[tuple[str, str]]:
     return [(s.method, s.url.split("?")[0].removeprefix(API)) for s in sent]
 
 
-def body(sent) -> dict[str, Any]:
+def body(sent) -> JsonObject:
     return json.loads(sent.body)
 
 
-def results(*items: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+def results(*items: JsonObject) -> tuple[int, dict[str, object]]:
     return 200, {"results": list(items), "next": None}
 
 
-def created(path: str) -> dict[str, tuple[int, dict[str, Any]]]:
+def created(path: str) -> dict[str, tuple[int, dict[str, object]]]:
     """POST on path answers an object at path/new; DELETE of it 204."""
     return {
         f"POST /v1/{path}": (201, {"url": f"{API}/{path}/new", "uuid": "u-new"}),
@@ -89,7 +90,7 @@ def test_tagged_fields_carry_the_run_tag(fake_http):
     partij, document = body(sent[0]), body(sent[1])
     assert partij["soortPartij"] == "organisatie"
     assert partij["partijIdentificatie"] == {"naam": "run1-bv"}
-    assert base64.b64decode(document["inhoud"]) == b"hallo"
+    assert base64.b64decode(str(document["inhoud"])) == b"hallo"
     assert (document["titel"], document["bestandsomvang"]) == ("run1-document", 5)
 
 
@@ -100,7 +101,7 @@ def test_tagged_fields_carry_the_run_tag(fake_http):
 def test_identificator_register_follows_its_kind(fake_http, kind, objecttype, register):
     sent = fake_http(created("partij-identificatoren"))
     openklant.make_partij_identificator(api(), ResourceRegistry("run1"), {"uuid": "p"}, kind, "123")
-    identificator = body(sent[0])["partijIdentificator"]
+    identificator = section(body(sent[0]), "partijIdentificator")
     assert (identificator["codeObjecttype"], identificator["codeRegister"]) == (objecttype, register)
 
 
@@ -222,7 +223,7 @@ def test_submission_contact_cleanup_deletes_the_tree_by_onderwerp(fake_http):
     registry = ResourceRegistry("run1")
     openklant.make_submission_contact(api(), registry, "OF-1", "a@example.invalid")
     assert body(sent[0])["onderwerp"] == "OF-1"
-    assert body(sent[3])["onderwerpobjectidentificator"]["codeObjecttype"] == "formulierinzending"
+    assert section(body(sent[3]), "onderwerpobjectidentificator")["codeObjecttype"] == "formulierinzending"
     assert openklant.klantcontacten_about(api(), "OF-1", "x") == [found[1]]
     sent.clear()
     registry.cleanup()
@@ -264,8 +265,8 @@ def test_productaanvraag_and_logboek_cleanup(fake_http):
     make_productaanvraag(api(), registry, "ot", "pat", "OF-1")
     clean_up_logboek(api(), registry, "lt", "it1")
     registry.cleanup()
-    record = body(sent[0])["record"]
-    assert (record["data"]["type"], record["data"]["bron"]["kenmerk"]) == ("pat", "OF-1")
+    data = section(section(body(sent[0]), "record"), "data")
+    assert (data["type"], section(data, "bron")["kenmerk"]) == ("pat", "OF-1")
     assert "heeftBetrekkingOp__objectId__exact__it1" in sent[1].url
     assert calls(sent)[1:] == [("GET", "/objects"), ("DELETE", "/objects/log"), ("DELETE", "/objects/new")]
 

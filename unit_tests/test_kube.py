@@ -40,7 +40,7 @@ def test_errors_keep_the_command_and_the_last_stderr_line(fake_runner):
 
 
 def test_missing_kubectl_is_reported():
-    def runner(args, timeout, _stdin=None):
+    def runner(args, _timeout, _stdin=None):
         raise FileNotFoundError(args[0])
 
     with pytest.raises(KubeError, match="kubectl not found on PATH"):

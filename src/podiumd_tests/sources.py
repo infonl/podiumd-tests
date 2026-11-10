@@ -37,7 +37,7 @@ def source_problems(item: pytest.Item) -> list[str]:
     problems: list[str] = []
     for marker in markers:
         args = marker.args
-        texts = all(isinstance(arg, str) and arg.strip() for arg in args)  # pyright: ignore[reportUnknownVariableType]
+        texts = all(isinstance(arg, str) and arg.strip() for arg in args)
         if len(args) != SOURCE_ARGS or not texts:
             problems.append(f"{item.nodeid}: source needs two texts, origin and reason: {args!r}")
         elif str(args[0]).split()[0] not in ORIGINS:

@@ -46,7 +46,6 @@ def kept_after_removal(podiumd_env: Environment, submission: str, age_days: int)
 """)
 def test_registered_submission_is_removed_after_the_limit(
     http: requests.Session,
-    urls: dict[str, str],
     podiumd_env: Environment,
     mailpit: ApiClient,
     registry: ResourceRegistry,

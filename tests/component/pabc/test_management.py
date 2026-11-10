@@ -34,9 +34,7 @@ pytestmark = [pytest.mark.component, pytest.mark.ui, pytest.mark.requires("pabc"
 
 
 @pytest.fixture(name="pabc")
-def fixture_pabc(
-    page: Page, podiumd_env: Environment, urls: dict[str, str], need_bootstrap: Callable[..., None]
-) -> requests.Session:
+def fixture_pabc(page: Page, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> requests.Session:
     """PABC's management API in the test admin's session."""
     need_bootstrap(ADMIN.name)
     return login(page, podiumd_env, ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))

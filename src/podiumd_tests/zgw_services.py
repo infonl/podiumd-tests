@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
+from typing import override
 from urllib.parse import urlsplit
 
 from podiumd_tests.components import component_for_host
@@ -44,6 +45,7 @@ class ServiceReference:
     field: str = ""
     where: tuple[tuple[str, str], ...] = ()
 
+    @override
     def __str__(self) -> str:
         if self.field:
             return f"{self.model}.{self.field}"

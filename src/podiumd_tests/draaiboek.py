@@ -16,11 +16,14 @@ import sys
 from collections import Counter
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 import yaml
 
 from podiumd_tests.config import REPO_ROOT
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 # How TA's specs name a draaiboek tab when they cite a row.
 CITED_SHEETS = {
@@ -113,7 +116,7 @@ def status(specs: set[str], decisions: dict[str, tuple[str, str]]) -> str:
 
 
 def report_row(
-    case: dict[str, Any],
+    case: Mapping[str, object],
     specs: set[str],
     decisions: dict[str, tuple[str, str]],
     own: set[str],

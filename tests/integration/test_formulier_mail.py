@@ -38,7 +38,6 @@ OMSCHRIJVING = {"type": "textfield", "key": "omschrijving", "label": "Omschrijvi
 """)
 def test_email_registration_mails_the_submission(
     http: requests.Session,
-    urls: dict[str, str],
     podiumd_env: Environment,
     mailpit: ApiClient,
     registry: ResourceRegistry,
@@ -62,7 +61,6 @@ def test_email_registration_mails_the_submission(
 """)
 def test_confirmation_mail_summarises_the_submission(
     http: requests.Session,
-    urls: dict[str, str],
     podiumd_env: Environment,
     mailpit: ApiClient,
     registry: ResourceRegistry,

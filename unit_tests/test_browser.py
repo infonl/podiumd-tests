@@ -1,7 +1,6 @@
 """Unit tests for the navigation retry, the browser logins, the axe scan, Open Beheer's session and the Django admin login."""
 
 from contextlib import nullcontext
-from typing import Any
 
 import pytest
 import requests
@@ -54,7 +53,7 @@ def test_context_args_skip_certificate_checks_only_for_a_local_ca(page_env):
 
 def test_headless_page_guards_navigation_and_closes_the_browser(monkeypatch, page_env, fake_page):
     page = fake_page()
-    calls: list[Any] = []
+    calls: list[object] = []
 
     class Chromium:
         def launch(self, args):
