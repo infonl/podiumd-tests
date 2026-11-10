@@ -23,9 +23,11 @@ from podiumd_tests.bootstrap.oidc_mock import KEYCLOAK_STORE_KEY
 from podiumd_tests.bootstrap.oidc_mock import KeycloakOidcMock
 from podiumd_tests.bootstrap.oidc_mock import oidc_params
 from podiumd_tests.bootstrap.runner import Context
+from podiumd_tests.bootstrap.runner import Outcome
 from podiumd_tests.bootstrap.runner import bootstrap
 from podiumd_tests.bootstrap.runner import check
 from podiumd_tests.bootstrap.runner import has_failure
+from podiumd_tests.bootstrap.runner import outcome_report
 from podiumd_tests.bootstrap.runner import refusal
 from podiumd_tests.bootstrap.runner import unbootstrap
 from podiumd_tests.bootstrap.steps import KCC
@@ -95,6 +97,23 @@ def test_bootstrap_applies_missing_steps_and_stores_credentials(env_factory, fak
     assert present.log == []
     assert "t0ken-value" in fake_runner.stdins[-1]
     assert "t0ken-value" not in " ".join(" ".join(c) for c in fake_runner.calls)
+
+
+def test_each_outcome_has_the_seconds_its_step_took(env_factory, fake_runner, profile_factory, monkeypatch):
+    env = cluster_env(env_factory, fake_runner, profile_factory)
+    clock = iter([10.0, 12.5, 20.0, 20.25])
+    monkeypatch.setattr("podiumd_tests.bootstrap.runner.time.monotonic", lambda: next(clock))
+    outcomes = bootstrap(env, [FakeStep("a"), FakeStep("b", present=True), FakeStep("c", requires=("zac",))])
+    assert [(o.step, o.seconds) for o in outcomes] == [("a", 2.5), ("b", 0.25), ("c", 0)]
+
+
+def test_outcome_report_shows_seconds_and_the_total():
+    outcomes = [Outcome("zac-bpmn-process", "created", "key", 12.34), Outcome("a", "present", seconds=1.0)]
+    assert outcome_report(outcomes).splitlines() == [
+        "created  zac-bpmn-process   12.3s  key",
+        "present  a                   1.0s",
+        "         total              13.3s",
+    ]
 
 
 def test_rotate_reapplies_present_steps(env_factory, fake_runner, profile_factory):

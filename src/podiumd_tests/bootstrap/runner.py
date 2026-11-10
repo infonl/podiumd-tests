@@ -8,8 +8,11 @@ Credentials a step creates go to the credentials Secret only.
 
 from __future__ import annotations
 
+import time
+
 from dataclasses import dataclass
 from dataclasses import field
+from dataclasses import replace
 from typing import TYPE_CHECKING
 from typing import Literal
 from typing import Protocol
@@ -89,6 +92,7 @@ class Outcome:
     step: str
     action: Action
     detail: str = ""
+    seconds: float = 0
 
 
 def refusal(profile: Profile) -> str | None:
@@ -122,11 +126,13 @@ def _each(env: Environment, steps: Sequence[Step], act: Callable[[Context, Step]
         if reason:
             outcomes.append(Outcome(step.name, "skipped", reason))
             continue
+        started = time.monotonic()
         try:
-            outcomes.append(act(ctx, step))
+            outcome = act(ctx, step)
         except _STEP_ERRORS as exc:
             # One broken step must not stop the others, least of all during unbootstrap.
-            outcomes.append(Outcome(step.name, "failed", str(exc)))
+            outcome = Outcome(step.name, "failed", str(exc))
+        outcomes.append(replace(outcome, seconds=time.monotonic() - started))
     return outcomes
 
 
@@ -182,7 +188,14 @@ def check(env: Environment, steps: Sequence[Step]) -> list[Outcome]:
 
 
 def outcome_report(outcomes: Sequence[Outcome]) -> str:
-    """One line per step for the terminal."""
-    width = max((len(outcome.step) for outcome in outcomes), default=0)
-    lines = (f"{outcome.action:8} {outcome.step.ljust(width)}  {outcome.detail}" for outcome in outcomes)
+    """One line per step for the terminal, with its seconds, and the total."""
+    width = max([len("total"), *(len(outcome.step) for outcome in outcomes)])
+    lines = [
+        _report_line(outcome.action, outcome.step.ljust(width), outcome.seconds, outcome.detail) for outcome in outcomes
+    ]
+    lines.append(_report_line("", "total".ljust(width), sum(outcome.seconds for outcome in outcomes)))
     return "\n".join(line.rstrip() for line in lines)
+
+
+def _report_line(action: str, step: str, seconds: float, detail: str = "") -> str:
+    return f"{action:8} {step} {seconds:6.1f}s  {detail}"
