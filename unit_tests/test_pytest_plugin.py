@@ -129,14 +129,14 @@ def test_several_replicas_is_a_no_op_without_replicas_command(pytester):
     pytester.runpytest_inprocess(*INNER_ARGS, "-m", "not destructive").assert_outcomes(passed=1)
 
 
-APPS = ("openzaak", "openklant", "objecten", "objecttypen", "opennotificaties", "mailpit", "zac")
+APPS = ("openzaak", "openklant", "objecten", "objecttypen", "opennotificaties", "mailpit", "zac", "openvtb", "kiss")
 WRITABLE_CONFTEST = (
     INNER_CONFTEST.replace('"allowed_tiers": ["smoke"]', '"allowed_tiers": ["smoke", "full"]')
     .replace(
         '"urls": {"openzaak": "https://openzaak.example.test"}',
         '"urls": {'
         + ", ".join(f'"{a}": "https://{a}.example.test"' for a in APPS)
-        + '}, "settings": {"productaanvraag_zaaktype": "ZT-PA"}',
+        + '}, "settings": {"productaanvraag_zaaktype": "ZT-PA", "productaanvraag_type": "PT-1"}',
     )
     .replace("environ={}", 'environ={"PODIUMD_TESTS_SECRET_" + k: "s3cr3t" for k in SECRETS}')
     + """
@@ -150,6 +150,8 @@ SECRETS = [
     "PTEST_BOOTSTRAP_OBJECTTYPEN_TOKEN",
     "PTEST_BOOTSTRAP_OPENKLANT_TOKEN",
     "PTEST_BOOTSTRAP_ADMIN_PASSWORD",
+    "PTEST_BOOTSTRAP_OPENVTB_TOKEN",
+    "PABC_API_KEY",
 ]
 """
 )
@@ -189,8 +191,13 @@ def test_api_fixtures_check_their_bootstrap_step_once(pytester, monkeypatch):
     pytester.makepyfile(
         """
 def test_clients(openklant, objecten, objecttypen, openzaak, openzaak_openbaar, openzaak_noauth,
-                 openzaak_productaanvraag, opennotificaties, mailpit, zgw_secret, run_tag):
+                 openzaak_productaanvraag, opennotificaties, mailpit, zgw_secret, run_tag,
+                 openvtb_verzoeken, openvtb_taken, openvtb_berichten, productaanvraagtype, pabc_api_key):
     assert openklant.url("x") == "https://openklant.example.test/klantinteracties/api/v1/x"
+    assert [c.url("x") for c in (openvtb_verzoeken, openvtb_taken, openvtb_berichten)] == [
+        f"https://openvtb.example.test/{api}/api/v1/x" for api in ("verzoeken", "taken", "berichten")
+    ]
+    assert (productaanvraagtype, pabc_api_key) == ("PT-1", "s3cr3t")
     assert opennotificaties.url("x") == "https://opennotificaties.example.test/api/v1/x"
     assert zgw_secret == "s3cr3t"
     assert run_tag.startswith("ptest-")
@@ -211,6 +218,7 @@ def test_again(openzaak, callback, new_callback):
     pytester.runpytest_inprocess(*INNER_ARGS, "--podiumd-run-tag=ptest-unit").assert_outcomes(passed=3)
     assert checked.count("openzaak-client") == 1
     assert checked.count("infra-mock-server") == 1
+    assert checked.count("openvtb-token") == 1
 
 
 NEEDS_A_STEP = """
@@ -309,17 +317,20 @@ def _fake_zac_and_open_zaak(monkeypatch):
     """Replace the ZAC and Open Zaak calls of the fixtures; the list collects the deleted zaak URLs."""
     deleted = []
     monkeypatch.setattr(runner, "check", lambda _env, steps: [Outcome(s.name, "present") for s in steps])
-    monkeypatch.setattr(pytest_plugin, "zac_session", lambda _env, user, password: f"{user}:{password}")
-    monkeypatch.setattr(pytest_plugin, "zaakafhandelparameters", lambda _zac, _url, zaaktype: [{"zaaktype": zaaktype}])
-    monkeypatch.setattr(pytest_plugin, "confirmation_on", lambda _zac, _url, _zaaktype: False)
-    monkeypatch.setattr(pytest_plugin, "objecttype_url", lambda _env, name: f"objecttype {name}")
-    monkeypatch.setattr(pytest_plugin, "zaaktype_parts", lambda _client, zaaktype: f"parts of {zaaktype['url']}")
-    monkeypatch.setattr(
-        pytest_plugin,
-        "create_zaak",
-        lambda _zac, _url, _parameters, **fields: {"uuid": "u1", "identificatie": "ZAAK-1", **fields},
-    )
-    monkeypatch.setattr(pytest_plugin, "delete_zaak", lambda _client, url, **_options: deleted.append(url))
+    fakes = {
+        "zac_session": lambda _env, user, password: f"{user}:{password}",
+        "zaakafhandelparameters": lambda _zac, _url, zaaktype: [{"zaaktype": zaaktype}],
+        "confirmation_on": lambda _zac, _url, _zaaktype: False,
+        "objecttype_url": lambda _env, name: f"objecttype {name}",
+        "zaaktype_parts": lambda _client, zaaktype: f"parts of {zaaktype['url']}",
+        "create_zaak": lambda _zac, _url, _parameters, **fields: {"uuid": "u1", "identificatie": "ZAAK-1", **fields},
+        "delete_zaak": lambda _client, url, **_options: deleted.append(url),
+        "user_groups": lambda _zac, _url: ["beheerders"],
+        "bpmn_zaaktype": lambda _openzaak: {"url": "zt/zt-b", "omschrijving": "b"},
+        "challenge_session": lambda _env, url, user, password: (url, user, password),
+    }
+    for name, fake in fakes.items():
+        monkeypatch.setattr(pytest_plugin, name, fake)
     return deleted
 
 
@@ -329,8 +340,10 @@ def test_zac_and_zaaktype_fixtures(pytester, monkeypatch, fake_http):
     pytester.makeconftest(WRITABLE_CONFTEST)
     pytester.makepyfile(
         """
-def test_fixtures(zac, zac_parameters, zac_zaak, parts, productaanvraag_objecttype):
+def test_fixtures(zac, zac_parameters, zac_zaak, parts, productaanvraag_objecttype, zac_group, bpmn_zaak):
     assert zac == "ptest-bootstrap-admin:s3cr3t"
+    assert zac_group == "beheerders"
+    assert bpmn_zaak["omschrijving"] == "ptest-unit-bpmn"
     assert zac_parameters == {"zaaktype": "ZT-PA"}
     assert zac_zaak(toelichting="t")["omschrijving"] == "ptest-unit-zac-zaak"
     assert parts == "parts of zt-1"
@@ -339,12 +352,21 @@ def test_fixtures(zac, zac_parameters, zac_zaak, parts, productaanvraag_objectty
 
 def test_confirmation(ontvangstbevestiging):
     pass
+
+
+def test_kiss(kiss_session):
+    from podiumd_tests.bootstrap.steps import ADMIN
+
+    assert kiss_session(ADMIN) == ("https://kiss.example.test", "ptest-bootstrap-admin", "s3cr3t")
 """
     )
     result = pytester.runpytest_inprocess(*INNER_ARGS, "-rs", "--podiumd-run-tag=ptest-unit")
-    result.assert_outcomes(passed=1, skipped=1)
+    result.assert_outcomes(passed=2, skipped=1)
     result.stdout.fnmatch_lines(["*ZAC sends no ontvangstbevestiging for ZT-PA*"])
-    assert deleted == ["https://openzaak.example.test/zaken/api/v1/zaken/u1"]
+    assert deleted == [
+        "https://openzaak.example.test/zaken/api/v1/zaken/u1",
+        "https://openzaak.example.test/zaken/api/v1/zaken/u1",
+    ]
 
 
 def test_zac_parameters_skip_without_parameters_in_zac(pytester, monkeypatch):
@@ -427,3 +449,12 @@ def test_untold():
     result = pytester.runpytest_inprocess(*INNER_ARGS)
     assert result.ret == pytest.ExitCode.USAGE_ERROR
     result.stderr.fnmatch_lines(["*scenario has no Then*"])
+
+
+def test_public_url_skips_a_component_the_profile_reaches_in_the_cluster(env_factory, profile_factory):
+    gateway = "http://frankgateway-outway.podiumd.svc.cluster.local:9080"
+    env = env_factory(profile_factory(urls={"zac": "https://zac.example.test", "frankgateway": gateway}))
+    urls = {"zac": "https://zac.example.test", "frankgateway": "http://127.0.0.1:41235"}
+    assert pytest_plugin.public_url(env, urls, "zac") == "https://zac.example.test"
+    with pytest.raises(pytest.skip.Exception, match="frankgateway has no public host in this profile"):
+        pytest_plugin.public_url(env, urls, "frankgateway")

@@ -3,12 +3,14 @@
 import io
 import json
 import subprocess
+import threading
 
 from types import SimpleNamespace
 from typing import cast
 
 import pytest
 
+from podiumd_tests import kube as kube_module
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import cluster_service
@@ -145,3 +147,87 @@ def test_forwarded_port_fails_with_kubectl_error_when_it_exits():
     process = fake_process('error: services "outway" not found\n')
     with pytest.raises(KubeError, match='services "outway" not found'):
         forwarded_port(["kubectl"], process, 5)
+
+
+class SilentOutput:
+    """Output of a kubectl that prints nothing until closed."""
+
+    def __init__(self):
+        self.closed: threading.Event = threading.Event()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        self.closed.wait()
+        raise StopIteration
+
+
+@pytest.fixture
+def silent_output():
+    output = SilentOutput()
+    yield output
+    output.closed.set()
+
+
+def test_forwarded_port_fails_when_kubectl_reports_nothing_in_time(silent_output):
+    process = cast("subprocess.Popen[str]", SimpleNamespace(stdout=silent_output))
+    with pytest.raises(KubeError, match=r"no forwarded port within 0\.05s"):
+        forwarded_port(["kubectl"], process, 0.05)  # pyright: ignore[reportArgumentType]
+
+
+def test_get_json_without_output_is_an_error_get_optional_is_none(fake_runner):
+    fake_runner.answers["get secret"] = (0, "")
+    kube = Kube("ctx", "ns", fake_runner)
+    with pytest.raises(KubeError, match="empty output"):
+        kube.get_json("secret", "s1")
+    assert kube.get_optional("secret", "s1") is None
+
+
+def test_get_json_of_a_json_list_is_an_error(fake_runner):
+    fake_runner.answers["get pods"] = (0, "[]")
+    with pytest.raises(KubeError, match="expected a JSON object"):
+        Kube("ctx", "ns", fake_runner).get_json("pods")
+
+
+def test_secret_value_decodes_one_key_and_names_a_missing_one(fake_runner):
+    fake_runner.answers["get secret s1"] = (0, json.dumps({"data": {"password": "cHc="}}))
+    kube = Kube("ctx", "ns", fake_runner)
+    assert kube.secret_value("s1", "password") == "pw"
+    with pytest.raises(KubeError, match="no key 'token'"):
+        kube.secret_value("s1", "token")
+
+
+class FakePortForward:
+    """A `kubectl port-forward` process: stdout holds its output; records terminate and wait."""
+
+    def __init__(self, output):
+        self.stdout: io.StringIO = io.StringIO(output)
+        self.stopped: list[str] = []
+
+    def terminate(self):
+        self.stopped.append("terminate")
+
+    def wait(self, _timeout):
+        self.stopped.append("wait")
+
+
+def test_port_forward_yields_the_local_port_and_stops_kubectl(fake_runner, monkeypatch):
+    process = FakePortForward("Forwarding from 127.0.0.1:41235 -> 80\n")
+    started = []
+    monkeypatch.setattr(kube_module, "start_process", lambda args: started.append(args) or process)
+    with Kube("ctx", "ns", fake_runner).port_forward("outway", 80) as port:
+        assert port == 41235
+        assert process.stopped == []
+    assert "service/outway" in started[0]
+    assert process.stopped == ["terminate", "wait"]
+
+
+def test_port_forward_without_kubectl_is_reported(fake_runner, monkeypatch):
+    def missing(args):
+        raise FileNotFoundError(args[0])
+
+    monkeypatch.setattr(kube_module, "start_process", missing)
+    kube = Kube("ctx", "ns", fake_runner)
+    with pytest.raises(KubeError, match="kubectl not found on PATH"), kube.port_forward("outway", 80):
+        pytest.fail("no port without kubectl")

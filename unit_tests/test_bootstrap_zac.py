@@ -106,6 +106,34 @@ def test_remove_leaves_a_value_someone_else_changed(ctx, fake_http):
     assert "changed by someone else" in context.notes[0]
 
 
+@pytest.mark.parametrize(
+    ("confirmation", "present"),
+    [({**WANTED, "id": 1}, True), (OFF, False)],
+)
+def test_present_when_the_part_is_on_for_the_zaaktype(ctx, fake_http, confirmation, present):
+    fake_http(answers(confirmation))
+    assert STEP.is_present(ctx()) is present
+
+
+def test_absent_without_zaakafhandelparameters(ctx, fake_http):
+    fake_http({"GET /rest/zaakafhandelparameters": (200, [])})
+    assert STEP.is_present(ctx()) is False
+
+
+def test_remove_without_a_record_changes_nothing(ctx, fake_http):
+    sent = fake_http({})
+    assert STEP.remove(ctx()) == (STORE_KEY,)
+    assert sent == []
+
+
+def test_remove_skips_a_zaaktype_zac_no_longer_has(ctx, fake_http):
+    sent = fake_http({f"GET /rest/zaakafhandelparameters/{UUID}": (404, {})})
+    context = ctx(record={UUID: OFF})
+    assert STEP.remove(context) == (STORE_KEY,)
+    assert all(s.method != "PUT" for s in sent)
+    assert context.notes == []
+
+
 def test_store_key_keeps_the_name_of_the_email_confirmation_record():
     assert STORE_KEY == "ptest_bootstrap_zac_email_confirmation_record"
 

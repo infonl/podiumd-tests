@@ -58,6 +58,18 @@ def test_release_deletes_only_its_own_lease(fake_runner):
     assert not any("delete" in c for c in fake_runner.calls)
 
 
+def test_release_deletes_its_own_lease(fake_runner):
+    fake_runner.answers = {"get lease": (0, lease("me", datetime.now(tz=UTC))), "": (0, "")}
+    release_lease(Kube("ctx", "podiumd", fake_runner), "me")
+    assert any("delete" in c for c in fake_runner.calls)
+
+
+def test_a_lease_another_run_creates_first_refuses(fake_runner):
+    fake_runner.answers = {"get lease": (0, ""), "delete lease": (0, ""), "create": (1, "AlreadyExists")}
+    with pytest.raises(LockBusyError, match="was just taken by another run"):
+        take_lease(Kube("ctx", "podiumd", fake_runner), "me", 3600)
+
+
 def test_lock_file_is_taken_and_released_without_cluster(tmp_path, profile_factory, fake_runner):
     lock = tmp_path / "lock"
     env = Environment(profile_factory(settings={"lock_file": str(lock)}), fake_runner, environ={})

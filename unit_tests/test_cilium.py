@@ -1,6 +1,7 @@
 """Unit tests for Cilium and Hubble detection."""
 
 import json
+import os
 
 from podiumd_tests import cilium
 from podiumd_tests import doctor
@@ -126,3 +127,32 @@ def test_recorded_drops_writes_policy_drops_of_every_agent(tmp_path, fake_runner
     assert all(m.stopped for m in monitors.values())
     pkills = [c for c in fake_runner.calls if "pkill" in c]
     assert {c[c.index("exec") + 1] for c in pkills} == {"cilium-a", "cilium-b"}
+
+
+class FakeKubectl:
+    """A kubectl exec that writes output to its pty and exits; records its command and kill."""
+
+    def __init__(self, output):
+        self.output: bytes = output
+        self.command: list[str] = []
+        self.killed: bool = False
+
+    def start(self, command, stdin, stdout, stderr):
+        assert stdin == stdout == stderr
+        self.command = list(command)
+        os.write(stdout, self.output)
+        return self
+
+    def kill(self):
+        self.killed = True
+
+
+def test_monitor_reads_the_agent_pty_until_kubectl_exits(fake_runner, monkeypatch):
+    kubectl = FakeKubectl(b'{"type": "drop"}\nchatter\n')
+    monkeypatch.setattr(cilium, "start_process", kubectl.start)
+    monitor = cilium.start_monitor(Kube("ctx", "podiumd", fake_runner), "cilium-a")
+    assert [line.strip() for line in monitor.lines()] == ['{"type": "drop"}', "chatter"]
+    assert kubectl.command[-len(cilium.MONITOR) - 4 :] == ["cilium-a", "-c", "cilium-agent", "--", *cilium.MONITOR]
+    assert not kubectl.killed
+    monitor.stop()
+    assert kubectl.killed
