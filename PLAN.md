@@ -315,7 +315,7 @@ Why this layout:
 
 ## 8a. Code quality checks
 
-`run_python_checks` runs these checks, fastest first, and stops at the first failure:
+`run_python_checks` runs these checks all at the same time, prints each one's log in this order and lists every failed step:
 
 1. `ruff check`
 2. `shellcheck`, then `actionlint` on `.github/workflows/`
@@ -326,9 +326,9 @@ Why this layout:
 7. `pymarkdown` (`-d md013,md014`, `plugins.md024.siblings_only`)
 8. `vulture` (with the generated TypedDict whitelist), then `deptry src tests` (`[tool.deptry]`)
 9. `bandit -c pyproject.toml`
-10. `pylint src`, then `pylint tests unit_tests` with the same `TESTS_PYLINT_DISABLE` list
+10. `pylint -j 0 src` and `pylint -j 0` on the test directories with the same `TESTS_PYLINT_DISABLE` list
 11. `basedpyright` (`typeCheckingMode = "strict"`, relaxed under the test directories)
-12. `pytest` on `unit_tests`
+12. `pytest -n auto --maxprocesses 8` on `unit_tests`
 13. `pip-audit` on the `.venv` packages, a warning only (skipped when pypi.org is unreachable); the `pip-audit` workflow runs it weekly and on `pyproject.toml` changes
 
 Ruff `PL` owns the count rules, so pylint disables them (`[tool.pylint."messages control"]`).
