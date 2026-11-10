@@ -58,3 +58,13 @@ def test_run_snippets_runs_them_in_order_in_one_shell(fake_runner):
     code = fake_runner.stdins[0]
     compile(code, "<snippets>", "exec")
     assert code.index("snippets/jwt_secret.py") < code.index("snippets/token_auth.py")
+
+
+def test_action_ensure_wraps_the_snippets_run(fake_runner):
+    fake_runner.answers["exec -i deploy/openzaak"] = (0, 'PTEST_VALUE={"created": false}\n')
+    kube = Kube("ctx", "ns", fake_runner)
+    assert run_snippet(kube, "openzaak", "token_auth", {"action": "ensure", "stored": True}) == {"created": False}
+    run_snippet(kube, "openzaak", "token_auth", {"action": "status"})
+    ensure, status = fake_runner.stdins
+    assert ensure.index("def run(params)") < ensure.index("_step_run = run")
+    assert "_step_run" not in status

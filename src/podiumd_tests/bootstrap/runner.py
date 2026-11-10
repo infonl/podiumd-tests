@@ -16,6 +16,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 from typing import Literal
 from typing import Protocol
+from typing import runtime_checkable
 
 import requests
 
@@ -85,6 +86,15 @@ class Step(Protocol):
         ...
 
 
+@runtime_checkable
+class Ensures(Protocol):  # pylint: disable=too-few-public-methods  # an optional Step method
+    """A step that checks and applies in one go, e.g. in one Django shell."""
+
+    def ensure(self, ctx: Context, /) -> dict[str, str] | None:
+        """Apply unless is_present; return the credentials to store, None when present."""
+        ...
+
+
 @dataclass(frozen=True)
 class Outcome:
     """What happened to one step."""
@@ -148,10 +158,9 @@ def bootstrap(env: Environment, steps: Sequence[Step], *, rotate: bool = False) 
         reason = not_allowed(ctx, step)
         if reason:
             return Outcome(step.name, "skipped", reason)
-        if not rotate and step.is_present(ctx):
+        values = _apply_missing(ctx, step, rotate=rotate)
+        if values is None:
             return Outcome(step.name, "present")
-        ctx.notes.clear()
-        values = step.apply(ctx)
         if values:
             ctx.store.write(values)
             ctx.env.credentials.forget(*values)
@@ -159,6 +168,17 @@ def bootstrap(env: Environment, steps: Sequence[Step], *, rotate: bool = False) 
         return Outcome(step.name, "created", "; ".join([stored, *ctx.notes]))
 
     return _each(env, steps, apply)
+
+
+def _apply_missing(ctx: Context, step: Step, *, rotate: bool) -> dict[str, str] | None:
+    """Apply the step unless it is present (always with rotate); the credentials to store, None when present."""
+    if not rotate and isinstance(step, Ensures):
+        ctx.notes.clear()
+        return step.ensure(ctx)
+    if not rotate and step.is_present(ctx):
+        return None
+    ctx.notes.clear()
+    return step.apply(ctx)
 
 
 def unbootstrap(env: Environment, steps: Sequence[Step]) -> list[Outcome]:

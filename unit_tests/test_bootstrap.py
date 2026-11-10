@@ -3,9 +3,11 @@
 import ast
 import base64
 import json
+import subprocess
 
 from dataclasses import dataclass
 from dataclasses import field
+from dataclasses import replace
 from typing import override
 
 import pytest
@@ -39,8 +41,11 @@ from podiumd_tests.bootstrap.steps import SnippetStep
 from podiumd_tests.bootstrap.steps import openformulieren_params
 from podiumd_tests.bootstrap.steps import openinwoner_openklant_params
 from podiumd_tests.bootstrap.steps import productaanvraag_zaaktypen
+from podiumd_tests.capabilities import Capabilities
+from podiumd_tests.components import COMPONENTS
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.credentials import env_var_name
+from podiumd_tests.django_snippets import snippet_source
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
@@ -209,12 +214,17 @@ def test_cli_refuses_bootstrap_on_smoke_only_profiles(tmp_path, capsys):
     assert "smoke-only" in capsys.readouterr().err
 
 
-def snippet_params(code):
-    """The params the first snippet was sent with, from the [name, source, params] list passed to _json.loads."""
+def snippet_calls(code):
+    """The [name, source, params] calls a Django shell was sent, from the list passed to _json.loads."""
     calls = [
         n for n in ast.walk(ast.parse(code)) if isinstance(n, ast.Call) and getattr(n.func, "attr", None) == "loads"
     ]
-    return json.loads(ast.literal_eval(calls[0].args[0]))[0][2]
+    return json.loads(ast.literal_eval(calls[0].args[0]))
+
+
+def snippet_params(code):
+    """The params the first snippet was sent with."""
+    return snippet_calls(code)[0][2]
 
 
 def snippet_answer(value):
@@ -635,7 +645,7 @@ def test_openinwoner_partijen_remove_deletes_the_partijen_of_the_test_identities
 def test_snippet_notes_reach_the_outcome(env_factory, fake_runner, profile_factory):
     env = cluster_env(env_factory, fake_runner, profile_factory, urls={"objecten": "https://objecten.example.test"})
     fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "objecten"}}]}))
-    fake_runner.answers["exec -i deploy/objecten"] = snippet_answer({"present": False, "notes": ["no objecttype X"]})
+    fake_runner.answers["exec -i deploy/objecten"] = snippet_answer({"created": True, "notes": ["no objecttype X"]})
     step = SnippetStep("objecten-token", ("objecten",), "token_auth", "tok", {"modules": ("m",), "object_types": ["X"]})
     outcome = bootstrap(env, [step])[0]
     assert outcome.action == "created"
@@ -800,3 +810,130 @@ def test_an_opt_in_step_does_nothing_unless_the_profile_allows_it(env_factory, f
     assert step.apply(ctx) == {}
     assert ctx.notes == ["not allowed: profile setting of_wait_for_payment is off"]
     assert not any("exec" in c for c in fake_runner.calls)
+
+
+# Run-time params come from Open Klant, Keycloak and the mock server; the shells do not depend on them.
+SNIPPET_STEPS = [replace(step, context_params=None) for step in STEPS if isinstance(step, SnippetStep)]
+# Steps behind an opt-in setting that is off run no shell.
+RUNNING = [step for step in SNIPPET_STEPS if step.opt_in is None]
+DEPLOYMENTS = sorted({prefix for component in COMPONENTS.values() for prefix in component.deployment_prefixes})
+VOLATILE = ("action", "secret", "record", "stored")
+
+
+def _object_key(name, params):
+    return json.dumps([name, {k: v for k, v in params.items() if k not in VOLATILE}], sort_keys=True)
+
+
+class SnippetCluster:
+    """Django deployments that run snippet steps: counts shells, keeps the step objects and the credentials Secret."""
+
+    def __init__(self):
+        self.shells: list[str] = []
+        self.calls: list[tuple[str, str]] = []
+        self.objects: set[str] = set()
+        self.secret: dict[str, str] = {}
+
+    def __call__(self, args, _timeout, stdin=None):
+        line = " ".join(args)
+        if "exec -i deploy/" in line:
+            self.shells.append(line.split("deploy/")[1].split()[0])
+            values = [self._run(name, params) for name, _, params in snippet_calls(stdin)]
+            out = "".join(f"PTEST_VALUE={json.dumps(value)}\n" for value in values)
+            return subprocess.CompletedProcess(list(args), 0, out, "")
+        return subprocess.CompletedProcess(list(args), 0, self._kubectl(line, stdin), "")
+
+    def make_present(self, steps):
+        for step in steps:
+            self.objects.add(_object_key(step.snippet, step.params))
+            if step.store_key:
+                self.secret[step.store_key] = "{}"
+
+    def _kubectl(self, line, stdin):
+        if "get deployments" in line:
+            return json.dumps({"items": [{"metadata": {"name": name}} for name in DEPLOYMENTS]})
+        if "get secret podiumd-tests-credentials" in line:
+            return stored(self.secret) if self.secret else ""
+        if "apply -f -" in line:
+            self.secret = json.loads(stdin)["stringData"]
+        return ""
+
+    def _run(self, name, params):
+        name = name.removeprefix("snippets/").removesuffix(".py")
+        key = _object_key(name, params)
+        action = params["action"]
+        self.calls.append((name, action))
+        if action == "status":
+            return {"present": key in self.objects}
+        if action == "ensure" and key in self.objects and params["stored"]:
+            return {"created": False}
+        self.objects.add(key)
+        return {"present": True, "record": {}, "created": True}
+
+
+@pytest.fixture(name="cluster")
+def fixture_cluster():
+    return SnippetCluster()
+
+
+@pytest.fixture(name="env")
+def fixture_env(env_factory, profile_factory, cluster):
+    env = env_factory(profile_factory(), runner=cluster)
+    env.capabilities = Capabilities(frozenset(("cluster", *COMPONENTS)), {})
+    return env
+
+
+def test_ensure_runs_status_then_apply_only_when_missing():
+    log = []
+
+    def step_run(params):
+        log.append(params["action"])
+        return {"present": params["present"], "record": {"n": 1}}
+
+    namespace = {"run": step_run}
+    source = compile(snippet_source("_ensure"), "_ensure", "exec")
+    exec(source, namespace)  # noqa: S102  # pylint: disable=exec-used  # the snippet as the Django shell runs it
+    ensure = namespace["run"]
+    assert ensure({"action": "ensure", "present": True, "stored": True}) == {"created": False}
+    assert ensure({"action": "ensure", "present": True, "stored": False}) == {
+        "present": True,
+        "record": {"n": 1},
+        "created": True,
+    }
+    assert ensure({"action": "ensure", "present": False, "stored": True})["created"]
+    assert log == ["status", "status", "apply", "status", "apply"]
+
+
+def test_fresh_bootstrap_runs_one_shell_per_snippet_step(env, cluster):
+    outcomes = bootstrap(env, SNIPPET_STEPS)
+    assert {o.action for o in outcomes if o.step in {s.name for s in RUNNING}} == {"created"}
+    assert len(cluster.shells) == len(RUNNING)
+    assert {action for _, action in cluster.calls} == {"ensure"}
+
+
+def test_rebootstrap_finds_every_snippet_step_present(env, cluster):
+    cluster.make_present(RUNNING)
+    outcomes = bootstrap(env, SNIPPET_STEPS)
+    assert {o.action for o in outcomes} == {"present"}
+    assert len(cluster.shells) == len(RUNNING)
+
+
+def test_ensure_makes_a_new_secret_when_the_objects_exist_without_it(env, cluster):
+    step = next(s for s in SNIPPET_STEPS if s.name == "openzaak-client")
+    cluster.make_present([step])
+    cluster.secret = {}
+    outcome = bootstrap(env, [step])[0]
+    assert (outcome.action, outcome.detail) == ("created", step.store_key)
+    assert len(cluster.secret[step.store_key]) == 40
+    assert len(cluster.shells) == 1
+
+
+def test_rotate_applies_without_status(env, cluster):
+    cluster.make_present(RUNNING)
+    bootstrap(env, SNIPPET_STEPS, rotate=True)
+    assert {action for _, action in cluster.calls} == {"apply"}
+
+
+def test_check_reports_missing_and_present(env, cluster):
+    cluster.make_present(RUNNING[:1])
+    outcomes = check(env, SNIPPET_STEPS[:2])
+    assert [o.action for o in outcomes] == ["present", "missing"]
