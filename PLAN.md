@@ -318,7 +318,7 @@ Why this layout:
 `run_python_checks` runs these checks, fastest first, and stops at the first failure:
 
 1. `ruff check`
-2. `shellcheck`
+2. `shellcheck`, then `actionlint` on `.github/workflows/`
 3. `ruff format --check`
 4. `flake8` with wemake-python-styleguide (`[tool.flake8]`: only the WPS rules ruff lacks)
 5. `yamllint --strict` on the tracked YAML files (`.yamllint`)

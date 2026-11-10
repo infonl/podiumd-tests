@@ -7,7 +7,7 @@ usage() {
     cat <<'EOF'
 Usage: run_python_checks [-h|--help]
 
-Runs ruff check, shellcheck, ruff format --check, flake8
+Runs ruff check, shellcheck, actionlint, ruff format --check, flake8
 (wemake-python-styleguide), yamllint, jscpd, pymarkdown, vulture, bandit, pylint,
 basedpyright and pytest (unit_tests/ only, with coverage threshold from
 pyproject.toml), fastest first, then pip-audit on the packages of .venv.
@@ -66,6 +66,9 @@ echo "=== shellcheck (${#shell_scripts[@]} shell script(s)) ==="
 if ((${#shell_scripts[@]})); then
     shellcheck "${shell_scripts[@]}"
 fi
+
+echo "=== actionlint (workflows) ==="
+actionlint
 
 echo "=== ruff format --check ==="
 ruff format --check .

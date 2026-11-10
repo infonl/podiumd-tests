@@ -33,6 +33,7 @@ dev = [
     "wemake-python-styleguide",  # flake8 plugin, its own pinned flake8
     "pip-audit",         # known vulnerabilities in the .venv packages
     "yamllint",
+    "actionlint-py",     # GitHub workflow lint, with shellcheck on run: steps
     "pytest",
     "pytest-cov",        # coverage of the unit tests (run_python_checks)
     "bandit",
@@ -110,6 +111,7 @@ select = [
     "F",    # Pyflakes
     "FA",   # flake8-future-annotations
     "FBT",  # flake8-boolean-trap
+    "FIX",  # flake8-fixme: a TODO, FIXME or XXX is an issue or a fix, not a comment
     "FLY",  # pyflint
     "FURB", # refurb
     "G",    # flake8-logging-format
@@ -145,6 +147,7 @@ select = [
     "T10",
     "T20",
     "TCH",
+    "TD",   # flake8-todos
     "TID",
     "TRY",  # tryceratops
     "UP",   # pyupgrade
