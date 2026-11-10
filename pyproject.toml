@@ -221,13 +221,11 @@ ignore = [
     # done by ruff or pylint
     "WPS210",  # too many locals: PLR0914
     "WPS211",  # too many arguments: PLR0913, PLR0917
-    "WPS212",  # too many returns: PLR0911
     "WPS213",  # too many expressions: PLR0915
     "WPS214",  # too many methods: PLR0904
     "WPS229",  # too long try body: PLW0717
     "WPS231",  # cognitive complexity: C901, PLR0912
     "WPS421",  # print: T201, off on purpose (the CLI prints)
-    "WPS426",  # lambda in a loop: B023 checks the actual late binding
     "WPS432",  # magic number: PLR2004 (comparisons), elsewhere a named constant is not clearer
     "WPS441",  # control variable used after its loop: B020, PLW2901 (a comprehension reusing names is no bug)
     # opinion, or in conflict with this code base
@@ -244,9 +242,7 @@ ignore = [
     "WPS430",  # nested function: closures on purpose (callbacks, retries)
     "WPS504",  # negated condition: flags x if y is not None else None, the natural order
     "WPS529",  # implicit .get(): flags a dispatch on which keys a dict has; SIM401 catches the if/else default case
-    "WPS501",  # finally without except: a try/finally cleanup is normal python
     "WPS602",  # staticmethod: a method that needs no instance
-    "WPS615",  # get_x/set_x: names of the APIs these helpers wrap
     "WPS203",  # too many imported names: the module that wires all bootstrap steps imports them all
     "WPS322",  # multi-line string layout: scenario texts and Django snippets start on the opening line
     "WPS412",  # logic in __init__.py: the package's API lives there; a move would leave a re-export facade
