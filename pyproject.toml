@@ -82,7 +82,7 @@ omit = ["*/snippets/*.py", "*/perf/*locustfile.py"]
 branch = true
 
 [tool.coverage.report]
-fail_under = 96
+fail_under = 97
 # The threshold check rounds to this precision; at 0, 95.996% passes as 96%.
 precision = 2
 
