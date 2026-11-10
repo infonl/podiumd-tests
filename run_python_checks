@@ -31,6 +31,8 @@ if [[ -x .venv/bin/python3 ]]; then
     if [[ ! -e "${stamp}" || pyproject.toml -nt "${stamp}" || -z "$(find "${stamp}" -mmin -1440)" ]]; then
         echo "=== upgrading .venv dev tools ==="
         python3 -m pip install -q -U --upgrade-strategy eager -e '.[dev]'
+        # A new playwright needs its own browser build; without it every UI test fails at launch.
+        python3 -m playwright install chromium > /dev/null
         touch "${stamp}"
     fi
 fi
