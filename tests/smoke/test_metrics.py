@@ -160,7 +160,7 @@ def test_loki_has_pod_logs(grafana: Grafana, podiumd_env: Environment) -> None:
     """Loki has recent log streams of the application namespace (Alloy forwards them)."""
     if not grafana.uid("loki"):
         pytest.skip("no loki datasource (metrics without logging)")
-    query = f'{{namespace="{podiumd_env.profile.kube.namespace}"}}'
+    query = f'{{namespace="{podiumd_env.profile.kube.namespace}"}}'  # noqa: B907  # LogQL label matcher
     body = grafana.proxy("loki", "/loki/api/v1/query_range", {"query": query, "limit": "5"})
     assert body["status"] == "success"
     assert cast("dict[str, object]", body["data"])["result"], f"no log streams for {query}: is Alloy forwarding logs?"
@@ -256,9 +256,8 @@ def test_every_pod_logs_to_loki(grafana: Grafana, podiumd_env: Environment) -> N
     """
     if not grafana.uid("loki"):
         pytest.skip("no loki datasource (metrics without logging)")
-    query = (
-        f'sum by (namespace, pod) (count_over_time({{namespace=~"{"|".join(podiumd_env.namespaces)}"}}[{LOG_WINDOW}]))'
-    )
+    namespaces = "|".join(podiumd_env.namespaces)
+    query = f'sum by (namespace, pod) (count_over_time({{namespace=~"{namespaces}"}}[{LOG_WINDOW}]))'  # noqa: B907  # LogQL
     in_loki = pods_in_loki(grafana.proxy("loki", "/loki/api/v1/query", {"query": query}))
     now = datetime.now(UTC)
     candidates = running_pods_not_in_loki(podiumd_env.items("pods"), in_loki, now)

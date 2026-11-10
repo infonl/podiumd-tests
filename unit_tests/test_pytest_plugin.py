@@ -135,7 +135,7 @@ WRITABLE_CONFTEST = (
     .replace(
         '"urls": {"openzaak": "https://openzaak.example.test"}',
         '"urls": {'
-        + ", ".join(f'"{a}": "https://{a}.example.test"' for a in APPS)
+        + ", ".join(f'{a!r}: "https://{a}.example.test"' for a in APPS)
         + '}, "settings": {"productaanvraag_zaaktype": "ZT-PA", "productaanvraag_type": "PT-1"}',
     )
     .replace("environ={}", 'environ={"PODIUMD_TESTS_SECRET_" + k: "s3cr3t" for k in SECRETS}')

@@ -33,6 +33,7 @@ dev = [
     "isort",
     "flake8-pyproject",  # flake8 reads [tool.flake8] in pyproject.toml
     "wemake-python-styleguide",  # flake8 plugin, its own pinned flake8
+    "flake8-bugbear",    # flake8 plugin: B907 and B042, which ruff lacks
     "pip-audit",         # known vulnerabilities in the .venv packages
     "deptry",            # dependencies declared and imported agree
     "yamllint",
@@ -180,8 +181,8 @@ ignore = [
 # RUF039).
 preview = true
 explicit-preview-rules = true
-# The WPS codes in noqa comments belong to flake8 (wemake-python-styleguide), not to ruff.
-external = ["WPS"]
+# These codes in noqa comments belong to flake8 plugins, not to ruff.
+external = ["WPS", "B907", "B042"]
 fixable = ["ALL"]
 unfixable = []
 # Allow unused variables when underscore-prefixed.
@@ -216,9 +217,9 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
 
-# flake8 runs only wemake-python-styleguide (WPS), for what ruff cannot check; read via flake8-pyproject.
+# flake8 runs wemake-python-styleguide (WPS) and plugin rules ruff cannot check; read via flake8-pyproject.
 [tool.flake8]
-select = ["WPS"]
+select = ["WPS", "B907", "B042"]
 max-line-length = 120
 # Jones complexity of a line (default 14): only the really dense lines
 max-line-complexity = 18

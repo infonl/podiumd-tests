@@ -95,5 +95,5 @@ def test_bericht_needs_a_berichttype(
 
 def _delete_openvtb_bericht(podiumd_env: Environment, uuid: str) -> None:
     """Delete a bericht (and so free its berichttype) through Open VTB's Django shell; the API refuses it (405)."""
-    code = f"from openvtb.components.berichten.models import Bericht\nBericht.objects.filter(uuid='{uuid}').delete()"
+    code = f"from openvtb.components.berichten.models import Bericht\nBericht.objects.filter(uuid={uuid!r}).delete()"
     podiumd_env.kube.exec_django_shell(podiumd_env.deployment_for("openvtb"), code)

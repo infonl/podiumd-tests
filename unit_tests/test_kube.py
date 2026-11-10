@@ -2,6 +2,7 @@
 
 import io
 import json
+import pickle
 import subprocess
 import threading
 
@@ -39,6 +40,12 @@ def test_errors_keep_the_command_and_the_last_stderr_line(fake_runner):
         Kube("ctx", "ns", fake_runner).api_reachable()
     assert str(info.value).endswith(": Unable to connect to the server")
     assert info.value.command.startswith("kubectl --context ctx")
+
+
+def test_a_kube_error_survives_pickling():
+    error = KubeError(["kubectl", "get", "pods"], "E1005 noise\nforbidden\n")
+    copy = pickle.loads(pickle.dumps(error))  # noqa: S301  # data pickled by this test
+    assert (type(copy), str(copy), copy.command) == (KubeError, str(error), error.command)
 
 
 def test_missing_kubectl_is_reported():

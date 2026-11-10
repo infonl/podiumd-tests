@@ -291,7 +291,8 @@ def test_zaak_document_can_be_downloaded(
     open_status_page(page, podiumd_env, zaak)
     # The status page loads the zaak's documents after the page itself ("Gegevens laden...").
     expect(page.get_by_text(str(document["titel"])).first).to_be_visible(timeout=LIST_TIMEOUT_MS)
-    href = page.locator(f'a[href*="{str(document["url"]).rsplit("/", 1)[-1]}"]').first.get_attribute("href")
+    document_uuid = str(document["url"]).rsplit("/", 1)[-1]
+    href = page.locator(f'a[href*="{document_uuid}"]').first.get_attribute("href")  # noqa: B907  # CSS selector
     assert href, "no download link for the document"
     download = browser_session(page, podiumd_env).get(
         re.sub(r"^/", f"{podiumd_env.profile.urls['openinwoner']}/", href)
@@ -397,7 +398,7 @@ def expect_listed(page: Page, zaak: JsonObject) -> None:
 def open_status_page(page: Page, podiumd_env: Environment, zaak: JsonObject, who: str = "inwoner") -> None:
     """Log the identity in and open the zaak's status page from Mijn zaken."""
     log_in(page, podiumd_env, who)
-    page.locator(f'a[href*="{zaak["uuid"]}"]').first.click()
+    page.locator(f'a[href*="{zaak["uuid"]}"]').first.click()  # noqa: B907  # CSS selector
 
 
 def documents_of(openzaak: ApiClient, zaak: JsonObject) -> list[str]:

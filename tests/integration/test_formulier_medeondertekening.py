@@ -18,6 +18,7 @@ from playwright.sync_api import expect
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.browser import keycloak_login
 from podiumd_tests.browser import refuse_cookies
+from podiumd_tests.mailpit import quoted
 from podiumd_tests.mailpit import received
 from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import submit
@@ -106,7 +107,9 @@ def test_cosigned_form_is_registered(
     request = received(mailpit, registry, timeout=TIMEOUT, to=cosigner)
     link = re.search(r'href="([^"]+)"', request)
     assert link, "no link in the co-sign request"
-    assert not mailpit.get("search", {"query": f'to:"{registratie}"'}).get("messages"), "registered before co-signing"
+    assert not mailpit.get("search", {"query": f"to:{quoted(registratie)}"}).get("messages"), (
+        "registered before co-signing"
+    )
     page.goto(html.unescape(link[1]))
     _log_in_as_cosigner(
         page, podiumd_env, lambda: received(mailpit, registry, timeout=TIMEOUT, to=cosigner, subject=OTP_SUBJECT)

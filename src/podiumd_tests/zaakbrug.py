@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from typing import NamedTuple
 from xml.etree.ElementTree import fromstring  # nosec B405  # parses ZaakBrug's own answer
+from xml.sax.saxutils import quoteattr  # nosec B406  # escapes, parses nothing
 
 from podiumd_tests.workloads import expect_defect
 
@@ -23,6 +24,7 @@ if TYPE_CHECKING:
 ZDS = "/services/translate/generic/zds"
 STUF = "http://www.egem.nl/StUF/StUF0301"
 ZKN = "http://www.egem.nl/StUF/sector/zkn/0310"
+XMLNS = f"xmlns:StUF={quoteattr(STUF)} xmlns:ZKN={quoteattr(ZKN)}"
 # ZaakBrug's default organisation (zaakbrug.globals.organizations).
 GEMEENTECODE = "1900"
 # The mutation parameters shared by the Lk01 messages (creeerZaak, voegZaakdocumentToe).
@@ -87,8 +89,8 @@ def _stuurgegevens(berichtcode: str, now: datetime, gemeentecode: str, *, rest: 
 
 def _isvan_zaaktype(code: str, verwerkingssoort: str) -> str:
     """Return the isVan reference to a zaaktype by its code, shared by creeerZaak and voegZaakdocumentToe."""
-    return f"""<ZKN:isVan StUF:entiteittype="ZAKZKT" StUF:verwerkingssoort="{verwerkingssoort}">
-<ZKN:gerelateerde StUF:entiteittype="ZKT" StUF:verwerkingssoort="{verwerkingssoort}">
+    return f"""<ZKN:isVan StUF:entiteittype="ZAKZKT" StUF:verwerkingssoort={quoteattr(verwerkingssoort)}>
+<ZKN:gerelateerde StUF:entiteittype="ZKT" StUF:verwerkingssoort={quoteattr(verwerkingssoort)}>
 <ZKN:omschrijving>podiumd-tests</ZKN:omschrijving><ZKN:code>{code}</ZKN:code>
 <ZKN:ingangsdatumObject xsi:nil="true" StUF:noValue="geenWaarde"/></ZKN:gerelateerde></ZKN:isVan>"""
 
@@ -99,7 +101,7 @@ def genereer_zaak_id(now: datetime, gemeentecode: str = GEMEENTECODE) -> str:
         "Di02", now, gemeentecode, rest="<StUF:functie>genereerZaakidentificatie</StUF:functie>"
     )
     return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
- xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}"><SOAP-ENV:Body><ZKN:genereerZaakIdentificatie_Di02>
+ {XMLNS}><SOAP-ENV:Body><ZKN:genereerZaakIdentificatie_Di02>
 {stuurgegevens}</ZKN:genereerZaakIdentificatie_Di02></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
 
 
@@ -109,7 +111,7 @@ def genereer_document_id(now: datetime, gemeentecode: str = GEMEENTECODE) -> str
         "Di02", now, gemeentecode, rest="<StUF:functie>genereerDocumentidentificatie</StUF:functie>"
     )
     return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
- xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}"><SOAP-ENV:Body><ZKN:genereerDocumentIdentificatie_Di02>
+ {XMLNS}><SOAP-ENV:Body><ZKN:genereerDocumentIdentificatie_Di02>
 {stuurgegevens}</ZKN:genereerDocumentIdentificatie_Di02></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
 
 
@@ -133,11 +135,11 @@ def creeer_zaak(  # noqa: PLR0913  # one message
     """
     stuurgegevens = _stuurgegevens("Lk01", now, gemeentecode, rest="<StUF:entiteittype>ZAK</StUF:entiteittype>")
     return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
- xmlns:BG="http://www.egem.nl/StUF/sector/bg/0310" xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}"
+ xmlns:BG="http://www.egem.nl/StUF/sector/bg/0310" {XMLNS}
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><SOAP-ENV:Body><ZKN:zakLk01>
 {stuurgegevens}
 {MUTATIE}
-<ZKN:object StUF:sleutelVerzendend="{zaak}" StUF:entiteittype="ZAK" StUF:verwerkingssoort="T">
+<ZKN:object StUF:sleutelVerzendend={quoteattr(zaak)} StUF:entiteittype="ZAK" StUF:verwerkingssoort="T">
 {_zaak_velden(now, zaak, velden)}
 {_isvan_zaaktype(zaaktype_code, "T")}
 <ZKN:heeftAlsInitiator StUF:entiteittype="ZAKBTRINI" StUF:verwerkingssoort="T"><ZKN:gerelateerde>
@@ -163,13 +165,13 @@ def _zaak_wijziging(
     """Return a zakLk01 envelope (mutatiesoort W): the old zaak, then as it becomes, each with extra elements."""
     stuurgegevens = _stuurgegevens("Lk01", now, gemeentecode, rest="<StUF:entiteittype>ZAK</StUF:entiteittype>")
     objects = "".join(
-        f"""<ZKN:object StUF:sleutelVerzendend="{zaak}" StUF:entiteittype="ZAK" StUF:verwerkingssoort="W">
+        f"""<ZKN:object StUF:sleutelVerzendend={quoteattr(zaak)} StUF:entiteittype="ZAK" StUF:verwerkingssoort="W">
 {_zaak_velden(now, zaak, velden)}
 {_isvan_zaaktype(zaaktype_code, "I")}{extra}</ZKN:object>"""
         for velden, extra in changes
     )
     return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
- xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+ {XMLNS} xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 <SOAP-ENV:Body><ZKN:zakLk01>
 {stuurgegevens}
 <ZKN:parameters><StUF:mutatiesoort>W</StUF:mutatiesoort>
@@ -217,7 +219,7 @@ def geef_zaak_details(now: datetime, zaak: str, gemeentecode: str = GEMEENTECODE
     """Return a geefZaakdetails_Lv01 envelope for the BeantwoordVraag endpoint: read one zaak by identificatie."""
     stuurgegevens = _stuurgegevens("Lv01", now, gemeentecode, rest="<StUF:entiteittype>ZAK</StUF:entiteittype>")
     return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
- xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+ {XMLNS} xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 <SOAP-ENV:Body><ZKN:zakLv01>
 {stuurgegevens}
 <ZKN:parameters><StUF:sortering>0</StUF:sortering>
@@ -236,7 +238,7 @@ def voeg_zaakdocument_toe(
     """Return a voegZaakdocumentToe_Lk01 envelope: attach one document to a zaak."""
     stuurgegevens = _stuurgegevens("Lk01", now, gemeentecode, rest="<StUF:entiteittype>EDC</StUF:entiteittype>")
     return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
- xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}" xmlns:xmime="http://www.w3.org/2005/05/xmlmime"
+ {XMLNS} xmlns:xmime="http://www.w3.org/2005/05/xmlmime"
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><SOAP-ENV:Body><ZKN:edcLk01>
 {stuurgegevens}
 {MUTATIE}
@@ -259,7 +261,7 @@ def _vrij_bericht(message: str, functie: str, now: datetime, gemeentecode: str, 
     """Return a vrij bericht (Di02) envelope for the VrijBericht endpoint, with this body after its stuurgegevens."""
     stuurgegevens = _stuurgegevens("Di02", now, gemeentecode, rest=f"<StUF:functie>{functie}</StUF:functie>")
     return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
- xmlns:StUF="{STUF}" xmlns:ZKN="{ZKN}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+ {XMLNS} xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 <SOAP-ENV:Body><ZKN:{message}>
 {stuurgegevens}
 {body}</ZKN:{message}></SOAP-ENV:Body></SOAP-ENV:Envelope>"""

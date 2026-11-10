@@ -8,6 +8,7 @@ import subprocess  # nosec B404
 
 from typing import TYPE_CHECKING
 from typing import Protocol
+from typing import override
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -31,6 +32,8 @@ class ProcessError(Exception):
     """An external command failed. The message holds the command line, so it can be pasted and rerun."""
 
     def __init__(self, command: Sequence[str], detail: str) -> None:
+        # All arguments go to Exception, so pickle and copy can rebuild the error.
+        super().__init__(command, detail)
         self.command: str = shlex.join(command)
         # kubectl repeats client-side noise (E1005 memcache...) before the real error, and kubectl exec
         # ends with its own exit-code line after the program's error; keep the last real line.
@@ -38,7 +41,12 @@ class ProcessError(Exception):
         lines = [line for line in written if line.strip() and not KUBECTL_EXEC_EXIT.match(line)]
         # A Python program may log warnings after its exception; the exception is the real error.
         errors = [line for line in lines if PYTHON_EXCEPTION.match(line)]
-        super().__init__(f"{self.command}: {(errors or lines or ['failed'])[-1]}")
+        self.message: str = f"{self.command}: {(errors or lines or ['failed'])[-1]}"
+
+    @override
+    def __str__(self) -> str:
+        """Return the command line and its error."""
+        return self.message
 
 
 def run_process(args: Sequence[str], timeout: int, stdin: str | None = None) -> subprocess.CompletedProcess[str]:

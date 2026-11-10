@@ -28,6 +28,7 @@ from podiumd_tests.kcc import add_klantcontact
 from podiumd_tests.kcc import ita_detail_text
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.mailpit import forget_mails
+from podiumd_tests.mailpit import quoted
 from podiumd_tests.openinwoner import ask_anonymously
 from podiumd_tests.openinwoner import forget_questions
 from podiumd_tests.openinwoner import portal_login
@@ -79,7 +80,7 @@ MANY_QUESTIONS = 26
 def clean_up_question(podiumd_env: Environment, openklant: ApiClient, registry: ResourceRegistry, vraag: str) -> None:
     """Delete, at cleanup, the question's klantcontacten and the copy Open Inwoner mails to the contact address."""
     clean_up_klantcontacten(openklant, registry, SUBJECT, vraag)
-    forget_mails(podiumd_env, registry, f'"{vraag}"')
+    forget_mails(podiumd_env, registry, quoted(vraag))
 
 
 def question_in_open_klant(openklant: ApiClient, vraag: str) -> JsonObject:

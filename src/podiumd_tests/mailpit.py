@@ -18,12 +18,17 @@ if TYPE_CHECKING:
     from podiumd_tests.seed.registry import ResourceRegistry
 
 
+def quoted(value: str) -> str:
+    """Return value as one Mailpit search phrase."""
+    return f'"{value}"'  # noqa: B907  # Mailpit search syntax, not a Python literal
+
+
 def wait_for_mail(
     mailpit: ApiClient, *, timeout: float, subject: str | None = None, to: str | None = None
 ) -> JsonObject:
     """Return the first message with exactly this subject and/or to this address; WaitTimeoutError if none arrives."""
     criteria = (("subject", subject), ("to", to))
-    query = " ".join(f'{field}:"{value}"' for field, value in criteria if value)
+    query = " ".join(f"{field}:{quoted(value)}" for field, value in criteria if value)
 
     def found() -> JsonObject | None:
         page = mailpit.get("search", {"query": query})
@@ -43,7 +48,7 @@ def received(
 ) -> str:
     """Return the HTML of the first mail to the address (wait_for_mail); cleanup deletes every mail to the address."""
     message = wait_for_mail(mailpit, timeout=timeout, to=to, subject=subject)
-    registry.add(f"mail to {to}", lambda: delete_mails(mailpit, f'to:"{to}"'))
+    registry.add(f"mail to {to}", lambda: delete_mails(mailpit, f"to:{quoted(to)}"))
     return str(mailpit.get(f"message/{message['ID']}").get("HTML"))
 
 

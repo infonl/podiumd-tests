@@ -20,6 +20,7 @@ import pytest
 from podiumd_tests.json_data import entries
 from podiumd_tests.kcc import ita_afhandeltermijn_hours
 from podiumd_tests.kube import metadata_name
+from podiumd_tests.mailpit import quoted
 from podiumd_tests.mailpit import received
 from podiumd_tests.seed.objecten import clean_up_logboek
 from podiumd_tests.seed.objecten import make_object
@@ -127,5 +128,5 @@ def test_afdeling_gets_one_reminder_for_its_overdue_contactverzoeken(
     )
     assert [o for o in onderwerpen if o in body] == [], "the reminder shows a contactverzoek's onderwerp"
     assert "/afdelings-contacten" in body
-    found = mailpit.get("search", {"query": f'to:"{quiet_address}"'})
+    found = mailpit.get("search", {"query": f"to:{quoted(quiet_address)}"})
     assert entries(found.get("messages")) == [], f"a reminder to {quiet_address}"

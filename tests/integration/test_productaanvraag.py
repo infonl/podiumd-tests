@@ -7,6 +7,8 @@ for profile settings productaanvraag_type and productaanvraag_zaaktype.
 
 from __future__ import annotations
 
+import json
+
 from typing import TYPE_CHECKING
 
 import pytest
@@ -115,7 +117,7 @@ def test_new_form_becomes_a_zac_zaak(
     # Open Formulieren's productaanvraag template, as the environments configure it.
     content = (
         '{"bron": {"naam": "Open Formulieren", "kenmerk": "{{ submission.public_reference }}"},'
-        f' "type": "{productaanvraagtype}", "aanvraaggegevens": {{% json_summary %}}, "taal": "nld"}}'
+        f' "type": {json.dumps(productaanvraagtype)}, "aanvraaggegevens": {{% json_summary %}}, "taal": "nld"}}'
     )
     registration = {
         "backend": "objects_api",

@@ -4,6 +4,7 @@ from dataclasses import replace
 from datetime import UTC
 from datetime import datetime
 from xml.etree import ElementTree as ET  # nosec B405  # parses an envelope built here
+from xml.sax.saxutils import quoteattr
 
 from podiumd_tests.zaakbrug import ZKN
 from podiumd_tests.zaakbrug import Document
@@ -28,7 +29,7 @@ from podiumd_tests.zaakbrug import zaak_identificatie
 
 def test_zds_answer_gives_the_zaak_identificatie():
     answer = (
-        f'<Envelope><Body><x:Du02 xmlns:x="{ZKN}"><x:zaak><x:identificatie>ZK2026-00001</x:identificatie>'
+        f"<Envelope><Body><x:Du02 xmlns:x={quoteattr(ZKN)}><x:zaak><x:identificatie>ZK2026-00001</x:identificatie>"
         "</x:zaak></x:Du02></Body></Envelope>"
     )
     assert zaak_identificatie(answer) == "ZK2026-00001"
@@ -75,7 +76,7 @@ def test_status_and_document_envelopes():
 
 
 def test_checked_out_id_and_fault():
-    answer = f'<Envelope><Body><x:Du02 xmlns:x="{ZKN}"><x:checkedOutId>C-9</x:checkedOutId></x:Du02></Body></Envelope>'
+    answer = f"<Envelope><Body><x:Du02 xmlns:x={quoteattr(ZKN)}><x:checkedOutId>C-9</x:checkedOutId></x:Du02></Body></Envelope>"
     assert checked_out_id(answer) == "C-9"
     assert checked_out_id("<Envelope/>") is None
     fault = '<e:Envelope xmlns:e="http://schemas.xmlsoap.org/soap/envelope/"><e:Body><e:Fault/></e:Body></e:Envelope>'
@@ -93,6 +94,6 @@ def test_document_envelopes_are_xml_with_the_zaak_and_the_document():
     details = ET.fromstring(geef_zaak_details(now, "Z-1"))  # noqa: S314  # nosec B314  # built here
     assert details.findtext(f".//{{{ZKN}}}gelijk/{{{ZKN}}}identificatie") == "Z-1"
     assert "genereerDocumentidentificatie" in genereer_document_id(now)
-    answer = f'<E><x:Du02 xmlns:x="{ZKN}"><x:document><x:identificatie>D-9</x:identificatie></x:document></x:Du02></E>'
+    answer = f"<E><x:Du02 xmlns:x={quoteattr(ZKN)}><x:document><x:identificatie>D-9</x:identificatie></x:document></x:Du02></E>"
     assert document_identificatie(answer) == "D-9"
     assert soap_action("creeerZaak_ZakLk01")["SOAPAction"] == f"{ZKN}/creeerZaak_ZakLk01"

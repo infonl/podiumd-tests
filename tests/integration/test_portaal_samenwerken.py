@@ -18,6 +18,7 @@ from playwright.sync_api import expect
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.bootstrap.steps import OI_BEGELEIDER
 from podiumd_tests.mailpit import forget_mails
+from podiumd_tests.mailpit import quoted
 from podiumd_tests.openinwoner import LOGINS
 from podiumd_tests.openinwoner import begeleider_login
 from podiumd_tests.openinwoner import portal_login
@@ -53,8 +54,8 @@ def _prepare(
     reset_begeleider(podiumd_env)
     registry.add("plans and contacts of the begeleider", lambda: reset_begeleider(podiumd_env))
     # Open Inwoner mails both sides about the contact request.
-    forget_mails(podiumd_env, registry, f'to:"{OI_BEGELEIDER.params["email"]}"')
-    forget_mails(podiumd_env, registry, f'to:"{user_email(identity.username)}" subject:"contactpersoon"')
+    forget_mails(podiumd_env, registry, f"to:{quoted(str(OI_BEGELEIDER.params['email']))}")
+    forget_mails(podiumd_env, registry, f'to:{quoted(user_email(identity.username))} subject:"contactpersoon"')
     # The first login makes the identity's account, which the begeleider finds by its e-mail address.
     portal_login(page, podiumd_env, method, identity, CONTACTS)
     page.context.clear_cookies()

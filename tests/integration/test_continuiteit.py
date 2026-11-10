@@ -398,7 +398,9 @@ def test_portal_mail_waits_in_the_queue_during_a_mail_outage(
     vraag = registry.tagged("portaal-mailstoring")
     clean_up_klantcontacten(openklant, registry, QUESTION_SUBJECT, vraag)
     registry.add(f"queued mails about {vraag}", lambda: mail_queue(podiumd_env, "openinwoner", "delete", vraag))
-    forget_mails(podiumd_env, registry, f'"{vraag}"')
+    # mailpit.quoted would be this module's 51st imported name (WPS203).
+    about_vraag = f'"{vraag}"'  # noqa: B907  # Mailpit search phrase
+    forget_mails(podiumd_env, registry, about_vraag)
     with component_down(podiumd_env, http, "mailpit"):
         ask_anonymously(page, podiumd_env, QUESTION_SUBJECT, vraag, f"{vraag}@example.invalid")
         expect(
@@ -414,7 +416,7 @@ def test_portal_mail_waits_in_the_queue_during_a_mail_outage(
         assert "Verzonden" not in statuses
     mail_queue(podiumd_env, "openinwoner", "retry", vraag)
     wait_until(
-        lambda: mailpit.get("search", {"query": f'"{vraag}"'}).get("messages"),
+        lambda: mailpit.get("search", {"query": about_vraag}).get("messages"),
         timeout=REGISTRATION_TIMEOUT,
         description=f"mail about {vraag} in Mailpit",
     )
@@ -470,7 +472,7 @@ def test_ita_mail_is_sent_after_a_mail_outage(
     klantcontact = make_klantcontact(openklant, registry)
     taak = make_internetaak(openklant, registry, klantcontact, [])
     clean_up_logboek(objecten, registry, objecttype_url(podiumd_env, "Activiteitenlog"), str(taak["uuid"]))
-    forget_mails(podiumd_env, registry, f'to:"{adres}"')
+    forget_mails(podiumd_env, registry, f'to:"{adres}"')  # noqa: B907  # Mailpit search; see about_vraag
     expect_status(ita.post(f"{ita_url}/api/internetaken/{taak['uuid']}/aan-mij-toewijzen", json={}), 200, 201, 204)
     with component_down(podiumd_env, http, "mailpit"):
         forward = ita.post(f"{ita_url}/api/internetaken/{taak['uuid']}/forward", json={"groep": groep})

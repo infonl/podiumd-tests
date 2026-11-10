@@ -8,11 +8,11 @@ usage() {
 Usage: run_python_checks [-h|--help]
 
 Runs ruff check, shellcheck, actionlint, ruff format --check, flake8
-(wemake-python-styleguide), yamllint, jscpd, pymarkdown, vulture, deptry, bandit,
-pylint, basedpyright and pytest (unit_tests/ only, with coverage threshold from
-pyproject.toml), fastest first, stopping at the first failure. Then pip-audit
-on the packages of .venv, which only warns. Upgrades the dev tools in
-.venv first when last upgraded over a day ago.
+(wemake-python-styleguide and plugins), yamllint, jscpd, pymarkdown, vulture,
+deptry, bandit, pylint, basedpyright and pytest (unit_tests/ only, with coverage
+threshold from pyproject.toml), fastest first, stopping at the first failure.
+Then pip-audit on the packages of .venv, which only warns. Upgrades the dev
+tools in .venv first when last upgraded over a day ago.
 EOF
 }
 
@@ -73,8 +73,8 @@ actionlint
 echo "=== ruff format --check ==="
 ruff format --check .
 
-# Settings in pyproject.toml [tool.flake8] (flake8-pyproject): only the WPS rules ruff does not have.
-echo "=== flake8 (wemake-python-styleguide) ==="
+# Settings in pyproject.toml [tool.flake8] (flake8-pyproject): only the rules ruff does not have.
+echo "=== flake8 (wemake-python-styleguide, plugins) ==="
 flake8 src tests unit_tests infra
 
 # Settings in .yamllint.
