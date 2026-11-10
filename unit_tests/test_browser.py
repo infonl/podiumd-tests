@@ -51,23 +51,29 @@ def test_context_args_skip_certificate_checks_only_for_a_local_ca(page_env):
     assert context_args(page_env(ca_bundle={"configmap": "ca", "key": "ca.pem"})) == {"ignore_https_errors": True}
 
 
+class FakeChromium:
+    """Playwright's chromium: records its calls in calls; the new context's page is page."""
+
+    def __init__(self, page, calls):
+        self.page: object = page
+        self.calls: list[object] = calls
+
+    def launch(self, args):
+        self.calls.append(("launch", args))
+        return self
+
+    def new_context(self, **kwargs):
+        self.calls.append(("context", kwargs))
+        return type("C", (), {"new_page": lambda _s: self.page})()
+
+    def close(self):
+        self.calls.append("close")
+
+
 def test_headless_page_guards_navigation_and_closes_the_browser(monkeypatch, page_env, fake_page):
     page = fake_page()
     calls: list[object] = []
-
-    class Chromium:
-        def launch(self, args):
-            calls.append(("launch", args))
-            return self
-
-        def new_context(self, **kwargs):  # noqa: PLR6301  # fakes Browser.new_context
-            calls.append(("context", kwargs))
-            return type("C", (), {"new_page": lambda _s: page})()
-
-        def close(self):  # noqa: PLR6301  # fakes Browser.close
-            calls.append("close")
-
-    playwright = type("P", (), {"chromium": Chromium()})()
+    playwright = type("P", (), {"chromium": FakeChromium(page, calls)})()
     monkeypatch.setattr(browser, "sync_playwright", lambda: nullcontext(playwright))
     with headless_page(page_env()) as opened:
         assert opened is page
@@ -128,7 +134,8 @@ def test_wcag_violations_injects_axe_and_runs_the_aa_rules(monkeypatch, fake_pag
     page = fake_page(evaluated=[None, {"violations": [violation]}])
     assert wcag_violations(page) == [violation]
     assert page.actions[0] == ("evaluate", "/* axe */", None)
-    assert page.actions[1][2]["runOnly"]["values"] == accessibility.WCAG21_AA
+    options = page.actions[1][2]
+    assert options["runOnly"]["values"] == accessibility.WCAG21_AA
     assert describe_violation(violation) == "color-contrast (serious, 2 elements): Contrast"
 
 
@@ -188,7 +195,7 @@ def test_goto_and_reload_are_repeated_after_a_network_change_and_warn(fake_page)
 def test_other_errors_and_a_third_network_change_are_raised(fake_page):
     with pytest.raises(PlaywrightError, match="ERR_CONNECTION_REFUSED"):
         guard_navigation(fake_page(errors=["net::ERR_CONNECTION_REFUSED"])).goto("https://x.test/")
-    fake = fake_page(errors=[NETWORK_CHANGED] * 3)
+    fake = fake_page(errors=[NETWORK_CHANGED for _ in range(3)])
     with pytest.warns(UserWarning, match="retry 2 of 2"), pytest.raises(PlaywrightError):
         retry_network_change(fake, lambda: fake.goto("https://x.test/"), "goto")
     assert [a[0] for a in fake.actions].count("pause") == 2

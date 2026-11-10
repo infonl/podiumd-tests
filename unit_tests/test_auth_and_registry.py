@@ -157,6 +157,9 @@ def test_password_grant_sends_the_client_secret(fake_http):
 LOGIN_PAGE = '<form id="kc-form-login" action="https://kc.test/login?a=1&amp;b=2" method="post">'
 
 
+type _Post = tuple[str, dict[str, str]]
+
+
 class FakeBrowser:
     """A session that answers GET and each POST with the next page."""
 
@@ -164,7 +167,7 @@ class FakeBrowser:
         self.pages: list[requests.Response] = [
             response_factory(body=page.encode(), url=f"{KC}/page{i}") for i, page in enumerate(pages)
         ]
-        self.posts: list[tuple[str, dict[str, str]]] = []
+        self.posts: list[_Post] = []
 
     def get(self, _url):
         return self.pages.pop(0)

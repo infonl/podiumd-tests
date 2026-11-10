@@ -1,10 +1,9 @@
 """Unit tests for the ZaakBrug ZDS messages."""
 
-import xml.etree.ElementTree as ET  # nosec B405  # parses an envelope built here
-
 from dataclasses import replace
 from datetime import UTC
 from datetime import datetime
+from xml.etree import ElementTree as ET  # nosec B405  # parses an envelope built here
 
 from podiumd_tests.zaakbrug import ZKN
 from podiumd_tests.zaakbrug import ZaakVelden
@@ -53,7 +52,8 @@ def test_update_zaak_carries_the_old_and_the_new_zaak_in_stuf_order():
     objects = ET.fromstring(envelope).findall(f".//{{{ZKN}}}object")  # noqa: S314  # nosec B314  # built here
     assert [o.findtext(f"{{{ZKN}}}verlenging/{{{ZKN}}}duur") for o in objects] == ["5", "10"]
     tags = [child.tag.split("}")[1] for child in objects[0]]
-    assert tags.index("kenmerk") < tags.index("startdatum") < tags.index("verlenging") < tags.index("isVan")
+    positions = [tags.index(tag) for tag in ("kenmerk", "startdatum", "verlenging", "isVan")]
+    assert positions == sorted(positions)
     assert ZaakVelden().kenmerk_xml() == ZaakVelden().verlenging_xml() == ""
 
 

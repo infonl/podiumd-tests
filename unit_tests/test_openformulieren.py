@@ -3,6 +3,8 @@
 import json
 import re
 
+from typing import TYPE_CHECKING
+
 import pytest
 import requests
 
@@ -21,6 +23,9 @@ from podiumd_tests.openformulieren import tagged_forms
 from podiumd_tests.openformulieren import wait_for_registration
 from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.wait import Clock
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 OF = "https://of.example.test"
 
@@ -63,6 +68,19 @@ def test_submit_walks_the_sdk_sequence_and_returns_the_done_status(fake_http, en
     assert registry.cleanup() == ["submission s1"]
 
 
+class Throttled:
+    """fake_http's answer table; _complete answers the next of completions."""
+
+    def __init__(self, completions, table):
+        self.completions: Iterator[tuple[int, object]] = completions
+        self.table: dict[str, object] = table
+
+    def get(self, key, default=None):
+        if key == "POST /api/v2/submissions/s1/_complete":
+            return next(self.completions)
+        return self.table.get(key, default)
+
+
 def test_submit_waits_out_the_completion_throttle(fake_http, env, fake_runner, monkeypatch):
     snippet_answers(fake_runner, None)
     monkeypatch.setattr(wait, "Clock", lambda: Clock(sleep=lambda _seconds: None))
@@ -70,13 +88,7 @@ def test_submit_waits_out_the_completion_throttle(fake_http, env, fake_runner, m
 
     table = answers({"status": "done", "result": "success", "publicReference": "ZAAK-1"})
 
-    class Throttled:
-        """fake_http's answer table; _complete answers 429 first."""
-
-        def get(self, key, default=None):  # noqa: PLR6301  # fakes the answer table's get
-            return next(completions) if key == "POST /api/v2/submissions/s1/_complete" else table.get(key, default)
-
-    sent = fake_http(Throttled())
+    sent = fake_http(Throttled(completions, table))
     status = submit(
         env, requests.Session(), ResourceRegistry("ptest-abc", keep=True), "klacht", {}, timeout=5, registers=False
     )
@@ -150,7 +162,7 @@ def test_registered_zaak_and_its_cleanup(fake_http, env, fake_runner, found, err
     zaak = {"url": "https://oz.test/zaken/api/v1/zaken/1"}
     sent = fake_http(
         {
-            "GET /zaken/api/v1/zaken": (200, [zaak] * found),
+            "GET /zaken/api/v1/zaken": (200, [zaak for _ in range(found)]),
             "GET /zaken/api/v1/zaakinformatieobjecten": (200, []),
             "DELETE /zaken/api/v1/zaken/1": (204, None),
         }

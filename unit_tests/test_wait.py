@@ -12,7 +12,7 @@ from podiumd_tests.wait import wait_until
 
 class FakeClock:
     def __init__(self):
-        self.now: float = 0.0
+        self.now: float = float(0)
 
     def __call__(self):
         return self.now

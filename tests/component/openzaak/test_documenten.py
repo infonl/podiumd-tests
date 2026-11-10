@@ -193,5 +193,5 @@ def test_large_documents_with_the_same_name_keep_their_own_content(
     for document in documents:
         download = openzaak.http.get(f"{document['url']}/download", headers={**openzaak.headers(), "Accept": "*/*"})
         stored.append(download.content if download.status_code == HTTPStatus.OK else b"")
-    assert unlocked == [HTTPStatus.NO_CONTENT] * SAME_NAME_UPLOADS
-    assert [s == c for s, c in zip(stored, contents, strict=True)] == [True] * SAME_NAME_UPLOADS
+    assert unlocked == [HTTPStatus.NO_CONTENT for _ in range(SAME_NAME_UPLOADS)]
+    assert [s == c for s, c in zip(stored, contents, strict=True)] == [True for _ in range(SAME_NAME_UPLOADS)]

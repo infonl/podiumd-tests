@@ -39,7 +39,7 @@ def test_violations_name_each_exceeded_limit():
     stats = read_stats(CSV)["oz_zaken"]
     assert violations(stats, Threshold(1500, 0.01, 1.5, 200)) == ["p95 1600 ms > 1500 ms", "2/100 failed > 1%"]
     assert violations(stats, Threshold(2000, 0.05, 1.5, 200)) == []
-    assert violations(EndpointStats(0, 0, 0.0), Threshold(2000, 0.05, 1.5, 200)) == ["no requests"]
+    assert violations(EndpointStats(0, 0, 0), Threshold(2000, 0.05, 1.5, 200)) == ["no requests"]
 
 
 def perf_run(root, name, p95, settings='{"users": "5"}'):

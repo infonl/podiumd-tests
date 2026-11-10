@@ -174,8 +174,8 @@ class FakePage:  # pylint: disable=too-many-instance-attributes  # one per Page 
         self.url: str = url
         self.errors: list[str] = list(errors)
         self.texts: dict[str, str] = texts or {}
-        self.landings: list[str] = list(landings)
-        self.evaluated: list[object] = list(evaluated)
+        self._landings: list[str] = list(landings)
+        self._evaluated: list[object] = list(evaluated)
         self.actions: list[tuple[object, ...]] = []
         self.waits: list[object] = []
         self.context: SimpleNamespace = SimpleNamespace(cookies=lambda: list(cookies))
@@ -203,15 +203,15 @@ class FakePage:  # pylint: disable=too-many-instance-attributes  # one per Page 
 
     def wait_for_url(self, target):
         self.waits.append(target)
-        if self.landings:
-            self.url = self.landings.pop(0)
+        if self._landings:
+            self.url = self._landings.pop(0)
 
     def wait_for_timeout(self, ms):
         self.actions.append(("pause", ms))
 
     def evaluate(self, script, arg=None):
         self.actions.append(("evaluate", script, arg))
-        return self.evaluated.pop(0) if self.evaluated else None
+        return self._evaluated.pop(0) if self._evaluated else None
 
     @contextmanager
     def expect_navigation(self):  # noqa: PLR6301  # fakes Page.expect_navigation

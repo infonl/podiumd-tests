@@ -388,7 +388,10 @@ def test_contactverzoek_is_found_by_its_klantcontactnummer(
     expect_status(ita.get(f"{by_nummer}/{UNKNOWN_NUMMER}"), HTTPStatus.NOT_FOUND)
 
 
-def _guarded_calls(taak: JsonObject) -> dict[str, tuple[str, dict[str, object]]]:
+type _Call = tuple[str, dict[str, object]]
+
+
+def _guarded_calls(taak: JsonObject) -> dict[str, _Call]:
     """ITA's writes on one contactverzoek: path and the smallest body its model accepts."""
     uuid = str(taak["uuid"])
     klantcontact = str(section(taak, "aanleidinggevendKlantcontact").get("uuid"))

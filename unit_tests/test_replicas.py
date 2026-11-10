@@ -8,12 +8,14 @@ from podiumd_tests.replicas import HOLD_ENV
 from podiumd_tests.replicas import several_replicas
 from podiumd_tests.replicas import switches_replicas
 
+type _Call = tuple[list[str], str | None]
+
 
 class HoldRecorder:
     """Records each command with the lock hold it saw in the process environment."""
 
     def __init__(self):
-        self.calls: list[tuple[list[str], str | None]] = []
+        self.calls: list[_Call] = []
 
     def __call__(self, args, _timeout, _stdin=None):
         self.calls.append((list(args), os.environ.get(HOLD_ENV)))

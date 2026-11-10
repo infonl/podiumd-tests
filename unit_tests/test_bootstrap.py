@@ -529,16 +529,16 @@ def test_record_mode_hands_the_stored_record_to_apply_and_remove(env_factory, fa
     assert snippet_params(fake_runner.stdins[-1]) == {"kanalen": {}, "action": "remove", "record": earlier}
 
 
+class BrokenStep(FakeStep):
+    @override
+    def remove(self, _ctx):
+        raise KubeError(["kubectl", "exec"], "DisallowedHost: example.com")
+
+
 def test_a_failing_step_does_not_stop_the_others(env_factory, fake_runner, profile_factory):
     env = cluster_env(env_factory, fake_runner, profile_factory)
-
-    class Broken(FakeStep):
-        @override
-        def remove(self, _ctx):
-            raise KubeError(["kubectl", "exec"], "DisallowedHost: example.com")
-
     later = FakeStep("later", present=True)
-    outcomes = unbootstrap(env, [later, Broken("broken", present=True)])
+    outcomes = unbootstrap(env, [later, BrokenStep("broken", present=True)])
     assert [(o.step, o.action) for o in outcomes] == [("broken", "failed"), ("later", "removed")]
     assert "DisallowedHost" in outcomes[0].detail
     assert failed(outcomes)
@@ -607,11 +607,10 @@ def test_openinwoner_partijen_remove_deletes_the_partijen_of_the_test_identities
     searched = [r.url.split("ObjectId=")[1] for r in sent if "partijIdentificatorObjectId" in r.url]
     assert searched == ["000037178601", "999990019", "999993653", "68750110"]
     # The vestiging's sub-identificator goes before the kvk_nummer it refers to.
+    deletes = ["/partij-identificatoren/i2", "/partij-identificatoren/i1", "/partijen/p1"]
     assert [r.url.removeprefix(OK + api) for r in sent if r.method == "DELETE"] == [
-        "/partij-identificatoren/i2",
-        "/partij-identificatoren/i1",
-        "/partijen/p1",
-    ] * 4
+        path for _ in range(4) for path in deletes
+    ]
 
 
 def test_snippet_notes_reach_the_outcome(env_factory, fake_runner, profile_factory):

@@ -44,9 +44,12 @@ def test_run_snippet_sends_code_and_params_over_stdin(fake_runner):
     assert json.dumps({"client_id": "s3cret-client"}) in code
 
 
+type _Call = tuple[str, dict[str, object]]
+
+
 def test_run_snippets_runs_them_in_order_in_one_shell(fake_runner):
     fake_runner.answers["exec -i deploy/openzaak"] = (0, "chatter\nPTEST_VALUE=1\nPTEST_VALUE=[2]\n")
-    calls: list[tuple[str, dict[str, object]]] = [
+    calls: list[_Call] = [
         ("jwt_secret", {"client_id": "a"}),
         ("token_auth", {"identifier": "b"}),
     ]

@@ -227,7 +227,7 @@ def test_kiss_content_is_synced_after_create_and_delete(monkeypatch, snippets, p
     kind("vac").create(env, range(3), 1)
     kind("vac").delete_all(env)
     assert [(p["action"], len(p["items"])) for _, p in ran] == [("create", 3), ("delete", 0)]
-    assert jobs == [("cron-vac", f"{VOLUME_TAG}-vac-sync")] * 2
+    assert jobs == [("cron-vac", f"{VOLUME_TAG}-vac-sync") for _ in range(2)]
     assert kind("vac").count(env) == 0
 
 

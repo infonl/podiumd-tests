@@ -94,7 +94,8 @@ def test_reference_problems_name_missing_rows_and_unset_fields(page_env, monkeyp
         "objects_api.ObjectsAPIGroupConfig.objects_service: unset in 1 of 2 rows",
         "zgw_consumers.Service api_type=ztc: no rows",
     ]
-    assert env.snippets[0][2]["references"][2] == {
+    references = env.snippets[0][2]["references"]
+    assert references[2] == {
         "model": "zgw_consumers.Service",
         "field": "",
         "where": {"api_type": "ztc"},

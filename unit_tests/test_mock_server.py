@@ -1,7 +1,8 @@
 """Unit tests for the mock server step and reading what it received."""
 
-import importlib.util
 import json
+
+from importlib import util as importlib_util
 
 from podiumd_tests import mock_server
 from podiumd_tests.bootstrap.runner import Context
@@ -91,10 +92,10 @@ def test_callback_skips_a_line_cut_short(env_factory, fake_runner):
 
 def mock_server_handler(path):
     """A mock server Handler for a path, without a socket: enough for its status logic."""
-    spec = importlib.util.spec_from_file_location("server", mock_server.INFRA / "server.py")
+    spec = importlib_util.spec_from_file_location("server", mock_server.INFRA / "server.py")
     assert spec
     assert spec.loader
-    module = importlib.util.module_from_spec(spec)
+    module = importlib_util.module_from_spec(spec)
     spec.loader.exec_module(module)
     handler = module.Handler.__new__(module.Handler)
     handler.path = path

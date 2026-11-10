@@ -40,11 +40,14 @@ def body(sent) -> JsonObject:
     return json.loads(sent.body)
 
 
-def results(*items: JsonObject) -> tuple[int, dict[str, object]]:
+type _Answer = tuple[int, dict[str, object]]
+
+
+def results(*items: JsonObject) -> _Answer:
     return 200, {"results": list(items), "next": None}
 
 
-def created(path: str) -> dict[str, tuple[int, dict[str, object]]]:
+def created(path: str) -> dict[str, _Answer]:
     """POST on path answers an object at path/new; DELETE of it 204."""
     return {
         f"POST /v1/{path}": (201, {"url": f"{API}/{path}/new", "uuid": "u-new"}),

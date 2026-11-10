@@ -59,8 +59,9 @@ OGONE, WORLDLINE = "ogone-legacy", "worldline"
 OGONE_REMOVED = (4,)
 MERCHANTS = {OGONE: OGONE_MERCHANT, WORLDLINE: WORLDLINE_MERCHANT}
 STEPS = {OGONE: "openformulieren-ogone", WORLDLINE: "openformulieren-worldline"}
+type _Report = tuple[str, str]
 # What the provider reports per outcome: Ogone's return URL and STATUS, Worldline's payment status.
-OUTCOMES: dict[str, dict[str, tuple[str, str]]] = {
+OUTCOMES: dict[str, dict[str, _Report]] = {
     OGONE: {
         "paid": ("accept", "9"),
         "uncertain": ("exception", "92"),
@@ -96,7 +97,7 @@ class Payer:
         )
         # The zaak of the pre-registration, deleted with the submission.
         self.zaak: JsonObject = registered_zaak(env, openzaak, registry, self.status)
-        self.headers: dict[str, str] = form_and_headers(self.http, env.profile.urls["openformulieren"], slug)[1]
+        self._headers: dict[str, str] = form_and_headers(self.http, env.profile.urls["openformulieren"], slug)[1]
 
     @property
     def secret(self) -> str:
@@ -110,7 +111,7 @@ class Payer:
 
     def request(self) -> JsonObject:
         """A new payment request: {type, url, data}, where Open Formulieren sends the browser."""
-        return start_payment(self.http, str(self.status["paymentUrl"]), self.headers)
+        return start_payment(self.http, str(self.status["paymentUrl"]), self._headers)
 
     def pay(self, outcome: str) -> tuple[str, dict[str, str]]:
         """Pay; the provider reports the outcome. The payment's order reference, and what the form is told."""

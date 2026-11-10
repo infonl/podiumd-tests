@@ -7,12 +7,16 @@ from podiumd_tests import redis
 
 if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
+    from podiumd_tests.json_data import JsonObject
+
+
+type _Call = tuple[tuple[object, ...], dict[str, object]]
 
 
 class FakeKube:
     def __init__(self, out):
         self.out: str = out
-        self.calls: list[tuple[tuple[object, ...], dict[str, object]]] = []
+        self.calls: list[_Call] = []
 
     def run(self, *args, **kwargs):
         self.calls.append((args, kwargs))
@@ -21,7 +25,7 @@ class FakeKube:
 
 class FakeEnv:
     def __init__(self, objects, out=""):
-        self.objects: dict[str, list[dict[str, object]]] = objects
+        self.objects: dict[str, list[JsonObject]] = objects
         self.kube: FakeKube = FakeKube(out)
 
     def items(self, kind):
