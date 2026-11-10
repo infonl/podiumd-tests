@@ -182,7 +182,7 @@ rights (SCC Twente), run the container image from a machine that has access.
 ## Development
 
 ```bash
-./run_python_checks   # ruff, shellcheck, actionlint, flake8 (wemake), yamllint, jscpd, pymarkdown, vulture, bandit, pylint, basedpyright, pytest, pip-audit
+./run_python_checks   # ruff, shellcheck, actionlint, flake8 (wemake), yamllint, jscpd, pymarkdown, vulture, deptry, bandit, pylint, basedpyright, pytest, pip-audit
 git config core.hooksPath .githooks   # once per clone: commits run the checks first
 ```
 

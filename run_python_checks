@@ -8,8 +8,8 @@ usage() {
 Usage: run_python_checks [-h|--help]
 
 Runs ruff check, shellcheck, actionlint, ruff format --check, flake8
-(wemake-python-styleguide), yamllint, jscpd, pymarkdown, vulture, bandit, pylint,
-basedpyright and pytest (unit_tests/ only, with coverage threshold from
+(wemake-python-styleguide), yamllint, jscpd, pymarkdown, vulture, deptry, bandit,
+pylint, basedpyright and pytest (unit_tests/ only, with coverage threshold from
 pyproject.toml), fastest first, stopping at the first failure. Then pip-audit
 on the packages of .venv, which only warns. Upgrades the dev tools in
 .venv first when last upgraded over a day ago.
@@ -126,6 +126,9 @@ PY
 
 echo "=== vulture (dead code) ==="
 vulture "$SRC" tests "$typeddict_whitelist"
+
+echo "=== deptry (declared and imported dependencies) ==="
+deptry src tests
 
 # Test directories excluded: every assert would flag B101.
 echo "=== bandit (security) ==="

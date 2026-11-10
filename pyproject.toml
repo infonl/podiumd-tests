@@ -19,6 +19,8 @@ dependencies = [
     "PyYAML",            # environment profiles, perf.yaml
     "locust",            # perf tier, replaces k6
     "axe-playwright-python", # ships axe-core for the WCAG scans (TA 172)
+    "playwright",        # imported directly; pytest-playwright brings it too
+    "gevent",            # imported by the gateway locustfile; locust brings it too
 ]
 
 [project.optional-dependencies]
@@ -32,6 +34,7 @@ dev = [
     "flake8-pyproject",  # flake8 reads [tool.flake8] in pyproject.toml
     "wemake-python-styleguide",  # flake8 plugin, its own pinned flake8
     "pip-audit",         # known vulnerabilities in the .venv packages
+    "deptry",            # dependencies declared and imported agree
     "yamllint",
     "actionlint-py",     # GitHub workflow lint, with shellcheck on run: steps
     "pytest",
@@ -302,6 +305,16 @@ sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 #   - __call__ of a callable Protocol (process.Runner): called through the protocol.
 #   - wait_until, tagged: library API without a caller in tests/.
 #   - Locust's hooks in perf/*locustfile.py (wait_time, @task, @events listeners): called by Locust.
+[tool.deptry]
+known_first_party = ["podiumd_tests"]
+# Django snippets: their imports exist only in the component images.
+extend_exclude = ["src/podiumd_tests/snippets"]
+optional_dependencies_dev_groups = ["dev"]
+
+[tool.deptry.per_rule_ignores]
+# Used but never imported: pytest loads the plugins; accessibility.py reads axe.min.js from the package's files.
+DEP002 = ["pytest-playwright", "pytest-xdist", "pytest-html", "axe-playwright-python"]
+
 [tool.vulture]
 # Django snippets: run() is called inside the component, not from here.
 exclude = ["*/snippets/*.py"]

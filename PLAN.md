@@ -324,7 +324,7 @@ Why this layout:
 5. `yamllint --strict` on the tracked YAML files (`.yamllint`)
 6. `jscpd` (weak mode, `--min-lines 4 --min-tokens 35`, the same ignore pattern)
 7. `pymarkdown` (`-d md013,md014`, `plugins.md024.siblings_only`)
-8. `vulture` (with the generated TypedDict whitelist)
+8. `vulture` (with the generated TypedDict whitelist), then `deptry src tests` (`[tool.deptry]`)
 9. `bandit -c pyproject.toml`
 10. `pylint src`, then `pylint tests unit_tests` with the same `TESTS_PYLINT_DISABLE` list
 11. `basedpyright` (`typeCheckingMode = "strict"`, relaxed under the test directories)
