@@ -33,7 +33,7 @@ def test_missing_context_fails_in_host_header_mode(profile_factory, fake_runner,
     result = statuses(checks)
     assert result["kube context"] == "fail"
     assert result["secret pw"] == "skip"
-    assert doctor.failed(checks)
+    assert doctor.has_failure(checks)
 
 
 def test_missing_context_only_warns_in_direct_mode(profile_factory, fake_runner, env_factory):
@@ -42,7 +42,7 @@ def test_missing_context_only_warns_in_direct_mode(profile_factory, fake_runner,
     result = statuses(checks)
     assert result["kube context"] == "warn"
     assert result["capabilities"] == "ok"
-    assert not doctor.failed(checks)
+    assert not doctor.has_failure(checks)
 
 
 def test_missing_kubectl_stops_early(env_factory):
@@ -67,7 +67,7 @@ def test_healthy_cluster_without_urls(profile_factory, fake_runner, env_factory)
     assert result["lock"] == "ok"
     assert result["workloads podiumd"] == "warn"
     assert "StatefulSet/redis 1/2" in next(c.detail for c in checks if c.name == "workloads podiumd")
-    assert not doctor.failed(checks)
+    assert not doctor.has_failure(checks)
 
 
 def test_smoke_only_profile_skips_the_lock(profile_factory, fake_runner, env_factory):
@@ -78,7 +78,7 @@ def test_smoke_only_profile_skips_the_lock(profile_factory, fake_runner, env_fac
 
 
 def test_format_shows_hints_for_failures_only():
-    text = doctor.format_checks(
+    text = doctor.checklist(
         [
             doctor.Check("kube API", "fail", "unreachable", "cluster stopped?"),
             doctor.Check("profile", "ok", "envs/x.yaml", "unused hint"),
@@ -96,7 +96,7 @@ def test_resolve_hosts_stops_waiting_at_the_deadline():
             raise socket.gaierror(-2, "Name or service not known")
 
     start = time.monotonic()
-    result = doctor.resolve_hosts(["ok.test", "unknown.test", "slow.test"], resolve, timeout=0.2)
+    result = doctor.resolve_all(["ok.test", "unknown.test", "slow.test"], resolve, timeout=0.2)
     assert time.monotonic() - start < 1
     assert result["ok.test"] == ""
     assert "Name or service not known" in result["unknown.test"]

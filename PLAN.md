@@ -320,7 +320,7 @@ Why this layout:
 1. `ruff check`
 2. `shellcheck`, then `actionlint` on `.github/workflows/`
 3. `ruff format --check`
-4. `flake8` with wemake-python-styleguide and plugins (`[tool.flake8]`: only the rules ruff lacks: WPS, bugbear B907 and B042, CCE001 class member order)
+4. `flake8` with wemake-python-styleguide and plugins (`[tool.flake8]`: only the rules ruff lacks: WPS, bugbear B907 and B042, CCE001 class member order, FNE005 and FNE008 function names)
 5. `yamllint --strict` on the tracked YAML files (`.yamllint`)
 6. `jscpd` (weak mode, `--min-lines 4 --min-tokens 35`, the same ignore pattern)
 7. `pymarkdown` (`-d md013,md014`, `plugins.md024.siblings_only`)

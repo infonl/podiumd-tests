@@ -11,6 +11,7 @@ from podiumd_tests.openinwoner import LOGINS
 from podiumd_tests.openinwoner import ask_anonymously
 from podiumd_tests.openinwoner import begeleider_login
 from podiumd_tests.openinwoner import count_accounts
+from podiumd_tests.openinwoner import is_virus_scan_enabled
 from podiumd_tests.openinwoner import kvk_api_root
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.openinwoner import reset_begeleider
@@ -19,7 +20,6 @@ from podiumd_tests.openinwoner import set_account
 from podiumd_tests.openinwoner import set_site_configuration
 from podiumd_tests.openinwoner import solve_captcha
 from podiumd_tests.openinwoner import upload_document
-from podiumd_tests.openinwoner import virus_scan_enabled
 
 PORTAL = "https://openinwoner.example.test"
 BANNER = "button:Alles weigeren"
@@ -102,7 +102,7 @@ def test_snippet_helpers_pass_their_parameters(env):
     assert set_account(env, "999", phonenumber="06") == {"old": 1}
     assert set_site_configuration(env, name="x") == {"old": 1}
     assert search_data(env, "read", "ptest") == {"old": 1}
-    assert virus_scan_enabled(env)
+    assert is_virus_scan_enabled(env)
     assert kvk_api_root(env) == "{'old': 1}"
     assert [(d, n) for d, n, _ in env.snippets] == [
         ("openinwoner", "oi_begeleider_reset"),

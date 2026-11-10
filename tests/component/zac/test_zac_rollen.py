@@ -23,8 +23,8 @@ from podiumd_tests.pabc import mapped_application_roles
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.workloads import skip_older_than
+from podiumd_tests.zac import is_zaak_listed
 from podiumd_tests.zac import wait_in_werkvoorraad
-from podiumd_tests.zac import zaak_listed
 from podiumd_tests.zac import zac_session
 
 if TYPE_CHECKING:
@@ -214,8 +214,8 @@ def test_search_lists_only_zaken_of_zaaktypen_with_a_role(
     for identificatie in (bpmn_zaak["identificatie"], other["identificatie"]):
         wait_in_werkvoorraad(zac, urls["zac"], str(identificatie))
     raadpleger = zac_as("raadpleger")
-    assert zaak_listed(raadpleger, urls["zac"], str(bpmn_zaak["identificatie"]))
-    assert not zaak_listed(raadpleger, urls["zac"], str(other["identificatie"]))
+    assert is_zaak_listed(raadpleger, urls["zac"], str(bpmn_zaak["identificatie"]))
+    assert not is_zaak_listed(raadpleger, urls["zac"], str(other["identificatie"]))
 
 
 @pytest.mark.source(POLICIES, "A user without a base role cannot use ZAC, whatever plus roles it has (PR #7232).")

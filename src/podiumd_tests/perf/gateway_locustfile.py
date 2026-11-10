@@ -39,7 +39,7 @@ def _arguments(parser: ArgumentParser) -> None:
 
 
 @events.init.add_listener
-def _environment(environment: LocustEnvironment, **_kwargs: object) -> None:
+def _on_init(environment: LocustEnvironment, **_kwargs: object) -> None:
     options = environment.parsed_options
     GatewayUser.env_under_test = Environment(load_profile(options.podiumd_env, default_envs_dir()))
     GatewayUser.scenario = options.podiumd_scenario

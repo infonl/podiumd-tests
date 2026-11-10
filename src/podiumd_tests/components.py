@@ -101,19 +101,19 @@ DJANGO_APPS = (
 ZGW_CONSUMER_APPS = (*DJANGO_APPS, "openbeheer", "referentielijsten", "openvtb")
 
 
-def _component_for_label(label: str) -> str | None:
+def _label_component(label: str) -> str | None:
     for name, component in COMPONENTS.items():
         if label in component.host_aliases:
             return name
     return None
 
 
-def component_for_host(host: str) -> str | None:
+def component_for_host(hostname: str) -> str | None:
     """Component of a hostname: <app>.<env>.<domain>, <stage>-<app>.<domain> or <app>.local."""
-    label = host.split(".", 1)[0]
-    found = _component_for_label(label)
+    label = hostname.split(".", 1)[0]
+    found = _label_component(label)
     if found is None and "-" in label:
-        found = _component_for_label(label.split("-", 1)[1])
+        found = _label_component(label.split("-", 1)[1])
     return found
 
 

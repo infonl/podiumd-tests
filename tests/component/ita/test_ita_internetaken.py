@@ -261,7 +261,7 @@ def test_kiss_reads_itas_logboek(
     taak: JsonObject,
 ) -> None:
     """The logboek entry ITA writes when claiming an internetaak is visible with KISS's logboek token."""
-    if not podiumd_env.credentials.configured("kiss_logboek_token"):
+    if not podiumd_env.credentials.is_configured("kiss_logboek_token"):
         pytest.skip(f"profile {podiumd_env.profile.name} has no secret kiss_logboek_token")
     claim(ita, urls, taak)
     query = {"type": logboek_type, "data_attr": f"heeftBetrekkingOp__objectId__exact__{taak['uuid']}"}
@@ -281,7 +281,7 @@ def test_kiss_reads_itas_logboek(
     When the medewerker opens the contactverzoek in ITA
     Then the detail page shows its onderwerp, vraag, toelichting and the klant's name
 """)
-def test_contactverzoek_from_kiss_shows_in_full_in_ita(
+def test_contactverzoek_from_kiss_shows_in_full_in_ita(  # noqa: FNE008  # the name is the test id
     ita: requests.Session,
     urls: dict[str, str],
     openklant: ApiClient,

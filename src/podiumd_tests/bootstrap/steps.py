@@ -73,14 +73,14 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
 
     def is_present(self, ctx: Context, /) -> bool:
         """Not allowed (nothing to do), or the objects exist and what the step stores is in the credentials Secret."""
-        if self._refused(ctx):
+        if self._is_refused(ctx):
             return True
         stored = self.store_key is None or self.store_key in ctx.store.read()
         return bool(self._run(ctx, "status")["present"]) and stored
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Create the objects: with a new random secret, or extending the stored record."""
-        if self._refused(ctx):
+        if self._is_refused(ctx):
             ctx.notes.append(f"not allowed: profile setting {self.opt_in} is off")
             return {}
         if self.store_key is None:
@@ -104,8 +104,8 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
         params = {**self.params, **runtime, "action": action, **extra}
         return cast("dict[str, object]", run_snippet(ctx.env.kube, deployment, self.snippet, params))
 
-    def _refused(self, ctx: Context) -> bool:
-        return self.opt_in is not None and not ctx.env.profile.allows(self.opt_in)
+    def _is_refused(self, ctx: Context) -> bool:
+        return self.opt_in is not None and not ctx.env.profile.is_allowed(self.opt_in)
 
     def _stored_record(self, ctx: Context) -> object:
         return json.loads(ctx.store.read().get(self.store_key or "", "{}"))
@@ -932,7 +932,7 @@ STEPS: tuple[Step, ...] = (
         wiring=True,
         context_params=lambda ctx: {
             "zaaktype": ctx.env.profile.settings.get("productaanvraag_zaaktype", "")
-            if ctx.env.profile.allows("zac_besluittype")
+            if ctx.env.profile.is_allowed("zac_besluittype")
             else ""
         },
     ),

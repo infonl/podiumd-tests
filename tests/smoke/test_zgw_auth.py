@@ -29,7 +29,7 @@ pytestmark = [pytest.mark.smoke, pytest.mark.requires("openzaak")]
 def fixture_client_id(podiumd_env: Environment, credentials: SecretResolver) -> str:
     """ZGW client id of the profile; skip when the environment has no ZGW client."""
     client_id = podiumd_env.profile.settings.get("zgw_client_id")
-    if not client_id or not credentials.configured("zgw_client_secret"):
+    if not client_id or not credentials.is_configured("zgw_client_secret"):
         pytest.skip("no settings.zgw_client_id or no secret zgw_client_secret: add both to the profile")
     return client_id
 

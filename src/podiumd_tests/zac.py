@@ -90,16 +90,16 @@ def inrichtingscheck_problems(check: JsonObject) -> list[str]:
     return sorted(problems)
 
 
-def confirmation_sent(confirmation: JsonObject) -> bool:
+def is_confirmation_sent(confirmation: JsonObject) -> bool:
     """ZAC sends this automaticEmailConfirmation: enabled, with a template and a sender."""
     return bool(confirmation.get("enabled") and confirmation.get("templateName") and confirmation.get("emailSender"))
 
 
-def confirmation_on(http: requests.Session, zac_url: str, identificatie: str) -> bool:
+def is_confirmation_on(http: requests.Session, zac_url: str, identificatie: str) -> bool:
     """ZAC sends its ontvangstbevestiging for productaanvragen of every version of the zaaktype."""
     found = zaakafhandelparameters(http, zac_url, identificatie)
     return bool(found) and all(
-        confirmation_sent(section(parameters, "automaticEmailConfirmation")) for parameters in found
+        is_confirmation_sent(section(parameters, "automaticEmailConfirmation")) for parameters in found
     )
 
 
@@ -199,7 +199,7 @@ def search(http: requests.Session, zac_url: str, **query: object) -> JsonObject:
     return cast("JsonObject", expect_status(http.put(f"{zac_url}/rest/zoeken/list", json=body), HTTPStatus.OK).json())
 
 
-def zaak_listed(http: requests.Session, zac_url: str, identificatie: str, **flags: bool) -> bool:
+def is_zaak_listed(http: requests.Session, zac_url: str, identificatie: str, **flags: bool) -> bool:
     """ZAC's search for zaken lists the zaak; flags are its alleen* filters (alleenOpenstaandeZaken: werkvoorraad)."""
     found = search(http, zac_url, type="ZAAK", zoeken={"ZAAK_IDENTIFICATIE": identificatie}, **flags)
     return any(resultaat.get("identificatie") == identificatie for resultaat in entries(found["resultaten"]))
@@ -227,7 +227,7 @@ def complete_task(http: requests.Session, zac_url: str, task: JsonObject, data: 
 def wait_in_werkvoorraad(http: requests.Session, zac_url: str, identificatie: str) -> None:
     """Wait until ZAC's werkvoorraad (its open zaken) lists the zaak."""
     wait_until(
-        lambda: zaak_listed(http, zac_url, identificatie, alleenOpenstaandeZaken=True),
+        lambda: is_zaak_listed(http, zac_url, identificatie, alleenOpenstaandeZaken=True),
         timeout=INDEX_TIMEOUT,
         description=f"zaak {identificatie} in the werkvoorraad",
     )

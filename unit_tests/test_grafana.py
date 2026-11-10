@@ -12,7 +12,7 @@ from podiumd_tests.grafana import Grafana
 from podiumd_tests.grafana import GrafanaError
 from podiumd_tests.grafana import down_targets
 from podiumd_tests.grafana import grafana_auth
-from podiumd_tests.grafana import logged_before
+from podiumd_tests.grafana import is_logged_before
 from podiumd_tests.grafana import monitors_without_targets
 from podiumd_tests.grafana import otel_jobs_query
 from podiumd_tests.grafana import pods_in_loki
@@ -162,6 +162,6 @@ def test_running_pods_not_in_loki_skips_young_and_finished_pods():
 
 def test_logged_before_reads_the_first_timestamp():
     logs = "2026-10-29T11:03:08.451094127Z first\n2026-10-29T11:04:00.000000001Z second\n"
-    assert logged_before(logs, datetime(2026, 10, 29, 11, 3, 9, tzinfo=UTC))
-    assert not logged_before(logs, datetime(2026, 10, 29, 11, 3, 8, tzinfo=UTC))
-    assert not logged_before("", datetime(2026, 10, 29, 11, 3, 9, tzinfo=UTC))
+    assert is_logged_before(logs, datetime(2026, 10, 29, 11, 3, 9, tzinfo=UTC))
+    assert not is_logged_before(logs, datetime(2026, 10, 29, 11, 3, 8, tzinfo=UTC))
+    assert not is_logged_before("", datetime(2026, 10, 29, 11, 3, 9, tzinfo=UTC))

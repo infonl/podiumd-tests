@@ -56,7 +56,7 @@ def _line(entry: Swept) -> str:
     return f"{entry.action:<8} {entry.kind:<20} {entry.name} {entry.detail}".rstrip()
 
 
-def format_swept(swept: list[Swept]) -> str:
+def sweep_report(swept: list[Swept]) -> str:
     """One line per leftover or skipped kind, and one count of the kept objects, for the terminal."""
     shown = [entry for entry in swept if entry.action != "kept"]
     lines = [_line(entry) for entry in shown]

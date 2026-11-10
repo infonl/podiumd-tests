@@ -25,7 +25,7 @@ from podiumd_tests.bootstrap.oidc_mock import oidc_params
 from podiumd_tests.bootstrap.runner import Context
 from podiumd_tests.bootstrap.runner import bootstrap
 from podiumd_tests.bootstrap.runner import check
-from podiumd_tests.bootstrap.runner import failed
+from podiumd_tests.bootstrap.runner import has_failure
 from podiumd_tests.bootstrap.runner import refusal
 from podiumd_tests.bootstrap.runner import unbootstrap
 from podiumd_tests.bootstrap.steps import KCC
@@ -166,16 +166,16 @@ def test_store_merges_and_removes_keys(fake_runner):
 def test_resolver_falls_back_to_bootstrap_credentials(env_factory, fake_runner):
     fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (0, stored({"zgw_secret": "boot"}))
     creds = env_factory().credentials
-    assert creds.configured("zgw_secret")
+    assert creds.is_configured("zgw_secret")
     assert creds.get("zgw_secret") == "boot"
-    assert not creds.configured("other")
+    assert not creds.is_configured("other")
 
 
 def test_resolver_sees_what_bootstrap_stored_after_forget(env_factory, fake_runner):
     key = "get secret podiumd-tests-credentials --ignore-not-found"
     fake_runner.answers[key] = (0, "")
     creds = env_factory().credentials
-    assert not creds.configured("admin_password")
+    assert not creds.is_configured("admin_password")
     fake_runner.answers[key] = (0, stored({"admin_password": "new"}))
     creds.forget("admin_password")
     assert creds.get("admin_password") == "new"
@@ -541,7 +541,7 @@ def test_a_failing_step_does_not_stop_the_others(env_factory, fake_runner, profi
     outcomes = unbootstrap(env, [later, BrokenStep("broken", present=True)])
     assert [(o.step, o.action) for o in outcomes] == [("broken", "failed"), ("later", "removed")]
     assert "DisallowedHost" in outcomes[0].detail
-    assert failed(outcomes)
+    assert has_failure(outcomes)
 
 
 OK = "https://ok.example.test"

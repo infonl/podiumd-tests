@@ -10,8 +10,8 @@ from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
+from podiumd_tests.responses import is_root_answering
 from podiumd_tests.responses import is_server_error
-from podiumd_tests.responses import root_answers
 from podiumd_tests.responses import url_host
 
 
@@ -66,7 +66,7 @@ def test_get_entries_needs_200(fake_http):
 @pytest.mark.parametrize(("status", "answers"), [(200, True), (401, True), (502, False)])
 def test_root_answers_unless_the_component_fails(fake_http, status, answers):
     sent = fake_http({"/": (status, {})})
-    assert root_answers(requests.Session(), "https://zac.example.test", 5) is answers
+    assert is_root_answering(requests.Session(), "https://zac.example.test", 5) is answers
     assert sent[0].url == "https://zac.example.test/"
 
 
@@ -75,4 +75,4 @@ def test_a_refused_connection_is_no_answer(monkeypatch):
         raise requests.ConnectionError
 
     monkeypatch.setattr(requests.Session, "get", refuse)
-    assert root_answers(requests.Session(), "https://zac.example.test", 5) is False
+    assert is_root_answering(requests.Session(), "https://zac.example.test", 5) is False

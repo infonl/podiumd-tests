@@ -53,7 +53,7 @@ def reported_role(env: Environment, pod: JsonObject) -> str:
     return found.group(1) if found else ""
 
 
-def checks_master_role(pod: JsonObject) -> bool:
+def is_master_role_checked(pod: JsonObject) -> bool:
     """Return whether a master-labelled pod reporting role:slave goes NotReady (masterReadinessCheck)."""
     containers = entries(section(pod, "spec").get("containers"))
     probes = [section(container, "readinessProbe") for container in containers if container.get("name") == REDIS_HA]

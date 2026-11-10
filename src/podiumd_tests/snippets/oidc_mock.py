@@ -31,7 +31,7 @@ def run(params):
     if params["action"] == "remove":
         _remove(record, clients)
         if params.get("identities") and "accounts_before" in record:
-            _delete_accounts(_accounts(params["identities"]).exclude(pk__in=record["accounts_before"]))
+            _delete(_accounts(params["identities"]).exclude(pk__in=record["accounts_before"]))
         return {"present": False}
     for key, empty in (("clients", {}), ("created", []), ("providers", [])):
         record.setdefault(key, empty)
@@ -40,7 +40,7 @@ def run(params):
         _site(record)
     if params.get("identities"):
         record.setdefault("accounts_before", list(_accounts(params["identities"]).values_list("pk", flat=True)))
-        _create_accounts(params.get("accounts") or [])
+        _create(params.get("accounts") or [])
     return {"present": True, "record": record}
 
 
@@ -103,7 +103,7 @@ def _accounts(identities):
     return User.objects.filter(query)
 
 
-def _delete_accounts(accounts):
+def _delete(accounts):
     # Rendering a page for a logged-in account creates CMS static alias Versions with
     # created_by that account, a protected, non-null foreign key: hand them over to another user,
     # a superuser when there is one (with SSO-only admins there is none).
@@ -121,7 +121,7 @@ def _delete_accounts(accounts):
     accounts.delete()
 
 
-def _create_accounts(accounts):
+def _create(accounts):
     from open_inwoner.accounts.choices import LoginTypeChoices
     from open_inwoner.accounts.models import User
 

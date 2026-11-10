@@ -30,10 +30,10 @@ from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import INDEX_TIMEOUT
+from podiumd_tests.zac import is_zaak_listed
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_with_person
 from podiumd_tests.zac import wait_in_werkvoorraad
-from podiumd_tests.zac import zaak_listed
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -294,10 +294,10 @@ def test_aborted_zaak_is_closed_and_listed_among_the_closed_zaken(
     expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     assert not read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpen"]
 
-    def listed() -> bool:
-        return zaak_listed(zac, urls["zac"], str(zaak["identificatie"]), alleenAfgeslotenZaken=True)
+    def is_listed() -> bool:
+        return is_zaak_listed(zac, urls["zac"], str(zaak["identificatie"]), alleenAfgeslotenZaken=True)
 
-    wait_until(listed, timeout=INDEX_TIMEOUT, description=f"zaak {zaak['identificatie']} among the closed zaken")
+    wait_until(is_listed, timeout=INDEX_TIMEOUT, description=f"zaak {zaak['identificatie']} among the closed zaken")
 
 
 @pytest.mark.tc("ZAC-047", "ZAC-048")

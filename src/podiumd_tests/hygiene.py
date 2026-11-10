@@ -72,12 +72,12 @@ def unpinned_images(workload: JsonObject) -> list[str]:
     found: list[str] = []
     for container in pod_containers(workload, with_init=True):
         image = str(container.get("image") or "")
-        if _unpinned(image):
+        if _is_unpinned(image):
             found.append(f"{metadata_name(workload)}/{container.get('name')}: {image}")
     return found
 
 
-def _unpinned(image: str) -> bool:
+def _is_unpinned(image: str) -> bool:
     reference = image.rsplit("/", 1)[-1]
     return "@sha256:" not in image and (":" not in reference or reference.endswith(":latest"))
 
@@ -98,16 +98,16 @@ def without_disruption_budget(workloads: Sequence[JsonObject], budgets: Sequence
 
     A budget selects by its matchLabels only; matchExpressions are not evaluated.
     """
-    replicated = [workload for workload in workloads if _replicated(workload)]
-    return [metadata_name(workload) for workload in replicated if not _budgeted(workload, budgets)]
+    replicated = [workload for workload in workloads if _is_replicated(workload)]
+    return [metadata_name(workload) for workload in replicated if not _is_budgeted(workload, budgets)]
 
 
-def _replicated(workload: JsonObject) -> bool:
+def _is_replicated(workload: JsonObject) -> bool:
     replicas = section(workload, "spec").get("replicas", 1)
     return isinstance(replicas, int) and replicas >= BUDGET_MIN_REPLICAS
 
 
-def _budgeted(workload: JsonObject, budgets: Sequence[JsonObject]) -> bool:
+def _is_budgeted(workload: JsonObject, budgets: Sequence[JsonObject]) -> bool:
     """Whether a PodDisruptionBudget in the workload's namespace selects its pods."""
     labels = section(section(section(section(workload, "spec"), "template"), "metadata"), "labels")
     return any(

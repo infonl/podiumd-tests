@@ -130,7 +130,7 @@ def insecure_session_cookies(response: requests.Response) -> list[str]:
     return found
 
 
-def foreign_origin_allowed(response: requests.Response, origin: str) -> bool:
+def is_foreign_origin_allowed(response: requests.Response, origin: str) -> bool:
     """Return whether the response lets a page on origin read it: the origin echoed, or any origin with credentials."""
     allowed = response.headers.get("Access-Control-Allow-Origin")
     credentials = response.headers.get("Access-Control-Allow-Credentials", "").lower() == "true"

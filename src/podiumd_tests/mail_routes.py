@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from podiumd_tests.config import MAIL_STAYS_INTERNAL_BY_ESTATE
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
-from podiumd_tests.kube import decode_secret_data
+from podiumd_tests.kube import decode_secret
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.kube import metadata_namespace
 
@@ -38,7 +38,7 @@ class MailRoute:
     host: str
 
 
-def mail_stays_internal(profile: Profile) -> bool:
+def is_mail_internal(profile: Profile) -> bool:
     """Return True when the environment's mail may only go to SMTP servers inside the cluster."""
     return MAIL_STAYS_INTERNAL_BY_ESTATE[profile.estate]
 
@@ -62,7 +62,7 @@ def is_internal(host: str, internal: frozenset[str]) -> bool:
 def _texts(kind: str, data: JsonObject) -> dict[str, str]:
     """Return the values of a Secret's data, decoded, or of a ConfigMap's."""
     if kind == "secret":
-        return decode_secret_data(data)
+        return decode_secret(data)
     return {var: str(host) for var, host in data.items()}
 
 

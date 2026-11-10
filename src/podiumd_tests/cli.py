@@ -27,8 +27,8 @@ from podiumd_tests import doctor
 from podiumd_tests import results
 from podiumd_tests import workloads
 from podiumd_tests.bootstrap.runner import bootstrap
-from podiumd_tests.bootstrap.runner import failed
-from podiumd_tests.bootstrap.runner import format_outcomes
+from podiumd_tests.bootstrap.runner import has_failure
+from podiumd_tests.bootstrap.runner import outcome_report
 from podiumd_tests.bootstrap.runner import refusal
 from podiumd_tests.bootstrap.runner import unbootstrap
 from podiumd_tests.bootstrap.steps import STEPS
@@ -47,11 +47,11 @@ from podiumd_tests.lock import LockBusyError
 from podiumd_tests.lock import held
 from podiumd_tests.process import ProcessError
 from podiumd_tests.seed.volume import faster
-from podiumd_tests.seed.volume import format_seeded
 from podiumd_tests.seed.volume import seed
+from podiumd_tests.seed.volume import seed_report
 from podiumd_tests.seed.volume import unseed
-from podiumd_tests.sweep import format_swept
 from podiumd_tests.sweep import sweep
+from podiumd_tests.sweep import sweep_report
 from podiumd_tests.tiers import TIERS
 from podiumd_tests.wait import parse_duration
 
@@ -184,14 +184,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     """Run the preflight checks and print them."""
     env = Environment(_load(args))
     checks = doctor.run_checks(env)
-    print(doctor.format_checks(checks))
+    print(doctor.checklist(checks))
     if args.json:
         report = json.dumps([asdict(check) for check in checks], indent=2)
         Path(args.json).write_text(f"{report}\n", encoding="utf-8")
-    return EXIT_CONFIG if doctor.failed(checks) else EXIT_OK
+    return EXIT_CONFIG if doctor.has_failure(checks) else EXIT_OK
 
 
-def _defines_test(node_id: str) -> bool:
+def _is_defined(node_id: str) -> bool:
     """Whether the node id's file defines its test function; pytest on xdist runs nothing for an unknown one."""
     name = node_id.rsplit("::", maxsplit=1)[-1].split("[", maxsplit=1)[0]
     source = (config.REPO_ROOT / node_id.split("::", maxsplit=1)[0]).read_text(encoding="utf-8")
@@ -212,7 +212,7 @@ def pytest_selection(
     if outside:
         msg = f"not in tier {tier_name}: {', '.join(outside)} (its paths: {', '.join(tier.paths)})"
         raise config.ProfileError(msg)
-    unknown = [arg for arg in given if "::" in arg and not _defines_test(arg)]
+    unknown = [arg for arg in given if "::" in arg and not _is_defined(arg)]
     if unknown:
         msg = (
             f"no such test: {', '.join(unknown)} (a node id names a test function, without the report's @group suffix)"
@@ -239,12 +239,12 @@ def pytest_selection(
     return [*selection, *args.pytest_args]
 
 
-def _preflight_ok(env: Environment, args: argparse.Namespace) -> bool:
+def _is_preflight_ok(env: Environment, args: argparse.Namespace) -> bool:
     if args.skip_doctor:
         return True
     checks = doctor.run_checks(env)
-    if doctor.failed(checks):
-        print(doctor.format_checks([check for check in checks if check.status == "fail"]), file=sys.stderr)
+    if doctor.has_failure(checks):
+        print(doctor.checklist([check for check in checks if check.status == "fail"]), file=sys.stderr)
         return False
     return True
 
@@ -253,7 +253,7 @@ def _bootstrap_env(args: argparse.Namespace) -> Environment | int:
     """Return the environment for bootstrap and unbootstrap, or the exit code that stops them."""
     profile = _load(args)
     env = Environment(profile)
-    if not _preflight_ok(env, args):
+    if not _is_preflight_ok(env, args):
         return EXIT_CONFIG
     reason = env.capabilities.skip_reason(CLUSTER)
     if reason:
@@ -286,8 +286,8 @@ def _apply_steps(
     steps = selected_steps(args.step)
     with held(env, f"{verb} {env.profile.name}"):
         outcomes = action(env, steps)
-    print(format_outcomes(outcomes))
-    return EXIT_CONFIG if failed(outcomes) else EXIT_OK
+    print(outcome_report(outcomes))
+    return EXIT_CONFIG if has_failure(outcomes) else EXIT_OK
 
 
 def cmd_sweep(args: argparse.Namespace) -> int:
@@ -302,14 +302,14 @@ def cmd_sweep(args: argparse.Namespace) -> int:
         print(f"refused: {reason}", file=sys.stderr)
         return EXIT_NOT_ALLOWED
     env = Environment(_load(args))
-    if not _preflight_ok(env, args):
+    if not _is_preflight_ok(env, args):
         return EXIT_CONFIG
     if args.dry_run:
         swept = sweep(env, cutoff, dry_run=True)
     else:
         with held(env, f"sweep {env.profile.name}"):
             swept = sweep(env, cutoff, dry_run=False)
-    print(format_swept(swept))
+    print(sweep_report(swept))
     return EXIT_CONFIG if any(swept_object.action == "failed" for swept_object in swept) else EXIT_OK
 
 
@@ -320,7 +320,7 @@ def _volume_env(args: argparse.Namespace) -> Environment | int:
         print(f"refused: {profile.name} does not allow tier perf (allowed_tiers), so no volume data", file=sys.stderr)
         return EXIT_NOT_ALLOWED
     env = Environment(profile)
-    return env if _preflight_ok(env, args) else EXIT_CONFIG
+    return env if _is_preflight_ok(env, args) else EXIT_CONFIG
 
 
 def cmd_seed_volume(args: argparse.Namespace) -> int:
@@ -332,7 +332,7 @@ def cmd_seed_volume(args: argparse.Namespace) -> int:
         held(env, f"seed-volume {env.profile.name}"),
         faster(env, args.scale_cluster),
     ):
-        print(format_seeded(seed(env, args.scale, parallel=args.parallel)))
+        print(seed_report(seed(env, args.scale, parallel=args.parallel)))
     return EXIT_OK
 
 
@@ -342,7 +342,7 @@ def cmd_unseed_volume(args: argparse.Namespace) -> int:
     if isinstance(env, int):
         return env
     with held(env, f"unseed-volume {env.profile.name}"):
-        print(format_seeded(unseed(env)))
+        print(seed_report(unseed(env)))
     return EXIT_OK
 
 
@@ -384,7 +384,7 @@ def _run_tier(args: argparse.Namespace) -> int:
         return EXIT_NOT_ALLOWED
     env = Environment(profile)
     with group("doctor"):
-        preflight = _preflight_ok(env, args)
+        preflight = _is_preflight_ok(env, args)
     if not preflight:
         return EXIT_CONFIG
     info = results.RunInfo(

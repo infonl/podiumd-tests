@@ -31,8 +31,8 @@ from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
+from podiumd_tests.responses import is_root_answering
 from podiumd_tests.responses import is_server_error
-from podiumd_tests.responses import root_answers
 from podiumd_tests.seed.objecten import clean_up_logboek
 from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import make_productaanvraag
@@ -108,10 +108,10 @@ def test_stopped_component_harms_no_other(
 ) -> None:
     """While the component is stopped its root fails and every other root answers (TA reg-89, 124, 144)."""
     others = [
-        c for c in sorted(urls) if c != component and c in COMPONENTS and root_answers(http, urls[c], ROOT_TIMEOUT)
+        c for c in sorted(urls) if c != component and c in COMPONENTS and is_root_answering(http, urls[c], ROOT_TIMEOUT)
     ]
     with component_down(podiumd_env, http, component):
-        assert [c for c in others if not root_answers(http, urls[c], ROOT_TIMEOUT)] == []
+        assert [c for c in others if not is_root_answering(http, urls[c], ROOT_TIMEOUT)] == []
 
 
 @pytest.mark.requires("frankgateway", "openzaak", "openinwoner")
@@ -133,10 +133,12 @@ def test_frankgateway_outage_does_not_cascade(
     BRP/KvK/BAG through the outway, but their roots do not depend on it.
     """
     apps = [
-        c for c in sorted(urls) if c in COMPONENTS and c != "frankgateway" and root_answers(http, urls[c], ROOT_TIMEOUT)
+        c
+        for c in sorted(urls)
+        if c in COMPONENTS and c != "frankgateway" and is_root_answering(http, urls[c], ROOT_TIMEOUT)
     ]
     with scaled(podiumd_env.kube, podiumd_env.deployment_for("frankgateway"), 0):
-        assert [c for c in apps if not root_answers(http, urls[c], ROOT_TIMEOUT)] == []
+        assert [c for c in apps if not is_root_answering(http, urls[c], ROOT_TIMEOUT)] == []
 
 
 def form_starts(podiumd_env: Environment, http: requests.Session, registry: ResourceRegistry) -> None:
@@ -184,7 +186,7 @@ def test_without_open_zaak_the_apps_say_so(
         body = zaak_body(zac_parameters, omschrijving=registry.tagged("geen-oz"))
         refused = zac.post(f"{podiumd_env.profile.urls['zac']}/rest/zaken/zaak", json=body)
         assert refused.status_code >= HTTPStatus.BAD_REQUEST
-        assert root_answers(zac, podiumd_env.profile.urls["zac"], ROOT_TIMEOUT), "ZAC itself fails"
+        assert is_root_answering(zac, podiumd_env.profile.urls["zac"], ROOT_TIMEOUT), "ZAC itself fails"
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in ("openklant", "opennotificaties")])
@@ -364,7 +366,7 @@ def test_without_open_klant_a_zaak_with_a_person_cannot_be_opened(
         assert opened.status_code in {HTTPStatus.INTERNAL_SERVER_ERROR, HTTPStatus.GATEWAY_TIMEOUT}, describe(opened)
         if opened.status_code == HTTPStatus.INTERNAL_SERVER_ERROR:
             assert opened.json().get("message") == "msg.error.server.generic"
-        assert root_answers(zac, zac_url, ROOT_TIMEOUT), "ZAC itself fails without Open Klant"
+        assert is_root_answering(zac, zac_url, ROOT_TIMEOUT), "ZAC itself fails without Open Klant"
     assert read_zaak(zac, zac_url, str(zaak["uuid"]))["identificatie"] == zaak["identificatie"]
 
 

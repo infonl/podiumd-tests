@@ -168,7 +168,7 @@ def pods_in_loki(query_response: JsonObject) -> set[tuple[str, str]]:
     return {(str(metric.get("namespace")), str(metric.get("pod"))) for metric in metrics}
 
 
-def logged_before(timestamped_logs: str, cutoff: datetime) -> bool:
+def is_logged_before(timestamped_logs: str, cutoff: datetime) -> bool:
     """Whether the first line of `kubectl logs --timestamps` output was written before cutoff."""
     first = timestamped_logs.lstrip().partition(" ")[0]
     if not first:

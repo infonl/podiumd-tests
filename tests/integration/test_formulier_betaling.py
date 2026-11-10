@@ -154,7 +154,7 @@ def fixture_payment_form(
     need_bootstrap: Callable[..., None],
 ) -> tuple[str, str]:
     """The payment backend (the test's parameter), and the slug of a form with a price paid through its merchant."""
-    if not podiumd_env.profile.allows("of_wait_for_payment"):
+    if not podiumd_env.profile.is_allowed("of_wait_for_payment"):
         pytest.skip("profile setting of_wait_for_payment is off: Open Formulieren registers before the payment")
     backend = str(request.param)
     version = component_versions(podiumd_env, ["openformulieren"]).get("openformulieren")

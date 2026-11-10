@@ -299,7 +299,7 @@ def test_profile_email_reaches_open_klant(
     )
     _save_profile_email(page, podiumd_env, adres)
 
-    def stored() -> bool:
+    def is_stored() -> bool:
         return any(
             a.get("adres") == adres
             for partij in partijen_of(openklant, bsn)
@@ -307,7 +307,7 @@ def test_profile_email_reaches_open_klant(
         )
 
     # Open Inwoner sends the address to Open Klant asynchronously.
-    wait_until(stored, timeout=60, description=f"digitaal adres {adres} in Open Klant")
+    wait_until(is_stored, timeout=60, description=f"digitaal adres {adres} in Open Klant")
 
 
 @pytest.mark.requires("api-proxy", "cluster")

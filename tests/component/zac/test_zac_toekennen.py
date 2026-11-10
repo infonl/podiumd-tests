@@ -73,11 +73,11 @@ def test_zaken_from_the_list_are_assigned_and_released(
     uuids = [str(zac_zaak()["uuid"]), str(zac_zaak()["uuid"])]
     zaken = f"{urls['zac']}/rest/zaken/lijst"
 
-    def all_are(wanted: tuple[object, object]) -> bool:
+    def are_all(wanted: tuple[object, object]) -> bool:
         return all(assignment(read_zaak(zac, urls["zac"], u)) == wanted for u in uuids)
 
     body = {"uuids": uuids, "groepId": zac_group, "behandelaarGebruikersnaam": ADMIN.username, "reden": "test"}
     expect_status(zac.put(f"{zaken}/verdelen", json=body), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    wait_until(lambda: all_are((zac_group, ADMIN.username)), timeout=LIST_TIMEOUT, description="zaken verdeeld")
+    wait_until(lambda: are_all((zac_group, ADMIN.username)), timeout=LIST_TIMEOUT, description="zaken verdeeld")
     expect_status(zac.put(f"{zaken}/vrijgeven", json={"uuids": uuids, "reden": "test"}), 200, 204)
-    wait_until(lambda: all_are((zac_group, None)), timeout=LIST_TIMEOUT, description="zaken vrijgegeven")
+    wait_until(lambda: are_all((zac_group, None)), timeout=LIST_TIMEOUT, description="zaken vrijgegeven")

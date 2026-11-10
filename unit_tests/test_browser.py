@@ -10,7 +10,7 @@ from playwright.sync_api import Error as PlaywrightError
 from podiumd_tests import accessibility
 from podiumd_tests import browser
 from podiumd_tests import openbeheer
-from podiumd_tests.accessibility import describe_violation
+from podiumd_tests.accessibility import violation_line
 from podiumd_tests.accessibility import wcag_violations
 from podiumd_tests.auth.django_admin import AdminLoginError
 from podiumd_tests.auth.django_admin import admin_login
@@ -136,7 +136,7 @@ def test_wcag_violations_injects_axe_and_runs_the_aa_rules(monkeypatch, fake_pag
     assert page.actions[0] == ("evaluate", "/* axe */", None)
     options = page.actions[1][2]
     assert options["runOnly"]["values"] == accessibility.WCAG21_AA
-    assert describe_violation(violation) == "color-contrast (serious, 2 elements): Contrast"
+    assert violation_line(violation) == "color-contrast (serious, 2 elements): Contrast"
 
 
 def test_openbeheer_session_logs_in_through_the_oidc_login(monkeypatch, page_env):

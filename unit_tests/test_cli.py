@@ -330,7 +330,7 @@ def test_volume_commands_seed_and_unseed_under_the_lock(envs, offline, monkeypat
     monkeypatch.setattr(cli, "faster", faster)
     monkeypatch.setattr(cli, "seed", lambda _env, scale, parallel: {f"{scale}/{parallel}": 1})
     monkeypatch.setattr(cli, "unseed", lambda _env: {"unseeded": 2})
-    monkeypatch.setattr(cli, "format_seeded", lambda counts: f"counts {counts}")
+    monkeypatch.setattr(cli, "seed_report", lambda counts: f"counts {counts}")
     argv = [*envs(), "seed-volume", "--env", "e", "--scale", "perf", "--parallel", "2", "--scale-cluster", "3"]
     assert cli.main(argv) == cli.EXIT_OK
     assert cli.main([*envs(), "unseed-volume", "--env", "e"]) == cli.EXIT_OK

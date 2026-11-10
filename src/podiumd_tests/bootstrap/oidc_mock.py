@@ -121,7 +121,7 @@ class KeycloakOidcMock:
     def is_present(self, ctx: Context, /) -> bool:  # noqa: PLR6301  # a Step method
         """Both scopes with all their mappers exist, and every app's client has its scopes and redirect URI."""
         admin = for_environment(ctx.env)
-        return _scopes_complete(admin) and all(_client_complete(admin, *found) for found in _clients(ctx, admin))
+        return _are_scopes_complete(admin) and all(_is_client_complete(admin, *found) for found in _clients(ctx, admin))
 
     def apply(self, ctx: Context, /) -> dict[str, str]:  # noqa: PLR6301  # a Step method
         """Add what is missing, and extend the stored record with it."""
@@ -152,7 +152,7 @@ class KeycloakOidcMock:
         return (KEYCLOAK_STORE_KEY,)
 
 
-def _scopes_complete(admin: KeycloakAdmin) -> bool:
+def _are_scopes_complete(admin: KeycloakAdmin) -> bool:
     """Both scopes exist with all their mappers."""
     scopes = admin.client_scopes()
     for name, (_, mappers) in SCOPES.items():
@@ -162,7 +162,9 @@ def _scopes_complete(admin: KeycloakAdmin) -> bool:
     return True
 
 
-def _client_complete(admin: KeycloakAdmin, client: JsonObject, wanted: tuple[str, ...], redirect: str | None) -> bool:
+def _is_client_complete(
+    admin: KeycloakAdmin, client: JsonObject, wanted: tuple[str, ...], redirect: str | None
+) -> bool:
     """Return whether the client has its scopes and, when it needs one, the redirect URI."""
     if set(wanted) - admin.client_scope_names(str(client["id"])):
         return False

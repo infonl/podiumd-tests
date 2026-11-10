@@ -9,7 +9,7 @@ import pytest
 from podiumd_tests.auth.keycloak_admin import for_environment
 from podiumd_tests.mail_routes import cluster_hosts
 from podiumd_tests.mail_routes import is_internal
-from podiumd_tests.mail_routes import mail_stays_internal
+from podiumd_tests.mail_routes import is_mail_internal
 from podiumd_tests.mail_routes import realm_routes
 from podiumd_tests.mail_routes import workload_routes
 
@@ -31,7 +31,7 @@ pytestmark = [
 @pytest.fixture(scope="module", name="internal")
 def fixture_internal(podiumd_env: Environment) -> frozenset[str]:
     """The hosts mail may go to; skips where the estate has no such rule."""
-    if not mail_stays_internal(podiumd_env.profile):
+    if not is_mail_internal(podiumd_env.profile):
         pytest.skip(f"estate {podiumd_env.profile.estate} has no in-cluster mail rule")
     return cluster_hosts(podiumd_env)
 

@@ -95,7 +95,7 @@ class SecretSpec:
     options: dict[str, str] = field(default_factory=dict[str, str])
 
     @property
-    def needs_cluster(self) -> bool:
+    def is_in_cluster(self) -> bool:
         """True when resolving it reads the cluster."""
         return self.source in CLUSTER_SECRET_SOURCES
 
@@ -118,7 +118,7 @@ class Profile:  # pylint: disable=too-many-instance-attributes  # mirrors the YA
     path: Path | None = None
 
     @property
-    def smoke_only(self) -> bool:
+    def is_smoke_only(self) -> bool:
         """Only smoke runs are allowed: nothing writes to the environment, so nothing takes its lock."""
         return set(self.allowed_tiers) <= {"smoke"}
 
@@ -134,7 +134,7 @@ class Profile:  # pylint: disable=too-many-instance-attributes  # mirrors the YA
             return ["minikube", "update-context", "--profile", context]
         return None
 
-    def allows(self, setting: str) -> bool:
+    def is_allowed(self, setting: str) -> bool:
         """Whether an opt-in setting that changes the owner's configuration is "true"."""
         return self.settings.get(setting, "").lower() == "true"  # settings are strings
 
@@ -253,7 +253,7 @@ def _parse_access(value: object, where: str) -> Access:
     return Access("host-header", ref, ca_bundle)
 
 
-def _wiring(value: object, estate: str, where: str) -> bool:
+def _is_wiring_allowed(value: object, estate: str, where: str) -> bool:
     wiring = _mapping(value or {}, where).get("wiring", WIRING_BY_ESTATE[estate])
     if not isinstance(wiring, bool):
         msg = f"{where}.wiring: expected true or false"
@@ -303,6 +303,6 @@ def parse_profile(raw: object, *, name: str, path: Path | None = None) -> Profil
         secrets=secrets,
         access=_parse_access(data.get("access"), f"{where}.access"),
         settings={key: str(setting) for key, setting in settings.items()},
-        wiring=_wiring(data.get("bootstrap"), estate, f"{where}.bootstrap"),
+        wiring=_is_wiring_allowed(data.get("bootstrap"), estate, f"{where}.bootstrap"),
         path=path,
     )

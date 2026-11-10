@@ -19,7 +19,7 @@ import pytest
 from podiumd_tests.auth.keycloak_admin import for_environment
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import url_host
-from podiumd_tests.workloads import chart_older_than
+from podiumd_tests.workloads import is_chart_older_than
 
 if TYPE_CHECKING:
     import requests
@@ -125,7 +125,7 @@ def test_zac_login_sends_an_s256_code_challenge(
     """ZAC's login redirect to Keycloak carries an S256 code challenge (PKCE)."""
     query = zac_login_query(http, urls)
     assert query.get("client_id") == ["zac"]
-    if not query.get("code_challenge") and chart_older_than(podiumd_env, (4, 10, 0)):
+    if not query.get("code_challenge") and is_chart_older_than(podiumd_env, (4, 10, 0)):
         pytest.xfail(ZAC_PKCE_OFF)
     assert query.get("code_challenge_method") == ["S256"]
 

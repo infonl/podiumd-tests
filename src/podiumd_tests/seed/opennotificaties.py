@@ -38,8 +38,8 @@ def delete_abonnement(opennotificaties: ApiClient, url: str) -> None:
     while a delivery to the abonnement is still scheduled.
     """
 
-    def deleted() -> bool:
+    def is_deleted() -> bool:
         opennotificaties.delete(url)
         return True
 
-    wait_until(deleted, timeout=DELETE_TIMEOUT, description=f"DELETE {url}")
+    wait_until(is_deleted, timeout=DELETE_TIMEOUT, description=f"DELETE {url}")

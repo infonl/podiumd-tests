@@ -17,10 +17,10 @@ from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import describe
 from podiumd_tests.security import MIN_CERT_DAYS
 from podiumd_tests.security import days_valid
-from podiumd_tests.security import foreign_origin_allowed
 from podiumd_tests.security import insecure_session_cookies
+from podiumd_tests.security import is_foreign_origin_allowed
 from podiumd_tests.security import missing_security_headers
-from podiumd_tests.workloads import chart_older_than
+from podiumd_tests.workloads import is_chart_older_than
 
 if TYPE_CHECKING:
     import requests
@@ -74,7 +74,7 @@ def test_security_headers(
     component: str,
 ) -> None:
     """The root sends HSTS and nosniff, and frame protection when it is an HTML page."""
-    if component == "openbao" and chart_older_than(podiumd_env, (4, 10, 1)):
+    if component == "openbao" and is_chart_older_than(podiumd_env, (4, 10, 1)):
         reason = "[podiumd-chart-23] podiumd before 4.10.1 sets no custom_response_headers for OpenBao: no nosniff"
         request.applymarker(pytest.mark.xfail(strict=False, reason=f"{reason} (helm-charts #664)"))
     response = http.get(f"{public_url(podiumd_env, urls, component)}/", allow_redirects=False)
@@ -108,7 +108,7 @@ def test_foreign_origin_gets_no_cors_access(
     preflight = http.options(url, headers={"Origin": FOREIGN_ORIGIN, "Access-Control-Request-Method": "GET"})
     get = http.get(url, headers={"Origin": FOREIGN_ORIGIN}, allow_redirects=False)
     for response in (preflight, get):
-        assert not foreign_origin_allowed(response, FOREIGN_ORIGIN), describe(response)
+        assert not is_foreign_origin_allowed(response, FOREIGN_ORIGIN), describe(response)
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in PUBLIC])

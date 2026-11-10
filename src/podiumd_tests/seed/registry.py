@@ -87,12 +87,12 @@ def _batch_key(entry: _Entry) -> object:
     return (id(entry.snippet.kube), entry.snippet.deployment) if entry.snippet else id(entry)
 
 
-def _delete_batch(batch: list[_Entry]) -> list[str]:
+def _delete_batch(entries: list[_Entry]) -> list[str]:
     """Delete the entries, in one Django shell when they are snippets of one deployment; the errors."""
-    if len(batch) > 1 and _run_batch(batch):
+    if len(entries) > 1 and _run_batch(entries):
         return []
     errors: list[str] = []
-    for entry in batch:
+    for entry in entries:
         try:
             entry.delete()
         except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught  # collect all, report together
@@ -100,9 +100,9 @@ def _delete_batch(batch: list[_Entry]) -> list[str]:
     return errors
 
 
-def _run_batch(batch: Sequence[_Entry]) -> bool:
+def _run_batch(entries: Sequence[_Entry]) -> bool:  # noqa: FNE005  # runs the snippets
     """Run the entries' snippets in one Django shell; False when that failed, to run each and report which one."""
-    snippets = [entry.snippet for entry in batch if entry.snippet]
+    snippets = [entry.snippet for entry in entries if entry.snippet]
     calls = [(snippet.name, snippet.params) for snippet in snippets]
     try:
         run_snippets(snippets[0].kube, snippets[0].deployment, calls)

@@ -28,7 +28,7 @@ TIMEOUT = 90
 LIMIT_DAYS = 1
 
 
-def kept_after_removal(podiumd_env: Environment, submission: str, age_days: int) -> bool:
+def is_kept_after_removal(podiumd_env: Environment, submission: str, age_days: int) -> bool:
     """Whether the submission survives the data removal task at this age (snippet openformulieren_data_removal)."""
     params: dict[str, object] = {"uuid": submission, "age_days": age_days}
     result = run_snippet(
@@ -66,5 +66,5 @@ def test_registered_submission_is_removed_after_the_limit(
     )
     submission = str(submit(podiumd_env, http, registry, slug, {"omschrijving": slug}, timeout=TIMEOUT)["submission"])
     assert slug in received(mailpit, registry, timeout=TIMEOUT, to=address), "not registered"
-    assert kept_after_removal(podiumd_env, submission, 0), "removed within the limit"
-    assert not kept_after_removal(podiumd_env, submission, LIMIT_DAYS + 1), "kept after the limit"
+    assert is_kept_after_removal(podiumd_env, submission, 0), "removed within the limit"
+    assert not is_kept_after_removal(podiumd_env, submission, LIMIT_DAYS + 1), "kept after the limit"

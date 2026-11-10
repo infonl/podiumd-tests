@@ -174,11 +174,11 @@ def parse_junit(xml_text: str) -> tuple[Counts, Details]:
     details = Details()
     root = ET.fromstring(xml_text)  # nosec B314  # noqa: S314
     for case in root.iter("testcase"):
-        _add_case(case, counts, details)
+        _count(case, counts, details)
     return counts, details
 
 
-def _add_case(case: ET.Element, counts: Counts, details: Details) -> None:
+def _count(case: ET.Element, counts: Counts, details: Details) -> None:
     """Count one junit testcase and list it under its outcome."""
     counts.total += 1
     test_id = f"{case.get('classname', '')}::{case.get('name', '')}".strip(":")

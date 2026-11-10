@@ -28,7 +28,7 @@ def test_monitoring_logging_grafana_on_ssc_is_grafana():
         ("unknown.local", None),
     ],
 )
-def test_component_for_host(host, component):
+def test_component_for_host(host, component):  # noqa: FNE008  # the name is the test id
     assert component_for_host(host) == component
 
 

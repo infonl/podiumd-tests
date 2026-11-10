@@ -5,8 +5,8 @@ import subprocess
 
 from podiumd_tests.lock import holder
 from podiumd_tests.replicas import HOLD_ENV
+from podiumd_tests.replicas import can_switch_replicas
 from podiumd_tests.replicas import several_replicas
-from podiumd_tests.replicas import switches_replicas
 
 type _Call = tuple[list[str], str | None]
 
@@ -29,7 +29,7 @@ def test_replicas_are_switched_on_for_the_block_and_off_after_it(tmp_path, env_f
     settings = {"replicas_command": "/opt/podiumd-minikube/bin/replicas", "lock_file": str(lock)}
     recorder = HoldRecorder()
     env = env_factory(profile_factory(settings=settings), runner=recorder)
-    assert switches_replicas(env.profile)
+    assert can_switch_replicas(env.profile)
     with several_replicas(env):
         assert recorder.calls == [(["/opt/podiumd-minikube/bin/replicas", "on"], line)]
     assert recorder.calls[1] == (["/opt/podiumd-minikube/bin/replicas", "off"], line)
@@ -38,7 +38,7 @@ def test_replicas_are_switched_on_for_the_block_and_off_after_it(tmp_path, env_f
 
 def test_without_replicas_command_nothing_runs(env_factory, fake_runner):
     env = env_factory()
-    assert not switches_replicas(env.profile)
+    assert not can_switch_replicas(env.profile)
     with several_replicas(env):
         assert fake_runner.calls == []
     assert fake_runner.calls == []

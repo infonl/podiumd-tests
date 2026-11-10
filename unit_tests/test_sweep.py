@@ -17,8 +17,8 @@ from podiumd_tests.results import new_run_id
 from podiumd_tests.results import run_started
 from podiumd_tests.sweep import FINDERS
 from podiumd_tests.sweep import Swept
-from podiumd_tests.sweep import format_swept
 from podiumd_tests.sweep import is_stale
+from podiumd_tests.sweep import sweep_report
 from podiumd_tests.sweep import with_productaanvraag
 
 if TYPE_CHECKING:
@@ -70,15 +70,15 @@ def test_a_zaak_of_a_run_tagged_productaanvraag_is_stale(monkeypatch, fake_http,
 
 
 def test_format_swept():
-    assert format_swept([Swept("zaak", "z/1", "deleted"), Swept("form", "", "skipped", "requires: cluster")]) == (
+    assert sweep_report([Swept("zaak", "z/1", "deleted"), Swept("form", "", "skipped", "requires: cluster")]) == (
         "deleted  zaak                 z/1\nskipped  form                  requires: cluster"
     )
-    assert format_swept([]) == "nothing to sweep"
+    assert sweep_report([]) == "nothing to sweep"
 
 
 def test_format_swept_counts_the_kept_objects_per_kind():
     kept = [Swept("zaak", "z/1", "kept"), Swept("zaak", "z/2", "kept"), Swept("mail", "m1", "kept")]
-    assert format_swept(kept) == (
+    assert sweep_report(kept) == (
         "kept     3 run-tagged objects of runs after the cutoff (zaak 2, mail 1): lower --older-than"
     )
 

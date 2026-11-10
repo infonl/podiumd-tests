@@ -96,7 +96,7 @@ class SecretResolver:
         for value in self._bootstrap().values():
             self._redactor.add(value)
 
-    def configured(self, name: str) -> bool:
+    def is_configured(self, name: str) -> bool:
         """Return True when the secret has a source: the profile, its env var, or the credentials Secret."""
         overridden = bool(self._environ.get(env_var_name(name)))
         return name in self._profile.secrets or overridden or name in self._bootstrap()
@@ -109,7 +109,7 @@ class SecretResolver:
 
     def optional(self, name: str) -> str | None:
         """Value of a secret that an environment may lack; None when it has no source."""
-        return self.get(name) if self.configured(name) else None
+        return self.get(name) if self.is_configured(name) else None
 
     def _bootstrap(self) -> dict[str, str]:
         """Contents of the credentials Secret, read once; empty without cluster access."""

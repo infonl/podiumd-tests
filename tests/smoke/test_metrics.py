@@ -23,7 +23,7 @@ from podiumd_tests.grafana import MONITOR_POOLS
 from podiumd_tests.grafana import Grafana
 from podiumd_tests.grafana import down_targets
 from podiumd_tests.grafana import grafana_auth
-from podiumd_tests.grafana import logged_before
+from podiumd_tests.grafana import is_logged_before
 from podiumd_tests.grafana import monitors_without_targets
 from podiumd_tests.grafana import otel_jobs_query
 from podiumd_tests.grafana import pods_in_loki
@@ -34,7 +34,7 @@ from podiumd_tests.json_data import section
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
-from podiumd_tests.workloads import chart_older_than
+from podiumd_tests.workloads import is_chart_older_than
 
 if TYPE_CHECKING:
     import requests
@@ -221,7 +221,7 @@ def test_every_component_reports_metrics(grafana: Grafana, podiumd_env: Environm
     no_monitor, no_otel = without_metrics(deployed, grafana.proxy("prometheus", "/api/v1/targets"), otel)
     otel_off = bool(otel_apps) and len(no_otel) == len(otel_apps)
     missing = no_monitor if otel_off else no_monitor + no_otel
-    gaps = METRICS_GAPS_BEFORE_4_10 if chart_older_than(podiumd_env, (4, 10, 0)) else {}
+    gaps = METRICS_GAPS_BEFORE_4_10 if is_chart_older_than(podiumd_env, (4, 10, 0)) else {}
     unknown = [c for c in missing if c not in gaps]
     assert not unknown, f"components without metrics in Prometheus: {unknown}"
     if missing:
@@ -264,7 +264,7 @@ def test_every_pod_logs_to_loki(grafana: Grafana, podiumd_env: Environment) -> N
     missing = [
         f"{section(p, 'metadata').get('namespace')}/{metadata_name(p)}"
         for p in candidates
-        if logged_before(
+        if is_logged_before(
             podiumd_env.kube.run(
                 "logs",
                 f"pod/{metadata_name(p)}",

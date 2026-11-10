@@ -22,9 +22,9 @@ from podiumd_tests.browser import browser_session
 from podiumd_tests.json_data import section
 from podiumd_tests.openinwoner import LOGINS
 from podiumd_tests.openinwoner import choose_document
+from podiumd_tests.openinwoner import is_virus_scan_enabled
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.openinwoner import upload_document
-from podiumd_tests.openinwoner import virus_scan_enabled
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openklant import delete_klantcontact_tree
 from podiumd_tests.seed.openzaak import CATALOGI
@@ -82,7 +82,7 @@ WHO = [
 @pytest.fixture(scope="module", name="virus_scan")
 def fixture_virus_scan(podiumd_env: Environment) -> None:
     """Skips unless Open Inwoner scans uploads with ClamAV."""
-    if not virus_scan_enabled(podiumd_env):
+    if not is_virus_scan_enabled(podiumd_env):
         pytest.skip(
             "Open Inwoner scans no uploads: set profile setting clamav and run bootstrap step openinwoner-virus-scan"
         )
@@ -255,7 +255,7 @@ def test_zaak_shows_its_current_status(
     zaak = zaak_of(openzaak, registry, parts, who)
     current = parts.statustypen[1]
     make_status(openzaak, zaak, str(current["url"]))
-    open_status_page(page, podiumd_env, zaak, who)
+    open_zaak_status(page, podiumd_env, zaak, who)
     # The status page loads the zaak's data after the page itself, like the list.
     expect(page.locator("main")).to_contain_text(str(current["omschrijving"]), timeout=LIST_TIMEOUT_MS)
 
@@ -288,7 +288,7 @@ def test_zaak_document_can_be_downloaded(
     inhoud = registry.tagged("documentinhoud")
     document = make_document(openzaak, registry, parts.informatieobjecttype, inhoud, status="definitief")
     link_document(openzaak, registry, zaak, document)
-    open_status_page(page, podiumd_env, zaak)
+    open_zaak_status(page, podiumd_env, zaak)
     # The status page loads the zaak's documents after the page itself ("Gegevens laden...").
     expect(page.get_by_text(str(document["titel"])).first).to_be_visible(timeout=LIST_TIMEOUT_MS)
     document_uuid = str(document["url"]).rsplit("/", 1)[-1]
@@ -327,7 +327,7 @@ def test_uploaded_document_reaches_the_zaak(
     zaak = zaak_of(openzaak, registry, parts)
     clean_up_new_documents(openzaak, registry, zaak)
     bestand = f"{registry.tagged('upload')}.txt"
-    open_status_page(page, podiumd_env, zaak)
+    open_zaak_status(page, podiumd_env, zaak)
     upload_document(page, bestand, bestand.encode())
     found = wait_until(lambda: documents_of(openzaak, zaak), timeout=30, description=f"document {bestand} on the zaak")
     assert bestand in found
@@ -360,7 +360,7 @@ def test_infected_upload_is_refused(
     need_bootstrap(LOGINS[who][0].name, *WIRING, "openinwoner-zaaktype-config")
     zaak = zaak_of(openzaak, registry, parts, who)
     clean_up_new_documents(openzaak, registry, zaak)
-    open_status_page(page, podiumd_env, zaak, who)
+    open_zaak_status(page, podiumd_env, zaak, who)
     upload_document(page, f"{registry.tagged('eicar')}.txt", EICAR)
     assert documents_of(openzaak, zaak) == []
 
@@ -386,7 +386,7 @@ def test_refused_file_type_cannot_be_uploaded(
     """The upload form keeps its button disabled for a file type outside the allowed list, such as .html (TA reg-178)."""
     need_bootstrap(INWONER.name, *WIRING, "openinwoner-zaaktype-config")
     zaak = zaak_of(openzaak, registry, parts)
-    open_status_page(page, podiumd_env, zaak)
+    open_zaak_status(page, podiumd_env, zaak)
     expect(choose_document(page, f"{registry.tagged('pagina')}.html", b"<html></html>")).to_be_disabled()
 
 
@@ -395,7 +395,7 @@ def expect_listed(page: Page, zaak: JsonObject) -> None:
     expect(page.get_by_text(str(zaak["identificatie"])).first).to_be_visible(timeout=LIST_TIMEOUT_MS)
 
 
-def open_status_page(page: Page, podiumd_env: Environment, zaak: JsonObject, who: str = "inwoner") -> None:
+def open_zaak_status(page: Page, podiumd_env: Environment, zaak: JsonObject, who: str = "inwoner") -> None:
     """Log the identity in and open the zaak's status page from Mijn zaken."""
     log_in(page, podiumd_env, who)
     page.locator(f'a[href*="{zaak["uuid"]}"]').first.click()  # noqa: B907  # CSS selector
@@ -440,7 +440,7 @@ def test_question_about_a_zaak_reaches_open_klant(
         lambda: [delete_klantcontact_tree(openklant, k) for k in klantcontacten()],
     )
     vraag = registry.tagged("zaakvraag")
-    open_status_page(page, podiumd_env, zaak)
+    open_zaak_status(page, podiumd_env, zaak)
     # htmx loads the form after the page (status/content/); typing before that settles leaves the button disabled.
     question = page.locator('#contact-form textarea[name="question"]')
     question.wait_for()

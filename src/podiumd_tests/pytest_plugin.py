@@ -41,8 +41,8 @@ from podiumd_tests.seed.openzaak import zaaktype_parts
 from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.sources import source_problems
 from podiumd_tests.sources import sources
-from podiumd_tests.zac import confirmation_on
 from podiumd_tests.zac import create_zaak
+from podiumd_tests.zac import is_confirmation_on
 from podiumd_tests.zac import user_groups
 from podiumd_tests.zac import zaakafhandelparameters
 from podiumd_tests.zac import zac_session
@@ -404,7 +404,7 @@ def fixture_ontvangstbevestiging(
     """Skips unless ZAC mails an ontvangstbevestiging for productaanvragen (of setting productaanvraag_zaaktype)."""
     need_bootstrap("zac-email-confirmation")
     zaaktype = str(podiumd_env.profile.settings.get("productaanvraag_zaaktype"))
-    if not confirmation_on(zac, podiumd_env.profile.urls["zac"], zaaktype):
+    if not is_confirmation_on(zac, podiumd_env.profile.urls["zac"], zaaktype):
         pytest.skip(
             f"ZAC sends no ontvangstbevestiging for {zaaktype}: allow it with profile setting zac_email_confirmation"
         )
@@ -504,7 +504,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         raise pytest.UsageError("\n".join(problems))
     switching = any(
         "several_replicas" in getattr(test, "fixturenames", ()) for test in items
-    ) and replicas.switches_replicas(_environment(config).profile)
+    ) and replicas.can_switch_replicas(_environment(config).profile)
     for item in items:
         if switching and "several_replicas" in getattr(item, "fixturenames", ()):
             item.add_marker(pytest.mark.destructive)

@@ -41,17 +41,17 @@ class KissKanalen:
 
     def not_allowed(self, ctx: Context) -> str | None:  # noqa: PLR6301  # a Step method
         """Why the profile does not allow the change, or None."""
-        return None if _allowed(ctx) else f"profile setting kiss_kanalen is off for {ctx.env.profile.name}"
+        return None if _is_allowed(ctx) else f"profile setting kiss_kanalen is off for {ctx.env.profile.name}"
 
     def is_present(self, ctx: Context, /) -> bool:
         """Not allowed (nothing to do), or every kanaal of KANALEN exists."""
-        if not _allowed(ctx):
+        if not _is_allowed(ctx):
             return True
         return set(KANALEN) <= set(_current(*self._session(ctx)))
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Add the missing kanalen; record the ones added."""
-        if not _allowed(ctx):
+        if not _is_allowed(ctx):
             ctx.notes.append("not allowed: profile setting kiss_kanalen is off")
             return {}
         http, kiss = self._session(ctx)
@@ -83,5 +83,5 @@ def _current(http: requests.Session, kiss: str) -> dict[str, str]:
     return {str(kanaal["naam"]): str(kanaal["id"]) for kanaal in found}
 
 
-def _allowed(ctx: Context) -> bool:
-    return ctx.env.profile.allows("kiss_kanalen")
+def _is_allowed(ctx: Context) -> bool:
+    return ctx.env.profile.is_allowed("kiss_kanalen")

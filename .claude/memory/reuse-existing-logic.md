@@ -39,8 +39,8 @@ older suites that each had their own copy of the same helpers (PLAN.md R22).
    | HTTP to profile URLs (also host-header mode) | `Environment.session()` / `make_session`; fixture `http` |
    | expected status, its message, 401/403, 5xx, hostname of a URL | `responses` (`expect_status`, `describe`, `REFUSED`, `is_server_error`, `url_host`) |
    | "a component root answers" (doctor and test) | `responses.get_root` + `is_server_error` |
-   | a secret / an optional secret | `SecretResolver.get` / `configured`, `optional` (fixture `credentials`); never `os.environ` |
-   | which secret sources need the cluster | `SecretSpec.needs_cluster` |
+   | a secret / an optional secret | `SecretResolver.get` / `is_configured`, `optional` (fixture `credentials`); never `os.environ` |
+   | which secret sources need the cluster | `SecretSpec.is_in_cluster` |
    | per-environment values that are no secret | `Profile.settings` |
    | canonical component names, host and deployment aliases | `COMPONENTS`, `component_for_host`, `deployed_components` |
    | what an environment can do | `Capabilities` and `@pytest.mark.requires(...)`; per-component params: `requiring` |

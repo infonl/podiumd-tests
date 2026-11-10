@@ -10,7 +10,7 @@ from podiumd_tests.json_data import section
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.redis import MASTER_LABEL
 from podiumd_tests.redis import MASTER_SERVICE
-from podiumd_tests.redis import checks_master_role
+from podiumd_tests.redis import is_master_role_checked
 from podiumd_tests.redis import master_pod
 from podiumd_tests.redis import ready_endpoints
 from podiumd_tests.redis import redis_cli
@@ -49,7 +49,7 @@ def test_redis_ha_master_service_points_at_the_master(podiumd_env: Environment) 
     pods = redis_pods(podiumd_env)
     if not pods:
         pytest.skip("no redis-ha pods")
-    if not all(checks_master_role(p) for p in pods):
+    if not all(is_master_role_checked(p) for p in pods):
         pytest.skip("redis-ha has no masterReadinessCheck (helm-charts #634)")
     roles = {metadata_name(p): reported_role(podiumd_env, p) for p in pods}
     behind = ready_endpoints(podiumd_env, MASTER_SERVICE)

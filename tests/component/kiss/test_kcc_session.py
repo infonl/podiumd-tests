@@ -95,7 +95,7 @@ def test_kiss_renders_for_the_kcc_user(page: Page, urls: dict[str, str]) -> None
     When the medewerker registers a klantcontact through KISS
     Then the klantcontact is in Open Klant with its onderwerp
 """)
-def test_klantcontact_through_kiss(
+def test_klantcontact_through_kiss(  # noqa: FNE008  # the name is the test id
     kiss: requests.Session, urls: dict[str, str], openklant: ApiClient, registry: ResourceRegistry
 ) -> None:
     """A klantcontact registered through KISS lands in Open Klant (TA reg-12)."""
@@ -150,7 +150,7 @@ def test_company_unknown_to_kiss_is_found_in_the_kvk(kiss: requests.Session, url
     When the medewerker registers a klantcontact on that kanaal through KISS
     Then the klantcontact is in Open Klant on exactly that kanaal
 """)
-def test_klantcontact_keeps_the_kanaal_chosen_in_kiss(
+def test_klantcontact_keeps_the_kanaal_chosen_in_kiss(  # noqa: FNE008  # the name is the test id
     kiss: requests.Session,
     urls: dict[str, str],
     openklant: ApiClient,

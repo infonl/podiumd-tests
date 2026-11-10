@@ -86,13 +86,13 @@ def test_started_task_is_in_mijn_taken(
     """The started task has the chosen group and behandelaar, and ZAC's Mijn taken lists it."""
     assert assignment(taak) == (zac_group, ADMIN.username)
 
-    def listed() -> bool:
+    def is_listed() -> bool:
         found = search(
             zac, urls["zac"], type="TAAK", zoeken={"TAAK_ZAAK_ID": taak["zaakIdentificatie"]}, alleenMijnTaken=True
         )
         return any(r.get("id") == taak["id"] for r in entries(found["resultaten"]))
 
-    wait_until(listed, timeout=TIMEOUT, description=f"task {taak['id']} in Mijn taken")
+    wait_until(is_listed, timeout=TIMEOUT, description=f"task {taak['id']} in Mijn taken")
 
 
 @pytest.mark.source(

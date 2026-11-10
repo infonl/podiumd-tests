@@ -21,8 +21,8 @@ from podiumd_tests.seed.volume import Seeded
 from podiumd_tests.seed.volume import corpus
 from podiumd_tests.seed.volume import counts
 from podiumd_tests.seed.volume import faster
-from podiumd_tests.seed.volume import format_seeded
 from podiumd_tests.seed.volume import seed
+from podiumd_tests.seed.volume import seed_report
 from podiumd_tests.seed.volume import target
 from podiumd_tests.seed.volume import unseed
 
@@ -41,7 +41,7 @@ def test_corpus_picks_wrap_around():
 
 
 def test_report_shows_counts_or_the_skip_reason():
-    report = format_seeded([Seeded("zaken", 3, 50), Seeded("objecten", 0, 0, "skipped: no objecten")])
+    report = seed_report([Seeded("zaken", 3, 50), Seeded("objecten", 0, 0, "skipped: no objecten")])
     assert report.splitlines() == ["zaken          3 -> 50", "objecten       skipped: no objecten"]
 
 

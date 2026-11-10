@@ -159,7 +159,7 @@ class Kube:
 
     def secret_value(self, name: str, key: str, *, namespace: str | None = None) -> str:
         """Return the decoded value of one key of a Kubernetes secret, in the profile namespace unless given."""
-        data = decode_secret_data(section(self.get_json("secret", name, namespace=namespace), "data"))
+        data = decode_secret(section(self.get_json("secret", name, namespace=namespace), "data"))
         if key not in data:
             raise KubeError(self.command("get", "secret", name, namespace=namespace), f"no key {key!r}")
         return data[key]
@@ -242,7 +242,7 @@ def cluster_service(url: str) -> tuple[str, str, int] | None:
     return match["service"], match["namespace"], parts.port or 80
 
 
-def decode_secret_data(data: Mapping[str, object]) -> dict[str, str]:
+def decode_secret(data: Mapping[str, object]) -> dict[str, str]:
     """Return the base64 `data` of a Secret, decoded."""
     return {key: base64.b64decode(str(value)).decode() for key, value in data.items()}
 
@@ -268,7 +268,7 @@ def metadata_labels(item: Mapping[str, object]) -> JsonObject:
     return section(section(item, "metadata"), "labels")
 
 
-def condition_true(item: Mapping[str, object], kind: str) -> bool:
+def is_condition_true(item: Mapping[str, object], kind: str) -> bool:
     """Whether the object's status has the condition of this type with status True."""
     matching = [
         condition for condition in entries(section(item, "status").get("conditions")) if condition.get("type") == kind

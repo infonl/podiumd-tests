@@ -96,11 +96,11 @@ def notify_request(env: Environment, channel: tuple[str, str], adres: str, templ
     """The mock server's record of OMC's Notify request to adres with the template of OMC setting `template`."""
     template_id = omc_setting(env, template)
 
-    def wanted(entry: JsonObject) -> bool:
+    def is_wanted(entry: JsonObject) -> bool:
         body = section(entry, "body")
         return body.get(channel[1]) == adres and body.get("template_id") == template_id
 
-    return Callback(env, channel[0]).wait_for(wanted, timeout=MAIL_TIMEOUT, description=f"OMC {template} to {adres}")
+    return Callback(env, channel[0]).wait_for(is_wanted, timeout=MAIL_TIMEOUT, description=f"OMC {template} to {adres}")
 
 
 def email_address(registry: ResourceRegistry) -> str:

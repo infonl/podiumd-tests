@@ -25,7 +25,7 @@ HOLD_ENV = "MINIKUBE_LOCK_HOLD"
 TIMEOUT = 600
 
 
-def switches_replicas(profile: Profile) -> bool:
+def can_switch_replicas(profile: Profile) -> bool:
     """Whether tests that need several pods switch them on themselves (and so disrupt the environment)."""
     return bool(profile.settings.get(SETTING))
 

@@ -73,9 +73,9 @@ def test_object_is_found_in_kiss_search(
     run_cronjob(podiumd_env.kube, cronjob, titel)
     kiss = kcc_login(page, podiumd_env, "kiss")
 
-    def found() -> bool:
+    def is_found() -> bool:
         hits = kiss_search_hits(kiss, podiumd_env.profile.urls["kiss"], titel)
         return any(titel in str(hit.get("_source")) for hit in hits)
 
     # Elasticsearch shows new documents only after its next index refresh, which lags under load.
-    wait_until(found, timeout=60, description=f"KISS search finds {titel}")
+    wait_until(is_found, timeout=60, description=f"KISS search finds {titel}")

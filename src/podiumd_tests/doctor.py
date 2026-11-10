@@ -126,7 +126,7 @@ def _api_error(env: Environment) -> str:
 
 
 def _lock(env: Environment) -> Check:
-    if env.profile.smoke_only:
+    if env.profile.is_smoke_only:
         return Check("lock", "skip", f"{env.profile.name} is smoke-only: no run takes the lock")
     try:
         current = lease_holder(env.kube)
@@ -156,9 +156,7 @@ def _getaddrinfo(host: str) -> None:
     socket.getaddrinfo(host, None)
 
 
-def resolve_hosts(
-    hosts: Iterable[str], resolve: Resolver = _getaddrinfo, timeout: float = DNS_TIMEOUT
-) -> dict[str, str]:
+def resolve_all(hosts: Iterable[str], resolve: Resolver = _getaddrinfo, timeout: float = DNS_TIMEOUT) -> dict[str, str]:
     """Look up all hosts in parallel; the error per host, "" when it resolved.
 
     The system resolver has no timeout and can take 10-20 s per unknown host;
@@ -216,7 +214,7 @@ def _url_checks(env: Environment, session: requests.Session, console: dict[str, 
     # In host-header mode the requests go to the ingress IP; the hosts need not resolve.
     dns_errors: dict[str, str] = {}
     if env.profile.access.mode == "direct":
-        dns_errors = resolve_hosts((url_host(console[component]) for component, _ in urls), resolve)
+        dns_errors = resolve_all((url_host(console[component]) for component, _ in urls), resolve)
     checks: dict[str, Check] = {}
     reachable: list[tuple[str, str]] = []
     absent = _not_deployed(env)
@@ -255,7 +253,7 @@ def _secrets(env: Environment, *, cluster_ok: bool) -> list[Check]:
 
 def _secret(env: Environment, name: str, absent: dict[str, str], *, cluster_ok: bool) -> Check:
     spec = env.profile.secrets[name]
-    if not cluster_ok and spec.needs_cluster:
+    if not cluster_ok and spec.is_in_cluster:
         return Check(f"secret {name}", "skip", "no cluster")
     # The deployment or Secret it is read from names its component (contact-web: kiss, omc: omc).
     owners = deployed_components([spec.options.get("deployment") or spec.options.get("name") or ""])
@@ -314,12 +312,12 @@ def run_checks(
     return [Check(check.name, check.status, env.redactor.redact(check.detail), check.hint) for check in checks]
 
 
-def failed(checks: list[Check]) -> bool:
+def has_failure(checks: list[Check]) -> bool:
     """Return True when any check failed."""
     return any(check.status == "fail" for check in checks)
 
 
-def format_checks(checks: list[Check]) -> str:
+def checklist(checks: list[Check]) -> str:
     """Checklist text for the terminal, with hints for failures and warnings."""
     width = max((len(check.name) for check in checks), default=0)
     lines: list[str] = []

@@ -65,7 +65,7 @@ class Step(Protocol):
         ...
 
     @property
-    def wiring(self) -> bool:
+    def wiring(self) -> bool:  # noqa: FNE005  # Step protocol member, the wiring field of every step dataclass
         """True for platform wiring: skipped unless the profile allows wiring."""
         ...
 
@@ -93,7 +93,7 @@ class Outcome:
 
 def refusal(profile: Profile) -> str | None:
     """Why bootstrap may not run on this environment, or None: smoke-only environments stay untouched."""
-    if profile.smoke_only:
+    if profile.is_smoke_only:
         return f"{profile.name} is smoke-only (allowed_tiers: {', '.join(profile.allowed_tiers)}); bootstrap changes it"
     return None
 
@@ -130,7 +130,7 @@ def _each(env: Environment, steps: Sequence[Step], act: Callable[[Context, Step]
     return outcomes
 
 
-def failed(outcomes: Sequence[Outcome]) -> bool:
+def has_failure(outcomes: Sequence[Outcome]) -> bool:
     """Return True when any step failed."""
     return any(outcome.action == "failed" for outcome in outcomes)
 
@@ -181,7 +181,7 @@ def check(env: Environment, steps: Sequence[Step]) -> list[Outcome]:
     return _each(env, steps, present)
 
 
-def format_outcomes(outcomes: Sequence[Outcome]) -> str:
+def outcome_report(outcomes: Sequence[Outcome]) -> str:
     """One line per step for the terminal."""
     width = max((len(outcome.step) for outcome in outcomes), default=0)
     lines = (f"{outcome.action:8} {outcome.step.ljust(width)}  {outcome.detail}" for outcome in outcomes)

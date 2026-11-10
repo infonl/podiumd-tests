@@ -100,13 +100,13 @@ def _module_ids(tree: ast.Module) -> list[str]:
     """Return the case ids of the module's pytestmark."""
     ids: list[str] = []
     for node in tree.body:
-        if isinstance(node, ast.Assign) and _assigns_pytestmark(node):
+        if isinstance(node, ast.Assign) and _is_pytestmark_assignment(node):
             values = node.value.elts if isinstance(node.value, ast.List) else [node.value]
             ids += [case for value in values for case in _tc_ids(value)]
     return ids
 
 
-def _assigns_pytestmark(node: ast.Assign) -> bool:
+def _is_pytestmark_assignment(node: ast.Assign) -> bool:
     return any(getattr(target, "id", "") == "pytestmark" for target in node.targets)
 
 

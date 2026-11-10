@@ -25,11 +25,11 @@ from podiumd_tests.json_data import JsonObject
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import KubeError
-from podiumd_tests.kube import condition_true
+from podiumd_tests.kube import is_condition_true
 from podiumd_tests.kube import metadata_labels
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.kube import metadata_namespace
-from podiumd_tests.responses import root_answers
+from podiumd_tests.responses import is_root_answering
 from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
@@ -194,7 +194,7 @@ def skip_older_than(env: Environment, component: str, version: tuple[int, ...], 
         pytest.skip(f"{component} {shown} is older than {'.'.join(map(str, version))}: {behaviour}")
 
 
-def chart_older_than(env: Environment, version: tuple[int, ...]) -> bool:
+def is_chart_older_than(env: Environment, version: tuple[int, ...]) -> bool:
     """Whether the deployed podiumd chart is older than `version`; True when its version is unknown."""
     found = _version(chart_version(env) or "")
     return found is None or found < version
@@ -252,7 +252,7 @@ def _job_log(kube: Kube, job: str) -> str:
     return f"no log of job/{job}"
 
 
-def _foreign(item: Item) -> bool:
+def _is_foreign(item: Item) -> bool:
     return metadata_labels(item).get("app") in FOREIGN_APPS
 
 
@@ -260,7 +260,7 @@ def unready_workloads(items: Sequence[Item]) -> list[str]:
     """Deployments and StatefulSets with fewer ready replicas than wanted, as "name ready/wanted"."""
     found: list[str] = []
     for item in items:
-        if _foreign(item):
+        if _is_foreign(item):
             continue
         replicas = section(item, "spec").get("replicas", 1)
         wanted = replicas if isinstance(replicas, int) else 1
@@ -320,21 +320,21 @@ def replica_drift(env: Environment, namespaces: Sequence[str] | None = None) -> 
     return found
 
 
-def unhealthy_pods(pods: Sequence[Item]) -> list[str]:
+def unhealthy_pods(items: Sequence[Item]) -> list[str]:
     """Long-running pods that are not Running with all containers ready, as "name: reason".
 
     Pods of Jobs are left to failed_jobs; pods being deleted and FOREIGN_APPS are ignored.
     """
     found: list[str] = []
-    for pod in pods:
-        if not _left_out(pod):
+    for pod in items:
+        if not _is_left_out(pod):
             found += _pod_problems(pod)
     return found
 
 
-def _left_out(pod: Item) -> bool:
+def _is_left_out(pod: Item) -> bool:
     deleted = bool(section(pod, "metadata").get("deletionTimestamp"))
-    return "Job" in _owner_kinds(pod) or deleted or _foreign(pod)
+    return "Job" in _owner_kinds(pod) or deleted or _is_foreign(pod)
 
 
 def _pod_problems(pod: Item) -> list[str]:
@@ -397,8 +397,8 @@ def _where(pod: Item) -> str:
     return f"{metadata_name(pod)} on {section(pod, 'spec').get('nodeName', '?')}"
 
 
-def _job_failed(job: Item) -> bool:
-    return condition_true(job, "Failed")
+def _has_failed(job: Item) -> bool:
+    return is_condition_true(job, "Failed")
 
 
 KEYCLOAKS = "keycloaks.k8s.keycloak.org"
@@ -419,11 +419,11 @@ def recreate_update_jobs(keycloaks: Sequence[Item]) -> set[str]:
     }
 
 
-def failed_jobs(jobs: Sequence[Item], keycloaks: Sequence[Item] = ()) -> list[str]:
+def failed_jobs(items: Sequence[Item], keycloaks: Sequence[Item] = ()) -> list[str]:
     """Jobs that failed: every standalone Job, and the latest Job of each CronJob; not a `recreate_update_jobs` one."""
     latest: dict[str, Item] = {}
     standalone: list[Item] = []
-    for job in jobs:
+    for job in items:
         cronjob = _owner_name(job, "CronJob")
         if cronjob is None:
             standalone.append(job)
@@ -434,7 +434,7 @@ def failed_jobs(jobs: Sequence[Item], keycloaks: Sequence[Item] = ()) -> list[st
             latest[cronjob] = job
     expected = recreate_update_jobs(keycloaks)
     counted = (*standalone, *latest.values())
-    return sorted(metadata_name(job) for job in counted if _job_failed(job) and metadata_name(job) not in expected)
+    return sorted(metadata_name(job) for job in counted if _has_failed(job) and metadata_name(job) not in expected)
 
 
 @contextmanager
@@ -445,6 +445,10 @@ def component_down(env: Environment, http: requests.Session, component: str) -> 
     """
     url = env.profile.urls[component]
     with scaled(env.kube, env.deployment_for(component), 0):
-        wait_until(lambda: not root_answers(http, url, ROOT_TIMEOUT), timeout=120, description=f"{component} stopped")
+        wait_until(
+            lambda: not is_root_answering(http, url, ROOT_TIMEOUT), timeout=120, description=f"{component} stopped"
+        )
         yield
-    wait_until(lambda: root_answers(http, url, ROOT_TIMEOUT), timeout=300, description=f"{component} answers again")
+    wait_until(
+        lambda: is_root_answering(http, url, ROOT_TIMEOUT), timeout=300, description=f"{component} answers again"
+    )

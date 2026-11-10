@@ -57,7 +57,7 @@ def keycloak_hosts(urls: Mapping[str, str]) -> frozenset[str]:
     return frozenset(url_host(urls[component]) for component in ("keycloak", "keycloak-admin") if component in urls)
 
 
-def logs_in_through_keycloak(http: requests.Session, start_url: str, hosts: Collection[str]) -> bool:
+def has_keycloak_login(http: requests.Session, start_url: str, hosts: Collection[str]) -> bool:
     """Whether the login at start_url redirects to Keycloak; UnexpectedStatusError for a server error.
 
     A failing app must fail the test, not look like an app without a Keycloak login.

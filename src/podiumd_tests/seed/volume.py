@@ -361,7 +361,7 @@ def _kiss_kind(name: str, source: KissSource) -> Kind:
 
 
 def _volume_zac_allowed(env: Environment) -> str | None:
-    if not env.profile.allows("pabc_volume_zaaktype"):
+    if not env.profile.is_allowed("pabc_volume_zaaktype"):
         return "not allowed: profile setting pabc_volume_zaaktype is off"
     return None
 
@@ -507,7 +507,7 @@ def counts(env: Environment) -> dict[str, int | None]:
     return found
 
 
-def format_seeded(seeded: list[Seeded]) -> str:
+def seed_report(seeded: list[Seeded]) -> str:
     """One line per kind: its count before and after, or why it was skipped."""
     width = max([14, *(len(entry.kind) + 1 for entry in seeded)])
     outcomes = [(entry.kind, entry.detail or f"{entry.before} -> {entry.after}") for entry in seeded]

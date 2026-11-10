@@ -10,8 +10,8 @@ from urllib3 import HTTPResponse
 
 from podiumd_tests.security import conforming_password
 from podiumd_tests.security import days_valid
-from podiumd_tests.security import foreign_origin_allowed
 from podiumd_tests.security import insecure_session_cookies
+from podiumd_tests.security import is_foreign_origin_allowed
 from podiumd_tests.security import missing_security_headers
 from podiumd_tests.security import policy_breaking_passwords
 from podiumd_tests.security import realm_policy_gaps
@@ -127,7 +127,7 @@ def test_only_session_cookies_need_secure_and_httponly(response_factory):
 def test_foreign_origin_allowed(response_factory, headers, allowed):
     response = response_factory()
     response.headers.update(headers)
-    assert foreign_origin_allowed(response, "https://foreign.test") is allowed
+    assert is_foreign_origin_allowed(response, "https://foreign.test") is allowed
 
 
 def test_days_valid():

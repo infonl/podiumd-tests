@@ -46,7 +46,7 @@ def get_root(session: requests.Session, base_url: str, timeout: float | tuple[fl
     return session.get(f"{base_url}/", timeout=timeout)
 
 
-def root_answers(session: requests.Session, base_url: str, timeout: float) -> bool:
+def is_root_answering(session: requests.Session, base_url: str, timeout: float) -> bool:
     """Whether the component's root answers without a server error (a refused connection counts as no)."""
     try:
         return not is_server_error(get_root(session, base_url, timeout))

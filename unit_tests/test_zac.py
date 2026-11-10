@@ -95,7 +95,7 @@ def parameters(identificatie, *, enabled=True, id_: int | None = 1):
 )
 def test_confirmation_on(fake_http, found, on):
     fake_http({"GET /rest/zaakafhandelparameters": (200, found)})
-    assert zac.confirmation_on(requests.Session(), ZAC, "zt1") is on
+    assert zac.is_confirmation_on(requests.Session(), ZAC, "zt1") is on
 
 
 def test_person_key_retries_once_with_a_fresh_lookup_on_410(fake_http, response_factory):
@@ -150,8 +150,8 @@ def test_zac_session_logs_in_through_keycloak(env_factory, profile_factory, monk
 
 def test_zaak_listed_searches_by_identificatie_with_the_flags(fake_http):
     sent = fake_http({"PUT /rest/zoeken/list": (200, {"resultaten": [{"identificatie": "ZAAK-1"}]})})
-    assert zac.zaak_listed(requests.Session(), ZAC, "ZAAK-1", alleenOpenstaandeZaken=True)
-    assert not zac.zaak_listed(requests.Session(), ZAC, "ZAAK-2")
+    assert zac.is_zaak_listed(requests.Session(), ZAC, "ZAAK-1", alleenOpenstaandeZaken=True)
+    assert not zac.is_zaak_listed(requests.Session(), ZAC, "ZAAK-2")
     body = json.loads(sent[0].body)
     assert body["zoeken"] == {"ZAAK_IDENTIFICATIE": "ZAAK-1"}
     assert body["alleenOpenstaandeZaken"] is True

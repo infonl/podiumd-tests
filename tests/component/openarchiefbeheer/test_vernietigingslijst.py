@@ -34,9 +34,9 @@ from podiumd_tests.oab import API
 from podiumd_tests.oab import cache_zaken
 from podiumd_tests.oab import destroy_now
 from podiumd_tests.oab import forget_zaken
+from podiumd_tests.oab import is_review_queued_after_commit
 from podiumd_tests.oab import login
 from podiumd_tests.oab import process_review_response
-from podiumd_tests.oab import queues_review_after_commit
 from podiumd_tests.oab import set_archive_config
 from podiumd_tests.oab import ui_login
 from podiumd_tests.responses import REFUSED
@@ -380,7 +380,7 @@ def test_rejected_list_goes_back_to_the_record_manager(
 """)
 def test_review_response_is_queued_after_its_commit(podiumd_env: Environment) -> None:
     """ReviewResponseSerializer.create queues its task with transaction.on_commit, so the worker finds the response."""
-    assert queues_review_after_commit(podiumd_env)
+    assert is_review_queued_after_commit(podiumd_env)
 
 
 @pytest.mark.tc("ABC-015")
@@ -907,11 +907,11 @@ def fixture_archive_config(podiumd_env: Environment) -> Iterator[Callable[..., N
     """set(**fields): change OAB's global ArchiveConfig for this test; the old values come back after it."""
     old: dict[str, object] = {}
 
-    def set_fields(**fields: object) -> None:
+    def set_config(**fields: object) -> None:
         for field, value in set_archive_config(podiumd_env, fields).items():
             old.setdefault(field, value)
 
-    yield set_fields
+    yield set_config
     if old:
         set_archive_config(podiumd_env, old)
 

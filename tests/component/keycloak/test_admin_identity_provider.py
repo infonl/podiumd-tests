@@ -32,7 +32,7 @@ ROLE_MAPPER = "oidc-hardcoded-role-idp-mapper"
 ADMIN_ROLES = frozenset(("admin",))
 
 
-def _grants_admin(mapper: JsonObject) -> bool:
+def _is_admin_grant(mapper: JsonObject) -> bool:
     config = mapper.get("config") or {}
     role = str(config.get("role", "")) if isinstance(config, dict) else ""
     return mapper.get("identityProviderMapper") == ROLE_MAPPER and role.rsplit(".", maxsplit=1)[-1] in ADMIN_ROLES
@@ -43,7 +43,7 @@ def _admin_role_providers(admin: KeycloakAdmin) -> list[JsonObject]:
     providers = [
         p
         for p in admin.identity_providers()
-        if any(_grants_admin(m) for m in admin.identity_provider_mappers(str(p["alias"])))
+        if any(_is_admin_grant(m) for m in admin.identity_provider_mappers(str(p["alias"])))
     ]
     if not providers:
         pytest.skip("no identity provider in the master realm grants a Keycloak admin role")

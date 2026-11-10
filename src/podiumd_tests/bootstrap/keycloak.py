@@ -19,9 +19,9 @@ if TYPE_CHECKING:
     from podiumd_tests.bootstrap.runner import Context
 
 
-def keycloak_password_key(key: str) -> str:
+def keycloak_password_key(user: str) -> str:
     """Key of a test user's password in the credentials Secret."""
-    return f"{PREFIX.replace('-', '_')}_{key.replace('-', '_')}_password"
+    return f"{PREFIX.replace('-', '_')}_{user.replace('-', '_')}_password"
 
 
 @dataclass(frozen=True)

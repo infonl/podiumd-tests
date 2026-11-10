@@ -86,7 +86,7 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
         name: tuple[str, str] | None = None,
     ) -> str:
         """Create an enabled user without required actions, by default named PodiumD <username>; its id."""
-        body = {**_user_body(username, attributes, name), "credentials": [_password(password)]}
+        body = {**_user_body(username, attributes, name), "credentials": [_password_credential(password)]}
         self._send("POST", "/users", body, HTTPStatus.CREATED)
         user_id = self.user_id(username)
         if user_id is None:
@@ -112,7 +112,7 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
         if user_id is None:
             return self.create_user(username, password, attributes, name)
         self._send("PUT", f"/users/{user_id}", _user_body(username, attributes, name), HTTPStatus.NO_CONTENT)
-        self._send("PUT", f"/users/{user_id}/reset-password", _password(password), HTTPStatus.NO_CONTENT)
+        self._send("PUT", f"/users/{user_id}/reset-password", _password_credential(password), HTTPStatus.NO_CONTENT)
         return user_id
 
     def new_password(self) -> str:
@@ -122,7 +122,7 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
     def password_refusal(self, user_id: str, password: str) -> str | None:
         """Keycloak's reason to refuse the password as the user's new one; None when it takes it."""
         response = self.http.put(
-            f"{self.base}/users/{user_id}/reset-password", json=_password(password), headers=self.headers
+            f"{self.base}/users/{user_id}/reset-password", json=_password_credential(password), headers=self.headers
         )
         if response.status_code == HTTPStatus.NO_CONTENT:
             return None
@@ -301,5 +301,5 @@ def _user_body(
     }
 
 
-def _password(password: str) -> JsonObject:
+def _password_credential(password: str) -> JsonObject:
     return {"type": "password", "value": password, "temporary": False}

@@ -71,7 +71,7 @@ def _arguments(parser: ArgumentParser) -> None:
 
 
 @events.init.add_listener
-def _environment(environment: LocustEnvironment, **_kwargs: object) -> None:
+def _on_init(environment: LocustEnvironment, **_kwargs: object) -> None:
     profile = load_profile(environment.parsed_options.podiumd_env, default_envs_dir())
     ApiUser.env_under_test = Environment(profile)
     ApiUser.run_tag = environment.parsed_options.podiumd_run_tag

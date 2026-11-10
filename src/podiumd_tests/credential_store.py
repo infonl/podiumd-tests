@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from podiumd_tests.json_data import section
-from podiumd_tests.kube import decode_secret_data
+from podiumd_tests.kube import decode_secret
 
 if TYPE_CHECKING:
     from podiumd_tests.kube import Kube
@@ -28,7 +28,7 @@ class CredentialStore:
     def read(self) -> dict[str, str]:
         """All stored values; empty when the Secret does not exist."""
         secret = self.kube.get_optional("secret", STORE_NAME)
-        return decode_secret_data(section(secret, "data")) if secret else {}
+        return decode_secret(section(secret, "data")) if secret else {}
 
     def write(self, values: dict[str, str]) -> None:
         """Merge values into the Secret, creating it when needed. Values go over stdin, not argv."""

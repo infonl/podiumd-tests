@@ -96,10 +96,10 @@ def test_optional_secrets_come_from_profile_or_env_var(profile_factory, env_fact
     environ = {env_var_name("grafana_password"): "from-env"}
     profile = profile_factory(secrets={"grafana_username": {"k8s_secret": {"name": "s", "key": "k"}}})
     creds = env_factory(profile, environ).credentials
-    assert creds.configured("grafana_username")
-    assert creds.configured("grafana_password")
+    assert creds.is_configured("grafana_username")
+    assert creds.is_configured("grafana_password")
     assert creds.optional("grafana_password") == "from-env"
-    assert not creds.configured("zgw_client_secret")
+    assert not creds.is_configured("zgw_client_secret")
     assert creds.optional("zgw_client_secret") is None
 
 

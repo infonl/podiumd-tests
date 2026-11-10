@@ -18,7 +18,7 @@ from podiumd_tests.bootstrap.names import PREFIX
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
-from podiumd_tests.zac import confirmation_sent
+from podiumd_tests.zac import is_confirmation_sent
 from podiumd_tests.zac import zaakafhandelparameters
 from podiumd_tests.zac import zac_session
 
@@ -69,7 +69,7 @@ class ZacPart:
 EMAIL_CONFIRMATION = ZacPart(
     "automaticEmailConfirmation",
     {"enabled": True, "templateName": "Ontvangstbevestiging", "emailSender": "GEMEENTE", "emailReply": "GEMEENTE"},
-    confirmation_sent,
+    is_confirmation_sent,
 )
 # ZAC's default leaves every human task inactive, so no task can be started on a zaak.
 AANVULLENDE_INFORMATIE = ZacPart(
@@ -159,7 +159,7 @@ class ZacParameters:
     def _allowed(self, ctx: Context) -> str | None:
         """Return the zaaktype identificatie when the profile allows the change, else None."""
         profile = ctx.env.profile
-        return profile.settings.get("productaanvraag_zaaktype") if profile.allows(self.setting) else None
+        return profile.settings.get("productaanvraag_zaaktype") if profile.is_allowed(self.setting) else None
 
     def _session(self, ctx: Context) -> requests.Session:
         return zac_session(ctx.env, self.admin.username, ctx.env.credentials.get(self.admin.store_key))

@@ -48,8 +48,8 @@ def test_role_endpoints_and_master_check():
     fake = FakeEnv({"pods": [master, other], "endpoints": [endpoints]}, out="# Replication\r\nrole:slave\r\n")
     env = cast("Environment", fake)
     assert redis.redis_pods(env) == [master]
-    assert redis.checks_master_role(master)
-    assert not redis.checks_master_role(other)
+    assert redis.is_master_role_checked(master)
+    assert not redis.is_master_role_checked(other)
     assert redis.ready_endpoints(env, "redis-ha-master") == ["redis-ha-0"]
     assert redis.reported_role(env, master) == "slave"
     args, kwargs = fake.kube.calls[0]

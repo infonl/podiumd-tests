@@ -48,7 +48,7 @@ OWN = {"bronorganisatie": TEST_CATALOGUS_RSIN}
 def event(kanaal: str, resource: str, actie: str, hoofd: object) -> Callable[[JsonObject], bool]:
     """Matches a received notification of this kind about hoofd (a URL)."""
 
-    def match(entry: JsonObject) -> bool:
+    def is_match(entry: JsonObject) -> bool:
         body = entry.get("body")
         if not isinstance(body, dict):
             return False
@@ -59,7 +59,7 @@ def event(kanaal: str, resource: str, actie: str, hoofd: object) -> Callable[[Js
             and body.get("hoofdObject") == hoofd
         )
 
-    return match
+    return is_match
 
 
 def notified(callback: Callback, match: Callable[[JsonObject], bool], description: str) -> JsonObject:

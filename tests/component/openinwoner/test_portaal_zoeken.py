@@ -193,18 +193,18 @@ def test_search_can_be_switched_off(http: requests.Session, urls: dict[str, str]
     """With search switched off in the admin, the search page and links to it answer 404, and the form is gone."""
     search = f"{urls['openinwoner']}/search/"
 
-    def search_answers(status: HTTPStatus) -> bool:
+    def is_search_answering(status: HTTPStatus) -> bool:
         return http.get(search, params={"query": PASPOORT}).status_code == status
 
-    def form_shown() -> bool:
+    def is_form_shown() -> bool:
         return 'id="search-form"' in expect_status(http.get(f"{urls['openinwoner']}/"), HTTPStatus.OK).text
 
     old = set_site_configuration(podiumd_env, search_enabled=False)
     try:
         wait_until(
-            lambda: search_answers(HTTPStatus.NOT_FOUND) and not form_shown(),
+            lambda: is_search_answering(HTTPStatus.NOT_FOUND) and not is_form_shown(),
             timeout=SOLO_TIMEOUT,
             description="search off",
         )
     finally:
-        _restore_search(podiumd_env, old, lambda: search_answers(HTTPStatus.OK))
+        _restore_search(podiumd_env, old, lambda: is_search_answering(HTTPStatus.OK))

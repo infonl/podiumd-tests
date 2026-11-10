@@ -58,9 +58,9 @@ def test_crawled_website_is_found_in_kiss_search(
         host = urlsplit(url).hostname or url
         name = host.removeprefix("www.").split(".")[0]
 
-        def found(host: str = host, name: str = name) -> bool:
+        def is_found(host: str = host, name: str = name) -> bool:
             hits = kiss_search_hits(kiss, podiumd_env.profile.urls["kiss"], name)
             return any(section(hit, "_source").get("url_host") == host for hit in hits)
 
         # Elasticsearch shows new documents only after its next index refresh.
-        wait_until(found, timeout=60, description=f"KISS search for {name!r} finds a page of {host}")
+        wait_until(is_found, timeout=60, description=f"KISS search for {name!r} finds a page of {host}")

@@ -14,8 +14,8 @@ from podiumd_tests.json_data import section
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.redis import REDIS_HA
 from podiumd_tests.workloads import KEYCLOAKS
-from podiumd_tests.workloads import chart_older_than
 from podiumd_tests.workloads import failed_jobs
+from podiumd_tests.workloads import is_chart_older_than
 from podiumd_tests.workloads import replica_drift
 from podiumd_tests.workloads import unhealthy_pods
 from podiumd_tests.workloads import unready_workloads
@@ -184,7 +184,7 @@ def test_keycloak_instances_have_a_disruption_budget(podiumd_env: Environment) -
 """)
 def test_redis_ha_replicas_have_a_disruption_budget(request: pytest.FixtureRequest, podiumd_env: Environment) -> None:
     """redis-ha's replicas have a PodDisruptionBudget (redis-ha-replication), so a node drain keeps one running."""
-    if chart_older_than(podiumd_env, (4, 10, 0)):
+    if is_chart_older_than(podiumd_env, (4, 10, 0)):
         request.applymarker(
             pytest.mark.xfail(
                 strict=True,

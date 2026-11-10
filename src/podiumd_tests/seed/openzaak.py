@@ -48,7 +48,7 @@ def delete_zaak(openzaak: ApiClient, url: str, *, with_documents: bool = False) 
     during the delete. A 500 counts as deleted only when the zaak is gone.
     """
 
-    def deleted() -> bool:
+    def is_deleted() -> bool:
         response = openzaak.request(
             "DELETE", url, HTTPStatus.NO_CONTENT, HTTPStatus.NOT_FOUND, HTTPStatus.INTERNAL_SERVER_ERROR
         )
@@ -61,7 +61,7 @@ def delete_zaak(openzaak: ApiClient, url: str, *, with_documents: bool = False) 
         if with_documents
         else []
     )
-    wait_until(deleted, timeout=DELETE_TIMEOUT, description=f"DELETE {url}")
+    wait_until(is_deleted, timeout=DELETE_TIMEOUT, description=f"DELETE {url}")
     for document in documents:
         openzaak.delete(document)
 

@@ -13,7 +13,7 @@ import pytest
 
 from playwright.sync_api import expect
 
-from podiumd_tests.accessibility import describe_violation
+from podiumd_tests.accessibility import violation_line
 from podiumd_tests.accessibility import wcag_violations
 from podiumd_tests.bootstrap.names import TEST_FORM
 from podiumd_tests.browser import refuse_cookies
@@ -59,5 +59,5 @@ def test_page_has_no_critical_wcag_violation(
     else:
         # The form SDK renders the start page, with its heading, after the page has loaded.
         expect(page.get_by_role("heading", name=TEST_FORM)).to_be_visible()
-    critical = [describe_violation(v) for v in wcag_violations(page) if v.get("impact") == "critical"]
+    critical = [violation_line(v) for v in wcag_violations(page) if v.get("impact") == "critical"]
     assert critical == []
