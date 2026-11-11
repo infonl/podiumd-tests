@@ -26,7 +26,9 @@ from podiumd_tests.responses import get_entries
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import complete_task
+from podiumd_tests.zac import end_process
 from podiumd_tests.zac import is_taak_listed
+from podiumd_tests.zac import is_task_open
 from podiumd_tests.zac import open_task
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import wait_in_werkvoorraad
@@ -183,3 +185,21 @@ def test_summary_closes_the_zaak_with_its_resultaat(
     assert not zaak["isOpen"], zaak.get("status")
     assert section(zaak, "status").get("naam") == EINDSTATUS
     assert section(section(zaak, "resultaat"), "resultaattype").get("naam") == EINDSTATUS, zaak.get("resultaat")
+
+
+@pytest.mark.source("podiumd-tests", "Cleanup ends a BPMN zaak's process by afbreken before it deletes the zaak.")
+@pytest.mark.scenario("""
+    Given a BPMN zaak in ZAC with its intake taak open
+    When the beheerder breaks the zaak off as niet ontvankelijk
+    Then the zaak has no running process
+    And the intake taak is no longer open
+""")
+def test_afbreken_ends_the_process_and_its_taken(
+    zac: requests.Session, urls: dict[str, str], bpmn_zaak: JsonObject
+) -> None:
+    """end_process (afbreken) of a zaak of a zaaktype without niet-ontvankelijk resultaattype ends its process."""
+    uuid = str(bpmn_zaak["uuid"])
+    task = open_task(zac, urls["zac"], uuid, INTAKE)
+    end_process(zac, urls["zac"], uuid)
+    assert not read_zaak(zac, urls["zac"], uuid)["isProcesGestuurd"]
+    assert not is_task_open(zac, urls["zac"], str(task["id"]))

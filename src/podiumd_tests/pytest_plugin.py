@@ -31,9 +31,7 @@ from podiumd_tests.kube import cluster_service
 from podiumd_tests.mock_server import Callback
 from podiumd_tests.oidc import challenge_session
 from podiumd_tests.seed.objecten import objecttype_url
-from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import ZaaktypeParts
-from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.openzaak import published_zaaktype
 from podiumd_tests.seed.openzaak import zaaktype_parts
 from podiumd_tests.seed.registry import ResourceRegistry
@@ -41,6 +39,7 @@ from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.sources import source_problems
 from podiumd_tests.sources import sources
 from podiumd_tests.workloads import skip_older_than
+from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import is_confirmation_on
 from podiumd_tests.zac import user_groups
@@ -490,15 +489,11 @@ def fixture_zac_zaak(
     openzaak_productaanvraag: ApiClient,
     registry: ResourceRegistry,
 ) -> Callable[..., JsonObject]:
-    """Start a zaak in ZAC with a run-tagged omschrijving; cleanup deletes it from Open Zaak."""
+    """Start a zaak in ZAC with a run-tagged omschrijving; cleanup ends its BPMN process and deletes it."""
 
     def start(**fields: object) -> JsonObject:
         zaak = create_zaak(zac, urls["zac"], zac_parameters, omschrijving=registry.tagged("zac-zaak"), **fields)
-        url = f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}"
-        registry.add(
-            f"zaak {zaak['identificatie']}",
-            lambda: delete_zaak(openzaak_productaanvraag, url, with_documents=True),
-        )
+        clean_up_zaak(zac, urls["zac"], openzaak_productaanvraag, registry, zaak)
         return zaak
 
     return start
@@ -526,10 +521,9 @@ def fixture_bpmn_zaak(
     bpmn_parameters: JsonObject,
     registry: ResourceRegistry,
 ) -> JsonObject:
-    """Start a zaak of the BPMN test zaaktype in ZAC; cleanup deletes it and its documents from Open Zaak."""
+    """Start a zaak of the BPMN test zaaktype in ZAC; cleanup ends its process and deletes it and its documents."""
     zaak = create_zaak(zac, urls["zac"], bpmn_parameters, omschrijving=registry.tagged("bpmn"))
-    url = f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}"
-    registry.add(f"zaak {zaak['identificatie']}", lambda: delete_zaak(openzaak, url, with_documents=True))
+    clean_up_zaak(zac, urls["zac"], openzaak, registry, zaak)
     return zaak
 
 

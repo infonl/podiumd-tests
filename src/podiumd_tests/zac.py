@@ -34,6 +34,8 @@ if TYPE_CHECKING:
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
+# The status ZAC gives a completed or ended task.
+AFGEROND = "AFGEROND"
 # ZAC's own address inside its pod.
 IN_POD = "http://localhost:8080"
 # ZAC reindexes in the request, page by page; tens of thousands of zaken take minutes.
@@ -294,8 +296,48 @@ def afbreken(http: requests.Session, zac_url: str, zaak: JsonObject) -> requests
     return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/afbreken", json=body)
 
 
+def end_process(http: requests.Session, zac_url: str, uuid: str) -> None:
+    """End the zaak's BPMN process and its open taken by afbreken, where ZAC allows it: on an open, not heropende zaak.
+
+    ZAC 5.9.1 keeps the process when afsluiten closes the zaak, and when the zaak is deleted in Open Zaak (zac-14).
+    afbreken of a zaaktype without niet-ontvankelijk resultaattype leaves the zaak open.
+    """
+    response = http.get(f"{zac_url}/rest/zaken/zaak/{uuid}")
+    if response.status_code == HTTPStatus.NOT_FOUND:
+        return
+    zaak = cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
+    is_open = zaak.get("isOpen") and not zaak.get("isHeropend")
+    if is_open and zaak.get("isProcesGestuurd") and section(zaak, "rechten").get("afbreken"):
+        expect_status(afbreken(http, zac_url, zaak), HTTPStatus.OK)
+
+
+def end_process_at_cleanup(http: requests.Session, zac_url: str, registry: ResourceRegistry, zaak: JsonObject) -> None:
+    """Run end_process at cleanup; registered after the zaak's delete, it runs before it."""
+    uuid = str(zaak["uuid"])
+    registry.add(f"BPMN process of zaak {zaak['identificatie']}", lambda: end_process(http, zac_url, uuid))
+
+
+def clean_up_zaak(  # noqa: PLR0913  # the zaak, its two APIs and the cleanup
+    http: requests.Session,
+    zac_url: str,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    zaak: JsonObject,
+    *,
+    with_documents: bool = True,
+) -> None:
+    """Delete, at cleanup, the zaak ZAC shows from Open Zaak, after end_process."""
+    url = openzaak.url(f"{ZAKEN}/zaken/{zaak['uuid']}")
+    registry.add(f"zaak {zaak['identificatie']}", lambda: delete_zaak(openzaak, url, with_documents=with_documents))
+    end_process_at_cleanup(http, zac_url, registry, zaak)
+
+
 def afsluiten(http: requests.Session, zac_url: str, zaak: JsonObject) -> requests.Response:
-    """Close the zaak with a resultaattype that needs no besluit, as for a BPMN zaak; ZAC's answer."""
+    """Close the zaak with a resultaattype that needs no besluit, as for a BPMN zaak; ZAC's answer.
+
+    Ends a BPMN zaak's process first (end_process): ZAC keeps it on the closed zaak, where afbreken is refused.
+    """
+    end_process(http, zac_url, str(zaak["uuid"]))
     body = {"reden": "podiumd-tests", "resultaattypeUuid": _resultaattype_without_besluit(http, zac_url, zaak)}
     return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/afsluiten", json=body)
 
@@ -539,7 +581,7 @@ def open_task(http: requests.Session, zac_url: str, zaak_uuid: str, name: str) -
 
     def found() -> JsonObject | None:
         tasks = get_entries(http, f"{zac_url}/rest/taken/zaak/{zaak_uuid}")
-        open_tasks = (task for task in tasks if task.get("status") != "AFGEROND")
+        open_tasks = (task for task in tasks if task.get("status") != AFGEROND)
         return next((task for task in open_tasks if task.get("naam") == name), None)
 
     return wait_until(found, timeout=TASK_TIMEOUT, description=f"open task {name!r} on zaak {zaak_uuid}")
@@ -548,6 +590,12 @@ def open_task(http: requests.Session, zac_url: str, zaak_uuid: str, name: str) -
 def read_taak(http: requests.Session, zac_url: str, taak_id: str) -> JsonObject:
     """ZAC's view of a taak."""
     return cast("JsonObject", expect_status(http.get(f"{zac_url}/rest/taken/{taak_id}"), HTTPStatus.OK).json())
+
+
+def is_task_open(http: requests.Session, zac_url: str, task_id: str) -> bool:
+    """ZAC reads the task, and not as AFGEROND."""
+    response = http.get(f"{zac_url}/rest/taken/{task_id}")
+    return response.status_code == HTTPStatus.OK and response.json().get("status") != AFGEROND
 
 
 def complete_task(http: requests.Session, zac_url: str, task: JsonObject, data: JsonObject) -> JsonObject:

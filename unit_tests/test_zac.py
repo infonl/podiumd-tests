@@ -341,6 +341,55 @@ def test_afhandelen_and_afsluiten_use_a_resultaattype_without_besluit(fake_http)
     assert json.loads(sent[-1].body) == {"reden": "podiumd-tests", "resultaattypeUuid": "r2"}
 
 
+@pytest.mark.parametrize(
+    ("zaak", "methods"),
+    [
+        ({"isProcesGestuurd": True, "isOpen": True, "rechten": {"afbreken": True}}, ["GET", "PATCH"]),
+        ({"isProcesGestuurd": False, "isOpen": True, "rechten": {"afbreken": True}}, ["GET"]),
+        ({"isProcesGestuurd": True, "isOpen": True, "rechten": {"afbreken": False}}, ["GET"]),
+        ({"isProcesGestuurd": True, "isOpen": True, "rechten": {"afbreken": True}, "isHeropend": True}, ["GET"]),
+        ({"isProcesGestuurd": True, "isOpen": False, "rechten": {"afbreken": True}}, ["GET"]),
+    ],
+)
+def test_end_process_aborts_only_a_zaak_with_a_process_that_zac_lets_abort(fake_http, zaak, methods):
+    sent = fake_http(
+        {"GET /rest/zaken/zaak/z1": (200, {"uuid": "z1", **zaak}), "PATCH /rest/zaken/zaak/z1/afbreken": (200, {})}
+    )
+    zac.end_process(requests.Session(), ZAC, "z1")
+    assert [request.method for request in sent] == methods
+
+
+@pytest.mark.parametrize(
+    ("answer", "is_open"),
+    [((200, {"status": "TOEGEKEND"}), True), ((200, {"status": "AFGEROND"}), False), ((404, {}), False)],
+)
+def test_is_task_open_is_a_read_task_not_afgerond(fake_http, answer, is_open):
+    fake_http({"GET /rest/taken/t1": answer})
+    assert zac.is_task_open(requests.Session(), ZAC, "t1") is is_open
+
+
+def test_clean_up_zaak_ends_the_process_before_it_deletes_the_zaak(fake_http):
+    zaak = {"uuid": "z1", "isOpen": True, "isProcesGestuurd": True, "rechten": {"afbreken": True}}
+    sent = fake_http(
+        {
+            "GET /rest/zaken/zaak/z1": (200, zaak),
+            "PATCH /rest/zaken/zaak/z1/afbreken": (200, {}),
+            "GET /zaken/api/v1/zaakinformatieobjecten": (200, []),
+            "DELETE /zaken/api/v1/zaken/z1": (204, None),
+        }
+    )
+    registry = ResourceRegistry("ptest-abc")
+    openzaak = ApiClient(requests.Session(), "https://oz.test", {})
+    zac.clean_up_zaak(requests.Session(), ZAC, openzaak, registry, {"uuid": "z1", "identificatie": "ZAAK-1"})
+    assert registry.cleanup() == []
+    assert [f"{request.method} {request.url}" for request in sent] == [
+        f"GET {ZAC}/rest/zaken/zaak/z1",
+        f"PATCH {ZAC}/rest/zaken/zaak/z1/afbreken",
+        "GET https://oz.test/zaken/api/v1/zaakinformatieobjecten?zaak=https%3A%2F%2Foz.test%2Fzaken%2Fapi%2Fv1%2Fzaken%2Fz1",
+        "DELETE https://oz.test/zaken/api/v1/zaken/z1",
+    ]
+
+
 def test_wijzig_zaak_sends_the_fields_with_omschrijving_zaaktype_and_reden(fake_http):
     sent = fake_http({"PATCH /rest/zaken/zaak/z1": (200, {})})
     zaak = {"uuid": "z1", "omschrijving": "o", "zaaktype": {"uuid": "zt1"}}

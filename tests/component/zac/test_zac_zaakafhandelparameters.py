@@ -20,8 +20,6 @@ from podiumd_tests.json_data import differences
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import CATALOGI
-from podiumd_tests.seed.openzaak import ZAKEN
-from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.seed.zac_zaaktype import make_role_group
 from podiumd_tests.seed.zac_zaaktype import make_zac_zaaktype
@@ -29,6 +27,7 @@ from podiumd_tests.seed.zac_zaaktype import publish_new_version
 from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import behandelaar_groups
+from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import clear_ztc_cache
 from podiumd_tests.zac import comparable
 from podiumd_tests.zac import copied_zaakafhandelparameters
@@ -158,8 +157,7 @@ def _zaak(
 ) -> JsonObject:
     """Start a zaak in ZAC in the default groep of these zaakafhandelparameters; cleanup deletes it."""
     zaak = create_zaak(zac, urls["zac"], parameters, omschrijving=registry.tagged("zac-versie"))
-    url = f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}"
-    registry.add(f"zaak {zaak['identificatie']}", lambda: delete_zaak(openzaak, url))
+    clean_up_zaak(zac, urls["zac"], openzaak, registry, zaak, with_documents=False)
     return zaak
 
 

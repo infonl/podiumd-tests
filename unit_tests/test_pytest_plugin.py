@@ -325,7 +325,9 @@ def _fake_zac_and_open_zaak(monkeypatch):
         "objecttype_url": lambda _env, name: f"objecttype {name}",
         "zaaktype_parts": lambda _client, zaaktype: f"parts of {zaaktype['url']}",
         "create_zaak": lambda _zac, _url, _parameters, **fields: {"uuid": "u1", "identificatie": "ZAAK-1", **fields},
-        "delete_zaak": lambda _client, url, **_options: deleted.append(url),
+        "clean_up_zaak": lambda _zac, _url, client, _registry, zaak: deleted.append(
+            client.url(f"zaken/{zaak['uuid']}")
+        ),
         "user_groups": lambda _zac, _url: ["beheerders"],
         "published_zaaktype": lambda _openzaak, identificatie, _step: (
             {"url": "zt/zt-b", "omschrijving": "b"} if identificatie.endswith("bpmn") else {"url": "zt-1"}
@@ -368,8 +370,8 @@ def test_kiss(kiss_session):
     result.assert_outcomes(passed=2, skipped=1)
     result.stdout.fnmatch_lines(["*ZAC sends no ontvangstbevestiging for ZT-PA*"])
     assert deleted == [
-        "https://openzaak.example.test/zaken/api/v1/zaken/u1",
-        "https://openzaak.example.test/zaken/api/v1/zaken/u1",
+        "https://openzaak.example.test/zaken/u1",
+        "https://openzaak.example.test/zaken/u1",
     ]
 
 

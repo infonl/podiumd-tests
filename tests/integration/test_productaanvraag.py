@@ -32,14 +32,15 @@ from podiumd_tests.seed.objecten import created_notificatie
 from podiumd_tests.seed.objecten import make_productaanvraag
 from podiumd_tests.seed.openklant import make_submission_contact
 from podiumd_tests.seed.openzaak import ZAKEN
-from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import zaaktype_parts
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import PRODUCTAANVRAAG_TIMEOUT
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import clean_up_inbox_entries
+from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import deliver_notificatie
+from podiumd_tests.zac import end_process_at_cleanup
 from podiumd_tests.zac import inbox_productaanvragen
 from podiumd_tests.zac import open_task
 from podiumd_tests.zac import productaanvraag_zaak
@@ -201,6 +202,7 @@ def handled_zaak(
 ) -> JsonObject:
     """Return the BPMN zaak ZAC starts for the productaanvraag, once ZAC has handled it (its process started)."""
     zaak = productaanvraag_zaak(openzaak, registry, kenmerk)
+    end_process_at_cleanup(zac, zac_url, registry, zaak)
     open_task(zac, zac_url, str(zaak["uuid"]), INTAKE)
     return zaak
 
@@ -430,8 +432,7 @@ def test_unhandled_productaanvraag_becomes_a_zaak_from_the_inbox(
     )
     body = zaak_body(bpmn_parameters, omschrijving=registry.tagged("inbox-zaak"))
     zaak = start_zaak(zac, urls["zac"], {**body, "inboxProductaanvraag": entry})
-    url = f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}"
-    registry.add(f"zaak {zaak['identificatie']}", lambda: delete_zaak(openzaak, url))
+    clean_up_zaak(zac, urls["zac"], openzaak, registry, zaak, with_documents=False)
     documents = {str(document["uuid"]) for document in zaak_documents(zac, urls["zac"], zaak)}
     assert documents == {uuid_of(pdf["url"]), uuid_of(bijlage["url"])}
     assert section(read_zaak(zac, urls["zac"], str(zaak["uuid"])), "zaakdata").get("omschrijving") == kenmerk

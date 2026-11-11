@@ -9,12 +9,11 @@ import pytest
 from podiumd_tests.bootstrap.names import EMAIL_IOT
 from podiumd_tests.json_data import section
 from podiumd_tests.seed.openzaak import CATALOGI
-from podiumd_tests.seed.openzaak import ZAKEN
-from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.seed.zac_zaaktype import make_zac_zaaktype
 from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.zac import activate_human_tasks
+from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac_signaleringen import save_signalering_setting
 from podiumd_tests.zac_signaleringen import signalering_settings
@@ -101,8 +100,7 @@ def _zaak_starter(
 
     def start() -> JsonObject:
         zaak = create_zaak(zac, urls["zac"], parameters, omschrijving=registry.tagged("zac-eigen"))
-        url = f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}"
-        registry.add(f"zaak {zaak['identificatie']}", lambda: delete_zaak(openzaak, url, with_documents=True))
+        clean_up_zaak(zac, urls["zac"], openzaak, registry, zaak)
         return zaak
 
     return start
