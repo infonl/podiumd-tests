@@ -218,3 +218,18 @@ def medewerkers(ita: requests.Session, ita_url: str, **query: str) -> list[str]:
     """Return the identificaties ITA's medewerker picker offers: by search, or by afdelingOfGroep and type."""
     found = expect_status(ita.get(f"{ita_url}/api/medewerkers", params=query), HTTPStatus.OK).json()
     return [str(medewerker.get("identificatie")) for medewerker in entries(found)]
+
+
+def koppel_zaak(http: requests.Session, ita_url: str, taak: JsonObject, zaaknummer: str) -> requests.Response:
+    """Link the zaak with this identificatie to the klantcontact of the internetaak (Zaak koppelen); ITA's answer."""
+    body = {
+        "zaakIdentificatie": zaaknummer,
+        "aanleidinggevendKlantcontactUuid": section(taak, "aanleidinggevendKlantcontact")["uuid"],
+        "internetaakId": taak["uuid"],
+    }
+    return http.post(f"{ita_url}/api/internetaken/koppel-zaak", json=body)
+
+
+def logboek(ita: requests.Session, ita_url: str, taak: JsonObject) -> list[JsonObject]:
+    """Return the activiteiten of ITA's logboek of the internetaak, newest first, as its detail page shows them."""
+    return get_entries(ita, f"{ita_url}/api/internetaken/{taak['uuid']}/logboek")

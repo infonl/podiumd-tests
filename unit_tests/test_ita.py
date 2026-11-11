@@ -146,3 +146,19 @@ def test_forward_and_medewerkers_call_itas_routes(fake_http):
     assert json.loads(sent[0].body) == {"medewerker": "m-1", "afdeling": "a"}
     assert ita.medewerkers(requests.Session(), ITA, afdelingOfGroep="a", type="Afdeling") == ["m-1"]
     assert parse_qs(urlsplit(sent[1].url).query) == {"afdelingOfGroep": ["a"], "type": ["Afdeling"]}
+
+
+def test_koppel_zaak_and_logboek_call_itas_routes(fake_http):
+    sent = fake_http(
+        {
+            "POST /api/internetaken/koppel-zaak": (200, {}),
+            "GET /api/internetaken/t-1/logboek": (200, [{"type": "toegewezen"}]),
+        }
+    )
+    ita.koppel_zaak(requests.Session(), ITA, TAAK, "ZAAK-1")
+    assert json.loads(sent[0].body) == {
+        "zaakIdentificatie": "ZAAK-1",
+        "aanleidinggevendKlantcontactUuid": "k-1",
+        "internetaakId": "t-1",
+    }
+    assert ita.logboek(requests.Session(), ITA, TAAK) == [{"type": "toegewezen"}]
