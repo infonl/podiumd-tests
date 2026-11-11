@@ -1,6 +1,6 @@
-"""ZAC's beheer of referentietabellen, on run-tagged tables of podiumd-tests.
+"""ZAC's beheer of referentietabellen and mailtemplates, on run-tagged tables and templates of podiumd-tests.
 
-The estate's tables are only read; a system table only gets a request ZAC refuses.
+The estate's tables and templates are only read; a system table only gets a request ZAC refuses.
 """
 
 from __future__ import annotations
@@ -13,14 +13,19 @@ import pytest
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
+from podiumd_tests.zac_beheer import MAILTEMPLATES
 from podiumd_tests.zac_beheer import REFERENTIETABELLEN
 from podiumd_tests.zac_beheer import VALUE_MAX_LENGTH
+from podiumd_tests.zac_beheer import create_mailtemplate
 from podiumd_tests.zac_beheer import create_referentietabel
+from podiumd_tests.zac_beheer import delete_mailtemplate
 from podiumd_tests.zac_beheer import delete_referentietabel
 from podiumd_tests.zac_beheer import guard_referentietabel
 from podiumd_tests.zac_beheer import has_same_values
+from podiumd_tests.zac_beheer import mailtemplate
 from podiumd_tests.zac_beheer import referentietabel
 from podiumd_tests.zac_beheer import referentietabel_values
+from podiumd_tests.zac_beheer import update_mailtemplate
 from podiumd_tests.zac_beheer import update_referentietabel
 
 if TYPE_CHECKING:
@@ -100,3 +105,26 @@ def test_system_value_of_a_referentietabel_cannot_be_removed(
     guard_referentietabel(zac, zac_url, registry, tabel)
     expect_status(update_referentietabel(zac, zac_url, tabel, gewoon), HTTPStatus.BAD_REQUEST)
     assert has_same_values(referentietabel(zac, zac_url, "COMMUNICATIEKANAAL"), tabel)
+
+
+@pytest.mark.scenario("""
+    Given a new mailtemplate for mail from a zaak
+    When the beheerder changes its onderwerp and body
+    Then ZAC shows the new onderwerp and body
+    When the beheerder deletes it
+    Then ZAC no longer has it
+""")
+def test_mailtemplate_is_created_edited_and_deleted(
+    zac: requests.Session, urls: dict[str, str], registry: ResourceRegistry
+) -> None:
+    """A saved mailtemplate reads back as saved; a deleted one is gone."""
+    zac_url = urls["zac"]
+    template = create_mailtemplate(zac, zac_url, registry)
+    assert template["id"] in [found.get("id") for found in get_entries(zac, zac_url + MAILTEMPLATES)]
+
+    update_mailtemplate(zac, zac_url, template, onderwerp="Nieuw {ZAAK_NUMMER}", body="<p>Nieuwe tekst</p>")
+    gelezen = expect_status(mailtemplate(zac, zac_url, template), HTTPStatus.OK).json()
+    assert (gelezen["onderwerp"], gelezen["body"]) == ("Nieuw {ZAAK_NUMMER}", "<p>Nieuwe tekst</p>")
+
+    delete_mailtemplate(zac, zac_url, template)
+    assert mailtemplate(zac, zac_url, template).status_code == HTTPStatus.NOT_FOUND

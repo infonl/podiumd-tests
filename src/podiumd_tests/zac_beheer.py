@@ -1,4 +1,4 @@
-"""ZAC's beheer of referentietabellen."""
+"""ZAC's beheer of referentietabellen and mailtemplates."""
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from podiumd_tests.seed.registry import ResourceRegistry
 
 REFERENTIETABELLEN = "/rest/referentietabellen"
+MAILTEMPLATES = "/rest/beheer/mailtemplates"
 # RestReferenceTableValue.REFERENCE_TABLE_VALUE_MAX_LENGTH.
 VALUE_MAX_LENGTH = 1000
 
@@ -87,3 +88,39 @@ def guard_referentietabel(http: requests.Session, zac_url: str, registry: Resour
         expect_status(update_referentietabel(http, zac_url, tabel, values), HTTPStatus.OK)
 
     registry.add(f"ZAC referentietabel {tabel['code']} as before", restore)
+
+
+def create_mailtemplate(http: requests.Session, zac_url: str, registry: ResourceRegistry) -> JsonObject:
+    """Create a mailtemplate for mail from a zaak with a run-tagged name, not ZAC's default; cleanup deletes it.
+
+    ZAC mails with the first default mailtemplate of a mail: a default one could replace the estate's.
+    """
+    naam = registry.tagged(f"zac-{secrets.token_hex(3)}")
+    body = {
+        "mailTemplateNaam": naam,
+        "onderwerp": "podiumd-tests {ZAAK_NUMMER}",
+        "body": "<p>podiumd-tests</p>",
+        "mail": "ZAAK_ALGEMEEN",
+        "defaultMailtemplate": False,
+    }
+    response = http.post(zac_url + MAILTEMPLATES, json=body)
+    created = cast("JsonObject", expect_status(response, HTTPStatus.CREATED).json())
+    # ZAC answers 204 also when a test deleted it.
+    registry.add(f"ZAC mailtemplate {naam}", lambda: delete_mailtemplate(http, zac_url, created))
+    return created
+
+
+def mailtemplate(http: requests.Session, zac_url: str, template: JsonObject) -> requests.Response:
+    """ZAC's answer to a read of the mailtemplate."""
+    return http.get(f"{zac_url}{MAILTEMPLATES}/{template['id']}")
+
+
+def update_mailtemplate(http: requests.Session, zac_url: str, template: JsonObject, **fields: object) -> None:
+    """Save the mailtemplate with these fields changed."""
+    response = http.put(f"{zac_url}{MAILTEMPLATES}/{template['id']}", json={**template, **fields})
+    expect_status(response, HTTPStatus.OK)
+
+
+def delete_mailtemplate(http: requests.Session, zac_url: str, template: JsonObject) -> None:
+    """Delete the mailtemplate."""
+    expect_status(http.delete(f"{zac_url}{MAILTEMPLATES}/{template['id']}"), HTTPStatus.NO_CONTENT)

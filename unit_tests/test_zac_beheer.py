@@ -1,4 +1,4 @@
-"""Unit tests for ZAC's beheer of referentietabellen."""
+"""Unit tests for ZAC's beheer of referentietabellen and mailtemplates."""
 
 import json
 
@@ -50,3 +50,15 @@ def test_guard_referentietabel_saves_the_table_back_only_when_its_values_changed
     zac_beheer.guard_referentietabel(requests.Session(), ZAC, registry, TABEL)
     registry.cleanup()
     assert [json.loads(request.body)["values"] for request in sent if request.method == "PUT"] == puts
+
+
+def test_create_mailtemplate_is_never_a_default_and_cleanup_deletes_it(fake_http):
+    templates = "/rest/beheer/mailtemplates"
+    sent = fake_http({f"POST {templates}": (201, {"id": 3}), f"DELETE {templates}/3": (204, None)})
+    registry = ResourceRegistry(RUN)
+    assert zac_beheer.create_mailtemplate(requests.Session(), ZAC, registry) == {"id": 3}
+    body = json.loads(sent[0].body)
+    assert (body["mail"], body["defaultMailtemplate"]) == ("ZAAK_ALGEMEEN", False)
+    assert body["mailTemplateNaam"].startswith(f"{RUN}-zac-")
+    registry.cleanup()
+    assert sent[-1].url == f"{ZAC}{templates}/3"
