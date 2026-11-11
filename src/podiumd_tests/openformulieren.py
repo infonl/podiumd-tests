@@ -9,6 +9,7 @@ from typing import cast
 from podiumd_tests.bootstrap.steps import OF_REDACTEUR
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 from podiumd_tests.results import TAG_PREFIX
 from podiumd_tests.results import now_iso
@@ -243,6 +244,41 @@ def tagged_forms(env: Environment) -> list[str]:
     params: dict[str, object] = {"prefix": TAG_PREFIX, "action": "list"}
     found = run_snippet(env.kube, env.deployment_for("openformulieren"), "openformulieren_form", params)
     return [str(slug) for slug in cast("list[object]", found)]
+
+
+def upload_file(  # noqa: PLR0913, PLR0917  # one upload
+    http: requests.Session, base_url: str, submission: JsonObject, headers: dict[str, str], name: str, content: bytes
+) -> requests.Response:
+    """Upload a file for a submission, as the form's file field does; the temporary upload's response."""
+    files = {"file": (name, content, "text/plain")}
+    data = {"submission": str(submission["url"])}
+    return http.post(f"{base_url}/api/v2/formio/fileupload", files=files, data=data, headers=headers)
+
+
+def file_value(base_url: str, upload: JsonObject, content_type: str = "text/plain") -> dict[str, object]:
+    """Return the value of a Form.io file field that holds one temporary upload."""
+    reference = {"url": upload["url"], "name": upload["name"], "size": upload["size"]}
+    return {
+        **reference,
+        "storage": "url",
+        "originalName": upload["name"],
+        "type": content_type,
+        "data": {**reference, "baseUrl": base_url, "form": "", "project": ""},
+    }
+
+
+def can_submit_step(
+    http: requests.Session, step: JsonObject, headers: dict[str, str], data: Mapping[str, object]
+) -> bool:
+    """Return whether the form's logic lets the step with this data go on (its Volgende button)."""
+    response = http.post(f"{step['url']}/_check-logic", json={"data": dict(data)}, headers=headers)
+    return bool(section(_json(response, HTTPStatus.OK), "step")["canSubmit"])
+
+
+def set_logic_rules(editor: requests.Session, base_url: str, form: JsonObject, rules: Sequence[JsonObject]) -> None:
+    """Replace the form's logic rules, as the form designer saves them."""
+    response = editor.put(f"{base_url}/api/v2/forms/{form['uuid']}/logic-rules", json=[dict(rule) for rule in rules])
+    expect_status(response, HTTPStatus.OK)
 
 
 def redacteur_session(env: Environment) -> requests.Session:

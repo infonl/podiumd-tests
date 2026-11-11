@@ -15,10 +15,14 @@ from typing import cast
 import pytest
 
 from podiumd_tests.bootstrap.names import TEST_FORM
+from podiumd_tests.bootstrap.steps import ZGW_REGISTRATION
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
+from podiumd_tests.openformulieren import file_value
 from podiumd_tests.openformulieren import forget_submission
+from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import start_submission
+from podiumd_tests.openformulieren import upload_file
 from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
@@ -213,3 +217,56 @@ def test_address_search_reaches_pdok(
     )
     labels = [str(a.get("label")) for a in entries(expect_status(found, HTTPStatus.OK).json())]
     assert any("1015CJ Amsterdam" in label for label in labels), labels
+
+
+BIJLAGE = {
+    "type": "file",
+    "key": "bijlage",
+    "label": "Bijlage",
+    "fileMaxSize": "20KB",
+    "storage": "url",
+    "url": "",
+    "multiple": False,
+    "file": {"type": []},
+}
+
+
+@pytest.mark.requires("cluster")
+@pytest.mark.source(
+    "external GemeenteNijmegen/open-forms-testautomatisering helpers/file-upload.ts",
+    "Uploads of 109 B, 13 kB, 555 kB and 1.5 MB: a form takes files up to its field's maximum size.",
+)
+@pytest.mark.parametrize(("size", "accepted"), [(109, True), (13_000, True), (555_000, False)])
+@pytest.mark.scenario("""
+    Given a form with a file field of at most 20 kB
+    When a visitor attaches a file of 109 B, 13 kB or 555 kB
+    Then the step accepts the small files
+    And refuses the file above the maximum, naming the size
+""")
+def test_file_field_takes_files_up_to_its_maximum(  # parametrized size
+    http: requests.Session,
+    urls: dict[str, str],
+    podiumd_env: Environment,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+    size: int,
+    accepted: bool,  # noqa: FBT001  # parameter
+) -> None:
+    """A step with a file within fileMaxSize is saved; above it Open Formulieren answers 413."""
+    need_bootstrap("openformulieren-zgw-group")
+    base = urls["openformulieren"]
+    slug = registry.tagged(f"upload-{size}")
+    make_form(podiumd_env, registry, slug, [BIJLAGE], ZGW_REGISTRATION)
+    submission, headers = start_submission(http, base, slug)
+    forget_submission(podiumd_env, registry, str(submission["id"]))
+    upload = expect_status(upload_file(http, base, submission, headers, "bijlage.txt", b"x" * size), HTTPStatus.OK)
+    step = entries(submission["steps"])[0]
+    data = {"bijlage": [file_value(base, upload.json())]}
+    response = http.put(str(step["url"]), json={"data": data}, headers=headers)
+    if accepted:
+        expect_status(response, HTTPStatus.CREATED, HTTPStatus.OK)
+    else:
+        expect_status(response, HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+        assert re.search(r"maximale bestandsgrootte|maximum file size", response.text, re.IGNORECASE), response.text[
+            :300
+        ]
