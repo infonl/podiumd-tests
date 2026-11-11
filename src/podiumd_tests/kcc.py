@@ -25,6 +25,7 @@ from podiumd_tests.responses import expect_status
 from podiumd_tests.results import now_iso
 from podiumd_tests.seed.openklant import delete_klantcontact_tree
 from podiumd_tests.seed.openklant import klantcontact_body
+from podiumd_tests.seed.openklant import onderwerpobject_body
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.workloads import expect_defect
 
@@ -41,6 +42,8 @@ if TYPE_CHECKING:
 
 # KISS proxies Open Klant's klantinteracties API under this path.
 KISS_KLANTINTERACTIES = "/api/klantinteracties/api/v1"
+# KISS's zaaksysteem proxy: the Zaken API of the register's zaaksysteem.
+KISS_ZAKEN = "/api/zaken"
 # KISS's own route for a new klantcontact: it links the logged-in medewerker as actor.
 KISS_POST_KLANTCONTACTEN = "/api/postklantcontacten"
 KISS_CONTACTMOMENTDETAILS = "/api/contactmomentdetails"
@@ -101,16 +104,42 @@ def kiss_betrokkene(
         "organisatienaam": "",
         "contactnaam": {"voorletters": "P", "voornaam": "PodiumD", "voorvoegselAchternaam": "", "achternaam": "test"},
     }
-    url = f"{kiss_url}{KISS_KLANTINTERACTIES}/betrokkenen"
+    return _kiss_create(kiss, kiss_url, "betrokkenen", body)
+
+
+def kiss_onderwerpobject(
+    kiss: requests.Session, kiss_url: str, klantcontact: JsonObject, zaak: JsonObject
+) -> JsonObject:
+    """Link a klantcontact to a zaak through KISS's proxy, as KISS's frontend does; cleanup is the klantcontact's."""
+    return _kiss_create(kiss, kiss_url, "onderwerpobjecten", onderwerpobject_body(klantcontact, str(zaak["uuid"])))
+
+
+def _kiss_create(kiss: requests.Session, kiss_url: str, resource: str, body: JsonObject) -> JsonObject:
+    url = f"{kiss_url}{KISS_KLANTINTERACTIES}/{resource}"
     return expect_status(kiss.post(url, json=body, headers=kiss_register(kiss, kiss_url)), HTTPStatus.CREATED).json()
 
 
+def _kiss_get(kiss: requests.Session, kiss_url: str, path: str, **params: str) -> JsonObject:
+    response = kiss.get(kiss_url + path, params=params, headers=kiss_register(kiss, kiss_url))
+    return expect_status(response, HTTPStatus.OK).json()
+
+
 def kiss_klantcontacten(kiss: requests.Session, kiss_url: str, **params: str) -> list[JsonObject]:
-    """Return the klantcontacten KISS lists for a query, e.g. a partij's on its Contactmomenten tab."""
-    response = kiss.get(
-        f"{kiss_url}{KISS_KLANTINTERACTIES}/klantcontacten", params=params, headers=kiss_register(kiss, kiss_url)
-    )
-    return entries(expect_status(response, HTTPStatus.OK).json().get("results"))
+    """Return the klantcontacten KISS lists for a query, e.g. a partij's or a zaak's on its Contactmomenten tab."""
+    return entries(_kiss_get(kiss, kiss_url, f"{KISS_KLANTINTERACTIES}/klantcontacten", **params).get("results"))
+
+
+def kiss_zaken(kiss: requests.Session, kiss_url: str, **params: str) -> list[JsonObject]:
+    """Return the zaken KISS finds in its zaaksysteem for a query, e.g. by identificatie as its Zaken search does.
+
+    KISS leaves out a zaak whose zaaktype it cannot read, and adds the zaaktype as _zaaktype.
+    """
+    return entries(_kiss_get(kiss, kiss_url, f"{KISS_ZAKEN}/zaken", **params).get("results"))
+
+
+def kiss_zaak(kiss: requests.Session, kiss_url: str, zaak_uuid: str) -> JsonObject:
+    """Return the zaak as KISS's zaak page reads it, with _zaaktype."""
+    return _kiss_get(kiss, kiss_url, f"{KISS_ZAKEN}/zaken/{zaak_uuid}")
 
 
 def kiss_actor(  # noqa: PLR0913, PLR0917  # the KISS session, cleanup and the actor
@@ -132,8 +161,7 @@ def kiss_actor(  # noqa: PLR0913, PLR0917  # the KISS session, cleanup and the a
             "codeSoortObjectId": "idf",
         },
     }
-    response = kiss.post(f"{kiss_url}{KISS_KLANTINTERACTIES}/actoren", json=body, headers=kiss_register(kiss, kiss_url))
-    actor = expect_status(response, HTTPStatus.CREATED).json()
+    actor = _kiss_create(kiss, kiss_url, "actoren", body)
     registry.add(f"actor {actor['url']}", lambda: openklant.delete(str(actor["url"])))
     return actor
 
@@ -163,8 +191,7 @@ def kiss_contactverzoek(  # noqa: PLR0913, PLR0917  # one flow
         "soortDigitaalAdres": "email" if "@" in adres else "telefoonnummer",
         "omschrijving": "onbekend",
     }
-    response = kiss.post(f"{kiss_url}{KISS_KLANTINTERACTIES}/digitaleadressen", json=digitaal_adres, headers=register)
-    expect_status(response, HTTPStatus.CREATED)
+    _kiss_create(kiss, kiss_url, "digitaleadressen", digitaal_adres)
     taak = {
         "nummer": "",
         "gevraagdeHandeling": "Contact opnemen met betrokkene",
@@ -190,13 +217,12 @@ def internetaken_of(klantcontacten: list[JsonObject]) -> list[str]:
 
 def kiss_contactverzoeken_by_adres(kiss: requests.Session, kiss_url: str, adres: str) -> list[str]:
     """Return the uuids of the internetaken KISS's contactverzoek search finds by a phone number or e-mail address."""
-    params = {"adres": adres, "expand": "verstrektDoorBetrokkene"}
-    response = kiss.get(
-        f"{kiss_url}{KISS_KLANTINTERACTIES}/digitaleadressen", params=params, headers=kiss_register(kiss, kiss_url)
+    found = _kiss_get(
+        kiss, kiss_url, f"{KISS_KLANTINTERACTIES}/digitaleadressen", adres=adres, expand="verstrektDoorBetrokkene"
     )
     betrokkenen = {
-        str(section(section(found, "_expand"), "verstrektDoorBetrokkene").get("uuid"))
-        for found in entries(expect_status(response, HTTPStatus.OK).json().get("results"))
+        str(section(section(digitaal_adres, "_expand"), "verstrektDoorBetrokkene").get("uuid"))
+        for digitaal_adres in entries(found.get("results"))
     }
     return [
         uuid

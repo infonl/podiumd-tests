@@ -30,10 +30,13 @@ from podiumd_tests.kcc import kiss_contactverzoeken_by_adres
 from podiumd_tests.kcc import kiss_klantcontact
 from podiumd_tests.kcc import kiss_klantcontacten
 from podiumd_tests.kcc import kiss_medewerkers
+from podiumd_tests.kcc import kiss_onderwerpobject
 from podiumd_tests.kcc import kiss_register
 from podiumd_tests.kcc import kiss_search_hits
 from podiumd_tests.kcc import kiss_sync_cronjob
 from podiumd_tests.kcc import kiss_website_crawlers
+from podiumd_tests.kcc import kiss_zaak
+from podiumd_tests.kcc import kiss_zaken
 from podiumd_tests.kcc import vac_data
 from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.seed.registry import ResourceRegistry
@@ -105,6 +108,37 @@ def test_kiss_betrokkene_and_klantcontacten_go_through_kiss(fake_http):
 
 
 KI = "/api/klantinteracties/api/v1"
+
+
+def test_kiss_onderwerpobject_links_the_zaak_as_kiss_does(fake_http):
+    sent = fake_http(
+        {"/api/environment/registers": (200, REGISTERS), f"POST {KI}/onderwerpobjecten": (201, {"uuid": "o1"})}
+    )
+    assert kiss_onderwerpobject(requests.Session(), KISS, {"uuid": "1"}, {"uuid": "z1"}) == {"uuid": "o1"}
+    body = json.loads(sent[-1].body)
+    assert body["klantcontact"] == {"uuid": "1"}
+    assert body["onderwerpobjectidentificator"] == {
+        "objectId": "z1",
+        "codeObjecttype": "zgw-Zaak",
+        "codeRegister": "openzaak",
+        "codeSoortObjectId": "uuid",
+    }
+    assert sent[-1].headers["systemIdentifier"] == "ok-1"
+
+
+def test_kiss_zaken_and_zaak_use_the_register(fake_http):
+    sent = fake_http(
+        {
+            "/api/environment/registers": (200, REGISTERS),
+            "/api/zaken/zaken": (200, {"results": [{"uuid": "z1"}]}),
+            "/api/zaken/zaken/z1": (200, {"identificatie": "ZAAK-1"}),
+        }
+    )
+    kiss = requests.Session()
+    assert kiss_zaken(kiss, KISS, identificatie="ZAAK-1") == [{"uuid": "z1"}]
+    assert sent[-1].url == f"{KISS}/api/zaken/zaken?identificatie=ZAAK-1"
+    assert kiss_zaak(kiss, KISS, "z1") == {"identificatie": "ZAAK-1"}
+    assert sent[-1].headers["systemIdentifier"] == "ok-1"
 
 
 def _openklant(deleted) -> ApiClient:

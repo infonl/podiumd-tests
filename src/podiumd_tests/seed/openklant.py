@@ -206,9 +206,25 @@ def close_internetaak(openklant: ApiClient, taak: JsonObject) -> JsonObject:
     return openklant.patch(str(taak["url"]), {"status": "verwerkt"})
 
 
-# (codeObjecttype, codeRegister, codeSoortObjectId) of what an onderwerpobject points at.
-ZAAK = ("zaak", "openzaak", "zaak-uuid")
+# (codeObjecttype, codeRegister, codeSoortObjectId) of what an onderwerpobject points at; ZAAK as KISS records it.
+ZAAK = ("zgw-Zaak", "openzaak", "uuid")
 FORMULIERINZENDING = ("formulierinzending", "Open Formulieren", "public_registration_reference")
+
+
+def onderwerpobject_body(
+    klantcontact: JsonObject, object_id: str, codes: tuple[str, str, str] = ZAAK
+) -> dict[str, object]:
+    """Return an onderwerpobject linking a klantcontact to what it is about: a zaak or a form submission."""
+    objecttype, register, soort = codes
+    return {
+        "klantcontact": ref(klantcontact),
+        "onderwerpobjectidentificator": {
+            "objectId": object_id,
+            "codeObjecttype": objecttype,
+            "codeRegister": register,
+            "codeSoortObjectId": soort,
+        },
+    }
 
 
 def make_onderwerpobject(
@@ -218,17 +234,8 @@ def make_onderwerpobject(
     object_id: str,
     codes: tuple[str, str, str] = ZAAK,
 ) -> JsonObject:
-    """Links a klantcontact to what it is about: a zaak (as KISS records it) or a form submission."""
-    objecttype, register, soort = codes
-    body: dict[str, object] = {
-        "klantcontact": ref(klantcontact),
-        "onderwerpobjectidentificator": {
-            "objectId": object_id,
-            "codeObjecttype": objecttype,
-            "codeRegister": register,
-            "codeSoortObjectId": soort,
-        },
-    }
+    """Create an onderwerpobject_body in Open Klant."""
+    body = onderwerpobject_body(klantcontact, object_id, codes)
     return _create(openklant, registry, "onderwerpobjecten", body)
 
 
