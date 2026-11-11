@@ -24,6 +24,7 @@ from podiumd_tests.kcc import kiss_contactverzoeken_by_adres
 from podiumd_tests.kcc import kiss_klantcontacten
 from podiumd_tests.kcc import kiss_medewerkers
 from podiumd_tests.kcc import kiss_sync_cronjob
+from podiumd_tests.mailpit import own_address
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
@@ -77,7 +78,7 @@ def _actoren_of(taak: JsonObject) -> list[str]:
 
 def _adres(registry: ResourceRegistry, soort: str) -> str:
     """A phone number or e-mail address no other test uses."""
-    return f"{registry.tagged('klant')}@example.invalid" if soort == "email" else f"06{random_nummer()[-8:]}"
+    return own_address(registry) if soort == "email" else f"06{random_nummer()[-8:]}"
 
 
 @pytest.mark.parametrize(
