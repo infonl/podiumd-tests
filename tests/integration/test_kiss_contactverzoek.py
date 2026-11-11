@@ -103,7 +103,7 @@ def test_contactverzoek_from_kiss_is_found_by_the_klants_adres(
     adres: str,
 ) -> None:
     """postklantcontacten and postinternetaak with an actor; KISS's search by digitaal adres finds the internetaak."""
-    eenheid = kiss_actor(kiss, urls["kiss"], openklant, registry, actor, registry.tagged(actor))
+    eenheid = kiss_actor(kiss, urls["kiss"], openklant, registry, actor, registry.tagged(f"kiss-{actor}-{adres}"))
     klant_adres = _adres(registry, adres)
     taak = kiss_contactverzoek(kiss, urls["kiss"], openklant, registry, [eenheid], klant_adres)
     assert _actoren_of(taak) == [eenheid["uuid"]]
@@ -154,7 +154,9 @@ def test_contactverzoek_for_a_klant_is_listed_for_that_klant(
 ) -> None:
     """The internetaak is among those of the partij's klantcontacten, as KISS's Contactverzoeken tab reads them."""
     partij = make_partij(openklant, registry) if soort == "persoon" else make_organisatie(openklant, registry)
-    afdeling = kiss_actor(kiss, urls["kiss"], openklant, registry, "afdeling", registry.tagged("afdeling"))
+    afdeling = kiss_actor(
+        kiss, urls["kiss"], openklant, registry, "afdeling", registry.tagged(f"kiss-afdeling-{soort}")
+    )
     adres = _adres(registry, "telefoonnummer")
     taak = kiss_contactverzoek(kiss, urls["kiss"], openklant, registry, [afdeling], adres, partij)
     listed = kiss_klantcontacten(
