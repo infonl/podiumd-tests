@@ -293,10 +293,13 @@ def search(http: requests.Session, zac_url: str, **query: object) -> JsonObject:
     return cast("JsonObject", expect_status(http.put(f"{zac_url}/rest/zoeken/list", json=body), HTTPStatus.OK).json())
 
 
-def is_zaak_listed(http: requests.Session, zac_url: str, identificatie: str, **flags: bool) -> bool:
-    """ZAC's search for zaken lists the zaak; flags are its alleen* filters (alleenOpenstaandeZaken: werkvoorraad)."""
-    found = search(http, zac_url, type="ZAAK", zoeken={"ZAAK_IDENTIFICATIE": identificatie}, **flags)
-    return any(resultaat.get("identificatie") == identificatie for resultaat in entries(found["resultaten"]))
+def is_zaak_listed(http: requests.Session, zac_url: str, zaak: JsonObject, **flags: bool) -> bool:
+    """ZAC's search for zaken lists the zaak; flags are its alleen* filters (alleenOpenstaandeZaken: werkvoorraad).
+
+    Matched by uuid: ZAC's index can hold deleted zaken whose identificatie Open Zaak gave out again (open-zaak-1).
+    """
+    found = search(http, zac_url, type="ZAAK", zoeken={"ZAAK_IDENTIFICATIE": zaak["identificatie"]}, **flags)
+    return any(resultaat.get("id") == zaak["uuid"] for resultaat in entries(found["resultaten"]))
 
 
 def open_task(http: requests.Session, zac_url: str, zaak_uuid: str, name: str) -> JsonObject:
@@ -318,12 +321,12 @@ def complete_task(http: requests.Session, zac_url: str, task: JsonObject, data: 
     )
 
 
-def wait_in_werkvoorraad(http: requests.Session, zac_url: str, identificatie: str) -> None:
+def wait_in_werkvoorraad(http: requests.Session, zac_url: str, zaak: JsonObject) -> None:
     """Wait until ZAC's werkvoorraad (its open zaken) lists the zaak."""
     wait_until(
-        lambda: is_zaak_listed(http, zac_url, identificatie, alleenOpenstaandeZaken=True),
+        lambda: is_zaak_listed(http, zac_url, zaak, alleenOpenstaandeZaken=True),
         timeout=INDEX_TIMEOUT,
-        description=f"zaak {identificatie} in the werkvoorraad",
+        description=f"zaak {zaak['identificatie']} in the werkvoorraad",
     )
 
 

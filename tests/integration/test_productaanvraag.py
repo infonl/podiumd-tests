@@ -147,4 +147,4 @@ def test_new_form_becomes_a_zac_zaak(
         ],
     )
     zaak = productaanvraag_zaak(openzaak_productaanvraag, registry, kenmerk)
-    wait_in_werkvoorraad(zac, podiumd_env.profile.urls["zac"], str(zaak["identificatie"]))
+    wait_in_werkvoorraad(zac, podiumd_env.profile.urls["zac"], zaak)

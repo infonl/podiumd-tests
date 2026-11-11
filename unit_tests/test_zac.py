@@ -148,10 +148,13 @@ def test_zac_session_logs_in_through_keycloak(env_factory, profile_factory, monk
     assert logins == [(ZAC + LOGIN_PATHS["zac"], "u", "p")]
 
 
-def test_zaak_listed_searches_by_identificatie_with_the_flags(fake_http):
-    sent = fake_http({"PUT /rest/zoeken/list": (200, {"resultaten": [{"identificatie": "ZAAK-1"}]})})
-    assert zac.is_zaak_listed(requests.Session(), ZAC, "ZAAK-1", alleenOpenstaandeZaken=True)
-    assert not zac.is_zaak_listed(requests.Session(), ZAC, "ZAAK-2")
+def test_zaak_listed_searches_by_identificatie_with_the_flags_and_matches_the_uuid(fake_http):
+    sent = fake_http({"PUT /rest/zoeken/list": (200, {"resultaten": [{"id": "z1", "identificatie": "ZAAK-1"}]})})
+    assert zac.is_zaak_listed(
+        requests.Session(), ZAC, {"uuid": "z1", "identificatie": "ZAAK-1"}, alleenOpenstaandeZaken=True
+    )
+    # A deleted zaak in ZAC's index with the same identificatie.
+    assert not zac.is_zaak_listed(requests.Session(), ZAC, {"uuid": "z2", "identificatie": "ZAAK-1"})
     body = json.loads(sent[0].body)
     assert body["zoeken"] == {"ZAAK_IDENTIFICATIE": "ZAAK-1"}
     assert body["alleenOpenstaandeZaken"] is True

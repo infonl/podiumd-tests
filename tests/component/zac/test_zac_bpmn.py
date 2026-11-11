@@ -91,7 +91,7 @@ def test_bpmn_zaak_starts_with_its_intake_form(
     zac: requests.Session, urls: dict[str, str], bpmn_zaak: JsonObject, zac_group: str
 ) -> None:
     """A new zaak of the BPMN zaaktype starts the process: the intake task opens with its form.io form."""
-    wait_in_werkvoorraad(zac, urls["zac"], str(bpmn_zaak["identificatie"]))
+    wait_in_werkvoorraad(zac, urls["zac"], bpmn_zaak)
     task = open_task(zac, urls["zac"], str(bpmn_zaak["uuid"]), INTAKE)
     assert section(task, "formioFormulier").get("name") == "ptestIntakeForm"
     # The task goes to the zaak's behandelaar, and a new zaak has none yet.

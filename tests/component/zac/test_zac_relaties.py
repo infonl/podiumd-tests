@@ -112,7 +112,7 @@ def test_koppel_search_leaves_out_the_zaak_and_marks_a_linked_one(
 ) -> None:
     """The koppel search leaves out the zaak itself and gives ALREADY_GERELATEERD for a linked zaak."""
     zaak, ander = zac_zaak(), zac_zaak()
-    wait_in_werkvoorraad(zac, urls["zac"], str(zaak["identificatie"]))
+    wait_in_werkvoorraad(zac, urls["zac"], zaak)
     assert koppel_zoekresultaat(zac, urls["zac"], zaak, zaak, GERELATEERD) is None
     assert _reden(zac, urls["zac"], zaak, ander, GERELATEERD) is None
 

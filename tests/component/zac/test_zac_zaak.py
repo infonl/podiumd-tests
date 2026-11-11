@@ -150,7 +150,7 @@ def test_zaak_with_an_initiator_is_in_the_werkvoorraad(
     person = zac.get(f"{urls['zac']}/rest/klanten/person/{initiator['temporaryPersonId']}")
     assert expect_status(person, HTTPStatus.OK).json()["bsn"] == EREBOS
     assert "ONTVANGSTBEVESTIGING_NIET_VERSTUURD" in strings(zaak.get("indicaties"))
-    wait_in_werkvoorraad(zac, urls["zac"], str(zaak["identificatie"]))
+    wait_in_werkvoorraad(zac, urls["zac"], zaak)
 
 
 @pytest.mark.tc("ZAC-029", "ZAC-030", "ZAC-031")
@@ -318,7 +318,7 @@ def test_aborted_zaak_is_closed_and_listed_among_the_closed_zaken(
     assert not read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpen"]
 
     def is_listed() -> bool:
-        return is_zaak_listed(zac, urls["zac"], str(zaak["identificatie"]), alleenAfgeslotenZaken=True)
+        return is_zaak_listed(zac, urls["zac"], zaak, alleenAfgeslotenZaken=True)
 
     wait_until(is_listed, timeout=INDEX_TIMEOUT, description=f"zaak {zaak['identificatie']} among the closed zaken")
 

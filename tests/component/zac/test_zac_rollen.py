@@ -211,11 +211,11 @@ def test_search_lists_only_zaken_of_zaaktypen_with_a_role(
 ) -> None:
     """Once both zaken are indexed, the raadpleger's search finds the BPMN zaak and not the estate's zaak."""
     other = zac_zaak()
-    for identificatie in (bpmn_zaak["identificatie"], other["identificatie"]):
-        wait_in_werkvoorraad(zac, urls["zac"], str(identificatie))
+    for zaak in (bpmn_zaak, other):
+        wait_in_werkvoorraad(zac, urls["zac"], zaak)
     raadpleger = zac_as("raadpleger")
-    assert is_zaak_listed(raadpleger, urls["zac"], str(bpmn_zaak["identificatie"]))
-    assert not is_zaak_listed(raadpleger, urls["zac"], str(other["identificatie"]))
+    assert is_zaak_listed(raadpleger, urls["zac"], bpmn_zaak)
+    assert not is_zaak_listed(raadpleger, urls["zac"], other)
 
 
 @pytest.mark.source(POLICIES, "A user without a base role cannot use ZAC, whatever plus roles it has (PR #7232).")
