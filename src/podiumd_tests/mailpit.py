@@ -75,6 +75,22 @@ def received(
     return str(received_message(mailpit, registry, timeout=timeout, to=to, subject=subject).get("HTML"))
 
 
+def received_mails(
+    mailpit: ApiClient, registry: ResourceRegistry, query: str, *, count: int = 1, timeout: float
+) -> list[JsonObject]:
+    """Wait until a Mailpit search finds at least count messages; return them. Cleanup deletes what it finds.
+
+    For an address other tests also mail: query narrows it to one test's mails, e.g. to:"address" "zaaknummer".
+    """
+    registry.add(f"mails {query}", lambda: delete_mails(mailpit, query))
+
+    def found() -> list[JsonObject] | None:
+        messages = search(mailpit, query)
+        return messages if len(messages) >= count else None
+
+    return wait_until(found, timeout=timeout, interval=1, description=f"{count} mail(s) {query} in Mailpit")
+
+
 def delete_mails(mailpit: ApiClient, query: str) -> None:
     """Delete every message a Mailpit search finds."""
     mailpit.request("DELETE", "search", HTTPStatus.OK, params={"query": query})

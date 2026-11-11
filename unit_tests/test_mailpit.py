@@ -12,6 +12,7 @@ from podiumd_tests.mailpit import forget_mails
 from podiumd_tests.mailpit import mail_queue
 from podiumd_tests.mailpit import own_address
 from podiumd_tests.mailpit import received
+from podiumd_tests.mailpit import received_mails
 from podiumd_tests.mailpit import wait_for_mail
 from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -73,3 +74,20 @@ def test_mail_queue_returns_the_statuses(env_factory, fake_runner):
     fake_runner.answers["exec -i deploy/openformulieren"] = (0, 'PTEST_VALUE={"status": ["queued"]}\n')
     assert mail_queue(env_factory(), "openformulieren", "status", "x") == ["queued"]
     assert '"action": "status"' in fake_runner.stdins[-1]
+
+
+def test_received_mails_waits_for_the_count_and_cleanup_deletes_only_the_query(fake_http):
+    messages = [{"ID": "a"}, {"ID": "b"}]
+    sent = fake_http({"GET /api/v1/search": (200, {"messages": messages}), "DELETE /api/v1/search": (200, {})})
+    registry = ResourceRegistry("ptest-abc")
+    query = 'to:"x@example.invalid" "ZAAK-1"'
+    assert received_mails(ApiClient(requests.Session(), API, {}), registry, query, count=2, timeout=0) == messages
+    assert registry.cleanup() == []
+    assert sent[-1].method == "DELETE"
+    assert "ZAAK-1" in sent[-1].url
+
+
+def test_received_mails_times_out_below_the_count(fake_http):
+    fake_http({"GET /api/v1/search": (200, {"messages": [{"ID": "a"}]})})
+    with pytest.raises(AssertionError, match="2 mail"):
+        received_mails(ApiClient(requests.Session(), API, {}), ResourceRegistry("ptest-abc"), "x", count=2, timeout=0)

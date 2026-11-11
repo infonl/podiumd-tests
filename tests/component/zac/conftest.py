@@ -1,4 +1,4 @@
-"""Fixtures for podiumd-tests' own zaaktypen in ZAC."""
+"""Fixtures for podiumd-tests' own zaaktypen in ZAC, and the test admin's signaleringen."""
 
 from __future__ import annotations
 
@@ -16,6 +16,8 @@ from podiumd_tests.seed.zac_zaaktype import make_zac_zaaktype
 from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.zac import activate_human_tasks
 from podiumd_tests.zac import create_zaak
+from podiumd_tests.zac_signaleringen import save_signalering_setting
+from podiumd_tests.zac_signaleringen import signalering_settings
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -128,3 +130,20 @@ def fixture_zac_taken_zaak(
 ) -> Callable[[], JsonObject]:
     """Start a zaak of the taken zaaktype in ZAC; cleanup deletes it and its documents from Open Zaak."""
     return _zaak_starter(zac, urls, zac_taken_zaaktype, openzaak, registry)
+
+
+@pytest.fixture(name="signaleringen")
+def fixture_signaleringen(zac: requests.Session, urls: dict[str, str]) -> Iterator[Callable[..., None]]:
+    """Turn the test admin's dashboard signal per type on or off, and mail for those types; restores them afterwards.
+
+    Tests using it share xdist group zac-signaleringen: the settings are the admin's.
+    """
+    before = signalering_settings(zac, urls["zac"])
+
+    def turn(*, mail: bool = False, **types: bool) -> None:
+        for soort, on in types.items():
+            save_signalering_setting(zac, urls["zac"], {"type": soort, "dashboard": on, "mail": mail})
+
+    yield turn
+    for setting in before:
+        save_signalering_setting(zac, urls["zac"], setting)
