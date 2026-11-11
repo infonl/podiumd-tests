@@ -33,7 +33,7 @@ share their setup. The user picks the batches to port.
 | Z5 | Mail from a zaak | 2 high, 2 medium | 4 (done) | none | 2 |
 | Z6 | Documents: verplaatsen, ontkoppelen, versies, ondertekenen, refusals | 1 high, 6 medium | 8 (done) | none | 2 |
 | Z7 | CMMN taken: intake, Goedkeuren, Advies, Document verzenden | 1 high, 4 medium | 4 | human task parameters for more plan items | 2.5 |
-| Z8 | Rights per role: closed zaak, documents, admin, verdelen, brp_zoeken | 1 high (partial), 6 medium | 6 | none | 2 |
+| Z8 | Rights per role: closed zaak, documents, admin, verdelen, brp_zoeken | 1 high (partial), 6 medium | 6 (done) | none | 2 |
 | Z9 | Productaanvraag: betrokkenen, inbox, contact, documents | 2 high, 5 medium | 5 | productaanvraag with betrokkenen and geometry | 2 |
 | Z10 | Zaakafhandelparameters: persist, new zaaktype version, PABC groups; hoofd- and deelzaak | 4 high, 3 medium | 6 | a throwaway zaaktype configured in ZAC | 3.5 |
 | Z11 | Search, werklijsten, signaleringen | 6 medium | 5 | none | 2 |
@@ -127,16 +127,19 @@ share their setup. The user picks the batches to port.
   zaakafhandelparameters.
 - Risks: environments that do not allow the opt-in skip these tests.
 
-### Z8: rights per role (2 days, 6 tests)
+### Z8: rights per role (done: 6 tests, 13 cases)
 
-- Gaps: on an afgehandelde zaak a behandelaar and coordinator cannot edit details, dates, betrokkenen or send mail, a
-  recordmanager and beheerder can (not dates) and can heropenen; document rights per role and lock state; ZAC's
-  `/rest/admin` refused for every role but beheerder; only a coordinator may verdelen and vrijgeven; without
-  brp_zoeken no person search and initiator changes only to a bedrijf; the group list of a zaak offers only groups
-  with rights on the zaaktype in PABC.
-- Files: `tests/component/zac/test_zac_rechten.py`.
-- Reuses: `ZAC_ROLE_USERS`, `zac_session` per user, the refusal pattern of `test_zac_refuses_a_call_below_its_least_role`.
-- Risks: PABC's mapping is podiumd-tests' own domain (`ZAC_DOMAIN`); never change the estate's PABC dataset.
+- Covered in `tests/component/zac/test_zac_rechten.py`, as the base roles on the BPMN test zaaktype, with the rights
+  of ZAC 5.9.1's policies: the rechten of an afgehandelde zaak per role; a behandelaar and coordinator cannot edit it,
+  a recordmanager can (not the uiterlijke einddatum afdoening), a behandelaar cannot heropenen; document rights per
+  role when locked by another user, ondertekend and on an afgehandelde zaak; beheer refused to every role but
+  beheerder; only a coordinator verdeelt and vrijgeeft; without brp_zoeken no person search but a bedrijf as
+  initiator; the werklijst CSV export refused to the recordmanager (`test_zac_rollen.py`).
+- Not covered: a recordmanager reopening a zaak (the BPMN test zaaktype has no statustype Heropend: bootstrap);
+  the group list per zaaktype from PABC (needs the PABC API key or podiumd-tests' own Keycloak groups); mail from a
+  closed zaak (only the right `versturenEmail`).
+- ZAC's search matches a zaak by uuid: its index keeps deleted zaken (open-zaak-1) whose identificatie Open Zaak hands
+  out again.
 
 ### Z9: productaanvraag (2 days, 5 tests)
 

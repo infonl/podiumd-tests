@@ -20,11 +20,11 @@ The batches that close the gaps of [`kiss-ita-scenario-gaps.md`](kiss-ita-scenar
 | --- | --- | --- | --- | --- | --- |
 | K1 | Contactmoment through KISS's own routes | 5 high, 4 medium | 3 (done) | none | 1.5 |
 | K2 | Contactverzoek through KISS, to afdeling, groep and medewerker | 6 high | 4 (done) | none | 2 |
-| K3 | Zaak in KISS | 3 high | 2 | none | 1 |
-| K4 | Search variants (person, company) | 2 high, 7 medium | 0 (parameters) | none; check the BRP and KvK test sets | 0.5 |
+| K3 | Zaak in KISS | 3 high | 2 (done) | none | 1 |
+| K4 | Search variants (person, company) | 2 high, 7 medium | 0 (parameters, done) | none | 0.5 |
 | K5 | Search sources: smoelenboek, source filter, afdeling on a kennisartikel | 7 medium | 3 | a kennisartikel with afdelingen | 1 |
 | K6 | Nieuws en werkinstructies | 23 medium | 5 | none | 1.5 |
-| I1 | Forward to a medewerker, groepsmailbox rules | 7 high, 8 medium | 4 | a medewerker without e-mail | 2 |
+| I1 | Forward to a medewerker, groepsmailbox rules | 7 high, 8 medium | 6 (done) | none | 2 |
 | I2 | Afsluiten and historie | 3 high, 8 medium | 5 (done) | none | 2 |
 | I3 | Reminder to a medewerker | 3 high | 1 (extended) | none | 0.5 |
 | I4 | Zaak koppelen and the logboek | 10 medium | 3 | none | 1.5 |
@@ -60,17 +60,21 @@ The batches that close the gaps of [`kiss-ita-scenario-gaps.md`](kiss-ita-scenar
 - The test creates its own actoren; KISS's frontend reuses an existing actor with the same identificator.
 - Skipped where KISS takes a medewerker's e-mail address instead of the smoelenboek (`USE_MEDEWERKEREMAIL`).
 
-### K3: zaak in KISS (1 day, 2 tests)
+### K3: zaak in KISS (done: 2 tests)
 
-- Gaps: find a zaak through `/api/zaken/zaken`; register a contactmoment on it through KISS and read it back through
-  KISS. Extends `tests/integration/test_klantcontact_zaak.py`.
+- Covered in `tests/integration/test_klantcontact_zaak.py`: KISS finds a zaak by its zaaknummer (`/api/zaken/zaken`)
+  and opens it; a contactmoment saved through KISS with an onderwerpobject for the zaak (`zgw-Zaak`, as KISS records
+  it) is listed for the zaak by KISS's Contactmomenten query.
+- Not covered: the contactmoment on the zaak in Open Zaak (KISS has it commented out: Open Zaak takes only Open Klant 1
+  contactmomenten); the zaak checked as gerelateerde zaak (frontend).
 
-### K4: search variants (0.5 day, parameters only)
+### K4: search variants (done: 10 parameters)
 
-- Gaps: unknown bedrijfsnaam, unknown postcode and huisnummer; several results by naam, KvK-nummer, postcode;
-  person by part of the achternaam, and postcode filtered on achternaam, part of it, or huisletter.
-- New parameters on `test_person_search` and `test_company_search`. First check that the BRP and KvK test sets hold
-  KISS's test persons (Melap*, 2511CA 21, 1074HK 1) and a KvK-nummer with several vestigingen.
+- Covered in `tests/component/kiss/test_kiss_zoeken.py`: person search by part of the name with geboortedatum, by
+  postcode and huisnummer with the exact count, filtered on (part of) the achternaam and on huisletter; company search
+  with several results by naam, KvK-nummer and address, an unknown bedrijfsnaam and an unknown address. The BRP and
+  KvK test sets behind Frank!Gateway hold KISS's test persons and companies with the same counts.
+- Not covered: client-side validation (an invalid BSN, a 2-letter achternaam filter).
 
 ### K5: search sources (1 day, 3 tests)
 
@@ -83,13 +87,15 @@ The batches that close the gaps of [`kiss-ita-scenario-gaps.md`](kiss-ita-scenar
   asserted); the publication window (future start hidden, past end hidden, future end shown); skill and type filters
   with search; marking unread. In `tests/component/kiss/test_kiss_beheer.py`.
 
-### I1: forward to a medewerker (2 days, 4 tests)
+### I1: forward to a medewerker (done: 6 tests, 11 cases)
 
-- Gaps: forward to a medewerker, alone and with their afdeling; the mails to medewerker and afdeling with and
-  without a groepsmailbox and the warning; an afdeling without mailbox allowed with a medewerker; a groep without
-  mailbox refused; mode medewerker without afdeling or groep refused; a medewerker without e-mail gets a warning;
-  `/api/medewerkers` by search, afdeling and groep; regression #425 (assigned through the object-register id).
-- Bootstrap: one more Objecten medewerker without e-mail (extend `objecten-medewerker-kcc`).
+- Covered in `tests/component/ita/test_ita_doorsturen.py`: forward to an afdeling or groep with a groepsmailbox
+  (moved there); to a medewerker with their afdeling or groep, assigned to both, one recipient (the medewerker, or the
+  groepsmailbox when the medewerker has no e-mail address) and ITA's warning for an afdeling without mailbox; an
+  afdeling or groep without mailbox and without medewerker refused; a medewerker alone, or an afdeling and a groep at
+  once, refused; `/api/medewerkers` by name, afdeling and groep, and no hits; regression #425 (assigned through the
+  user's object-register id is on their own list).
+- Each test creates its own afdeling, groep and medewerkers in Objecten (unique identificaties), so no bootstrap change.
 
 ### I2: afsluiten and historie (done: 5 tests)
 
