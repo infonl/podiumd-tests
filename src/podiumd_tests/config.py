@@ -28,7 +28,8 @@ MAIL_STAYS_INTERNAL_BY_ESTATE = {"minikube": True, "podiumd-infra": True, "exter
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # Secret sources that read the cluster; without kube access they cannot resolve.
 CLUSTER_SECRET_SOURCES = ("k8s_secret", "pod_env", "zgw_jwt_secret")
-SECRET_SOURCES = (*CLUSTER_SECRET_SOURCES, "dev_default")
+# keyvault: an Azure Key Vault secret ({vault, name}), read with the console's az login.
+SECRET_SOURCES = (*CLUSTER_SECRET_SOURCES, "dev_default", "keyvault")
 
 AccessMode = Literal["direct", "host-header"]
 

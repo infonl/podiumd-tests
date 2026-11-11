@@ -16,6 +16,8 @@ from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
+from podiumd_tests.process import ProcessError
+from podiumd_tests.process import run_checked
 
 if TYPE_CHECKING:
     from podiumd_tests.config import Profile
@@ -25,6 +27,7 @@ ENV_PREFIX = "PODIUMD_TESTS_SECRET_"
 REDACTED = "***"
 # Shorter values would mask ordinary text.
 MIN_SECRET_LENGTH = 4
+AZ_TIMEOUT = 60
 
 
 class SecretError(Exception):
@@ -142,7 +145,7 @@ class SecretResolver:
             raise SecretError(msg)
         try:
             return self._from_source(spec).strip()
-        except (KubeError, ValueError) as exc:
+        except (ProcessError, ValueError) as exc:
             msg = f"secret {name!r} ({spec.source}): {exc}"
             raise SecretError(msg) from exc
 
@@ -155,6 +158,9 @@ class SecretResolver:
                 return self._kube.secret_value(opts["name"], opts["key"], namespace=opts.get("namespace"))
             case "pod_env":
                 return self._kube.exec(opts["deployment"], "printenv", opts["var"])
+            case "keyvault":
+                command = ["az", "keyvault", "secret", "show", "--vault-name", opts["vault"], "--name", opts["name"]]
+                return run_checked(self._kube.runner, [*command, "--query", "value", "-o", "tsv"], AZ_TIMEOUT)
             case "zgw_jwt_secret":
                 return str(run_snippet(self._kube, opts["deployment"], "jwt_secret", {"client_id": opts["client_id"]}))
             case _:

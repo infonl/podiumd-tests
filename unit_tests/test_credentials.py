@@ -117,3 +117,16 @@ def test_register_all_masks_resolvable_and_stored_secrets_without_a_get(profile_
     env = env_factory(profile)
     env.credentials.register_all()
     assert env.redactor.redact("kv-secret-value stored-token-value") == "*** ***"
+
+
+def test_keyvault_secret_is_read_with_az(profile_factory, fake_runner, env_factory):
+    fake_runner.answers["az keyvault secret show --vault-name kv --name s1 --query value -o tsv"] = (0, "value\n")
+    profile = profile_factory(secrets={"s": {"keyvault": {"vault": "kv", "name": "s1"}}})
+    assert env_factory(profile).credentials.get("s") == "value"
+
+
+def test_keyvault_failure_names_the_secret(profile_factory, fake_runner, env_factory):
+    fake_runner.answers["az keyvault"] = (1, "Forbidden")
+    profile = profile_factory(secrets={"s": {"keyvault": {"vault": "kv", "name": "s1"}}})
+    with pytest.raises(SecretError, match=r"secret 's' \(keyvault\).*Forbidden"):
+        env_factory(profile).credentials.get("s")
