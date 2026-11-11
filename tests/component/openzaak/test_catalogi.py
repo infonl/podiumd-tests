@@ -6,10 +6,12 @@ concept zaaktypen can be deleted, so nothing is left behind.
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import make_concept_zaaktype
 
@@ -102,3 +104,31 @@ def test_zaaktype_versions(openzaak: ApiClient, registry: ResourceRegistry, test
     found = openzaak.list(f"{CATALOGI}/zaaktypen", {"identificatie": str(eerste["identificatie"]), "status": "concept"})
     assert {str(z["url"]) for z in found} == {str(eerste["url"]), str(tweede["url"])}
     assert openzaak.get(str(eerste["url"]))["eindeGeldigheid"] == "2026-06-30"
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=UnexpectedStatusError,
+    reason="[open-zaak-12] Open Zaak 1.29.3 answers 500 (IntegrityError) to a statustype with a volgnummer the "
+    "zaaktype already has; not yet reported upstream",
+)
+@pytest.mark.source(
+    "podiumd-tests",
+    "Open Zaak refuses a statustype whose volgnummer the zaaktype already has, as a validation error.",
+)
+@pytest.mark.scenario("""
+    Given a concept zaaktype with a statustype numbered 1
+    When a second statustype numbered 1 is added
+    Then Open Zaak refuses it as invalid, naming the volgnummer
+    And the zaaktype keeps one statustype
+""")
+def test_duplicate_statustype_volgnummer_is_refused(
+    openzaak: ApiClient, registry: ResourceRegistry, test_zaaktype: JsonObject
+) -> None:
+    """POST /statustypen with a volgnummer the zaaktype already has answers 400, not 500."""
+    concept = make_concept_zaaktype(openzaak, registry, str(test_zaaktype["catalogus"]))
+    body = {"omschrijving": "podiumd-tests", "zaaktype": concept["url"], "volgnummer": 1}
+    openzaak.request("POST", f"{CATALOGI}/statustypen", HTTPStatus.CREATED, json=body)
+    refused = openzaak.request("POST", f"{CATALOGI}/statustypen", HTTPStatus.BAD_REQUEST, json=body).json()
+    assert refused.get("invalidParams")
+    assert len(openzaak.list(f"{CATALOGI}/statustypen", {"zaaktype": str(concept["url"]), "status": "alles"})) == 1
