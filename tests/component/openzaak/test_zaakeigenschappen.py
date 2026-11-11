@@ -1,7 +1,6 @@
-"""Open Zaak besluiten and zaakeigenschappen on the test zaaktype.
+"""Open Zaak zaakeigenschappen on the test zaaktype.
 
-Ported from TA regression 24 and 29; unlike TA, the besluittype and eigenschap come from
-bootstrap, so no test publishes a type it cannot delete.
+Ported from TA regression 24; the eigenschap comes from bootstrap, so no test publishes a type it cannot delete.
 """
 
 from __future__ import annotations
@@ -10,8 +9,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.seed.openzaak import BESLUITEN
-from podiumd_tests.seed.openzaak import make_besluit
 from podiumd_tests.seed.openzaak import make_zaak
 
 if TYPE_CHECKING:
@@ -20,28 +17,6 @@ if TYPE_CHECKING:
     from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("openzaak")]
-
-
-@pytest.mark.source(
-    "TA regression/29-besluit-op-zaak.spec.ts", "A besluit records a formal decision on a zaak in the Besluiten API."
-)
-@pytest.mark.scenario("""
-    Given a zaak in Open Zaak
-    When a besluit of the zaaktype's besluittype is made on the zaak
-    Then the besluit reads back with its besluittype, zaak and toelichting
-    And the besluiten of the zaak are only this besluit
-""")
-def test_besluit_on_a_zaak(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
-    """A besluit of the zaak's besluittype reads back and is found by besluittype and zaak (TA reg-29)."""
-    zaak = make_zaak(openzaak, registry, parts.zaaktype)
-    besluit = make_besluit(openzaak, registry, parts.besluittype, zaak=zaak["url"])
-    read = openzaak.get(str(besluit["url"]))
-    assert (read["besluittype"], read["zaak"], read["toelichting"]) == (
-        parts.besluittype,
-        zaak["url"],
-        registry.tagged("besluit"),
-    )
-    assert [b["url"] for b in openzaak.list(f"{BESLUITEN}/besluiten", {"zaak": str(zaak["url"])})] == [besluit["url"]]
 
 
 @pytest.mark.source(

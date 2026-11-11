@@ -280,8 +280,12 @@ def delete_documents_of(openzaak: ApiClient, zaak: str) -> None:
 
 
 def make_besluit(openzaak: ApiClient, registry: ResourceRegistry, besluittype: str, **fields: object) -> JsonObject:
-    """Create a besluit of a besluittype whose toelichting carries the run tag."""
+    """Create a besluit whose identificatie and toelichting carry the run tag; fields override defaults, None drops one.
+
+    The identificatie is the suite's own: Open Zaak 1.29.3 generates the same one for concurrent creates (open-zaak-8).
+    """
     body: dict[str, object] = {
+        "identificatie": registry.tagged(f"besluit-{secrets.token_hex(4)}"),
         "verantwoordelijkeOrganisatie": TEST_CATALOGUS_RSIN,
         "besluittype": besluittype,
         "datum": today(),
@@ -289,7 +293,8 @@ def make_besluit(openzaak: ApiClient, registry: ResourceRegistry, besluittype: s
         "toelichting": registry.tagged("besluit"),
         **fields,
     }
-    besluit = openzaak.post(f"{BESLUITEN}/besluiten", body)
+    given = {key: value for key, value in body.items() if value is not None}
+    besluit = openzaak.post(f"{BESLUITEN}/besluiten", given)
     url = str(besluit["url"])
     registry.add(f"besluit {url}", lambda: delete_besluit(openzaak, url))
     return besluit

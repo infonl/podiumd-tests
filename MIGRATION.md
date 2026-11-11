@@ -118,12 +118,12 @@ Sources:
 | `regression/193-frankgateway-zac-openzaak-e2e.spec.ts` | component or integration | 3/4/5 | port | ZAC's BRP and KvK lookups → `tests/component/zac/test_zac_klanten.py`. The Frank!Gateway route ZAC → Open Zaak exists in no estate; rollen: `test_statussen_rollen.py`. |
 | `regression/22-negative-auth.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_autorisaties.py, with client ptest-bootstrap-zgw-noauth. |
 | `regression/23-va-escalatie.spec.ts` | component or integration | 3/4/5 | merge | Into `tests/component/openzaak/` test_autorisaties.py. |
-| `regression/24-zaakeigenschappen.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_besluiten_eigenschappen.py, on bootstrap eigenschap kenteken. |
+| `regression/24-zaakeigenschappen.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_zaakeigenschappen.py, on bootstrap eigenschap kenteken. |
 | `regression/25-abonnement-filter.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`. |
 | `regression/26-multi-subscriber.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`. |
 | `regression/27-status-event-keten.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`. |
 | `regression/28-gerelateerde-zaken.spec.ts` | component or integration | 3/4/5 | merge | With 59 into `tests/component/openzaak/` test_zaken.py test_relevante_andere_zaken. |
-| `regression/29-besluit-op-zaak.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_besluiten_eigenschappen.py, on the bootstrap besluittype. |
+| `regression/29-besluit-op-zaak.spec.ts` | component or integration | 3/4/5 | port | `tests/component/openzaak/` test_besluiten.py, on the bootstrap besluittype. |
 | `regression/30-rol-event.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`. |
 | `regression/33-zaak-update-event.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`. |
 | `regression/34-zio-events.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_notificaties.py`. |
