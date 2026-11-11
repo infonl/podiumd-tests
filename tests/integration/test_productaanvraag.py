@@ -19,6 +19,7 @@ import pytest
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import KIERKEGAARD
 from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
+from podiumd_tests.basisregistraties import KVK_TEST_VESTIGING
 from podiumd_tests.bootstrap.bpmn import bpmn_link
 from podiumd_tests.bootstrap.bpmn import uuid_of
 from podiumd_tests.bootstrap.names import BPMN_PRODUCTAANVRAAGTYPE
@@ -26,6 +27,7 @@ from podiumd_tests.json_data import section
 from podiumd_tests.mailpit import received
 from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import submit
+from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.seed.objecten import created_notificatie
 from podiumd_tests.seed.objecten import make_productaanvraag
 from podiumd_tests.seed.openklant import make_submission_contact
@@ -250,6 +252,43 @@ def test_betrokkenen_of_a_productaanvraag_become_rollen(
         ("belanghebbende", "natuurlijk_persoon", KIERKEGAARD),
         ("belanghebbende", "niet_natuurlijk_persoon", KVK_TEST_NUMMER),
     }
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=UnexpectedStatusError,
+    reason="[podiumd-chart-42] the podiumd chart's Productaanvraag-Dimpact objecttype (4.10.0, 4.10.1) refuses a "
+    "betrokkene with kvkNummer and vestigingsNummer (oneOf matches two branches); not reported upstream",
+)
+@pytest.mark.source(PRODUCTAANVRAAG_SOURCE, "ZAC adds a company betrokkene at vestiging level as a rol.")
+@pytest.mark.scenario("""
+    Given ZAC starts zaken of the BPMN test zaaktype, with a KvK koppeling, for a productaanvraagtype
+    When a productaanvraag names a company with its vestiging as belanghebbende
+    Then the zaak has that vestiging as belanghebbende
+""")
+def test_company_betrokkene_at_vestiging_level_becomes_a_rol(
+    zac: requests.Session,
+    urls: dict[str, str],
+    objecten: ApiClient,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    productaanvraag_objecttype: str,
+    bpmn_productaanvraagtype: str,
+) -> None:
+    """Objecten stores a betrokkene with kvkNummer and vestigingsNummer; ZAC adds a rol with the vestigingsnummer."""
+    kenmerk = registry.tagged("vestiging")
+    betrokkene = {
+        "kvkNummer": KVK_TEST_NUMMER,
+        "vestigingsNummer": KVK_TEST_VESTIGING,
+        "rolOmschrijvingGeneriek": "belanghebbende",
+    }
+    make_productaanvraag(
+        objecten, registry, productaanvraag_objecttype, bpmn_productaanvraagtype, kenmerk, betrokkenen=[betrokkene]
+    )
+    zaak = handled_zaak(zac, urls["zac"], openzaak, registry, kenmerk)
+    rollen = openzaak.list(f"{ZAKEN}/rollen", {"zaak": str(zaak["url"])})
+    vestigingen = [section(rol, "betrokkeneIdentificatie").get("vestigingsNummer") for rol in rollen]
+    assert KVK_TEST_VESTIGING in vestigingen
 
 
 @pytest.mark.source(PRODUCTAANVRAAG_SOURCE, "ZAC takes the zaak's details, location and documents from the aanvraag.")

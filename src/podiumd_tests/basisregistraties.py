@@ -21,6 +21,8 @@ KIERKEGAARD = "999990020"
 # The api-proxy of every estate the suite tests routes KvK to KvK's test API; its test set has
 # Test BV Donald, with this hoofdvestiging address.
 KVK_TEST_NUMMER = "68750110"
+# A vestiging of KVK_TEST_NUMMER in the KvK test set.
+KVK_TEST_VESTIGING = "000038509490"
 KVK_TEST_ADRES = {"postcode": "8823SJ", "huisnummer": "3"}
 
 
