@@ -5,6 +5,8 @@ The mails go to run-tagged addresses at Mailpit; cleanup deletes them.
 
 from __future__ import annotations
 
+import uuid
+
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -52,7 +54,8 @@ def fixture_mail(zac: requests.Session, urls: dict[str, str], registry: Resource
     def build(zaak: JsonObject, **fields: object) -> JsonObject:
         return {
             "verzender": afzenders(zac, urls["zac"], zaak)[0]["mail"],
-            "ontvanger": f"{registry.tagged('ontvanger')}@example.com",
+            # One address per mail: the tests of a run read and delete each other's mail otherwise.
+            "ontvanger": f"{registry.tagged(f'ontvanger-{uuid.uuid4().hex[:8]}')}@example.com",
             "onderwerp": "Zaak {ZAAK_NUMMER}",
             "body": "<p>Over zaak {ZAAK_NUMMER}: {ZAAK_OMSCHRIJVING}</p>",
             "createDocumentFromMail": False,
