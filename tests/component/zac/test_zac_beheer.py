@@ -56,7 +56,7 @@ def test_referentietabel_is_created_edited_and_deleted(
     """A referentietabel's values are replaced by the saved list; a deleted table is gone."""
     zac_url = urls["zac"]
     tabel = referentietabel(zac, zac_url, str(create_referentietabel(zac, zac_url, registry, ["Een", "Twee"])["code"]))
-    # ZAC 5.9.1 reads the values in no fixed order: its REST API has no sortOrder.
+    # ZAC ignores the saved order of values (zac-15).
     assert sorted(referentietabel_values(tabel)) == ["Een", "Twee"]
 
     een = next(value for value in entries(tabel["values"]) if value["name"] == "Een")
@@ -66,6 +66,29 @@ def test_referentietabel_is_created_edited_and_deleted(
     expect_status(delete_referentietabel(zac, zac_url, tabel), HTTPStatus.NO_CONTENT)
     codes = [found.get("code") for found in get_entries(zac, zac_url + REFERENTIETABELLEN)]
     assert tabel["code"] not in codes
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-15] ZAC 5.9.1 keeps a referentietabel's values in creation order: it sorts on a sortOrder that its "
+    "REST API never sets; not yet reported upstream",
+)
+@pytest.mark.scenario("""
+    Given a new referentietabel with the values Een, Twee and Drie
+    When the beheerder saves them in the order Drie, Een, Twee
+    Then ZAC gives the values in that order
+""")
+def test_referentietabel_keeps_the_saved_order(
+    zac: requests.Session, urls: dict[str, str], registry: ResourceRegistry
+) -> None:
+    """GET after a PUT with the values reordered returns them in the saved order."""
+    zac_url = urls["zac"]
+    code = str(create_referentietabel(zac, zac_url, registry, ["Een", "Twee", "Drie"])["code"])
+    tabel = referentietabel(zac, zac_url, code)
+    by_name = {str(value["name"]): value for value in entries(tabel["values"])}
+    reordered = [by_name["Drie"], by_name["Een"], by_name["Twee"]]
+    expect_status(update_referentietabel(zac, zac_url, tabel, reordered), HTTPStatus.OK)
+    assert referentietabel_values(referentietabel(zac, zac_url, code)) == ["Drie", "Een", "Twee"]
 
 
 @pytest.mark.scenario("""
