@@ -503,22 +503,30 @@ def fixture_zac_zaak(
     return start
 
 
+@pytest.fixture(name="bpmn_zaaktype")
+def fixture_bpmn_zaaktype(openzaak: ApiClient, need_bootstrap: Callable[..., None]) -> JsonObject:
+    """Return the BPMN test zaaktype, which ZAC handles with podiumd-tests' BPMN process."""
+    need_bootstrap("zac-bpmn-process")
+    return published_zaaktype(openzaak, names.BPMN_ZAAKTYPE, "openzaak-zaaktype-bpmn")
+
+
+@pytest.fixture(name="bpmn_parameters")
+def fixture_bpmn_parameters(bpmn_zaaktype: JsonObject, zac_group: str) -> JsonObject:
+    """Return what create_zaak reads of zaakafhandelparameters, for the BPMN test zaaktype in the test admin's group."""
+    zaaktype = {"uuid": uuid_of(bpmn_zaaktype["url"]), "omschrijving": bpmn_zaaktype["omschrijving"]}
+    return {"zaaktype": zaaktype, "defaultGroepId": zac_group}
+
+
 @pytest.fixture(name="bpmn_zaak")
-def fixture_bpmn_zaak(  # noqa: PLR0913, PLR0917  # fixtures
+def fixture_bpmn_zaak(
     zac: requests.Session,
     urls: dict[str, str],
     openzaak: ApiClient,
-    zac_group: str,
+    bpmn_parameters: JsonObject,
     registry: ResourceRegistry,
-    need_bootstrap: Callable[..., None],
 ) -> JsonObject:
     """Start a zaak of the BPMN test zaaktype in ZAC; cleanup deletes it and its documents from Open Zaak."""
-    need_bootstrap("zac-bpmn-process")
-    zaaktype = published_zaaktype(openzaak, names.BPMN_ZAAKTYPE, "openzaak-zaaktype-bpmn")
-    parameters = {"zaaktype": {"uuid": uuid_of(zaaktype["url"]), "omschrijving": zaaktype["omschrijving"]}}
-    zaak = create_zaak(
-        zac, urls["zac"], {**parameters, "defaultGroepId": zac_group}, omschrijving=registry.tagged("bpmn")
-    )
+    zaak = create_zaak(zac, urls["zac"], bpmn_parameters, omschrijving=registry.tagged("bpmn"))
     url = f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}"
     registry.add(f"zaak {zaak['identificatie']}", lambda: delete_zaak(openzaak, url, with_documents=True))
     return zaak

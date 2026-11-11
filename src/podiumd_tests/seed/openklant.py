@@ -303,15 +303,16 @@ def delete_partij(openklant: ApiClient, partij: str) -> None:
     openklant.delete(partij)
 
 
-def make_submission_contact(openklant: ApiClient, registry: ResourceRegistry, kenmerk: str, adres: str) -> None:
-    """Create the e-mail address a form's submitter left, as Open Formulieren registers it in Open Klant.
+def make_submission_contact(openklant: ApiClient, registry: ResourceRegistry, kenmerk: str, *adressen: str) -> None:
+    """Create the e-mail addresses and telefoonnummers a form's submitter left, as Open Formulieren registers them.
 
     A klantcontact about the submission (onderwerpobject with its kenmerk) with a betrokkene and the
-    address; ZAC finds it for the productaanvraag with that kenmerk. Cleanup deletes the whole tree,
+    addresses; ZAC finds them for the productaanvraag with that kenmerk. Cleanup deletes the whole tree,
     also the onderwerpobject ZAC adds for the zaak.
     """
     klantcontact = make_klantcontact(openklant, registry, onderwerp=kenmerk)
     betrokkene = make_betrokkene(openklant, registry, klantcontact, None)
-    make_digitaal_adres(openklant, registry, None, adres, betrokkene)
+    for adres in adressen:
+        make_digitaal_adres(openklant, registry, None, adres, betrokkene)
     make_onderwerpobject(openklant, registry, klantcontact, kenmerk, FORMULIERINZENDING)
     clean_up_klantcontacten(openklant, registry, kenmerk)

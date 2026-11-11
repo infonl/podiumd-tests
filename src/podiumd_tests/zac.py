@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from datetime import date
 from datetime import timedelta
 from http import HTTPStatus
@@ -31,6 +33,8 @@ if TYPE_CHECKING:
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
+# ZAC's own address inside its pod.
+IN_POD = "http://localhost:8080"
 # ZAC reindexes in the request, page by page; tens of thousands of zaken take minutes.
 REINDEX_TIMEOUT = 1800
 # Objecten notifies, Open Notificaties delivers to ZAC, and ZAC starts the zaak and its case.
@@ -123,7 +127,12 @@ def zaak_body(parameters: JsonObject, **fields: object) -> JsonObject:
 
 def create_zaak(http: requests.Session, zac_url: str, parameters: JsonObject, **fields: object) -> JsonObject:
     """Return a zaak started in ZAC (zaak_body), as ZAC shows it."""
-    response = http.post(f"{zac_url}/rest/zaken/zaak", json=zaak_body(parameters, **fields))
+    return start_zaak(http, zac_url, zaak_body(parameters, **fields))
+
+
+def start_zaak(http: requests.Session, zac_url: str, body: JsonObject) -> JsonObject:
+    """Return the zaak ZAC starts for this request (RestZaakAanmaakGegevens), as ZAC shows it."""
+    response = http.post(f"{zac_url}/rest/zaken/zaak", json=body)
     created = cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
     if "uuid" in created:
         return created
@@ -310,6 +319,14 @@ def send_with_person(
     return attempt() if response.status_code == HTTPStatus.GONE else response
 
 
+def productaanvraag_zaken(openzaak: ApiClient, kenmerk: str) -> list[JsonObject]:
+    """Return the zaken started since yesterday with the productaanvraag's kenmerk in the toelichting."""
+    # ZAC dates the zaak in Dutch time: around midnight a day after the UTC date.
+    since = (date.fromisoformat(today()) - timedelta(days=1)).isoformat()
+    zaken = openzaak.list(f"{ZAKEN}/zaken", {"startdatum__gte": since})
+    return [zaak for zaak in zaken if kenmerk in str(zaak.get("toelichting") or "")]
+
+
 def productaanvraag_zaak(
     openzaak: ApiClient, registry: ResourceRegistry, kenmerk: str, timeout: float = PRODUCTAANVRAAG_TIMEOUT
 ) -> JsonObject:
@@ -318,12 +335,8 @@ def productaanvraag_zaak(
     openzaak: a client that may read and delete zaken of the zaaktype (bootstrap openzaak-client-productaanvraag).
     """
 
-    # ZAC dates the zaak in Dutch time: around midnight a day after the UTC date.
-    since = (date.fromisoformat(today()) - timedelta(days=1)).isoformat()
-
     def started() -> JsonObject | None:
-        zaken = openzaak.list(f"{ZAKEN}/zaken", {"startdatum__gte": since})
-        return next((zaak for zaak in zaken if kenmerk in str(zaak.get("toelichting") or "")), None)
+        return next(iter(productaanvraag_zaken(openzaak, kenmerk)), None)
 
     def delete() -> None:
         zaak = started()
@@ -335,6 +348,25 @@ def productaanvraag_zaak(
     return wait_until(started, timeout=timeout, interval=3, description=f"zaak for productaanvraag {kenmerk}")
 
 
+def inbox_productaanvragen(http: requests.Session, zac_url: str, productaanvraagtype: str) -> list[JsonObject]:
+    """Return the entries of ZAC's Inbox productaanvragen of the productaanvraagtype."""
+    body = {"type": productaanvraagtype, "page": 0, "maxResults": 100}
+    response = http.put(f"{zac_url}/rest/inbox-productaanvragen", json=body)
+    return entries(cast("JsonObject", expect_status(response, HTTPStatus.OK).json()).get("resultaten"))
+
+
+def clean_up_inbox_entries(
+    http: requests.Session, zac_url: str, registry: ResourceRegistry, productaanvraagtype: str
+) -> None:
+    """Delete, at cleanup, the entries of ZAC's Inbox productaanvragen of the productaanvraagtype."""
+
+    def delete() -> None:
+        for entry in inbox_productaanvragen(http, zac_url, productaanvraagtype):
+            expect_status(http.delete(f"{zac_url}/rest/inbox-productaanvragen/{entry['id']}"), HTTPStatus.NO_CONTENT)
+
+    registry.add(f"Inbox productaanvragen of type {productaanvraagtype}", delete)
+
+
 def reindex_zaken(env: Environment) -> None:
     """Rebuild ZAC's search index of zaken from Open Zaak, through ZAC's internal endpoint.
 
@@ -342,9 +374,23 @@ def reindex_zaken(env: Environment) -> None:
     CronJob does: the reindex outlasts an ingress timeout. ZAC first empties the index, so its
     search misses zaken until the call returns.
     """
-    url = "http://localhost:8080/rest/internal/indexeren/herindexeren/ZAAK"
+    url = f"{IN_POD}/rest/internal/indexeren/herindexeren/ZAAK"
     command = f'curl -sS -f -o /dev/null -H "X-API-KEY: $ZAC_INTERNAL_ENDPOINTS_API_KEY" {url}'
     env.kube.exec(env.deployment_for("zac"), "sh", "-c", command, timeout=REINDEX_TIMEOUT)
+
+
+def deliver_notificatie(env: Environment, notificatie: JsonObject, times: int) -> list[int]:
+    """Deliver the notificatie to ZAC this many times at once, as Open Notificaties does; ZAC's HTTP statuses.
+
+    Sent inside the ZAC pod with ZAC's own key for Open Notificaties; ZAC handles it before it answers.
+    """
+    post = (
+        f"curl -sS -o /dev/null -w '%{{http_code}}\\n' -X POST -H 'Content-Type: application/json'"
+        f' -H "Authorization: $OPEN_NOTIFICATIONS_API_SECRET_KEY" --data "$1" {IN_POD}/rest/notificaties'
+    )
+    command = f"for i in {' '.join(map(str, range(times)))}; do {post} & done; wait"
+    output = env.kube.exec(env.deployment_for("zac"), "sh", "-c", command, "sh", json.dumps(notificatie))
+    return [int(line) for line in output.split()]
 
 
 def search(http: requests.Session, zac_url: str, **query: object) -> JsonObject:

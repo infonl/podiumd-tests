@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC
+from datetime import datetime
 from typing import TYPE_CHECKING
 from typing import cast
 
@@ -51,16 +53,40 @@ def make_object(
 
 
 def make_productaanvraag(
-    objecten: ApiClient, registry: ResourceRegistry, objecttype: str, productaanvraagtype: str, kenmerk: str
+    objecten: ApiClient,
+    registry: ResourceRegistry,
+    objecttype: str,
+    productaanvraagtype: str,
+    kenmerk: str,
+    **fields: object,
 ) -> JsonObject:
-    """Create a productaanvraag object as Open Formulieren's objects API registration writes it."""
+    """Create a productaanvraag object as Open Formulieren's objects API registration writes it, with these fields.
+
+    fields: further fields of the Productaanvraag-Dimpact schema (betrokkenen, zaakgegevens, pdf, bijlagen).
+    """
     data: dict[str, object] = {
         "bron": {"naam": "Open Formulieren", "kenmerk": kenmerk},
         "type": productaanvraagtype,
         "aanvraaggegevens": {"melding": {"naamAanvrager": "podiumd-tests", "omschrijving": kenmerk}},
         "taal": "nld",
+        **fields,
     }
     return make_object(objecten, registry, objecttype, data)
+
+
+def created_notificatie(created: JsonObject) -> JsonObject:
+    """Return the notificatie Objecten sends for the new object."""
+    url = str(created["url"])
+    return {
+        "kanaal": "objecten",
+        "hoofdObject": url,
+        "resource": "object",
+        "resourceUrl": url,
+        "actie": "create",
+        # ZAC reads microseconds and a zone.
+        "aanmaakdatum": datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+        "kenmerken": {"objectType": created["type"]},
+    }
 
 
 def clean_up_logboek(objecten: ApiClient, registry: ResourceRegistry, logboek_type: str, internetaak: str) -> None:

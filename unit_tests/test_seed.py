@@ -17,6 +17,7 @@ from podiumd_tests.seed import objecten as objecten_module
 from podiumd_tests.seed import openklant
 from podiumd_tests.seed import openzaak
 from podiumd_tests.seed.objecten import clean_up_logboek
+from podiumd_tests.seed.objecten import created_notificatie
 from podiumd_tests.seed.objecten import make_productaanvraag
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.opennotificaties import CALLBACK_AUTH
@@ -240,9 +241,10 @@ def test_submission_contact_cleanup_deletes_the_tree_by_onderwerp(fake_http):
     answers |= {"GET /v1/klantcontacten": results(*found), "GET /v1/klantcontacten/new": (404, {})}
     sent = fake_http(answers)
     registry = ResourceRegistry("run1")
-    openklant.make_submission_contact(api(), registry, "OF-1", "a@example.invalid")
+    openklant.make_submission_contact(api(), registry, "OF-1", "a@example.invalid", "0612345678")
     assert body(sent[0])["onderwerp"] == "OF-1"
-    assert section(body(sent[3]), "onderwerpobjectidentificator")["codeObjecttype"] == "formulierinzending"
+    assert [body(s)["soortDigitaalAdres"] for s in sent[2:4]] == ["email", "telefoonnummer"]
+    assert section(body(sent[4]), "onderwerpobjectidentificator")["codeObjecttype"] == "formulierinzending"
     assert openklant.klantcontacten_about(api(), "OF-1", "x") == [found[1]]
     sent.clear()
     registry.cleanup()
@@ -281,13 +283,24 @@ def test_productaanvraag_and_logboek_cleanup(fake_http):
         | {"GET /v1/objects": results({"url": f"{API}/objects/log"}), "DELETE /v1/objects/log": (204, {})}
     )
     registry = ResourceRegistry("run1")
-    make_productaanvraag(api(), registry, "ot", "pat", "OF-1")
+    make_productaanvraag(api(), registry, "ot", "pat", "OF-1", betrokkenen=[{"inpBsn": "1"}])
     clean_up_logboek(api(), registry, "lt", "it1")
     registry.cleanup()
     data = section(section(body(sent[0]), "record"), "data")
-    assert (data["type"], section(data, "bron")["kenmerk"]) == ("pat", "OF-1")
+    assert (data["type"], section(data, "bron")["kenmerk"], data["betrokkenen"]) == ("pat", "OF-1", [{"inpBsn": "1"}])
     assert "heeftBetrekkingOp__objectId__exact__it1" in sent[1].url
     assert calls(sent)[1:] == [("GET", "/objects"), ("DELETE", "/objects/log"), ("DELETE", "/objects/new")]
+
+
+def test_created_notificatie_is_objectens_create_of_the_object():
+    notificatie = created_notificatie({"url": f"{API}/objects/o", "type": "https://objecttypen.test/ot"})
+    assert (notificatie["kanaal"], notificatie["resourceUrl"], notificatie["actie"]) == (
+        "objecten",
+        f"{API}/objects/o",
+        "create",
+    )
+    assert section(notificatie, "kenmerken") == {"objectType": "https://objecttypen.test/ot"}
+    assert str(notificatie["aanmaakdatum"]).endswith("Z")
 
 
 def test_abonnement_sends_the_callback_auth(fake_http):

@@ -321,3 +321,33 @@ def test_rights_of_gives_a_role_the_rights_of_the_roles_before_it():
     least = {"lezen": "raadpleger", "wijzigen": "recordmanager", "versturenEmail": None}
     assert zac.rights_of("raadpleger", least) == {"lezen": True, "wijzigen": False, "versturenEmail": False}
     assert zac.rights_of("beheerder", least) == {"lezen": True, "wijzigen": True, "versturenEmail": False}
+
+
+def test_productaanvraag_zaken_are_all_zaken_with_the_kenmerk(fake_http):
+    zaken = [{"url": "z/1", "toelichting": "kenmerk OF-42"}, {"url": "z/2"}, {"url": "z/3", "toelichting": "OF-42"}]
+    fake_http({"GET /zaken/api/v1/zaken": (200, zaken)})
+    openzaak = ApiClient(requests.Session(), "https://oz.test", {})
+    assert [zaak["url"] for zaak in zac.productaanvraag_zaken(openzaak, "OF-42")] == ["z/1", "z/3"]
+
+
+def test_inbox_productaanvragen_of_a_type_and_their_cleanup(fake_http):
+    found = {"resultaten": [{"id": 7, "type": "t"}], "totaal": 1}
+    sent = fake_http(
+        {"PUT /rest/inbox-productaanvragen": (200, found), "DELETE /rest/inbox-productaanvragen/7": (204, None)}
+    )
+    http, registry = requests.Session(), ResourceRegistry("ptest-abc")
+    assert zac.inbox_productaanvragen(http, ZAC, "t") == found["resultaten"]
+    assert json.loads(sent[0].body)["type"] == "t"
+    zac.clean_up_inbox_entries(http, ZAC, registry, "t")
+    assert registry.cleanup() == []
+    assert (sent[-1].method, sent[-1].url) == ("DELETE", f"{ZAC}/rest/inbox-productaanvragen/7")
+
+
+def test_deliver_notificatie_posts_it_in_the_zac_pod_this_many_times(env_factory, fake_runner):
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "zac"}}]}))
+    fake_runner.answers["exec deploy/zac"] = (0, "204\n204\n")
+    assert zac.deliver_notificatie(env_factory(), {"actie": "create"}, 2) == [204, 204]
+    argv = fake_runner.calls[-1]
+    assert "for i in 0 1;" in argv[-3]
+    assert "$OPEN_NOTIFICATIONS_API_SECRET_KEY" in argv[-3]
+    assert json.loads(argv[-1]) == {"actie": "create"}
