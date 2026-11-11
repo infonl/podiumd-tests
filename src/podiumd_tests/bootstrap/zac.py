@@ -207,5 +207,8 @@ class ZacCatalogusStep(SnippetStep):
         return removed
 
     def _clear(self, ctx: Context) -> None:
+        # On a fresh environment the admin is made later in the same bootstrap, and ZAC has cached nothing yet.
+        if not ctx.env.credentials.is_configured(self.admin.store_key):
+            return
         session = zac_session(ctx.env, self.admin.username, ctx.env.credentials.get(self.admin.store_key))
         clear_ztc_cache(session, ctx.env.profile.urls["zac"])

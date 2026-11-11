@@ -166,3 +166,14 @@ def test_zac_catalogus_step_clears_zacs_cache_after_apply_and_remove(ctx, fake_r
     step.remove(context)
     assert ran == ["apply", "remove"]
     assert [request.method for request in sent] == ["DELETE", "DELETE"]
+
+
+def test_zac_catalogus_step_skips_the_cache_without_the_admin(ctx, fake_runner, fake_http, monkeypatch):
+    sent = fake_http({})
+    monkeypatch.setattr("podiumd_tests.bootstrap.snippet_step.run_snippet", lambda *_args: {"present": True})
+    step = zac_step.ZacCatalogusStep("besluittype", ("openzaak", "zac"), "openzaak_besluittype", None, admin=ADMIN)
+    context = ctx()
+    monkeypatch.setattr(type(context.env.credentials), "is_configured", lambda _self, _key: False)
+    fake_runner.answers["get deploy"] = (0, json.dumps({"items": [{"metadata": {"name": "openzaak"}}]}))
+    step.apply(context)
+    assert sent == []
