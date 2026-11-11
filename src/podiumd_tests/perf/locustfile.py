@@ -45,6 +45,7 @@ from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import make_zaak
+from podiumd_tests.seed.openzaak import published_zaaktype
 from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.zac import zac_session
 
@@ -85,7 +86,7 @@ def _deep_page(openzaak: ApiClient, path: str) -> str:
 
 def _openzaak_calls(env: Environment) -> dict[str, Call]:
     openzaak = openzaak_client(env, ZGW_CLIENT_ID, ZGW_STORE_KEY, "perf")
-    zaaktype = str(openzaak.list(f"{CATALOGI}/zaaktypen", {"identificatie": TEST_ZAAKTYPE})[0]["url"])
+    zaaktype = str(published_zaaktype(openzaak, TEST_ZAAKTYPE, "openzaak-zaaktype")["url"])
     documenten = f"{DOCUMENTEN}/enkelvoudiginformatieobjecten"
     ordered = {"pageSize": str(PAGE_SIZE), "ordering": "-auteur", "page": _deep_page(openzaak, documenten)}
     calls: dict[str, Call] = {

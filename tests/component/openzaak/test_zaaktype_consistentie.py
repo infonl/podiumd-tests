@@ -10,11 +10,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.bootstrap.bpmn import bpmn_zaaktype
+from podiumd_tests.bootstrap.names import BPMN_ZAAKTYPE
 from podiumd_tests.json_data import entries
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_zaak
+from podiumd_tests.seed.openzaak import published_zaaktype
 from podiumd_tests.seed.openzaak import zaaktype_parts
 
 if TYPE_CHECKING:
@@ -40,7 +41,7 @@ pytestmark = [
 def fixture_other(openzaak: ApiClient, need_bootstrap: Callable[..., None]) -> ZaaktypeParts:
     """Return the types of a second published zaaktype in the test catalogus."""
     need_bootstrap("openzaak-zaaktype-bpmn")
-    return zaaktype_parts(openzaak, bpmn_zaaktype(openzaak))
+    return zaaktype_parts(openzaak, published_zaaktype(openzaak, BPMN_ZAAKTYPE, "openzaak-zaaktype-bpmn"))
 
 
 type Request = tuple[str, dict[str, object]]

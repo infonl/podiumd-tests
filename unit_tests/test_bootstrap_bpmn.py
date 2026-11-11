@@ -10,7 +10,6 @@ import requests
 from podiumd_tests.bootstrap import bpmn
 from podiumd_tests.bootstrap.bpmn import PROCESS_KEY
 from podiumd_tests.bootstrap.bpmn import ZacBpmnProcess
-from podiumd_tests.bootstrap.bpmn import bpmn_zaaktype
 from podiumd_tests.bootstrap.bpmn import uuid_of
 from podiumd_tests.bootstrap.names import ZAC_DOMAIN
 from podiumd_tests.bootstrap.names import ZAC_FUNCTIONAL_ROLES
@@ -19,6 +18,7 @@ from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.credentials import env_var_name
 from podiumd_tests.responses import UnexpectedStatusError
+from podiumd_tests.seed.openzaak import published_zaaktype
 
 ZAAKTYPE = {
     "url": "https://oz/catalogi/api/v1/zaaktypen/zt-1/",
@@ -40,10 +40,11 @@ class FakeResponse(SimpleNamespace):
         return self.body
 
 
-def test_bpmn_zaaktype_is_the_published_version():
-    assert bpmn_zaaktype(FakeOpenZaak([{**ZAAKTYPE, "concept": True}, ZAAKTYPE])) == ZAAKTYPE  # pyright: ignore[reportArgumentType]
+def test_published_zaaktype_skips_concepts_and_names_the_step():
+    found = FakeOpenZaak([{**ZAAKTYPE, "concept": True}, ZAAKTYPE])
+    assert published_zaaktype(found, "zt", "openzaak-zaaktype-bpmn") == ZAAKTYPE  # pyright: ignore[reportArgumentType]
     with pytest.raises(LookupError, match="openzaak-zaaktype-bpmn"):
-        bpmn_zaaktype(FakeOpenZaak([{**ZAAKTYPE, "concept": True}]))  # pyright: ignore[reportArgumentType]
+        published_zaaktype(FakeOpenZaak([{**ZAAKTYPE, "concept": True}]), "zt", "openzaak-zaaktype-bpmn")  # pyright: ignore[reportArgumentType]
     assert uuid_of(ZAAKTYPE["url"]) == "zt-1"
 
 

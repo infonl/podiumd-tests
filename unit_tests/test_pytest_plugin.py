@@ -326,7 +326,9 @@ def _fake_zac_and_open_zaak(monkeypatch):
         "create_zaak": lambda _zac, _url, _parameters, **fields: {"uuid": "u1", "identificatie": "ZAAK-1", **fields},
         "delete_zaak": lambda _client, url, **_options: deleted.append(url),
         "user_groups": lambda _zac, _url: ["beheerders"],
-        "bpmn_zaaktype": lambda _openzaak: {"url": "zt/zt-b", "omschrijving": "b"},
+        "published_zaaktype": lambda _openzaak, identificatie, _step: (
+            {"url": "zt/zt-b", "omschrijving": "b"} if identificatie.endswith("bpmn") else {"url": "zt-1"}
+        ),
         "challenge_session": lambda _env, url, user, password: (url, user, password),
     }
     for name, fake in fakes.items():

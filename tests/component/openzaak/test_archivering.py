@@ -15,13 +15,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.bootstrap.names import ARCHIEF_ZAAKTYPE
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import make_besluit
 from podiumd_tests.seed.openzaak import make_status
 from podiumd_tests.seed.openzaak import make_zaak
-from podiumd_tests.seed.openzaak import zaaktype_parts
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -63,19 +61,15 @@ class Given:
 
 
 @pytest.fixture(scope="module", name="archief")
-def fixture_archief(openzaak: ApiClient, need_bootstrap: Callable[..., None]) -> Archief:
+def fixture_archief(openzaak: ApiClient, archief_parts: ZaaktypeParts) -> Archief:
     """Return the archief zaaktype's types and its resultaattypen by afleidingswijze."""
-    need_bootstrap("openzaak-zaaktype-archief")
-    zaaktype = next(
-        z for z in openzaak.list(f"{CATALOGI}/zaaktypen", {"identificatie": ARCHIEF_ZAAKTYPE}) if not z.get("concept")
-    )
     resultaattypen = {
         str(r["omschrijving"]): str(r["url"])
-        for r in openzaak.list(f"{CATALOGI}/resultaattypen", {"zaaktype": str(zaaktype["url"])})
+        for r in openzaak.list(f"{CATALOGI}/resultaattypen", {"zaaktype": archief_parts.zaaktype})
     }
     if not resultaattypen:
         pytest.skip("archief zaaktype has no resultaattypen (Selectielijst API was unreachable at bootstrap)")
-    return Archief(zaaktype_parts(openzaak, zaaktype), resultaattypen)
+    return Archief(archief_parts, resultaattypen)
 
 
 def _close(

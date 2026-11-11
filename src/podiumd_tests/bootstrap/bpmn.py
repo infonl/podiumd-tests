@@ -32,7 +32,7 @@ from podiumd_tests.pabc import ensure_domain
 from podiumd_tests.pabc import ensure_functional_role
 from podiumd_tests.pabc import zaaktype_entity_type
 from podiumd_tests.responses import expect_status
-from podiumd_tests.seed.openzaak import CATALOGI
+from podiumd_tests.seed.openzaak import published_zaaktype
 from podiumd_tests.zac import user_groups
 from podiumd_tests.zac import zac_session
 
@@ -49,16 +49,6 @@ ZAC_APPLICATION = "zaakafhandelcomponent"
 FILES = Path(__file__).parent.parent / "bpmn"
 DEFINITIONS = "/rest/bpmn-process-definitions"
 CONFIGURATION = "/rest/zaaktype-bpmn-configuration"
-
-
-def bpmn_zaaktype(openzaak: ApiClient) -> JsonObject:
-    """Return the published zaaktype of step openzaak-zaaktype-bpmn, as Open Zaak's Catalogi API shows it."""
-    zaaktypen = openzaak.list(f"{CATALOGI}/zaaktypen", {"identificatie": BPMN_ZAAKTYPE})
-    found = [zaaktype for zaaktype in zaaktypen if not zaaktype.get("concept")]
-    if not found:
-        msg = f"zaaktype {BPMN_ZAAKTYPE} missing: bootstrap step openzaak-zaaktype-bpmn"
-        raise LookupError(msg)
-    return found[0]
 
 
 def mappable_roles(pabc: requests.Session, pabc_url: str) -> dict[str, tuple[str, ...]]:
@@ -89,7 +79,7 @@ class ZacBpmnProcess:
     def is_present(self, ctx: Context, /) -> bool:
         """Return whether the process is deployed, linked to the BPMN test zaaktype, and PABC maps the roles."""
         try:
-            zaaktype = uuid_of(bpmn_zaaktype(_openzaak(ctx))["url"])
+            zaaktype = uuid_of(published_zaaktype(_openzaak(ctx), BPMN_ZAAKTYPE, "openzaak-zaaktype-bpmn")["url"])
         except LookupError:
             return False
         http, zac = self._zac(ctx)
@@ -110,7 +100,7 @@ class ZacBpmnProcess:
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Map the functional roles in PABC, deploy the process and its forms, and link it to the zaaktype."""
-        zaaktype = bpmn_zaaktype(_openzaak(ctx))
+        zaaktype = published_zaaktype(_openzaak(ctx), BPMN_ZAAKTYPE, "openzaak-zaaktype-bpmn")
         self._map_roles(ctx, str(zaaktype["omschrijving"]))
         http, zac = self._zac(ctx)
         process = FILES / f"{PROCESS_KEY}.bpmn"

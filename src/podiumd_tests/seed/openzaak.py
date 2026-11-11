@@ -101,6 +101,16 @@ class ZaaktypeParts:
     resultaattypen: list[str]
 
 
+def published_zaaktype(openzaak: ApiClient, identificatie: str, step: str) -> JsonObject:
+    """Return the published zaaktype with this identificatie that bootstrap step `step` creates."""
+    zaaktypen = openzaak.list(f"{CATALOGI}/zaaktypen", {"identificatie": identificatie})
+    found = [zaaktype for zaaktype in zaaktypen if not zaaktype.get("concept")]
+    if not found:
+        msg = f"zaaktype {identificatie} missing: bootstrap step {step}"
+        raise LookupError(msg)
+    return found[0]
+
+
 def zaaktype_parts(openzaak: ApiClient, zaaktype: JsonObject) -> ZaaktypeParts:
     """Look up the statustypen, roltypen, informatieobjecttype, eigenschappen, besluittype and resultaattypen."""
     url = str(zaaktype["url"])

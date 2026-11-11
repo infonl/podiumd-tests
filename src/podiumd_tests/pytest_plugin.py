@@ -21,7 +21,6 @@ from podiumd_tests import results
 from podiumd_tests import scenarios
 from podiumd_tests.bootstrap import names
 from podiumd_tests.bootstrap import runner
-from podiumd_tests.bootstrap.bpmn import bpmn_zaaktype
 from podiumd_tests.bootstrap.bpmn import uuid_of
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import STEPS
@@ -33,10 +32,10 @@ from podiumd_tests.kube import cluster_service
 from podiumd_tests.mock_server import Callback
 from podiumd_tests.oidc import challenge_session
 from podiumd_tests.seed.objecten import objecttype_url
-from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import ZaaktypeParts
 from podiumd_tests.seed.openzaak import delete_zaak
+from podiumd_tests.seed.openzaak import published_zaaktype
 from podiumd_tests.seed.openzaak import zaaktype_parts
 from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.sources import source_problems
@@ -343,8 +342,14 @@ def fixture_opennotificaties(podiumd_env: Environment, need_bootstrap: Callable[
 def fixture_test_zaaktype(openzaak: ApiClient, need_bootstrap: Callable[..., None]) -> JsonObject:
     """Return the published test zaaktype in the test catalogus (bootstrap step openzaak-zaaktype)."""
     need_bootstrap("openzaak-zaaktype")
-    found = openzaak.list(f"{CATALOGI}/zaaktypen", {"identificatie": names.TEST_ZAAKTYPE})
-    return found[0]
+    return published_zaaktype(openzaak, names.TEST_ZAAKTYPE, "openzaak-zaaktype")
+
+
+@pytest.fixture(scope="session", name="archief_parts")
+def fixture_archief_parts(openzaak: ApiClient, need_bootstrap: Callable[..., None]) -> ZaaktypeParts:
+    """Return the types of the archief zaaktype, a second zaaktype in the test catalogus."""
+    need_bootstrap("openzaak-zaaktype-archief")
+    return zaaktype_parts(openzaak, published_zaaktype(openzaak, names.ARCHIEF_ZAAKTYPE, "openzaak-zaaktype-archief"))
 
 
 @pytest.fixture(scope="session", name="parts")
@@ -494,7 +499,7 @@ def fixture_bpmn_zaak(  # noqa: PLR0913, PLR0917  # fixtures
 ) -> JsonObject:
     """Start a zaak of the BPMN test zaaktype in ZAC; cleanup deletes it and its documents from Open Zaak."""
     need_bootstrap("zac-bpmn-process")
-    zaaktype = bpmn_zaaktype(openzaak)
+    zaaktype = published_zaaktype(openzaak, names.BPMN_ZAAKTYPE, "openzaak-zaaktype-bpmn")
     parameters = {"zaaktype": {"uuid": uuid_of(zaaktype["url"]), "omschrijving": zaaktype["omschrijving"]}}
     zaak = create_zaak(
         zac, urls["zac"], {**parameters, "defaultGroepId": zac_group}, omschrijving=registry.tagged("bpmn")
