@@ -4,6 +4,7 @@ import ast
 import base64
 import json
 import subprocess
+import threading
 
 from dataclasses import dataclass
 from dataclasses import field
@@ -29,6 +30,7 @@ from podiumd_tests.bootstrap.runner import Outcome
 from podiumd_tests.bootstrap.runner import bootstrap
 from podiumd_tests.bootstrap.runner import check
 from podiumd_tests.bootstrap.runner import has_failure
+from podiumd_tests.bootstrap.runner import in_dependency_order
 from podiumd_tests.bootstrap.runner import outcome_report
 from podiumd_tests.bootstrap.runner import refusal
 from podiumd_tests.bootstrap.runner import unbootstrap
@@ -108,7 +110,9 @@ def test_each_outcome_has_the_seconds_its_step_took(env_factory, fake_runner, pr
     env = cluster_env(env_factory, fake_runner, profile_factory)
     clock = iter([10.0, 12.5, 20.0, 20.25])
     monkeypatch.setattr("podiumd_tests.bootstrap.runner.time.monotonic", lambda: next(clock))
-    outcomes = bootstrap(env, [FakeStep("a"), FakeStep("b", present=True), FakeStep("c", requires=("zac",))])
+    # a and b share a component, so they run one after the other and read the clock in this order.
+    steps = [FakeStep("a", ("openzaak",)), FakeStep("b", ("openzaak",), present=True), FakeStep("c", ("zac",))]
+    outcomes = bootstrap(env, steps)
     assert [(o.step, o.seconds) for o in outcomes] == [("a", 2.5), ("b", 0.25), ("c", 0)]
 
 
@@ -991,9 +995,11 @@ def test_check_outcomes_are_those_of_is_present(env, cluster, present):
     assert outcomes(SNIPPET_STEPS) == outcomes([PlainStep(step) for step in SNIPPET_STEPS])
 
 
-def test_fresh_bootstrap_runs_one_status_shell_and_one_shell_per_step(env, cluster):
+def test_fresh_bootstrap_runs_one_shell_per_step_and_at_most_one_status_shell_per_deployment(env, cluster):
     bootstrap(env, SNIPPET_STEPS)
-    assert len(cluster.shells) == 1 + len(RUNNING)
+    # Parallel steps of other deployments may batch their status before the first create invalidates it.
+    deployments = {step.requires[0] for step in RUNNING}
+    assert len(RUNNING) + 1 <= len(cluster.shells) <= len(RUNNING) + len(deployments)
 
 
 def test_after_a_created_step_each_snippet_step_runs_one_shell(env, cluster):
@@ -1088,3 +1094,22 @@ def test_a_skipped_step_stays_out_of_the_batch(env, cluster):
     assert [o.action for o in outcomes] == ["present", "present", "skipped"]
     assert len(cluster.calls) == 2
     assert len(cluster.shells) == 1
+
+
+def test_steps_sharing_a_component_run_in_order_and_others_in_parallel():
+    started: list[str] = []
+    gate = threading.Event()
+
+    def run(step):
+        started.append(step.name)
+        if step.name == "a1":
+            # b1 shares no component with a1, so it starts while a1 waits; a2 must not.
+            assert gate.wait(5), "b1 did not start while a1 ran"
+        if step.name == "b1":
+            gate.set()
+        return Outcome(step.name, "present")
+
+    steps = [FakeStep("a1", ("openzaak",)), FakeStep("b1", ("keycloak",)), FakeStep("a2", ("openzaak", "zac"))]
+    outcomes = in_dependency_order(steps, run, workers=2)
+    assert [o.step for o in outcomes] == ["a1", "b1", "a2"]
+    assert started.index("a2") > started.index("a1")

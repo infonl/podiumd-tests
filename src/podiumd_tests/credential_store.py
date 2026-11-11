@@ -7,6 +7,7 @@ credentials without profile entries.
 
 from __future__ import annotations
 
+from threading import Lock
 from typing import TYPE_CHECKING
 
 from podiumd_tests.json_data import section
@@ -24,6 +25,8 @@ class CredentialStore:
 
     def __init__(self, kube: Kube) -> None:
         self.kube: Kube = kube
+        # Bootstrap steps run in parallel; each write reads, merges and puts the whole Secret.
+        self._lock: Lock = Lock()
 
     def read(self) -> dict[str, str]:
         """All stored values; empty when the Secret does not exist."""
@@ -32,15 +35,17 @@ class CredentialStore:
 
     def write(self, values: dict[str, str]) -> None:
         """Merge values into the Secret, creating it when needed. Values go over stdin, not argv."""
-        self._put(self.read() | values)
+        with self._lock:
+            self._put(self.read() | values)
 
     def remove(self, *keys: str) -> None:
         """Drop keys; the Secret itself is deleted when nothing is left."""
-        remaining = {key: value for key, value in self.read().items() if key not in keys}
-        # apply would merge stringData into the old keys, so the Secret is recreated instead.
-        self.kube.delete("secret", STORE_NAME)
-        if remaining:
-            self._put(remaining)
+        with self._lock:
+            remaining = {key: value for key, value in self.read().items() if key not in keys}
+            # apply would merge stringData into the old keys, so the Secret is recreated instead.
+            self.kube.delete("secret", STORE_NAME)
+            if remaining:
+                self._put(remaining)
 
     def _put(self, values: dict[str, str]) -> None:
         self.kube.apply(

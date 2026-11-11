@@ -11,10 +11,15 @@ from __future__ import annotations
 import time
 
 from collections import defaultdict
+from concurrent.futures import FIRST_COMPLETED
+from concurrent.futures import Future
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import wait
 from contextlib import suppress
 from dataclasses import dataclass
 from dataclasses import field
 from dataclasses import replace
+from threading import Lock
 from typing import TYPE_CHECKING
 from typing import Literal
 from typing import Protocol
@@ -140,23 +145,56 @@ def not_allowed(ctx: Context, step: Step) -> str | None:
     return str(found) if found else None
 
 
+# Steps run at the same time when they share no component; more would mostly queue on the cluster's CPU.
+PARALLEL_STEPS = 4
+
+
 def _each(env: Environment, steps: Sequence[Step], act: Callable[[Context, Step], Outcome]) -> list[Outcome]:
-    """Run act on every step the environment has the capabilities for; skip the others with a reason."""
-    ctx = Context(env, CredentialStore(env.kube))
-    outcomes: list[Outcome] = []
-    for step in steps:
+    """Run act on every step the environment has the capabilities for; skip the others with a reason.
+
+    A step waits for every earlier step that shares a component with it; the others run in parallel.
+    Outcomes come back in the order of steps.
+    """
+    store = CredentialStore(env.kube)
+
+    def run(step: Step) -> Outcome:
         reason = _skip_reason(env, step)
         if reason:
-            outcomes.append(Outcome(step.name, "skipped", reason))
-            continue
+            return Outcome(step.name, "skipped", reason)
         started = time.monotonic()
         try:
-            outcome = act(ctx, step)
+            outcome = act(Context(env, store), step)
         except _STEP_ERRORS as exc:
             # One broken step must not stop the others, least of all during unbootstrap.
             outcome = Outcome(step.name, "failed", str(exc))
-        outcomes.append(replace(outcome, seconds=time.monotonic() - started))
-    return outcomes
+        return replace(outcome, seconds=time.monotonic() - started)
+
+    return in_dependency_order(steps, run, PARALLEL_STEPS)
+
+
+def _components(step: Step) -> set[str]:
+    return set(step.requires) - {CLUSTER}
+
+
+def in_dependency_order(steps: Sequence[Step], run: Callable[[Step], Outcome], workers: int) -> list[Outcome]:
+    """Run each step once all earlier steps sharing a component with it are done; the outcomes in step order."""
+    after = [
+        {earlier for earlier in range(index) if _components(steps[earlier]) & _components(step)}
+        for index, step in enumerate(steps)
+    ]
+    outcomes: dict[int, Outcome] = {}
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        running: dict[Future[Outcome], int] = {}
+        waiting = list(range(len(steps)))
+        while waiting or running:
+            ready = [pending for pending in waiting if after[pending] <= outcomes.keys()]
+            for index in ready:
+                waiting.remove(index)
+                running[pool.submit(run, steps[index])] = index
+            finished, _ = wait(running, return_when=FIRST_COMPLETED)
+            for future in finished:
+                outcomes[running.pop(future)] = future.result()
+    return [outcomes[index] for index in range(len(steps))]
 
 
 def _skip_reason(env: Environment, step: Step) -> str | None:
@@ -173,6 +211,7 @@ class _Statuses:
     """
 
     def __init__(self, steps: Sequence[Step]) -> None:
+        self._lock: Lock = Lock()  # steps ask from parallel threads
         self._steps: Sequence[Step] = steps
         # Per step name: its deployment and the status calls of that deployment's steps.
         self._batches: dict[str, tuple[str, _Calls]] | None = None
@@ -183,6 +222,14 @@ class _Statuses:
         """Return is_present of the step from its deployment's batch; None when no batch has it."""
         if not self._valid or not isinstance(step, SnippetChecks):
             return None
+        with self._lock:
+            return self._is_present_in_batch(ctx, step) if self._valid else None
+
+    def invalidate(self) -> None:
+        """Forget the batches: a step may have changed what the remaining ones check."""
+        self._valid = False
+
+    def _is_present_in_batch(self, ctx: Context, step: SnippetChecks) -> bool | None:
         if self._batches is None:
             self._batches = _batches(ctx, self._steps)
         batch = self._batches.get(step.name)
@@ -192,10 +239,6 @@ class _Statuses:
                 self._batches.pop(member.name)
             self._present.update(_batch_status(ctx, deployment, calls))
         return self._present.get(step.name)
-
-    def invalidate(self) -> None:
-        """Forget the batches: a step may have changed what the remaining ones check."""
-        self._valid = False
 
 
 def _batches(ctx: Context, steps: Sequence[Step]) -> dict[str, tuple[str, _Calls]]:
