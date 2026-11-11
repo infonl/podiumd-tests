@@ -14,17 +14,24 @@ import pytest
 
 from playwright.sync_api import expect
 
+from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
 from podiumd_tests.bootstrap.kiss import KANALEN
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.kcc import KENNIS_URL
 from podiumd_tests.kcc import kcc_login
+from podiumd_tests.kcc import kiss_betrokkene
+from podiumd_tests.kcc import kiss_contactmomentdetails
 from podiumd_tests.kcc import kiss_klantcontact
+from podiumd_tests.kcc import kiss_klantcontacten_of
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openklant import klantcontact_body
+from podiumd_tests.seed.openklant import make_organisatie
+from podiumd_tests.seed.openklant import make_partij
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -35,9 +42,17 @@ if TYPE_CHECKING:
 
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
+    from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [pytest.mark.component, pytest.mark.ui, pytest.mark.core, pytest.mark.requires("kiss", "keycloak")]
+
+# KISS names the medewerker by the token's email claim, else by preferred_username (AuthenticationSetup.GetEmail).
+KCC_IDS = (user_email(KCC.username), KCC.username)
+
+
+def _is_the_kcc_medewerker(actor: JsonObject) -> bool:
+    return section(actor, "actoridentificator").get("objectId") in KCC_IDS
 
 
 @pytest.fixture(name="kiss")
@@ -101,6 +116,81 @@ def test_klantcontact_through_kiss(  # noqa: FNE008  # the name is the test id
     """A klantcontact registered through KISS lands in Open Klant (TA reg-12)."""
     body = klantcontact_body(registry, onderwerp=registry.tagged("kiss-klantcontact"))
     assert kiss_klantcontact(kiss, urls["kiss"], openklant, registry, body)["onderwerp"] == body["onderwerp"]
+
+
+@pytest.mark.source(
+    "upstream KISS-frontend Kiss.Bff.EndToEndTest AfhandelingFormScenarios",
+    "KISS saves a contactmoment through its own route, which names the logged-in medewerker as actor.",
+)
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to KISS
+    When the medewerker saves a contactmoment as KISS's frontend does
+    Then Open Klant has the contactmoment with the medewerker as its actor
+""")
+def test_contactmoment_saved_in_kiss_names_the_medewerker(
+    kiss: requests.Session, urls: dict[str, str], openklant: ApiClient, registry: ResourceRegistry
+) -> None:
+    """POST /api/postklantcontacten links the KCC user's medewerker actor."""
+    body = klantcontact_body(registry, onderwerp=registry.tagged("kiss-medewerker"))
+    saved = kiss_klantcontact(kiss, urls["kiss"], openklant, registry, body)
+    actoren = [openklant.get(str(actor["url"])) for actor in entries(saved.get("hadBetrokkenActoren"))]
+    assert [(actor.get("soortActor"), _is_the_kcc_medewerker(actor)) for actor in actoren] == [("medewerker", True)]
+
+
+@pytest.mark.parametrize("soort", ["persoon", "organisatie"])
+@pytest.mark.source(
+    "upstream KISS-frontend Kiss.Bff.EndToEndTest ContactMomentCreation",
+    "A contactmoment for a person or a vestiging shows on that klant's Contactmomenten tab.",
+)
+@pytest.mark.scenario("""
+    Given a person or an organisation known in Open Klant
+    When the KCC medewerker saves a contactmoment for that klant in KISS
+    Then KISS lists the contactmoment for that klant
+""")
+def test_contactmoment_for_a_klant_is_listed_for_that_klant(  # fixtures
+    kiss: requests.Session,
+    urls: dict[str, str],
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    soort: str,
+) -> None:
+    """A contactmoment with the partij as betrokkene is in KISS's klantcontacten of that partij."""
+    partij = make_partij(openklant, registry) if soort == "persoon" else make_organisatie(openklant, registry)
+    body = klantcontact_body(registry, onderwerp=registry.tagged(f"kiss-{soort}"))
+    saved = kiss_klantcontact(kiss, urls["kiss"], openklant, registry, body)
+    kiss_betrokkene(kiss, urls["kiss"], saved, partij)
+    assert saved["uuid"] in [item.get("uuid") for item in kiss_klantcontacten_of(kiss, urls["kiss"], partij)]
+
+
+@pytest.mark.source(
+    "upstream KISS-frontend Kiss.Bff.EndToEndTest AfhandelingFormScenarios, VraagScenarios",
+    "KISS keeps a contactmoment's gespreksresultaat, afdeling, vraag and the sources consulted in its own database.",
+)
+@pytest.mark.scenario("""
+    Given a contactmoment the KCC medewerker saved in KISS
+    When KISS stores its gespreksresultaat, afdeling, vraag and the VAC and kennisartikel consulted
+    Then KISS gives them back for that contactmoment, with the medewerker who registered it
+""")
+def test_kiss_keeps_the_contactmoment_details(
+    kiss: requests.Session, urls: dict[str, str], openklant: ApiClient, registry: ResourceRegistry
+) -> None:
+    """PUT /api/contactmomentdetails is read back by GET; KISS adds the medewerker (it does not return bronnen)."""
+    saved = kiss_klantcontact(kiss, urls["kiss"], openklant, registry, klantcontact_body(registry))
+    bronnen = [
+        {"soort": "VAC", "titel": registry.tagged("vac"), "url": f"{KENNIS_URL}vac"},
+        {"soort": "Kennisbank", "titel": registry.tagged("kennisartikel"), "url": f"{KENNIS_URL}kennis"},
+    ]
+    fields = {
+        "gespreksresultaat": "Afgehandeld",
+        "verantwoordelijkeAfdeling": registry.tagged("afdeling"),
+        "vraag": "podiumd-tests",
+        "specifiekeVraag": registry.tagged("vraag"),
+        "bronnen": bronnen,
+    }
+    details = kiss_contactmomentdetails(kiss, urls["kiss"], saved, **fields)
+    kept = {key: details.get(key) for key in ("gespreksresultaat", "verantwoordelijkeAfdeling", "specifiekeVraag")}
+    assert kept == {key: fields[key] for key in kept}
+    assert details.get("emailadresKcm") in KCC_IDS
 
 
 @pytest.mark.tc("KI-007")

@@ -23,6 +23,7 @@ from podiumd_tests.kube import metadata_name
 from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import expect_status
 from podiumd_tests.results import now_iso
+from podiumd_tests.seed.openklant import delete_klantcontact_tree
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.workloads import expect_defect
 
@@ -38,7 +39,10 @@ if TYPE_CHECKING:
     from podiumd_tests.seed.registry import ResourceRegistry
 
 # KISS proxies Open Klant's klantinteracties API under this path.
-KISS_KLANTCONTACTEN = "/api/klantinteracties/api/v1/klantcontacten"
+KISS_KLANTINTERACTIES = "/api/klantinteracties/api/v1"
+# KISS's own route for a new klantcontact: it links the logged-in medewerker as actor.
+KISS_POST_KLANTCONTACTEN = "/api/postklantcontacten"
+KISS_CONTACTMOMENTDETAILS = "/api/contactmomentdetails"
 # URLs in KISS's search content that point nowhere.
 KENNIS_URL = "https://example.invalid/"
 
@@ -70,14 +74,59 @@ def kiss_register(kiss: requests.Session, kiss_url: str) -> dict[str, str]:
 def kiss_klantcontact(
     kiss: requests.Session, kiss_url: str, openklant: ApiClient, registry: ResourceRegistry, body: JsonObject
 ) -> JsonObject:
-    """Register a klantcontact through KISS; Open Klant's copy of it.
+    """Register a klantcontact as KISS's frontend does; Open Klant's copy of it.
 
-    KISS does not delete klantcontacten (DELETE answers 405); cleanup goes to Open Klant.
+    KISS links the logged-in medewerker as actor. KISS does not delete klantcontacten; cleanup goes to Open Klant.
     """
-    response = kiss.post(kiss_url + KISS_KLANTCONTACTEN, json=body, headers=kiss_register(kiss, kiss_url))
-    created = expect_status(response, HTTPStatus.CREATED).json()
-    registry.add(f"klantcontact {created['url']}", lambda: openklant.delete(str(created["url"])))
+    response = kiss.post(kiss_url + KISS_POST_KLANTCONTACTEN, json=body, headers=kiss_register(kiss, kiss_url))
+    created = expect_status(response, HTTPStatus.OK).json()
+    url = str(created["url"])
+    registry.add(f"klantcontact {url}", lambda: delete_klantcontact_tree(openklant, url))
     return openklant.get(f"klantcontacten/{created['uuid']}")
+
+
+def kiss_betrokkene(
+    kiss: requests.Session, kiss_url: str, klantcontact: JsonObject, partij: JsonObject | None
+) -> JsonObject:
+    """Add the klant to a klantcontact through KISS's proxy, as KISS's frontend does; cleanup is the klantcontact's."""
+    body: dict[str, object] = {
+        "wasPartij": {"uuid": partij["uuid"]} if partij else None,
+        "hadKlantcontact": {"uuid": klantcontact["uuid"]},
+        "rol": "klant",
+        "initiator": True,
+        "organisatienaam": "",
+        "contactnaam": {"voorletters": "P", "voornaam": "PodiumD", "voorvoegselAchternaam": "", "achternaam": "test"},
+    }
+    url = f"{kiss_url}{KISS_KLANTINTERACTIES}/betrokkenen"
+    return expect_status(kiss.post(url, json=body, headers=kiss_register(kiss, kiss_url)), HTTPStatus.CREATED).json()
+
+
+def kiss_klantcontacten_of(kiss: requests.Session, kiss_url: str, partij: JsonObject) -> list[JsonObject]:
+    """Return the partij's klantcontacten as KISS lists them on its Contactmomenten tab."""
+    params = {"hadBetrokkene__wasPartij__url": str(partij["url"])}
+    response = kiss.get(
+        f"{kiss_url}{KISS_KLANTINTERACTIES}/klantcontacten", params=params, headers=kiss_register(kiss, kiss_url)
+    )
+    return entries(expect_status(response, HTTPStatus.OK).json().get("results"))
+
+
+def kiss_contactmomentdetails(
+    kiss: requests.Session, kiss_url: str, klantcontact: JsonObject, **fields: object
+) -> JsonObject:
+    """Store KISS's own details of a contactmoment (gespreksresultaat, afdeling, bronnen) and read them back.
+
+    KISS keeps them in its database by the klantcontact's URL and has no call to delete them.
+    """
+    body: dict[str, object] = {
+        "id": klantcontact["url"],
+        "startdatum": now_iso(),
+        "einddatum": now_iso(),
+        "bronnen": [],
+    }
+    body.update(fields)
+    expect_status(kiss.put(kiss_url + KISS_CONTACTMOMENTDETAILS, json=body), HTTPStatus.OK)
+    found = kiss.get(kiss_url + KISS_CONTACTMOMENTDETAILS, params={"id": str(klantcontact["url"])})
+    return expect_status(found, HTTPStatus.OK).json()
 
 
 def ita_detail_text(ita: requests.Session, ita_url: str, taak: JsonObject) -> str:

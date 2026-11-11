@@ -19,7 +19,10 @@ from podiumd_tests.kcc import expect_ita_group_access_bug
 from podiumd_tests.kcc import ita_detail_text
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.kcc import kennisartikel_data
+from podiumd_tests.kcc import kiss_betrokkene
+from podiumd_tests.kcc import kiss_contactmomentdetails
 from podiumd_tests.kcc import kiss_klantcontact
+from podiumd_tests.kcc import kiss_klantcontacten_of
 from podiumd_tests.kcc import kiss_register
 from podiumd_tests.kcc import kiss_search_hits
 from podiumd_tests.kcc import kiss_sync_cronjob
@@ -61,18 +64,47 @@ def test_kiss_klantcontact_registers_cleanup_in_open_klant(fake_http):
     sent = fake_http(
         {
             "/api/environment/registers": (200, REGISTERS),
-            "POST /api/klantinteracties/api/v1/klantcontacten": (201, {"url": "https://ok/kc/1", "uuid": "1"}),
+            "POST /api/postklantcontacten": (200, {"url": "https://ok/kc/1", "uuid": "1"}),
         }
     )
     deleted = []
-    openklant = SimpleNamespace(delete=deleted.append, get=lambda path: {"path": path})
+    gone = SimpleNamespace(status_code=404)
+    openklant = SimpleNamespace(
+        delete=deleted.append, get=lambda path: {"path": path}, request=lambda *_args, **_kwargs: gone
+    )
     registry = ResourceRegistry("ptest-run")
     assert kiss_klantcontact(requests.Session(), KISS, openklant, registry, {"kanaal": "telefoon"}) == {  # pyright: ignore[reportArgumentType]
         "path": "klantcontacten/1"
     }
     assert sent[1].headers["systemIdentifier"] == "ok-1"
     registry.cleanup()
-    assert deleted == ["https://ok/kc/1"]
+    assert deleted == []  # the klantcontact was already gone
+
+
+def test_kiss_betrokkene_and_klantcontacten_of_go_through_kiss(fake_http):
+    sent = fake_http(
+        {
+            "/api/environment/registers": (200, REGISTERS),
+            "POST /api/klantinteracties/api/v1/betrokkenen": (201, {"uuid": "b1"}),
+            "GET /api/klantinteracties/api/v1/klantcontacten": (200, {"results": [{"uuid": "1"}]}),
+        }
+    )
+    kiss = requests.Session()
+    kiss_betrokkene(kiss, KISS, {"uuid": "1"}, {"uuid": "p1", "url": "https://ok/p/1"})
+    body = json.loads(sent[-1].body)
+    assert (body["wasPartij"], body["hadKlantcontact"], body["rol"]) == ({"uuid": "p1"}, {"uuid": "1"}, "klant")
+    assert kiss_klantcontacten_of(kiss, KISS, {"url": "https://ok/p/1"}) == [{"uuid": "1"}]
+    assert "hadBetrokkene__wasPartij__url=https" in sent[-1].url
+
+
+def test_kiss_contactmomentdetails_puts_and_reads_back(fake_http):
+    sent = fake_http(
+        {"PUT /api/contactmomentdetails": (200, None), "GET /api/contactmomentdetails": (200, {"vraag": "v"})}
+    )
+    found = kiss_contactmomentdetails(requests.Session(), KISS, {"url": "https://ok/kc/1"}, vraag="v")
+    assert found == {"vraag": "v"}
+    put = json.loads(sent[0].body)
+    assert (put["id"], put["vraag"], put["bronnen"]) == ("https://ok/kc/1", "v", [])
 
 
 def test_ita_detail_text_is_the_json_of_the_internetaak(fake_http):

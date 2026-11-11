@@ -10,12 +10,12 @@ versions is not counted.
 | Tier | Tests | Functions | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 210 | 37 | 9 |
-| component | 548 | 326 | 31 |
+| component | 552 | 329 | 31 |
 | integration | 119 | 70 | 10 |
 | perf | 54 | 3 | 0 |
-| **full tier** | **850** | **415** |  |
+| **full tier** | **854** | **418** |  |
 
-Unit tests (`unit_tests/`, functions): 609. Perf endpoints (`perf/runs.py`): 22.
+Unit tests (`unit_tests/`, functions): 611. Perf endpoints (`perf/runs.py`): 22.
 
 ## Per area
 
@@ -35,7 +35,7 @@ Unit tests (`unit_tests/`, functions): 609. Perf endpoints (`perf/runs.py`): 22.
 | component | frankgateway | 5 | 1 |
 | component | ita | 19 | 14 |
 | component | keycloak | 22 | 13 |
-| component | kiss | 30 | 14 |
+| component | kiss | 34 | 17 |
 | component | objecten | 15 | 5 |
 | component | omc | 3 | 2 |
 | component | openarchiefbeheer | 33 | 27 |
@@ -92,7 +92,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | draaiboek | 87 |
 | external | 101 |
 | podiumd-tests | 280 |
-| upstream | 65 |
+| upstream | 69 |
 
 ## Expected failures per known issue
 
