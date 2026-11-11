@@ -41,6 +41,8 @@ REINDEX_TIMEOUT = 1800
 PRODUCTAANVRAAG_TIMEOUT = 120
 # ZAC indexes a zaak in Solr after Open Notificaties tells it about the change.
 INDEX_TIMEOUT = 60
+# Open Notificaties delivers a catalogus change to ZAC.
+NOTIFICATION_TIMEOUT = 60
 # A BPMN process reaches its next user task after ZAC's service tasks have run.
 TASK_TIMEOUT = 30
 # ZAC assigns and releases list selections in a background job.
@@ -72,6 +74,85 @@ def zaakafhandelparameters(http: requests.Session, zac_url: str, identificatie: 
         if parameters.get("id") is not None
         and identificatie in {None, section(parameters, "zaaktype").get("identificatie")}
     ]
+
+
+def read_zaakafhandelparameters(http: requests.Session, zac_url: str, zaaktype_uuid: str) -> JsonObject:
+    """Return ZAC's zaakafhandelparameters of one zaaktype version, complete for a save; id None when it has none."""
+    response = http.get(f"{zac_url}/rest/zaakafhandelparameters/{zaaktype_uuid}")
+    return cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
+
+
+def save_zaakafhandelparameters(http: requests.Session, zac_url: str, parameters: JsonObject) -> JsonObject:
+    """Save zaakafhandelparameters as ZAC's beheerder; the saved ones."""
+    response = http.put(f"{zac_url}/rest/zaakafhandelparameters", json=parameters)
+    return cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
+
+
+def copied_zaakafhandelparameters(http: requests.Session, zac_url: str, zaaktype_uuid: str) -> JsonObject:
+    """Wait until ZAC has zaakafhandelparameters for a new zaaktype version; return them.
+
+    ZAC copies them from the newest version with the same omschrijving when Open Notificaties delivers an update of
+    the published version.
+    """
+
+    def copied() -> JsonObject | None:
+        found = read_zaakafhandelparameters(http, zac_url, zaaktype_uuid)
+        return None if found.get("id") is None else found
+
+    return wait_until(copied, timeout=NOTIFICATION_TIMEOUT, description=f"zaakafhandelparameters of {zaaktype_uuid}")
+
+
+# ZAC's CMMN model, with the user events INTAKE_AFRONDEN and ZAAK_AFHANDELEN.
+CASE_DEFINITION = "generiek-zaakafhandelmodel"
+
+
+def configure_zaaktype(
+    http: requests.Session, zac_url: str, zaaktype_uuid: str, groep: str, **fields: object
+) -> JsonObject:
+    """Save valide zaakafhandelparameters for a zaaktype version: ZAC's CMMN model, groep and fields; the saved ones.
+
+    The niet-ontvankelijk resultaattype is the zaaktype's first; ZAC runs a user event only with a parameter for it.
+    """
+    response = http.get(f"{zac_url}/rest/zaakafhandelparameters/case-definitions/{CASE_DEFINITION}")
+    definition = cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
+    events = [
+        {"id": event["id"], "naam": event["naam"]} for event in entries(definition["userEventListenerDefinitions"])
+    ]
+    first = get_entries(http, f"{zac_url}/rest/zaakafhandelparameters/resultaattypes/{zaaktype_uuid}")[0]
+    parameters = {
+        **read_zaakafhandelparameters(http, zac_url, zaaktype_uuid),
+        "caseDefinition": {"key": CASE_DEFINITION, "naam": definition["naam"]},
+        "defaultGroepId": groep,
+        "zaakNietOntvankelijkResultaattype": first,
+        "userEventListenerParameters": events,
+        **fields,
+    }
+    return save_zaakafhandelparameters(http, zac_url, parameters)
+
+
+# Fields that differ between the zaakafhandelparameters of two versions of a zaaktype.
+VERSION_FIELDS = frozenset(("id", "creatiedatum", "zaaktype"))
+
+
+def comparable(value: object) -> object:
+    """Return the zaakafhandelparameters, or a part, without VERSION_FIELDS, lists sorted, a resultaattype by naam.
+
+    A new version has its own resultaattypen, which ZAC maps by omschrijving.
+    """
+    if isinstance(value, list):
+        return sorted((comparable(item) for item in cast("list[object]", value)), key=repr)
+    if not isinstance(value, dict):
+        return value
+    found = cast("JsonObject", value)
+    if "naamGeneriek" in found:
+        return found.get("naam")
+    return {key: comparable(item) for key, item in found.items() if key not in VERSION_FIELDS}
+
+
+def behandelaar_groups(http: requests.Session, zac_url: str, omschrijving: str) -> set[str]:
+    """Return the ids of the groups ZAC offers as behandelaar of zaken of the zaaktype: those PABC authorises."""
+    url = f"{zac_url}/rest/identity/zaaktype/{omschrijving}/behandelaar-groups"
+    return {str(group["id"]) for group in get_entries(http, url)}
 
 
 # Fields of ZAC's inrichtingscheck that its verdict valide does not require.

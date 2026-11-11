@@ -23,6 +23,8 @@ from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 from podiumd_tests.zac import clear_ztc_cache
 from podiumd_tests.zac import is_confirmation_sent
+from podiumd_tests.zac import read_zaakafhandelparameters
+from podiumd_tests.zac import save_zaakafhandelparameters
 from podiumd_tests.zac import zaakafhandelparameters
 from podiumd_tests.zac import zac_session
 
@@ -116,7 +118,7 @@ class ZacParameters:
         versions = zaakafhandelparameters(http, zac, identificatie)
         for version in versions:
             uuid = str(section(version, "zaaktype")["uuid"])
-            if not self.part.is_on(self.part.read(_parameters(http, zac, uuid))):
+            if not self.part.is_on(self.part.read(read_zaakafhandelparameters(http, zac, uuid))):
                 return False
         return bool(versions)
 
@@ -134,12 +136,12 @@ class ZacParameters:
             raise LookupError(msg)
         for found in versions:
             uuid = str(section(found, "zaaktype")["uuid"])
-            parameters = _parameters(http, zac, uuid)
+            parameters = read_zaakafhandelparameters(http, zac, uuid)
             old = self.part.read(parameters)
             if self.part.is_on(old):
                 continue
             record.setdefault(uuid, old)
-            _put(http, zac, self.part.write(parameters, {**old, **self.part.wanted}))
+            save_zaakafhandelparameters(http, zac, self.part.write(parameters, {**old, **self.part.wanted}))
         return {self.store_key: json.dumps(record, sort_keys=True)}
 
     def remove(self, ctx: Context, /) -> tuple[str, ...]:
@@ -157,7 +159,7 @@ class ZacParameters:
             if not self.part.is_mine(current):
                 ctx.notes.append(f"zaaktype {uuid}: {self.part.key} changed by someone else; left as it is")
                 continue
-            _put(http, zac, self.part.write(parameters, {**old, "id": current.get("id")}))
+            save_zaakafhandelparameters(http, zac, self.part.write(parameters, {**old, "id": current.get("id")}))
         return (self.store_key,)
 
     def _allowed(self, ctx: Context) -> str | None:
@@ -170,17 +172,6 @@ class ZacParameters:
 
     def _record(self, ctx: Context) -> dict[str, JsonObject]:
         return cast("dict[str, JsonObject]", json.loads(ctx.store.read().get(self.store_key, "{}")))
-
-
-def _parameters(http: requests.Session, zac: str, uuid: str) -> JsonObject:
-    """Return the zaakafhandelparameters of one zaaktype version, complete for a PUT."""
-    return cast(
-        "JsonObject", expect_status(http.get(f"{zac}/rest/zaakafhandelparameters/{uuid}"), HTTPStatus.OK).json()
-    )
-
-
-def _put(http: requests.Session, zac: str, parameters: JsonObject) -> None:
-    expect_status(http.put(f"{zac}/rest/zaakafhandelparameters", json=parameters), HTTPStatus.OK)
 
 
 @dataclass(frozen=True)

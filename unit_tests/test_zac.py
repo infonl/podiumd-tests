@@ -1,5 +1,6 @@
 """Unit tests for the ZAC REST helpers."""
 
+import functools
 import json
 
 import pytest
@@ -9,6 +10,8 @@ from podiumd_tests import zac
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.oidc import LOGIN_PATHS
 from podiumd_tests.seed.registry import ResourceRegistry
+from podiumd_tests.wait import Clock
+from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import inrichtingscheck_problems
 
@@ -315,6 +318,81 @@ def test_verdelen_and_vrijgeven_send_the_selection(fake_http):
 def test_assignment_is_group_and_behandelaar():
     assert zac.assignment({"groep": {"id": "g1"}, "behandelaar": {"id": "u1"}}) == ("g1", "u1")
     assert zac.assignment({"groep": {"id": "g1"}, "behandelaar": None}) == ("g1", None)
+
+
+def test_configure_zaaktype_saves_the_cmmn_model_groep_resultaattype_and_user_events(fake_http):
+    model = {
+        "naam": "Generiek",
+        "userEventListenerDefinitions": [{"id": "INTAKE_AFRONDEN", "naam": "Intake afronden", "type": "X"}],
+    }
+    sent = fake_http(
+        {
+            "GET /rest/zaakafhandelparameters/case-definitions/generiek-zaakafhandelmodel": (200, model),
+            "GET /rest/zaakafhandelparameters/resultaattypes/zt1": (200, [{"id": "r1"}, {"id": "r2"}]),
+            "GET /rest/zaakafhandelparameters/zt1": (200, {"id": None, "zaaktype": {"uuid": "zt1"}}),
+            "PUT /rest/zaakafhandelparameters": (200, {"id": 7, "valide": True}),
+        }
+    )
+    saved = zac.configure_zaaktype(requests.Session(), ZAC, "zt1", "g1", intakeMail="NIET_BESCHIKBAAR")
+    assert saved == {"id": 7, "valide": True}
+    assert json.loads(sent[-1].body) == {
+        "id": None,
+        "zaaktype": {"uuid": "zt1"},
+        "caseDefinition": {"key": "generiek-zaakafhandelmodel", "naam": "Generiek"},
+        "defaultGroepId": "g1",
+        "zaakNietOntvankelijkResultaattype": {"id": "r1"},
+        "userEventListenerParameters": [{"id": "INTAKE_AFRONDEN", "naam": "Intake afronden"}],
+        "intakeMail": "NIET_BESCHIKBAAR",
+    }
+
+
+def test_copied_zaakafhandelparameters_waits_for_their_id(monkeypatch):
+    monkeypatch.setattr(zac, "wait_until", functools.partial(wait_until, clock=Clock(sleep=lambda _seconds: None)))
+    answers = iter([{"id": None}, {"id": 3}])
+    monkeypatch.setattr(zac, "read_zaakafhandelparameters", lambda *_args: next(answers))
+    assert zac.copied_zaakafhandelparameters(requests.Session(), ZAC, "zt2") == {"id": 3}
+
+
+def test_comparable_leaves_out_what_differs_between_versions():
+    resultaattype = {"id": "r1", "naam": "Afgehandeld", "naamGeneriek": "Afgebroken"}
+    first = {
+        "id": 1,
+        "creatiedatum": "x",
+        "zaaktype": {"uuid": "zt1"},
+        "zaakNietOntvankelijkResultaattype": resultaattype,
+        "zaakAfzenders": [{"id": 1, "mail": "B"}, {"id": 2, "mail": "A"}],
+    }
+    second = {
+        **first,
+        "id": 2,
+        "zaaktype": {"uuid": "zt2"},
+        "zaakNietOntvankelijkResultaattype": {**resultaattype, "id": "r9"},
+        "zaakAfzenders": [{"id": 5, "mail": "A"}, {"id": 6, "mail": "B"}],
+    }
+    assert zac.comparable(first) == zac.comparable(second)
+    assert zac.comparable({**second, "defaultGroepId": "g2"}) != zac.comparable(first)
+
+
+def test_behandelaar_groups_are_zacs_groups_for_the_zaaktype(fake_http):
+    fake_http({"GET /rest/identity/zaaktype/zt/behandelaar-groups": (200, [{"id": "g1"}, {"id": "g2"}])})
+    assert zac.behandelaar_groups(requests.Session(), ZAC, "zt") == {"g1", "g2"}
+
+
+def test_afronden_intake_and_afbreken(fake_http, monkeypatch):
+    events = []
+    monkeypatch.setattr(zac, "user_event", lambda *args, **fields: events.append((args[3], fields)) or _ok())
+    sent = fake_http({"PATCH /rest/zaken/zaak/z1/afbreken": (204, None)})
+    zaak = {"uuid": "z1"}
+    zac.afronden_intake(requests.Session(), ZAC, zaak)
+    assert events == [("INTAKE_AFRONDEN", {"zaakOntvankelijk": True})]
+    assert zac.afbreken(requests.Session(), ZAC, zaak).status_code == 204
+    assert json.loads(sent[-1].body) == {"zaakbeeindigRedenId": "ZAAK_NIET_ONTVANKELIJK"}
+
+
+def _ok():
+    response = requests.Response()
+    response.status_code = 204
+    return response
 
 
 def test_rights_of_gives_a_role_the_rights_of_the_roles_before_it():

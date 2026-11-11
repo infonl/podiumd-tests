@@ -12,6 +12,7 @@ import requests
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.environment import Environment
 from podiumd_tests.seed import volume
+from podiumd_tests.seed import zac_zaaktype
 from podiumd_tests.seed.volume import KINDS
 from podiumd_tests.seed.volume import SCALES
 from podiumd_tests.seed.volume import VOLUME_ACTOR
@@ -234,13 +235,18 @@ def test_kiss_content_is_synced_after_create_and_delete(monkeypatch, snippets, p
 @pytest.mark.parametrize(("known", "added", "deleted"), [(None, [VOLUME_TAG], []), ("et", [], ["et"])])
 def test_zaken_in_zac_manage_the_pabc_entity_type(monkeypatch, profile_factory, known, added, deleted):
     adds, deletes, reindexes = [], [], []
-    monkeypatch.setattr(volume, "admin_session", lambda *_args: "pabc-session")
-    monkeypatch.setattr(volume, "zaaktype_entity_type", lambda *_args: known)
-    monkeypatch.setattr(volume, "add_zaaktype_entity_type", lambda _session, _url, name: adds.append(name))
-    monkeypatch.setattr(volume, "delete_entity_type", lambda _session, _url, entity: deletes.append(entity))
-    monkeypatch.setattr(volume, "reindex_zaken", reindexes.append)
-    monkeypatch.setattr(volume, "zac_session", lambda *_args: "zac-session")
-    monkeypatch.setattr(volume, "count_zaken_found", lambda _session, _url, _tag: 7)
+    fakes = (
+        (volume, "zaaktype_entity_type", lambda *_args: known),
+        (zac_zaaktype, "zaaktype_entity_type", lambda *_args: known),
+        (zac_zaaktype, "admin_session", lambda *_args: "pabc-session"),
+        (volume, "add_zaaktype_entity_type", lambda _session, _url, name: adds.append(name)),
+        (zac_zaaktype, "delete_entity_type", lambda _session, _url, entity: deletes.append(entity)),
+        (volume, "reindex_zaken", reindexes.append),
+        (volume, "zac_as_admin", lambda _env: "zac-session"),
+        (volume, "count_zaken_found", lambda _session, _url, _tag: 7),
+    )
+    for module, name, fake in fakes:
+        monkeypatch.setattr(module, name, fake)
     env = volume_env(profile_factory(urls={"pabc": "https://pabc.test", "zac": "https://zac.test"}))
     kind("zaken_in_zac").create(env, range(1), 1)
     kind("zaken_in_zac").delete_all(env)

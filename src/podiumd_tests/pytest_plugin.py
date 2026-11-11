@@ -37,6 +37,7 @@ from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.openzaak import published_zaaktype
 from podiumd_tests.seed.openzaak import zaaktype_parts
 from podiumd_tests.seed.registry import ResourceRegistry
+from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.sources import source_problems
 from podiumd_tests.sources import sources
 from podiumd_tests.workloads import skip_older_than
@@ -446,7 +447,7 @@ def fixture_kiss_session(
 def fixture_zac(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> requests.Session:
     """Return the test admin's session on ZAC's REST API."""
     need_bootstrap(steps.ADMIN.name)
-    return zac_session(podiumd_env, steps.ADMIN.username, podiumd_env.credentials.get(steps.ADMIN.store_key))
+    return zac_as_admin(podiumd_env)
 
 
 @pytest.fixture(name="zac_as")

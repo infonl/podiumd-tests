@@ -1,7 +1,7 @@
 """ZAC: zaken koppelen and ontkoppelen, and its search for zaken to link, as ZAC's REST API does it for the UI.
 
-The zaken are of the estate's productaanvraag zaaktype (fixture zac_zaak), which allows no deelzaken: hoofdzaak and
-deelzaak are refused here.
+Gerelateerd and the refusals of the estate's productaanvraag zaaktype (fixture zac_zaak), which allows no deelzaken;
+hoofdzaak and deelzaak with podiumd-tests' own zaaktype, its own deelzaaktype (fixture zac_eigen_zaak).
 """
 
 from __future__ import annotations
@@ -13,12 +13,15 @@ import pytest
 
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.json_data import strings
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import INDEX_TIMEOUT
-from podiumd_tests.zac import NIET_ONTVANKELIJK
+from podiumd_tests.zac import afbreken
+from podiumd_tests.zac import afhandelen
+from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import koppel
 from podiumd_tests.zac import koppel_zoekresultaat
 from podiumd_tests.zac import ontkoppel
@@ -43,6 +46,11 @@ pytestmark = [
 ]
 
 GERELATEERD = "GERELATEERD"
+HOOFDZAAK = "HOOFDZAAK"
+DEELZAAK = "DEELZAAK"
+# The tests of fixture zac_eigen_zaaktype, a throwaway zaaktype made known to PABC and deleted with a Django snippet.
+EIGEN_ZAAKTYPE = pytest.mark.xdist_group("zac-eigen-zaaktype")
+THROWAWAY = pytest.mark.requires("pabc", "cluster")
 
 
 def _relaties(zac: requests.Session, zac_url: str, zaak: JsonObject) -> list[tuple[str, str]]:
@@ -69,6 +77,17 @@ def _reden(zac: requests.Session, zac_url: str, zaak: JsonObject, ander: JsonObj
         description=f"zaak {ander['identificatie']} in the koppel search of {zaak['identificatie']}",
     )
     return found.get("nietKoppelbaarReden")
+
+
+def _wait_for_reden(
+    zac: requests.Session, zac_url: str, zaak: JsonObject, ander: JsonObject, relatie: str, reden: str
+) -> None:
+    """Wait until ZAC's koppel search gives this reason for the other zaak: it reads the zaken from its index."""
+    wait_until(
+        lambda: (koppel_zoekresultaat(zac, zac_url, zaak, ander, relatie) or {}).get("nietKoppelbaarReden") == reden,
+        timeout=INDEX_TIMEOUT,
+        description=f"{reden} for zaak {ander['identificatie']} in the koppel search of {zaak['identificatie']}",
+    )
 
 
 @pytest.mark.scenario("""
@@ -132,18 +151,8 @@ def test_closed_zaak_can_be_gerelateerd_but_not_deelzaak(
 ) -> None:
     """A closed zaak: DEELZAAK gives AFGEHANDELD; GERELATEERD is accepted from the open and from the closed zaak."""
     zaak, gesloten = zac_zaak(), zac_zaak()
-    afbreken = zac.patch(
-        f"{urls['zac']}/rest/zaken/zaak/{gesloten['uuid']}/afbreken", json={"zaakbeeindigRedenId": NIET_ONTVANKELIJK}
-    )
-    expect_status(afbreken, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    wait_until(
-        lambda: (
-            (koppel_zoekresultaat(zac, urls["zac"], zaak, gesloten, "DEELZAAK") or {}).get("nietKoppelbaarReden")
-            == "AFGEHANDELD"
-        ),
-        timeout=INDEX_TIMEOUT,
-        description=f"zaak {gesloten['identificatie']} closed in the koppel search",
-    )
+    expect_status(afbreken(zac, urls["zac"], gesloten), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    _wait_for_reden(zac, urls["zac"], zaak, gesloten, DEELZAAK, "AFGEHANDELD")
     assert _reden(zac, urls["zac"], zaak, gesloten, GERELATEERD) is None
 
     expect_status(koppel(zac, urls["zac"], zaak, gesloten, GERELATEERD), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
@@ -176,3 +185,128 @@ def test_zaaktype_without_deelzaaktypen_refuses_hoofd_and_deelzaak(
     expect_status(koppel(zac, urls["zac"], zaak, ander, relatie), *REFUSED)
     for each in (zaak, ander):
         assert openzaak_productaanvraag.get(_zaak_url(urls["openzaak"], each)).get("hoofdzaak") is None
+
+
+def _is_closed(zac: requests.Session, zac_url: str, zaak: JsonObject) -> bool:
+    return read_zaak(zac, zac_url, str(zaak["uuid"]))["isOpen"] is False
+
+
+def _linked(
+    zac: requests.Session, zac_url: str, hoofd: JsonObject, deel: JsonObject, vanaf: str, reden: str | None = None
+) -> requests.Response:
+    """Link (without reden) or unlink the deelzaak, from the hoofdzaak or from the deelzaak; ZAC's answer."""
+    zaak, ander, relatie = (hoofd, deel, DEELZAAK) if vanaf == "hoofdzaak" else (deel, hoofd, HOOFDZAAK)
+    if reden is None:
+        return koppel(zac, zac_url, zaak, ander, relatie)
+    return ontkoppel(zac, zac_url, zaak, ander, relatie, reden)
+
+
+@EIGEN_ZAAKTYPE
+@THROWAWAY
+@pytest.mark.parametrize("vanaf", ["hoofdzaak", "deelzaak"])
+@pytest.mark.scenario("""
+    Given two open zaken of a zaaktype that allows itself as deelzaaktype
+    When the behandelaar links the second as deelzaak of the first, from either zaak
+    Then the first shows the second as deelzaak and the second the first as hoofdzaak
+    And Open Zaak records the first as hoofdzaak of the second
+    And ZAC marks them hoofdzaak and deelzaak
+""")
+def test_hoofd_and_deelzaak_show_on_both_zaken(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_eigen_zaak: Callable[[], JsonObject],
+    openzaak: ApiClient,
+    vanaf: str,
+) -> None:
+    """DEELZAAK from the hoofdzaak and HOOFDZAAK from the deelzaak link the same way, in ZAC and Open Zaak."""
+    hoofd, deel = zac_eigen_zaak(), zac_eigen_zaak()
+    expect_status(_linked(zac, urls["zac"], hoofd, deel, vanaf), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    assert _relaties(zac, urls["zac"], hoofd) == [(deel["identificatie"], DEELZAAK)]
+    assert _relaties(zac, urls["zac"], deel) == [(hoofd["identificatie"], HOOFDZAAK)]
+    assert openzaak.get(_zaak_url(urls["openzaak"], deel)).get("hoofdzaak") == _zaak_url(urls["openzaak"], hoofd)
+    assert HOOFDZAAK in strings(read_zaak(zac, urls["zac"], str(hoofd["uuid"])).get("indicaties"))
+    assert DEELZAAK in strings(read_zaak(zac, urls["zac"], str(deel["uuid"])).get("indicaties"))
+
+
+@EIGEN_ZAAKTYPE
+@THROWAWAY
+@pytest.mark.scenario("""
+    Given a hoofdzaak in behandeling with an open deelzaak
+    When the behandelaar handles the hoofdzaak
+    Then it is refused and the hoofdzaak stays open
+    When the deelzaak is ontkoppeld with a reden
+    Then the hoofdzaak can be afgehandeld
+""")
+def test_hoofdzaak_is_afgehandeld_once_its_open_deelzaak_is_ontkoppeld(
+    zac: requests.Session, urls: dict[str, str], zac_eigen_zaak: Callable[[], JsonObject]
+) -> None:
+    """Afhandelen of a hoofdzaak with an open deelzaak is refused; after ontkoppelen it is accepted."""
+    hoofd, deel = zac_eigen_zaak(), zac_eigen_zaak()
+    expect_status(_linked(zac, urls["zac"], hoofd, deel, "hoofdzaak"), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    afronden_intake(zac, urls["zac"], hoofd)
+    expect_status(afhandelen(zac, urls["zac"], hoofd), HTTPStatus.BAD_REQUEST)
+    assert not _is_closed(zac, urls["zac"], hoofd)
+
+    unlinked = _linked(zac, urls["zac"], hoofd, deel, "hoofdzaak", "podiumd-tests")
+    expect_status(unlinked, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    expect_status(afhandelen(zac, urls["zac"], hoofd), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    assert _is_closed(zac, urls["zac"], hoofd)
+
+
+@EIGEN_ZAAKTYPE
+@THROWAWAY
+@pytest.mark.parametrize("vanaf", ["hoofdzaak", "deelzaak"])
+@pytest.mark.scenario("""
+    Given a hoofdzaak in behandeling with a deelzaak
+    When the deelzaak is closed
+    Then ontkoppelen is refused while the hoofdzaak is open
+    And the hoofdzaak can be afgehandeld
+    When both are closed, the behandelaar unlinks them from either zaak with a reden
+    Then neither zaak shows the other
+""")
+def test_closed_deelzaak_is_ontkoppeld_once_the_hoofdzaak_is_closed(
+    zac: requests.Session, urls: dict[str, str], zac_eigen_zaak: Callable[[], JsonObject], vanaf: str
+) -> None:
+    """A closed deelzaak lets the hoofdzaak be afgehandeld; ZAC unlinks hoofd- and deelzaak only when both are open or
+    both are closed.
+    """
+    hoofd, deel = zac_eigen_zaak(), zac_eigen_zaak()
+    expect_status(_linked(zac, urls["zac"], hoofd, deel, vanaf), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    afronden_intake(zac, urls["zac"], hoofd)
+    expect_status(afbreken(zac, urls["zac"], deel), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    expect_status(_linked(zac, urls["zac"], hoofd, deel, vanaf, "podiumd-tests"), *REFUSED)
+
+    expect_status(afhandelen(zac, urls["zac"], hoofd), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    assert _is_closed(zac, urls["zac"], hoofd)
+    unlinked = _linked(zac, urls["zac"], hoofd, deel, vanaf, "podiumd-tests")
+    expect_status(unlinked, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    assert _relaties(zac, urls["zac"], hoofd) == []
+    assert _relaties(zac, urls["zac"], deel) == []
+
+
+@EIGEN_ZAAKTYPE
+@THROWAWAY
+@pytest.mark.parametrize(
+    ("van", "naar", "reden"),
+    [("deel", "derde", "IS_DEELZAAK"), ("derde", "deel", "ALREADY_DEELZAAK"), ("derde", "hoofd", "HAS_DEELZAKEN")],
+)
+@pytest.mark.scenario("""
+    Given a hoofdzaak with a deelzaak, and a third open zaak, of a zaaktype that allows itself as deelzaaktype
+    When the behandelaar searches for a deelzaak of the deelzaak, or for the deelzaak or hoofdzaak from the third zaak
+    Then the search says the zaak is a deelzaak, is already a deelzaak, or has deelzaken
+    And linking them that way is refused
+""")
+def test_deelzaak_cannot_become_deel_or_hoofdzaak_again(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_eigen_zaak: Callable[[], JsonObject],
+    van: str,
+    naar: str,
+    reden: str,
+) -> None:
+    """The koppel search for a DEELZAAK gives IS_DEELZAAK, ALREADY_DEELZAAK or HAS_DEELZAKEN; koppelen is refused."""
+    zaken = {"hoofd": zac_eigen_zaak(), "deel": zac_eigen_zaak(), "derde": zac_eigen_zaak()}
+    linked = _linked(zac, urls["zac"], zaken["hoofd"], zaken["deel"], "hoofdzaak")
+    expect_status(linked, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    _wait_for_reden(zac, urls["zac"], zaken[van], zaken[naar], DEELZAAK, reden)
+    expect_status(koppel(zac, urls["zac"], zaken[van], zaken[naar], DEELZAAK), *REFUSED)

@@ -6,6 +6,7 @@ openzaak_catalogi_types; that snippet only touches names carrying a run tag.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
@@ -60,13 +61,33 @@ def publish(openzaak: ApiClient, catalogus_type: JsonObject) -> JsonObject:
     return openzaak.get(str(catalogus_type["url"]))
 
 
+@dataclass(frozen=True)
+class ZaaktypeTypes:
+    """The statustypen (the last is the eindstatus) and (omschrijving, omschrijvingGeneriek) roltypen of a zaaktype.
+
+    The defaults are what publishing needs.
+    """
+
+    statustypen: tuple[str, ...] = ("Ontvangen", "Afgehandeld")
+    roltypen: tuple[tuple[str, str], ...] = (("Initiator", "initiator"),)
+
+
+PUBLISHABLE = ZaaktypeTypes()
+
+
 def make_publishable_zaaktype(
-    env: Environment, openzaak: ApiClient, registry: ResourceRegistry, template: JsonObject, **fields: object
+    env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    template: JsonObject,
+    types: ZaaktypeTypes = PUBLISHABLE,
+    /,
+    **fields: object,
 ) -> JsonObject:
     """Create a concept zaaktype with what publishing needs, copied from a published template zaaktype.
 
-    Two statustypen, a roltype and a resultaattype of the template's selectielijst; children are not registered:
-    they go with the zaaktype, and the API refuses to delete those of a published one.
+    The types and a resultaattype "Afgehandeld" of the template's selectielijst; children are not registered: they go
+    with the zaaktype, and the API refuses to delete those of a published one.
     """
     resultaattype = openzaak.list(f"{CATALOGI}/resultaattypen", {"zaaktype": str(template["url"])})[0]
     zaaktype = make_concept_zaaktype(
@@ -78,12 +99,14 @@ def make_publishable_zaaktype(
     )
     forget_catalogus_type(env, registry, str(zaaktype["identificatie"]))
     url = zaaktype["url"]
-    for volgnummer, omschrijving in enumerate(("Ontvangen", "Afgehandeld"), start=1):
+    for volgnummer, omschrijving in enumerate(types.statustypen, start=1):
         openzaak.post(
             f"{CATALOGI}/statustypen", {"zaaktype": url, "omschrijving": omschrijving, "volgnummer": volgnummer}
         )
-    roltype = {"zaaktype": url, "omschrijving": "Initiator", "omschrijvingGeneriek": "initiator"}
-    openzaak.post(f"{CATALOGI}/roltypen", roltype)
+    for omschrijving, generiek in types.roltypen:
+        openzaak.post(
+            f"{CATALOGI}/roltypen", {"zaaktype": url, "omschrijving": omschrijving, "omschrijvingGeneriek": generiek}
+        )
     copied = ("resultaattypeomschrijving", "selectielijstklasse", "archiefnominatie", "archiefactietermijn")
     body = {key: resultaattype[key] for key in copied}
     procedure = {"afleidingswijze": "afgehandeld", "procestermijn": None}

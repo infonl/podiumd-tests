@@ -6,6 +6,7 @@ from podiumd_tests import pytest_plugin
 from podiumd_tests.bootstrap import runner
 from podiumd_tests.bootstrap.runner import Outcome
 from podiumd_tests.pytest_plugin import requiring
+from podiumd_tests.seed import zac_zaaktype
 
 pytest_plugins = ["pytester"]
 
@@ -333,6 +334,7 @@ def _fake_zac_and_open_zaak(monkeypatch):
     }
     for name, fake in fakes.items():
         monkeypatch.setattr(pytest_plugin, name, fake)
+    monkeypatch.setattr(zac_zaaktype, "zac_session", fakes["zac_session"])
     return deleted
 
 
@@ -373,7 +375,7 @@ def test_kiss(kiss_session):
 
 def test_zac_parameters_skip_without_parameters_in_zac(pytester, monkeypatch):
     monkeypatch.setattr(runner, "check", lambda _env, steps: [Outcome(s.name, "present") for s in steps])
-    monkeypatch.setattr(pytest_plugin, "zac_session", lambda _env, _user, _password: None)
+    monkeypatch.setattr(zac_zaaktype, "zac_session", lambda _env, _user, _password: None)
     monkeypatch.setattr(pytest_plugin, "zaakafhandelparameters", lambda _zac, _url, _zaaktype: [])
     pytester.makeconftest(WRITABLE_CONFTEST)
     pytester.makepyfile("def test_parameters(zac_parameters):\n    pass\n")

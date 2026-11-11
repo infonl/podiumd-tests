@@ -27,7 +27,6 @@ from podiumd_tests.bootstrap.names import TEST_CATALOGUS_DOMEIN
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
-from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.clients.platform import openklant_client
 from podiumd_tests.clients.platform import openzaak_client
 from podiumd_tests.credentials import SecretError
@@ -37,8 +36,6 @@ from podiumd_tests.kcc import kennisartikel_data
 from podiumd_tests.kcc import kiss_sync_cronjob
 from podiumd_tests.kcc import vac_data
 from podiumd_tests.pabc import add_zaaktype_entity_type
-from podiumd_tests.pabc import admin_session
-from podiumd_tests.pabc import delete_entity_type
 from podiumd_tests.pabc import zaaktype_entity_type
 from podiumd_tests.process import ProcessError
 from podiumd_tests.seed.openklant import make_actor
@@ -49,11 +46,13 @@ from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.registry import ResourceRegistry
+from podiumd_tests.seed.zac_zaaktype import forget_zaaktype
+from podiumd_tests.seed.zac_zaaktype import pabc_as_admin
+from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.workloads import run_cronjob
 from podiumd_tests.workloads import scaled
 from podiumd_tests.zac import count_zaken_found
 from podiumd_tests.zac import reindex_zaken
-from podiumd_tests.zac import zac_session
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -366,28 +365,16 @@ def _volume_zac_allowed(env: Environment) -> str | None:
     return None
 
 
-def _pabc(env: Environment) -> tuple[requests.Session, str]:
-    return admin_session(env, ADMIN.username, env.credentials.get(ADMIN.store_key)), env.profile.urls["pabc"]
-
-
 def _count_zaken_in_zac(env: Environment) -> int:
-    zac = zac_session(env, ADMIN.username, env.credentials.get(ADMIN.store_key))
-    return count_zaken_found(zac, env.profile.urls["zac"], VOLUME_TAG)
+    return count_zaken_found(zac_as_admin(env), env.profile.urls["zac"], VOLUME_TAG)
 
 
 def _index_zaken_in_zac(env: Environment, _missing: range, _parallel: int) -> None:
     """Make the volume zaaktype known to PABC, so the admin may see its zaken, and reindex ZAC's zaken."""
-    pabc, pabc_url = _pabc(env)
+    pabc, pabc_url = pabc_as_admin(env)
     if zaaktype_entity_type(pabc, pabc_url, VOLUME_TAG) is None:
         add_zaaktype_entity_type(pabc, pabc_url, VOLUME_TAG)
     reindex_zaken(env)
-
-
-def _forget_zaken_in_zac(env: Environment) -> None:
-    pabc, pabc_url = _pabc(env)
-    entity_type = zaaktype_entity_type(pabc, pabc_url, VOLUME_TAG)
-    if entity_type is not None:
-        delete_entity_type(pabc, pabc_url, entity_type)
 
 
 def _delete_zaken(env: Environment) -> None:
@@ -405,7 +392,7 @@ KINDS: tuple[Kind, ...] = (
         "zac",
         _count_zaken_in_zac,
         _index_zaken_in_zac,
-        _forget_zaken_in_zac,
+        lambda env: forget_zaaktype(env, VOLUME_TAG),
         target_kind="zaken",
         refused=_volume_zac_allowed,
     ),

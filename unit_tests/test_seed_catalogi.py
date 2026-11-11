@@ -50,7 +50,11 @@ def test_list_remove_and_forget_run_the_snippet(snippets):
     ]
 
 
-def test_publishable_zaaktype_copies_the_templates_resultaattype(snippets, fake_http):
+@pytest.mark.parametrize(
+    ("types", "statustypen", "roltypen"),
+    [((), 2, 1), ((catalogi.ZaaktypeTypes(("a", "b", "c"), (("i", "initiator"), ("b", "behandelaar"))),), 3, 2)],
+)
+def test_publishable_zaaktype_copies_the_templates_resultaattype(snippets, fake_http, types, statustypen, roltypen):
     zaaktypen = "catalogi/api/v1/zaaktypen"
     resultaattype = {
         "resultaattypeomschrijving": "rto",
@@ -74,10 +78,11 @@ def test_publishable_zaaktype_copies_the_templates_resultaattype(snippets, fake_
     client = ApiClient(requests.Session(), API, {})
     registry = ResourceRegistry("run1")
     template = {"url": "tpl", "catalogus": "cat", "selectielijstProcestype": "proc"}
-    zaaktype = catalogi.make_publishable_zaaktype(env(), client, registry, template)  # pyright: ignore[reportArgumentType]
+    zaaktype = catalogi.make_publishable_zaaktype(env(), client, registry, template, *types)  # pyright: ignore[reportArgumentType]
     assert catalogi.publish(client, zaaktype) == new
     posted = [s.url.removeprefix(API) for s in sent if s.method == "POST"]
-    assert posted.count("/catalogi/api/v1/statustypen") == 2
+    assert posted.count("/catalogi/api/v1/statustypen") == statustypen
+    assert posted.count("/catalogi/api/v1/roltypen") == roltypen
     registry.cleanup()
     assert [p["name"] for _, _, p in snippets] == [TAGGED]
 
