@@ -12,21 +12,20 @@ from datetime import UTC
 from datetime import datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING
-from typing import cast
 
 import pytest
 
 from podiumd_tests.bootstrap.steps import ITA_GROEP
-from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.clients.platform import mailpit_client
 from podiumd_tests.clients.platform import objecten_client
+from podiumd_tests.ita import answer_body
+from podiumd_tests.ita import assign_to_me
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.kcc import add_klantcontact
 from podiumd_tests.kcc import expect_ita_group_access_bug
 from podiumd_tests.kcc import ita_afhandeltermijn_hours
 from podiumd_tests.kcc import ita_bijna_verlopen_hours
-from podiumd_tests.kcc import kcc_login
 from podiumd_tests.kcc import weekday_hours_before
 from podiumd_tests.mailpit import received
 from podiumd_tests.responses import expect_status
@@ -49,8 +48,6 @@ if TYPE_CHECKING:
 
     import requests
 
-    from playwright.sync_api import Page
-
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
@@ -63,35 +60,6 @@ ITA_E2E = "upstream interne-taak-afhandeling/ITA InterneTaakAfhandeling.EndToEnd
 MAIL_TIMEOUT = 60
 # A klantcontact nummer Open Klant never hands out (its numbers come from random_nummer).
 UNKNOWN_NUMMER = "0000000000"
-
-
-@pytest.fixture(name="ita")
-def fixture_ita(page: Page, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> requests.Session:
-    """ITA in the KCC test user's session; ITA finds the user's Open Klant actor by e-mail."""
-    need_bootstrap(KCC.name, "openklant-actor-kcc")
-    return kcc_login(page, podiumd_env, "ita")
-
-
-@pytest.fixture(scope="module", name="logboek_type")
-def fixture_logboek_type(podiumd_env: Environment) -> str:
-    """The Activiteitenlog objecttype ITA logs its actions in."""
-    return objecttype_url(podiumd_env, "Activiteitenlog")
-
-
-@pytest.fixture(name="taak")
-def fixture_taak(
-    openklant: ApiClient, objecten: ApiClient, registry: ResourceRegistry, logboek_type: str
-) -> JsonObject:
-    """An unassigned internetaak raised by a klantcontact; ITA's logboek of it is cleaned up too."""
-    taak = make_internetaak(openklant, registry, make_klantcontact(openklant, registry), [])
-    clean_up_logboek(objecten, registry, logboek_type, str(taak["uuid"]))
-    return taak
-
-
-def claim(ita: requests.Session, urls: dict[str, str], taak: JsonObject) -> None:
-    """The KCC user claims the internetaak in ITA."""
-    response = ita.post(f"{urls['ita']}/api/internetaken/{taak['uuid']}/aan-mij-toewijzen", json={})
-    expect_status(response, HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.NO_CONTENT)
 
 
 @pytest.mark.source(
@@ -132,41 +100,46 @@ def test_afdelingen_and_groepen_are_seeded_together(ita: requests.Session, urls:
     And it is on the medewerker's own list in ITA
 """)
 def test_claimed_internetaak_is_on_my_list(
-    ita: requests.Session, urls: dict[str, str], openklant: ApiClient, taak: JsonObject
+    ita: requests.Session, urls: dict[str, str], openklant: ApiClient, internetaak: JsonObject
 ) -> None:
     """A claimed internetaak is assigned to the user's actor and on the user's list (TA int-74, reg-73)."""
-    claim(ita, urls, taak)
-    assert entries(openklant.get(f"internetaken/{taak['uuid']}")["toegewezenAanActoren"])
+    assign_to_me(ita, urls["ita"], internetaak)
+    assert entries(openklant.get(f"internetaken/{internetaak['uuid']}")["toegewezenAanActoren"])
     mine = get_entries(ita, f"{urls['ita']}/api/internetaken/aan-mij-toegewezen")
-    assert taak["uuid"] in {str(t.get("uuid")) for t in mine}
+    assert internetaak["uuid"] in {str(t.get("uuid")) for t in mine}
 
 
+@pytest.mark.parametrize("gelukt", [False, True], ids=["niet gelukt", "gelukt"])
 @pytest.mark.source(
     "TA interaction/180-ita-contactmoment-afsluiten.spec.ts",
     "Checks a KCC employee can register a contactmoment on an internetaak in ITA and close it.",
 )
+@pytest.mark.source(
+    f"{ITA_E2E}/Contactverzoek/ContactverzoekScenarios.cs",
+    "A contactmoment, gelukt or not, is registered without closing the contactverzoek.",
+)
 @pytest.mark.scenario("""
     Given the KCC medewerker is logged in to ITA
     And an unassigned contactverzoek in Open Klant
-    When the medewerker answers it in ITA with a contact that did not succeed
-    Then that klantcontact is in Open Klant, marked as not gelukt
+    When the medewerker registers a contact in ITA that did or did not succeed, without closing
+    Then that klantcontact is in Open Klant, marked gelukt or not gelukt
+    And the contactverzoek stays te_verwerken
 """)
 def test_answering_an_internetaak_registers_a_klantcontact(
-    ita: requests.Session, urls: dict[str, str], openklant: ApiClient, registry: ResourceRegistry, taak: JsonObject
+    ita: requests.Session,
+    urls: dict[str, str],
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    internetaak: JsonObject,
+    gelukt: bool,  # noqa: FBT001  # a parameter
 ) -> None:
-    """Answering an internetaak with a contact registers that klantcontact in Open Klant (TA int-180)."""
-    aanleiding = cast("JsonObject", taak["aanleidinggevendKlantcontact"])
+    """A contactmoment on an internetaak is a klantcontact in Open Klant; the internetaak stays open (TA int-180)."""
     onderwerp = registry.tagged("ita-antwoord")
-    antwoord = klantcontact_body(registry, onderwerp=onderwerp, indicatieContactGelukt=False)
     clean_up_klantcontacten(openklant, registry, onderwerp)
-    body = {
-        "interneTaakId": taak["uuid"],
-        "aanleidinggevendKlantcontactUuid": aanleiding["uuid"],
-        "klantcontactRequest": {k: v for k, v in antwoord.items() if k != "nummer"},
-    }
-    add_klantcontact(ita, urls["ita"], body)
-    found = klantcontacten_about(openklant, onderwerp)
-    assert [k["indicatieContactGelukt"] for k in found] == [False]
+    antwoord = klantcontact_body(registry, onderwerp=onderwerp, indicatieContactGelukt=gelukt)
+    add_klantcontact(ita, urls["ita"], answer_body(internetaak, antwoord))
+    assert [k["indicatieContactGelukt"] for k in klantcontacten_about(openklant, onderwerp)] == [gelukt]
+    assert openklant.get(f"internetaken/{internetaak['uuid']}")["status"] == "te_verwerken"
 
 
 @pytest.mark.source(
@@ -206,7 +179,7 @@ def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(
     openklant: ApiClient,
     objecten: ApiClient,
     registry: ResourceRegistry,
-    taak: JsonObject,
+    internetaak: JsonObject,
     soort: str,
 ) -> None:
     """Forwarding to an afdeling or groep assigns the internetaak to its Open Klant actor (TA reg-184).
@@ -221,13 +194,15 @@ def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(
         f"actoren of {identificatie}",
         lambda: [openklant.delete(str(a["url"])) for a in openklant.list("actoren", actoren)],
     )
-    forward = ita.post(f"{urls['ita']}/api/internetaken/{taak['uuid']}/forward", json={soort.lower(): identificatie})
+    forward = ita.post(
+        f"{urls['ita']}/api/internetaken/{internetaak['uuid']}/forward", json={soort.lower(): identificatie}
+    )
     expect_status(forward, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    assigned = entries(openklant.get(f"internetaken/{taak['uuid']}")["toegewezenAanActoren"])
+    assigned = entries(openklant.get(f"internetaken/{internetaak['uuid']}")["toegewezenAanActoren"])
     assert {str(a["uuid"]) for a in assigned} & {str(a["uuid"]) for a in openklant.list("actoren", actoren)}
     if podiumd_env.capabilities.skip_reason("mailpit") is None:
         # ITA mails the afdeling's or groep's mailbox about the forwarded contactverzoek.
-        nummer = openklant.get(str(section(taak, "aanleidinggevendKlantcontact")["url"]))["nummer"]
+        nummer = openklant.get(str(section(internetaak, "aanleidinggevendKlantcontact")["url"]))["nummer"]
         subject = f"Contactverzoek Doorgestuurd - {nummer}"
         received(mailpit_client(podiumd_env), registry, timeout=MAIL_TIMEOUT, to=data["email"], subject=subject)
 
@@ -256,13 +231,13 @@ def test_kiss_reads_itas_logboek(
     podiumd_env: Environment,
     objecten: ApiClient,
     logboek_type: str,
-    taak: JsonObject,
+    internetaak: JsonObject,
 ) -> None:
     """The logboek entry ITA writes when claiming an internetaak is visible with KISS's logboek token."""
     if not podiumd_env.credentials.is_configured("kiss_logboek_token"):
         pytest.skip(f"profile {podiumd_env.profile.name} has no secret kiss_logboek_token")
-    claim(ita, urls, taak)
-    query = {"type": logboek_type, "data_attr": f"heeftBetrekkingOp__objectId__exact__{taak['uuid']}"}
+    assign_to_me(ita, urls["ita"], internetaak)
+    query = {"type": logboek_type, "data_attr": f"heeftBetrekkingOp__objectId__exact__{internetaak['uuid']}"}
     written = wait_until(lambda: objecten.list("objects", query), timeout=30, description="ITA's logboek entry")
     kiss = objecten_client(podiumd_env, "kiss_logboek_token")
     assert [o["url"] for o in kiss.list("objects", query)] == [o["url"] for o in written]
@@ -286,7 +261,7 @@ def test_forward_to_an_afdeling_without_mailbox_is_refused(
     openklant: ApiClient,
     objecten: ApiClient,
     registry: ResourceRegistry,
-    taak: JsonObject,
+    internetaak: JsonObject,
 ) -> None:
     """ITA refuses to forward to an afdeling that has no e-mail address when no medewerker is chosen; nothing changes."""
     identificatie = registry.tagged("afdeling")
@@ -303,9 +278,11 @@ def test_forward_to_an_afdeling_without_mailbox_is_refused(
             for a in openklant.list("actoren", {"actoridentificatorObjectId": identificatie})
         ],
     )
-    forward = ita.post(f"{urls['ita']}/api/internetaken/{taak['uuid']}/forward", json={"afdeling": identificatie})
+    forward = ita.post(
+        f"{urls['ita']}/api/internetaken/{internetaak['uuid']}/forward", json={"afdeling": identificatie}
+    )
     expect_status(forward, HTTPStatus.BAD_REQUEST)
-    assert entries(openklant.get(f"internetaken/{taak['uuid']}")["toegewezenAanActoren"]) == []
+    assert entries(openklant.get(f"internetaken/{internetaak['uuid']}")["toegewezenAanActoren"]) == []
 
 
 @pytest.mark.source(
@@ -372,10 +349,9 @@ def _guarded_calls(taak: JsonObject) -> dict[str, _Call]:
         ),
         "register a contactmoment": (
             "/api/internetaken/close-with-klantcontact",
-            {
-                "interneTaakId": uuid,
-                "aanleidinggevendKlantcontactUuid": klantcontact,
-                "klantcontactRequest": {
+            answer_body(
+                taak,
+                {
                     "indicatieContactGelukt": True,
                     "onderwerp": "podiumd-tests",
                     "inhoud": "podiumd-tests",
@@ -383,7 +359,7 @@ def _guarded_calls(taak: JsonObject) -> dict[str, _Call]:
                     "taal": "nl",
                     "vertrouwelijk": False,
                 },
-            },
+            ),
         ),
     }
 
@@ -401,14 +377,14 @@ def _guarded_calls(taak: JsonObject) -> dict[str, _Call]:
     And the contactverzoek stays verwerkt in Open Klant
 """)
 def test_a_verwerkt_contactverzoek_is_read_only(
-    ita: requests.Session, urls: dict[str, str], openklant: ApiClient, taak: JsonObject, action: str
+    ita: requests.Session, urls: dict[str, str], openklant: ApiClient, internetaak: JsonObject, action: str
 ) -> None:
     """Each write ITA offers on a contactverzoek answers 409 naming verwerkt once Open Klant has it verwerkt."""
-    close_internetaak(openklant, taak)
-    path, body = _guarded_calls(taak)[action]
+    close_internetaak(openklant, internetaak)
+    path, body = _guarded_calls(internetaak)[action]
     refused = expect_status(ita.post(urls["ita"] + path, json=body), HTTPStatus.CONFLICT)
     assert "verwerkt" in refused.text, refused.text[:300]
-    assert openklant.get(f"internetaken/{taak['uuid']}")["status"] == "verwerkt"
+    assert openklant.get(f"internetaken/{internetaak['uuid']}")["status"] == "verwerkt"
 
 
 @pytest.mark.source(
@@ -442,7 +418,7 @@ def test_werklijst_shows_the_urgency_of_each_contactverzoek(
             openklant, registry, make_klantcontact(openklant, registry, plaatsgevondenOp=plaatsgevonden), []
         )
         clean_up_logboek(objecten, registry, logboek_type, str(taak["uuid"]))
-        claim(ita, urls, taak)
+        assign_to_me(ita, urls["ita"], taak)
         expected[str(taak["uuid"])] = status
     mine = {str(t.get("uuid")): t for t in get_entries(ita, f"{urls['ita']}/api/internetaken/aan-mij-toegewezen")}
     found = {uuid: section(mine.get(uuid, {}), "urgentie").get("status") for uuid in expected}

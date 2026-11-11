@@ -12,11 +12,11 @@ import pytest
 
 from podiumd_tests.bootstrap.steps import ITA_BEHEERDER
 from podiumd_tests.bootstrap.steps import KCC
+from podiumd_tests.ita import overview
+from podiumd_tests.ita import uuids
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
-from podiumd_tests.seed.objecten import clean_up_logboek
-from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import close_internetaak
 from podiumd_tests.seed.openklant import make_internetaak
 from podiumd_tests.seed.openklant import make_klantcontact
@@ -40,13 +40,9 @@ E2E = "upstream interne-taak-afhandeling/ITA InterneTaakAfhandeling.EndToEndTest
 
 
 @pytest.fixture(name="closed_taak")
-def fixture_closed_taak(
-    podiumd_env: Environment, openklant: ApiClient, objecten: ApiClient, registry: ResourceRegistry
-) -> JsonObject:
-    """An internetaak raised by a klantcontact and set to verwerkt; ITA's logboek of it is cleaned up too."""
-    taak = make_internetaak(openklant, registry, make_klantcontact(openklant, registry), [])
-    clean_up_logboek(objecten, registry, objecttype_url(podiumd_env, "Activiteitenlog"), str(taak["uuid"]))
-    return close_internetaak(openklant, taak)
+def fixture_closed_taak(openklant: ApiClient, internetaak: JsonObject) -> JsonObject:
+    """An internetaak set to verwerkt."""
+    return close_internetaak(openklant, internetaak)
 
 
 @pytest.fixture(name="ita_as")
@@ -80,6 +76,29 @@ def test_only_the_beheerder_lists_all_contactverzoeken(
     alle = f"{urls['ita']}/api/internetaken"
     expect_status(ita_as(ITA_BEHEERDER).get(alle), HTTPStatus.OK)
     expect_status(ita_as(KCC).get(alle), *REFUSED)
+
+
+@pytest.mark.source(
+    f"{E2E}/Contactverzoek/ContactverzoekScenarios.cs",
+    "Alle contactverzoeken lists an open contactverzoek; a closed one is no longer on it.",
+)
+@pytest.mark.scenario("""
+    Given an open and a closed contactverzoek in Open Klant
+    When the functioneel beheerder opens Alle contactverzoeken in ITA
+    Then ITA lists the open contactverzoek
+    And not the closed one
+""")
+def test_alle_contactverzoeken_lists_only_open_ones(
+    ita_as: Callable[[KeycloakUser], requests.Session],
+    urls: dict[str, str],
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    closed_taak: JsonObject,
+) -> None:
+    """ITA's list of all internetaken has the te_verwerken ones, not the verwerkt ones."""
+    open_taak = make_internetaak(openklant, registry, make_klantcontact(openklant, registry), [])
+    listed = set(uuids(overview(ita_as(ITA_BEHEERDER), f"{urls['ita']}/api/internetaken")))
+    assert (open_taak["uuid"] in listed, closed_taak["uuid"] in listed) == (True, False)
 
 
 @pytest.mark.source(

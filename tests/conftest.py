@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
     from podiumd_tests.environment import Environment
 
-pytest_plugins = ["podiumd_tests.pytest_plugin"]
+pytest_plugins = ["podiumd_tests.pytest_plugin", "podiumd_tests.ita"]
 
 
 # pytest-playwright's own fixtures, extended here: a conftest overrides a plugin's fixture.
