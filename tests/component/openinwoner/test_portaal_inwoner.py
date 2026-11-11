@@ -158,7 +158,8 @@ def test_mijn_vragen_answers(page: Page, portal: str) -> None:
         ("/mijn-profiel/", "welkom|mijn profiel|profiel"),
         ("/mijn-profiel/edit/", "profiel|gegevens|aanpassen|wijzig"),
         ("/mijn-profiel/notificaties/", "notificatie|melding|voorkeur"),
-        ("/search/", "zoek"),
+        # With test_search_can_be_switched_off, which turns the search off for the whole portal for a while.
+        pytest.param("/search/", "zoek", marks=pytest.mark.xdist_group("openinwoner-search")),
         ("/contactformulier/", "contact|vraag"),
     ],
 )
