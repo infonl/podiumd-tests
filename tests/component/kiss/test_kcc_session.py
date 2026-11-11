@@ -47,7 +47,7 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.component, pytest.mark.ui, pytest.mark.core, pytest.mark.requires("kiss", "keycloak")]
 
-# KISS names the medewerker by the token's email claim, else by preferred_username (AuthenticationSetup.GetEmail).
+# KISS names the medewerker by the token's email claim, else by preferred_username, which kiss-4 makes it use.
 KCC_IDS = (user_email(KCC.username), KCC.username)
 
 
@@ -99,6 +99,26 @@ def test_kiss_renders_for_the_kcc_user(page: Page, urls: dict[str, str]) -> None
     page.goto(f"{urls['kiss']}/")
     expect(page.get_by_role("banner").get_by_role("button", name="Zoeken")).to_be_visible()
     expect(page.get_by_role("link", name="Uitloggen")).to_be_visible()
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="[kiss-4] KISS 3.2.0 (.NET 8) reads the claim email, which the token handler renames to ClaimTypes.Email, "
+    "so it uses preferred_username as the medewerker's e-mail address; not yet reported upstream",
+)
+@pytest.mark.source(
+    "podiumd-tests",
+    "KISS names the medewerker by e-mail address on the actor of each contactmoment and in its own details.",
+)
+@pytest.mark.scenario("""
+    Given the KCC medewerker, whose username is not an e-mail address, is logged in to KISS
+    When KISS is asked who is logged in
+    Then KISS knows the medewerker by their e-mail address
+""")
+def test_kiss_knows_the_medewerker_by_email(kiss: requests.Session, urls: dict[str, str]) -> None:
+    """KISS's /api/me has the e-mail address from the Keycloak token, not the username."""
+    me = expect_status(kiss.get(f"{urls['kiss']}/api/me"), HTTPStatus.OK).json()
+    assert me["email"] == user_email(KCC.username)
 
 
 @pytest.mark.source(
