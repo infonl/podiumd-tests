@@ -46,8 +46,8 @@ INDEX_TIMEOUT = 60
 NOTIFICATION_TIMEOUT = 60
 # A BPMN process reaches its next user task after ZAC's service tasks have run.
 TASK_TIMEOUT = 30
-# ZAC assigns and releases list selections in a background job.
-LIST_TIMEOUT = 60
+# ZAC assigns and releases list selections in a background job, and indexes taken in Solr; both lag under load.
+LIST_TIMEOUT = 120
 
 
 def zac_session(env: Environment, username: str, password: str) -> requests.Session:

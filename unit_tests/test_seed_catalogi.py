@@ -99,4 +99,9 @@ def test_concept_iot_and_besluittype_are_tagged_and_forgotten(snippets, fake_htt
     catalogi.make_concept_iot(env(), client, registry, "cat")  # pyright: ignore[reportArgumentType]
     catalogi.make_concept_besluittype(env(), client, registry, "cat")  # pyright: ignore[reportArgumentType]
     registry.cleanup()
-    assert [p["name"] for _, _, p in snippets] == ["ptest-2611111200abcd-besluittype", "ptest-2611111200abcd-iot"]
+    names = [str(p["name"]) for _, _, p in snippets]
+    assert [name.rsplit("-", 1)[0] for name in names] == [
+        "ptest-2611111200abcd-besluittype",
+        "ptest-2611111200abcd-iot",
+    ]
+    assert len({name.rsplit("-", 1)[1] for name in names}) == 2  # each its own suffix

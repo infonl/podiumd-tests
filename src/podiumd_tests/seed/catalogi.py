@@ -6,6 +6,8 @@ openzaak_catalogi_types; that snippet only touches names carrying a run tag.
 
 from __future__ import annotations
 
+import secrets
+
 from dataclasses import dataclass
 from http import HTTPStatus
 from typing import TYPE_CHECKING
@@ -119,7 +121,7 @@ def make_publishable_zaaktype(
 
 def make_concept_iot(env: Environment, openzaak: ApiClient, registry: ResourceRegistry, catalogus: str) -> JsonObject:
     """Create a run-tagged concept informatieobjecttype in a catalogus."""
-    omschrijving = registry.tagged("iot")
+    omschrijving = registry.tagged(f"iot-{secrets.token_hex(3)}")
     forget_catalogus_type(env, registry, omschrijving)
     body = {
         "catalogus": catalogus,
@@ -135,7 +137,7 @@ def make_concept_besluittype(
     env: Environment, openzaak: ApiClient, registry: ResourceRegistry, catalogus: str, **fields: object
 ) -> JsonObject:
     """Create a run-tagged concept besluittype in a catalogus."""
-    omschrijving = registry.tagged("besluittype")
+    omschrijving = registry.tagged(f"besluittype-{secrets.token_hex(3)}")
     forget_catalogus_type(env, registry, omschrijving)
     body: dict[str, object] = {
         "catalogus": catalogus,

@@ -25,6 +25,7 @@ from podiumd_tests.mailpit import received_message
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import complete_task
@@ -66,7 +67,6 @@ ADVIES = "Positief"
 VRAAG = "podiumd-tests vraag"
 
 # ZAC starts the zaak's CMMN case, and runs list distributions and indexing, in the background.
-TIMEOUT = 60
 SUSPENSION_DAYS = 7
 
 # The names of ZAC's CMMN human tasks (Generiek_zaakafhandelmodel.cmmn.xml).
@@ -130,7 +130,7 @@ def test_started_task_is_in_mijn_taken(
     assert assignment(taak) == (zac_group, ADMIN.username)
     wait_until(
         lambda: is_taak_listed(zac, urls["zac"], taak, alleenMijnTaken=True),
-        timeout=TIMEOUT,
+        timeout=LIST_TIMEOUT,
         description=f"task {taak['id']} in Mijn taken",
     )
 
@@ -153,7 +153,7 @@ def test_aanvullende_informatie_gives_the_zaak_its_waiting_status(
         naam = section(read_zaak(zac, urls["zac"], str(taak["zaakUuid"])), "status").get("naam")
         return str(naam) if naam == WAITING else None
 
-    wait_until(status, timeout=TIMEOUT, description=f"status {WAITING!r} on {taak['zaakIdentificatie']}")
+    wait_until(status, timeout=LIST_TIMEOUT, description=f"status {WAITING!r} on {taak['zaakIdentificatie']}")
 
 
 @pytest.mark.source(
@@ -178,10 +178,12 @@ def test_taken_from_the_list_are_released_and_assigned(
         return assignment(expect_status(zac.get(f"{taken}/{taak['id']}"), HTTPStatus.OK).json()) == wanted
 
     expect_status(zac.put(f"{taken}/lijst/vrijgeven", json={"taken": selected, "reden": "test"}), 200, 204)
-    wait_until(lambda: is_((zac_group, None)), timeout=TIMEOUT, description=f"task {taak['id']} vrijgegeven")
+    wait_until(lambda: is_((zac_group, None)), timeout=LIST_TIMEOUT, description=f"task {taak['id']} vrijgegeven")
     body = {"taken": selected, "groepId": zac_group, "behandelaarGebruikersnaam": ADMIN.username, "reden": "test"}
     expect_status(zac.put(f"{taken}/lijst/verdelen", json=body), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    wait_until(lambda: is_((zac_group, ADMIN.username)), timeout=TIMEOUT, description=f"task {taak['id']} verdeeld")
+    wait_until(
+        lambda: is_((zac_group, ADMIN.username)), timeout=LIST_TIMEOUT, description=f"task {taak['id']} verdeeld"
+    )
 
 
 @pytest.mark.source(
@@ -263,7 +265,7 @@ def test_open_advies_intern_holds_off_afhandelen(
     zac_url = urls["zac"]
     offered = wait_until(
         lambda: {str(item.get("naam")) for item in human_tasks_offered(zac, zac_url, behandeling)} or None,
-        timeout=TIMEOUT,
+        timeout=LIST_TIMEOUT,
         description=f"human tasks on {behandeling['identificatie']}",
     )
     assert offered == {GOEDKEUREN, ADVIES_INTERN, ADVIES_EXTERN, DOCUMENT_VERZENDEN}
@@ -274,7 +276,7 @@ def test_open_advies_intern_holds_off_afhandelen(
     assert "ZAAK_AFHANDELEN" not in _acties(zac, zac_url, behandeling)
     wait_until(
         lambda: is_taak_listed(zac, zac_url, taak, alleenMijnTaken=True),
-        timeout=TIMEOUT,
+        timeout=LIST_TIMEOUT,
         description=f"task {taak['id']} listed",
     )
 
@@ -282,7 +284,7 @@ def test_open_advies_intern_holds_off_afhandelen(
     assert (afgerond.get("status"), section(afgerond, "taakdata").get("advies")) == ("AFGEROND", ADVIES)
     wait_until(
         lambda: not is_taak_listed(zac, zac_url, taak, alleenMijnTaken=True),
-        timeout=TIMEOUT,
+        timeout=LIST_TIMEOUT,
         description=f"task {taak['id']} gone",
     )
     assert "ZAAK_AFHANDELEN" in _acties(zac, zac_url, behandeling)
