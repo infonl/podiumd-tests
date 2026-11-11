@@ -11,6 +11,8 @@ ZGW_OPENBAAR_CLIENT_ID = "ptest-bootstrap-zgw-openbaar"
 ZGW_OPENBAAR_STORE_KEY = "ptest_bootstrap_zgw_openbaar_secret"
 ZGW_NOAUTH_CLIENT_ID = "ptest-bootstrap-zgw-noauth"
 ZGW_NOAUTH_STORE_KEY = "ptest_bootstrap_zgw_noauth_secret"
+ZGW_GESLOTEN_CLIENT_ID = "ptest-bootstrap-zgw-gesloten"
+ZGW_GESLOTEN_STORE_KEY = "ptest_bootstrap_zgw_gesloten_secret"
 # Scope prefixes per component on the test catalogus, and the Catalogi API scopes.
 ZGW_COMPONENTS: dict[str, tuple[str, ...]] = {
     "zrc": ("zaken.", "audittrails."),

@@ -624,6 +624,13 @@ STEPS: tuple[Step, ...] = (
         components={},
         catalogi_scopes=(),
     ),
+    # A client that cannot change a closed zaak, reopen it or force a document unlock (ZGW rules zrc-007, zrc-008).
+    openzaak_client_step(
+        "openzaak-client-gesloten",
+        names.ZGW_GESLOTEN_CLIENT_ID,
+        names.ZGW_GESLOTEN_STORE_KEY,
+        exclude=("geforceerd", "heropenen"),
+    ),
     SnippetStep(
         "opennotificaties-client",
         ("opennotificaties",),

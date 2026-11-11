@@ -15,11 +15,13 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.json_data import entries
+from podiumd_tests.responses import REFUSED
 from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import link_document
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_document_in_parts
+from podiumd_tests.seed.openzaak import make_gebruiksrechten
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.openzaak import today
 
@@ -308,3 +310,59 @@ def test_objectinformatieobject_follows_the_zaak(
     response = openzaak.request("POST", f"{DOCUMENTEN}/objectinformatieobjecten", HTTPStatus.BAD_REQUEST, json=body)
     expected = "unique" if case == "already-mirrored" else "inconsistent-relation"
     assert [p["code"] for p in entries(response.json()["invalidParams"])] == [expected], response.text
+
+
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW business rule drc-006",
+    "indicatieGebruiksrecht is null until gebruiksrechten exist; it is true with them and null again without.",
+)
+@pytest.mark.scenario("""
+    Given a new document in Open Zaak
+    Then its gebruiksrechten are not recorded
+    And it cannot be marked as having gebruiksrechten without them
+    When gebruiksrechten are recorded, it has gebruiksrechten
+    And when they are deleted, they are no longer recorded
+""")
+def test_indicatie_gebruiksrecht_follows_the_gebruiksrechten(
+    openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
+) -> None:
+    """indicatieGebruiksrecht: null at create, true not settable by hand, true with gebruiksrechten, null after."""
+    document = make_document(openzaak, registry, parts.informatieobjecttype, indicatieGebruiksrecht=None)
+    url = str(document["url"])
+    assert document["indicatieGebruiksrecht"] is None
+    lock = openzaak.request("POST", f"{url}/lock", HTTPStatus.OK, json={}).json()["lock"]
+    body = {"indicatieGebruiksrecht": True, "lock": lock}
+    response = openzaak.request("PATCH", url, HTTPStatus.BAD_REQUEST, json=body)
+    assert "indicatieGebruiksrecht" in invalid_names(response)
+    openzaak.request("POST", f"{url}/unlock", HTTPStatus.NO_CONTENT, json={"lock": lock})
+    gebruiksrechten = make_gebruiksrechten(openzaak, registry, document)
+    assert openzaak.get(url)["indicatieGebruiksrecht"] is True
+    openzaak.delete(str(gebruiksrechten["url"]))
+    assert openzaak.get(url)["indicatieGebruiksrecht"] is None
+
+
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW business rule drc-009",
+    "A document changes only with its lockId; only a client with documenten.geforceerd-unlock unlocks without it.",
+)
+@pytest.mark.scenario("""
+    Given a locked document in Open Zaak
+    When it is changed without the lock or with a wrong one
+    Then Open Zaak refuses the change
+    And a client without the right to force an unlock cannot unlock it without the lock
+    And a client with that right can
+""")
+def test_locked_document_needs_its_lock(
+    openzaak: ApiClient, openzaak_gesloten: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
+) -> None:
+    """PATCH without or with a wrong lock is a 400; unlock without the lock needs documenten.geforceerd-unlock."""
+    document = make_document(openzaak, registry, parts.informatieobjecttype)
+    url = str(document["url"])
+    openzaak.request("POST", f"{url}/lock", HTTPStatus.OK, json={})
+    for lock in ({}, {"lock": "0" * 32}):
+        body = {"titel": registry.tagged("titel"), **lock}
+        response = openzaak.request("PATCH", url, HTTPStatus.BAD_REQUEST, json=body)
+        assert invalid_names(response), response.text
+    openzaak_gesloten.request("POST", f"{url}/unlock", HTTPStatus.BAD_REQUEST, *REFUSED, json={})
+    openzaak.request("POST", f"{url}/unlock", HTTPStatus.NO_CONTENT, json={})
+    assert openzaak.get(url)["locked"] is False

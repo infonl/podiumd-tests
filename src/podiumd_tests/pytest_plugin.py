@@ -291,6 +291,19 @@ def fixture_openzaak_openbaar(run_tag: str, podiumd_env: Environment, need_boots
     )
 
 
+@pytest.fixture(scope="session", name="openzaak_gesloten")
+def fixture_openzaak_gesloten(run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
+    """Open Zaak as a client without zaken.geforceerd-bijwerken, zaken.heropenen and documenten.geforceerd-unlock."""
+    return _zgw_client(
+        run_tag,
+        podiumd_env,
+        need_bootstrap,
+        "openzaak-client-gesloten",
+        names.ZGW_GESLOTEN_CLIENT_ID,
+        names.ZGW_GESLOTEN_STORE_KEY,
+    )
+
+
 @pytest.fixture(scope="session", name="openzaak_noauth")
 def fixture_openzaak_noauth(run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
     """Open Zaak as a known client without any autorisatie."""

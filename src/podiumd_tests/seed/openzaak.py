@@ -126,17 +126,21 @@ def zaaktype_parts(openzaak: ApiClient, zaaktype: JsonObject) -> ZaaktypeParts:
     )
 
 
-def make_status(
-    openzaak: ApiClient, zaak: JsonObject, statustype: str, toelichting: str = "", gezet: datetime | None = None
-) -> JsonObject:
-    """Create a status of a zaak, set now or at gezet; deleted with the zaak."""
-    body = {
+def status_body(zaak: JsonObject, statustype: str, toelichting: str = "", gezet: datetime | None = None) -> JsonObject:
+    """Return the body of a status of a zaak, set now or at gezet."""
+    return {
         "zaak": zaak["url"],
         "statustype": statustype,
         "datumStatusGezet": (gezet or datetime.now(tz=UTC)).isoformat(),
         "statustoelichting": toelichting,
     }
-    return openzaak.post(f"{ZAKEN}/statussen", body)
+
+
+def make_status(
+    openzaak: ApiClient, zaak: JsonObject, statustype: str, toelichting: str = "", gezet: datetime | None = None
+) -> JsonObject:
+    """Create a status of a zaak, set now or at gezet; deleted with the zaak."""
+    return openzaak.post(f"{ZAKEN}/statussen", status_body(zaak, statustype, toelichting, gezet))
 
 
 def close_zaak(
@@ -229,6 +233,16 @@ def make_document_in_parts(
         expect_status(upload, HTTPStatus.OK)
         offset += size
     return document
+
+
+def make_gebruiksrechten(openzaak: ApiClient, registry: ResourceRegistry, document: JsonObject) -> JsonObject:
+    """Create gebruiksrechten of a document; Open Zaak then sets its indicatieGebruiksrecht to true."""
+    body = {
+        "informatieobject": document["url"],
+        "startdatum": f"{today()}T00:00:00Z",
+        "omschrijvingVoorwaarden": registry.tagged("gebruiksrechten"),
+    }
+    return _create(openzaak, registry, f"{DOCUMENTEN}/gebruiksrechten", body)
 
 
 def link_document(
