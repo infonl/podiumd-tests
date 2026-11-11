@@ -34,6 +34,7 @@ from podiumd_tests.zac import verdelen
 from podiumd_tests.zac import vrijgeven
 from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zac_session
+from podiumd_tests.zac_betrokkenen import wijzig_initiator
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import nieuwe_versie
 from podiumd_tests.zac_documents import uploaded_document
@@ -355,6 +356,6 @@ def test_without_brp_zoeken_no_person_search_but_a_bedrijf_initiator(
     behandelaar = zac_as("behandelaar")
     refused = behandelaar.put(f"{urls['zac']}/rest/klanten/personen", json={"bsn": EREBOS})
     assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
-    body = {"zaakUUID": bpmn_zaak["uuid"], "betrokkeneIdentificatie": {"type": "RSIN", "kvkNummer": KVK_TEST_NUMMER}}
-    changed = expect_status(behandelaar.patch(f"{urls['zac']}/rest/zaken/initiator", json=body), HTTPStatus.OK)
+    bedrijf = {"type": "RSIN", "kvkNummer": KVK_TEST_NUMMER}
+    changed = expect_status(wijzig_initiator(behandelaar, urls["zac"], bpmn_zaak, bedrijf, None), HTTPStatus.OK)
     assert section(changed.json(), "initiatorIdentificatie").get("kvkNummer") == KVK_TEST_NUMMER

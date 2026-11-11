@@ -85,6 +85,14 @@ def test_factories_post_and_delete_at_cleanup(fake_http, factory, path):
     assert calls(sent) == [("POST", f"/{path}"), ("DELETE", f"/{path}/new")]
 
 
+def test_digitaal_adres_of_a_partij_is_its_standard_address_unless_told_otherwise(fake_http):
+    sent = fake_http(created("digitaleadressen"))
+    registry = ResourceRegistry("run1")
+    openklant.make_digitaal_adres(api(), registry, {"uuid": "p"}, "a@example.invalid")
+    openklant.make_digitaal_adres(api(), registry, {"uuid": "p"}, "b@example.invalid", standaard=False)
+    assert [body(request)["isStandaardAdres"] for request in sent] == [True, False]
+
+
 def test_besluit_is_deleted_after_its_document_links(fake_http):
     path = "besluiten/api/v1/besluiten"
     links = "besluiten/api/v1/besluitinformatieobjecten"

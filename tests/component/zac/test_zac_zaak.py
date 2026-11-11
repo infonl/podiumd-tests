@@ -18,7 +18,6 @@ import pytest
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import IDENTITIES
-from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.responses import UnexpectedStatusError
@@ -35,6 +34,10 @@ from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_with_person
 from podiumd_tests.zac import verlengen
 from podiumd_tests.zac import wait_in_werkvoorraad
+from podiumd_tests.zac_betrokkenen import add_betrokkene
+from podiumd_tests.zac_betrokkenen import betrokkene_roltype
+from podiumd_tests.zac_betrokkenen import betrokkenen
+from podiumd_tests.zac_betrokkenen import wijzig_initiator
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
 from podiumd_tests.zac_documents import zaak_documents
@@ -143,8 +146,7 @@ def test_zaak_with_an_initiator_is_in_the_werkvoorraad(
     zaak = zac_zaak()
 
     def add(identificatie: JsonObject) -> requests.Response:
-        body = {"zaakUUID": zaak["uuid"], "betrokkeneIdentificatie": identificatie}
-        return zac.patch(f"{urls['zac']}/rest/zaken/initiator", json=body)
+        return wijzig_initiator(zac, urls["zac"], zaak, identificatie, None)
 
     initiator = section(
         expect_status(send_with_person(zac, urls["zac"], EREBOS, add), HTTPStatus.OK).json(), "initiatorIdentificatie"
@@ -327,17 +329,11 @@ def test_aborted_zaak_is_closed_and_listed_among_the_closed_zaken(
     Then the zaak lists all three betrokkenen with their roles
 """)
 def test_betrokkenen_with_the_same_and_different_roles_are_listed(
-    zac: requests.Session, urls: dict[str, str], zac_parameters: JsonObject, zac_zaak: Callable[..., JsonObject]
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
 ) -> None:
     """A person in two roles and a company in one of them are all listed with the zaak."""
     zaak = zac_zaak()
-    zaaktype = section(zac_parameters, "zaaktype")["uuid"]
-    # By name prefix: a zaaktype may say "Belanghebbende e2e", and several share a generic role.
-    available = entries(zac.get(f"{urls['zac']}/rest/klanten/roltype/{zaaktype}/betrokkene").json())
-    roltypen = {
-        rol: next(r for r in available if str(r["naam"]).lower().startswith(rol))
-        for rol in ("belanghebbende", "contactpersoon")
-    }
+    roltypen = {rol: betrokkene_roltype(zac, urls["zac"], zaak, rol) for rol in ("belanghebbende", "contactpersoon")}
     company = {
         "type": "VN",
         "kvkNummer": BEDRIJF.attributes["kvk"][0],
@@ -347,17 +343,11 @@ def test_betrokkenen_with_the_same_and_different_roles_are_listed(
     for rol, who in wanted:
 
         def add(identificatie: JsonObject, rol: str = rol) -> requests.Response:
-            body = {
-                "zaakUUID": zaak["uuid"],
-                "roltypeUUID": roltypen[rol]["uuid"],
-                "roltoelichting": "test",
-                "betrokkeneIdentificatie": identificatie,
-            }
-            return zac.post(f"{urls['zac']}/rest/zaken/betrokkene", json=body)
+            return add_betrokkene(zac, urls["zac"], zaak, roltypen[rol], identificatie)
 
         response = send_with_person(zac, urls["zac"], EREBOS, add) if who == "persoon" else add(company)
         expect_status(response, HTTPStatus.OK)
-    listed = get_entries(zac, f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}/betrokkene")
+    listed = betrokkenen(zac, urls["zac"], zaak)
     assert sorted(str(b.get("roltype")) for b in listed) == sorted(str(roltypen[r]["naam"]) for r, _ in wanted)
 
 

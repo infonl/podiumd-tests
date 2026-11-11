@@ -106,21 +106,26 @@ def make_partij_identificator(
     return _create(openklant, registry, "partij-identificatoren", body)
 
 
-def make_digitaal_adres(
+def make_digitaal_adres(  # noqa: PLR0913  # the address and its owner
     openklant: ApiClient,
     registry: ResourceRegistry,
     partij: JsonObject | None,
     adres: str,
     betrokkene: JsonObject | None = None,
+    *,
+    standaard: bool | None = None,
 ) -> JsonObject:
-    """Create an e-mail address, or telefoonnummer when adres has no @, of a partij (standard address) or betrokkene."""
+    """Create an e-mail address, or telefoonnummer when adres has no @, of a partij or betrokkene.
+
+    standaard: isStandaardAdres; by default a partij's address is its standard address.
+    """
     body: dict[str, object] = {
         "verstrektDoorBetrokkene": ref(betrokkene) if betrokkene else None,
         "verstrektDoorPartij": ref(partij) if partij else None,
         "adres": adres,
         "soortDigitaalAdres": "email" if "@" in adres else "telefoonnummer",
         "omschrijving": registry.tagged("adres"),
-        "isStandaardAdres": partij is not None,
+        "isStandaardAdres": partij is not None if standaard is None else standaard,
     }
     return _create(openklant, registry, "digitaleadressen", body)
 
