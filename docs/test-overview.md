@@ -10,12 +10,12 @@ versions is not counted.
 | Tier | Tests | Functions | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 210 | 37 | 9 |
-| component | 552 | 329 | 31 |
-| integration | 119 | 70 | 10 |
+| component | 551 | 328 | 31 |
+| integration | 127 | 74 | 10 |
 | perf | 54 | 3 | 0 |
-| **full tier** | **854** | **418** |  |
+| **full tier** | **861** | **421** |  |
 
-Unit tests (`unit_tests/`, functions): 611. Perf endpoints (`perf/runs.py`): 22.
+Unit tests (`unit_tests/`, functions): 616. Perf endpoints (`perf/runs.py`): 22.
 
 ## Per area
 
@@ -33,7 +33,7 @@ Unit tests (`unit_tests/`, functions): 611. Perf endpoints (`perf/runs.py`): 22.
 | smoke | zgw_auth | 4 | 2 |
 | component | basisregistraties | 23 | 16 |
 | component | frankgateway | 5 | 1 |
-| component | ita | 19 | 14 |
+| component | ita | 18 | 13 |
 | component | keycloak | 22 | 13 |
 | component | kiss | 34 | 17 |
 | component | objecten | 15 | 5 |
@@ -63,6 +63,7 @@ Unit tests (`unit_tests/`, functions): 611. Perf endpoints (`perf/runs.py`): 22.
 | integration | formulier_wijzigen | 1 | 1 |
 | integration | formulier_zaak | 1 | 1 |
 | integration | formulier_zaaktype_versie | 1 | 1 |
+| integration | kiss_contactverzoek | 8 | 4 |
 | integration | kiss_kennis | 2 | 1 |
 | integration | kiss_website | 1 | 1 |
 | integration | klacht_bezwaar | 1 | 1 |
@@ -92,7 +93,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | draaiboek | 87 |
 | external | 101 |
 | podiumd-tests | 280 |
-| upstream | 69 |
+| upstream | 76 |
 
 ## Expected failures per known issue
 

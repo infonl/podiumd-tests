@@ -26,7 +26,6 @@ from podiumd_tests.kcc import add_klantcontact
 from podiumd_tests.kcc import expect_ita_group_access_bug
 from podiumd_tests.kcc import ita_afhandeltermijn_hours
 from podiumd_tests.kcc import ita_bijna_verlopen_hours
-from podiumd_tests.kcc import ita_detail_text
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.kcc import weekday_hours_before
 from podiumd_tests.mailpit import received
@@ -41,7 +40,6 @@ from podiumd_tests.seed.openklant import close_internetaak
 from podiumd_tests.seed.openklant import klantcontact_body
 from podiumd_tests.seed.openklant import klantcontacten_about
 from podiumd_tests.seed.openklant import make_actor
-from podiumd_tests.seed.openklant import make_betrokkene
 from podiumd_tests.seed.openklant import make_internetaak
 from podiumd_tests.seed.openklant import make_klantcontact
 from podiumd_tests.wait import wait_until
@@ -268,41 +266,6 @@ def test_kiss_reads_itas_logboek(
     written = wait_until(lambda: objecten.list("objects", query), timeout=30, description="ITA's logboek entry")
     kiss = objecten_client(podiumd_env, "kiss_logboek_token")
     assert [o["url"] for o in kiss.list("objects", query)] == [o["url"] for o in written]
-
-
-@pytest.mark.tc("ITA-035")
-@pytest.mark.source(
-    "draaiboek ITA-035",
-    "A contactverzoek submitted through Contact shows all its recorded information on ITA's detail page.",
-)
-@pytest.mark.scenario("""
-    Given the KCC medewerker is logged in to ITA
-    And a contactverzoek as KISS registers it: a klantcontact with a klant, assigned to the medewerker's groep
-    When the medewerker opens the contactverzoek in ITA
-    Then the detail page shows its onderwerp, vraag, toelichting and the klant's name
-""")
-def test_contactverzoek_from_kiss_shows_in_full_in_ita(  # noqa: FNE008  # the name is the test id
-    ita: requests.Session,
-    urls: dict[str, str],
-    openklant: ApiClient,
-    objecten: ApiClient,
-    registry: ResourceRegistry,
-    logboek_type: str,
-    need_bootstrap: Callable[..., None],
-    request: pytest.FixtureRequest,
-    podiumd_env: Environment,
-) -> None:
-    """A contactverzoek as KISS registers it (klantcontact, klant, internetaak to a groep) shows in full in ITA."""
-    expect_ita_group_access_bug(request, podiumd_env)
-    need_bootstrap("objecten-medewerker-kcc")
-    groep = make_actor(openklant, registry, "organisatorische_eenheid", ITA_GROEP, "grp")
-    onderwerp = registry.tagged("contactverzoek")
-    klantcontact = make_klantcontact(openklant, registry, onderwerp=onderwerp, inhoud=f"Vraag {onderwerp}")
-    make_betrokkene(openklant, registry, klantcontact, None)
-    taak = make_internetaak(openklant, registry, klantcontact, [groep])
-    clean_up_logboek(objecten, registry, logboek_type, str(taak["uuid"]))
-    detail = ita_detail_text(ita, urls["ita"], taak)
-    assert [v for v in (onderwerp, f"Vraag {onderwerp}", str(taak["toelichting"]), "PodiumD") if v not in detail] == []
 
 
 @pytest.mark.source(

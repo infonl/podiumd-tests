@@ -5,6 +5,7 @@ import json
 from datetime import UTC
 from datetime import datetime
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 import requests
@@ -12,17 +13,23 @@ import requests
 from podiumd_tests import kcc
 from podiumd_tests import workloads
 from podiumd_tests.bootstrap.steps import KCC
+from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.kcc import KENNIS_URL
 from podiumd_tests.kcc import LOGBOEK_HINT
 from podiumd_tests.kcc import add_klantcontact
 from podiumd_tests.kcc import expect_ita_group_access_bug
+from podiumd_tests.kcc import internetaken_of
 from podiumd_tests.kcc import ita_detail_text
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.kcc import kennisartikel_data
+from podiumd_tests.kcc import kiss_actor
 from podiumd_tests.kcc import kiss_betrokkene
 from podiumd_tests.kcc import kiss_contactmomentdetails
+from podiumd_tests.kcc import kiss_contactverzoek
+from podiumd_tests.kcc import kiss_contactverzoeken_by_adres
 from podiumd_tests.kcc import kiss_klantcontact
-from podiumd_tests.kcc import kiss_klantcontacten_of
+from podiumd_tests.kcc import kiss_klantcontacten
+from podiumd_tests.kcc import kiss_medewerkers
 from podiumd_tests.kcc import kiss_register
 from podiumd_tests.kcc import kiss_search_hits
 from podiumd_tests.kcc import kiss_sync_cronjob
@@ -81,7 +88,7 @@ def test_kiss_klantcontact_registers_cleanup_in_open_klant(fake_http):
     assert deleted == []  # the klantcontact was already gone
 
 
-def test_kiss_betrokkene_and_klantcontacten_of_go_through_kiss(fake_http):
+def test_kiss_betrokkene_and_klantcontacten_go_through_kiss(fake_http):
     sent = fake_http(
         {
             "/api/environment/registers": (200, REGISTERS),
@@ -93,8 +100,91 @@ def test_kiss_betrokkene_and_klantcontacten_of_go_through_kiss(fake_http):
     kiss_betrokkene(kiss, KISS, {"uuid": "1"}, {"uuid": "p1", "url": "https://ok/p/1"})
     body = json.loads(sent[-1].body)
     assert (body["wasPartij"], body["hadKlantcontact"], body["rol"]) == ({"uuid": "p1"}, {"uuid": "1"}, "klant")
-    assert kiss_klantcontacten_of(kiss, KISS, {"url": "https://ok/p/1"}) == [{"uuid": "1"}]
+    assert kiss_klantcontacten(kiss, KISS, hadBetrokkene__wasPartij__url="https://ok/p/1") == [{"uuid": "1"}]
     assert "hadBetrokkene__wasPartij__url=https" in sent[-1].url
+
+
+KI = "/api/klantinteracties/api/v1"
+
+
+def _openklant(deleted) -> ApiClient:
+    return cast(
+        "ApiClient",
+        SimpleNamespace(delete=deleted.append, get=lambda path: {"path": path, "uuid": path.rpartition("/")[2]}),
+    )
+
+
+@pytest.mark.parametrize(
+    ("soort", "codes"), [("groep", ("organisatorische_eenheid", "grp")), ("medewerker", ("medewerker", "mdw"))]
+)
+def test_kiss_actor_is_created_through_kiss_and_cleaned_up(fake_http, soort, codes):
+    sent = fake_http(
+        {
+            "/api/environment/registers": (200, REGISTERS),
+            f"POST {KI}/actoren": (201, {"uuid": "a1", "url": "https://ok/a/1"}),
+        }
+    )
+    deleted = []
+    registry = ResourceRegistry("ptest-run")
+    kiss_actor(requests.Session(), KISS, _openklant(deleted), registry, soort, "naam")
+    body = json.loads(sent[-1].body)
+    assert (body["soortActor"], body["actoridentificator"]["codeObjecttype"]) == codes
+    registry.cleanup()
+    assert deleted == ["https://ok/a/1"]
+
+
+def test_kiss_contactverzoek_posts_the_adres_and_the_internetaak(fake_http):
+    sent = fake_http(
+        {
+            "/api/environment/registers": (200, REGISTERS),
+            "POST /api/postklantcontacten": (200, {"url": "https://ok/kc/1", "uuid": "1"}),
+            f"POST {KI}/betrokkenen": (201, {"uuid": "b1"}),
+            f"POST {KI}/digitaleadressen": (201, {"uuid": "d1"}),
+            "POST /api/postinternetaak": (201, {"uuid": "t1"}),
+        }
+    )
+    actor = {"uuid": "a1"}
+    taak = kiss_contactverzoek(
+        requests.Session(), KISS, _openklant([]), ResourceRegistry("ptest-run"), [actor], "a@b.nl"
+    )
+    assert taak["path"] == "internetaken/t1"
+    posted = {request.url.removeprefix(KISS): json.loads(request.body) for request in sent if request.method == "POST"}
+    adres = posted[f"{KI}/digitaleadressen"]
+    assert (adres["verstrektDoorBetrokkene"], adres["soortDigitaalAdres"]) == ({"uuid": "b1"}, "email")
+    internetaak = posted["/api/postinternetaak"]
+    assert (internetaak["aanleidinggevendKlantcontact"], internetaak["toegewezenAanActoren"]) == (
+        {"uuid": "1"},
+        [actor],
+    )
+
+
+def test_kiss_contactverzoeken_by_adres_follows_the_betrokkenen(fake_http):
+    adres = {"_expand": {"verstrektDoorBetrokkene": {"uuid": "b1"}}}
+    adressen = {"results": [adres, adres]}
+    klantcontacten = {"results": [{"_expand": {"leiddeTotInterneTaken": [{"uuid": "t1"}]}}]}
+    sent = fake_http(
+        {
+            "/api/environment/registers": (200, REGISTERS),
+            f"GET {KI}/digitaleadressen": (200, adressen),
+            f"GET {KI}/klantcontacten": (200, klantcontacten),
+        }
+    )
+    assert kiss_contactverzoeken_by_adres(requests.Session(), KISS, "0612345678") == ["t1"]
+    assert "hadBetrokkene__uuid=b1" in sent[-1].url
+
+
+def test_internetaken_of_reads_the_expanded_internetaken():
+    assert internetaken_of([{"_expand": {"leiddeTotInterneTaken": [{"uuid": "t1"}, {"uuid": "t2"}]}}, {}]) == [
+        "t1",
+        "t2",
+    ]
+
+
+def test_kiss_medewerkers_returns_the_smoelenboek_entries(fake_http):
+    hits = {"hits": {"hits": [{"_source": {"Smoelenboek": {"identificatie": "m1"}}}]}}
+    sent = fake_http({"POST /api/search/medewerkers": (200, hits)})
+    assert kiss_medewerkers(requests.Session(), KISS, "m1", "groep") == [{"identificatie": "m1"}]
+    assert json.loads(sent[0].body)["filterValue"] == "groep"
 
 
 def test_kiss_contactmomentdetails_puts_and_reads_back(fake_http):

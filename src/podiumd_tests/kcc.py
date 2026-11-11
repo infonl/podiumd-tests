@@ -24,6 +24,7 @@ from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import expect_status
 from podiumd_tests.results import now_iso
 from podiumd_tests.seed.openklant import delete_klantcontact_tree
+from podiumd_tests.seed.openklant import klantcontact_body
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.workloads import expect_defect
 
@@ -43,6 +44,9 @@ KISS_KLANTINTERACTIES = "/api/klantinteracties/api/v1"
 # KISS's own route for a new klantcontact: it links the logged-in medewerker as actor.
 KISS_POST_KLANTCONTACTEN = "/api/postklantcontacten"
 KISS_CONTACTMOMENTDETAILS = "/api/contactmomentdetails"
+KISS_POST_INTERNETAAK = "/api/postinternetaak"
+# The codeObjecttype KISS gives the actor of a contactverzoek (getActorConfig); ITA reads afd and grp.
+KISS_ACTOR_CODES = {"afdeling": "afd", "groep": "grp", "medewerker": "mdw"}
 # URLs in KISS's search content that point nowhere.
 KENNIS_URL = "https://example.invalid/"
 
@@ -101,13 +105,114 @@ def kiss_betrokkene(
     return expect_status(kiss.post(url, json=body, headers=kiss_register(kiss, kiss_url)), HTTPStatus.CREATED).json()
 
 
-def kiss_klantcontacten_of(kiss: requests.Session, kiss_url: str, partij: JsonObject) -> list[JsonObject]:
-    """Return the partij's klantcontacten as KISS lists them on its Contactmomenten tab."""
-    params = {"hadBetrokkene__wasPartij__url": str(partij["url"])}
+def kiss_klantcontacten(kiss: requests.Session, kiss_url: str, **params: str) -> list[JsonObject]:
+    """Return the klantcontacten KISS lists for a query, e.g. a partij's on its Contactmomenten tab."""
     response = kiss.get(
         f"{kiss_url}{KISS_KLANTINTERACTIES}/klantcontacten", params=params, headers=kiss_register(kiss, kiss_url)
     )
     return entries(expect_status(response, HTTPStatus.OK).json().get("results"))
+
+
+def kiss_actor(  # noqa: PLR0913, PLR0917  # the KISS session, cleanup and the actor
+    kiss: requests.Session, kiss_url: str, openklant: ApiClient, registry: ResourceRegistry, soort: str, naam: str
+) -> JsonObject:
+    """Create the actor (afdeling, groep or medewerker) for a contactverzoek as KISS's frontend does.
+
+    KISS reuses an actor with the same identificator; each test creates its own, so a parallel test's cleanup
+    cannot delete it. naam is also its identificatie.
+    """
+    body = {
+        "naam": naam,
+        "soortActor": "medewerker" if soort == "medewerker" else "organisatorische_eenheid",
+        "indicatieActief": True,
+        "actoridentificator": {
+            "objectId": naam,
+            "codeObjecttype": KISS_ACTOR_CODES[soort],
+            "codeRegister": "obj",
+            "codeSoortObjectId": "idf",
+        },
+    }
+    response = kiss.post(f"{kiss_url}{KISS_KLANTINTERACTIES}/actoren", json=body, headers=kiss_register(kiss, kiss_url))
+    actor = expect_status(response, HTTPStatus.CREATED).json()
+    registry.add(f"actor {actor['url']}", lambda: openklant.delete(str(actor["url"])))
+    return actor
+
+
+def kiss_contactverzoek(  # noqa: PLR0913, PLR0917  # one flow
+    kiss: requests.Session,
+    kiss_url: str,
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    actoren: list[JsonObject],
+    adres: str,
+    partij: JsonObject | None = None,
+) -> JsonObject:
+    """Register a contactverzoek as KISS's frontend does; its internetaak in Open Klant.
+
+    The klant leaves a phone number, or an e-mail address when adres has an @. Cleanup is the klantcontact's.
+    """
+    onderwerp = registry.tagged("contactverzoek")
+    body = klantcontact_body(registry, onderwerp=onderwerp, inhoud=f"Vraag {onderwerp}")
+    klantcontact = kiss_klantcontact(kiss, kiss_url, openklant, registry, body)
+    betrokkene = kiss_betrokkene(kiss, kiss_url, klantcontact, partij)
+    register = kiss_register(kiss, kiss_url)
+    digitaal_adres = {
+        "verstrektDoorBetrokkene": {"uuid": betrokkene["uuid"]},
+        "verstrektDoorPartij": None,
+        "adres": adres,
+        "soortDigitaalAdres": "email" if "@" in adres else "telefoonnummer",
+        "omschrijving": "onbekend",
+    }
+    response = kiss.post(f"{kiss_url}{KISS_KLANTINTERACTIES}/digitaleadressen", json=digitaal_adres, headers=register)
+    expect_status(response, HTTPStatus.CREATED)
+    taak = {
+        "nummer": "",
+        "gevraagdeHandeling": "Contact opnemen met betrokkene",
+        "aanleidinggevendKlantcontact": {"uuid": klantcontact["uuid"]},
+        "toegewezenAanActoren": [{"uuid": actor["uuid"]} for actor in actoren],
+        "toelichting": registry.tagged("toelichting"),
+        "status": "te_verwerken",
+    }
+    created = expect_status(
+        kiss.post(kiss_url + KISS_POST_INTERNETAAK, json=taak, headers=register), HTTPStatus.CREATED
+    )
+    return openklant.get(f"internetaken/{created.json()['uuid']}")
+
+
+def internetaken_of(klantcontacten: list[JsonObject]) -> list[str]:
+    """Return the uuids of the internetaken the klantcontacten (expanded with leiddeTotInterneTaken) led to."""
+    return [
+        str(taak.get("uuid"))
+        for klantcontact in klantcontacten
+        for taak in entries(section(klantcontact, "_expand").get("leiddeTotInterneTaken"))
+    ]
+
+
+def kiss_contactverzoeken_by_adres(kiss: requests.Session, kiss_url: str, adres: str) -> list[str]:
+    """Return the uuids of the internetaken KISS's contactverzoek search finds by a phone number or e-mail address."""
+    params = {"adres": adres, "expand": "verstrektDoorBetrokkene"}
+    response = kiss.get(
+        f"{kiss_url}{KISS_KLANTINTERACTIES}/digitaleadressen", params=params, headers=kiss_register(kiss, kiss_url)
+    )
+    betrokkenen = {
+        str(section(section(found, "_expand"), "verstrektDoorBetrokkene").get("uuid"))
+        for found in entries(expect_status(response, HTTPStatus.OK).json().get("results"))
+    }
+    return [
+        uuid
+        for betrokkene in sorted(betrokkenen)
+        for uuid in internetaken_of(
+            kiss_klantcontacten(kiss, kiss_url, hadBetrokkene__uuid=betrokkene, expand="leiddeTotInterneTaken")
+        )
+    ]
+
+
+def kiss_medewerkers(kiss: requests.Session, kiss_url: str, search: str, groep: str) -> list[JsonObject]:
+    """Return the smoelenboek entries KISS's contactverzoek form offers for a search within a groep."""
+    body = {"search": search, "filterField": "Smoelenboek.groepen.groepsnaam", "filterValue": groep}
+    response = kiss.post(f"{kiss_url}/api/search/medewerkers", json=body)
+    hits = entries(section(expect_status(response, HTTPStatus.OK).json(), "hits").get("hits"))
+    return [section(section(hit, "_source"), "Smoelenboek") for hit in hits]
 
 
 def kiss_contactmomentdetails(

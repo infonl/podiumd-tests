@@ -26,7 +26,7 @@ from podiumd_tests.kcc import kcc_login
 from podiumd_tests.kcc import kiss_betrokkene
 from podiumd_tests.kcc import kiss_contactmomentdetails
 from podiumd_tests.kcc import kiss_klantcontact
-from podiumd_tests.kcc import kiss_klantcontacten_of
+from podiumd_tests.kcc import kiss_klantcontacten
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openklant import klantcontact_body
@@ -159,7 +159,8 @@ def test_contactmoment_for_a_klant_is_listed_for_that_klant(  # fixtures
     body = klantcontact_body(registry, onderwerp=registry.tagged(f"kiss-{soort}"))
     saved = kiss_klantcontact(kiss, urls["kiss"], openklant, registry, body)
     kiss_betrokkene(kiss, urls["kiss"], saved, partij)
-    assert saved["uuid"] in [item.get("uuid") for item in kiss_klantcontacten_of(kiss, urls["kiss"], partij)]
+    listed = kiss_klantcontacten(kiss, urls["kiss"], hadBetrokkene__wasPartij__url=str(partij["url"]))
+    assert saved["uuid"] in [item.get("uuid") for item in listed]
 
 
 @pytest.mark.source(
