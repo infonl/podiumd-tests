@@ -138,6 +138,31 @@ def test_betrokkene_is_ontkoppeld_with_a_reden(
     assert _last_historie(zac, urls["zac"], zaak) == ("ONTKOPPELD", reden)
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-13] ZAC 5.9.1 ontkoppelt a betrokkene without a reden (RestReden is not validated); not yet "
+    "reported upstream",
+)
+@REGRESSIE
+@pytest.mark.requires("openzaak")
+@pytest.mark.scenario("""
+    Given a zaak in ZAC with a person as belanghebbende
+    When the behandelaar ontkoppelt the betrokkene without a reden
+    Then ZAC refuses it
+    And the zaak still lists the betrokkene
+""")
+def test_ontkoppelen_of_a_betrokkene_needs_a_reden(
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
+) -> None:
+    """DELETE /rest/zaken/betrokkene/{rolid} without reden answers 400 and keeps the rol."""
+    zaak = zac_zaak()
+    expect_status(_add_belanghebbende(zac, urls["zac"], zaak), HTTPStatus.OK)
+    betrokkene = betrokkenen(zac, urls["zac"], zaak)[0]
+    response = ontkoppel_betrokkene(zac, urls["zac"], betrokkene, None)
+    assert betrokkenen(zac, urls["zac"], zaak) == [betrokkene], f"ZAC answered {response.status_code}"
+    expect_status(response, HTTPStatus.BAD_REQUEST)
+
+
 def _initiator(openzaak: ApiClient, urls: dict[str, str], zaak: JsonObject) -> JsonObject:
     """The zaak's initiator rol in Open Zaak; fails unless there is exactly one."""
     rollen = openzaak.list(f"{ZAKEN}/rollen", {"zaak": f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}"})

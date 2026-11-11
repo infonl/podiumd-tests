@@ -133,8 +133,8 @@ share their setup. The user picks the batches to port.
   role when locked by another user, ondertekend and on an afgehandelde zaak; beheer refused to every role but
   beheerder; only a coordinator verdeelt and vrijgeeft; without brp_zoeken no person search but a bedrijf as
   initiator; the werklijst CSV export refused to the recordmanager (`test_zac_rollen.py`).
-- Not covered: a recordmanager reopening a zaak (the BPMN test zaaktype has no statustype Heropend: bootstrap);
-  the group list per zaaktype from PABC (needs the PABC API key or podiumd-tests' own Keycloak groups); mail from a
+- A recordmanager reopens a closed BPMN zaak (the BPMN test zaaktype got statustype Heropend in bootstrap).
+- Not covered: the group list per zaaktype from PABC (needs the PABC API key or podiumd-tests' own Keycloak groups); mail from a
   closed zaak (only the right `versturenEmail`).
 - ZAC's search matches a zaak by uuid: its index keeps deleted zaken (open-zaak-1) whose identificatie Open Zaak hands
   out again.
@@ -178,7 +178,7 @@ share their setup. The user picks the batches to port.
 - Covered in `test_zac_klanten.py`: the same person with the same rol is added once (409); a betrokkene is ontkoppeld
   with a reden in the historie; the initiator changes from persoon to bedrijf and back (a toelichting required, one
   initiator in Open Zaak); a person's e-mail is the voorkeur address, else the first.
-- Finding (zac-13 pending reproduction on minikube): ontkoppelen of a betrokkene or the initiator works without a reden.
+- Finding zac-13: ontkoppelen of a betrokkene or the initiator works without a reden (strict xfail).
 
 ## Not planned
 

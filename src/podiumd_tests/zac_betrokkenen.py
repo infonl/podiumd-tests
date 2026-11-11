@@ -41,9 +41,16 @@ def betrokkenen(http: requests.Session, zac_url: str, zaak: JsonObject) -> list[
     return get_entries(http, f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/betrokkene")
 
 
-def ontkoppel_betrokkene(http: requests.Session, zac_url: str, betrokkene: JsonObject, reden: str) -> requests.Response:
+def _reden_body(reden: str | None) -> dict[str, str]:
+    """ZAC's reden body; None sends none."""
+    return {} if reden is None else {"reden": reden}
+
+
+def ontkoppel_betrokkene(
+    http: requests.Session, zac_url: str, betrokkene: JsonObject, reden: str | None
+) -> requests.Response:
     """Remove the betrokkene (as betrokkenen lists it) from its zaak with the reden; ZAC's answer."""
-    return http.delete(f"{zac_url}/rest/zaken/betrokkene/{betrokkene['rolid']}", json={"reden": reden})
+    return http.delete(f"{zac_url}/rest/zaken/betrokkene/{betrokkene['rolid']}", json=_reden_body(reden))
 
 
 def wijzig_initiator(
@@ -56,6 +63,6 @@ def wijzig_initiator(
     return http.patch(f"{zac_url}/rest/zaken/initiator", json=body)
 
 
-def ontkoppel_initiator(http: requests.Session, zac_url: str, zaak: JsonObject, reden: str) -> requests.Response:
+def ontkoppel_initiator(http: requests.Session, zac_url: str, zaak: JsonObject, reden: str | None) -> requests.Response:
     """Remove the zaak's initiator with the reden; ZAC's answer."""
-    return http.delete(f"{zac_url}/rest/zaken/{zaak['uuid']}/initiator", json={"reden": reden})
+    return http.delete(f"{zac_url}/rest/zaken/{zaak['uuid']}/initiator", json=_reden_body(reden))
