@@ -18,7 +18,7 @@ The batches that close the gaps of [`kiss-ita-scenario-gaps.md`](kiss-ita-scenar
 
 | Batch | Area | Gaps closed | Tests | Bootstrap | Days |
 | --- | --- | --- | --- | --- | --- |
-| K1 | Contactmoment through KISS's own routes | 5 high, 4 medium | 4 | none | 1.5 |
+| K1 | Contactmoment through KISS's own routes | 5 high, 4 medium | 3 (done) | none | 1.5 |
 | K2 | Contactverzoek through KISS, to afdeling, groep and medewerker | 6 high | 4 | medewerker in the smoelenboek index | 2 |
 | K3 | Zaak in KISS | 3 high | 2 | none | 1 |
 | K4 | Search variants (person, company) | 2 high, 7 medium | 0 (parameters) | none; check the BRP and KvK test sets | 0.5 |
@@ -34,15 +34,19 @@ The batches that close the gaps of [`kiss-ita-scenario-gaps.md`](kiss-ita-scenar
 
 ## Batches
 
-### K1: contactmoment through KISS's own routes (1.5 days, 4 tests)
+### K1: contactmoment through KISS's own routes (done: 3 tests, 4 cases)
 
-- Gaps: an anonymous, a person's and a vestiging's contactmoment saved through `POST /api/postklantcontacten`, the
-  logged-in medewerker as actor, the person's or vestiging's partij as betrokkene and read back for them;
-  contactmomentdetails (gespreksresultaat, afdeling, bronnen: the VACs and kennisartikel looked at) through
-  `PUT/GET /api/contactmomentdetails`; a long title or specifieke vraag cut to fit the onderwerp (browser, 3 cases).
-- Files: `kcc.kiss_klantcontact` moves to `/api/postklantcontacten` (one helper, no second one); tests in
-  `tests/component/kiss/test_klantcontact.py`.
-- Risks: KISS does not delete klantcontacten; cleanup stays in Open Klant.
+- Covered in `tests/component/kiss/test_kcc_session.py`: a contactmoment saved through `POST /api/postklantcontacten`
+  names the KCC medewerker as actor; one for a persoon and one for an organisatie is listed for that partij (the
+  Contactmomenten tab's query); KISS keeps gespreksresultaat, afdeling and vraag in `contactmomentdetails` and adds
+  the medewerker. `kcc.kiss_klantcontact` uses KISS's own route now, so every KISS klantcontact test does.
+- Not covered: the bronnen (KISS's GET leaves them out; they feed only its reports); the onderwerp cut to fit
+  (browser; deferred).
+- Leftovers: KISS has no call to delete contactmomentdetails; one row per test run stays, run-tagged.
+- Finding: KISS names the medewerker by the token's `email` claim, else `preferred_username`
+  (`AuthenticationSetup.GetEmail`). On kees00 and minikube it gets no email claim although the client's default scopes
+  include `email`, so it uses the username and creates a second actor for the KCC user (objectId the username, code
+  email) next to bootstrap's actor with the e-mail.
 
 ### K2: contactverzoek through KISS (2 days, 4 tests)
 
