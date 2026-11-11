@@ -227,3 +227,19 @@ def test_koppel_zoekresultaat_matches_the_uuid_not_the_identificatie(fake_http):
         zac.koppel_zoekresultaat(requests.Session(), ZAC, zaak, {"uuid": "z3", "identificatie": "ZAAK-3"}, "DEELZAAK")
         is None
     )
+
+
+def test_besluit_calls_send_zacs_fields(fake_http):
+    sent = fake_http(
+        {
+            "GET /rest/zaken/besluittypes/zt1": (200, [{"id": "bt1"}]),
+            "POST /rest/zaken/besluit": (200, {"uuid": "b1"}),
+            "DELETE /rest/health-check/ztc-cache": (200, "2026-11-11T12:00:00Z"),
+        }
+    )
+    http, zaak = requests.Session(), {"uuid": "z1", "zaaktype": {"uuid": "zt1"}}
+    besluittype = zac.besluittypen(http, ZAC, zaak)[0]
+    zac.vastleggen_besluit(http, ZAC, zaak, besluittype, ingangsdatum="2026-11-11")
+    assert json.loads(sent[-1].body) == {"zaakUuid": "z1", "besluittypeUuid": "bt1", "ingangsdatum": "2026-11-11"}
+    zac.clear_ztc_cache(http, ZAC)
+    assert sent[-1].method == "DELETE"

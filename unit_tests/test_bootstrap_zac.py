@@ -150,3 +150,19 @@ def test_human_task_part_switches_on_only_its_plan_item():
     changed = AANVULLENDE_INFORMATIE.write(parameters, {**old, **AANVULLENDE_INFORMATIE.wanted})
     assert [i["actief"] for i in entries(changed["humanTaskParameters"])] == [False, True]
     assert AANVULLENDE_INFORMATIE.is_mine(AANVULLENDE_INFORMATIE.read(changed))
+
+
+def test_zac_catalogus_step_clears_zacs_cache_after_apply_and_remove(ctx, fake_runner, fake_http, monkeypatch):
+    sent = fake_http({"DELETE /rest/health-check/ztc-cache": (200, "2026-11-11T12:00:00Z")})
+    ran = []
+    monkeypatch.setattr(
+        "podiumd_tests.bootstrap.snippet_step.run_snippet",
+        lambda *_args: ran.append(_args[3]["action"]) or {"present": True},
+    )
+    step = zac_step.ZacCatalogusStep("besluittype", ("openzaak", "zac"), "openzaak_besluittype", None, admin=ADMIN)
+    context = ctx()
+    fake_runner.answers["get deploy"] = (0, json.dumps({"items": [{"metadata": {"name": "openzaak"}}]}))
+    step.apply(context)
+    step.remove(context)
+    assert ran == ["apply", "remove"]
+    assert [request.method for request in sent] == ["DELETE", "DELETE"]
