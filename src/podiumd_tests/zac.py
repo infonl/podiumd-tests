@@ -152,6 +152,40 @@ def resultaattypen(http: requests.Session, zac_url: str, zaak: JsonObject) -> li
     return entries(expect_status(response, HTTPStatus.OK).json())
 
 
+def koppel(
+    http: requests.Session, zac_url: str, zaak: JsonObject, ander: JsonObject, relatie: str
+) -> requests.Response:
+    """Link the other zaak to the zaak as GERELATEERD, HOOFDZAAK or DEELZAAK (of the other zaak); ZAC's answer."""
+    body = {"zaakUuid": zaak["uuid"], "teKoppelenZaakUuid": ander["uuid"], "relatieType": relatie}
+    return http.patch(f"{zac_url}/rest/zaken/zaak/koppel", json=body)
+
+
+def ontkoppel(  # noqa: PLR0913, PLR0917  # the fields of ZAC's request
+    http: requests.Session, zac_url: str, zaak: JsonObject, ander: JsonObject, relatie: str, reden: str
+) -> requests.Response:
+    """Unlink the other zaak from the zaak; ZAC's answer."""
+    body = {
+        "zaakUuid": zaak["uuid"],
+        "gekoppeldeZaakIdentificatie": ander["identificatie"],
+        "relatieType": relatie,
+        "reden": reden,
+    }
+    return http.patch(f"{zac_url}/rest/zaken/zaak/ontkoppel", json=body)
+
+
+def koppel_zoekresultaat(
+    http: requests.Session, zac_url: str, zaak: JsonObject, ander: JsonObject, relatie: str
+) -> JsonObject | None:
+    """Return the other zaak as ZAC's search for zaken to link to the zaak finds it, or None.
+
+    Matched by uuid: ZAC's index can hold deleted zaken whose identificatie Open Zaak gave out again (open-zaak-1).
+    """
+    body = {"zoekZaakIdentifier": ander["identificatie"], "relationType": relatie, "page": 0, "rows": 10}
+    response = http.put(f"{zac_url}/rest/zaken/gekoppelde-zaken/{zaak['uuid']}/zoek-koppelbare-zaken", json=body)
+    found = entries(expect_status(response, HTTPStatus.OK).json().get("resultaten"))
+    return next((item for item in found if item.get("id") == ander["uuid"]), None)
+
+
 def person_lookup(http: requests.Session, zac_url: str, bsn: str) -> list[JsonObject]:
     """ZAC's person lookup by BSN."""
     response = http.put(f"{zac_url}/rest/klanten/personen", json={"bsn": bsn})

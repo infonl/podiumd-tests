@@ -197,3 +197,33 @@ def test_user_event_runs_the_open_plan_item_of_the_action(fake_http):
 def test_resultaattypen_are_those_of_the_zaaktype(fake_http):
     fake_http({"GET /rest/zaken/resultaattypes/zt1": (200, [{"id": "r1"}])})
     assert zac.resultaattypen(requests.Session(), ZAC, {"zaaktype": {"uuid": "zt1"}}) == [{"id": "r1"}]
+
+
+def test_koppel_and_ontkoppel_send_zacs_link_data(fake_http):
+    sent = fake_http({"PATCH /rest/zaken/zaak/koppel": (204, None), "PATCH /rest/zaken/zaak/ontkoppel": (204, None)})
+    http = requests.Session()
+    zaak, ander = {"uuid": "z1", "identificatie": "ZAAK-1"}, {"uuid": "z2", "identificatie": "ZAAK-2"}
+    zac.koppel(http, ZAC, zaak, ander, "GERELATEERD")
+    assert json.loads(sent[-1].body) == {"zaakUuid": "z1", "teKoppelenZaakUuid": "z2", "relatieType": "GERELATEERD"}
+    zac.ontkoppel(http, ZAC, zaak, ander, "GERELATEERD", "reden")
+    assert json.loads(sent[-1].body) == {
+        "zaakUuid": "z1",
+        "gekoppeldeZaakIdentificatie": "ZAAK-2",
+        "relatieType": "GERELATEERD",
+        "reden": "reden",
+    }
+
+
+def test_koppel_zoekresultaat_matches_the_uuid_not_the_identificatie(fake_http):
+    deleted = {"id": "old", "identificatie": "ZAAK-2", "nietKoppelbaarReden": "AFGEHANDELD"}
+    current = {"id": "z2", "identificatie": "ZAAK-2", "nietKoppelbaarReden": None}
+    sent = fake_http(
+        {"PUT /rest/zaken/gekoppelde-zaken/z1/zoek-koppelbare-zaken": (200, {"resultaten": [deleted, current]})}
+    )
+    zaak, ander = {"uuid": "z1"}, {"uuid": "z2", "identificatie": "ZAAK-2"}
+    assert zac.koppel_zoekresultaat(requests.Session(), ZAC, zaak, ander, "DEELZAAK") == current
+    assert json.loads(sent[-1].body)["relationType"] == "DEELZAAK"
+    assert (
+        zac.koppel_zoekresultaat(requests.Session(), ZAC, zaak, {"uuid": "z3", "identificatie": "ZAAK-3"}, "DEELZAAK")
+        is None
+    )
