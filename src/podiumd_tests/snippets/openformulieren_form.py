@@ -63,10 +63,11 @@ def run(params):
     for backend in params["auth_backends"]:
         FormAuthenticationBackend.objects.create(form=form, backend=backend, options={})
     # Open Formulieren caches catalogus and zaaktype lookups for 12 hours: after a re-bootstrap it would register
-    # zaken on the deleted zaaktype of the earlier bootstrap.
+    # zaken on the deleted zaaktype of the earlier bootstrap. Delete only those keys: catalogi_client proxies to the
+    # default cache, which holds the sessions too, so clear() would log out every Open Formulieren user.
     from django.core.cache import caches
 
-    caches["catalogi_client"].clear()
+    caches["default"].delete_pattern("ZGW|catalogi|*")
     return {"present": True}
 
 
