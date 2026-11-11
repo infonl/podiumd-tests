@@ -7,7 +7,8 @@ Open Zaak optionally catalogus, rights limited to the test catalogus:
 components ({component: [scope prefix, ...]}), exclude (scope words left out), max_va}; and
 optionally zaaktypen, Zaken API rights on every version of zaaktypen the environment owns:
 {identificaties, scopes, max_va, base_url (Open Zaak's URL as the client calls it), and optionally
-document_scopes: Documenten API rights on those zaaktypen's informatieobjecttypen}.
+document_scopes: Documenten API rights on those zaaktypen's informatieobjecttypen, besluit_scopes: Besluiten API
+rights on their besluittypen}.
 """
 
 
@@ -58,10 +59,25 @@ def _zaaktype_rights_present(applicaties, zaaktypen_params):
     # on another Open Zaak URL (e.g. http before the switch to https) is stale.
     base = zaaktypen_params["base_url"].rstrip("/")
     versions = ZaakType.objects.filter(identificatie__in=zaaktypen_params["identificaties"], concept=False)
-    granted = set(rights.filter(component="zrc").values_list("zaaktype", flat=True))
+    # A right without a scope added since (e.g. zaken.geforceerd-bijwerken) counts as missing.
+    zrc = rights.filter(component="zrc", scopes__contains=zaaktypen_params["scopes"])
+    granted = set(zrc.values_list("zaaktype", flat=True))
     if not versions.exists() or any(base + zaaktype.get_absolute_api_url() not in granted for zaaktype in versions):
         return False
-    return not zaaktypen_params.get("document_scopes") or rights.filter(component="drc").exists()
+    if zaaktypen_params.get("document_scopes") and not rights.filter(component="drc").exists():
+        return False
+    # A besluittype recreated after bootstrap has a new URL, so its right is missing.
+    besluit_granted = set(rights.filter(component="brc").values_list("besluittype", flat=True))
+    wanted = {base + besluittype.get_absolute_api_url() for besluittype in _besluittypen(versions, zaaktypen_params)}
+    return wanted <= besluit_granted
+
+
+def _besluittypen(versions, zaaktypen_params):
+    from openzaak.components.catalogi.models import BesluitType
+
+    if not zaaktypen_params.get("besluit_scopes"):
+        return BesluitType.objects.none()
+    return BesluitType.objects.filter(zaaktypen__in=versions, concept=False).distinct()
 
 
 def _zaaktype_autorisaties(applicatie, zaaktypen_params):
@@ -90,6 +106,14 @@ def _zaaktype_autorisaties(applicatie, zaaktypen_params):
                     "max_vertrouwelijkheidaanduiding": zaaktypen_params["max_va"],
                 },
             )
+    for besluittype in _besluittypen(found, zaaktypen_params):
+        Autorisatie.objects.create(
+            applicatie=applicatie,
+            component="brc",
+            besluittype=zaaktypen_params["base_url"].rstrip("/") + besluittype.get_absolute_api_url(),
+            scopes=zaaktypen_params["besluit_scopes"],
+            max_vertrouwelijkheidaanduiding=zaaktypen_params["max_va"],
+        )
     missing = sorted(set(wanted) - {zaaktype.identificatie for zaaktype in found})
     return [f"no published zaaktype {identificatie}" for identificatie in missing]
 

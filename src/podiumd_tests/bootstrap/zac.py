@@ -10,14 +10,18 @@ from __future__ import annotations
 import json
 
 from dataclasses import dataclass
+from dataclasses import field
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
+from typing import override
 
 from podiumd_tests.bootstrap.names import PREFIX
+from podiumd_tests.bootstrap.snippet_step import SnippetStep
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
+from podiumd_tests.zac import clear_ztc_cache
 from podiumd_tests.zac import is_confirmation_sent
 from podiumd_tests.zac import zaakafhandelparameters
 from podiumd_tests.zac import zac_session
@@ -177,3 +181,40 @@ def _parameters(http: requests.Session, zac: str, uuid: str) -> JsonObject:
 
 def _put(http: requests.Session, zac: str, parameters: JsonObject) -> None:
     expect_status(http.put(f"{zac}/rest/zaakafhandelparameters", json=parameters), HTTPStatus.OK)
+
+
+@dataclass(frozen=True)
+class ZacCatalogusStep(SnippetStep):
+    """A SnippetStep on Open Zaak's catalogi that ZAC reads; it then clears ZAC's ZTC cache.
+
+    ZAC caches catalogus types for an hour, and a snippet's change sends no notification.
+    """
+
+    # The Keycloak test user that clears the cache (ZAC's beheerder).
+    admin: KeycloakUser = field(kw_only=True)
+
+    @override
+    def apply(self, ctx: Context, /) -> dict[str, str]:
+        """Apply the snippet, then clear ZAC's cache."""
+        applied = super().apply(ctx)
+        self._clear(ctx)
+        return applied
+
+    @override
+    def ensure(self, ctx: Context, /) -> dict[str, str] | None:
+        """Ensure the snippet's objects; clear ZAC's cache when it applied."""
+        applied = super().ensure(ctx)
+        if applied is not None:
+            self._clear(ctx)
+        return applied
+
+    @override
+    def remove(self, ctx: Context, /) -> tuple[str, ...]:
+        """Remove the snippet's objects, then clear ZAC's cache."""
+        removed = super().remove(ctx)
+        self._clear(ctx)
+        return removed
+
+    def _clear(self, ctx: Context) -> None:
+        session = zac_session(ctx.env, self.admin.username, ctx.env.credentials.get(self.admin.store_key))
+        clear_ztc_cache(session, ctx.env.profile.urls["zac"])

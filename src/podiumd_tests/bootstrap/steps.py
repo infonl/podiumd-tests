@@ -2,11 +2,7 @@
 
 from __future__ import annotations
 
-import json
-import secrets
-
 from dataclasses import dataclass
-from dataclasses import field
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
@@ -21,12 +17,13 @@ from podiumd_tests.bootstrap.kiss import KissKanalen
 from podiumd_tests.bootstrap.oidc_mock import KeycloakOidcMock
 from podiumd_tests.bootstrap.oidc_mock import oidc_params
 from podiumd_tests.bootstrap.omc import OmcAbonnement
+from podiumd_tests.bootstrap.snippet_step import SnippetStep
 from podiumd_tests.bootstrap.zac import AANVULLENDE_INFORMATIE
 from podiumd_tests.bootstrap.zac import EMAIL_CONFIRMATION
+from podiumd_tests.bootstrap.zac import ZacCatalogusStep
 from podiumd_tests.bootstrap.zac import ZacParameters
 from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.clients.platform import openklant_client
-from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.mock_server import MockServer
 from podiumd_tests.mock_server import mock_server_root
@@ -39,108 +36,11 @@ from podiumd_tests.seed.openklant import partijen_of
 from podiumd_tests.seed.openzaak import today
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     import requests
 
     from podiumd_tests.bootstrap.runner import Context
     from podiumd_tests.bootstrap.runner import Step
-    from podiumd_tests.django_snippets import SnippetCall
     from podiumd_tests.json_data import JsonObject
-
-
-@dataclass(frozen=True)
-class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarative step definition
-    """A step done by one Django snippet with actions status, apply and remove (and ensure, see _ensure.py).
-
-    Secret mode (default): a random secret is generated here, sent to the snippet and stored
-    under store_key. Record mode (record=True), for wiring that adds to shared objects: apply
-    gets the stored record and returns it extended with what it added; remove gets it back
-    and undoes exactly that. Without store_key the step stores nothing. With opt_in, apply
-    does nothing unless the profile allows that setting.
-    """
-
-    name: str
-    # The first component is the one the snippet runs in.
-    requires: tuple[str, ...]
-    snippet: str
-    store_key: str | None
-    params: dict[str, object] = field(default_factory=dict[str, object])
-    record: bool = False
-    wiring: bool = False
-    opt_in: str | None = None
-    # Parameters known only at run time, e.g. a stored secret or an in-cluster URL.
-    context_params: Callable[[Context], dict[str, object]] | None = None
-
-    def is_present(self, ctx: Context, /) -> bool:
-        """Not allowed (nothing to do), or the objects exist and what the step stores is in the credentials Secret."""
-        if self._is_refused(ctx):
-            return True
-        return self.is_present_in(ctx, self._run(ctx, "status"))
-
-    def status_call(self, ctx: Context, /) -> tuple[str, SnippetCall] | None:
-        """Return is_present's snippet call and its deployment; None when not allowed (present without a shell)."""
-        return None if self._is_refused(ctx) else self._call(ctx, "status")
-
-    def is_present_in(self, ctx: Context, status: object, /) -> bool:
-        """Return is_present for the result of status_call."""
-        stored = self._is_stored(ctx)
-        return bool(cast("dict[str, object]", status)["present"]) and stored
-
-    def apply(self, ctx: Context, /) -> dict[str, str]:
-        """Create the objects: with a new random secret, or extending the stored record."""
-        if self._is_refused(ctx):
-            ctx.notes.append(f"not allowed: profile setting {self.opt_in} is off")
-            return {}
-        return self._applied(ctx, "apply") or {}
-
-    def ensure(self, ctx: Context, /) -> dict[str, str] | None:
-        """Apply unless is_present, in one Django shell; the credentials to store, None when present."""
-        if self._is_refused(ctx):
-            return None
-        return self._applied(ctx, "ensure", stored=self._is_stored(ctx))
-
-    def remove(self, ctx: Context, /) -> tuple[str, ...]:
-        """Delete the objects, or undo what the stored record lists."""
-        self._run(ctx, "remove", **({"record": self._stored_record(ctx)} if self.record else {}))
-        return () if self.store_key is None else (self.store_key,)
-
-    def _call(self, ctx: Context, action: str, **extra: object) -> tuple[str, SnippetCall]:
-        deployment = ctx.env.deployment_for(self.requires[0])
-        runtime = self.context_params(ctx) if self.context_params else {}
-        return deployment, (self.snippet, {**self.params, **runtime, "action": action, **extra})
-
-    def _run(self, ctx: Context, action: str, **extra: object) -> dict[str, object]:
-        deployment, (snippet, params) = self._call(ctx, action, **extra)
-        return cast("dict[str, object]", run_snippet(ctx.env.kube, deployment, snippet, params))
-
-    def _is_refused(self, ctx: Context) -> bool:
-        return self.opt_in is not None and not ctx.env.profile.is_allowed(self.opt_in)
-
-    def _stored_record(self, ctx: Context) -> object:
-        return json.loads(ctx.store.read().get(self.store_key or "", "{}"))
-
-    def _is_stored(self, ctx: Context) -> bool:
-        return self.store_key is None or self.store_key in ctx.store.read()
-
-    def _applied(self, ctx: Context, action: str, **extra: object) -> dict[str, str] | None:
-        """Run apply or ensure; the credentials to store, None when ensure found the step present."""
-        if self.store_key is None:
-            return None if self._apply(ctx, action, **extra) is None else {}
-        if self.record:
-            result = self._apply(ctx, action, record=self._stored_record(ctx), **extra)
-            return None if result is None else {self.store_key: json.dumps(result["record"], sort_keys=True)}
-        secret = secrets.token_hex(20)  # 40 characters: the longest TokenAuth.token allows
-        return None if self._apply(ctx, action, secret=secret, **extra) is None else {self.store_key: secret}
-
-    def _apply(self, ctx: Context, action: str, **extra: object) -> dict[str, object] | None:
-        """Run apply or ensure; its result, None when ensure created nothing. Its "notes" go to the outcome."""
-        result = self._run(ctx, action, **extra)
-        if action == "ensure" and not result["created"]:
-            return None
-        notes = cast("list[object]", result.get("notes") or [])
-        ctx.notes.extend(str(note) for note in notes)
-        return result
 
 
 # The groep of the KCC test user in ITA: ITA shows a contactverzoek only to members of the
@@ -380,9 +280,12 @@ def productaanvraag_zaaktypen(ctx: Context) -> dict[str, object]:
     return {
         "zaaktypen": {
             "identificaties": [zaaktype],
-            "scopes": ["zaken.lezen", "zaken.verwijderen"],
+            # geforceerd-bijwerken: Open Zaak refuses to delete a besluit of a closed zaak without it.
+            "scopes": ["zaken.lezen", "zaken.verwijderen", "zaken.geforceerd-bijwerken"],
             # ZAC adds documents, e.g. the ontvangstbevestiging it sent; Open Zaak keeps them when the zaak goes.
             "document_scopes": ["documenten.lezen", "documenten.verwijderen"],
+            # A zaak with a besluit cannot be deleted before the besluit.
+            "besluit_scopes": ["besluiten.lezen", "besluiten.verwijderen"],
             "max_va": "zeer_geheim",
             "base_url": ctx.env.profile.urls["openzaak"],
         }
@@ -654,6 +557,22 @@ STEPS: tuple[Step, ...] = (
         ("objects.token.models",),
         names.OBJECTEN_STORE_KEY,
         object_types=[names.PRODUCTAANVRAAG_OBJECTTYPE, *names.ITA_OBJECTTYPES, *names.KISS_OBJECTTYPES],
+    ),
+    # A besluittype for the zaaktype ZAC handles, where the profile allows it: ZAC's inrichtingscheck needs one.
+    # Before openzaak-client-productaanvraag, which gets rights on it.
+    ZacCatalogusStep(
+        "openzaak-zac-besluittype",
+        ("openzaak", "zac", "keycloak"),
+        "openzaak_besluittype",
+        None,
+        {"omschrijving": f"{names.PREFIX}-zac-besluit"},
+        wiring=True,
+        admin=ADMIN,
+        context_params=lambda ctx: {
+            "zaaktype": ctx.env.profile.settings.get("productaanvraag_zaaktype", "")
+            if ctx.env.profile.is_allowed("zac_besluittype")
+            else ""
+        },
     ),
     # Only reads and deletes the zaken ZAC creates for the test's productaanvragen.
     SnippetStep(
@@ -980,18 +899,4 @@ STEPS: tuple[Step, ...] = (
     ZacBpmnProcess(ADMIN),
     # KISS's contactmoment kanalen, where the profile allows it (draaiboek KI-053-055).
     KissKanalen(ADMIN),
-    # A besluittype for the zaaktype ZAC handles, where the profile allows it: ZAC's inrichtingscheck needs one.
-    SnippetStep(
-        "openzaak-zac-besluittype",
-        ("openzaak", "zac"),
-        "openzaak_besluittype",
-        None,
-        {"omschrijving": f"{names.PREFIX}-zac-besluit"},
-        wiring=True,
-        context_params=lambda ctx: {
-            "zaaktype": ctx.env.profile.settings.get("productaanvraag_zaaktype", "")
-            if ctx.env.profile.is_allowed("zac_besluittype")
-            else ""
-        },
-    ),
 )

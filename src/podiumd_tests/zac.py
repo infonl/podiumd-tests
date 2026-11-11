@@ -152,6 +152,26 @@ def resultaattypen(http: requests.Session, zac_url: str, zaak: JsonObject) -> li
     return entries(expect_status(response, HTTPStatus.OK).json())
 
 
+def clear_ztc_cache(http: requests.Session, zac_url: str) -> None:
+    """Clear ZAC's cache of Open Zaak's catalogus types, as ZAC's beheerder."""
+    expect_status(http.delete(f"{zac_url}/rest/health-check/ztc-cache"), HTTPStatus.OK)
+
+
+def besluittypen(http: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:
+    """Return the besluittypen ZAC offers for the zaak's zaaktype today."""
+    zaaktype = section(zaak, "zaaktype")["uuid"]
+    response = http.get(f"{zac_url}/rest/zaken/besluittypes/{zaaktype}")
+    return entries(expect_status(response, HTTPStatus.OK).json())
+
+
+def vastleggen_besluit(
+    http: requests.Session, zac_url: str, zaak: JsonObject, besluittype: JsonObject, **fields: object
+) -> requests.Response:
+    """Record a besluit of the besluittype on the zaak, with these RestBesluitCreateData fields; ZAC's answer."""
+    body = {"zaakUuid": zaak["uuid"], "besluittypeUuid": besluittype["id"], **fields}
+    return http.post(f"{zac_url}/rest/zaken/besluit", json=body)
+
+
 def koppel(
     http: requests.Session, zac_url: str, zaak: JsonObject, ander: JsonObject, relatie: str
 ) -> requests.Response:

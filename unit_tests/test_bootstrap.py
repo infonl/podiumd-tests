@@ -34,12 +34,12 @@ from podiumd_tests.bootstrap.runner import in_dependency_order
 from podiumd_tests.bootstrap.runner import outcome_report
 from podiumd_tests.bootstrap.runner import refusal
 from podiumd_tests.bootstrap.runner import unbootstrap
+from podiumd_tests.bootstrap.snippet_step import SnippetStep
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.bootstrap.steps import ItaMedewerker
 from podiumd_tests.bootstrap.steps import OpenInwonerPartijen
 from podiumd_tests.bootstrap.steps import OpenKlantActor
-from podiumd_tests.bootstrap.steps import SnippetStep
 from podiumd_tests.bootstrap.steps import openformulieren_params
 from podiumd_tests.bootstrap.steps import openinwoner_openklant_params
 from podiumd_tests.bootstrap.steps import productaanvraag_zaaktypen
@@ -666,7 +666,8 @@ def test_productaanvraag_client_gets_rights_only_with_the_profile_setting(env_fa
     )
     zaaktypen = section(productaanvraag_zaaktypen(with_setting), "zaaktypen")
     assert zaaktypen["identificaties"] == ["zt-1"]
-    assert zaaktypen["scopes"] == ["zaken.lezen", "zaken.verwijderen"]
+    assert zaaktypen["scopes"] == ["zaken.lezen", "zaken.verwijderen", "zaken.geforceerd-bijwerken"]
+    assert zaaktypen["besluit_scopes"] == ["besluiten.lezen", "besluiten.verwijderen"]
     assert zaaktypen["base_url"] == "https://openzaak.example.test"
 
 
