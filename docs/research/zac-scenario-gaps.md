@@ -1,6 +1,8 @@
 # ZAC test scenarios: gaps in podiumd-tests
 
 Analysed 2026-11-08: the manual test scenarios of ZAC's development team (per sprint and the regression test before PodiumD 4.10),
+
+The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 clustered by behaviour and compared with the tests in `tests/`. Covered, obsolete and UI-only scenarios are left out.
 
 ## Scope
