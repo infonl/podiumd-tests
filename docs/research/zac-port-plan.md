@@ -27,7 +27,7 @@ share their setup. The user picks the batches to port.
 | Batch | Area | Gaps closed | Tests | Bootstrap | Days |
 | --- | --- | --- | --- | --- | --- |
 | Z1 | Zaak lifecycle: intake, afhandelen, heropenen, statuses | 5 high, 3 medium | 5 | none | 2 |
-| Z2 | Hoofdzaak, deelzaak and zaak koppelen | 1 high, 2 medium | 3 | none | 1.5 |
+| Z2 | Zaak koppelen (gerelateerd; hoofd- and deelzaak in Z10) | 1 high, 2 medium | 5 (done) | none | 1.5 |
 | Z3 | Besluiten in ZAC | 1 high, 3 medium | 4 | none (besluittype exists) | 1.5 |
 | Z4 | Opschorten, verlengen and their dates | 3 high (partial), 2 medium | 4 | none | 1.5 |
 | Z5 | Mail from a zaak | 2 high, 2 medium | 4 | none | 2 |
@@ -35,10 +35,10 @@ share their setup. The user picks the batches to port.
 | Z7 | CMMN taken: intake, Goedkeuren, Advies, Document verzenden | 1 high, 4 medium | 4 | human task parameters for more plan items | 2.5 |
 | Z8 | Rights per role: closed zaak, documents, admin, verdelen, brp_zoeken | 1 high (partial), 6 medium | 6 | none | 2 |
 | Z9 | Productaanvraag: betrokkenen, inbox, contact, documents | 2 high, 5 medium | 5 | productaanvraag with betrokkenen and geometry | 2 |
-| Z10 | Zaakafhandelparameters: persist, new zaaktype version, PABC groups | 3 high, 3 medium | 4 | a throwaway zaaktype configured in ZAC | 2.5 |
+| Z10 | Zaakafhandelparameters: persist, new zaaktype version, PABC groups; hoofd- and deelzaak | 4 high, 3 medium | 6 | a throwaway zaaktype configured in ZAC | 3.5 |
 | Z11 | Search, werklijsten, signaleringen | 6 medium | 5 | none | 2 |
 | Z12 | Betrokkenen | 6 medium | 4 | none | 1.5 |
-| | **Total** | | **54 tests** | | **about 23** |
+| | **Total** | | **58 tests** | | **about 24** |
 
 ## Batches
 
@@ -57,15 +57,17 @@ share their setup. The user picks the batches to port.
 - Risks: the statusmail depends on the zaakafhandelparameters of the estate's zaaktype; skip that assertion where its
   statusmail is off rather than changing the estate's configuration.
 
-### Z2: hoofdzaak, deelzaak and zaak koppelen (1.5 days, 3 tests)
+### Z2: zaak koppelen (done: 5 tests)
 
-- Gaps: koppelen shows the relation on both zaken; the hoofdzaak cannot be afgehandeld while a deelzaak has no
-  resultaat, can after the deelzaak is closed or ontkoppeld; ontkoppelen from both sides, also for a closed deelzaak;
-  koppel rules (closed with open, a deelzaak not again deel- or hoofdzaak, already related, read rights on the
-  target, own zaak not offered).
-- Files: new `tests/component/zac/test_zac_relaties.py`.
-- Reuses: `zac_zaak` twice, the raadpleger user for the read-rights case, `search` (Solr) for the koppel search.
-- Risks: the koppel search is Solr: wait with `wait_in_werkvoorraad` until both zaken are indexed.
+- Covered in `tests/component/zac/test_zac_relaties.py`: gerelateerd shows on both zaken (ZAC and Open Zaak) and
+  ontkoppelen from the other zaak removes it from both; the koppel search leaves out the zaak itself and marks a linked
+  zaak ALREADY_GERELATEERD, a second koppel is refused; a closed zaak can be gerelateerd (from either side) but not
+  become a deelzaak (AFGEHANDELD); a zaaktype without deelzaaktypen refuses hoofdzaak and deelzaak.
+- Moved to Z10: hoofdzaak and deelzaak koppelen, afhandelen of a hoofdzaak with an open deelzaak, ontkoppelen of a
+  closed deelzaak. No estate zaaktype allows deelzaken, and ZAC refuses zaken of a zaaktype it has no configuration
+  and PABC rights for (403), so these need Z10's throwaway zaaktype, with itself as deelzaaktype.
+- The koppel search matches by uuid: ZAC's index keeps zaken whose DELETE answered 500 (open-zaak-1), and Open Zaak
+  gives their identificatie out again.
 
 ### Z3: besluiten (1.5 days, 4 tests)
 
@@ -152,8 +154,11 @@ share their setup. The user picks the batches to port.
   statusmail); a new zaaktype version keeps all of them after ZAC's synchronisation, and a changed default groep
   applies only to new zaken (the behaviour of known issue podiumd-chart-37); only PABC-authorised groups are offered
   and an unauthorised default groep is cleared; the inrichtingscheck rejects a zaaktype without roltype Behandelaar or
-  Initiator.
-- Files: new `tests/component/zac/test_zac_zaaktype_versies.py`, `test_zac_zaakafhandelparameters.py`.
+  Initiator. From Z2: hoofdzaak and deelzaak koppelen shows on both zaken; the hoofdzaak cannot be afgehandeld while a
+  deelzaak is open, can after the deelzaak is closed or ontkoppeld; ontkoppelen of a closed deelzaak; a deelzaak
+  cannot become deel- or hoofdzaak again (IS_DEELZAAK, ALREADY_DEELZAAK, HAS_DEELZAKEN).
+- Files: new `tests/component/zac/test_zac_zaaktype_versies.py`, `test_zac_zaakafhandelparameters.py`; the hoofd- and
+  deelzaak tests in `test_zac_relaties.py`. The throwaway zaaktype lists itself as deelzaaktype.
 - Bootstrap: none; the tests make a throwaway zaaktype (`seed/catalogi.py`: `make_publishable_zaaktype`, `publish`)
   and configure it in ZAC through the admin API as step `zac-bpmn-process` does for its zaaktype; cleanup removes the
   zaaktype with snippet `openzaak_catalogi_types` and its PABC entity type.
