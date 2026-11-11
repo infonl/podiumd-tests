@@ -33,6 +33,7 @@ HEALTH = [
     ("zaakbrug", "/iaf/api/server/health"),
     ("zgw-office-addin", "/health"),
     ("zgw-office-addin", "/proxy/health"),
+    ("kiss-adapter", "/healthz"),
 ]
 
 # (component, method, path, extra headers)
@@ -51,6 +52,15 @@ ANONYMOUS = [
     ("zgw-office-addin", "GET", "/proxy/zaken/ptest-unknown", {}),
     ("pabc", "POST", "/api/v1/application-roles-per-entity-type", {}),
     ("pabc", "POST", "/api/v1/application-roles-per-entity-type", {"X-API-KEY": "ptest-wrong-key"}),
+    # The podiumd-adapter's routes for KISS (its AuthTests).
+    ("kiss-adapter", "GET", "/contactmomenten/api/v1/contactmomenten", {}),
+    ("kiss-adapter", "GET", "/contactmomenten/api/v1/klantcontactmomenten", {}),
+    ("kiss-adapter", "GET", "/contactmomenten/api/v1/objectcontactmomenten", {}),
+    ("kiss-adapter", "GET", "/klanten/api/v1/klanten", {}),
+    ("kiss-adapter", "GET", "/zaken/api/v1/zaken", {}),
+    ("kiss-adapter", "GET", "/catalogi/api/v1/zaaktypen", {}),
+    ("kiss-adapter", "GET", "/documenten/api/v1/enkelvoudiginformatieobjecten", {}),
+    ("kiss-adapter", "GET", "/api/v2/objects", {}),
 ]
 
 
@@ -77,6 +87,10 @@ ANONYMOUS = [
 @pytest.mark.source(
     "podiumd-tests",
     "PodiumD 4.10 adds Open VTB, ZaakBrug and the ZGW Office add-in, whose health endpoints are checked.",
+)
+@pytest.mark.source(
+    "external ICATT-Menselijk-Digitaal/podiumd-adapter test/PodiumdAdapter.Web.Test/AuthTests.cs",
+    "The adapter's /healthz answers 200 and every route refuses a request without a token.",
 )
 @pytest.mark.parametrize(("component", "path"), [requiring(c, c, p, test_id=f"{c}{p}") for c, p in HEALTH])
 @pytest.mark.scenario("""
@@ -131,6 +145,10 @@ def test_health_endpoint(http: requests.Session, urls: dict[str, str], component
 @pytest.mark.source(
     "podiumd-tests",
     "PodiumD 4.10 adds Open VTB and the ZGW Office add-in, whose APIs must refuse anonymous calls.",
+)
+@pytest.mark.source(
+    "external ICATT-Menselijk-Digitaal/podiumd-adapter test/PodiumdAdapter.Web.Test/AuthTests.cs",
+    "The adapter's /healthz answers 200 and every route refuses a request without a token.",
 )
 @pytest.mark.parametrize(
     ("component", "method", "path", "headers"),

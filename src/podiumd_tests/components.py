@@ -57,6 +57,8 @@ COMPONENTS: dict[str, Component] = {
     "zaakbrug": Component(("zaakbrug",), ("zaakbrug", "podiumd-zaakbrug")),
     # ExternalsPodiumD's host is <stage>-office-addin.<domain>.
     "zgw-office-addin": Component(("office-addin", "zgw-office-addin"), ("zgw-office-addin",)),
+    # podiumd-adapter: KISS's ZGW and Klanten calls to the e-Suite (chart podiumd, kiss.adapter).
+    "kiss-adapter": Component(("kiss-adapter",), ("kiss-adapter",)),
     "frankgateway": Component(
         ("frankgateway",), ("frankgateway-outway", "frankgateway", "frank-gateway"), monitored=True
     ),
