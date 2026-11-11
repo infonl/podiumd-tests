@@ -10,7 +10,8 @@ if TYPE_CHECKING:
 # @pytest.mark.source(origin, reason)
 SOURCE_ARGS = 2
 
-# First word of an origin: the source repository (MIGRATION.md), a component's own one, a draaiboek case, or this suite.
+# First word of an origin: the source repository (MIGRATION.md), a component's own one, another project's suite,
+# a draaiboek case, or this suite.
 ORIGINS = {
     "TA": "icatt-menselijk-digitaal/podiumd-testautomation",
     "MK": "infonl/podiumd-minikube/tests",
@@ -19,6 +20,8 @@ ORIGINS = {
     "ZAC": "infonl/dimpact-zaakafhandelcomponent/src/e2e",
     # Another component's own repository, named after the word: "upstream <owner>/<repo> <path>".
     "upstream": "a component's own repository (docs/research/upstream-tests.md)",
+    # Another project's test suite: "external <owner>/<repo> <case>".
+    "external": "a test suite of another project (docs/research/external-test-sources-plan.md)",
     "draaiboek": "TA test-catalog/cases.yaml",
     "podiumd-tests": "made in this suite",
 }
