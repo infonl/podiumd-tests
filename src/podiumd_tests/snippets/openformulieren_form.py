@@ -5,7 +5,7 @@ products whose name starts with param prefix). Params: action, slug, components 
 components of the step), registration ({"backend", "options"}; "api_group" names the ZGW
 API group whose pk goes into the options, "objects_api" is the Objecten API root of the Objects
 API group whose identifier goes into the options), auth_backends (login plugins, e.g. digid_oidc),
-settings (other Form fields), payment (optional {"backend": ogone-legacy or worldline, "merchant":
+settings (other Form fields); apply clears Open Formulieren's catalogi lookup cache; payment (optional {"backend": ogone-legacy or worldline, "merchant":
 an Ogone merchant's label or a Worldline merchant's pspid, "price"}: a product named after the form
 carries the price). Submissions of the form are test data and go with it.
 """
@@ -62,6 +62,11 @@ def run(params):
     )
     for backend in params["auth_backends"]:
         FormAuthenticationBackend.objects.create(form=form, backend=backend, options={})
+    # Open Formulieren caches catalogus and zaaktype lookups for 12 hours: after a re-bootstrap it would register
+    # zaken on the deleted zaaktype of the earlier bootstrap.
+    from django.core.cache import caches
+
+    caches["catalogi_client"].clear()
     return {"present": True}
 
 
