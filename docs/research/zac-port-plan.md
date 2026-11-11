@@ -28,7 +28,7 @@ share their setup. The user picks the batches to port.
 | --- | --- | --- | --- | --- | --- |
 | Z1 | Zaak lifecycle: intake, afhandelen, heropenen, statuses | 5 high, 3 medium | 5 | none | 2 |
 | Z2 | Zaak koppelen (gerelateerd; hoofd- and deelzaak in Z10) | 1 high, 2 medium | 5 (done) | none | 1.5 |
-| Z3 | Besluiten in ZAC | 1 high, 3 medium | 4 | none (besluittype exists) | 1.5 |
+| Z3 | Besluiten in ZAC | 1 high, 3 medium | 7 (done) | besluit rights for the cleanup client | 1.5 |
 | Z4 | Opschorten, verlengen and their dates | 3 high (partial), 2 medium | 4 | none | 1.5 |
 | Z5 | Mail from a zaak | 2 high, 2 medium | 4 | none | 2 |
 | Z6 | Documents: verplaatsen, ontkoppelen, versies, ondertekenen, refusals | 1 high, 6 medium | 6 | none | 2 |
@@ -38,7 +38,7 @@ share their setup. The user picks the batches to port.
 | Z10 | Zaakafhandelparameters: persist, new zaaktype version, PABC groups; hoofd- and deelzaak | 4 high, 3 medium | 6 | a throwaway zaaktype configured in ZAC | 3.5 |
 | Z11 | Search, werklijsten, signaleringen | 6 medium | 5 | none | 2 |
 | Z12 | Betrokkenen | 6 medium | 4 | none | 1.5 |
-| | **Total** | | **58 tests** | | **about 24** |
+| | **Total** | | **61 tests** | | **about 24** |
 
 ## Batches
 
@@ -69,15 +69,19 @@ share their setup. The user picks the batches to port.
 - The koppel search matches by uuid: ZAC's index keeps zaken whose DELETE answered 500 (open-zaak-1), and Open Zaak
   gives their identificatie out again.
 
-### Z3: besluiten (1.5 days, 4 tests)
+### Z3: besluiten (done: 7 tests)
 
-- Gaps: besluit vastleggen only in In behandeling or Heropend; a document linked to the besluit; wijzigen and
-  intrekken with reden (read-only after, reason shown); a zaak with besluiten can be afgerond and heropend; besluit
-  validations (ingangsdatum required, vervaldatum not before it); a resultaat that requires a besluit blocks
-  afhandelen; a zaak with a besluit cannot be afgebroken.
-- Files: new `tests/component/zac/test_zac_besluiten.py`.
-- Reuses: the besluittype of step `openzaak-zac-besluittype`, Z1's `afronden_intake` (a besluit needs In behandeling).
-- Risks: Open Zaak's open-zaak-7 (a besluit with a document cannot be deleted): cleanup through `delete_besluit`.
+- Covered in `tests/component/zac/test_zac_besluiten.py`: a besluit is refused in the intake and stored in Open Zaak
+  after it; ingangsdatum required; wijzigen needs a reden and shows in the besluit's historie; intrekken needs a reden
+  and sets vervaldatum and vervalreden; a zaak with a besluit is afgehandeld and heropend, and takes another besluit in
+  Heropend; a besluit links a document of the zaak; afbreken of a zaak with a besluit is refused (strict xfail zac-10:
+  ZAC 5.9.1 checks the resultaat instead).
+- Not covered: vervaldatum before ingangsdatum (ZAC and Open Zaak accept it through the API; only ZAC's form checks
+  it); a resultaat that requires a besluit (no estate resultaattype has besluitVerplicht).
+- Bootstrap: the productaanvraag client deletes besluiten (besluit rights, zaken.geforceerd-bijwerken for a closed
+  zaak); the besluittype keeps its URL, links the zaaktype's documenttypes and clears ZAC's ZTC cache.
+- The tests run one after another (xdist group): Open Zaak gives besluiten created at the same time the same
+  identificatie (open-zaak-8).
 
 ### Z4: opschorten and verlengen (1.5 days, 4 tests)
 
