@@ -68,7 +68,9 @@ WORLDLINE_MERCHANT = "ptest-bootstrap-worldline"
 WORLDLINE_STORE_KEY = "ptest_bootstrap_worldline_secret"
 # Open Notificaties kanalen the ported tests subscribe on, with the filters of ExternalsPodiumD
 # and podiumd-infra.
-KANALEN = {"zaken": ["bronorganisatie", "zaaktype", "vertrouwelijkheidaanduiding"]}
+# The perf tier publishes on its own kanaal, which nothing subscribes to, so no app receives the load.
+PERF_KANAAL = "ptest-bootstrap-perf"
+KANALEN = {"zaken": ["bronorganisatie", "zaaktype", "vertrouwelijkheidaanduiding"], PERF_KANAAL: []}
 # API tokens (TokenAuth identifier = store key).
 # The productaanvraag chain (Objecten → Open Notificaties → ZAC → Open Zaak) runs on the
 # environment's own wiring: profile settings productaanvraag_type and productaanvraag_zaaktype.

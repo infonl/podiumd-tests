@@ -42,6 +42,13 @@ ENDPOINTS = {
     # client with rights on one zaaktype (bootstrap step openzaak-client-productaanvraag, which needs ZAC).
     "oz_documenten_ordered": "openzaak",
     "oz_zaken_one_zaaktype": "zac",
+    # Baseflow's DMF PoC document mix (cg-dmf-poc k6/perf.js) and Open Notificaties' notificatie.
+    "oz_document_get": "openzaak",
+    "oz_document_create": "openzaak",
+    "oz_document_patch": "openzaak",
+    "oz_oio_list": "openzaak",
+    "oz_zio_create": "openzaak",
+    "onrc_notificatie": "opennotificaties",
 }
 
 # Anonymous requests through the public gateway, one Locust run each (tests/perf/test_gateway_perf.py), to compare

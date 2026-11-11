@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import time
 
+from functools import partial
 from typing import TYPE_CHECKING
 
 from locust import User
@@ -20,32 +21,24 @@ from podiumd_tests.auth.keycloak import discovery_url
 from podiumd_tests.auth.keycloak_admin import realm_of
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import brp_personen
-from podiumd_tests.bootstrap.names import TEST_ZAAKTYPE
-from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
-from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_CLIENT_ID
-from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_STORE_KEY
-from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.clients.platform import openklant_client
-from podiumd_tests.clients.platform import openzaak_client
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
 from podiumd_tests.kcc import vac_data
 from podiumd_tests.oidc import challenge_session
+from podiumd_tests.perf.zgw_calls import Call
+from podiumd_tests.perf.zgw_calls import Prepared
+from podiumd_tests.perf.zgw_calls import opennotificaties_calls
+from podiumd_tests.perf.zgw_calls import openzaak_calls
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import make_klantcontact
 from podiumd_tests.seed.openklant import random_bsn
-from podiumd_tests.seed.openzaak import BSN_FILTER
-from podiumd_tests.seed.openzaak import CATALOGI
-from podiumd_tests.seed.openzaak import DOCUMENTEN
-from podiumd_tests.seed.openzaak import ZAKEN
-from podiumd_tests.seed.openzaak import make_zaak
-from podiumd_tests.seed.openzaak import published_zaaktype
 from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.zac import zac_session
 
@@ -55,14 +48,9 @@ if TYPE_CHECKING:
 
     from locust.env import Environment as LocustEnvironment
 
-    from podiumd_tests.clients.api import ApiClient
 
 # A word the volume corpus, KISS's kennisbank and the portal's products all use.
 SEARCH_TERM = "aanvraag"
-# Open Zaak's performance_test reads documents and zaken at page 34 of 100.
-PAGE_SIZE = 100
-DEEP_PAGE = 34
-type Call = Callable[[ResourceRegistry], object]
 
 
 @events.init_command_line_parser.add_listener
@@ -76,35 +64,6 @@ def _on_init(environment: LocustEnvironment, **_kwargs: object) -> None:
     profile = load_profile(environment.parsed_options.podiumd_env, default_envs_dir())
     ApiUser.env_under_test = Environment(profile)
     ApiUser.run_tag = environment.parsed_options.podiumd_run_tag
-
-
-def _deep_page(openzaak: ApiClient, path: str) -> str:
-    """Return the page Open Zaak's own benchmark reads (34 of 100), or the last one when there are fewer."""
-    count = int(str(openzaak.get(path, {"pageSize": str(PAGE_SIZE)})["count"]))
-    return str(max(1, min(DEEP_PAGE, -(-count // PAGE_SIZE))))
-
-
-def _openzaak_calls(env: Environment) -> dict[str, Call]:
-    openzaak = openzaak_client(env, ZGW_CLIENT_ID, ZGW_STORE_KEY, "perf")
-    zaaktype = str(published_zaaktype(openzaak, TEST_ZAAKTYPE, "openzaak-zaaktype")["url"])
-    documenten = f"{DOCUMENTEN}/enkelvoudiginformatieobjecten"
-    ordered = {"pageSize": str(PAGE_SIZE), "ordering": "-auteur", "page": _deep_page(openzaak, documenten)}
-    calls: dict[str, Call] = {
-        "oz_zaken": lambda _registry: openzaak.request("GET", f"{ZAKEN}/zaken", 200, params={"pageSize": "20"}),
-        "oz_zaaktypen": lambda _registry: openzaak.request("GET", f"{CATALOGI}/zaaktypen", 200),
-        "oz_zaak_create": lambda registry: make_zaak(openzaak, registry, zaaktype),
-        # Mijn zaken: the zaken of one inwoner, a join over every zaak's rollen.
-        "oz_zaken_by_bsn": lambda _registry: openzaak.request(
-            "GET", f"{ZAKEN}/zaken", 200, params={BSN_FILTER: random_bsn()}
-        ),
-        "oz_documenten_ordered": lambda _registry: openzaak.request("GET", documenten, 200, params=ordered),
-    }
-    if "zac" in env.profile.urls:
-        # A client with rights on one zaaktype, as every PodiumD app has: Open Zaak filters by its autorisaties.
-        limited = openzaak_client(env, ZGW_PRODUCTAANVRAAG_CLIENT_ID, ZGW_PRODUCTAANVRAAG_STORE_KEY, "perf")
-        page = {"pageSize": "20"}
-        calls["oz_zaken_one_zaaktype"] = lambda _registry: limited.request("GET", f"{ZAKEN}/zaken", 200, params=page)
-    return calls
 
 
 def _openklant_calls(env: Environment) -> dict[str, Call]:
@@ -164,7 +123,7 @@ class ApiUser(User):
 
     @task
     def round_of_calls(self) -> None:
-        """Every call once, timed; what a write created is deleted after its timing."""
+        """Every call once, timed without its setup; what a call created is deleted after its timing."""
         for name, call in self.calls.items():
             registry = ResourceRegistry(self.run_tag)
             try:
@@ -173,12 +132,25 @@ class ApiUser(User):
                 # Also when Locust stops the user (GreenletExit) right after a write.
                 registry.cleanup()
 
-    def _timed(self, name: str, call: Call, registry: ResourceRegistry) -> None:
-        """Make the call and report its time and outcome to Locust."""
-        started = time.perf_counter()
+    def _timed(self, name: str, call: Call | Prepared, registry: ResourceRegistry) -> None:
+        """Make the call and report its time and outcome to Locust; a setup failure counts as a failed call."""
         error = None
+        timed: Callable[[], object]
+        if isinstance(call, tuple):
+            prepare, run = call
+            try:
+                prepared = prepare(registry)
+            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught  # Locust counts it
+                self.environment.events.request.fire(
+                    request_type="API", name=name, response_time=0, response_length=0, exception=exc
+                )
+                return
+            timed = partial(run, prepared)
+        else:
+            timed = partial(call, registry)
+        started = time.perf_counter()
         try:
-            call(registry)
+            timed()
         except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught  # Locust counts it
             error = exc
         elapsed_ms = (time.perf_counter() - started) * 1000
@@ -186,16 +158,18 @@ class ApiUser(User):
             request_type="API", name=name, response_time=elapsed_ms, response_length=0, exception=error
         )
 
-    def _calls(self) -> dict[str, Call]:
+    def _calls(self) -> dict[str, Call | Prepared]:
         """Return the calls of podiumd_tests.perf.runs.ENDPOINTS whose component the environment has."""
         env = self.env_under_test
         http = env.session(cookies=False)
         urls = env.profile.urls
-        calls: dict[str, Call] = {}
+        calls: dict[str, Call | Prepared] = {}
         if "openzaak" in urls:
-            calls |= _openzaak_calls(env)
+            calls |= openzaak_calls(env)
         if "openklant" in urls:
             calls |= _openklant_calls(env)
+        if "opennotificaties" in urls:
+            calls |= opennotificaties_calls(env)
         if "objecten" in urls:
             calls |= _objecten_calls(env)
         if "api-proxy" in urls:
