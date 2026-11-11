@@ -37,11 +37,26 @@ def test_publish_zac_zaaktype_gives_zacs_types_and_itself_as_deelzaaktype(fake_h
     client = ApiClient(requests.Session(), API, {})
     published = zac_zaaktype.publish_zac_zaaktype(env(), client, ResourceRegistry(RUN), {}, servicenorm="P10D")
     assert published == {"url": f"{API}{ZAAKTYPEN}/v1", "concept": False}
-    assert made["statustypen"] == ("Intake", "In behandeling", "Afgerond")
+    assert made["statustypen"] == ("Intake", "Wacht op aanvullende informatie", "In behandeling", "Afgerond")
     assert ("Behandelaar", "behandelaar") in made["roltypen"]
     assert str(made["omschrijving"]).startswith(f"{RUN}-zac-")
     assert made["servicenorm"] == "P10D"
     assert json.loads(sent[-1].body) == {"deelzaaktypen": [f"{API}{ZAAKTYPEN}/v1"]}
+
+
+def test_publish_zac_zaaktype_links_the_informatieobjecttypen_before_publishing(fake_http, monkeypatch):
+    monkeypatch.setattr(
+        zac_zaaktype, "make_publishable_zaaktype", lambda *_args, **_fields: {"url": f"{API}{ZAAKTYPEN}/v1"}
+    )
+    monkeypatch.setattr(zac_zaaktype, "publish", lambda _openzaak, concept: concept)
+    links = "/catalogi/api/v1/zaaktype-informatieobjecttypen"
+    sent = fake_http({f"PATCH {ZAAKTYPEN}/v1": (200, {}), f"POST {links}": (201, {})})
+    client = ApiClient(requests.Session(), API, {})
+    zac_zaaktype.publish_zac_zaaktype(env(), client, ResourceRegistry(RUN), {}, informatieobjecttypen=("i1", "i2"))
+    assert [json.loads(s.body) for s in sent if s.url.endswith(links)] == [
+        {"zaaktype": f"{API}{ZAAKTYPEN}/v1", "informatieobjecttype": "i1", "volgnummer": 1, "richting": "intern"},
+        {"zaaktype": f"{API}{ZAAKTYPEN}/v1", "informatieobjecttype": "i2", "volgnummer": 2, "richting": "intern"},
+    ]
 
 
 def test_publish_new_version_ends_the_old_one_yesterday_and_updates_the_new_one(fake_http, monkeypatch):

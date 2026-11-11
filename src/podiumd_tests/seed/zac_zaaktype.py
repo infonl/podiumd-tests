@@ -25,6 +25,7 @@ from podiumd_tests.pabc import zaaktype_entity_type
 from podiumd_tests.seed.catalogi import ZaaktypeTypes
 from podiumd_tests.seed.catalogi import make_publishable_zaaktype
 from podiumd_tests.seed.catalogi import publish
+from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.zac import clear_ztc_cache
 from podiumd_tests.zac import configure_zaaktype
@@ -32,6 +33,8 @@ from podiumd_tests.zac import user_groups
 from podiumd_tests.zac import zac_session
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     import requests
 
     from podiumd_tests.clients.api import ApiClient
@@ -41,7 +44,8 @@ if TYPE_CHECKING:
 
 # The statustypen of ZAC's CMMN model and the roltypen ZAC requires.
 ZAC_TYPES = ZaaktypeTypes(
-    ("Intake", "In behandeling", "Afgerond"), (("Initiator", "initiator"), ("Behandelaar", "behandelaar"))
+    ("Intake", "Wacht op aanvullende informatie", "In behandeling", "Afgerond"),
+    (("Initiator", "initiator"), ("Behandelaar", "behandelaar")),
 )
 
 
@@ -56,15 +60,25 @@ def pabc_as_admin(env: Environment) -> tuple[requests.Session, str]:
 
 
 def publish_zac_zaaktype(
-    env: Environment, openzaak: ApiClient, registry: ResourceRegistry, template: JsonObject, **fields: object
+    env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    template: JsonObject,
+    *,
+    informatieobjecttypen: Sequence[str] = (),
+    **fields: object,
 ) -> JsonObject:
     """Publish a throwaway zaaktype with run-tagged omschrijving that ZAC can handle and that is its own deelzaaktype.
 
-    A new version takes the identificatie and omschrijving of the one before in fields.
+    informatieobjecttypen: URLs of published ones in its catalogus. A new version takes the identificatie and
+    omschrijving of the one before in fields.
     """
     body: dict[str, object] = {"omschrijving": registry.tagged(f"zac-{secrets.token_hex(3)}"), **fields}
     concept = make_publishable_zaaktype(env, openzaak, registry, template, ZAC_TYPES, **body)
     openzaak.patch(str(concept["url"]), {"deelzaaktypen": [concept["url"]]})
+    for volgnummer, iot in enumerate(informatieobjecttypen, start=1):
+        link = {"zaaktype": concept["url"], "informatieobjecttype": iot, "volgnummer": volgnummer, "richting": "intern"}
+        openzaak.post(f"{CATALOGI}/zaaktype-informatieobjecttypen", link)
     return publish(openzaak, concept)
 
 
@@ -77,8 +91,16 @@ def publish_new_version(
     """
     yesterday = date.fromisoformat(today()) - timedelta(days=1)
     openzaak.patch(str(zaaktype["url"]), {"eindeGeldigheid": yesterday.isoformat()})
-    same = {key: zaaktype[key] for key in ("identificatie", "omschrijving", "servicenorm")}
-    version = publish_zac_zaaktype(env, openzaak, registry, template, **same, beginGeldigheid=today())
+    version = publish_zac_zaaktype(
+        env,
+        openzaak,
+        registry,
+        template,
+        identificatie=zaaktype["identificatie"],
+        omschrijving=zaaktype["omschrijving"],
+        servicenorm=zaaktype["servicenorm"],
+        beginGeldigheid=today(),
+    )
     return openzaak.patch(str(version["url"]), {"eindeGeldigheid": None})
 
 
@@ -114,7 +136,13 @@ def make_role_group(env: Environment, registry: ResourceRegistry, role: str) -> 
 
 
 def make_zac_zaaktype(
-    env: Environment, openzaak: ApiClient, registry: ResourceRegistry, template: JsonObject, **fields: object
+    env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    template: JsonObject,
+    *,
+    informatieobjecttypen: Sequence[str] = (),
+    **fields: object,
 ) -> JsonObject:
     """Publish a throwaway zaaktype, grant it and configure it in the admin's first group; its zaakafhandelparameters.
 
@@ -122,7 +150,9 @@ def make_zac_zaaktype(
     """
     zac_url = env.profile.urls["zac"]
     registry.add("ZAC's ZTC cache", lambda: clear_ztc_cache(zac_as_admin(env), zac_url))
-    zaaktype = publish_zac_zaaktype(env, openzaak, registry, template, **fields)
+    zaaktype = publish_zac_zaaktype(
+        env, openzaak, registry, template, informatieobjecttypen=informatieobjecttypen, **fields
+    )
     grant_zaaktype(env, registry, str(zaaktype["omschrijving"]))
     admin = zac_as_admin(env)
     return configure_zaaktype(admin, zac_url, uuid_of(zaaktype["url"]), user_groups(admin, zac_url)[0])

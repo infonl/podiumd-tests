@@ -200,6 +200,56 @@ def test_user_event_runs_the_open_plan_item_of_the_action(fake_http):
         zac.user_event(http, ZAC, "z1", "ZAAK_AFHANDELEN")
 
 
+def test_activate_human_tasks_switches_every_one_on_with_its_fields(fake_http):
+    tasks = [
+        {"actief": False, "planItemDefinition": {"id": "GOEDKEUREN"}, "doorlooptijd": None},
+        {"actief": False, "planItemDefinition": {"id": "ADVIES_INTERN"}, "referentieTabellen": [{"veld": "ADVIES"}]},
+    ]
+    parameters = {"id": 7, "zaaktype": {"uuid": "zt1"}, "humanTaskParameters": tasks}
+    sent = fake_http(
+        {
+            "GET /rest/zaakafhandelparameters/zt1": (200, parameters),
+            "PUT /rest/zaakafhandelparameters": (200, {"id": 7}),
+        }
+    )
+    assert zac.activate_human_tasks(requests.Session(), ZAC, "zt1", GOEDKEUREN={"doorlooptijd": 10}) == {"id": 7}
+    saved = json.loads(sent[-1].body)
+    assert saved["id"] == 7
+    assert saved["humanTaskParameters"] == [
+        {"actief": True, "planItemDefinition": {"id": "GOEDKEUREN"}, "doorlooptijd": 10},
+        {"actief": True, "planItemDefinition": {"id": "ADVIES_INTERN"}, "referentieTabellen": [{"veld": "ADVIES"}]},
+    ]
+
+
+def test_start_human_task_waits_until_zac_offers_it_and_starts_it_without_a_mail(fake_http, monkeypatch):
+    offers = iter([[], [{"id": "p9", "naam": "Goedkeuren"}]])
+    monkeypatch.setattr(zac, "human_tasks_offered", lambda *_args: next(offers))
+    monkeypatch.setattr(zac, "wait_until", functools.partial(wait_until, clock=Clock(sleep=lambda _s: None)))
+    sent = fake_http({"POST /rest/planitems/doHumanTaskPlanItem": (204, None)})
+    zaak = {"uuid": "z1", "identificatie": "ZAAK-1"}
+    response = zac.start_human_task(requests.Session(), ZAC, zaak, "Goedkeuren", "g1", fataledatum="2026-12-01")
+    assert response.status_code == 204
+    assert json.loads(sent[-1].body) == {
+        "planItemInstanceId": "p9",
+        "groep": {"id": "g1", "naam": "g1"},
+        "taakdata": {},
+        "taakStuurGegevens": {"sendMail": False},
+        "fataledatum": "2026-12-01",
+    }
+
+
+def test_human_tasks_and_user_events_offered_are_zacs_plan_items(fake_http):
+    fake_http(
+        {
+            "GET /rest/planitems/zaak/z1/humanTaskPlanItems": (200, [{"naam": "Goedkeuren"}]),
+            "GET /rest/planitems/zaak/z1/userEventListenerPlanItems": (200, [{"userEventListenerActie": "X"}]),
+        }
+    )
+    http = requests.Session()
+    assert zac.human_tasks_offered(http, ZAC, {"uuid": "z1"}) == [{"naam": "Goedkeuren"}]
+    assert zac.user_events_offered(http, ZAC, "z1") == [{"userEventListenerActie": "X"}]
+
+
 def test_resultaattypen_are_those_of_the_zaaktype(fake_http):
     fake_http({"GET /rest/zaken/resultaattypes/zt1": (200, [{"id": "r1"}])})
     assert zac.resultaattypen(requests.Session(), ZAC, {"zaaktype": {"uuid": "zt1"}}) == [{"id": "r1"}]

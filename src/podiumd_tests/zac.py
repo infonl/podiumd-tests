@@ -232,10 +232,17 @@ def zaak_historie(http: requests.Session, zac_url: str, zaak: JsonObject) -> lis
     return get_entries(http, f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/historie")
 
 
+def user_events_offered(http: requests.Session, zac_url: str, zaak_uuid: str) -> list[JsonObject]:
+    """Return the plan items of the CMMN user events ZAC offers on the zaak now.
+
+    ZAC offers INTAKE_AFRONDEN and ZAAK_AFHANDELEN only while no human task of the stage is open.
+    """
+    return get_entries(http, f"{zac_url}/rest/planitems/zaak/{zaak_uuid}/userEventListenerPlanItems")
+
+
 def user_event(http: requests.Session, zac_url: str, zaak_uuid: str, actie: str, **fields: object) -> requests.Response:
     """Run a CMMN user event of the zaak: INTAKE_AFRONDEN or ZAAK_AFHANDELEN, at its open plan item; ZAC's answer."""
-    listeners = http.get(f"{zac_url}/rest/planitems/zaak/{zaak_uuid}/userEventListenerPlanItems")
-    items = entries(expect_status(listeners, HTTPStatus.OK).json())
+    items = user_events_offered(http, zac_url, zaak_uuid)
     found = [item for item in items if item.get("userEventListenerActie") == actie]
     if not found:
         msg = f"zaak {zaak_uuid} offers no {actie}: {[item.get('naam') for item in items]}"
@@ -518,6 +525,46 @@ def complete_task(http: requests.Session, zac_url: str, task: JsonObject, data: 
     return cast(
         "JsonObject", expect_status(http.patch(f"{zac_url}/rest/taken/complete", json=body), HTTPStatus.OK).json()
     )
+
+
+def activate_human_tasks(
+    http: requests.Session, zac_url: str, zaaktype_uuid: str, **plan_items: JsonObject
+) -> JsonObject:
+    """Switch every human task of the zaaktype version on, with these fields per plan item id; the saved parameters."""
+    parameters = read_zaakafhandelparameters(http, zac_url, zaaktype_uuid)
+    tasks = [
+        {**task, "actief": True, **plan_items.get(str(section(task, "planItemDefinition").get("id")), {})}
+        for task in entries(parameters.get("humanTaskParameters"))
+    ]
+    return save_zaakafhandelparameters(http, zac_url, {**parameters, "humanTaskParameters": tasks})
+
+
+def human_tasks_offered(http: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:
+    """Return the plan items of the human tasks ZAC offers to start on the zaak now."""
+    return get_entries(http, f"{zac_url}/rest/planitems/zaak/{zaak['uuid']}/humanTaskPlanItems")
+
+
+def start_human_task(
+    http: requests.Session, zac_url: str, zaak: JsonObject, name: str, groep: str, **fields: object
+) -> requests.Response:
+    """Start the zaak's human task of this name for the group, once ZAC offers it; ZAC's answer.
+
+    ZAC starts a zaak's case, and the stage after the intake, in the background. fields: more of ZAC's
+    RESTHumanTaskData (medewerker, fataledatum, toelichting, taakdata, taakStuurGegevens: no mail unless given).
+    """
+
+    def offered() -> JsonObject | None:
+        return next((item for item in human_tasks_offered(http, zac_url, zaak) if item.get("naam") == name), None)
+
+    plan_item = wait_until(offered, timeout=INDEX_TIMEOUT, description=f"{name!r} offered on {zaak['identificatie']}")
+    body = {
+        "planItemInstanceId": plan_item["id"],
+        "groep": {"id": groep, "naam": groep},
+        "taakdata": {},
+        "taakStuurGegevens": {"sendMail": False},
+        **fields,
+    }
+    return http.post(f"{zac_url}/rest/planitems/doHumanTaskPlanItem", json=body)
 
 
 def wait_in_werkvoorraad(http: requests.Session, zac_url: str, zaak: JsonObject) -> None:

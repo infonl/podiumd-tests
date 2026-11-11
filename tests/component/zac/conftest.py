@@ -1,4 +1,4 @@
-"""Fixtures for podiumd-tests' own zaaktype in ZAC."""
+"""Fixtures for podiumd-tests' own zaaktypen in ZAC."""
 
 from __future__ import annotations
 
@@ -6,10 +6,15 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.names import EMAIL_IOT
+from podiumd_tests.json_data import section
+from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.seed.zac_zaaktype import make_zac_zaaktype
+from podiumd_tests.seed.zac_zaaktype import zac_as_admin
+from podiumd_tests.zac import activate_human_tasks
 from podiumd_tests.zac import create_zaak
 
 if TYPE_CHECKING:
@@ -21,27 +26,84 @@ if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.openzaak import ZaaktypeParts
+
+# Days a Goedkeuren taak of the taken zaaktype takes: more than any zaak of it has left.
+GOEDKEUREN_DOORLOOPTIJD = 3650
+
+
+@pytest.fixture(scope="session", name="zaaktype_registry")
+def fixture_zaaktype_registry(request: pytest.FixtureRequest, run_tag: str) -> Iterator[ResourceRegistry]:
+    """Cleanup at the end of the session, for the throwaway zaaktypen."""
+    registry = ResourceRegistry(run_tag, keep=bool(request.config.getoption("--keep-data")))
+    try:
+        yield registry
+    finally:
+        registry.cleanup()
 
 
 @pytest.fixture(scope="session", name="zac_eigen_zaaktype")
 def fixture_zac_eigen_zaaktype(
-    request: pytest.FixtureRequest,
     podiumd_env: Environment,
     openzaak: ApiClient,
     test_zaaktype: JsonObject,
-    run_tag: str,
+    zaaktype_registry: ResourceRegistry,
     need_bootstrap: Callable[..., None],
-) -> Iterator[JsonObject]:
+) -> JsonObject:
     """ZAC's zaakafhandelparameters of a throwaway zaaktype in PABC domain ptest-bootstrap, its own deelzaaktype.
 
     Tests using it share xdist group zac-eigen-zaaktype, so a run makes one.
     """
     need_bootstrap("zac-bpmn-process")
-    registry = ResourceRegistry(run_tag, keep=bool(request.config.getoption("--keep-data")))
-    try:
-        yield make_zac_zaaktype(podiumd_env, openzaak, registry, test_zaaktype)
-    finally:
-        registry.cleanup()
+    return make_zac_zaaktype(podiumd_env, openzaak, zaaktype_registry, test_zaaktype)
+
+
+@pytest.fixture(scope="session", name="zac_taken_zaaktype")
+def fixture_zac_taken_zaaktype(
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    test_zaaktype: JsonObject,
+    parts: ZaaktypeParts,
+    zaaktype_registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+) -> JsonObject:
+    """ZAC's zaakafhandelparameters of a throwaway zaaktype as zac_eigen_zaaktype, with every human task on.
+
+    Its documents are of the test informatieobjecttype or e-mail; Advies extern mails the adviseur, Goedkeuren takes
+    GOEDKEUREN_DOORLOOPTIJD days. Tests using it share xdist group zac-taken-zaaktype, so a run makes one.
+    """
+    need_bootstrap("zac-bpmn-process")
+    need_bootstrap("openzaak-iot-email")
+    iots = openzaak.list(f"{CATALOGI}/informatieobjecttypen", {"catalogus": str(test_zaaktype["catalogus"])})
+    email = next(str(iot["url"]) for iot in iots if iot.get("omschrijving") == EMAIL_IOT and not iot.get("concept"))
+    parameters = make_zac_zaaktype(
+        podiumd_env,
+        openzaak,
+        zaaktype_registry,
+        test_zaaktype,
+        informatieobjecttypen=(parts.informatieobjecttype, email),
+    )
+    return activate_human_tasks(
+        zac_as_admin(podiumd_env),
+        podiumd_env.profile.urls["zac"],
+        str(section(parameters, "zaaktype")["uuid"]),
+        ADVIES_EXTERN={"formulierDefinitieId": "EXTERN_ADVIES_MAIL"},
+        GOEDKEUREN={"doorlooptijd": GOEDKEUREN_DOORLOOPTIJD},
+    )
+
+
+def _zaak_starter(
+    zac: requests.Session, urls: dict[str, str], parameters: JsonObject, openzaak: ApiClient, registry: ResourceRegistry
+) -> Callable[[], JsonObject]:
+    """Start a zaak of the zaakafhandelparameters' zaaktype in ZAC; cleanup deletes it and its documents."""
+
+    def start() -> JsonObject:
+        zaak = create_zaak(zac, urls["zac"], parameters, omschrijving=registry.tagged("zac-eigen"))
+        url = f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}"
+        registry.add(f"zaak {zaak['identificatie']}", lambda: delete_zaak(openzaak, url, with_documents=True))
+        return zaak
+
+    return start
 
 
 @pytest.fixture(name="zac_eigen_zaak")
@@ -53,11 +115,16 @@ def fixture_zac_eigen_zaak(
     registry: ResourceRegistry,
 ) -> Callable[[], JsonObject]:
     """Start a zaak of podiumd-tests' own zaaktype in ZAC; cleanup deletes it from Open Zaak."""
+    return _zaak_starter(zac, urls, zac_eigen_zaaktype, openzaak, registry)
 
-    def start() -> JsonObject:
-        zaak = create_zaak(zac, urls["zac"], zac_eigen_zaaktype, omschrijving=registry.tagged("zac-eigen"))
-        url = f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}"
-        registry.add(f"zaak {zaak['identificatie']}", lambda: delete_zaak(openzaak, url))
-        return zaak
 
-    return start
+@pytest.fixture(name="zac_taken_zaak")
+def fixture_zac_taken_zaak(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_taken_zaaktype: JsonObject,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+) -> Callable[[], JsonObject]:
+    """Start a zaak of the taken zaaktype in ZAC; cleanup deletes it and its documents from Open Zaak."""
+    return _zaak_starter(zac, urls, zac_taken_zaaktype, openzaak, registry)
