@@ -238,3 +238,18 @@ def test_port_forward_without_kubectl_is_reported(fake_runner, monkeypatch):
     kube = Kube("ctx", "ns", fake_runner)
     with pytest.raises(KubeError, match="kubectl not found on PATH"), kube.port_forward("outway", 80):
         pytest.fail("no port without kubectl")
+
+
+def test_deploy_applies_restarts_and_waits_and_delete_all_goes_last_first(fake_runner):
+    fake_runner.answers["kubectl"] = (0, "")
+    kube = Kube("ctx", "ns", fake_runner)
+    manifests: list[dict[str, object]] = [
+        {"kind": "ConfigMap", "metadata": {"name": "c"}},
+        {"kind": "Deployment", "metadata": {"name": "d"}},
+    ]
+    kube.deploy(manifests, "d", 60, restart=True)
+    verbs = [" ".join(call[call.index("ns") + 1 : call.index("ns") + 3]) for call in fake_runner.calls]
+    assert verbs == ["apply -f", "apply -f", "rollout restart", "rollout status"]
+    fake_runner.calls.clear()
+    kube.delete_all(manifests)
+    assert [call[-2] for call in fake_runner.calls] == ["d", "c"]

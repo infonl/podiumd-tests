@@ -19,7 +19,6 @@ import yaml
 from podiumd_tests.config import REPO_ROOT
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
-from podiumd_tests.kube import metadata_name
 from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
@@ -137,17 +136,10 @@ class MockServer:
 
     def apply(self, ctx: Context, /) -> dict[str, str]:  # noqa: PLR6301  # a Step method
         """Apply the manifests, restart on new code, and wait until the Deployment is ready."""
-        kube = ctx.env.kube
-        for manifest in manifests(_image(ctx.env)):
-            kube.apply(manifest)
-        kube.run("rollout", "restart", f"deployment/{NAME}")
-        kube.run(
-            "rollout", "status", f"deployment/{NAME}", f"--timeout={ROLLOUT_TIMEOUT}s", timeout=ROLLOUT_TIMEOUT + 10
-        )
+        ctx.env.kube.deploy(manifests(_image(ctx.env)), NAME, ROLLOUT_TIMEOUT, restart=True)
         return {}
 
     def remove(self, ctx: Context, /) -> tuple[str, ...]:  # noqa: PLR6301  # a Step method
         """Delete the manifests' objects."""
-        for manifest in reversed(manifests()):
-            ctx.env.kube.delete(str(manifest["kind"]).lower(), metadata_name(manifest))
+        ctx.env.kube.delete_all(manifests())
         return ()

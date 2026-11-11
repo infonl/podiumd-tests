@@ -84,6 +84,21 @@ class Kube:
         """Delete an object; no error when it does not exist."""
         return self.run("delete", kind, name, "--ignore-not-found")
 
+    def deploy(
+        self, manifests: list[dict[str, object]], deployment: str, timeout: int, *, restart: bool = False
+    ) -> None:
+        """Apply manifests and wait until the Deployment has rolled out; restart: roll it even when unchanged."""
+        for manifest in manifests:
+            self.apply(manifest)
+        if restart:
+            self.run("rollout", "restart", f"deployment/{deployment}")
+        self.run("rollout", "status", f"deployment/{deployment}", f"--timeout={timeout}s", timeout=timeout + 10)
+
+    def delete_all(self, manifests: list[dict[str, object]]) -> None:
+        """Delete the manifests' objects, last first."""
+        for manifest in reversed(manifests):
+            self.delete(str(manifest["kind"]).lower(), metadata_name(manifest))
+
     def get_json(self, *args: str, namespace: str | None = None, all_namespaces: bool = False) -> dict[str, object]:
         """`kubectl get ... -o json` as a dict."""
         args = ("get", *args, "-o", "json")
