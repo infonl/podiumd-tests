@@ -30,6 +30,7 @@ from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import INDEX_TIMEOUT
+from podiumd_tests.zac import NIET_ONTVANKELIJK
 from podiumd_tests.zac import is_zaak_listed
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_with_person
@@ -96,8 +97,6 @@ FILES = {
     # About 300 pages: LibreOffice's memory grows with them; gotenberg stops a conversion after 30 s.
     "large-word": (DOCX, minimal_docx("podiumd-tests " * 20, paragraphs=10_000)),
 }
-# The reason ZAC always offers for aborting a zaak.
-NIET_ONTVANKELIJK = "ZAAK_NIET_ONTVANKELIJK"
 
 
 @pytest.mark.tc("ZAC-006", "ZAC-010", "ZAC-019", "ZAC-022")

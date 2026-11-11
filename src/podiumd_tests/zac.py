@@ -103,6 +103,10 @@ def is_confirmation_on(http: requests.Session, zac_url: str, identificatie: str)
     )
 
 
+# The reason ZAC always offers for aborting a zaak.
+NIET_ONTVANKELIJK = "ZAAK_NIET_ONTVANKELIJK"
+
+
 def zaak_body(parameters: JsonObject, **fields: object) -> JsonObject:
     """ZAC's request to start a zaak of the zaaktype of these zaakafhandelparameters, in their default group.
 
@@ -127,6 +131,25 @@ def create_zaak(http: requests.Session, zac_url: str, parameters: JsonObject, **
 def read_zaak(http: requests.Session, zac_url: str, uuid: str) -> JsonObject:
     """ZAC's view of a zaak."""
     return cast("JsonObject", expect_status(http.get(f"{zac_url}/rest/zaken/zaak/{uuid}"), HTTPStatus.OK).json())
+
+
+def user_event(http: requests.Session, zac_url: str, zaak_uuid: str, actie: str, **fields: object) -> requests.Response:
+    """Run a CMMN user event of the zaak: INTAKE_AFRONDEN or ZAAK_AFHANDELEN, at its open plan item; ZAC's answer."""
+    listeners = http.get(f"{zac_url}/rest/planitems/zaak/{zaak_uuid}/userEventListenerPlanItems")
+    items = entries(expect_status(listeners, HTTPStatus.OK).json())
+    found = [item for item in items if item.get("userEventListenerActie") == actie]
+    if not found:
+        msg = f"zaak {zaak_uuid} offers no {actie}: {[item.get('naam') for item in items]}"
+        raise AssertionError(msg)
+    body = {"zaakUuid": zaak_uuid, "planItemInstanceId": found[0]["id"], "actie": actie, **fields}
+    return http.post(f"{zac_url}/rest/planitems/doUserEventListenerPlanItem", json=body)
+
+
+def resultaattypen(http: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:
+    """Return the resultaattypen ZAC offers for the zaak's zaaktype."""
+    zaaktype = section(zaak, "zaaktype")["uuid"]
+    response = http.get(f"{zac_url}/rest/zaken/resultaattypes/{zaaktype}")
+    return entries(expect_status(response, HTTPStatus.OK).json())
 
 
 def person_lookup(http: requests.Session, zac_url: str, bsn: str) -> list[JsonObject]:
