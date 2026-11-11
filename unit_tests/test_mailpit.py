@@ -22,7 +22,7 @@ def test_own_address_is_run_tagged_and_new_each_time():
     registry = ResourceRegistry("ptest-2611111200abcd")
     first, second = own_address(registry), own_address(registry)
     assert first.startswith("ptest-2611111200abcd-ontvanger-")
-    assert first.endswith("@example.com")
+    assert first.endswith("@example.invalid")
     assert first != second
 
 

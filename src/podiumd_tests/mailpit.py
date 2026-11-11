@@ -21,8 +21,11 @@ if TYPE_CHECKING:
 
 
 def own_address(registry: ResourceRegistry) -> str:
-    """Return a new run-tagged address for one test's mail: the tests of a run read and delete each other's mail."""
-    return f"{registry.tagged(f'ontvanger-{uuid.uuid4().hex[:8]}')}@example.com"
+    """Return a new run-tagged address for one test's mail: the tests of a run read and delete each other's mail.
+
+    .invalid never resolves (RFC 2606), so a mail that leaves Mailpit's environment is never delivered.
+    """
+    return f"{registry.tagged(f'ontvanger-{uuid.uuid4().hex[:8]}')}@example.invalid"
 
 
 def quoted(value: str) -> str:

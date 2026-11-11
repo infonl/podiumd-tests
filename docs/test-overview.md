@@ -10,7 +10,7 @@ versions is not counted.
 | Tier | Tests | Functions | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 210 | 37 | 9 |
-| component | 641 | 379 | 35 |
+| component | 641 | 379 | 36 |
 | integration | 140 | 84 | 11 |
 | perf | 54 | 3 | 0 |
 | **full tier** | **964** | **482** |  |
@@ -147,6 +147,7 @@ Ids of infonl/podiumd-known-issues.
 | zac-7 | 2 |
 | zac-10 | 1 |
 | zac-11 | 1 |
+| zac-12 | 1 |
 | zgw-office-addin-1 | 2 |
 
 Tests without a scenario: 0.

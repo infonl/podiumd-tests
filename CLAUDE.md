@@ -11,3 +11,4 @@ Rules for working in this repository:
 @.claude/memory/coordination-podiumd-minikube.md
 @.claude/memory/remove-unused.md
 @.claude/memory/xfail-markers.md
+@.claude/memory/mail-only-to-mailpit.md

@@ -42,7 +42,7 @@ pytestmark = [
 ]
 
 MAIL_TIMEOUT = 60
-REPLY_TO = "antwoord@example.com"
+REPLY_TO = "antwoord@example.invalid"
 NIET_VERSTUURD = "ONTVANGSTBEVESTIGING_NIET_VERSTUURD"
 
 

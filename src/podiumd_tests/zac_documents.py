@@ -69,7 +69,10 @@ FILES = {
     "txt": ("text/plain", b"podiumd-tests"),
     "pdf": ("application/pdf", MINIMAL_PDF),
     "docx": (DOCX, b"versie 1"),
-    "eml": ("message/rfc822", b"From: podiumd-tests@example.com\r\nSubject: podiumd-tests\r\n\r\npodiumd-tests\r\n"),
+    "eml": (
+        "message/rfc822",
+        b"From: podiumd-tests@example.invalid\r\nSubject: podiumd-tests\r\n\r\npodiumd-tests\r\n",
+    ),
     "word": (DOCX, minimal_docx("podiumd-tests")),
     # About 300 pages: LibreOffice's memory grows with them; gotenberg stops a conversion after 30 s.
     "large-word": (DOCX, minimal_docx("podiumd-tests " * 20, paragraphs=10_000)),

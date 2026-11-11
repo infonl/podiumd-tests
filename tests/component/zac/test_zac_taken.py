@@ -288,6 +288,11 @@ def test_open_advies_intern_holds_off_afhandelen(
     assert "ZAAK_AFHANDELEN" in _acties(zac, zac_url, behandeling)
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-12] ZAC 5.9.1 does not store the referentietabel of human task parameters on their first save, so "
+    "Advies intern offers no Advies values; not yet reported upstream",
+)
 @ZAC_TEAM
 @THROWAWAY
 @TAKEN_ZAAKTYPE

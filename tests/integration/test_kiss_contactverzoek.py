@@ -77,7 +77,7 @@ def _actoren_of(taak: JsonObject) -> list[str]:
 
 def _adres(registry: ResourceRegistry, soort: str) -> str:
     """A phone number or e-mail address no other test uses."""
-    return f"{registry.tagged('klant')}@example.com" if soort == "email" else f"06{random_nummer()[-8:]}"
+    return f"{registry.tagged('klant')}@example.invalid" if soort == "email" else f"06{random_nummer()[-8:]}"
 
 
 @pytest.mark.parametrize(
@@ -200,7 +200,7 @@ def test_contactverzoek_to_a_medewerker_from_the_smoelenboek(
         "identificatie": identificatie,
         "voornaam": "PodiumD",
         "achternaam": identificatie,
-        "emails": [{"email": f"{identificatie}@example.com"}],
+        "emails": [{"email": f"{identificatie}@example.invalid"}],
         "groepen": [{"groepsnaam": ITA_GROEP}],
         "afdelingen": [],
     }

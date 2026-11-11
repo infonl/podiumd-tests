@@ -41,7 +41,12 @@ if TYPE_CHECKING:
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
-pytestmark = [pytest.mark.component, pytest.mark.ui, pytest.mark.requires("ita", "openklant", "objecten", "keycloak")]
+# Forwarding mails the afdeling, groep or medewerker: only where all mail goes to Mailpit.
+pytestmark = [
+    pytest.mark.component,
+    pytest.mark.ui,
+    pytest.mark.requires("ita", "openklant", "objecten", "keycloak", "mailpit"),
+]
 
 ITA_E2E = "upstream interne-taak-afhandeling/ITA InterneTaakAfhandeling.EndToEndTest/Contactverzoek"
 # ITA sends its mail in the request; Mailpit lists it within seconds.
@@ -83,7 +88,7 @@ def _subject(openklant: ApiClient, taak: JsonObject) -> str:
     And a contactverzoek, and an afdeling or groep with a groepsmailbox
     When the medewerker forwards the contactverzoek to the afdeling or groep
     Then the contactverzoek is assigned to it in Open Klant
-    And its groepsmailbox gets the mail "Contactverzoek Doorgestuurd" with the klantcontact's nummer, where mail is tested
+    And its groepsmailbox gets the mail "Contactverzoek Doorgestuurd" with the klantcontact's nummer
 """)
 def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(  # fixtures
     ita: requests.Session,
@@ -103,10 +108,8 @@ def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(  # fixtures
     response = forward(ita, urls["ita"], internetaak, **{soort.lower(): eenheid})
     assert expect_status(response, HTTPStatus.OK).json()["notificationResult"] == SUCCES
     assert _assigned(openklant, internetaak) == [eenheid]
-    if podiumd_env.capabilities.skip_reason("mailpit") is None:
-        subject = _subject(openklant, internetaak)
-        mailpit = mailpit_client(podiumd_env)
-        received(mailpit, registry, timeout=MAIL_TIMEOUT, to=mailbox(eenheid), subject=subject)
+    subject = _subject(openklant, internetaak)
+    received(mailpit_client(podiumd_env), registry, timeout=MAIL_TIMEOUT, to=mailbox(eenheid), subject=subject)
 
 
 @pytest.mark.parametrize("case", list(MEDEWERKER_CASES))
@@ -149,11 +152,10 @@ def test_forward_to_a_medewerker_mails_one_party(  # fixtures and parameters
     else:
         assert NIET_ELKE in result
     assert _assigned(openklant, internetaak) == [medewerker, eenheid]
-    if podiumd_env.capabilities.skip_reason("mailpit") is None:
-        mailpit = mailpit_client(podiumd_env)
-        to, other = (medewerker, eenheid) if medewerker_email else (eenheid, medewerker)
-        received(mailpit, registry, timeout=MAIL_TIMEOUT, to=mailbox(to), subject=_subject(openklant, internetaak))
-        assert search(mailpit, f"to:{quoted(mailbox(other))}") == []
+    mailpit = mailpit_client(podiumd_env)
+    to, other = (medewerker, eenheid) if medewerker_email else (eenheid, medewerker)
+    received(mailpit, registry, timeout=MAIL_TIMEOUT, to=mailbox(to), subject=_subject(openklant, internetaak))
+    assert search(mailpit, f"to:{quoted(mailbox(other))}") == []
 
 
 @pytest.mark.parametrize("soort", ["Afdeling", "Groep"])
