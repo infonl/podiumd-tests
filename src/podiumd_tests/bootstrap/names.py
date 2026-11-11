@@ -34,6 +34,8 @@ TEST_BESLUITTYPE = "ptest-bootstrap-besluit"
 BPMN_ZAAKTYPE = "ptest-bootstrap-bpmn"
 BPMN_IOT = "ptest-bootstrap-bpmn-bijlage"
 BPMN_BESLUITTYPE = "ptest-bootstrap-bpmn-besluit"
+# The productaanvraagtype ZAC starts a zaak of BPMN_ZAAKTYPE for (bootstrap step zac-bpmn-productaanvraag).
+BPMN_PRODUCTAANVRAAGTYPE = "ptest-bootstrap-bpmn-productaanvraag"
 # ZAC's rights on podiumd-tests' own zaaktypen, apart from the estate's PABC dataset: realm roles of test users,
 # PABC's functional roles of those names mapped to ZAC application roles, in PABC's domain of those zaaktypen.
 ZAC_DOMAIN = "ptest-bootstrap"

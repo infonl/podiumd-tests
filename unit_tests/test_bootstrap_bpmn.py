@@ -10,7 +10,9 @@ import requests
 from podiumd_tests.bootstrap import bpmn
 from podiumd_tests.bootstrap.bpmn import PROCESS_KEY
 from podiumd_tests.bootstrap.bpmn import ZacBpmnProcess
+from podiumd_tests.bootstrap.bpmn import ZacBpmnProductaanvraag
 from podiumd_tests.bootstrap.bpmn import uuid_of
+from podiumd_tests.bootstrap.names import BPMN_PRODUCTAANVRAAGTYPE
 from podiumd_tests.bootstrap.names import ZAC_DOMAIN
 from podiumd_tests.bootstrap.names import ZAC_FUNCTIONAL_ROLES
 from podiumd_tests.bootstrap.runner import Context
@@ -190,6 +192,46 @@ def test_apply_fails_when_zac_refuses_the_process(ctx, fake_http, monkeypatch):
     fake_http({f"POST {bpmn.DEFINITIONS}": (400, {"detail": "invalid"})})
     with pytest.raises(UnexpectedStatusError, match="400"):
         ZacBpmnProcess(ADMIN).apply(ctx)
+
+
+CONFIGURATION = f"GET {bpmn.CONFIGURATION}"
+STORE = f"POST {bpmn.CONFIGURATION}"
+
+
+@pytest.mark.parametrize(
+    ("links", "present"),
+    [
+        ([{**LINK, "productaanvraagtype": BPMN_PRODUCTAANVRAAGTYPE}], True),
+        ([LINK], False),
+        ([{**LINK, "zaaktypeUuid": "zt-old", "productaanvraagtype": BPMN_PRODUCTAANVRAAGTYPE}], False),
+        ([], False),
+    ],
+)
+def test_productaanvraag_present_needs_the_type_on_the_zaaktypes_link(ctx, fake_http, links, present):
+    fake_http({CONFIGURATION: (200, links)})
+    assert ZacBpmnProductaanvraag(ADMIN).is_present(ctx) is present
+
+
+def test_productaanvraag_apply_sets_the_type_on_the_link(ctx, fake_http):
+    sent = fake_http({CONFIGURATION: (200, [{**LINK, "groepNaam": "g"}]), STORE: (200, {})})
+    assert ZacBpmnProductaanvraag(ADMIN).apply(ctx) == {}
+    stored = json.loads(sent[-1].body)
+    assert (stored["productaanvraagtype"], stored["groepNaam"]) == (BPMN_PRODUCTAANVRAAGTYPE, "g")
+
+
+def test_productaanvraag_apply_needs_the_link(ctx, fake_http):
+    fake_http({CONFIGURATION: (200, [])})
+    with pytest.raises(LookupError, match="zac-bpmn-process"):
+        ZacBpmnProductaanvraag(ADMIN).apply(ctx)
+
+
+@pytest.mark.parametrize(("productaanvraagtype", "stores"), [(BPMN_PRODUCTAANVRAAGTYPE, 1), ("another", 0)])
+def test_productaanvraag_remove_clears_only_its_own_type(ctx, fake_http, productaanvraagtype, stores):
+    sent = fake_http({CONFIGURATION: (200, [{**LINK, "productaanvraagtype": productaanvraagtype}]), STORE: (200, {})})
+    assert ZacBpmnProductaanvraag(ADMIN).remove(ctx) == ()
+    posts = [json.loads(s.body) for s in sent if s.method == "POST"]
+    assert len(posts) == stores
+    assert all(post["productaanvraagtype"] is None for post in posts)
 
 
 @pytest.mark.parametrize(

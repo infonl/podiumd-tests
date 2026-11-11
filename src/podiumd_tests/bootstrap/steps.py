@@ -11,6 +11,7 @@ from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.bootstrap import names
 from podiumd_tests.bootstrap.bpmn import ZacBpmnProcess
+from podiumd_tests.bootstrap.bpmn import ZacBpmnProductaanvraag
 from podiumd_tests.bootstrap.inway import InwayConsumers
 from podiumd_tests.bootstrap.keycloak import KeycloakRoles
 from podiumd_tests.bootstrap.keycloak import KeycloakUser
@@ -899,6 +900,8 @@ STEPS: tuple[Step, ...] = (
     ZacParameters(ADMIN, "zac-aanvullende-informatie", "zac_aanvullende_informatie", AANVULLENDE_INFORMATIE),
     # podiumd-tests' BPMN process in ZAC, for zaaktype ptest-bootstrap-bpmn (needs PABC to know that zaaktype).
     ZacBpmnProcess(ADMIN),
+    # Productaanvragen of type ptest-bootstrap-bpmn-productaanvraag become zaken of that zaaktype.
+    ZacBpmnProductaanvraag(ADMIN),
     # KISS's contactmoment kanalen, where the profile allows it (draaiboek KI-053-055).
     KissKanalen(ADMIN),
 )

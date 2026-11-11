@@ -14,6 +14,7 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from podiumd_tests.bootstrap.names import BPMN_PRODUCTAANVRAAGTYPE
 from podiumd_tests.bootstrap.names import BPMN_ZAAKTYPE
 from podiumd_tests.bootstrap.names import PREFIX
 from podiumd_tests.bootstrap.names import ZAC_DOMAIN
@@ -62,6 +63,13 @@ def uuid_of(url: object) -> str:
     return str(url).rstrip("/").rsplit("/", 1)[-1]
 
 
+def bpmn_link(http: requests.Session, zac: str, zaaktype: str) -> JsonObject | None:
+    """ZAC's link of process PROCESS_KEY to the zaaktype (uuid), its zaaktype-bpmn-configuration; None without one."""
+    links = entries(expect_status(http.get(zac + CONFIGURATION), HTTPStatus.OK).json())
+    mine = (link for link in links if link.get("bpmnProcessDefinitionKey") == PROCESS_KEY)
+    return next((link for link in mine if link.get("zaaktypeUuid") == zaaktype), None)
+
+
 @dataclass(frozen=True)
 class ZacBpmnProcess:
     """The process ptestBpmnProcess with its forms, linked to the BPMN test zaaktype, which PABC knows.
@@ -85,14 +93,8 @@ class ZacBpmnProcess:
         http, zac = self._zac(ctx)
         definitions = entries(expect_status(http.get(zac + DEFINITIONS), HTTPStatus.OK).json())
         keys = {definition.get("key") for definition in definitions}
-        links = entries(expect_status(http.get(zac + CONFIGURATION), HTTPStatus.OK).json())
-        linked = any(
-            link.get("bpmnProcessDefinitionKey") == PROCESS_KEY
-            and link.get("zaaktypeUuid") == zaaktype
-            and not link.get("zaakNietOntvankelijkResultaattype")
-            for link in links
-        )
-        if PROCESS_KEY not in keys or not linked:
+        link = bpmn_link(http, zac, zaaktype)
+        if PROCESS_KEY not in keys or link is None or link.get("zaakNietOntvankelijkResultaattype"):
             return False
         pabc, pabc_url = self._pabc(ctx)
         wanted = mappable_roles(pabc, pabc_url).items()
@@ -146,8 +148,7 @@ class ZacBpmnProcess:
         return ()
 
     def _zac(self, ctx: Context) -> tuple[requests.Session, str]:
-        password = ctx.env.credentials.get(self.admin.store_key)
-        return zac_session(ctx.env, self.admin.username, password), ctx.env.profile.urls["zac"]
+        return _zac_login(ctx, self.admin)
 
     def _pabc(self, ctx: Context) -> tuple[requests.Session, str]:
         password = ctx.env.credentials.get(self.admin.store_key)
@@ -166,6 +167,58 @@ class ZacBpmnProcess:
         left_out = sorted(set(ZAC_FUNCTIONAL_ROLES) - set(wanted))
         if left_out:
             ctx.notes.append(f"not mapped, PABC lacks their application roles: {', '.join(left_out)}")
+
+
+@dataclass(frozen=True)
+class ZacBpmnProductaanvraag:
+    """Productaanvraagtype BPMN_PRODUCTAANVRAAGTYPE on the zaaktype link of step zac-bpmn-process.
+
+    ZAC then starts a zaak of the BPMN test zaaktype for such a productaanvraag. remove clears it: ZAC refuses a
+    productaanvraagtype that a link left for a deleted zaaktype still holds.
+    """
+
+    admin: KeycloakUser
+    name: str = "zac-bpmn-productaanvraag"
+    requires: tuple[str, ...] = ("zac", "openzaak")
+    wiring: bool = False
+
+    def is_present(self, ctx: Context, /) -> bool:
+        """Return whether the link of the BPMN test zaaktype has the productaanvraagtype."""
+        link = self._link(ctx)
+        return link is not None and link.get("productaanvraagtype") == BPMN_PRODUCTAANVRAAGTYPE
+
+    def apply(self, ctx: Context, /) -> dict[str, str]:
+        """Set the productaanvraagtype on the link; LookupError without the link."""
+        link = self._link(ctx)
+        if link is None:
+            msg = f"ZAC has no link of process {PROCESS_KEY} to {BPMN_ZAAKTYPE}: bootstrap step zac-bpmn-process"
+            raise LookupError(msg)
+        self._store(ctx, {**link, "productaanvraagtype": BPMN_PRODUCTAANVRAAGTYPE})
+        return {}
+
+    def remove(self, ctx: Context, /) -> tuple[str, ...]:
+        """Clear the productaanvraagtype of the link."""
+        link = self._link(ctx)
+        if link is not None and link.get("productaanvraagtype") == BPMN_PRODUCTAANVRAAGTYPE:
+            self._store(ctx, {**link, "productaanvraagtype": None})
+        return ()
+
+    def _link(self, ctx: Context) -> JsonObject | None:
+        try:
+            zaaktype = uuid_of(published_zaaktype(_openzaak(ctx), BPMN_ZAAKTYPE, "openzaak-zaaktype-bpmn")["url"])
+        except LookupError:
+            return None
+        http, zac = _zac_login(ctx, self.admin)
+        return bpmn_link(http, zac, zaaktype)
+
+    def _store(self, ctx: Context, link: JsonObject) -> None:
+        http, zac = _zac_login(ctx, self.admin)
+        expect_status(http.post(zac + CONFIGURATION, json=link), HTTPStatus.OK)
+
+
+def _zac_login(ctx: Context, admin: KeycloakUser) -> tuple[requests.Session, str]:
+    password = ctx.env.credentials.get(admin.store_key)
+    return zac_session(ctx.env, admin.username, password), ctx.env.profile.urls["zac"]
 
 
 def _openzaak(ctx: Context) -> ApiClient:
