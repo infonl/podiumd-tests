@@ -248,6 +248,12 @@ def _status(zac: requests.Session, zac_url: str, zaak: JsonObject) -> object:
     return section(read_zaak(zac, zac_url, str(zaak["uuid"])), "status").get("naam")
 
 
+# Intermittent: 2 in 12 tries on minikube.
+@pytest.mark.xfail(
+    strict=False,
+    reason="[zac-16] ZAC 5.9.1 indexes a completed taak again when a zaak update is indexed at the same moment, so it "
+    "stays in Mijn taken; not yet reported upstream",
+)
 @ZAC_TEAM
 @THROWAWAY
 @TAKEN_ZAAKTYPE
