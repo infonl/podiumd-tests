@@ -10,7 +10,7 @@ Usage: run_python_checks [-h|--help]
 Runs ruff check, shellcheck, actionlint, ruff format --check, flake8
 (wemake-python-styleguide and plugins), yamllint, jscpd, pymarkdown, vulture,
 deptry, bandit, pylint, basedpyright, pytest (unit_tests/ only, with coverage
-threshold from pyproject.toml) and pip-audit (only warns), all at the same
+threshold from pyproject.toml), the test overview's freshness and pip-audit (only warns), all at the same
 time; prints each step's log in that order and lists every failed step.
 Upgrades the dev tools in .venv first when last upgraded over a day ago.
 EOF
@@ -157,6 +157,9 @@ step_basedpyright() { basedpyright "$SRC" "${TEST_DIRS[@]}"; }
 # Coverage source and threshold: [tool.coverage] in pyproject.toml. More than 8 workers start slower than they gain.
 step_pytest() { python3 -m pytest -q -n auto --maxprocesses 8 --cov --cov-report=term-missing:skip-covered unit_tests; }
 
+# docs/test-overview.md matches the tests' markers.
+step_test_overview() { python3 -m podiumd_tests.overview --check; }
+
 # Known vulnerabilities in the packages of .venv, as a warning: a new advisory appears without a code change and must
 # not block a commit; the pip-audit workflow reports it. --skip-editable: podiumd-tests itself is not on PyPI. Own
 # cache: pip-audit cannot read the cache entries of a newer pip.
@@ -184,7 +187,7 @@ run_step() {
 # failed step. pip-audit only waits on PyPI and never fails.
 steps=(
     ruff_check shellcheck actionlint ruff_format flake8 yamllint jscpd pymarkdown vulture deptry bandit
-    pylint_src pylint_tests basedpyright pytest pip_audit
+    pylint_src pylint_tests basedpyright pytest test_overview pip_audit
 )
 pids=()
 for name in "${steps[@]}"; do

@@ -182,7 +182,7 @@ rights (SCC Twente), run the container image from a machine that has access.
 ## Development
 
 ```bash
-./run_python_checks   # ruff, shellcheck, actionlint, flake8 (wemake, plugins), yamllint, jscpd, pymarkdown, vulture, deptry, bandit, pylint, basedpyright, pytest, pip-audit
+./run_python_checks   # ruff, shellcheck, actionlint, flake8 (wemake, plugins), yamllint, jscpd, pymarkdown, vulture, deptry, bandit, pylint, basedpyright, pytest, test overview, pip-audit
 git config core.hooksPath .githooks   # once per clone: commits run the checks first
 ```
 
@@ -197,6 +197,7 @@ the mock server's manifests.
 
 - [results/README.md](results/README.md): where runs are stored, what each outcome means, how to view a run.
 - [MIGRATION.md](MIGRATION.md): where each test of the older suites went.
+- [docs/test-overview.md](docs/test-overview.md): how many tests per tier, area, source and known issue.
 - [docs/draaiboek-coverage.md](docs/draaiboek-coverage.md): which draaiboek case which test covers.
 - [docs/handoff/notices/README.md](docs/handoff/notices/README.md): freeze notices for the older suites' owners.
 - `docs/handoff/`: open requests to other repositories; `docs/research/`: background research.
