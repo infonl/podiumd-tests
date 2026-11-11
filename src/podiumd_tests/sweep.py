@@ -36,6 +36,7 @@ from podiumd_tests.seed.openzaak import BESLUITEN
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
+from podiumd_tests.seed.openzaak import delete_besluit
 from podiumd_tests.seed.openzaak import delete_zaak
 
 if TYPE_CHECKING:
@@ -130,6 +131,10 @@ def with_productaanvraag(env: Environment, openzaak: ApiClient, zaken: list[Json
     return list(by_url.values())
 
 
+def _besluit(client: ApiClient) -> Callable[[JsonObject], None]:
+    return lambda item: delete_besluit(client, str(item["url"]))
+
+
 def _zaak(client: ApiClient) -> Callable[[JsonObject], None]:
     return lambda item: delete_zaak(client, str(item["url"]))
 
@@ -151,6 +156,7 @@ FINDERS: tuple[Finder, ...] = (
         _openzaak,
         f"{BESLUITEN}/besluiten",
         {"verantwoordelijkeOrganisatie": TEST_CATALOGUS_RSIN},
+        _besluit,
     ),
     Finder("zaak", "openzaak", "openzaak-client", _openzaak, f"{ZAKEN}/zaken", RSIN, _zaak),
     Finder(

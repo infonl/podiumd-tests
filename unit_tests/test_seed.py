@@ -62,7 +62,6 @@ def created(path: str) -> dict[str, _Answer]:
         (lambda c, r: openzaak.make_rol(c, r, {"url": ZAAK}, "rt", inpBsn="1"), "zaken/api/v1/rollen"),
         (lambda c, r: openzaak.make_document(c, r, "iot"), "documenten/api/v1/enkelvoudiginformatieobjecten"),
         (lambda c, r: openzaak.link_document(c, r, {"url": ZAAK}, {"url": "d"}), "zaken/api/v1/zaakinformatieobjecten"),
-        (lambda c, r: openzaak.make_besluit(c, r, "bt"), "besluiten/api/v1/besluiten"),
         (lambda c, r: openzaak.make_concept_zaaktype(c, r, "cat"), "catalogi/api/v1/zaaktypen"),
         (openklant.make_partij, "partijen"),
         (openklant.make_organisatie, "partijen"),
@@ -83,6 +82,22 @@ def test_factories_post_and_delete_at_cleanup(fake_http, factory, path):
     assert factory(api(), registry)["url"] == f"{API}/{path}/new"
     registry.cleanup()
     assert calls(sent) == [("POST", f"/{path}"), ("DELETE", f"/{path}/new")]
+
+
+def test_besluit_is_deleted_after_its_document_links(fake_http):
+    path = "besluiten/api/v1/besluiten"
+    links = "besluiten/api/v1/besluitinformatieobjecten"
+    link = {"url": f"{API}/{links}/l1"}
+    sent = fake_http(created(path) | {f"GET /v1/{links}": (200, [link]), f"DELETE /v1/{links}/l1": (204, {})})
+    registry = ResourceRegistry("run1")
+    openzaak.make_besluit(api(), registry, "bt")
+    registry.cleanup()
+    assert calls(sent) == [
+        ("POST", f"/{path}"),
+        ("GET", f"/{links}"),
+        ("DELETE", f"/{links}/l1"),
+        ("DELETE", f"/{path}/new"),
+    ]
 
 
 def test_tagged_fields_carry_the_run_tag(fake_http):

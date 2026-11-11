@@ -279,7 +279,17 @@ def make_besluit(openzaak: ApiClient, registry: ResourceRegistry, besluittype: s
         "toelichting": registry.tagged("besluit"),
         **fields,
     }
-    return _create(openzaak, registry, f"{BESLUITEN}/besluiten", body)
+    besluit = openzaak.post(f"{BESLUITEN}/besluiten", body)
+    url = str(besluit["url"])
+    registry.add(f"besluit {url}", lambda: delete_besluit(openzaak, url))
+    return besluit
+
+
+def delete_besluit(openzaak: ApiClient, url: str) -> None:
+    """DELETE a besluit after its besluitinformatieobjecten: Open Zaak 1.29.3 answers 500 otherwise (open-zaak-7)."""
+    for link in openzaak.list(f"{BESLUITEN}/besluitinformatieobjecten", {"besluit": url}):
+        openzaak.delete(str(link["url"]))
+    openzaak.delete(url)
 
 
 def make_concept_zaaktype(

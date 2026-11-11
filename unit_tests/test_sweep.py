@@ -159,7 +159,8 @@ def test_finders_list_and_delete_with_their_own_client(env_factory, profile_fact
     env = env_factory(profile_factory(urls=urls), environ)
     client = finder.client(env)
     listed = client.url(finder.path).removeprefix(API)
-    sent = fake_http({"GET /api/v2/objects": (200, []), "DELETE /item/1": (204, None), f"GET {listed}": (200, [item])})
+    answers = {"GET /api/v2/objects": (200, []), "DELETE /item/1": (204, None), f"GET {listed}": (200, [item])}
+    sent = fake_http({"GET /besluiten/api/v1/besluitinformatieobjecten": (200, []), **answers})
     assert finder.items(env, client) == [item]
     finder.delete(client)(item)
     assert sent[-1].method == "DELETE"
