@@ -135,3 +135,31 @@ def test_logboek_lists_each_action(  # fixtures
     close_with_klantcontact(ita, urls["ita"], answer_body(internetaak, klantcontact_body(registry)))
     types = [str(activiteit.get("type")) for activiteit in logboek(ita, urls["ita"], internetaak)]
     assert types == ["verwerkt", "klantcontact", "zaakkoppeling-gewijzigd", "zaak-gekoppeld", "toegewezen"]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="[ita-3] ITA 3.3.4 marks koppel-zaak [AllowAnonymous]: without a login it links the zaak and returns the "
+    "zaak and the klantcontact; not reported upstream",
+)
+@pytest.mark.source("podiumd-tests", "ITA's API refuses every call without a login, as its fallback policy intends.")
+@pytest.mark.scenario("""
+    Given a contactverzoek and a zaak
+    When someone without a login links the zaak to the contactverzoek through ITA's API
+    Then ITA refuses it
+    And the contactverzoek is about no zaak
+""")
+def test_koppel_zaak_needs_a_login(  # fixtures
+    podiumd_env: Environment,
+    urls: dict[str, str],
+    openklant: ApiClient,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    parts: ZaaktypeParts,
+    internetaak: JsonObject,
+) -> None:
+    """koppel-zaak without a session cookie answers 401 and links nothing."""
+    zaak = make_zaak(openzaak, registry, parts.zaaktype)
+    anonymous = koppel_zaak(podiumd_env.session(), urls["ita"], internetaak, str(zaak["identificatie"]))
+    assert _zaken_of(openklant, internetaak) == [], f"ITA linked the zaak without a login ({anonymous.status_code})"
+    expect_status(anonymous, HTTPStatus.UNAUTHORIZED)
