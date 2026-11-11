@@ -129,3 +129,10 @@ def test_ontkoppel_document_cleanup_deletes_only_its_detached_entry(fake_http):
     assert [(request.method, request.url) for request in sent[-1:]] == [
         ("DELETE", f"{ZAC}/rest/ontkoppeldedocumenten/7")
     ]
+
+
+def test_ontkoppel_document_without_reden_sends_none(fake_http):
+    sent = fake_http({"PUT /rest/zaken/zaakinformatieobjecten/ontkoppel": (500, None)})
+    zaak = {"uuid": "z1", "identificatie": "ZAAK-1"}
+    zac_documents.ontkoppel_document(requests.Session(), ZAC, zaak, {"uuid": "d1"}, None, ResourceRegistry("ptest-x"))
+    assert json.loads(sent[-1].body) == {"zaakUUID": "z1", "documentUUID": "d1"}

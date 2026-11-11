@@ -116,6 +116,36 @@ def test_ontkoppeld_document_is_gekoppeld_to_another_zaak(
     assert _ontkoppeld(zac, urls["zac"], zaak, document) is None
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-11] ZAC 5.9.1 answers 500 to ontkoppelen without a reden after it has deleted the link in Open Zaak, "
+    "so the document is on no zaak and not in the ontkoppelde documenten; not yet reported upstream",
+)
+@pytest.mark.scenario("""
+    Given a document on a zaak in ZAC
+    When the behandelaar ontkoppelt it without a reden
+    Then ZAC refuses it
+    And the zaak still has the document
+""")
+def test_ontkoppelen_without_a_reden_keeps_the_document(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    openzaak_productaanvraag: ApiClient,
+    registry: ResourceRegistry,
+) -> None:
+    """Ontkoppelen without reden answers 400 and leaves the document on the zaak."""
+    zaak = zac_zaak()
+    document = uploaded_document(zac, urls["zac"], zaak, registry)
+    response = ontkoppel_document(zac, urls["zac"], zaak, document, None, registry)
+    kept = document["uuid"] in _uuids(zac, urls["zac"], zaak)
+    if not kept:  # the zaak's cleanup no longer reaches it
+        in_openzaak = f"{urls['openzaak']}/{DOCUMENTEN}/enkelvoudiginformatieobjecten/{document['uuid']}"
+        registry.add(f"document {document['uuid']}", lambda: openzaak_productaanvraag.delete(in_openzaak))
+    assert kept, f"ZAC answered {response.status_code} and the zaak no longer has the document"
+    expect_status(response, HTTPStatus.BAD_REQUEST)
+
+
 @pytest.mark.scenario("""
     Given a document ontkoppeld from a zaak in ZAC
     When the recordmanager deletes it from the ontkoppelde documenten

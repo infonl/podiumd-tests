@@ -214,10 +214,13 @@ def ontkoppel_document(  # noqa: PLR0913, PLR0917  # the fields of ZAC's request
     zac_url: str,
     zaak: JsonObject,
     document: JsonObject,
-    reden: str,
+    reden: str | None,
     registry: ResourceRegistry,
 ) -> requests.Response:
-    """Detach the document from the zaak with a reden; ZAC's answer. Cleanup deletes it while it is detached."""
+    """Detach the document from the zaak with a reden (None: sent without); ZAC's answer.
+
+    Cleanup deletes it while it is detached.
+    """
 
     def delete() -> None:
         for ontkoppeld in ontkoppelde_documenten(zac, zac_url, zaak):
@@ -225,5 +228,7 @@ def ontkoppel_document(  # noqa: PLR0913, PLR0917  # the fields of ZAC's request
                 expect_status(delete_ontkoppeld_document(zac, zac_url, ontkoppeld), HTTPStatus.NO_CONTENT)
 
     registry.add(f"ontkoppeld document {document['uuid']}", delete)
-    body = {"zaakUUID": zaak["uuid"], "documentUUID": document["uuid"], "reden": reden}
+    body = {"zaakUUID": zaak["uuid"], "documentUUID": document["uuid"]}
+    if reden is not None:
+        body["reden"] = reden
     return zac.put(f"{zac_url}/rest/zaken/zaakinformatieobjecten/ontkoppel", json=body)
