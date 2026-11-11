@@ -654,6 +654,14 @@ STEPS: tuple[Step, ...] = (
             "besluittype": names.BPMN_BESLUITTYPE,
         },
     ),
+    # The informatieobjecttype ZAC stores mails as; throwaway ZAC zaaktypen of the tests link it.
+    SnippetStep(
+        "openzaak-iot-email",
+        ("openzaak",),
+        "openzaak_iot",
+        None,
+        {"domein": names.TEST_CATALOGUS_DOMEIN, "rsin": names.TEST_CATALOGUS_RSIN, "omschrijving": names.EMAIL_IOT},
+    ),
     # ZaakBrug's statuses on a zaak of an expired zaaktype version: version 1 valid in 2020, version 2 from 2021.
     SnippetStep(
         "openzaak-zaaktype-zaakbrug-versies",

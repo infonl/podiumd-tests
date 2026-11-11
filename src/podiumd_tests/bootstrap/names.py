@@ -30,6 +30,8 @@ NRC_STORE_KEY = "ptest_bootstrap_nrc_secret"
 TEST_ZAAKTYPE = "ptest-bootstrap-klacht"
 TEST_IOT = "ptest-bootstrap-bijlage"
 TEST_BESLUITTYPE = "ptest-bootstrap-besluit"
+# ZAC stores a mail it sends as a document of the zaaktype's informatieobjecttype with exactly this omschrijving.
+EMAIL_IOT = "e-mail"
 # The zaaktype ZAC handles with podiumd-tests' BPMN process (bootstrap step zac-bpmn-process).
 BPMN_ZAAKTYPE = "ptest-bootstrap-bpmn"
 BPMN_IOT = "ptest-bootstrap-bpmn-bijlage"
