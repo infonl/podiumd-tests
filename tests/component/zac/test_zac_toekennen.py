@@ -11,10 +11,13 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.bootstrap.steps import ADMIN
-from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import LIST_TIMEOUT
+from podiumd_tests.zac import assignment
 from podiumd_tests.zac import read_zaak
+from podiumd_tests.zac import verdelen
+from podiumd_tests.zac import vrijgeven
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -24,14 +27,6 @@ if TYPE_CHECKING:
     from podiumd_tests.json_data import JsonObject
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "keycloak")]
-
-# ZAC assigns and releases list selections in a background job.
-LIST_TIMEOUT = 60
-
-
-def assignment(zaak: JsonObject) -> tuple[object, object]:
-    """(group id, behandelaar id) of ZAC's view of a zaak."""
-    return section(zaak, "groep").get("id"), section(zaak, "behandelaar").get("id")
 
 
 @pytest.mark.source("ZAC features/9-bpmn.feature", "Bob changes the group and user a zaak is assigned to.")
@@ -71,13 +66,11 @@ def test_zaken_from_the_list_are_assigned_and_released(
 ) -> None:
     """Verdelen gives the selected zaken the group and behandelaar; vrijgeven takes the behandelaar away again."""
     uuids = [str(zac_zaak()["uuid"]), str(zac_zaak()["uuid"])]
-    zaken = f"{urls['zac']}/rest/zaken/lijst"
 
     def are_all(wanted: tuple[object, object]) -> bool:
         return all(assignment(read_zaak(zac, urls["zac"], u)) == wanted for u in uuids)
 
-    body = {"uuids": uuids, "groepId": zac_group, "behandelaarGebruikersnaam": ADMIN.username, "reden": "test"}
-    expect_status(zac.put(f"{zaken}/verdelen", json=body), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    expect_status(verdelen(zac, urls["zac"], uuids, zac_group, ADMIN.username), HTTPStatus.NO_CONTENT)
     wait_until(lambda: are_all((zac_group, ADMIN.username)), timeout=LIST_TIMEOUT, description="zaken verdeeld")
-    expect_status(zac.put(f"{zaken}/vrijgeven", json={"uuids": uuids, "reden": "test"}), 200, 204)
+    expect_status(vrijgeven(zac, urls["zac"], uuids), HTTPStatus.NO_CONTENT)
     wait_until(lambda: are_all((zac_group, None)), timeout=LIST_TIMEOUT, description="zaken vrijgegeven")

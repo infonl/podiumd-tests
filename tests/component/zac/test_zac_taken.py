@@ -18,6 +18,7 @@ from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import assignment
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import search
 
@@ -79,11 +80,6 @@ def fixture_start_taak(
 def fixture_taak(zac_zaak: Callable[..., JsonObject], start_taak: Callable[..., JsonObject]) -> JsonObject:
     """The task Aanvullende informatie, started on a new zaak."""
     return start_taak(zac_zaak())
-
-
-def assignment(taak: JsonObject) -> tuple[object, object]:
-    """(group id, behandelaar id) of a task."""
-    return section(taak, "groep").get("id"), section(taak, "behandelaar").get("id")
 
 
 @pytest.mark.source(

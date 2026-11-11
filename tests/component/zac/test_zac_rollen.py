@@ -22,22 +22,20 @@ from podiumd_tests.pabc import decide
 from podiumd_tests.pabc import mapped_application_roles
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
-from podiumd_tests.workloads import skip_older_than
+from podiumd_tests.zac import POLICIES
 from podiumd_tests.zac import is_zaak_listed
+from podiumd_tests.zac import rights_of
 from podiumd_tests.zac import wait_in_werkvoorraad
-from podiumd_tests.zac import zac_session
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     import requests
 
-    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "pabc", "keycloak")]
 
-POLICIES = "upstream infonl/dimpact-zaakafhandelcomponent src/main/resources/policies"
 # The least base role that has each right, per policy read-out (overige-, werklijst- and notitie-rechten.rego).
 POLICY = {
     "overigeRechten": {"startenZaak": "behandelaar", "beheren": "beheerder", "zoeken": "raadpleger"},
@@ -71,6 +69,9 @@ CHECKS = [
         "DELETE", f"/rest/ontkoppeldedocumenten/{NO_ID}", None, "recordmanager", HTTPStatus.NO_CONTENT, id="ontkoppeld"
     ),
     pytest.param("GET", "/rest/referentietabellen", None, "beheerder", HTTPStatus.OK, id="beheer"),
+    pytest.param(
+        "POST", "/rest/csv/export", {"page": 0, "rows": 1, "type": "ZAAK"}, "beheerder", HTTPStatus.OK, id="export"
+    ),
 ]
 
 
@@ -83,25 +84,6 @@ def skip_without_brp_zoeken(decision: JsonObject) -> None:
     """Skip when PABC gives the brp_zoeken user no role: podiumd chart 4.9's PABC dataset lacks brp_zoeken."""
     if not mapped_application_roles(decision, BPMN_ZAAKTYPE):
         pytest.skip("PABC has no application role brp_zoeken: add it to PABC's dataset (podiumd chart 4.10 has it)")
-
-
-def has(role: str, least: str) -> bool:
-    """Whether the base role has a right whose least role is `least`."""
-    return ZAC_BASE_ROLES.index(role) >= ZAC_BASE_ROLES.index(least)
-
-
-@pytest.fixture(name="zac_as")
-def fixture_zac_as(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> Callable[[str], requests.Session]:
-    """A login to ZAC as the test user of one application role; skips below ZAC 5.9.1."""
-    skip_older_than(podiumd_env, "zac", (5, 9, 1), "the role tests follow its policies")
-    need_bootstrap("zac-bpmn-process")
-
-    def login(role: str) -> requests.Session:
-        user = ZAC_ROLE_USERS[role]
-        need_bootstrap(user.name)
-        return zac_session(podiumd_env, user.username, podiumd_env.credentials.get(user.store_key))
-
-    return login
 
 
 @pytest.mark.source(
@@ -147,10 +129,10 @@ def test_rights_follow_the_role(
     for endpoint, rights in POLICY.items():
         body = expect_status(http.get(f"{urls['zac']}/rest/policy/{endpoint}"), HTTPStatus.OK).json()
         actual |= {f"{endpoint}.{right}": body.get(right) for right in rights}
-        expected |= {f"{endpoint}.{right}": has(role, least) for right, least in rights.items()}
+        expected |= {f"{endpoint}.{right}": has for right, has in rights_of(role, rights).items()}
     zaak = expect_status(http.get(f"{urls['zac']}/rest/zaken/zaak/{bpmn_zaak['uuid']}"), HTTPStatus.OK).json()
     actual |= {f"zaak.{right}": section(zaak, "rechten").get(right) for right in ZAAK}
-    expected |= {f"zaak.{right}": has(role, least) for right, least in ZAAK.items()}
+    expected |= {f"zaak.{right}": has for right, has in rights_of(role, ZAAK).items()}
     assert actual == expected
 
 

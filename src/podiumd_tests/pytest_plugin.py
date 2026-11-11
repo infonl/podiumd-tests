@@ -21,9 +21,8 @@ from podiumd_tests import results
 from podiumd_tests import scenarios
 from podiumd_tests.bootstrap import names
 from podiumd_tests.bootstrap import runner
+from podiumd_tests.bootstrap import steps
 from podiumd_tests.bootstrap.bpmn import uuid_of
-from podiumd_tests.bootstrap.steps import ADMIN
-from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.clients import platform
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
@@ -40,6 +39,7 @@ from podiumd_tests.seed.openzaak import zaaktype_parts
 from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.sources import source_problems
 from podiumd_tests.sources import sources
+from podiumd_tests.workloads import skip_older_than
 from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import is_confirmation_on
 from podiumd_tests.zac import user_groups
@@ -184,15 +184,16 @@ def fixture_need_bootstrap(
     present.mkdir(exist_ok=True)
 
     def need(*step_names: str) -> None:
-        wanted = [step for step in STEPS if step.name in step_names and not (present / step.name).exists()]
-        unknown = set(step_names) - {step.name for step in STEPS}
+        named = [step for step in steps.STEPS if step.name in step_names]
+        wanted = [step for step in named if not (present / step.name).exists()]
+        unknown = set(step_names) - {step.name for step in named}
         if unknown:
             pytest.fail(f"unknown bootstrap steps: {', '.join(sorted(unknown))}")
         missing = _missing(podiumd_env, wanted)
         name = podiumd_env.profile.name
         if missing and not auto:
-            steps = ", ".join(step.name for step in missing)
-            pytest.fail(f"bootstrap missing on {name} ({steps}): run `podiumd-tests bootstrap --env {name}`")
+            missing_names = ", ".join(step.name for step in missing)
+            pytest.fail(f"bootstrap missing on {name} ({missing_names}): run `podiumd-tests bootstrap --env {name}`")
         if missing:
             _auto_bootstrap(podiumd_env, missing)
         for step in wanted:
@@ -444,8 +445,22 @@ def fixture_kiss_session(
 @pytest.fixture(name="zac")
 def fixture_zac(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> requests.Session:
     """Return the test admin's session on ZAC's REST API."""
-    need_bootstrap(ADMIN.name)
-    return zac_session(podiumd_env, ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
+    need_bootstrap(steps.ADMIN.name)
+    return zac_session(podiumd_env, steps.ADMIN.username, podiumd_env.credentials.get(steps.ADMIN.store_key))
+
+
+@pytest.fixture(name="zac_as")
+def fixture_zac_as(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> Callable[[str], requests.Session]:
+    """Return a login to ZAC as the test user of one application role; skips below ZAC 5.9.1."""
+    skip_older_than(podiumd_env, "zac", (5, 9, 1), "the role tests follow its policies")
+    need_bootstrap("zac-bpmn-process")
+
+    def login(role: str) -> requests.Session:
+        user = steps.ZAC_ROLE_USERS[role]
+        need_bootstrap(user.name)
+        return zac_session(podiumd_env, user.username, podiumd_env.credentials.get(user.store_key))
+
+    return login
 
 
 @pytest.fixture(name="zac_group")

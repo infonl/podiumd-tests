@@ -16,8 +16,9 @@ from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.zac import NIET_ONTVANKELIJK
+from podiumd_tests.zac import afhandelen
+from podiumd_tests.zac import afsluiten
 from podiumd_tests.zac import read_zaak
-from podiumd_tests.zac import resultaattypen
 from podiumd_tests.zac import user_event
 
 if TYPE_CHECKING:
@@ -49,13 +50,7 @@ def _ontvankelijk(zac: requests.Session, zac_url: str, zaak: JsonObject) -> None
 
 def _afhandelen(zac: requests.Session, zac_url: str, zaak: JsonObject) -> JsonObject:
     """Afhandelen with the first resultaattype that needs no besluit; the zaak as ZAC shows it after."""
-    resultaattype = next(r for r in resultaattypen(zac, zac_url, zaak) if not r.get("besluitVerplicht"))
-    fields = {"resultaattypeUuid": resultaattype["id"], "resultaatToelichting": "podiumd-tests"}
-    expect_status(
-        user_event(zac, zac_url, str(zaak["uuid"]), "ZAAK_AFHANDELEN", **fields),
-        HTTPStatus.OK,
-        HTTPStatus.NO_CONTENT,
-    )
+    expect_status(afhandelen(zac, zac_url, zaak), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     return read_zaak(zac, zac_url, str(zaak["uuid"]))
 
 
@@ -150,9 +145,7 @@ def test_heropend_zaak_loses_its_resultaat_and_can_be_closed_again(
         f"{urls['zac']}/rest/zaken/zaak/{uuid}/afbreken", json={"zaakbeeindigRedenId": NIET_ONTVANKELIJK}
     )
     expect_status(afbreken, *REFUSED)
-    resultaattype = next(r for r in resultaattypen(zac, urls["zac"], zaak) if not r.get("besluitVerplicht"))
-    body = {"reden": "podiumd-tests", "resultaattypeUuid": resultaattype["id"]}
-    again = expect_status(zac.patch(f"{urls['zac']}/rest/zaken/zaak/{uuid}/afsluiten", json=body), HTTPStatus.OK)
+    again = expect_status(afsluiten(zac, urls["zac"], zaak), HTTPStatus.OK)
     assert again.json()["isOpen"] is False
 
 

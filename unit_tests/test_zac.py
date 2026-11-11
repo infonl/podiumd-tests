@@ -267,3 +267,57 @@ def test_send_mail_and_its_acknowledge_variant(fake_http):
     assert sent[-1].url.endswith("/rest/mail/send/z1")
     zac.send_mail(http, ZAC, zaak, {"onderwerp": "x"}, acknowledge=True)
     assert sent[-1].url.endswith("/rest/mail/acknowledge/z1")
+
+
+def test_afhandelen_and_afsluiten_use_a_resultaattype_without_besluit(fake_http):
+    sent = fake_http(
+        {
+            "GET /rest/zaken/resultaattypes/zt1": (200, [{"id": "r1", "besluitVerplicht": True}, {"id": "r2"}]),
+            "GET /rest/planitems/zaak/z1/userEventListenerPlanItems": (
+                200,
+                [{"id": "p1", "userEventListenerActie": "ZAAK_AFHANDELEN"}],
+            ),
+            "POST /rest/planitems/doUserEventListenerPlanItem": (204, None),
+            "PATCH /rest/zaken/zaak/z1/afsluiten": (200, {"isOpen": False}),
+        }
+    )
+    http, zaak = requests.Session(), {"uuid": "z1", "zaaktype": {"uuid": "zt1"}}
+    zac.afhandelen(http, ZAC, zaak)
+    assert json.loads(sent[-1].body)["resultaattypeUuid"] == "r2"
+    zac.afsluiten(http, ZAC, zaak)
+    assert json.loads(sent[-1].body) == {"reden": "podiumd-tests", "resultaattypeUuid": "r2"}
+
+
+def test_wijzig_zaak_sends_the_fields_with_omschrijving_zaaktype_and_reden(fake_http):
+    sent = fake_http({"PATCH /rest/zaken/zaak/z1": (200, {})})
+    zaak = {"uuid": "z1", "omschrijving": "o", "zaaktype": {"uuid": "zt1"}}
+    zac.wijzig_zaak(requests.Session(), ZAC, zaak, uiterlijkeEinddatumAfdoening="2026-12-01")
+    assert json.loads(sent[-1].body) == {
+        "zaak": {"omschrijving": "o", "zaaktype": {"uuid": "zt1"}, "uiterlijkeEinddatumAfdoening": "2026-12-01"},
+        "reden": "podiumd-tests",
+    }
+
+
+def test_verdelen_and_vrijgeven_send_the_selection(fake_http):
+    sent = fake_http({"PUT /rest/zaken/lijst/verdelen": (204, None), "PUT /rest/zaken/lijst/vrijgeven": (204, None)})
+    http = requests.Session()
+    zac.verdelen(http, ZAC, ["z1"], "g1", None)
+    assert json.loads(sent[-1].body) == {
+        "uuids": ["z1"],
+        "groepId": "g1",
+        "behandelaarGebruikersnaam": None,
+        "reden": "podiumd-tests",
+    }
+    zac.vrijgeven(http, ZAC, ["z1"])
+    assert json.loads(sent[-1].body) == {"uuids": ["z1"], "reden": "podiumd-tests"}
+
+
+def test_assignment_is_group_and_behandelaar():
+    assert zac.assignment({"groep": {"id": "g1"}, "behandelaar": {"id": "u1"}}) == ("g1", "u1")
+    assert zac.assignment({"groep": {"id": "g1"}, "behandelaar": None}) == ("g1", None)
+
+
+def test_rights_of_gives_a_role_the_rights_of_the_roles_before_it():
+    least = {"lezen": "raadpleger", "wijzigen": "recordmanager", "versturenEmail": None}
+    assert zac.rights_of("raadpleger", least) == {"lezen": True, "wijzigen": False, "versturenEmail": False}
+    assert zac.rights_of("beheerder", least) == {"lezen": True, "wijzigen": True, "versturenEmail": False}

@@ -1,20 +1,41 @@
-"""ZAC's access rules (its OPA policies): a user without ZAC roles cannot read a zaak that the admin can read.
+"""ZAC's access rules (its OPA policies) on closed zaken, documents, beheer, verdelen and the BRP.
 
-Every ZAC REST call asks ZAC's OPA sidecar for the user's rights; a call that succeeds shows that OPA allows.
-This checks the other side: the KCC test user (klantcontactmedewerker, no ZAC roles) is refused.
+Every ZAC REST call asks ZAC's OPA sidecar for the user's rights; a call that succeeds shows that OPA allows. The
+tests per role log in as bootstrap's test user with only that ZAC application role on the BPMN test zaaktype
+(fixture zac_as); the expected rights are ZAC 5.9.1's policies.
 """
 
 from __future__ import annotations
 
+from datetime import date
+from datetime import timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.basisregistraties import EREBOS
+from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
+from podiumd_tests.bootstrap.names import ZAC_BASE_ROLES
+from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import KCC
+from podiumd_tests.json_data import section
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
+from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import LIST_TIMEOUT
+from podiumd_tests.zac import POLICIES
+from podiumd_tests.zac import afsluiten
+from podiumd_tests.zac import assignment
+from podiumd_tests.zac import read_zaak
+from podiumd_tests.zac import rights_of
+from podiumd_tests.zac import verdelen
+from podiumd_tests.zac import vrijgeven
+from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zac_session
+from podiumd_tests.zac_documents import document_url
+from podiumd_tests.zac_documents import nieuwe_versie
+from podiumd_tests.zac_documents import uploaded_document
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -23,8 +44,35 @@ if TYPE_CHECKING:
 
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "keycloak")]
+
+# The least base role with each right on a closed zaak (zaak-rechten.rego); None: no base role.
+CLOSED_ZAAK = {
+    "lezen": "raadpleger",
+    "behandelen": "behandelaar",
+    "wijzigen": "recordmanager",
+    "toekennen": "recordmanager",
+    "heropenen": "recordmanager",
+    "toevoegenInitiatorPersoon": "recordmanager",
+    "toevoegenBetrokkeneBedrijf": "recordmanager",
+    "verwijderenBetrokkene": "recordmanager",
+    "toevoegenBagObject": "recordmanager",
+    "wijzigenLocatie": "recordmanager",
+    "bekijkenZaakdata": "beheerder",
+    "wijzigenDoorlooptijd": None,
+    "creerenDocument": None,
+    "versturenEmail": None,
+    "versturenOntvangstbevestiging": None,
+}
+# ZAC's beheer endpoints that only read; each checks the right beheren (overige-rechten.rego).
+BEHEER = (
+    "/rest/admin/util",
+    "/rest/beheer/mailtemplates",
+    "/rest/zaakafhandelparameters",
+    "/rest/bpmn-process-definitions",
+)
 
 
 @pytest.mark.source(
@@ -52,3 +100,261 @@ def test_user_without_zac_roles_cannot_read_a_zaak(
     kcc = zac_session(podiumd_env, KCC.username, podiumd_env.credentials.get(KCC.store_key))
     refused = kcc.get(url, allow_redirects=False)
     assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
+
+
+@pytest.fixture(name="closed_bpmn_zaak")
+def fixture_closed_bpmn_zaak(zac: requests.Session, urls: dict[str, str], bpmn_zaak: JsonObject) -> JsonObject:
+    """The BPMN test zaak, afgehandeld by the test admin."""
+    return expect_status(afsluiten(zac, urls["zac"], bpmn_zaak), HTTPStatus.OK).json()
+
+
+@pytest.mark.requires("pabc")
+@pytest.mark.source(POLICIES, "On a closed zaak only a recordmanager or beheerder may change it, never its dates.")
+@pytest.mark.scenario("""
+    Given an afgehandelde zaak of the BPMN test zaaktype
+    When each test user with one ZAC base role reads the zaak's rechten
+    Then a behandelaar and coordinator may no longer change the zaak, its betrokkenen or documents
+    And a recordmanager and beheerder may change it and heropenen it, but not its dates
+    And no role may send mail from it or add a document to it
+""")
+def test_closed_zaak_rights_follow_the_role(
+    zac_as: Callable[[str], requests.Session], urls: dict[str, str], closed_bpmn_zaak: JsonObject
+) -> None:
+    """The closed zaak's rechten per base role match ZAC 5.9.1's least role per right on a closed zaak."""
+    actual = {}
+    for role in ZAC_BASE_ROLES:
+        rechten = section(read_zaak(zac_as(role), urls["zac"], str(closed_bpmn_zaak["uuid"])), "rechten")
+        actual[role] = {right: rechten.get(right) for right in CLOSED_ZAAK}
+    assert actual == {role: rights_of(role, CLOSED_ZAAK) for role in ZAC_BASE_ROLES}
+
+
+@pytest.mark.requires("pabc")
+@pytest.mark.source(POLICIES, "A closed zaak is changed and heropend only by a recordmanager or beheerder.")
+@pytest.mark.scenario("""
+    Given an afgehandelde zaak of the BPMN test zaaktype
+    When a behandelaar or a coordinator changes its omschrijving
+    Then ZAC refuses it
+    When a recordmanager changes its omschrijving
+    Then the zaak has the new omschrijving
+    But ZAC refuses the recordmanager a new uiterlijke einddatum afdoening
+    And ZAC refuses the behandelaar to heropenen the zaak
+""")
+def test_closed_zaak_is_changed_only_by_a_recordmanager(
+    zac_as: Callable[[str], requests.Session], urls: dict[str, str], closed_bpmn_zaak: JsonObject
+) -> None:
+    """Behandelaar and coordinator get 403 for an edit and heropenen; the recordmanager edits, but gets 403 for a date.
+
+    The recordmanager's heropenen is left to the rechten: the BPMN test zaaktype has no statustype Heropend.
+    """
+    zaak, zac_url = closed_bpmn_zaak, urls["zac"]
+    omschrijving = f"{zaak['omschrijving']}-gewijzigd"
+    for role in ("behandelaar", "coordinator"):
+        refused = wijzig_zaak(zac_as(role), zac_url, zaak, omschrijving=omschrijving)
+        assert refused.status_code == HTTPStatus.FORBIDDEN, f"{role}: {describe(refused)}"
+    recordmanager = zac_as("recordmanager")
+    expect_status(wijzig_zaak(recordmanager, zac_url, zaak, omschrijving=omschrijving), HTTPStatus.OK)
+    assert read_zaak(recordmanager, zac_url, str(zaak["uuid"]))["omschrijving"] == omschrijving
+    later = (date.fromisoformat(str(zaak["uiterlijkeEinddatumAfdoening"])) + timedelta(days=1)).isoformat()
+    refused = wijzig_zaak(recordmanager, zac_url, zaak, uiterlijkeEinddatumAfdoening=later)
+    assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
+    heropenen = f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/heropenen"
+    refused = zac_as("behandelaar").patch(heropenen, json={"reden": "podiumd-tests"})
+    assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
+
+
+def _locked(
+    zac: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject, registry: ResourceRegistry
+) -> None:
+    url, of_zaak = document_url(zac_url, document), {"zaak": str(zaak["uuid"])}
+    expect_status(zac.post(f"{url}/lock", params=of_zaak), HTTPStatus.OK)
+    # Unlocked before the zaak's cleanup deletes the document; ZAC refuses it once the test unlocked it.
+    registry.add(f"lock of document {document['uuid']}", lambda: zac.post(f"{url}/unlock", params=of_zaak))
+
+
+def _ondertekend(
+    zac: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject, _: ResourceRegistry
+) -> None:
+    url = document_url(zac_url, document)
+    expect_status(zac.post(f"{url}/onderteken", params={"zaak": str(zaak["uuid"])}), HTTPStatus.OK)
+
+
+def _afgehandeld(
+    zac: requests.Session, zac_url: str, zaak: JsonObject, _document: JsonObject, _registry: ResourceRegistry
+) -> None:
+    expect_status(afsluiten(zac, zac_url, zaak), HTTPStatus.OK)
+
+
+def _unlock(http: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject) -> requests.Response:
+    return http.post(f"{document_url(zac_url, document)}/unlock", params={"zaak": str(zaak["uuid"])})
+
+
+def _new_version(http: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject) -> requests.Response:
+    return nieuwe_versie(http, zac_url, zaak, document, {"beschrijving": "podiumd-tests"})
+
+
+def _delete(http: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject) -> requests.Response:
+    return http.delete(document_url(zac_url, document), json={"zaakUuid": zaak["uuid"], "reden": "podiumd-tests"})
+
+
+# Per state of a document: how the test admin brings it there, the least base role with each right
+# (document-rechten.rego; None: no base role) and a call the recordmanager may make and the behandelaar may not.
+DOCUMENT_STATES = [
+    pytest.param(
+        _locked,
+        {
+            "lezen": "raadpleger",
+            "vergrendelen": "behandelaar",
+            "wijzigen": "recordmanager",
+            "ontgrendelen": "recordmanager",
+            "toevoegenNieuweVersie": "recordmanager",
+            "verwijderen": None,
+            "ondertekenen": None,
+            "converteren": None,
+        },
+        _unlock,
+        id="vergrendeld-door-een-ander",
+    ),
+    pytest.param(
+        _ondertekend,
+        {
+            "lezen": "raadpleger",
+            "vergrendelen": "behandelaar",
+            "ondertekenen": "behandelaar",
+            "converteren": "behandelaar",
+            "wijzigen": "recordmanager",
+            "ontgrendelen": "recordmanager",
+            "toevoegenNieuweVersie": "recordmanager",
+            "verwijderen": "recordmanager",
+        },
+        _new_version,
+        id="ondertekend",
+    ),
+    pytest.param(
+        _afgehandeld,
+        {
+            "lezen": "raadpleger",
+            "wijzigen": "recordmanager",
+            "ontgrendelen": "recordmanager",
+            "toevoegenNieuweVersie": "recordmanager",
+            "verwijderen": "recordmanager",
+            "vergrendelen": None,
+            "ondertekenen": None,
+            "converteren": None,
+        },
+        _delete,
+        id="zaak-afgehandeld",
+    ),
+]
+
+
+@pytest.mark.requires("pabc")
+@pytest.mark.source(POLICIES, "A recordmanager may change locked, definitief and closed-zaak documents; others not.")
+@pytest.mark.scenario("""
+    Given a PDF in bewerking on a zaak of the BPMN test zaaktype
+    And the test admin locked it, signed it, or afgehandeld the zaak
+    When each test user with one ZAC base role reads the document's rechten
+    Then a behandelaar and coordinator may not change it, add a version or delete it
+    And a recordmanager and beheerder may
+    And ZAC refuses the behandelaar's unlock, new version or delete, and accepts the recordmanager's
+""")
+@pytest.mark.parametrize(("prepare", "least_roles", "call"), DOCUMENT_STATES)
+def test_document_rights_follow_the_role_and_the_state(
+    zac: requests.Session,
+    zac_as: Callable[[str], requests.Session],
+    urls: dict[str, str],
+    bpmn_zaak: JsonObject,
+    registry: ResourceRegistry,
+    prepare: Callable[..., None],
+    least_roles: dict[str, str | None],
+    call: Callable[..., requests.Response],
+) -> None:
+    """The document's rechten per base role match ZAC 5.9.1; the state's call is 403 for a behandelaar only."""
+    zac_url = urls["zac"]
+    document = uploaded_document(zac, zac_url, bpmn_zaak, registry, suffix="pdf", status="in_bewerking")
+    prepare(zac, zac_url, bpmn_zaak, document, registry)
+    url, of_zaak = document_url(zac_url, document), {"zaak": str(bpmn_zaak["uuid"])}
+    actual = {}
+    for role in ZAC_BASE_ROLES:
+        rechten = section(expect_status(zac_as(role).get(url, params=of_zaak), HTTPStatus.OK).json(), "rechten")
+        actual[role] = {right: rechten.get(right) for right in least_roles}
+    assert actual == {role: rights_of(role, least_roles) for role in ZAC_BASE_ROLES}
+    refused = call(zac_as("behandelaar"), zac_url, bpmn_zaak, document)
+    assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
+    expect_status(call(zac_as("recordmanager"), zac_url, bpmn_zaak, document), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+
+
+@pytest.mark.requires("pabc")
+@pytest.mark.source(POLICIES, "ZAC's beheer pages and /rest/admin are for the beheerder only.")
+@pytest.mark.scenario("""
+    Given a test user with only one ZAC base role
+    When the user opens ZAC's beheer: admin util, mailtemplates, zaakafhandelparameters and BPMN processes
+    Then ZAC refuses every one of them, unless the user is beheerder
+""")
+@pytest.mark.parametrize("role", ZAC_BASE_ROLES)
+def test_beheer_is_refused_to_every_role_but_beheerder(
+    zac_as: Callable[[str], requests.Session], urls: dict[str, str], role: str
+) -> None:
+    """Each read-only beheer endpoint answers 200 to the beheerder and 403 to every other base role."""
+    http = zac_as(role)
+    actual = {path: http.get(urls["zac"] + path).status_code for path in BEHEER}
+    wanted = HTTPStatus.OK if role == "beheerder" else HTTPStatus.FORBIDDEN
+    assert actual == dict.fromkeys(BEHEER, wanted)
+
+
+@pytest.mark.requires("pabc")
+@pytest.mark.source(POLICIES, "Only a coordinator or a role above it may verdelen and vrijgeven from the werkvoorraad.")
+@pytest.mark.scenario("""
+    Given a zaak of the BPMN test zaaktype in a group, without behandelaar
+    When a behandelaar verdeelt or vrijgeeft it from the werkvoorraad
+    Then ZAC refuses both
+    When a coordinator verdeelt it to the group and the test admin
+    Then the zaak has that group and behandelaar
+    When the coordinator vrijgeeft it
+    Then the zaak keeps the group but has no behandelaar
+""")
+def test_only_a_coordinator_verdeelt_and_vrijgeeft(
+    zac: requests.Session,
+    zac_as: Callable[[str], requests.Session],
+    urls: dict[str, str],
+    bpmn_zaak: JsonObject,
+    zac_group: str,
+) -> None:
+    """Verdelen and vrijgeven answer 403 to the behandelaar; the coordinator's change the zaak's behandelaar."""
+    zac_url, uuids = urls["zac"], [str(bpmn_zaak["uuid"])]
+    behandelaar = zac_as("behandelaar")
+    for refused in (
+        verdelen(behandelaar, zac_url, uuids, zac_group, ADMIN.username),
+        vrijgeven(behandelaar, zac_url, uuids),
+    ):
+        assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
+
+    def is_(wanted: tuple[object, object]) -> bool:
+        return assignment(read_zaak(zac, zac_url, uuids[0])) == wanted
+
+    coordinator = zac_as("coordinator")
+    expect_status(verdelen(coordinator, zac_url, uuids, zac_group, ADMIN.username), HTTPStatus.NO_CONTENT)
+    wait_until(lambda: is_((zac_group, ADMIN.username)), timeout=LIST_TIMEOUT, description="zaak verdeeld")
+    expect_status(vrijgeven(coordinator, zac_url, uuids), HTTPStatus.NO_CONTENT)
+    wait_until(lambda: is_((zac_group, None)), timeout=LIST_TIMEOUT, description="zaak vrijgegeven")
+
+
+@pytest.mark.requires("pabc")
+@pytest.mark.source(POLICIES, "Without the plus role brp_zoeken a user cannot search the BRP, but can add a bedrijf.")
+@pytest.mark.scenario("""
+    Given a zaak of the BPMN test zaaktype
+    And a behandelaar without the plus role brp_zoeken
+    When the behandelaar searches a person in the BRP
+    Then ZAC refuses it
+    When the behandelaar makes a bedrijf from the KvK the zaak's initiator
+    Then the zaak has that bedrijf as initiator
+""")
+def test_without_brp_zoeken_no_person_search_but_a_bedrijf_initiator(
+    zac_as: Callable[[str], requests.Session], urls: dict[str, str], bpmn_zaak: JsonObject
+) -> None:
+    """The behandelaar's person search answers 403; its initiator of type RSIN with a kvkNummer is stored."""
+    behandelaar = zac_as("behandelaar")
+    refused = behandelaar.put(f"{urls['zac']}/rest/klanten/personen", json={"bsn": EREBOS})
+    assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
+    body = {"zaakUUID": bpmn_zaak["uuid"], "betrokkeneIdentificatie": {"type": "RSIN", "kvkNummer": KVK_TEST_NUMMER}}
+    changed = expect_status(behandelaar.patch(f"{urls['zac']}/rest/zaken/initiator", json=body), HTTPStatus.OK)
+    assert section(changed.json(), "initiatorIdentificatie").get("kvkNummer") == KVK_TEST_NUMMER

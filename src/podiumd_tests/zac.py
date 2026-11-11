@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from typing import cast
 
 from podiumd_tests.auth.keycloak import form_login
+from podiumd_tests.bootstrap.names import ZAC_BASE_ROLES
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.oidc import LOGIN_PATHS
@@ -21,6 +22,7 @@ from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from collections.abc import Mapping
 
     import requests
 
@@ -37,6 +39,8 @@ PRODUCTAANVRAAG_TIMEOUT = 120
 INDEX_TIMEOUT = 60
 # A BPMN process reaches its next user task after ZAC's service tasks have run.
 TASK_TIMEOUT = 30
+# ZAC assigns and releases list selections in a background job.
+LIST_TIMEOUT = 60
 
 
 def zac_session(env: Environment, username: str, password: str) -> requests.Session:
@@ -155,6 +159,62 @@ def resultaattypen(http: requests.Session, zac_url: str, zaak: JsonObject) -> li
     zaaktype = section(zaak, "zaaktype")["uuid"]
     response = http.get(f"{zac_url}/rest/zaken/resultaattypes/{zaaktype}")
     return entries(expect_status(response, HTTPStatus.OK).json())
+
+
+def _resultaattype_without_besluit(http: requests.Session, zac_url: str, zaak: JsonObject) -> str:
+    """Return the id of the zaaktype's first resultaattype that needs no besluit."""
+    found = (item for item in resultaattypen(http, zac_url, zaak) if not item.get("besluitVerplicht"))
+    return str(next(found)["id"])
+
+
+def afhandelen(http: requests.Session, zac_url: str, zaak: JsonObject) -> requests.Response:
+    """Run ZAAK_AFHANDELEN of a CMMN zaak with a resultaattype that needs no besluit; ZAC's answer."""
+    resultaattype = _resultaattype_without_besluit(http, zac_url, zaak)
+    fields = {"resultaattypeUuid": resultaattype, "resultaatToelichting": "podiumd-tests"}
+    return user_event(http, zac_url, str(zaak["uuid"]), "ZAAK_AFHANDELEN", **fields)
+
+
+def afsluiten(http: requests.Session, zac_url: str, zaak: JsonObject) -> requests.Response:
+    """Close the zaak with a resultaattype that needs no besluit, as for a BPMN zaak; ZAC's answer."""
+    body = {"reden": "podiumd-tests", "resultaattypeUuid": _resultaattype_without_besluit(http, zac_url, zaak)}
+    return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/afsluiten", json=body)
+
+
+def wijzig_zaak(http: requests.Session, zac_url: str, zaak: JsonObject, **fields: object) -> requests.Response:
+    """Change these fields (RestZaakCreateData) of the zaak, with a reden; ZAC's answer."""
+    data = {"omschrijving": zaak["omschrijving"], "zaaktype": zaak["zaaktype"], **fields}
+    return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}", json={"zaak": data, "reden": "podiumd-tests"})
+
+
+def assignment(item: JsonObject) -> tuple[object, object]:
+    """(group id, behandelaar id) of ZAC's view of a zaak or task."""
+    return section(item, "groep").get("id"), section(item, "behandelaar").get("id")
+
+
+def verdelen(
+    http: requests.Session, zac_url: str, uuids: list[str], groep: str, behandelaar: str | None
+) -> requests.Response:
+    """Assign the zaken from the werkvoorraad to the group and behandelaar; ZAC's answer, before its background job."""
+    body = {"uuids": uuids, "groepId": groep, "behandelaarGebruikersnaam": behandelaar, "reden": "podiumd-tests"}
+    return http.put(f"{zac_url}/rest/zaken/lijst/verdelen", json=body)
+
+
+def vrijgeven(http: requests.Session, zac_url: str, uuids: list[str]) -> requests.Response:
+    """Release the zaken from the werkvoorraad; ZAC's answer, before its background job."""
+    return http.put(f"{zac_url}/rest/zaken/lijst/vrijgeven", json={"uuids": uuids, "reden": "podiumd-tests"})
+
+
+# ZAC's access rules (OPA policies), the source of the expected rights per role.
+POLICIES = "upstream infonl/dimpact-zaakafhandelcomponent src/main/resources/policies"
+
+
+def rights_of(role: str, least_roles: Mapping[str, str | None]) -> dict[str, bool]:
+    """Each right of least_roles (right: the least base role with it, None for none) that the base role has.
+
+    A base role has the rights of the base roles before it in ZAC_BASE_ROLES.
+    """
+    held = set(ZAC_BASE_ROLES[: ZAC_BASE_ROLES.index(role) + 1])
+    return {right: least in held for right, least in least_roles.items()}
 
 
 def clear_ztc_cache(http: requests.Session, zac_url: str) -> None:

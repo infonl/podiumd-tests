@@ -20,9 +20,9 @@ from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import BESLUITEN
 from podiumd_tests.seed.openzaak import delete_besluit
 from podiumd_tests.zac import NIET_ONTVANKELIJK
+from podiumd_tests.zac import afhandelen
 from podiumd_tests.zac import besluittypen
 from podiumd_tests.zac import read_zaak
-from podiumd_tests.zac import resultaattypen
 from podiumd_tests.zac import user_event
 from podiumd_tests.zac import vastleggen_besluit
 from podiumd_tests.zac_documents import uploaded_document
@@ -111,10 +111,7 @@ def _besluiten(zac: requests.Session, zac_url: str, zaak: JsonObject) -> list[Js
 
 
 def _afhandelen(zac: requests.Session, zac_url: str, zaak: JsonObject) -> None:
-    resultaattype = next(item for item in resultaattypen(zac, zac_url, zaak) if not item.get("besluitVerplicht"))
-    fields = {"resultaattypeUuid": resultaattype["id"], "resultaatToelichting": "podiumd-tests"}
-    response = user_event(zac, zac_url, str(zaak["uuid"]), "ZAAK_AFHANDELEN", **fields)
-    expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    expect_status(afhandelen(zac, zac_url, zaak), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
 
 
 @pytest.mark.scenario("""
