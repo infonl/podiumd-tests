@@ -3,7 +3,9 @@
 ITA's poller (POLLER_MODE verlopen-contactverzoek-herinnering-notificatie) mails every actor with contactverzoeken
 whose klantcontact took place more than ITA's afhandeltermijn of weekday hours ago and that are still
 te_verwerken. podiumd 4.10 leaves its CronJob off (ita.verlopenContactverzoekHerinneringNotificatie.enabled,
-DRT-726); the test runs where an environment turns it on. It runs the job once, which mails every overdue actor of the environment: destructive.
+DRT-726), so the test runs ITA's poller once in that mode from the CronJob of new contactverzoeken where the reminder
+CronJob is missing. The run mails every overdue actor of the environment: destructive, and only where Mailpit
+catches the mail.
 """
 
 from __future__ import annotations
@@ -50,6 +52,8 @@ pytestmark = [
 E2E = "upstream interne-taak-afhandeling/ITA InterneTaakAfhandeling.EndToEndTest/DagelijkseHerinnering"
 # The chart's CronJob <release>-verlopen-cv-notify (internetaakafhandeling 3.3).
 REMINDER = "-verlopen-cv-notify"
+# ITA's poller CronJob of new contactverzoeken, on in every environment; same image, POLLER_MODE picks the job.
+POLLER = "-nieuw-cv-notify"
 MAIL_TIMEOUT = 60
 # The voornaam make_betrokkene gives the klant.
 KLANTNAAM = "PodiumD"
@@ -57,14 +61,19 @@ KLANTNAAM = "PodiumD"
 AFDELING = "/afdelings-contacten"
 
 
-def reminder_cronjob(env: Environment) -> str:
-    """The name of ITA's reminder CronJob; skips where the environment has it off."""
-    found = [metadata_name(c) for c in env.items("cronjobs") if metadata_name(c).endswith(REMINDER)]
-    if not found:
-        pytest.skip(
-            "ITA's daily reminder is off here (ita.verlopenContactverzoekHerinneringNotificatie.enabled; DRT-726)"
-        )
-    return found[0]
+def reminder_job(env: Environment) -> tuple[str, dict[str, str]]:
+    """Return the CronJob that runs ITA's reminder, and the env that puts its poller in reminder mode if needed.
+
+    The reminder's own CronJob where the environment turns it on, else ITA's CronJob of new contactverzoeken.
+    """
+    names = [metadata_name(c) for c in env.items("cronjobs")]
+    reminder = [n for n in names if n.endswith(REMINDER)]
+    if reminder:
+        return reminder[0], {}
+    poller = [n for n in names if n.endswith(POLLER)]
+    if not poller:
+        pytest.skip(f"ITA has no poller CronJob (*{REMINDER} or *{POLLER}) here")
+    return poller[0], {"POLLER_MODE": "verlopen-contactverzoek-herinnering-notificatie"}
 
 
 def overdue_age(env: Environment) -> timedelta:
@@ -130,7 +139,7 @@ def test_afdeling_gets_one_reminder_for_its_overdue_contactverzoeken(
     registry: ResourceRegistry,
 ) -> None:
     """Two overdue contactverzoeken of an afdeling give it one mail; recent, closed and mailbox-less ones give none."""
-    cronjob = reminder_cronjob(podiumd_env)
+    cronjob, mode = reminder_job(podiumd_env)
     overdue_for = overdue_age(podiumd_env)
     logboek_type = objecttype_url(podiumd_env, "Activiteitenlog")
 
@@ -165,7 +174,7 @@ def test_afdeling_gets_one_reminder_for_its_overdue_contactverzoeken(
     gedeeld, gedeeld_address = afdeling(email=True)
     medewerker = _medewerker_with_afdeling(podiumd_env, openklant, objecten, registry, gedeeld, overdue_for)
 
-    run_cronjob(podiumd_env.kube, cronjob, registry.tagged("herinnering"))
+    run_cronjob(podiumd_env.kube, cronjob, registry.tagged("herinnering"), env=mode)
     _assert_reminder(mailpit, registry, overdue_address, "2 contactverzoeken wachten op jou", AFDELING, onderwerpen)
     assert search(mailpit, f"to:{quoted(quiet_address)}") == [], f"a reminder to {quiet_address}"
     for address, link in ((mailbox(medewerker), "/"), (gedeeld_address, AFDELING)):

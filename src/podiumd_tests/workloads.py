@@ -17,6 +17,7 @@ from contextlib import contextmanager
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+from typing import cast
 
 import pytest
 import yaml
@@ -230,9 +231,33 @@ def scaled(kube: Kube, deployment: str, replicas: int, timeout: int = 300) -> Ge
         scale(before)
 
 
-def run_cronjob(kube: Kube, cronjob: str, job: str, timeout: int = 300) -> None:
-    """Run the CronJob once now, as Job `job`; returns when it completed and deletes the Job either way."""
-    kube.run("create", "job", job, f"--from=cronjob/{cronjob}")
+# Environment variables of a container: name -> value.
+type Variables = Mapping[str, str]
+
+
+def one_off_job(cronjob: JsonObject, job: str, env: Variables) -> dict[str, object]:
+    """Return a Job manifest named `job` from the CronJob's template, with env set in each of its containers."""
+    spec: dict[str, object] = json.loads(json.dumps(section(cronjob, "spec").get("jobTemplate", {})))["spec"]
+    pod = section(section(spec, "template"), "spec")
+    for container in entries(pod.get("containers")):
+        _set_env(cast("dict[str, object]", container), env)
+    metadata = {"name": job, "namespace": metadata_namespace(cronjob)}
+    return {"apiVersion": "batch/v1", "kind": "Job", "metadata": metadata, "spec": spec}
+
+
+def _set_env(container: dict[str, object], env: Variables) -> None:
+    """Set the variables in a container's env, replacing any of the same name."""
+    kept = [variable for variable in entries(container.get("env")) if variable.get("name") not in env]
+    container["env"] = kept + [{"name": name, "value": value} for name, value in env.items()]
+
+
+def run_cronjob(kube: Kube, cronjob: str, job: str, timeout: int = 300, env: Variables | None = None) -> None:
+    """Run the CronJob once now, as Job `job` (env: variables set in its containers); waits, then deletes the Job."""
+    if env:
+        template = kube.get_json("cronjob", cronjob)
+        kube.apply(one_off_job(template, job, env))
+    else:
+        kube.run("create", "job", job, f"--from=cronjob/{cronjob}")
     try:
         kube.run("wait", "--for=condition=complete", f"job/{job}", f"--timeout={timeout}s", timeout=timeout + 10)
     except KubeError as error:

@@ -9,6 +9,8 @@ from types import SimpleNamespace
 import pytest
 
 from podiumd_tests import workloads
+from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
 from podiumd_tests.workloads import ClusterState
@@ -289,3 +291,14 @@ def test_skip_older_than_runs_a_newer_or_unknown_version(monkeypatch, env_factor
             skip_older_than(env_factory(), "zac", (5, 9, 1), "rules")
     else:
         skip_older_than(env_factory(), "zac", (5, 9, 1), "rules")
+
+
+def test_one_off_job_sets_env_in_each_container():
+    container = {"name": "c", "env": [{"name": "POLLER_MODE", "value": "nieuw"}, {"name": "A", "value": "1"}]}
+    pod = {"containers": [container]}
+    cronjob = {"metadata": {"namespace": "podiumd"}, "spec": {"jobTemplate": {"spec": {"template": {"spec": pod}}}}}
+    job = workloads.one_off_job(cronjob, "run-1", {"POLLER_MODE": "herinnering"})
+    assert (job["kind"], job["metadata"]) == ("Job", {"name": "run-1", "namespace": "podiumd"})
+    copied = entries(section(section(section(job, "spec"), "template"), "spec").get("containers"))[0]
+    assert copied["env"] == [{"name": "A", "value": "1"}, {"name": "POLLER_MODE", "value": "herinnering"}]
+    assert container["env"] == [{"name": "POLLER_MODE", "value": "nieuw"}, {"name": "A", "value": "1"}]
