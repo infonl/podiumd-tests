@@ -30,8 +30,8 @@ share their setup. The user picks the batches to port.
 | Z2 | Zaak koppelen (gerelateerd; hoofd- and deelzaak in Z10) | 1 high, 2 medium | 5 (done) | none | 1.5 |
 | Z3 | Besluiten in ZAC | 1 high, 3 medium | 7 (done) | besluit rights for the cleanup client | 1.5 |
 | Z4 | Opschorten, verlengen and their dates | 3 high (partial), 2 medium | 4 (done) | none | 1.5 |
-| Z5 | Mail from a zaak | 2 high, 2 medium | 4 | none | 2 |
-| Z6 | Documents: verplaatsen, ontkoppelen, versies, ondertekenen, refusals | 1 high, 6 medium | 6 | none | 2 |
+| Z5 | Mail from a zaak | 2 high, 2 medium | 4 (done) | none | 2 |
+| Z6 | Documents: verplaatsen, ontkoppelen, versies, ondertekenen, refusals | 1 high, 6 medium | 8 (done) | none | 2 |
 | Z7 | CMMN taken: intake, Goedkeuren, Advies, Document verzenden | 1 high, 4 medium | 4 | human task parameters for more plan items | 2.5 |
 | Z8 | Rights per role: closed zaak, documents, admin, verdelen, brp_zoeken | 1 high (partial), 6 medium | 6 | none | 2 |
 | Z9 | Productaanvraag: betrokkenen, inbox, contact, documents | 2 high, 5 medium | 5 | productaanvraag with betrokkenen and geometry | 2 |
@@ -94,28 +94,26 @@ share their setup. The user picks the batches to port.
 - Not covered: a verlenging beyond the zaaktype's verlengingstermijn (ZAC and Open Zaak accept 400 days against P14D
   through the API; only ZAC's form limits it).
 
-### Z5: mail from a zaak (2 days, 4 tests)
+### Z5: mail from a zaak (done: 4 tests)
 
-- Gaps: Bevestiging versturen from a zaak (mail arrives, stored as a document, indicatie
-  ONTVANGSTBEVESTIGING_NIET_VERSTUURD cleared); E-mail versturen with and without an attachment (mail arrives, PDF of
-  the mail on the zaak); mails built from the zaakafhandelparameters' templates with their afzender and reply-to; the
-  stored mail PDF's vertrouwelijkheidaanduiding.
-- Files: new `tests/component/zac/test_zac_mail.py`; `zac.py` gets `send_mail`.
-- Reuses: `mailpit` and its `received` lookup, `zac_zaak`.
-- Risks: needs mail: requires `mailpit`; the zaakspecifiek e-mail address of the productaanvraag (betrokkenen gap) is
-  Z9.
+- Covered in `tests/component/zac/test_zac_mail.py`: E-mail versturen with an attachment and a reply-to arrives from
+  ZAC's afzender with the zaaknummer and omschrijving filled in, and is kept on the zaak as a PDF with the chosen
+  vertrouwelijkheidaanduiding; without keeping it, the zaak gets no document; Bevestiging versturen arrives, is kept,
+  clears ONTVANGSTBEVESTIGING_NIET_VERSTUURD and is refused a second time; a mail without vertrouwelijkheidaanduiding
+  is refused.
+- Not covered: the zaakspecifiek e-mail address of the productaanvraag (Z9).
 
-### Z6: documents (2 days, 6 tests)
+### Z6: documents (done: 8 tests, 12 cases)
 
-- Gaps: verplaatsen to another zaak and koppelen from Ontkoppelde documenten (move in historie); ontkoppelen needs a
-  reden; a locked document cannot be deleted until unlocked; nieuwe versie with metadata (versie +1); ondertekenen on
-  a CMMN zaak (definitief, indicatie ONDERTEKEND); allowed and refused extensions (eml kept intact; aac, mp3, exe, msi
-  and empty files refused); a document deleted from Ontkoppelde documenten is gone from Open Zaak.
-- Files: new `tests/component/zac/test_zac_documenten.py`; upload helpers of the existing document tests move to
-  `zac.py` if a second module needs them.
-- Reuses: the upload of `test_document_can_be_deleted`, `zac_zaak`.
-- Risks: the 500 MB limit is left out: one upload of that size per run costs more than it checks; the refusal above the
-  limit can use the configured limit if ZAC exposes it.
+- Covered in `tests/component/zac/test_zac_documenten.py`: verplaatsen to another zaak (GEKOPPELD in the target's
+  historie); ontkoppelen with a reden (historie, Ontkoppelde documenten with the reden) and koppelen from there to
+  another zaak; deleting from Ontkoppelde documenten deletes the document in Open Zaak; a locked document cannot be
+  deleted until unlocked; nieuwe versie with a new file and metadata, and with metadata only (versie +1 each);
+  ondertekenen on a CMMN zaak (definitief, ONDERTEKEND, a second one refused); an .eml kept byte for byte; aac, mp3,
+  exe, msi and an empty file refused.
+- Not covered: ontkoppelen needs a reden (ZAC 5.9.1 accepts an empty reden, and without one answers 500 after it has
+  removed the link: the document is then on no zaak and not in Ontkoppelde documenten); the 500 MB limit (ZAC gives it
+  at `/rest/configuratie/max-file-size-mb`).
 
 ### Z7: CMMN taken (2.5 days, 4 tests)
 

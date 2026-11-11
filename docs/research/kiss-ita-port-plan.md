@@ -19,13 +19,13 @@ The batches that close the gaps of [`kiss-ita-scenario-gaps.md`](kiss-ita-scenar
 | Batch | Area | Gaps closed | Tests | Bootstrap | Days |
 | --- | --- | --- | --- | --- | --- |
 | K1 | Contactmoment through KISS's own routes | 5 high, 4 medium | 3 (done) | none | 1.5 |
-| K2 | Contactverzoek through KISS, to afdeling, groep and medewerker | 6 high | 4 | medewerker in the smoelenboek index | 2 |
+| K2 | Contactverzoek through KISS, to afdeling, groep and medewerker | 6 high | 4 (done) | none | 2 |
 | K3 | Zaak in KISS | 3 high | 2 | none | 1 |
 | K4 | Search variants (person, company) | 2 high, 7 medium | 0 (parameters) | none; check the BRP and KvK test sets | 0.5 |
 | K5 | Search sources: smoelenboek, source filter, afdeling on a kennisartikel | 7 medium | 3 | a kennisartikel with afdelingen | 1 |
 | K6 | Nieuws en werkinstructies | 23 medium | 5 | none | 1.5 |
 | I1 | Forward to a medewerker, groepsmailbox rules | 7 high, 8 medium | 4 | a medewerker without e-mail | 2 |
-| I2 | Afsluiten and historie | 3 high, 8 medium | 5 | none | 2 |
+| I2 | Afsluiten and historie | 3 high, 8 medium | 5 (done) | none | 2 |
 | I3 | Reminder to a medewerker | 3 high | 1 (extended) | none | 0.5 |
 | I4 | Zaak koppelen and the logboek | 10 medium | 3 | none | 1.5 |
 | I5 | Beheer and forward-form data | 9 medium | 3 | none | 1 |
@@ -48,14 +48,17 @@ The batches that close the gaps of [`kiss-ita-scenario-gaps.md`](kiss-ita-scenar
   include `email`, so it uses the username and creates a second actor for the KCC user (objectId the username, code
   email) next to bootstrap's actor with the e-mail.
 
-### K2: contactverzoek through KISS (2 days, 4 tests)
+### K2: contactverzoek through KISS (done: 4 tests, 9 cases)
 
-- Gaps: a contactverzoek to an afdeling or groep, by phone or e-mail (parametrized), through `postklantcontacten` and
-  `postinternetaak`, found by the phone or e-mail; to a medewerker picked from the smoelenboek
-  (`POST /api/search/medewerkers`); listed at the person or vestiging. Each continues into ITA (`ita_detail_text`),
-  which replaces the hand-built contactverzoek in `test_contactverzoek_from_kiss_shows_in_full_in_ita`.
-- Reuses: bootstrap `objecten-medewerker-kcc`; the smoelenboek case needs the medewerker in KISS's smoelenboek index
-  (its elastic-sync CronJob, as `test_kiss_kennis` runs it).
+- Covered in `tests/integration/test_kiss_contactverzoek.py`: a contactverzoek saved as KISS's frontend does
+  (`postklantcontacten`, betrokkene, digitaal adres and actor through KISS's proxy, `postinternetaak`) to an afdeling
+  or groep, by phone or e-mail, is assigned to it and found by that address with KISS's contactverzoek search; one for
+  ITA_GROEP shows in full in ITA (replaces the hand-built contactverzoek, test id ITA-035); one for a persoon or an
+  organisatie is listed for that partij; a medewerker created in Objecten is found in KISS's smoelenboek within
+  ITA_GROEP after the smoelenboek sync, and a contactverzoek to that medewerker and the groep is assigned to both and
+  shows in ITA.
+- The test creates its own actoren; KISS's frontend reuses an existing actor with the same identificator.
+- Skipped where KISS takes a medewerker's e-mail address instead of the smoelenboek (`USE_MEDEWERKEREMAIL`).
 
 ### K3: zaak in KISS (1 day, 2 tests)
 
@@ -88,12 +91,16 @@ The batches that close the gaps of [`kiss-ita-scenario-gaps.md`](kiss-ita-scenar
   `/api/medewerkers` by search, afdeling and groep; regression #425 (assigned through the object-register id).
 - Bootstrap: one more Objecten medewerker without e-mail (extend `objecten-medewerker-kcc`).
 
-### I2: afsluiten and historie (2 days, 5 tests)
+### I2: afsluiten and historie (done: 5 tests)
 
-- Gaps: `close-with-klantcontact` sets verwerkt and afgehandeldOp in Open Klant; the chain unassigned, assign to self,
-  close, in historie; contact gelukt keeps it te_verwerken; Mijn historie and its order; Afdelings- and Groephistorie;
-  `gebruiker-groepen-and-afdelingen`; Alle contactverzoeken lists an open one and drops a closed one.
-- Also: `test_question_answered_in_ita_shows_as_answered` closes through ITA instead of `close_internetaak`.
+- Covered in `tests/component/ita/test_ita_afsluiten.py`: an unassigned contactverzoek assigned to self and closed with
+  `close-with-klantcontact` is verwerkt with afgehandeldOp in Open Klant, its klantcontact gelukt, and moves to Mijn
+  historie; Mijn historie lists the latest first (ITA sorts on toegewezenOp); Afdelings- and Groepshistorie list the
+  closed ones; `gebruiker-groepen-and-afdelingen` offers the medewerker's groep. In `test_ita_beheer.py`: Alle
+  contactverzoeken lists an open one, not a closed one. Contact gelukt and niet gelukt keep it te_verwerken
+  (`test_answering_an_internetaak_registers_a_klantcontact`).
+- `test_question_answered_in_ita_shows_as_answered` closes through ITA's `close-with-klantcontact`.
+- ITA's helpers and fixtures are in `src/podiumd_tests/ita.py`.
 
 ### I3: reminder to a medewerker (0.5 day, 1 test extended)
 
