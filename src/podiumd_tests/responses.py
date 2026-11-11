@@ -11,7 +11,7 @@ import requests
 from podiumd_tests.json_data import JsonObject
 from podiumd_tests.json_data import entries
 
-REFUSED = frozenset({HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN})
+REFUSED = frozenset((HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN))
 # Characters of the body an unexpected status reports: enough for an API error's detail.
 BODY_EXCERPT = 300
 
@@ -28,25 +28,25 @@ def describe(response: requests.Response) -> str:
 
 
 def expect_status(response: requests.Response, *expected: int) -> requests.Response:
-    """The response, when its status is one of expected; UnexpectedStatusError otherwise."""
+    """Return the response, when its status is one of expected; UnexpectedStatusError otherwise."""
     if response.status_code not in expected:
-        msg = f"{describe(response)}, expected {' or '.join(str(e) for e in expected)}"
+        msg = f"{describe(response)}, expected {' or '.join(str(status) for status in expected)}"
         body = " ".join(response.text.split())[:BODY_EXCERPT]
         raise UnexpectedStatusError(f"{msg}: {body}" if body else msg)
     return response
 
 
 def is_server_error(response: requests.Response) -> bool:
-    """True for a 5xx status: the component (or its ingress) is broken, whatever the client sent."""
+    """Return True for a 5xx status: the component (or its ingress) is broken, whatever the client sent."""
     return response.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 def get_root(session: requests.Session, base_url: str, timeout: float | tuple[float, float]) -> requests.Response:
     """GET the root of a component, following redirects (R14: only the final answer counts)."""
-    return session.get(base_url + "/", timeout=timeout)
+    return session.get(f"{base_url}/", timeout=timeout)
 
 
-def root_answers(session: requests.Session, base_url: str, timeout: float) -> bool:
+def is_root_answering(session: requests.Session, base_url: str, timeout: float) -> bool:
     """Whether the component's root answers without a server error (a refused connection counts as no)."""
     try:
         return not is_server_error(get_root(session, base_url, timeout))
@@ -55,12 +55,12 @@ def root_answers(session: requests.Session, base_url: str, timeout: float) -> bo
 
 
 def url_host(url: str) -> str:
-    """The hostname of a URL, or "" when it has none."""
+    """Return the hostname of a URL, or "" when it has none."""
     return urlsplit(url).hostname or ""
 
 
 def get_entries(http: requests.Session, url: str) -> list[JsonObject]:
-    """The objects GET url answers with 200: a JSON array, or one under results or items (PABC)."""
+    """Return the objects GET url answers with 200: a JSON array, or one under results or items (PABC)."""
     body: object = expect_status(http.get(url), HTTPStatus.OK).json()
     if isinstance(body, dict):
         found = cast("JsonObject", body)

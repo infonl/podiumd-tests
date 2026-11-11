@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
 from podiumd_tests.openinwoner import search_data
 from podiumd_tests.openinwoner import set_site_configuration
 from podiumd_tests.responses import expect_status
@@ -38,7 +40,8 @@ pytestmark = [
 # Words that occur only in the test's own products; a hex suffix keeps runs apart. Their first
 # letters differ: the index also matches word prefixes (edge n-grams).
 SUFFIX = secrets.token_hex(3)
-PASPOORT, GROFVUIL, KEYWORD, BOTH = (f"{w}{SUFFIX}" for w in ("paspoort", "grofvuil", "reisdocument", "beide"))
+PASPOORT, GROFVUIL = f"paspoort{SUFFIX}", f"grofvuil{SUFFIX}"
+KEYWORD, BOTH = f"reisdocument{SUFFIX}", f"beide{SUFFIX}"
 # Each Open Inwoner process caches SiteConfiguration for SOLO_CACHE_TIMEOUT (5 s) in local memory.
 SOLO_TIMEOUT = 30
 
@@ -55,22 +58,36 @@ def fixture_categories(
         {"name": f"Grofvuil {GROFVUIL} {BOTH}", "category": f"Afval {SUFFIX}"},
     ]
     created = search_data(podiumd_env, "apply", tag, products)
-    yield dict(created["categories"])
+    yield {name: str(slug) for name, slug in section(created, "categories").items()}
     search_data(podiumd_env, "remove", tag)
 
 
 def hits(http: requests.Session, urls: dict[str, str], **params: str) -> list[str]:
     """The names of the test's products on the results page of a search."""
-    html = expect_status(http.get(urls["openinwoner"] + "/search/", params=params), HTTPStatus.OK).text
+    html = expect_status(http.get(f"{urls['openinwoner']}/search/", params=params), HTTPStatus.OK).text
     # Shown when Elasticsearch refuses the query, e.g. an index created without Open Inwoner's mapping.
     assert "zoekfunctie is tijdelijk niet beschikbaar" not in html, "Open Inwoner's search failed (search error)"
     return sorted(set(re.findall(rf"(?:Paspoort|Grofvuil) \w+{SUFFIX}", html)))
 
 
 @pytest.mark.parametrize("query", ["informatie", "ptest-xyzzy-geen-resultaat"])
+@pytest.mark.source(
+    "TA interaction/107-portaal-zoeken.spec.ts",
+    "The portal search page answers and renders its search form, also for a query without matches.",
+)
+@pytest.mark.source(
+    "TA regression/161-portaal-low-prio-coverage.spec.ts",
+    "Search accepts a query on information content; a query without matches shows a follow-up message with tips.",
+)
+@pytest.mark.scenario("""
+    Given a visitor of Open Inwoner
+    When the visitor searches for a word, with or without matches
+    Then the results page shows the search form
+    And a search without matches says that nothing was found
+""")
 def test_search_answers(http: requests.Session, urls: dict[str, str], query: str) -> None:
     """Search answers with its form; a query without hits says so (TA int-107, reg-161c/d)."""
-    html = expect_status(http.get(urls["openinwoner"] + "/search/", params={"query": query}), HTTPStatus.OK).text
+    html = expect_status(http.get(f"{urls['openinwoner']}/search/", params={"query": query}), HTTPStatus.OK).text
     assert 'name="query"' in html
     if "geen" in query:
         assert "We konden geen zoekresultaten vinden" in html
@@ -79,12 +96,27 @@ def test_search_answers(http: requests.Session, urls: dict[str, str], query: str
 @pytest.mark.tc("OI-092")
 @pytest.mark.usefixtures("categories")
 @pytest.mark.parametrize("query", [PASPOORT, KEYWORD], ids=["name", "keyword"])
+@pytest.mark.source("draaiboek OI-092", "Portal search can search on products.")
+@pytest.mark.scenario("""
+    Given two published products in Open Inwoner
+    When a visitor searches for a word of a product's name or its keyword
+    Then only that product is found
+""")
 def test_search_finds_a_product(http: requests.Session, urls: dict[str, str], query: str) -> None:
     """A product is found by a word of its name and by its keyword, and only that product."""
     assert hits(http, urls, query=query) == [f"Paspoort {PASPOORT}"]
 
 
 @pytest.mark.tc("OI-093", "OI-095")
+@pytest.mark.source("draaiboek OI-093", "Portal search can search on onderwerpen.")
+@pytest.mark.source("draaiboek OI-095", "Portal search results can be filtered.")
+@pytest.mark.scenario("""
+    Given two published products of different onderwerpen in Open Inwoner
+    When a visitor searches for a word both products contain
+    Then both products are found
+    When the visitor filters the results on one onderwerp
+    Then only that onderwerp's product is found
+""")
 def test_results_filter_on_onderwerp(http: requests.Session, urls: dict[str, str], categories: dict[str, str]) -> None:
     """Both products match; filtering on an onderwerp (category) keeps only that onderwerp's product."""
     assert hits(http, urls, query=BOTH) == [f"Grofvuil {GROFVUIL}", f"Paspoort {PASPOORT}"]
@@ -93,11 +125,17 @@ def test_results_filter_on_onderwerp(http: requests.Session, urls: dict[str, str
 
 
 @pytest.mark.tc("OI-094")
+@pytest.mark.source("draaiboek OI-094", "Feedback can be given on a portal search.")
+@pytest.mark.scenario("""
+    Given a search in Open Inwoner that finds a product
+    When the visitor gives positive feedback with a remark on the results
+    Then Open Inwoner stores the feedback with the search it was given on
+""")
+@pytest.mark.usefixtures("categories")  # results to give feedback on
 def test_feedback_on_a_search_is_stored(
-    http: requests.Session, urls: dict[str, str], podiumd_env: Environment, run_tag: str, categories: dict[str, str]
+    http: requests.Session, urls: dict[str, str], podiumd_env: Environment, run_tag: str
 ) -> None:
     """Feedback given on a results page is kept with the search it was given on."""
-    del categories  # results to give feedback on
     search = f"{urls['openinwoner']}/search/?query={PASPOORT}"
     page = expect_status(http.get(search), HTTPStatus.OK).text
     token = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', page)
@@ -105,43 +143,68 @@ def test_feedback_on_a_search_is_stored(
     remark = f"{run_tag}-zoeken nuttig"
     form = {"csrfmiddlewaretoken": token[1], "positive": "true", "remark": remark}
     expect_status(http.post(search, data=form, headers={"Referer": search}), HTTPStatus.OK)
-    stored = search_data(podiumd_env, "feedback", f"{run_tag}-zoeken")["feedback"]
+    stored = entries(search_data(podiumd_env, "feedback", f"{run_tag}-zoeken")["feedback"])
     assert [(f["positive"], f["remark"]) for f in stored] == [(True, remark)]
-    assert PASPOORT in stored[0]["query"]
+    assert PASPOORT in str(stored[0]["query"])
 
 
 @pytest.mark.tc("OI-097")
 @pytest.mark.usefixtures("categories")
 @pytest.mark.xfail(
     strict=True,
-    reason="Open Inwoner offers no 'did you mean': a search without hits shows fixed tips only; its"
+    reason="[open-inwoner-3] Open Inwoner offers no 'did you mean': a search without hits shows fixed tips only; its"
     " fuzzy matching lives in the autocomplete, not on the results page",
 )
+@pytest.mark.source("draaiboek OI-097", "Without results for a search, the portal suggests what was probably meant.")
+@pytest.mark.scenario("""
+    Given a published product in Open Inwoner
+    When a visitor searches for a misspelt name of the product
+    Then the results page says nothing was found
+    And it suggests the product that was probably meant
+""")
 def test_no_results_suggest_what_was_meant(http: requests.Session, urls: dict[str, str]) -> None:
     """A misspelt search without hits suggests the product that was probably meant."""
-    html = expect_status(http.get(urls["openinwoner"] + "/search/", params={"query": "Pasport"}), HTTPStatus.OK).text
+    html = expect_status(http.get(f"{urls['openinwoner']}/search/", params={"query": "Pasport"}), HTTPStatus.OK).text
     assert "We konden geen zoekresultaten vinden" in html
     assert PASPOORT in html
 
 
+def _restore_search(podiumd_env: Environment, old: dict[str, object], search_on: Callable[[], bool]) -> None:
+    """Set the search settings back and wait until the search answers again."""
+    set_site_configuration(podiumd_env, **old)
+    wait_until(search_on, timeout=SOLO_TIMEOUT, description="search back on")
+
+
 @pytest.mark.tc("OI-098", "OI-099")
+@pytest.mark.source(
+    "draaiboek OI-098", "After search is switched off in the admin, the end user cannot use the search function."
+)
+@pytest.mark.source(
+    "draaiboek OI-099",
+    "After search is switched off in the admin, the end user cannot use direct links to overview pages.",
+)
+@pytest.mark.scenario("""
+    Given search is switched off in the Open Inwoner admin
+    When a visitor opens the search page
+    Then the portal answers page not found
+    And the homepage shows no search form
+""")
 def test_search_can_be_switched_off(http: requests.Session, urls: dict[str, str], podiumd_env: Environment) -> None:
     """With search switched off in the admin, the search page and links to it answer 404, and the form is gone."""
-    search = urls["openinwoner"] + "/search/"
+    search = f"{urls['openinwoner']}/search/"
 
-    def search_answers(status: HTTPStatus) -> bool:
+    def is_search_answering(status: HTTPStatus) -> bool:
         return http.get(search, params={"query": PASPOORT}).status_code == status
 
-    def form_shown() -> bool:
-        return 'id="search-form"' in expect_status(http.get(urls["openinwoner"] + "/"), HTTPStatus.OK).text
+    def is_form_shown() -> bool:
+        return 'id="search-form"' in expect_status(http.get(f"{urls['openinwoner']}/"), HTTPStatus.OK).text
 
     old = set_site_configuration(podiumd_env, search_enabled=False)
     try:
         wait_until(
-            lambda: search_answers(HTTPStatus.NOT_FOUND) and not form_shown(),
+            lambda: is_search_answering(HTTPStatus.NOT_FOUND) and not is_form_shown(),
             timeout=SOLO_TIMEOUT,
             description="search off",
         )
     finally:
-        set_site_configuration(podiumd_env, **old)
-        wait_until(lambda: search_answers(HTTPStatus.OK), timeout=SOLO_TIMEOUT, description="search back on")
+        _restore_search(podiumd_env, old, lambda: is_search_answering(HTTPStatus.OK))

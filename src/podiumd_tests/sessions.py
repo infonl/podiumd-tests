@@ -37,11 +37,11 @@ class HostHeaderAdapter(HTTPAdapter):
 
     def __init__(self, hosts: set[str], ip: str) -> None:
         super().__init__()
-        self._hosts = hosts
-        self._ip = ip
+        self._hosts: set[str] = hosts
+        self._ip: str = ip
 
     @override
-    def send(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # HTTPAdapter.send signature
+    def send(
         self,
         request: requests.PreparedRequest,
         stream: bool = False,
@@ -65,14 +65,12 @@ class HostHeaderAdapter(HTTPAdapter):
         try:
             response = super().send(request, stream=stream, timeout=timeout, verify=verify, cert=cert, proxies=proxies)
         finally:
-            # Redirects copy this request; a stale Host header must not follow them to another host.
-            request.url = original
-            del request.headers["Host"]
+            _restore(request, original)
         response.url = original
         return response
 
     @override
-    def build_connection_pool_key_attributes(
+    def build_connection_pool_key_attributes(  # noqa: WPS118  # requests' HTTPAdapter method
         self,
         request: requests.PreparedRequest,
         verify: bool | str,
@@ -83,11 +81,20 @@ class HostHeaderAdapter(HTTPAdapter):
         host = request.headers.get("Host")
         if host and host_params["scheme"] == "https":
             name = urlsplit(f"//{host}").hostname
-            # urllib3 pool keys the requests stubs leave out of _PoolKwargs.
-            extra = cast("dict[str, object]", pool_kwargs)
+            # urllib3 pool keys the requests stubs leave out of _PoolKwargs; it is type-check-only, so not extendable.
+            extra = cast("dict[str, object]", pool_kwargs)  # pyright: ignore[reportInvalidCast]
             extra["server_hostname"] = name
             extra["assert_hostname"] = name
         return host_params, pool_kwargs
+
+
+def _restore(request: requests.PreparedRequest, url: str) -> None:
+    """Put the request's URL back and drop its Host header.
+
+    Redirects copy this request; a stale Host header must not follow them to another host.
+    """
+    request.url = url
+    request.headers.pop("Host")
 
 
 class TimeoutSession(requests.Session):
@@ -95,22 +102,23 @@ class TimeoutSession(requests.Session):
 
     def __init__(self, timeout: float = DEFAULT_TIMEOUT) -> None:
         super().__init__()
-        self.default_timeout = timeout
+        self.default_timeout: float = timeout
 
-    # Narrows the long keyword list of requests.Session.request, hence the pyright ignore.
     @override
-    def request(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, method: str | bytes, url: str | bytes, *args: object, **kwargs: object
-    ) -> requests.Response:
+    def request(self, method: str | bytes, url: str | bytes, *args: object, **kwargs: object) -> requests.Response:
         """Send a request, with the default timeout unless one is given."""
         kwargs.setdefault("timeout", self.default_timeout)
         return super().request(method, url, *args, **kwargs)  # pyright: ignore[reportArgumentType]
 
 
 def make_session(
-    urls: Mapping[str, str], ingress_ip: str | None = None, *, cookies: bool = True, verify: str | None = None
+    urls: Mapping[str, str],
+    ingress_ip: str | None = None,
+    *,
+    cookies: bool = True,
+    verify: str | None = None,
 ) -> requests.Session:
-    """A session for the profile URLs; with ingress_ip, profile hosts are reached through that IP.
+    """Return a session for the profile URLs; with ingress_ip, profile hosts are reached through that IP.
 
     verify: CA bundle file for https; None uses the system's CAs.
 
@@ -124,7 +132,7 @@ def make_session(
     if not cookies:
         session.cookies.set_policy(DefaultCookiePolicy(allowed_domains=[]))
     if ingress_ip:
-        hosts = {url_host(u) for u in urls.values()}
+        hosts = {url_host(url) for url in urls.values()}
         adapter = HostHeaderAdapter(hosts, ingress_ip)
         session.mount("http://", adapter)
         session.mount("https://", adapter)
@@ -132,7 +140,7 @@ def make_session(
 
 
 def peer_certificate(url: str, ingress_ip: str | None = None, ca_file: str | None = None) -> dict[str, object]:
-    """The certificate the host of an https URL presents, verified for that host; through ingress_ip if given."""
+    """Return the certificate the host of an https URL presents, verified for that host; through ingress_ip if given."""
     parts = urlsplit(url)
     host = parts.hostname or ""
     context = ssl.create_default_context(cafile=ca_file)

@@ -15,13 +15,17 @@ import pytest
 
 from playwright.sync_api import expect
 
+from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.basisregistraties import kvk_basisprofiel
 from podiumd_tests.basisregistraties import kvk_vestigingsprofiel
 from podiumd_tests.bootstrap.steps import IDENTITIES
+from podiumd_tests.openinwoner import kvk_api_root
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.openinwoner import set_account
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openklant import partijen_of
 from podiumd_tests.seed.openzaak import today
+from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -30,6 +34,7 @@ if TYPE_CHECKING:
 
     from playwright.sync_api import Page
 
+    from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -56,18 +61,66 @@ def heading(page: Page) -> str:
 
 
 @pytest.mark.core
+@pytest.mark.source(
+    "TA interaction/105-portaal-profiel-edit.spec.ts",
+    "Contact details (e-mail, phone number) can be changed on the profile edit page after a DigiD login.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner logged in with DigiD
+    When the inwoner opens the edit page of Mijn profiel
+    Then the page Bewerk contactgegevens is shown
+    And it offers e-mail addresses and phone numbers
+""")
 def test_profile_can_be_edited(page: Page, portal: str) -> None:
     """The profile edit form offers e-mail addresses and phone numbers (TA int-105, as formsets in this Open Inwoner)."""
-    page.goto(portal + "/mijn-profiel/edit/")
+    page.goto(f"{portal}/mijn-profiel/edit/")
     expect(page.get_by_role("heading", name="Bewerk contactgegevens")).to_be_visible()
     expect(page.locator('input[name="email_addresses-TOTAL_FORMS"]').first).to_be_attached()
     expect(page.locator('input[name="phone_addresses-TOTAL_FORMS"]').first).to_be_attached()
 
 
+@pytest.mark.source(
+    "upstream maykinmedia/open-inwoner src/open_inwoner/accounts/tests/test_profile_edit_e2e.py",
+    "The profile edit page rejects a malformed e-mail address and a malformed phone number.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner logged in with DigiD
+    When the inwoner saves a malformed e-mail address and phone number in Mijn profiel
+    Then the edit page stays open
+    And it shows an error for the e-mail address and for the phone number
+""")
+def test_profile_edit_refuses_malformed_contact_details(page: Page, portal: str) -> None:
+    """A malformed e-mail address and phone number are refused with a message each; the page stays the edit form."""
+    page.goto(f"{portal}/mijn-profiel/edit/")
+    page.locator('input[name="email_addresses-0-value"]').first.fill("geen-e-mailadres")
+    page.locator('input[name="phone_addresses-0-value"]').first.fill("12ab")
+    page.get_by_role("button", name="Sla wijzigingen op").first.click()
+    expect(page).to_have_url(re.compile(r"/mijn-profiel/edit/"))
+    # The field's error notifications; the same texts also sit in hidden templates of the page.
+    errors = page.locator(".notifications__errors")
+    expect(errors.filter(has_text="Voer een geldig e-mailadres in.")).to_be_visible()
+    expect(errors.filter(has_text="Ongeldig Nederlands telefoonnummer")).to_be_visible()
+
+
 @pytest.mark.tc("OI-048")
+@pytest.mark.source(
+    "TA regression/165-portaal-notif-save.spec.ts",
+    "Switching off the zaak notification preference is saved and persists after a reload.",
+)
+@pytest.mark.source(
+    "TA regression/106-portaal-notificatievoorkeur.spec.ts",
+    "The notification preferences page offers the zaak notification toggles and a save button.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner logged in with DigiD
+    When the inwoner switches the zaak notifications setting and saves
+    Then the changed setting is kept after reopening the page
+    When the inwoner switches it back and saves
+    Then the original setting is kept
+""")
 def test_notification_setting_is_saved(page: Page, portal: str) -> None:
     """Switching the zaak notifications setting persists, and switching back too (TA reg-106, reg-165)."""
-    page.goto(portal + "/mijn-profiel/notificaties/")
+    page.goto(f"{portal}/mijn-profiel/notificaties/")
     setting = page.locator('input[name="cases_notifications"]')
     if not setting.count():
         pytest.skip("Open Inwoner offers no zaak notification setting here (SiteConfiguration)")
@@ -77,10 +130,19 @@ def test_notification_setting_is_saved(page: Page, portal: str) -> None:
         if setting.is_checked() != wanted:
             setting.dispatch_event("click")
         page.get_by_role("button", name="Sla wijzigingen op").first.click()
-        page.goto(portal + "/mijn-profiel/notificaties/")
+        page.goto(f"{portal}/mijn-profiel/notificaties/")
         assert page.locator('input[name="cases_notifications"]').is_checked() == wanted
 
 
+@pytest.mark.source(
+    "TA regression/117-portaal-contactmomenten-paginatie.spec.ts",
+    "The contactmomenten overview and its pagination (?page=2) are reachable after a DigiD login.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner logged in with DigiD
+    When the inwoner opens Mijn vragen and its second page
+    Then both pages render in the portal's theme without a server error
+""")
 def test_mijn_vragen_answers(page: Page, portal: str) -> None:
     """The Mijn vragen list and its second page render without an error (TA reg-117)."""
     for path in ("/mijn-zaken/contactmomenten/", "/mijn-zaken/contactmomenten/?page=2"):
@@ -101,6 +163,23 @@ def test_mijn_vragen_answers(page: Page, portal: str) -> None:
     ],
 )
 @pytest.mark.tc("OI-029")
+@pytest.mark.source(
+    "TA regression/163-portaal-menu-kop-consistency.spec.ts",
+    "A menu item's text matches the heading of the page it links to.",
+)
+@pytest.mark.source(
+    "TA regression/96-portaal-profiel-navigatie.spec.ts",
+    "The mijn-profiel page is reachable after a DigiD login and shows the inwoner's data.",
+)
+@pytest.mark.source(
+    "TA interaction/108-portaal-vraag-stellen-inwoner.spec.ts",
+    "An inwoner can ask the municipality a question on the contact form page titled Contactformulier.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner logged in with DigiD
+    When the inwoner opens a page from the menu
+    Then the page's heading names what the menu item promises
+""")
 def test_page_heading_matches_its_menu_item(page: Page, portal: str, path: str, words: str) -> None:
     """Each page's heading names what its menu item promises (TA reg-163, reg-96, int-108)."""
     page.goto(portal + path)
@@ -108,12 +187,22 @@ def test_page_heading_matches_its_menu_item(page: Page, portal: str, path: str, 
 
 
 @pytest.mark.xdist_group("inwoner2")
+@pytest.mark.source(
+    "TA regression/114-portaal-multi-user-digid.spec.ts",
+    "After logging out of DigiD, logging in with another DigiD account gives the second inwoner's own session.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner logged in with DigiD
+    When the inwoner logs out
+    And a second inwoner logs in with DigiD
+    Then the second inwoner sees Mijn profiel
+""")
 def test_second_inwoner_sees_own_profile(
     page: Page, podiumd_env: Environment, portal: str, need_bootstrap: Callable[..., None]
 ) -> None:
     """After logging out, a second inwoner logs in to their own profile (TA reg-114)."""
     need_bootstrap(INWONER2.name)
-    page.goto(portal + "/digid-oidc/logout/")
+    page.goto(f"{portal}/digid-oidc/logout/")
     page.context.clear_cookies()
     portal_login(page, podiumd_env, "digid", INWONER2, "/mijn-profiel/")
     expect(page).to_have_url(re.compile(r"/mijn-profiel/"))
@@ -129,14 +218,24 @@ def test_second_inwoner_sees_own_profile(
             id="deactivated",
             marks=pytest.mark.xfail(
                 strict=True,
-                reason="Open Inwoner 2.4.3: the admin still offers the deprecated deactivated_on ('Profiel"
+                reason="[open-inwoner-1] Open Inwoner 2.4.3: the admin still offers the deprecated deactivated_on ('Profiel"
                 " verwijderen' now deletes the account), but it does not stop a DigiD login (TA reg-160b); not yet"
                 " reported upstream",
             ),
         ),
     ],
 )
-def test_disabled_account_cannot_log_in(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "TA regression/160-portaal-deactivated-on-pseudo-blokkade.spec.ts",
+    "Records that deactivated_on set in the admin does not block a DigiD login.",
+)
+@pytest.mark.source("podiumd-tests", "An account set to is_active=False in the admin cannot log in with DigiD.")
+@pytest.mark.scenario("""
+    Given an inwoner's account is set to inactive or deactivated in the admin
+    When the inwoner logs in with DigiD
+    Then the portal asks for a login again
+""")
+def test_disabled_account_cannot_log_in(
     page: Page,
     podiumd_env: Environment,
     portal: str,
@@ -151,13 +250,86 @@ def test_disabled_account_cannot_log_in(  # pylint: disable=too-many-arguments,t
     registry.add(f"account {bsn}", lambda: set_account(podiumd_env, bsn, **old))
     page.context.clear_cookies()
     portal_login(page, podiumd_env, "digid", INWONER2, "/mijn-profiel/")
-    page.goto(portal + "/mijn-profiel/")
+    page.goto(f"{portal}/mijn-profiel/")
     assert "/accounts/login/" in page.url
 
 
-@pytest.mark.requires("api-proxy")
+def _save_profile_email(page: Page, podiumd_env: Environment, adres: str) -> None:
+    """Log the second inwoner in and save this e-mail address in the profile."""
+    page.context.clear_cookies()
+    portal_login(page, podiumd_env, "digid", INWONER2, "/mijn-profiel/edit/")
+    page.locator('input[name="email_addresses-0-value"]').first.fill(adres)
+    page.get_by_role("button", name="Sla wijzigingen op").first.click()
+    page.wait_for_url(lambda url: "/mijn-profiel/edit/" not in url)
+
+
+@pytest.mark.tc("OI-023")
+@pytest.mark.core
+@pytest.mark.requires("openklant")
+# The second inwoner: logins of other tests (the inwoner logs in everywhere) would sync the changed address
+# back between this test's cleanup steps; only this group logs in as inwoner2.
+@pytest.mark.xdist_group("inwoner2")
+@pytest.mark.source(
+    "TA regression/179-portaal-profiel-naar-openklant.spec.ts",
+    "An e-mail address changed in the portal profile lands as a DigitaalAdres in Open Klant.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner logged in with DigiD
+    When the inwoner saves a new e-mail address in Mijn profiel
+    Then the e-mail address appears as a digitaal adres of the inwoner in Open Klant
+""")
+def test_profile_email_reaches_open_klant(
+    page: Page,
+    podiumd_env: Environment,
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """An e-mail address saved in the profile becomes a digitaal adres of the inwoner's partij (TA reg-179)."""
+    need_bootstrap(INWONER2.name, "openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-openklant")
+    bsn = INWONER2.attributes["bsn"][0]
+    adres = f"{registry.tagged('profiel')}@example.invalid"
+    # The partij may predate the test (an earlier login made it); its new adres goes anyway. The
+    # account keeps the address and every later login sends it again: set it back, after the adres
+    # is gone (cleanup runs last-added first).
+    registry.add(f"e-mail of account {bsn}", lambda: set_account(podiumd_env, bsn, email=user_email(INWONER2.username)))
+    registry.add(
+        f"digitaal adres {adres}",
+        lambda: [openklant.delete(str(a["url"])) for a in openklant.list("digitaleadressen", {"adres": adres})],
+    )
+    _save_profile_email(page, podiumd_env, adres)
+
+    def is_stored() -> bool:
+        return any(
+            a.get("adres") == adres
+            for partij in partijen_of(openklant, bsn)
+            for a in openklant.list("digitaleadressen", {"verstrektDoorPartij__uuid": partij.rsplit("/", 1)[-1]})
+        )
+
+    # Open Inwoner sends the address to Open Klant asynchronously.
+    wait_until(is_stored, timeout=60, description=f"digitaal adres {adres} in Open Klant")
+
+
+@pytest.mark.requires("api-proxy", "cluster")
 @pytest.mark.tc("OI-083")
-def test_company_profile_shows_kvk_names(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "TA regression/118-portaal-vestigingsnaam-bedrijf.spec.ts",
+    "The company profile shows the vestiging's name after an eHerkenning login.",
+)
+@pytest.mark.source(
+    "TA regression/146-portaal-uitbreiding.spec.ts",
+    "The company profile shows the vestigingsnummer and the trade name from KvK.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/99-portaal-eherkenning-login.spec.ts",
+    "After the eHerkenning login the test company's user has its KvK number set.",
+)
+@pytest.mark.scenario("""
+    Given a company logged in with eHerkenning
+    When the company opens Mijn profiel
+    Then the profile shows the KvK number, the company's name and the vestiging's trade name from KvK
+""")
+def test_company_profile_shows_kvk_names(
     page: Page,
     podiumd_env: Environment,
     portal: str,
@@ -166,13 +338,15 @@ def test_company_profile_shows_kvk_names(  # pylint: disable=too-many-arguments,
     need_bootstrap: Callable[..., None],
 ) -> None:
     """The company's profile shows its KvK number, its name and the vestiging's trade name from KvK (TA reg-118, reg-146)."""
-    need_bootstrap(BEDRIJF.name, "openinwoner-kvk")
+    need_bootstrap(BEDRIJF.name)
+    if not kvk_api_root(podiumd_env):
+        pytest.skip("Open Inwoner has no KvK API (KvKConfig.api_root): set openinwoner.kvk.apiRoot (podiumd 4.10.0+)")
     kvk, vestiging = BEDRIJF.attributes["kvk"][0], BEDRIJF.attributes["vestigingsnummer"][0]
     naam = expect_status(kvk_basisprofiel(http, urls["api-proxy"], kvk), HTTPStatus.OK).json()["naam"]
     profiel = expect_status(kvk_vestigingsprofiel(http, urls["api-proxy"], vestiging), HTTPStatus.OK).json()
     page.context.clear_cookies()
     portal_login(page, podiumd_env, "eherkenning", BEDRIJF, "/mijn-profiel/")
-    page.goto(portal + "/mijn-profiel/")
+    page.goto(f"{portal}/mijn-profiel/")
     main = page.locator("main")
     for text in (kvk, naam, profiel["eersteHandelsnaam"]):
         expect(main).to_contain_text(text)

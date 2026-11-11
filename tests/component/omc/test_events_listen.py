@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.omc import VALIDITY
 from podiumd_tests.bootstrap.omc import omc_token
 from podiumd_tests.responses import expect_status
 
@@ -26,12 +27,16 @@ if TYPE_CHECKING:
 
     from podiumd_tests.environment import Environment
 
-pytestmark = [pytest.mark.component, pytest.mark.core, pytest.mark.requires("omc", "cluster")]
+pytestmark = [
+    pytest.mark.component,
+    pytest.mark.core,
+    pytest.mark.requires("omc", "cluster"),
+]
 
 
 def notification(urls: dict[str, str], root: tuple[str, ...]) -> dict[str, object]:
     """A new-status notification for a zaak that does not exist, with Open Notificaties as these root properties."""
-    zaken = urls["openzaak"] + "/zaken/api/v1/"
+    zaken = f"{urls['openzaak']}/zaken/api/v1/"
     body: dict[str, object] = {
         "kanaal": "zaken",
         "hoofdObject": f"{zaken}zaken/{uuid.uuid4()}",
@@ -48,10 +53,12 @@ def notification(urls: dict[str, str], root: tuple[str, ...]) -> dict[str, objec
     return body | dict.fromkeys(root, urls["opennotificaties"])
 
 
-def listen(http: requests.Session, podiumd_env: Environment, body: dict[str, object]) -> requests.Response:
-    """POST a notification to OMC's Events/Listen with the token its abonnement uses."""
-    token = omc_token(podiumd_env, time.time())
-    url = podiumd_env.profile.urls["omc"] + "/Events/Listen"
+def listen(
+    http: requests.Session, podiumd_env: Environment, body: dict[str, object], issued: float | None = None
+) -> requests.Response:
+    """POST a notification to OMC's Events/Listen with the token its abonnement uses, issued now unless given."""
+    token = omc_token(podiumd_env, time.time() if issued is None else issued)
+    url = f"{podiumd_env.profile.urls['omc']}/Events/Listen"
     return http.post(url, json=body, headers={"Authorization": f"Bearer {token}"})
 
 
@@ -64,14 +71,39 @@ def listen(http: requests.Session, podiumd_env: Environment, body: dict[str, obj
             id="as-opennotificaties",
             marks=pytest.mark.xfail(
                 strict=True,
-                reason="OMC 1.17.19 rejects the 'source' root property of Open Notificaties 1.16.2"
+                reason="[omc-1] OMC 1.17.19 and 2.3.1 reject the 'source' root property of Open Notificaties 1.16.2"
                 " notifications (206, inner 422); not yet reported upstream",
             ),
         ),
     ],
 )
+@pytest.mark.source(
+    "podiumd-tests", "OMC answers 206 to a notification it cannot process, which Open Notificaties counts as delivered."
+)
+@pytest.mark.scenario("""
+    Given a notification of a new status for a zaak that does not exist
+    And the notification with or without Open Notificaties' source property
+    When it is posted to OMC with the token of OMC's abonnement
+    Then OMC processes it and fails only on fetching the unknown status
+""")
 def test_notification_is_recognized(
     http: requests.Session, podiumd_env: Environment, urls: dict[str, str], root: tuple[str, ...]
 ) -> None:
     """OMC processes the notification: 412, not the 206 that Open Notificaties would count as delivered."""
     expect_status(listen(http, podiumd_env, notification(urls, root)), HTTPStatus.PRECONDITION_FAILED)
+
+
+@pytest.mark.source(
+    "upstream Worth-NL/NotifyNL-OMC OMC/Tests/Infrastructure/WebApi/EventsHandler.IntegrationTests/Controllers/EventsControllerTests.cs",
+    "Listen_WithExpiredToken_Returns401: OMC refuses a notification whose token has expired.",
+)
+@pytest.mark.scenario("""
+    Given a notification of a new status
+    And a token signed with OMC's secret that expired a day ago
+    When the notification is posted to OMC with that token
+    Then OMC refuses it as unauthorized
+""")
+def test_expired_token_is_refused(http: requests.Session, podiumd_env: Environment, urls: dict[str, str]) -> None:
+    """A token that expired a day ago gets 401, though OMC's own secret signed it."""
+    expired = time.time() - VALIDITY - 24 * 3600
+    expect_status(listen(http, podiumd_env, notification(urls, ()), issued=expired), HTTPStatus.UNAUTHORIZED)

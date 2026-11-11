@@ -1,10 +1,14 @@
+---
 # ICATT podiumd-infra AKS environment kees00 (values/kees00/).
 estate: podiumd-infra
-allowed_tiers: [smoke, core, full, perf]
+# chaos: Kees's own environment; tell podiumd-infra before a run, its deploys must not overlap.
+allowed_tiers: [smoke, core, full, perf, chaos]
 kube:
   context: podiumd-kees00-aks
   namespace: podiumd
   monitoring_namespace: monitoring
+  # doctor rewrites the kube context from this cluster when its API address changed (fresh install).
+  aks: {subscription: e84e9255-f636-4592-afc3-d9d61fb79c6e, resource_group: rg-podiumd-kees00, name: podiumd-kees00-aks}
 urls:
   zac: https://zac.kees00.pd.test-rig.nl
   openzaak: https://openzaak.kees00.pd.test-rig.nl
@@ -25,19 +29,30 @@ urls:
   openbeheer: https://openbeheer.kees00.pd.test-rig.nl
   referentielijsten: https://referentielijsten.kees00.pd.test-rig.nl
   openarchiefbeheer: https://abc.kees00.pd.test-rig.nl
+  openvtb: https://openvtb.kees00.pd.test-rig.nl
+  zaakbrug: https://zaakbrug.kees00.pd.test-rig.nl
   # No ingress: reached through a port-forward.
   api-proxy: http://api-proxy.podiumd.svc.cluster.local
+  frankgateway: http://frankgateway-outway.podiumd.svc.cluster.local:9080
+  # Off the public edge until known issue zgw-office-addin-1 is fixed.
+  zgw-office-addin: http://zgw-office-addin-frontend.podiumd.svc.cluster.local
+  openbao: https://openbao.kees00.pd.test-rig.nl
 secrets:
   keycloak_admin_username:
     k8s_secret: {name: keycloak-podiumd-admin, key: username}
   keycloak_admin_password:
     k8s_secret: {name: keycloak-podiumd-admin, key: password}
+  kiss_elastic_password:
+    k8s_secret: {name: kiss-es-elastic-user, key: elastic}
+  # KISS's Objecten token for its logboek (Activiteitenlog).
+  kiss_logboek_token:
+    k8s_secret: {name: contact, key: LOGBOEK_TOKEN}
   # Grafana's own admin (basic auth), from the monitoring stack podiumd-infra deploys with
   # grafana-deploy=true. grafana-admin in Key Vault is a Keycloak SSO user and cannot log in with basic auth.
   grafana_username:
-    k8s_secret: {name: monitoring-grafana, key: admin-user, namespace: monitoring}
+    k8s_secret: {name: monitoring-logging-grafana, key: admin-user, namespace: monitoring}
   grafana_password:
-    k8s_secret: {name: monitoring-grafana, key: admin-password, namespace: monitoring}
+    k8s_secret: {name: monitoring-logging-grafana, key: admin-password, namespace: monitoring}
   # Signs the bootstrap's OMC abonnement token; read from OMC's own Secret.
   omc_jwt_secret:
     k8s_secret: {name: omc, key: OMC_AUTH_JWT_SECRET}
@@ -45,6 +60,8 @@ secrets:
   zgw_client_secret:
     zgw_jwt_secret: {deployment: openzaak, client_id: formulier}
 settings:
+  # Kyverno ClusterPolicy redirect-registries rewrites Docker Hub images to this mirror; the step compares images.
+  mock_server_image: podiumdregistry.azurecr.io/dockerhub/library/python:3.13-alpine
   # podiumd's e2e zaaktype; podiumd-infra seeds ZAC's zaakafhandelparameters for it (runtime data, not in its values).
   productaanvraag_type: productaanvraag-zaaktype-voor-e2e-testen
   productaanvraag_zaaktype: zaaktype-voor-e2e-testen

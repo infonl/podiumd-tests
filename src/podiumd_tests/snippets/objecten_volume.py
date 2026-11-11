@@ -33,7 +33,12 @@ def run(params):
         with transaction.atomic():
             for seq in range(params["start"], params["stop"]):
                 obj = Object.objects.create(object_type=registered)
-                data = {"title": f"{params['tag']} {seq}", "body": params["body"], "seq": seq, "tag": params["tag"]}
+                data = {
+                    "title": f"{params['tag']} {seq}",
+                    "body": params["body"],
+                    "seq": seq,
+                    "tag": params["tag"],
+                }
                 ObjectRecord.objects.create(
                     object=obj,
                     index=1,

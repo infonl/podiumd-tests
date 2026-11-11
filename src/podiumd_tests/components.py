@@ -12,42 +12,79 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Component:
-    """How one component shows up in hostnames and deployment names."""
+    """How one component shows up in hostnames, workload names and Prometheus."""
 
     host_aliases: tuple[str, ...]
     deployment_prefixes: tuple[str, ...]
+    # Prometheus scrapes it through a ServiceMonitor or PodMonitor named like one of its workloads.
+    monitored: bool = False
+    # Its OTEL service.name per version, which the collector's remote write turns into the series' job label.
+    otel_services: tuple[str, ...] = ()
 
 
 COMPONENTS: dict[str, Component] = {
-    "zac": Component(("zac",), ("zac",)),
-    "openzaak": Component(("openzaak",), ("openzaak",)),
-    "keycloak": Component(("keycloak",), ("keycloak",)),
+    "zac": Component(("zac",), ("zac",), otel_services=("zac",)),
+    "openzaak": Component(("openzaak",), ("openzaak",), otel_services=("openzaak",)),
+    "keycloak": Component(("keycloak",), ("keycloak",), monitored=True),
     "keycloak-admin": Component(("keycloak-admin",), ()),
     "kiss": Component(("contact", "kiss"), ("contact", "contact-web", "kiss")),
     "ita": Component(("ita", "internetaakafhandeling"), ("ita", "ita-web")),
     "pabc": Component(("pabc",), ("pabc",)),
-    "openarchiefbeheer": Component(("abc", "openarchiefbeheer", "openarchiefbeheer-ui"), ("openarchiefbeheer",)),
-    "openinwoner": Component(("portaal", "mijn", "openinwoner"), ("openinwoner",)),
-    "openformulieren": Component(("formulier", "openformulieren", "openformulieren-nginx"), ("openformulieren",)),
-    "openklant": Component(("openklant",), ("openklant",)),
-    "objecten": Component(("objecten",), ("objecten",)),
+    "openarchiefbeheer": Component(
+        ("abc", "openarchiefbeheer", "openarchiefbeheer-ui"),
+        ("openarchiefbeheer",),
+        otel_services=("openarchiefbeheer",),
+    ),
+    "openinwoner": Component(("portaal", "mijn", "openinwoner"), ("openinwoner",), otel_services=("openinwoner",)),
+    "openformulieren": Component(
+        ("formulier", "openformulieren", "openformulieren-nginx"), ("openformulieren",), otel_services=("openforms",)
+    ),
+    "openklant": Component(("openklant",), ("openklant",), otel_services=("openklant",)),
+    # Open Object 4.x reports as openobject, Objecten 3.x as objects.
+    "objecten": Component(("objecten",), ("objecten",), otel_services=("openobject", "objects")),
     # Open Object (podiumd 4.10) serves the Objecttypen API from deployment objecten.
     "objecttypen": Component(("objecttypen",), ("objecttypen", "objecten")),
-    "opennotificaties": Component(("notificaties", "opennotificaties"), ("opennotificaties", "notificaties")),
+    "opennotificaties": Component(
+        ("notificaties", "opennotificaties"), ("opennotificaties", "notificaties"), otel_services=("opennotificaties",)
+    ),
     "omc": Component(("omc",), ("omc",)),
     "openbeheer": Component(("openbeheer",), ("openbeheer",)),
-    "referentielijsten": Component(("referentielijsten",), ("referentielijsten",)),
-    "frankgateway": Component(("frankgateway",), ("frankgateway", "frank-gateway")),
+    "referentielijsten": Component(
+        ("referentielijsten",), ("referentielijsten",), otel_services=("referentielijsten",)
+    ),
+    "openvtb": Component(("openvtb",), ("openvtb",), otel_services=("openvtb",)),
+    # The sub-chart names its deployment <helm release>-zaakbrug.
+    "zaakbrug": Component(("zaakbrug",), ("zaakbrug", "podiumd-zaakbrug")),
+    # ExternalsPodiumD's host is <stage>-office-addin.<domain>.
+    "zgw-office-addin": Component(("office-addin", "zgw-office-addin"), ("zgw-office-addin",)),
+    # podiumd-adapter: KISS's ZGW and Klanten calls to the e-Suite (chart podiumd, kiss.adapter).
+    "kiss-adapter": Component(("kiss-adapter",), ("kiss-adapter",)),
+    "frankgateway": Component(
+        ("frankgateway",), ("frankgateway-outway", "frankgateway", "frank-gateway"), monitored=True
+    ),
+    # The chart names its StatefulSet and ServiceMonitor <helm release>-openbao.
+    "openbao": Component(("openbao",), ("openbao", "podiumd-openbao"), monitored=True),
     # podiumd's nginx in front of BRP, KvK and BAG (Frank!Gateway replaces it in newer charts).
     "api-proxy": Component(("api-proxy",), ("api-proxy",)),
-    # monitoring-logging's Grafana is named <helm release>-grafana: release monitoring or monitoring-logging on
-    # the estates, podiumd-minikube on minikube.
+    # monitoring-logging's Grafana is named <helm release>-grafana: release monitoring or monitoring-logging.
     "grafana": Component(
         ("grafana", "podiumd-logs"),
-        ("grafana", "monitoring-grafana", "monitoring-logging-grafana", "podiumd-minikube-grafana"),
+        (
+            "grafana",
+            "monitoring-grafana",
+            "monitoring-logging-grafana",
+            "podiumd-grafana",
+        ),
     ),
     "mailpit": Component(("mailpit",), ("mailpit",)),
+    # Without a URL: found by their workloads only.
+    "eck-operator": Component((), ("elastic-operator",), monitored=True),
+    "redis": Component((), ("redis-ha",), monitored=True),
+    "clamav": Component((), ("clamav",), monitored=True),
 }
+
+# Components with a host of their own: the URL-based checks (reachability, web security) and profile URLs cover these.
+HOSTED = tuple(name for name, component in COMPONENTS.items() if component.host_aliases)
 
 # Components that are Django apps: they have /admin/, `manage.py shell` and Django's mail settings.
 DJANGO_APPS = (
@@ -61,20 +98,24 @@ DJANGO_APPS = (
     "opennotificaties",
 )
 
+# Components with `manage.py shell` and zgw_consumers Services: DJANGO_APPS and apps left out of its admin, OIDC
+# and mail checks.
+ZGW_CONSUMER_APPS = (*DJANGO_APPS, "openbeheer", "referentielijsten", "openvtb")
 
-def _component_for_label(label: str) -> str | None:
+
+def _label_component(label: str) -> str | None:
     for name, component in COMPONENTS.items():
         if label in component.host_aliases:
             return name
     return None
 
 
-def component_for_host(host: str) -> str | None:
+def component_for_host(hostname: str) -> str | None:
     """Component of a hostname: <app>.<env>.<domain>, <stage>-<app>.<domain> or <app>.local."""
-    label = host.split(".", 1)[0]
-    found = _component_for_label(label)
+    label = hostname.split(".", 1)[0]
+    found = _label_component(label)
     if found is None and "-" in label:
-        found = _component_for_label(label.split("-", 1)[1])
+        found = _label_component(label.split("-", 1)[1])
     return found
 
 
@@ -83,6 +124,6 @@ def deployed_components(deployment_names: list[str]) -> set[str]:
     found: set[str] = set()
     for name, component in COMPONENTS.items():
         for prefix in component.deployment_prefixes:
-            if any(d == prefix or d.startswith(f"{prefix}-") for d in deployment_names):
+            if any(deployment == prefix or deployment.startswith(f"{prefix}-") for deployment in deployment_names):
                 found.add(name)
     return found

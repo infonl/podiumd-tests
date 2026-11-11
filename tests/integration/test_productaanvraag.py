@@ -7,6 +7,8 @@ for profile settings productaanvraag_type and productaanvraag_zaaktype.
 
 from __future__ import annotations
 
+import json
+
 from typing import TYPE_CHECKING
 
 import pytest
@@ -18,6 +20,7 @@ from podiumd_tests.seed.objecten import make_productaanvraag
 from podiumd_tests.seed.openklant import make_submission_contact
 from podiumd_tests.zac import PRODUCTAANVRAAG_TIMEOUT
 from podiumd_tests.zac import productaanvraag_zaak
+from podiumd_tests.zac import wait_in_werkvoorraad
 
 if TYPE_CHECKING:
     import requests
@@ -33,7 +36,20 @@ pytestmark = [
 ]
 
 
-def test_productaanvraag_becomes_a_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "MK test_productaanvraag_flow.py",
+    "A form submission through the Objects API and Open Notificaties makes ZAC create a zaak, with no manual step.",
+)
+@pytest.mark.source(
+    "PI test_productaanvraag_flow.py",
+    "A productaanvraag object makes ZAC create a zaak through the environment's standard chart wiring.",
+)
+@pytest.mark.scenario("""
+    Given ZAC handles productaanvragen of a zaaktype
+    When a productaanvraag is added to Objecten
+    Then ZAC starts a zaak in Open Zaak that names the productaanvraag's kenmerk
+""")
+def test_productaanvraag_becomes_a_zaak(
     objecten: ApiClient,
     openzaak_productaanvraag: ApiClient,
     registry: ResourceRegistry,
@@ -49,8 +65,16 @@ def test_productaanvraag_becomes_a_zaak(  # pylint: disable=too-many-arguments,t
 @pytest.mark.tc("OF-002")
 @pytest.mark.requires("openklant", "mailpit", "keycloak")
 @pytest.mark.usefixtures("ontvangstbevestiging")
-def test_zac_mails_the_initiator_an_ontvangstbevestiging(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
-    podiumd_env: Environment,
+@pytest.mark.source(
+    "draaiboek OF-002",
+    "A form leads to a zaak in ZAC, which automatically sends a receipt confirmation with the zaaknummer.",
+)
+@pytest.mark.scenario("""
+    Given a form's submitter left an e-mail address in Open Klant
+    When the form's productaanvraag makes ZAC start a zaak
+    Then the submitter receives a mail with the zaaknummer
+""")
+def test_zac_mails_the_initiator_an_ontvangstbevestiging(
     objecten: ApiClient,
     openzaak_productaanvraag: ApiClient,
     openklant: ApiClient,
@@ -70,9 +94,18 @@ def test_zac_mails_the_initiator_an_ontvangstbevestiging(  # pylint: disable=too
 
 @pytest.mark.tc("FB-008")
 @pytest.mark.requires("openformulieren")
-def test_new_form_becomes_a_zac_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source("draaiboek FB-008", "A new form can be set up that links to ZAC.")
+@pytest.mark.source("ZAC features/3-open-formulieren.feature", "A submitted form becomes a zaak in ZAC's werkvoorraad.")
+@pytest.mark.scenario("""
+    Given a new form in Open Formulieren that registers a productaanvraag in Objecten
+    When an inwoner submits the form
+    Then ZAC starts a zaak for it in Open Zaak
+    And the zaak is in ZAC's werkvoorraad
+""")
+def test_new_form_becomes_a_zac_zaak(
     podiumd_env: Environment,
     http: requests.Session,
+    zac: requests.Session,
     objecten: ApiClient,
     openzaak_productaanvraag: ApiClient,
     registry: ResourceRegistry,
@@ -84,7 +117,7 @@ def test_new_form_becomes_a_zac_zaak(  # pylint: disable=too-many-arguments,too-
     # Open Formulieren's productaanvraag template, as the environments configure it.
     content = (
         '{"bron": {"naam": "Open Formulieren", "kenmerk": "{{ submission.public_reference }}"},'
-        f' "type": "{productaanvraagtype}", "aanvraaggegevens": {{% json_summary %}}, "taal": "nld"}}'
+        f' "type": {json.dumps(productaanvraagtype)}, "aanvraaggegevens": {{% json_summary %}}, "taal": "nld"}}'
     )
     registration = {
         "backend": "objects_api",
@@ -113,4 +146,5 @@ def test_new_form_becomes_a_zac_zaak(  # pylint: disable=too-many-arguments,too-
             for o in objecten.list("objects", {"data_attr": f"bron__kenmerk__exact__{kenmerk}"})
         ],
     )
-    productaanvraag_zaak(openzaak_productaanvraag, registry, kenmerk)
+    zaak = productaanvraag_zaak(openzaak_productaanvraag, registry, kenmerk)
+    wait_in_werkvoorraad(zac, podiumd_env.profile.urls["zac"], str(zaak["identificatie"]))

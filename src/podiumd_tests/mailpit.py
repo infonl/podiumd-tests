@@ -18,15 +18,22 @@ if TYPE_CHECKING:
     from podiumd_tests.seed.registry import ResourceRegistry
 
 
+def quoted(value: str) -> str:
+    """Return value as one Mailpit search phrase."""
+    return f'"{value}"'  # noqa: B907  # Mailpit search syntax, not a Python literal
+
+
 def wait_for_mail(
     mailpit: ApiClient, *, timeout: float, subject: str | None = None, to: str | None = None
 ) -> JsonObject:
-    """The first message with exactly this subject and/or to this address; WaitTimeoutError if none arrives in time."""
-    query = " ".join(f'{field}:"{value}"' for field, value in (("subject", subject), ("to", to)) if value)
+    """Return the first message with exactly this subject and/or to this address; WaitTimeoutError if none arrives."""
+    criteria = (("subject", subject), ("to", to))
+    query = " ".join(f"{field}:{quoted(value)}" for field, value in criteria if value)
 
     def found() -> JsonObject | None:
         page = mailpit.get("search", {"query": query})
-        return next((m for m in entries(page.get("messages")) if subject in {None, m.get("Subject")}), None)
+        messages = entries(page.get("messages"))
+        return next((message for message in messages if subject in {None, message.get("Subject")}), None)
 
     return wait_until(found, timeout=timeout, interval=1, description=f"mail {query} in Mailpit")
 
@@ -39,9 +46,9 @@ def delete_message(mailpit: ApiClient, message_id: str) -> None:
 def received(
     mailpit: ApiClient, registry: ResourceRegistry, *, timeout: float, to: str, subject: str | None = None
 ) -> str:
-    """The HTML of the first mail to the address (wait_for_mail); cleanup deletes every mail to the address."""
+    """Return the HTML of the first mail to the address (wait_for_mail); cleanup deletes every mail to the address."""
     message = wait_for_mail(mailpit, timeout=timeout, to=to, subject=subject)
-    registry.add(f"mail to {to}", lambda: delete_mails(mailpit, f'to:"{to}"'))
+    registry.add(f"mail to {to}", lambda: delete_mails(mailpit, f"to:{quoted(to)}"))
     return str(mailpit.get(f"message/{message['ID']}").get("HTML"))
 
 

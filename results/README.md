@@ -9,6 +9,7 @@ results/<YYYY-MM>/<YYYYMMDD-HHMMSS>_<env>_<tier>_<runid>/
   summary.md    # counts, failures, known defects and skip reasons
   report.html   # every test with outcome, duration, message and log (pytest-html); not committed
   perf/         # perf tier only
+  cilium-drops.jsonl  # clusters with Cilium only: each packet a network policy denied during the run
   artifacts/    # a screenshot of each failed browser test; never committed
 ```
 
@@ -24,6 +25,8 @@ Start with `summary.md` (its counts match pytest's last line), or open `report.h
 | Skipped | The environment lacks what the test needs, e.g. "requires: omc (no URL in profile)" or a missing bootstrap step. | None, unless the environment should have it. |
 | XFailed | A known product defect showed again; the reason names it. | None; report it upstream if not done. |
 | XPassed | A known defect did not show this time. | A strict xfail that passes counts as Failed: the defect is fixed, so update the test. A non-strict one is a race that sometimes passes. |
+
+The table "Known defects" at the top of `summary.md` has one row per bug report id (the `[id]` that starts a known-defect reason): "still fails" when every test of the report XFailed, "did not show" when a test XPassed. A report that did not show is a candidate fix: check the defect and update the test.
 
 How to view a run:
 

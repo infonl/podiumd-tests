@@ -3,6 +3,7 @@
 from podiumd_tests.hygiene import baseline_violations
 from podiumd_tests.hygiene import missing_requests
 from podiumd_tests.hygiene import unpinned_images
+from podiumd_tests.hygiene import without_disruption_budget
 
 REQUESTS = {"requests": {"cpu": "100m", "memory": "128Mi"}}
 
@@ -59,3 +60,25 @@ def test_requests_are_checked_on_containers_only():
     containers = [{"name": "a", "image": "a:1", "resources": {}}, {"name": "b", "image": "b:1", "resources": REQUESTS}]
     found = missing_requests(workload(containers=containers, init=[{"name": "i", "image": "i:1"}]))
     assert found == ["w/a: no cpu or memory request"]
+
+
+def replicated(name, replicas, labels, namespace="podiumd"):
+    return {
+        "metadata": {"name": name, "namespace": namespace},
+        "spec": {"replicas": replicas, "template": {"metadata": {"labels": labels}}},
+    }
+
+
+def budget(match_labels, namespace="podiumd"):
+    return {"metadata": {"namespace": namespace}, "spec": {"selector": {"matchLabels": match_labels}}}
+
+
+def test_replicated_workloads_without_a_selecting_budget_are_named():
+    workloads = [
+        replicated("keycloak", 2, {"app": "keycloak", "tier": "web"}),
+        replicated("solr", 3, {"app": "solr"}),
+        replicated("single", 1, {"app": "single"}),
+        replicated("elsewhere", 2, {"app": "elsewhere"}, namespace="other"),
+    ]
+    budgets = [budget({"app": "solr"}), budget({"app": "elsewhere"}), budget({"app": "keycloak", "tier": "db"})]
+    assert without_disruption_budget(workloads, budgets) == ["keycloak", "elsewhere"]

@@ -1,7 +1,8 @@
+---
 # SSC Twente ExternalsPodiumD environment ontw-dim1 (applications/gemeenten/dim1/ontw/).
-# Every tier, chaos included (user, 2026-10-13).
+# Every tier except chaos.
 estate: externals
-allowed_tiers: [smoke, core, full, perf, chaos]
+allowed_tiers: [smoke, core, full, perf]
 kube:
   context: aks-blue-ontw-dim1
   namespace: podiumd
@@ -24,6 +25,12 @@ urls:
   openbeheer: https://ontw-openbeheer.dev.dimpact.nl
   referentielijsten: https://ontw-referentielijsten.dev.dimpact.nl
   grafana: https://ontw-podiumd-logs.dev.dimpact.nl
+  openbao: https://ontw-openbao-admin.dev.dimpact.nl
 secrets:
+  # keycloak-operator's master admin, as on podiumd-infra (checked on ontw-dim1 2026-10-27).
+  keycloak_admin_username:
+    k8s_secret: {name: keycloak-podiumd-admin, key: username}
+  keycloak_admin_password:
+    k8s_secret: {name: keycloak-podiumd-admin, key: password}
   pabc_api_key:
     pod_env: {deployment: pabc, var: API_KEY__0}

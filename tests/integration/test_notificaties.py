@@ -1,4 +1,4 @@
-"""Chains: changes in Open Zaak and Open Klant reach subscribers through Open Notificaties.
+"""Chains: changes in Open Zaak, Open Klant and Objecten reach subscribers through Open Notificaties.
 
 Ported from TA regression 19, 25, 26, 27, 30, 33, 34, 37, 42, 45 and 46. Each test subscribes
 callbacks of its own on the mock server (infra/mock-server) and matches the
@@ -11,8 +11,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.names import ITA_OBJECTTYPES
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.json_data import section
+from podiumd_tests.seed.objecten import make_object
+from podiumd_tests.seed.objecten import objecttype_url
+from podiumd_tests.seed.openklant import close_internetaak
 from podiumd_tests.seed.openklant import make_internetaak
 from podiumd_tests.seed.openklant import make_klantcontact
 from podiumd_tests.seed.openklant import make_partij
@@ -27,6 +31,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.mock_server import Callback
     from podiumd_tests.seed.openzaak import ZaaktypeParts
@@ -43,17 +48,18 @@ OWN = {"bronorganisatie": TEST_CATALOGUS_RSIN}
 def event(kanaal: str, resource: str, actie: str, hoofd: object) -> Callable[[JsonObject], bool]:
     """Matches a received notification of this kind about hoofd (a URL)."""
 
-    def match(entry: JsonObject) -> bool:
+    def is_match(entry: JsonObject) -> bool:
         body = entry.get("body")
+        if not isinstance(body, dict):
+            return False
         return (
-            isinstance(body, dict)
-            and body.get("kanaal") == kanaal
+            body.get("kanaal") == kanaal
             and body.get("resource") == resource
             and body.get("actie") == actie
             and body.get("hoofdObject") == hoofd
         )
 
-    return match
+    return is_match
 
 
 def notified(callback: Callback, match: Callable[[JsonObject], bool], description: str) -> JsonObject:
@@ -61,6 +67,16 @@ def notified(callback: Callback, match: Callable[[JsonObject], bool], descriptio
     return section(callback.wait_for(match, timeout=DELIVERY_TIMEOUT, description=description), "body")
 
 
+@pytest.mark.source(
+    "TA regression/25-abonnement-filter.spec.ts",
+    "Only the subscriber whose abonnement filter matches the vertrouwelijkheidaanduiding gets the callback.",
+)
+@pytest.mark.scenario("""
+    Given two subscribers in Open Notificaties, one for openbaar and one for vertrouwelijk zaken
+    When an openbaar and a vertrouwelijk zaak are created in Open Zaak
+    Then each subscriber gets the notification of its own zaak
+    And the vertrouwelijk subscriber does not get the openbaar zaak
+""")
 def test_kenmerk_filter_selects_the_subscriber(
     openzaak: ApiClient,
     opennotificaties: ApiClient,
@@ -78,10 +94,23 @@ def test_kenmerk_filter_selects_the_subscriber(
     # A later zaak for the other subscriber: once it arrived, the first one would have too.
     secret = make_zaak(openzaak, registry, zaaktype, vertrouwelijkheidaanduiding="vertrouwelijk")
     notified(vertrouwelijk, event("zaken", "zaak", "create", secret["url"]), "the vertrouwelijk zaak")
-    assert not [e for e in vertrouwelijk.received() if event("zaken", "zaak", "create", open_zaak["url"])(e)]
+    assert not any(event("zaken", "zaak", "create", open_zaak["url"])(e) for e in vertrouwelijk.received())
 
 
 @pytest.mark.core
+@pytest.mark.source(
+    "TA regression/19-notificaties-e2e.spec.ts",
+    "A zaak created in Open Zaak is published through Open Notificaties and reaches the webhook receiver.",
+)
+@pytest.mark.source(
+    "TA regression/26-multi-subscriber.spec.ts", "One zaak event reaches two independent subscribers on kanaal zaken."
+)
+@pytest.mark.scenario("""
+    Given two subscribers on kanaal zaken in Open Notificaties
+    When a zaak is created in Open Zaak
+    Then both subscribers get the same notification
+    And it names the zaak and its zaaktype
+""")
 def test_every_subscriber_gets_the_notification(
     openzaak: ApiClient,
     opennotificaties: ApiClient,
@@ -102,7 +131,29 @@ def test_every_subscriber_gets_the_notification(
     assert section(first, "kenmerken")["zaaktype"] == test_zaaktype["url"]
 
 
-def test_zaak_changes_are_notified_with_their_resource(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "TA regression/27-status-event-keten.spec.ts",
+    "A subscriber on kanaal zaken gets both the zaak-create and the status-create event.",
+)
+@pytest.mark.source(
+    "TA regression/30-rol-event.spec.ts", "Adding a rol to a zaak publishes a rol-create event on kanaal zaken."
+)
+@pytest.mark.source(
+    "TA regression/33-zaak-update-event.spec.ts", "A PATCH on a zaak publishes a partial_update event on kanaal zaken."
+)
+@pytest.mark.source(
+    "TA regression/34-zio-events.spec.ts",
+    "Linking a document to a zaak publishes a zaakinformatieobject-create event on kanaal zaken.",
+)
+@pytest.mark.source(
+    "TA regression/46-rol-delete-event.spec.ts", "Deleting a rol publishes a destroy event on kanaal zaken."
+)
+@pytest.mark.scenario("""
+    Given a subscriber on kanaal zaken in Open Notificaties
+    When a zaak in Open Zaak gets a status, a rol, a change and a document, and loses the rol
+    Then the subscriber gets a notification of each change, naming the changed object
+""")
+def test_zaak_changes_are_notified_with_their_resource(
     openzaak: ApiClient,
     opennotificaties: ApiClient,
     registry: ResourceRegistry,
@@ -129,6 +180,14 @@ def test_zaak_changes_are_notified_with_their_resource(  # pylint: disable=too-m
         assert notification["resourceUrl"] == url
 
 
+@pytest.mark.source(
+    "TA regression/34-zio-events.spec.ts", "Creating a document publishes an event on kanaal documenten."
+)
+@pytest.mark.scenario("""
+    Given a subscriber on kanaal documenten in Open Notificaties
+    When a document is created in Open Zaak
+    Then the subscriber gets a notification about the document
+""")
 def test_document_is_notified_on_kanaal_documenten(
     openzaak: ApiClient,
     opennotificaties: ApiClient,
@@ -144,6 +203,15 @@ def test_document_is_notified_on_kanaal_documenten(
 
 
 @pytest.mark.requires("openklant")
+@pytest.mark.source(
+    "TA regression/37-ok2-partij-events.spec.ts",
+    "Creating and changing a partij in Open Klant publish events on kanaal partijen.",
+)
+@pytest.mark.scenario("""
+    Given a subscriber on kanaal partijen in Open Notificaties
+    When a partij is created and changed in Open Klant
+    Then the subscriber gets a notification of both
+""")
 def test_partij_changes_are_notified(
     openklant: ApiClient, opennotificaties: ApiClient, registry: ResourceRegistry, callback: Callback
 ) -> None:
@@ -156,17 +224,36 @@ def test_partij_changes_are_notified(
 
 
 @pytest.mark.requires("openklant")
+@pytest.mark.source(
+    "TA regression/45-internetaak-event.spec.ts",
+    "Creating an internetaak and changing its status publish events on kanaal internetaken.",
+)
+@pytest.mark.scenario("""
+    Given a subscriber on kanaal internetaken in Open Notificaties
+    When an internetaak is created and completed in Open Klant
+    Then the subscriber gets a notification of both
+""")
 def test_internetaak_changes_are_notified(
     openklant: ApiClient, opennotificaties: ApiClient, registry: ResourceRegistry, callback: Callback
 ) -> None:
     """Creating an internetaak and completing it reach kanaal internetaken (TA reg-45)."""
     make_abonnement(opennotificaties, registry, callback.url, "internetaken", {})
     taak = make_internetaak(openklant, registry, make_klantcontact(openklant, registry), [])
-    openklant.patch(str(taak["url"]), {"status": "verwerkt"})
+    close_internetaak(openklant, taak)
     for actie in ("create", "partial_update"):
         notified(callback, event("internetaken", "internetaak", actie, taak["url"]), f"internetaak {actie}")
 
 
+@pytest.mark.source(
+    "TA regression/42-notif-retry.spec.ts",
+    "Open Notificaties retries delivery to a subscriber that first answers 500, so the event arrives eventually.",
+)
+@pytest.mark.scenario("""
+    Given a subscriber in Open Notificaties that refuses its first notification
+    When a zaak is created in Open Zaak
+    Then Open Notificaties delivers the notification again
+    And the subscriber accepts it the second time
+""")
 def test_failed_delivery_is_retried(
     openzaak: ApiClient,
     opennotificaties: ApiClient,
@@ -183,3 +270,31 @@ def test_failed_delivery_is_retried(
     match = event("zaken", "zaak", "create", zaak["url"])
     callback.wait_for(lambda e: match(e) and e.get("status") == 204, timeout=DELIVERY_TIMEOUT, description="redelivery")
     assert [e.get("status") for e in callback.received() if match(e)] == [500, 204]
+
+
+@pytest.mark.requires("objecten", "cluster")
+@pytest.mark.source(
+    "upstream maykinmedia/objects-api docs/api/_assets/objects-api.postman_collection.json",
+    "Create object: Objecten publishes the new object on Open Notificaties' kanaal objecten.",
+)
+@pytest.mark.scenario("""
+    Given a subscriber on kanaal objecten in Open Notificaties
+    When an object is created in Objecten
+    Then the subscriber gets a notification that names the object's objecttype
+""")
+def test_object_is_notified_on_kanaal_objecten(
+    podiumd_env: Environment,
+    objecten: ApiClient,
+    opennotificaties: ApiClient,
+    registry: ResourceRegistry,
+    callback: Callback,
+) -> None:
+    """A new object reaches kanaal objecten with its objecttype as kenmerk.
+
+    Open Formulieren's objects API registration and the productaanvraag chain depend on it.
+    """
+    make_abonnement(opennotificaties, registry, callback.url, "objecten", {})
+    afdeling = objecttype_url(podiumd_env, ITA_OBJECTTYPES[0])
+    created = make_object(objecten, registry, afdeling, {"identificatie": registry.tagged("afdeling"), "naam": "x"})
+    body = notified(callback, event("objecten", "object", "create", created["url"]), "the object's create notification")
+    assert section(body, "kenmerken").get("objectType") == afdeling

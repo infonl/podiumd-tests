@@ -6,14 +6,14 @@ import json
 from podiumd_tests.mail_routes import MailRoute
 from podiumd_tests.mail_routes import cluster_hosts
 from podiumd_tests.mail_routes import is_internal
-from podiumd_tests.mail_routes import mail_stays_internal
+from podiumd_tests.mail_routes import is_mail_internal
 from podiumd_tests.mail_routes import workload_routes
 
 
 def test_rule_applies_to_minikube_and_qa_only(profile_factory):
-    assert mail_stays_internal(profile_factory(estate="minikube"))
-    assert mail_stays_internal(profile_factory(estate="podiumd-infra"))
-    assert not mail_stays_internal(profile_factory(estate="externals"))
+    assert is_mail_internal(profile_factory(estate="minikube"))
+    assert is_mail_internal(profile_factory(estate="podiumd-infra"))
+    assert not is_mail_internal(profile_factory(estate="externals"))
 
 
 def test_internal_hosts_are_cluster_services_or_no_server(env_factory, fake_runner):

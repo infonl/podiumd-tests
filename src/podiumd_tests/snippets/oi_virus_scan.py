@@ -14,12 +14,12 @@ def run(params):
         return config.enable_virus_scan
     wanted = _wanted(params.get("clamav"))
     if params["action"] == "status":
-        return {"present": all(getattr(config, k) == v for k, v in wanted.items())}
+        return {"present": all(getattr(config, field) == value for field, value in wanted.items())}
     record = params.get("record") or {}
     if params["action"] == "remove":
         values = record
     else:
-        record = record or {k: getattr(config, k) for k in wanted}
+        record = record or {field: getattr(config, field) for field in wanted}
         values = wanted
     for field, value in values.items():
         setattr(config, field, value)

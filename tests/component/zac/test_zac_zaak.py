@@ -6,6 +6,9 @@ the test admin is ZAC beheerder of every domain.
 
 from __future__ import annotations
 
+import io
+import zipfile
+
 from datetime import UTC
 from datetime import date
 from datetime import datetime
@@ -21,12 +24,17 @@ from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
+from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import INDEX_TIMEOUT
+from podiumd_tests.zac import NIET_ONTVANKELIJK
+from podiumd_tests.zac import is_zaak_listed
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_with_person
+from podiumd_tests.zac import wait_in_werkvoorraad
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -39,8 +47,6 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "keycloak")]
 
-# ZAC indexes a zaak in Solr after Open Notificaties tells it about the change.
-INDEX_TIMEOUT = 60
 _, _, BEDRIJF = IDENTITIES
 # The smallest PDF a viewer opens: one empty page.
 MINIMAL_PDF = (
@@ -48,13 +54,61 @@ MINIMAL_PDF = (
     b" 3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n"
 )
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-# ZAC checks only the format, not the content.
-FILES = {"txt": ("text/plain", b"podiumd-tests"), "pdf": ("application/pdf", MINIMAL_PDF), "docx": (DOCX, b"versie 1")}
-# The reason ZAC always offers for aborting a zaak.
-NIET_ONTVANKELIJK = "ZAAK_NIET_ONTVANKELIJK"
+
+
+def minimal_docx(text: str, paragraphs: int = 1) -> bytes:
+    """A Word document with the text in each paragraph, as small as LibreOffice (ZAC's office converter) still opens."""
+    parts = {
+        "[Content_Types].xml": (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+            '<Default Extension="xml" ContentType="application/xml"/>'
+            '<Override PartName="/word/document.xml"'
+            ' ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+            "</Types>"
+        ),
+        "_rels/.rels": (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Target="word/document.xml"'
+            ' Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"/>'
+            "</Relationships>"
+        ),
+        "word/document.xml": (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            f"<w:body>{f'<w:p><w:r><w:t>{text}</w:t></w:r></w:p>' * paragraphs}</w:body></w:document>"
+        ),
+    }
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as docx:
+        for name, xml in parts.items():
+            docx.writestr(name, xml)
+    return buffer.getvalue()
+
+
+# ZAC checks only the format, not the content; "word" is a real document for the office converter.
+FILES = {
+    "txt": ("text/plain", b"podiumd-tests"),
+    "pdf": ("application/pdf", MINIMAL_PDF),
+    "docx": (DOCX, b"versie 1"),
+    "word": (DOCX, minimal_docx("podiumd-tests")),
+    # About 300 pages: LibreOffice's memory grows with them; gotenberg stops a conversion after 30 s.
+    "large-word": (DOCX, minimal_docx("podiumd-tests " * 20, paragraphs=10_000)),
+}
 
 
 @pytest.mark.tc("ZAC-006", "ZAC-010", "ZAC-019", "ZAC-022")
+@pytest.mark.source(
+    "draaiboek ZAC-006",
+    "A new zaak: the zaaktype, startdatum, communicatiekanaal and toelichting can be chosen (ZAC-006, -010, -019, -022).",
+)
+@pytest.mark.scenario("""
+    Given a behandelaar is logged in to ZAC
+    When the behandelaar starts a zaak with a zaaktype, an earlier startdatum, a communicatiekanaal and a toelichting
+    Then the zaak has the chosen zaaktype, startdatum, communicatiekanaal and toelichting
+""")
 def test_new_zaak_keeps_the_chosen_fields(
     zac_zaak: Callable[..., JsonObject], zac_parameters: JsonObject, registry: ResourceRegistry
 ) -> None:
@@ -67,7 +121,76 @@ def test_new_zaak_keeps_the_chosen_fields(
     assert section(zaak, "zaaktype")["uuid"] == section(zac_parameters, "zaaktype")["uuid"]
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-2] ZAC 5.4.5 and 5.9.1 answer 500 to a zaak without startdatum (NullPointerException in"
+    " calculateDoorlooptijden); PZ-13090",
+)
+@pytest.mark.source(
+    "podiumd-tests", "Found while porting ZAC-010: ZAC's UI always sends a startdatum, its API answers 500 without one."
+)
+@pytest.mark.scenario("""
+    Given a behandelaar is logged in to ZAC
+    When the behandelaar starts a zaak without a startdatum
+    Then ZAC refuses the zaak as a bad request, or starts it today
+""")
+def test_zaak_without_startdatum_is_refused_or_starts_today(zac_zaak: Callable[..., JsonObject]) -> None:
+    """ZAC refuses a zaak without startdatum with 400, or starts it today."""
+    refused, zaak = "", {}
+    try:
+        zaak = zac_zaak(startdatum=None)
+    except UnexpectedStatusError as error:
+        refused = str(error)
+    if refused:
+        assert ": HTTP 400," in refused, refused
+    else:
+        assert zaak.get("startdatum") == date.today().isoformat()  # noqa: DTZ011  # ZAC's dates are local dates
+
+
+@pytest.mark.requires("opennotificaties")
+@pytest.mark.source(
+    "ZAC features/2-zaken-toevoegen.feature",
+    "Bob creates a zaak and sees it, its initiator, that no acknowledgment was sent, and the zaak in the werkvoorraad.",
+)
+@pytest.mark.source("ZAC features/8-personen.feature", "Bob opens the initiator's person details from the zaak.")
+@pytest.mark.scenario("""
+    Given a new zaak in ZAC
+    When the behandelaar adds a person from the BRP as initiator
+    Then the initiator's person details show that person's BSN
+    And the zaak shows that no ontvangstbevestiging was sent
+    And the zaak appears among the open zaken in the werkvoorraad
+""")
+def test_zaak_with_an_initiator_is_in_the_werkvoorraad(
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
+) -> None:
+    """A new zaak with a BRP person as initiator shows the person, lacks an ontvangstbevestiging, and is in the werkvoorraad.
+
+    The werkvoorraad is ZAC's search for open zaken; ZAC indexes the zaak on Open Notificaties' zaken kanaal.
+    """
+    zaak = zac_zaak()
+
+    def add(identificatie: JsonObject) -> requests.Response:
+        body = {"zaakUUID": zaak["uuid"], "betrokkeneIdentificatie": identificatie}
+        return zac.patch(f"{urls['zac']}/rest/zaken/initiator", json=body)
+
+    initiator = section(
+        expect_status(send_with_person(zac, urls["zac"], EREBOS, add), HTTPStatus.OK).json(), "initiatorIdentificatie"
+    )
+    person = zac.get(f"{urls['zac']}/rest/klanten/person/{initiator['temporaryPersonId']}")
+    assert expect_status(person, HTTPStatus.OK).json()["bsn"] == EREBOS
+    assert "ONTVANGSTBEVESTIGING_NIET_VERSTUURD" in strings(zaak.get("indicaties"))
+    wait_in_werkvoorraad(zac, urls["zac"], str(zaak["identificatie"]))
+
+
 @pytest.mark.tc("ZAC-029", "ZAC-030", "ZAC-031")
+@pytest.mark.source("draaiboek ZAC-029", "A zaaknotitie can be added, changed and deleted (ZAC-029, -030, -031).")
+@pytest.mark.scenario("""
+    Given a zaak in ZAC
+    When the behandelaar adds, changes and then deletes a zaaknotitie
+    Then the zaak lists the notitie with its text after adding
+    And the zaak lists the changed text after changing
+    And the zaak lists no notitie after deleting
+""")
 def test_note_can_be_added_changed_and_deleted(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
 ) -> None:
@@ -89,6 +212,18 @@ def test_note_can_be_added_changed_and_deleted(
 
 
 @pytest.mark.tc("ZAC-042", "ZAC-043")
+@pytest.mark.source(
+    "draaiboek ZAC-042",
+    "A suspended zaak can be resumed, and a resumed zaak cannot be suspended again (ZAC-042, -043).",
+)
+@pytest.mark.scenario("""
+    Given a zaak in ZAC
+    When the behandelaar suspends the zaak
+    Then the zaak is suspended
+    When the behandelaar resumes the zaak
+    Then the zaak is no longer suspended
+    And ZAC refuses to suspend it a second time
+""")
 def test_suspended_zaak_resumes_and_cannot_be_suspended_again(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
 ) -> None:
@@ -104,7 +239,13 @@ def test_suspended_zaak_resumes_and_cannot_be_suspended_again(
 
 
 @pytest.mark.tc("ZAC-044")
-def test_extension_moves_the_planned_and_final_dates(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source("draaiboek ZAC-044", "The streefdatum and fatale datum of a zaak can be extended, once.")
+@pytest.mark.scenario("""
+    Given a zaak in ZAC of a zaaktype that allows verlenging
+    When the behandelaar extends the zaak by 10 days
+    Then the zaak's uiterlijke einddatum afdoening is 10 days later
+""")
+def test_extension_moves_the_planned_and_final_dates(
     zac: requests.Session,
     urls: dict[str, str],
     openzaak: ApiClient,
@@ -130,6 +271,15 @@ def test_extension_moves_the_planned_and_final_dates(  # pylint: disable=too-man
 @pytest.mark.tc("ZAC-045", "ZAC-062")
 # ZAC updates its search index from Open Notificaties' notifications.
 @pytest.mark.requires("opennotificaties")
+@pytest.mark.source(
+    "draaiboek ZAC-045", "A zaak can be aborted, and then shows in the werkvoorraad of closed zaken (ZAC-045, -062)."
+)
+@pytest.mark.scenario("""
+    Given an open zaak in ZAC
+    When the behandelaar aborts the zaak as niet ontvankelijk
+    Then the zaak is closed
+    And the zaak appears among the closed zaken
+""")
 def test_aborted_zaak_is_closed_and_listed_among_the_closed_zaken(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
 ) -> None:
@@ -142,44 +292,48 @@ def test_aborted_zaak_is_closed_and_listed_among_the_closed_zaken(
     response = zac.patch(f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}/afbreken", json=body)
     expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     assert not read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpen"]
-    query = {
-        "page": 0,
-        "rows": 10,
-        "type": "ZAAK",
-        "alleenAfgeslotenZaken": True,
-        "zoeken": {"ZAAK_IDENTIFICATIE": zaak["identificatie"]},
-    }
 
-    def listed() -> bool:
-        found = expect_status(zac.put(f"{urls['zac']}/rest/zoeken/list", json=query), HTTPStatus.OK).json()
-        return any(r.get("identificatie") == zaak["identificatie"] for r in entries(found["resultaten"]))
+    def is_listed() -> bool:
+        return is_zaak_listed(zac, urls["zac"], str(zaak["identificatie"]), alleenAfgeslotenZaken=True)
 
-    wait_until(listed, timeout=INDEX_TIMEOUT, description=f"zaak {zaak['identificatie']} among the closed zaken")
+    wait_until(is_listed, timeout=INDEX_TIMEOUT, description=f"zaak {zaak['identificatie']} among the closed zaken")
 
 
 @pytest.mark.tc("ZAC-047", "ZAC-048")
+@pytest.mark.source(
+    "draaiboek ZAC-047",
+    "Several betrokkenen with the same and different roles are linked to the zaak and shown with their role (ZAC-047, -048).",
+)
+@pytest.mark.scenario("""
+    Given a zaak in ZAC
+    When the behandelaar adds a person as belanghebbende and as contactpersoon
+    And adds a company as belanghebbende
+    Then the zaak lists all three betrokkenen with their roles
+""")
 def test_betrokkenen_with_the_same_and_different_roles_are_listed(
     zac: requests.Session, urls: dict[str, str], zac_parameters: JsonObject, zac_zaak: Callable[..., JsonObject]
 ) -> None:
     """A person in two roles and a company in one of them are all listed with the zaak."""
     zaak = zac_zaak()
     zaaktype = section(zac_parameters, "zaaktype")["uuid"]
+    # By name prefix: a zaaktype may say "Belanghebbende e2e", and several share a generic role.
+    available = entries(zac.get(f"{urls['zac']}/rest/klanten/roltype/{zaaktype}/betrokkene").json())
     roltypen = {
-        r["naam"]: r["uuid"]
-        for r in entries(zac.get(f"{urls['zac']}/rest/klanten/roltype/{zaaktype}/betrokkene").json())
+        rol: next(r for r in available if str(r["naam"]).lower().startswith(rol))
+        for rol in ("belanghebbende", "contactpersoon")
     }
     company = {
         "type": "VN",
         "kvkNummer": BEDRIJF.attributes["kvk"][0],
         "vestigingsnummer": BEDRIJF.attributes["vestigingsnummer"][0],
     }
-    wanted = [("Belanghebbende", "persoon"), ("Contactpersoon", "persoon"), ("Belanghebbende", "bedrijf")]
+    wanted = [("belanghebbende", "persoon"), ("contactpersoon", "persoon"), ("belanghebbende", "bedrijf")]
     for rol, who in wanted:
 
         def add(identificatie: JsonObject, rol: str = rol) -> requests.Response:
             body = {
                 "zaakUUID": zaak["uuid"],
-                "roltypeUUID": roltypen[rol],
+                "roltypeUUID": roltypen[rol]["uuid"],
                 "roltoelichting": "test",
                 "betrokkeneIdentificatie": identificatie,
             }
@@ -188,10 +342,10 @@ def test_betrokkenen_with_the_same_and_different_roles_are_listed(
         response = send_with_person(zac, urls["zac"], EREBOS, add) if who == "persoon" else add(company)
         expect_status(response, HTTPStatus.OK)
     listed = get_entries(zac, f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}/betrokkene")
-    assert sorted(str(b.get("roltype")) for b in listed) == sorted(r for r, _ in wanted)
+    assert sorted(str(b.get("roltype")) for b in listed) == sorted(str(roltypen[r]["naam"]) for r, _ in wanted)
 
 
-def uploaded_document(  # pylint: disable=too-many-arguments  # fixtures and two choices
+def uploaded_document(
     zac: requests.Session,
     zac_url: str,
     zaak: JsonObject,
@@ -209,13 +363,14 @@ def uploaded_document(  # pylint: disable=too-many-arguments  # fixtures and two
     if not types:
         pytest.skip(f"zaaktype {section(zaak, 'zaaktype').get('identificatie')} has no informatieobjecttypen")
     formaat, content = FILES[suffix]
-    name = f"{registry.tagged('document')}.{suffix}"
+    name = f"{registry.tagged('document')}.{'docx' if suffix.endswith('word') else suffix}"
     form = {
         "titel": name,
         "bestandsnaam": name,
         "formaat": formaat,
         "informatieobjectTypeUUID": str(types[0]["uuid"]),
-        "vertrouwelijkheidaanduiding": "openbaar",
+        # ZAC's enum constant; ZAC 5.9 refuses the API value "openbaar" (500).
+        "vertrouwelijkheidaanduiding": "OPENBAAR",
         "status": status,
         "taal": "dut",
         # ZAC parses the format its UI sends: date, hours and minutes, offset.
@@ -238,6 +393,12 @@ def zaak_documents(zac: requests.Session, zac_url: str, zaak: JsonObject) -> lis
 
 
 @pytest.mark.tc("ZAC-058")
+@pytest.mark.source("draaiboek ZAC-058", "A document can be deleted.")
+@pytest.mark.scenario("""
+    Given a document uploaded to a zaak in ZAC
+    When the behandelaar deletes the document
+    Then the zaak no longer lists the document
+""")
 def test_document_can_be_deleted(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
 ) -> None:
@@ -254,6 +415,16 @@ def test_document_can_be_deleted(
 
 
 @pytest.mark.tc("ZAC-056")
+@pytest.mark.source(
+    "draaiboek ZAC-056", "A document can be edited directly; Word saves it automatically as the new version."
+)
+@pytest.mark.scenario("""
+    Given a Word document in bewerking on a zaak in ZAC
+    When the behandelaar opens it for editing in Word
+    And Word saves the edited document
+    Then the document has a new version
+    And the download gives the saved content
+""")
 def test_word_saves_an_edited_document_as_a_new_version(
     zac: requests.Session,
     http: requests.Session,
@@ -280,6 +451,14 @@ def test_word_saves_an_edited_document_as_a_new_version(
 
 
 @pytest.mark.tc("ZAC-039")
+@pytest.mark.source(
+    "draaiboek ZAC-039", "A document sent by post outside ZAC gets the indication verzonden in the documents overview."
+)
+@pytest.mark.scenario("""
+    Given a definitief PDF document on a zaak in ZAC
+    When the behandelaar records that the document was sent by post
+    Then the zaak's documents mark the document as verzonden
+""")
 def test_sent_document_is_marked_verzonden(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
 ) -> None:
@@ -298,3 +477,31 @@ def test_sent_document_is_marked_verzonden(
     expect_status(zac.post(f"{urls['zac']}/rest/informatieobjecten/informatieobjecten/verzenden", json=body), 200, 204)
     listed = {str(d.get("uuid")): d for d in zaak_documents(zac, urls["zac"], zaak)}
     assert "VERZONDEN" in strings(listed[str(document["uuid"])].get("indicaties"))
+
+
+@pytest.mark.source(
+    "podiumd-tests",
+    "ZAC converts a Word document to PDF through its office converter (gotenberg); helm-charts #633 updates gotenberg.",
+)
+@pytest.mark.parametrize("suffix", ["word", "large-word"])
+@pytest.mark.scenario("""
+    Given a definitief Word document, small or large, on a zaak in ZAC
+    When the behandelaar converts the document to PDF
+    Then the document's current version is a PDF
+""")
+def test_word_document_is_converted_to_pdf(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    registry: ResourceRegistry,
+    suffix: str,
+) -> None:
+    """A definitief Word document converted in ZAC becomes a PDF: its current version has the PDF format and content."""
+    zaak = zac_zaak()
+    document = uploaded_document(zac, urls["zac"], zaak, registry, suffix=suffix)
+    documents = f"{urls['zac']}/rest/informatieobjecten/informatieobject/{document['uuid']}"
+    converted = zac.post(f"{documents}/convert", params={"zaak": str(zaak["uuid"])}, timeout=60)
+    expect_status(converted, HTTPStatus.NO_CONTENT, HTTPStatus.OK)
+    current = expect_status(zac.get(documents, params={"zaak": str(zaak["uuid"])}), HTTPStatus.OK).json()
+    assert current["formaat"] == "application/pdf", current.get("formaat")
+    assert expect_status(zac.get(f"{documents}/download"), HTTPStatus.OK).content.startswith(b"%PDF")

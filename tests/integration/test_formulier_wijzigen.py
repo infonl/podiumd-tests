@@ -32,7 +32,15 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
     from podiumd_tests.seed.registry import ResourceRegistry
 
-pytestmark = [pytest.mark.integration, pytest.mark.requires("openformulieren", "openzaak", "cluster")]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.requires("openformulieren", "openzaak", "cluster"),
+    pytest.mark.source(
+        "draaiboek OF-073", "An existing form can be changed and still results in zaken in ZAC when submitted again."
+    ),
+    pytest.mark.source("draaiboek OF-068", "Variable mappings are available and work."),
+    pytest.mark.source("draaiboek FB-009", "An existing form can be edited."),
+]
 
 TIMEOUT = 90
 OMSCHRIJVING = {"type": "textfield", "key": "omschrijving", "label": "Omschrijving"}
@@ -40,7 +48,13 @@ KENTEKEN = {"type": "textfield", "key": "kenteken", "label": "Kenteken"}
 
 
 @pytest.mark.tc("OF-068", "OF-073", "FB-009")
-def test_changed_form_registers_the_new_field(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.scenario("""
+    Given a form in Open Formulieren that registers zaken in Open Zaak
+    When the form editor adds a field kenteken mapped to the zaak eigenschap kenteken
+    And an inwoner submits the changed form
+    Then the new zaak has the filled-in kenteken as eigenschap
+""")
+def test_changed_form_registers_the_new_field(
     http: requests.Session,
     urls: dict[str, str],
     podiumd_env: Environment,

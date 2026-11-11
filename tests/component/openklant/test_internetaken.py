@@ -31,6 +31,16 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("openklant")]
     ],
     ids=["medewerker", "afdeling", "systeem", "afdeling-en-medewerker"],
 )
+@pytest.mark.source(
+    "TA regression/112-ita-toewijzen-actor-types.spec.ts",
+    "An internetaak can be assigned to each actor type: medewerker, afdeling, group, or several at once.",
+)
+@pytest.mark.scenario("""
+    Given a klantcontact in Open Klant
+    And actors of one or more kinds: medewerker, afdeling, system
+    When an internetaak of the klantcontact is assigned to those actors
+    Then the internetaak in Open Klant is assigned to exactly those actors
+""")
 def test_internetaak_assigned_to_actors(openklant: ApiClient, registry: ResourceRegistry, soorten: list[str]) -> None:
     """An internetaak keeps the actors it is assigned to (TA reg-112)."""
     actoren = [make_actor(openklant, registry, soort) for soort in soorten]
@@ -40,6 +50,15 @@ def test_internetaak_assigned_to_actors(openklant: ApiClient, registry: Resource
 
 
 @pytest.mark.core
+@pytest.mark.source(
+    "TA interaction/145-contact-lookup-flow.spec.ts",
+    "Contactmomenten and contactverzoeken of an inwoner or company can be looked up in Open Klant.",
+)
+@pytest.mark.scenario("""
+    Given an internetaak raised by a klantcontact in Open Klant
+    When Open Klant's internetaken are filtered on that klantcontact
+    Then exactly that internetaak is found
+""")
 def test_internetaak_found_by_its_klantcontact(openklant: ApiClient, registry: ResourceRegistry) -> None:
     """The aanleidinggevendKlantcontact filter finds the internetaak (TA int-145)."""
     klantcontact = make_klantcontact(openklant, registry)
@@ -49,6 +68,14 @@ def test_internetaak_found_by_its_klantcontact(openklant: ApiClient, registry: R
 
 
 @pytest.mark.tc("KI-038", "KI-060")
+@pytest.mark.source(
+    "TA regression/157-contact-haalcentraal-validatie.spec.ts",
+    "An internetaak (contactverzoek) with an incomplete payload is refused with a validation error.",
+)
+@pytest.mark.scenario("""
+    When an internetaak without an aanleidinggevend klantcontact is created in Open Klant
+    Then Open Klant refuses it with 400
+""")
 def test_internetaak_without_klantcontact_is_refused(openklant: ApiClient) -> None:
     """An internetaak needs an aanleidinggevend klantcontact (TA reg-157 KI-060)."""
     body = {

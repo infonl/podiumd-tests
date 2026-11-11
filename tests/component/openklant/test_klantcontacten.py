@@ -25,6 +25,20 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("openklant")]
 
 
 @pytest.mark.core
+@pytest.mark.source(
+    "TA interaction/09-ok2-klantcontact.spec.ts",
+    "A klantcontact registered through the Open Klant Klantinteracties API reads back the same record.",
+)
+@pytest.mark.source(
+    "TA regression/87-ok2-klantcontact-zoeken.spec.ts",
+    "A klantcontact's full record can be retrieved, so a question and answer can be consulted.",
+)
+@pytest.mark.scenario("""
+    Given a klantcontact on kanaal balie is registered in Open Klant
+    When it is read back
+    Then it has the kanaal, onderwerp and contact-gelukt indication it was registered with
+    And Open Klant gave it a nummer
+""")
 def test_klantcontact_roundtrip(openklant: ApiClient, registry: ResourceRegistry) -> None:
     """A klantcontact reads back with its fields and a nummer (TA int-09, reg-87)."""
     created = make_klantcontact(openklant, registry, kanaal="balie")
@@ -33,6 +47,17 @@ def test_klantcontact_roundtrip(openklant: ApiClient, registry: ResourceRegistry
     assert read["nummer"]
 
 
+@pytest.mark.source(
+    "TA regression/149-ok2-crud-uitbreiding.spec.ts",
+    "A klantcontact's onderwerp can be changed after registration, and a wrongly registered one deleted.",
+)
+@pytest.mark.scenario("""
+    Given a klantcontact in Open Klant
+    When its onderwerp and inhoud are changed
+    Then Open Klant returns the changed onderwerp and inhoud
+    When the klantcontact is deleted
+    Then Open Klant answers 404 for it
+""")
 def test_klantcontact_patch_and_delete(openklant: ApiClient, registry: ResourceRegistry) -> None:
     """A PATCH changes onderwerp and inhoud; after DELETE the klantcontact is gone (TA reg-149)."""
     url = str(make_klantcontact(openklant, registry)["url"])
@@ -42,6 +67,16 @@ def test_klantcontact_patch_and_delete(openklant: ApiClient, registry: ResourceR
     openklant.request("GET", url, 404)
 
 
+@pytest.mark.source(
+    "TA regression/87-ok2-klantcontact-zoeken.spec.ts",
+    "The KCC can list klantcontacten (paginated) and search them on kanaal.",
+)
+@pytest.mark.scenario("""
+    Given a klantcontact on kanaal balie in Open Klant
+    When the klantcontacten are listed, and filtered on kanaal balie
+    Then the list is paginated with a total count
+    And the filter finds the klantcontact
+""")
 def test_klantcontacten_list_and_filter_on_kanaal(openklant: ApiClient, registry: ResourceRegistry) -> None:
     """The list is paginated, and the kanaal filter finds a new klantcontact (TA reg-87)."""
     page = openklant.get("klantcontacten", {"pageSize": "5"})
@@ -55,6 +90,15 @@ def test_klantcontacten_list_and_filter_on_kanaal(openklant: ApiClient, registry
     assert str(created["uuid"]) in found
 
 
+@pytest.mark.source(
+    "TA interaction/09-ok2-klantcontact.spec.ts",
+    "A klantcontact can be linked to the KCC medewerker who registered it.",
+)
+@pytest.mark.scenario("""
+    Given a klantcontact and a medewerker in Open Klant
+    When the medewerker is linked to the klantcontact as actor
+    Then the klantcontact shows exactly that medewerker as betrokken actor
+""")
 def test_actor_linked_to_klantcontact(openklant: ApiClient, registry: ResourceRegistry) -> None:
     """A medewerker linked through actorklantcontacten shows in hadBetrokkenActoren (TA int-09)."""
     actor = make_actor(openklant, registry)
@@ -65,6 +109,15 @@ def test_actor_linked_to_klantcontact(openklant: ApiClient, registry: ResourceRe
     assert [a["uuid"] for a in actors] == [actor["uuid"]]
 
 
+@pytest.mark.source(
+    "TA regression/87-ok2-klantcontact-zoeken.spec.ts",
+    "Open Klant expands a klantcontact's betrokkenen for the KCC context.",
+)
+@pytest.mark.scenario("""
+    Given a klantcontact in Open Klant with an anonymous betrokkene
+    When the klantcontact is read with its betrokkenen expanded
+    Then it holds that betrokkene with its contactnaam
+""")
 def test_expand_had_betrokkenen(openklant: ApiClient, registry: ResourceRegistry) -> None:
     """expand=hadBetrokkenen inlines an anonymous betrokkene (TA reg-87)."""
     klantcontact = make_klantcontact(openklant, registry)

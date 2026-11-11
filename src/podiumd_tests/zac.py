@@ -8,8 +8,6 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
-import pytest
-
 from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
@@ -35,13 +33,23 @@ if TYPE_CHECKING:
 REINDEX_TIMEOUT = 1800
 # Objecten notifies, Open Notificaties delivers to ZAC, and ZAC starts the zaak and its case.
 PRODUCTAANVRAAG_TIMEOUT = 120
+# ZAC indexes a zaak in Solr after Open Notificaties tells it about the change.
+INDEX_TIMEOUT = 60
+# A BPMN process reaches its next user task after ZAC's service tasks have run.
+TASK_TIMEOUT = 30
 
 
 def zac_session(env: Environment, username: str, password: str) -> requests.Session:
-    """A session on ZAC's REST API, logged in through Keycloak's form."""
+    """Return a session on ZAC's REST API, logged in through Keycloak's form."""
     http = env.session()
     form_login(http, env.profile.urls["zac"] + LOGIN_PATHS["zac"], username, password)
     return http
+
+
+def user_groups(http: requests.Session, zac_url: str) -> list[str]:
+    """Return the ids of the groups ZAC knows the session's user in."""
+    user = expect_status(http.get(f"{zac_url}/rest/identity/loggedInUser"), HTTPStatus.OK).json()
+    return [str(group) for group in user["groupIds"]]
 
 
 def zaakafhandelparameters(http: requests.Session, zac_url: str, identificatie: str | None = None) -> list[JsonObject]:
@@ -51,21 +59,52 @@ def zaakafhandelparameters(http: requests.Session, zac_url: str, identificatie: 
     """
     found = get_entries(http, f"{zac_url}/rest/zaakafhandelparameters")
     return [
-        p
-        for p in found
-        if p.get("id") is not None and identificatie in {None, section(p, "zaaktype").get("identificatie")}
+        parameters
+        for parameters in found
+        if parameters.get("id") is not None
+        and identificatie in {None, section(parameters, "zaaktype").get("identificatie")}
     ]
 
 
-def confirmation_sent(confirmation: JsonObject) -> bool:
+# Fields of ZAC's inrichtingscheck that its verdict valide does not require.
+NOT_REQUIRED_FOR_VALIDE = {
+    "valide",
+    "heeftWaarschuwingen",
+    "besluittypeAanwezig",
+    "isZaakspecifiekeAutorisatieEigenschapAanwezig",
+    "isZaakspecifiekeAutorisatieRoltypeAanwezig",
+}
+
+
+def inrichtingscheck_problems(check: JsonObject) -> list[str]:
+    """Return the fields of ZAC's inrichtingscheck of one zaaktype that make it invalid, and its warnings."""
+    problems = [field for field, value in check.items() if value is False and field not in NOT_REQUIRED_FOR_VALIDE]
+    counts = {field: value for field, value in check.items() if field.startswith("aantal")}
+    problems += [f"{field}={value}" for field, value in counts.items() if value != 1]
+    if check.get("resultaattypesMetVerplichtBesluit") and not check.get("besluittypeAanwezig"):
+        problems.append("besluittypeAanwezig")
+    if check.get("heeftWaarschuwingen"):
+        problems.append("heeftWaarschuwingen")
+    if not problems and not check.get("valide"):
+        problems.append("valide")
+    return sorted(problems)
+
+
+def is_confirmation_sent(confirmation: JsonObject) -> bool:
     """ZAC sends this automaticEmailConfirmation: enabled, with a template and a sender."""
     return bool(confirmation.get("enabled") and confirmation.get("templateName") and confirmation.get("emailSender"))
 
 
-def confirmation_on(http: requests.Session, zac_url: str, identificatie: str) -> bool:
+def is_confirmation_on(http: requests.Session, zac_url: str, identificatie: str) -> bool:
     """ZAC sends its ontvangstbevestiging for productaanvragen of every version of the zaaktype."""
     found = zaakafhandelparameters(http, zac_url, identificatie)
-    return bool(found) and all(confirmation_sent(section(p, "automaticEmailConfirmation")) for p in found)
+    return bool(found) and all(
+        is_confirmation_sent(section(parameters, "automaticEmailConfirmation")) for parameters in found
+    )
+
+
+# The reason ZAC always offers for aborting a zaak.
+NIET_ONTVANKELIJK = "ZAAK_NIET_ONTVANKELIJK"
 
 
 def zaak_body(parameters: JsonObject, **fields: object) -> JsonObject:
@@ -79,9 +118,14 @@ def zaak_body(parameters: JsonObject, **fields: object) -> JsonObject:
 
 
 def create_zaak(http: requests.Session, zac_url: str, parameters: JsonObject, **fields: object) -> JsonObject:
-    """A zaak started in ZAC (zaak_body)."""
+    """Return a zaak started in ZAC (zaak_body), as ZAC shows it."""
     response = http.post(f"{zac_url}/rest/zaken/zaak", json=zaak_body(parameters, **fields))
-    return cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
+    created = cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
+    if "uuid" in created:
+        return created
+    # ZAC 5.9 answers only the identificatie.
+    found = http.get(f"{zac_url}/rest/zaken/zaak/id/{created['identificatie']}")
+    return cast("JsonObject", expect_status(found, HTTPStatus.OK).json())
 
 
 def read_zaak(http: requests.Session, zac_url: str, uuid: str) -> JsonObject:
@@ -89,18 +133,28 @@ def read_zaak(http: requests.Session, zac_url: str, uuid: str) -> JsonObject:
     return cast("JsonObject", expect_status(http.get(f"{zac_url}/rest/zaken/zaak/{uuid}"), HTTPStatus.OK).json())
 
 
-# ZAC's brp-rechten.rego allows the person lookup only with PABC application role brp_zoeken; podiumd's
-# files/pabc-dataset.json has none, so a PABC seeded from it refuses the lookup (reported to helm-charts).
-BRP_ZOEKEN_MISSING = (
-    "ZAC refuses the person lookup (403): podiumd's pabc-dataset.json maps no PABC application role brp_zoeken"
-)
+def user_event(http: requests.Session, zac_url: str, zaak_uuid: str, actie: str, **fields: object) -> requests.Response:
+    """Run a CMMN user event of the zaak: INTAKE_AFRONDEN or ZAAK_AFHANDELEN, at its open plan item; ZAC's answer."""
+    listeners = http.get(f"{zac_url}/rest/planitems/zaak/{zaak_uuid}/userEventListenerPlanItems")
+    items = entries(expect_status(listeners, HTTPStatus.OK).json())
+    found = [item for item in items if item.get("userEventListenerActie") == actie]
+    if not found:
+        msg = f"zaak {zaak_uuid} offers no {actie}: {[item.get('naam') for item in items]}"
+        raise AssertionError(msg)
+    body = {"zaakUuid": zaak_uuid, "planItemInstanceId": found[0]["id"], "actie": actie, **fields}
+    return http.post(f"{zac_url}/rest/planitems/doUserEventListenerPlanItem", json=body)
+
+
+def resultaattypen(http: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:
+    """Return the resultaattypen ZAC offers for the zaak's zaaktype."""
+    zaaktype = section(zaak, "zaaktype")["uuid"]
+    response = http.get(f"{zac_url}/rest/zaken/resultaattypes/{zaaktype}")
+    return entries(expect_status(response, HTTPStatus.OK).json())
 
 
 def person_lookup(http: requests.Session, zac_url: str, bsn: str) -> list[JsonObject]:
-    """ZAC's person lookup by BSN; an expected failure while PABC lacks brp_zoeken."""
+    """ZAC's person lookup by BSN."""
     response = http.put(f"{zac_url}/rest/klanten/personen", json={"bsn": bsn})
-    if response.status_code == HTTPStatus.FORBIDDEN:
-        pytest.xfail(BRP_ZOEKEN_MISSING)
     return entries(cast("JsonObject", expect_status(response, HTTPStatus.OK).json())["resultaten"])
 
 
@@ -128,7 +182,7 @@ def send_with_person(
 def productaanvraag_zaak(
     openzaak: ApiClient, registry: ResourceRegistry, kenmerk: str, timeout: float = PRODUCTAANVRAAG_TIMEOUT
 ) -> JsonObject:
-    """The zaak ZAC starts for a productaanvraag, with its kenmerk in the toelichting; cleanup deletes it.
+    """Return the zaak ZAC starts for a productaanvraag, with its kenmerk in the toelichting; cleanup deletes it.
 
     openzaak: a client that may read and delete zaken of the zaaktype (bootstrap openzaak-client-productaanvraag).
     """
@@ -138,7 +192,7 @@ def productaanvraag_zaak(
 
     def started() -> JsonObject | None:
         zaken = openzaak.list(f"{ZAKEN}/zaken", {"startdatum__gte": since})
-        return next((z for z in zaken if kenmerk in str(z.get("toelichting") or "")), None)
+        return next((zaak for zaak in zaken if kenmerk in str(zaak.get("toelichting") or "")), None)
 
     def delete() -> None:
         zaak = started()
@@ -162,8 +216,47 @@ def reindex_zaken(env: Environment) -> None:
     env.kube.exec(env.deployment_for("zac"), "sh", "-c", command, timeout=REINDEX_TIMEOUT)
 
 
+def search(http: requests.Session, zac_url: str, **query: object) -> JsonObject:
+    """Return page 1 of ZAC's search (rows 10 unless given) with these RestZoekParameters, as the session's user."""
+    body = {"page": 0, "rows": 10, **query}
+    return cast("JsonObject", expect_status(http.put(f"{zac_url}/rest/zoeken/list", json=body), HTTPStatus.OK).json())
+
+
+def is_zaak_listed(http: requests.Session, zac_url: str, identificatie: str, **flags: bool) -> bool:
+    """ZAC's search for zaken lists the zaak; flags are its alleen* filters (alleenOpenstaandeZaken: werkvoorraad)."""
+    found = search(http, zac_url, type="ZAAK", zoeken={"ZAAK_IDENTIFICATIE": identificatie}, **flags)
+    return any(resultaat.get("identificatie") == identificatie for resultaat in entries(found["resultaten"]))
+
+
+def open_task(http: requests.Session, zac_url: str, zaak_uuid: str, name: str) -> JsonObject:
+    """Wait until the zaak has an open task of this name, as ZAC lists it (with its formioFormulier)."""
+
+    def found() -> JsonObject | None:
+        tasks = get_entries(http, f"{zac_url}/rest/taken/zaak/{zaak_uuid}")
+        open_tasks = (task for task in tasks if task.get("status") != "AFGEROND")
+        return next((task for task in open_tasks if task.get("naam") == name), None)
+
+    return wait_until(found, timeout=TASK_TIMEOUT, description=f"open task {name!r} on zaak {zaak_uuid}")
+
+
+def complete_task(http: requests.Session, zac_url: str, task: JsonObject, data: JsonObject) -> JsonObject:
+    """Complete a form task with its form's data, as ZAC's UI submits it; the completed task."""
+    body = {**task, "taakdata": {**section(task, "taakdata"), **data}}
+    return cast(
+        "JsonObject", expect_status(http.patch(f"{zac_url}/rest/taken/complete", json=body), HTTPStatus.OK).json()
+    )
+
+
+def wait_in_werkvoorraad(http: requests.Session, zac_url: str, identificatie: str) -> None:
+    """Wait until ZAC's werkvoorraad (its open zaken) lists the zaak."""
+    wait_until(
+        lambda: is_zaak_listed(http, zac_url, identificatie, alleenOpenstaandeZaken=True),
+        timeout=INDEX_TIMEOUT,
+        description=f"zaak {identificatie} in the werkvoorraad",
+    )
+
+
 def count_zaken_found(zac: requests.Session, zac_url: str, zaaktype_omschrijving: str) -> int:
     """How many zaken of the zaaktype ZAC's search shows the session's user."""
-    query = {"page": 0, "rows": 1, "type": "ZAAK", "filters": {"ZAAKTYPE": {"values": [zaaktype_omschrijving]}}}
-    found = expect_status(zac.put(zac_url + "/rest/zoeken/list", json=query), HTTPStatus.OK).json()
-    return int(found["totaal"])
+    found = search(zac, zac_url, rows=1, type="ZAAK", filters={"ZAAKTYPE": {"values": [zaaktype_omschrijving]}})
+    return int(str(found["totaal"]))

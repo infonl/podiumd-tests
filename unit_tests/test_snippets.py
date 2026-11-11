@@ -8,6 +8,7 @@ from importlib import resources
 import pytest
 
 from podiumd_tests.django_snippets import run_snippet
+from podiumd_tests.django_snippets import run_snippets
 from podiumd_tests.django_snippets import snippet_source
 from podiumd_tests.kube import Kube
 
@@ -23,7 +24,8 @@ def test_snippet_compiles_and_defines_run(name):
     tree = ast.parse(snippet_source(name))
     functions = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
     assert "run" in functions
-    assert [a.arg for a in functions["run"].args.args] == ["params"]
+    # One parameter, the params dict; _params in a snippet that reads none.
+    assert [a.arg for a in functions["run"].args.args] in (["params"], ["_params"])
 
 
 def test_snippet_source_puts_its_includes_first():
@@ -40,3 +42,29 @@ def test_run_snippet_sends_code_and_params_over_stdin(fake_runner):
     assert "def run(params)" in code
     compile(code, "<snippet>", "exec")
     assert json.dumps({"client_id": "s3cret-client"}) in code
+
+
+type _Call = tuple[str, dict[str, object]]
+
+
+def test_run_snippets_runs_them_in_order_in_one_shell(fake_runner):
+    fake_runner.answers["exec -i deploy/openzaak"] = (0, "chatter\nPTEST_VALUE=1\nPTEST_VALUE=[2]\n")
+    calls: list[_Call] = [
+        ("jwt_secret", {"client_id": "a"}),
+        ("token_auth", {"identifier": "b"}),
+    ]
+    assert run_snippets(Kube("ctx", "ns", fake_runner), "openzaak", calls) == [1, [2]]
+    assert len(fake_runner.calls) == 1
+    code = fake_runner.stdins[0]
+    compile(code, "<snippets>", "exec")
+    assert code.index("snippets/jwt_secret.py") < code.index("snippets/token_auth.py")
+
+
+def test_action_ensure_wraps_the_snippets_run(fake_runner):
+    fake_runner.answers["exec -i deploy/openzaak"] = (0, 'PTEST_VALUE={"created": false}\n')
+    kube = Kube("ctx", "ns", fake_runner)
+    assert run_snippet(kube, "openzaak", "token_auth", {"action": "ensure", "stored": True}) == {"created": False}
+    run_snippet(kube, "openzaak", "token_auth", {"action": "status"})
+    ensure, status = fake_runner.stdins
+    assert ensure.index("def run(params)") < ensure.index("_step_run = run")
+    assert "_step_run" not in status

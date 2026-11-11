@@ -39,8 +39,8 @@ older suites that each had their own copy of the same helpers (PLAN.md R22).
    | HTTP to profile URLs (also host-header mode) | `Environment.session()` / `make_session`; fixture `http` |
    | expected status, its message, 401/403, 5xx, hostname of a URL | `responses` (`expect_status`, `describe`, `REFUSED`, `is_server_error`, `url_host`) |
    | "a component root answers" (doctor and test) | `responses.get_root` + `is_server_error` |
-   | a secret / an optional secret | `SecretResolver.get` / `configured`, `optional` (fixture `credentials`); never `os.environ` |
-   | which secret sources need the cluster | `SecretSpec.needs_cluster` |
+   | a secret / an optional secret | `SecretResolver.get` / `is_configured`, `optional` (fixture `credentials`); never `os.environ` |
+   | which secret sources need the cluster | `SecretSpec.is_in_cluster` |
    | per-environment values that are no secret | `Profile.settings` |
    | canonical component names, host and deployment aliases | `COMPONENTS`, `component_for_host`, `deployed_components` |
    | what an environment can do | `Capabilities` and `@pytest.mark.requires(...)`; per-component params: `requiring` |
@@ -50,6 +50,7 @@ older suites that each had their own copy of the same helpers (PLAN.md R22).
    | Grafana, Prometheus targets, Loki | `Grafana`, `grafana_auth`, `down_targets`, `target_count` |
    | Frank!Gateway no-route | `is_no_route` |
    | waiting for a condition | `wait_until` (never sleep) |
+   | a duration such as 30s, 1m30s or 24h | `parse_duration` |
    | cleanup of created data / run tag | `ResourceRegistry` (fixture `registry`) / `results.run_tag` |
    | masking secrets in output | `Redactor` |
    | writing run results | `ResultsSink` / `write_run` |

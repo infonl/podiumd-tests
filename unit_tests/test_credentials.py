@@ -73,6 +73,13 @@ def test_dev_defaults_are_not_redacted_but_overrides_are(profile_factory, env_fa
     assert env.redactor.redact("keycloak-admin s3cret-override") == "keycloak-admin ***"
 
 
+def test_a_secret_equal_to_a_dev_default_is_not_redacted(profile_factory, env_factory):
+    profile = profile_factory(estate="minikube", secrets={"user": {"dev_default": "admin"}})
+    env = env_factory(profile, {env_var_name("keycloak_admin_password"): "admin"})
+    env.credentials.get("keycloak_admin_password")
+    assert env.redactor.redact("test_admin_login") == "test_admin_login"
+
+
 def test_usernames_are_not_redacted(env_factory):
     env = env_factory(environ={env_var_name("grafana_username"): "admin"})
     env.credentials.get("grafana_username")
@@ -89,10 +96,10 @@ def test_optional_secrets_come_from_profile_or_env_var(profile_factory, env_fact
     environ = {env_var_name("grafana_password"): "from-env"}
     profile = profile_factory(secrets={"grafana_username": {"k8s_secret": {"name": "s", "key": "k"}}})
     creds = env_factory(profile, environ).credentials
-    assert creds.configured("grafana_username")
-    assert creds.configured("grafana_password")
+    assert creds.is_configured("grafana_username")
+    assert creds.is_configured("grafana_password")
     assert creds.optional("grafana_password") == "from-env"
-    assert not creds.configured("zgw_client_secret")
+    assert not creds.is_configured("zgw_client_secret")
     assert creds.optional("zgw_client_secret") is None
 
 

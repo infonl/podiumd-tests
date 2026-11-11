@@ -1,3 +1,4 @@
+---
 # ICATT podiumd-infra AKS environment johnb00 (values/johnb00/).
 estate: podiumd-infra
 allowed_tiers: [smoke, core, full, perf]
@@ -14,15 +15,20 @@ urls:
   kiss: https://contact.johnb00.pd.test-rig.nl
   ita: https://internetaakafhandeling.johnb00.pd.test-rig.nl
   openinwoner: https://portaal.johnb00.pd.test-rig.nl
-  # openbeheer: https://openbeheer.johnb00.pd.test-rig.nl - left out until the podiumd-tls certificate
-  # covers it (it serves a self-signed certificate now).
+  openbeheer: https://openbeheer.johnb00.pd.test-rig.nl
   openformulieren: https://formulier.johnb00.pd.test-rig.nl
   openklant: https://openklant.johnb00.pd.test-rig.nl
   objecten: https://objecten.johnb00.pd.test-rig.nl
   objecttypen: https://objecttypen.johnb00.pd.test-rig.nl
   opennotificaties: https://notificaties.johnb00.pd.test-rig.nl
   mailpit: https://mailpit.johnb00.pd.test-rig.nl
+  grafana: https://grafana.johnb00.pd.test-rig.nl
+  # No ingress: reached through a port-forward.
+  api-proxy: http://api-proxy.podiumd.svc.cluster.local
+  # zaakbrug, OpenBao and Frank!Gateway are switched off on johnb00.
 settings:
+  # Kyverno ClusterPolicy redirect-registries rewrites Docker Hub images to this mirror; the step compares images.
+  mock_server_image: podiumdregistry.azurecr.io/dockerhub/library/python:3.13-alpine
   # podiumd's e2e zaaktype. ZAC's zaakafhandelparameters for it are runtime data, seeded on
   # 2026-10-13 with productaanvraagtype productaanvraag-e2e-test (podiumd-infra seed script).
   productaanvraag_type: productaanvraag-e2e-test
@@ -36,3 +42,10 @@ secrets:
     k8s_secret: {name: keycloak-podiumd-admin, key: username}
   keycloak_admin_password:
     k8s_secret: {name: keycloak-podiumd-admin, key: password}
+  # Grafana's own admin (basic auth), from Secret monitoring-logging-grafana (podiumd-infra names the
+  # release monitoring-logging since #218; johnb00 rebuilt 2026-10-29). grafana-admin in Key Vault is a Keycloak SSO
+  # user and cannot log in with basic auth.
+  grafana_username:
+    k8s_secret: {name: monitoring-logging-grafana, key: admin-user, namespace: monitoring}
+  grafana_password:
+    k8s_secret: {name: monitoring-logging-grafana, key: admin-password, namespace: monitoring}

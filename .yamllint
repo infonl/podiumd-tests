@@ -1,0 +1,15 @@
+---
+# Stricter than yamllint's defaults; line length as [tool.ruff].
+extends: default
+
+rules:
+  document-start:
+    present: true
+  line-length:
+    max: 120
+  truthy:
+    allowed-values: ['true', 'false']
+  # An unquoted 0644 is the number 420
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true

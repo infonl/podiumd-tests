@@ -1,7 +1,8 @@
+---
 # SSC Twente ExternalsPodiumD environment test-dimp (applications/gemeenten/dimp/test/).
-# Every tier, chaos included (user, 2026-10-13).
+# Smoke only.
 estate: externals
-allowed_tiers: [smoke, core, full, perf, chaos]
+allowed_tiers: [smoke]
 kube:
   context: aks-blue-test-dimp
   namespace: podiumd
@@ -23,5 +24,12 @@ urls:
   openarchiefbeheer: https://test-abc.dimpact.nl
   grafana: https://test-podiumd-logs.dimpact.nl
 secrets:
+  # keycloak-operator's master admin, as on podiumd-infra (checked on test-dimp 2026-10-23).
+  keycloak_admin_username:
+    k8s_secret: {name: keycloak-podiumd-admin, key: username}
+  keycloak_admin_password:
+    k8s_secret: {name: keycloak-podiumd-admin, key: password}
+  kiss_elastic_password:
+    k8s_secret: {name: kiss-es-elastic-user, key: elastic}
   pabc_api_key:
     pod_env: {deployment: pabc, var: API_KEY__0}

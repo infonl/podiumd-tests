@@ -10,8 +10,8 @@ from urllib3 import HTTPResponse
 
 from podiumd_tests.security import conforming_password
 from podiumd_tests.security import days_valid
-from podiumd_tests.security import foreign_origin_allowed
 from podiumd_tests.security import insecure_session_cookies
+from podiumd_tests.security import is_foreign_origin_allowed
 from podiumd_tests.security import missing_security_headers
 from podiumd_tests.security import policy_breaking_passwords
 from podiumd_tests.security import realm_policy_gaps
@@ -74,6 +74,20 @@ def test_frame_protection_only_matters_for_html(response_factory):
     assert missing_security_headers(response) == ["Strict-Transport-Security", "X-Frame-Options or CSP frame-ancestors"]
 
 
+def test_a_redirects_html_body_needs_no_frame_protection(response_factory):
+    # e.g. OpenBao's / answers 307 to /ui/ with a small text/html body; a redirect is not rendered.
+    response = response_factory(status=307, url="https://app.example.test/")
+    response.headers.update(
+        {
+            "Content-Type": "text/html; charset=utf-8",
+            "Location": "/ui/",
+            "Strict-Transport-Security": "max-age=31536000",
+            "X-Content-Type-Options": "nosniff",
+        }
+    )
+    assert missing_security_headers(response) == []
+
+
 def test_nosniff_sent_twice_counts(response_factory):
     response = response_factory(url="http://app.example.test/")
     response.headers["X-Content-Type-Options"] = "nosniff, nosniff"
@@ -113,7 +127,7 @@ def test_only_session_cookies_need_secure_and_httponly(response_factory):
 def test_foreign_origin_allowed(response_factory, headers, allowed):
     response = response_factory()
     response.headers.update(headers)
-    assert foreign_origin_allowed(response, "https://foreign.test") is allowed
+    assert is_foreign_origin_allowed(response, "https://foreign.test") is allowed
 
 
 def test_days_valid():

@@ -9,7 +9,9 @@ description = "Smoke, component, integration and perf tests for PodiumD environm
 requires-python = ">=3.12"
 # Every dependency needs a reason.
 dependencies = [
-    "pytest",            # test runner for every tier
+    # test runner for every tier; <9.2: pytest-xdist 3.8.0 sets item._nodeid for xdist_group, which 9.2
+    # ignores (it reads _id), so loadgroup runs grouped tests in parallel
+    "pytest<9.2",
     "pytest-playwright", # UI tests; already used by podiumd-minikube and podiumd-infra
     "pytest-xdist",      # parallel component/integration runs (R10)
     "pytest-html",       # report.html of each run
@@ -17,17 +19,29 @@ dependencies = [
     "PyYAML",            # environment profiles, perf.yaml
     "locust",            # perf tier, replaces k6
     "axe-playwright-python", # ships axe-core for the WCAG scans (TA 172)
+    "playwright",        # imported directly; pytest-playwright brings it too
+    "gevent",            # imported by the gateway locustfile; locust brings it too
 ]
 
 [project.optional-dependencies]
-# Same list as podiumd charts/podiumd/bin/requirements.txt; unpinned, as there.
+# Unpinned: run_python_checks upgrades them daily, as CI installs the latest.
 dev = [
     "ruff",
     "pymarkdownlnt",
     "pylint",
     "vulture",
     "isort",
+    "flake8-pyproject",  # flake8 reads [tool.flake8] in pyproject.toml
+    "wemake-python-styleguide",  # flake8 plugin, its own pinned flake8
+    "flake8-bugbear",    # flake8 plugin: B907 and B042, which ruff lacks
+    "flake8-class-attributes-order",  # flake8 plugin: CCE001, class member order
+    "flake8-functions-names",  # flake8 plugin: FNE005 and FNE008, function names
+    "pip-audit",         # known vulnerabilities in the .venv packages
+    "deptry",            # dependencies declared and imported agree
+    "yamllint",
+    "actionlint-py",     # GitHub workflow lint, with shellcheck on run: steps
     "pytest",
+    "pytest-cov",        # coverage of the unit tests (run_python_checks)
     "bandit",
     "basedpyright",
     "jscpd",
@@ -42,7 +56,7 @@ podiumd-tests = "podiumd_tests.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-podiumd_tests = ["py.typed", "seed/volume_corpus.yaml"]
+podiumd_tests = ["py.typed", "seed/volume_corpus.yaml", "bpmn/*"]
 
 [tool.pytest.ini_options]
 # A bare `pytest` runs the offline unit tests only; environment tests run
@@ -63,10 +77,20 @@ markers = [
     "slow: takes more than a minute",
     "requires(*capabilities): skip unless the environment has these capabilities",
     "tc(*ids): draaiboek test case ids",
+    "source(origin, reason): where the test comes from and why it exists, as that source says (sources.ORIGINS)",
+    "scenario(text): the test as a Gherkin scenario, lines starting with Given, When, Then, And or But",
 ]
 
-# Tool settings below are copied from podiumd charts/podiumd/bin/pyproject.toml.
-# Deviations are marked "podiumd-tests:".
+[tool.coverage.run]
+source = ["src/podiumd_tests"]
+# Same excludes as the static checks: snippets run inside the components, the locustfiles under Locust.
+omit = ["*/snippets/*.py", "*/perf/*locustfile.py", "*/perf/zgw_calls.py"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 97
+# The threshold check rounds to this precision; at 0, 95.996% passes as 96%.
+precision = 2
 
 [tool.ruff]
 # Shared with [tool.ruff.format] and pylint max-line-length.
@@ -79,6 +103,8 @@ select = [
     "A",     # flake8-builtins
     "AIR",
     # "ANN", # flake8-annotations
+    "ANN201", # return type of a public function
+    "ANN202", # return type of a private function
     "ARG",
     "ASYNC",
     "B",    # flake8-bugbear
@@ -87,6 +113,7 @@ select = [
     "C90",  # maccabe
     "COM",  # flake8-commas
     #"D",    # pydocstyle
+    "D401", # docstring first line in imperative mood
     "DJ",
     "DTZ",
     "E",    # pycodestyle
@@ -96,8 +123,11 @@ select = [
     "F",    # Pyflakes
     "FA",   # flake8-future-annotations
     "FBT",  # flake8-boolean-trap
+    "FIX",  # flake8-fixme: a TODO, FIXME or XXX is an issue or a fix, not a comment
     "FLY",  # pyflint
     "FURB", # refurb
+    "FURB113", # preview: repeated append
+    "FURB140", # preview: reimplemented starmap
     "G",    # flake8-logging-format
     "I",    # isort
     "ICN",  # flake8-import-conventions
@@ -111,6 +141,13 @@ select = [
     "PERF", # perflint
     "PGH",
     "PIE",  # flake8-pie
+    "PL",   # pylint rules in ruff
+    "PLR0904", # preview: too many public methods
+    "PLR0914", # preview: too many locals
+    "PLR6201", # preview: literal membership in a set
+    "PLW0717", # preview: too many statements in a try body
+    "PLR6301", # preview: method without self
+    "PLW1514", # preview: open() without encoding
     "PT",   # flake8-pytest-style
     "PTH",  # flake8-use-pathlib
     "PYI",
@@ -118,6 +155,7 @@ select = [
     "RET",  # flake8-return
     "RSE",  # flake8-raise
     "RUF",  # ruff
+    "RUF039", # preview: regex pattern not a raw string
     "S",    # flake8-bandit
     "SIM",  # flake8-simplify
     "SLF",  # flake8-self
@@ -125,6 +163,7 @@ select = [
     "T10",
     "T20",
     "TCH",
+    "TD",   # flake8-todos
     "TID",
     "TRY",  # tryceratops
     "UP",   # pyupgrade
@@ -140,6 +179,12 @@ ignore = [
     "ERA001", # commented-out-code: current hits are prose that resembles code
 ]
 # Allow fix for all enabled rules (when `--fix`) is provided.
+# Preview rules only where selected by code (FURB113, FURB140, PLR0904, PLR0914, PLR6201, PLR6301, PLW0717, PLW1514,
+# RUF039).
+preview = true
+explicit-preview-rules = true
+# These codes in noqa comments belong to flake8 plugins, not to ruff.
+external = ["WPS", "CCE", "FNE", "B907", "B042"]
 fixable = ["ALL"]
 unfixable = []
 # Allow unused variables when underscore-prefixed.
@@ -154,17 +199,19 @@ lines-between-types = 1
 check-typed-exception = true  # Enable additional checks for try-except-pass
 
 [tool.ruff.lint.per-file-ignores]
-# tests/: pytest asserts, fixture/mock params (ARG), private-helper access
-# (SLF001), no __init__.py (INP001), composite asserts (PT018), unused
-# unpacked vars (RUF059), fixed-argv `git` calls (S603/S607), fake tokens
-# (S106). bandit does not scan tests/ either.
-# podiumd-tests: the same rules apply to unit_tests/.
-"tests/**" = ["S101", "ARG001", "ARG005", "SLF001", "INP001", "PT018", "RUF059", "S603", "S607", "S106"]
-"unit_tests/**" = ["S101", "ARG001", "ARG005", "SLF001", "INP001", "PT018", "RUF059", "S603", "S607", "S106"]
+# tests/: pytest asserts (S101), no __init__.py (INP001), unused unpacked vars (RUF059), fixed-argv `git` calls
+# (S603/S607). bandit does not scan tests/ either.
+# The same rules apply to unit_tests/.
+# PL counts and magic values (PLR2004, PLR0913, PLR0917, PLW0717, PLR0904, PLR0914), local imports (PLC0415),
+# return types (ANN201, ANN202) and imperative docstrings (D401): not enforced for tests.
+"tests/**" = ["ANN201", "ANN202", "D401", "S101", "INP001", "RUF059", "S603", "S607", "PLR2004", "PLR0913", "PLR0917", "PLC0415", "PLW0717", "PLR0904", "PLR0914"]
+"unit_tests/**" = ["ANN201", "ANN202", "D401", "S101", "INP001", "RUF059", "S603", "S607", "PLR2004", "PLR0913", "PLR0917", "PLC0415", "PLW0717", "PLR0904", "PLR0914"]
 # infra/: scripts that run in the cluster from a ConfigMap, not a package (INP001).
 "infra/**" = ["INP001"]
-# Django snippets: names from their `# include:` lines (F821); Django's documented _meta API (SLF001).
-"src/podiumd_tests/snippets/*.py" = ["F821", "SLF001"]
+# Django snippets: names from their `# include:` lines (F821); Django's documented _meta API (SLF001); imports
+# inside run(), which runs in the component's Django shell (PLC0415); no return types (ANN201, ANN202): no type
+# checker runs on them, as their models exist only in the component images.
+"src/podiumd_tests/snippets/*.py" = ["F821", "SLF001", "PLC0415", "ANN201", "ANN202"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -172,17 +219,72 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 line-ending = "auto"
 
+# flake8 runs wemake-python-styleguide (WPS) and plugin rules ruff cannot check; read via flake8-pyproject.
+[tool.flake8]
+select = ["WPS", "CCE", "FNE005", "FNE008", "B907", "B042"]
+# CCE001: magic methods right after __init__, as WPS338 wants; non-strict mode.
+class-attributes-order = "docstring,pass,meta_class,nested_class,constant,field,outer_field,if,expression,__new__,__init__,__post_init__,magic_method,property_method,static_method,class_method,method,protected_property_method,protected_static_method,protected_class_method,protected_method,private_property_method,private_static_method,private_class_method,private_method"
+max-line-length = 120
+# Jones complexity of a line (default 14): only the really dense lines
+max-line-complexity = 18
+max-cognitive-average = 6
+max-name-length = 30
+max-tuple-unpack-length = 3
+max-except-exceptions = 2
+max-lines-in-finally = 1
+max-noqa-comments = 5
+ignore = [
+    # done by ruff or pylint
+    "WPS210",  # too many locals: PLR0914
+    "WPS211",  # too many arguments: PLR0913, PLR0917
+    "WPS214",  # too many methods: PLR0904
+    "WPS421",  # print: T201, off on purpose (the CLI prints)
+    "WPS432",  # magic number: PLR2004 (comparisons), elsewhere a named constant is not clearer
+    "WPS441",  # control variable used after its loop: B020, PLW2901 (a comprehension reusing names is no bug)
+    # opinion, or in conflict with this code base
+    "WPS110",  # names like result, data, value: clear in their context
+    "WPS201",  # too many imports: isort force-single-line gives one import per line
+    "WPS202",  # too many module members: modules are the unit of this suite
+    "WPS204",  # overused expression: flags raise X(msg), the pattern ruff EM asks for
+    "WPS226",  # string constant overuse: json keys are data
+    "WPS237",  # complex f-string: a subscript or call in an f-string reads fine
+    "WPS407",  # mutable module constant: freezing nested dicts breaks json
+    "WPS430",  # nested function: closures on purpose (callbacks, retries)
+    "WPS529",  # implicit .get(): flags a dispatch on which keys a dict has; SIM401 catches the if/else default case
+]
+# flake8 applies only the longest pattern that matches a file (* matches / too).
+per-file-ignores = [
+    # its name is part of a test id (unit_tests/test_snippets.py)
+    "src/podiumd_tests/snippets/openformulieren_objects_backends.py:WPS118",
+    # tests: counts and sizes (asserts, line complexity), test idioms (short names, numbered names, test names that
+    # tell the behaviour, == [] in an assert, a module imported whole and by name), pytest markers as decorators
+    # (WPS216), Given/When/Then scenarios and pytester conftests as multi-line strings (WPS462)
+    "tests/*:WPS111,WPS114,WPS118,WPS216,WPS218,WPS221,WPS458,WPS462,WPS520",
+    "unit_tests/*:WPS111,WPS114,WPS118,WPS216,WPS218,WPS221,WPS458,WPS462,WPS520",
+]
+
 # pylint covers checks ruff lacks; overlapping rules are owned by one tool.
 # tests/-only disables live in run_python_checks (TESTS_PYLINT_DISABLE):
 # pylint has no per-directory config.
 
-[tool.pylint.main]
-# podiumd-tests: Django snippets import models that exist only in the component images.
-ignore = ["snippets"]
+# Owned by ruff PL (PLR0913, PLR0917, PLR0911, PLR0912, PLR0915, PLR0914, PLR0904, PLR0916, PLC0415, PLW1514).
+[tool.pylint."messages control"]
+disable = [
+    "too-many-arguments",
+    "too-many-positional-arguments",
+    "too-many-return-statements",
+    "too-many-branches",
+    "too-many-statements",
+    "too-many-locals",
+    "too-many-public-methods",
+    "too-many-boolean-expressions",
+    "import-outside-toplevel",
+    "unspecified-encoding",
+]
 
-[tool.pylint.basic]
-# Allow hyphens for the kebab-case script names (e.g. "verify-podiumd").
-module-rgx = "^(([a-z_][a-z0-9_-]*)|(__.*__))$"
+[tool.pylint.main]
+# Django snippets import models that exist only in the component images.
+ignore = ["snippets"]
 
 [tool.pylint.format]
 # Matches [tool.ruff] line-length.
@@ -201,13 +303,23 @@ force_single_line = true
 default_section = "THIRDPARTY"
 sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 
-# podiumd-tests: vulture runs on src/ plus tests/ (see run_python_checks), so library
+# Vulture runs on src/ plus tests/ (see run_python_checks), so library
 # code that only environment tests use is not dead. unit_tests/ is left out on purpose:
 # code used only by its own unit test is still dead. False positives:
 #   - pytest_* hooks, test_* functions, pytestmark and @pytest.fixture functions: used by pytest.
 #   - __call__ of a callable Protocol (process.Runner): called through the protocol.
 #   - wait_until, tagged: library API without a caller in tests/.
-#   - Locust's hooks in perf/locustfile.py (wait_time, @task, @events listeners): called by Locust.
+#   - Locust's hooks in perf/*locustfile.py (wait_time, @task, @events listeners): called by Locust.
+[tool.deptry]
+known_first_party = ["podiumd_tests"]
+# Django snippets: their imports exist only in the component images.
+extend_exclude = ["src/podiumd_tests/snippets"]
+optional_dependencies_dev_groups = ["dev"]
+
+[tool.deptry.per_rule_ignores]
+# Used but never imported: pytest loads the plugins; accessibility.py reads axe.min.js from the package's files.
+DEP002 = ["pytest-playwright", "pytest-xdist", "pytest-html", "axe-playwright-python"]
+
 [tool.vulture]
 # Django snippets: run() is called inside the component, not from here.
 exclude = ["*/snippets/*.py"]
@@ -226,20 +338,32 @@ skips = [
 exclude = [
     "**/__pycache__",
     ".venv",
-    # podiumd-tests: Django snippets import models that exist only in the component images.
+    # Django snippets import models that exist only in the component images.
     "src/podiumd_tests/snippets/*.py",
-    # podiumd-tests: Locust's event hooks are untyped.
-    "src/podiumd_tests/perf/locustfile.py",
+    # Locust's event hooks are untyped.
+    "src/podiumd_tests/perf/*locustfile.py",
 ]
 typeCheckingMode = "strict"
+# The oldest Python of requires-python; the .venv may run a newer one.
+pythonVersion = "3.12"
 reportUnusedImport = false  # done by ruff F401
 reportUntypedBaseClass = false # done by ruff N801
+reportUnnecessaryTypeIgnoreComment = "error"
+reportImplicitOverride = "error"
+reportCallInDefaultInitializer = "error"
+reportInvalidCast = "error"
+reportExplicitAny = "error"
+reportUnusedParameter = "error"
+reportPrivateLocalImportUsage = "error"
+reportUnannotatedClassAttribute = "error"
 
 # tests/: fakes, parametrize args and monkeypatch lambdas are unannotated
-# and scripts load as ModuleType, so Unknown types remain.
-# podiumd-tests: the same relaxations apply to unit_tests/.
+# and scripts load as ModuleType, so Unknown types remain. A fake is cast to
+# the type it stands in for, which reportInvalidCast rejects.
+# The same relaxations apply to unit_tests/.
 [[tool.basedpyright.executionEnvironments]]
 root = "tests"
+reportInvalidCast = false
 reportMissingParameterType = false
 reportUnknownLambdaType = false
 reportUnknownArgumentType = false
@@ -249,6 +373,7 @@ reportUnknownVariableType = false
 
 [[tool.basedpyright.executionEnvironments]]
 root = "unit_tests"
+reportInvalidCast = false
 reportMissingParameterType = false
 reportUnknownLambdaType = false
 reportUnknownArgumentType = false

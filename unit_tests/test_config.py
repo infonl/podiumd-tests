@@ -22,7 +22,7 @@ def test_parses_a_valid_profile(profile_factory):
     assert profile.settings == {"zgw_client_id": "formulier"}
     assert profile.urls["openzaak"] == "https://openzaak.example.test"
     assert profile.secrets["token"].options == {"name": "s", "key": "k"}
-    assert profile.secrets["token"].needs_cluster
+    assert profile.secrets["token"].is_in_cluster
     assert profile.access.mode == "host-header"
     assert profile.access.ingress_service is not None
     assert profile.access.ingress_service.name == "traefik"
@@ -81,8 +81,8 @@ def test_every_committed_profile_loads(name):
 def test_only_cluster_sources_need_the_cluster(profile_factory):
     secrets = {"a": {"dev_default": "x"}, "b": {"pod_env": {"deployment": "d", "var": "V"}}}
     profile = profile_factory(estate="minikube", secrets=secrets)
-    assert not profile.secrets["a"].needs_cluster
-    assert profile.secrets["b"].needs_cluster
+    assert not profile.secrets["a"].is_in_cluster
+    assert profile.secrets["b"].is_in_cluster
 
 
 @pytest.mark.parametrize(

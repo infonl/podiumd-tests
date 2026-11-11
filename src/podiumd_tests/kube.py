@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 from typing import cast
 from urllib.parse import urlsplit
 
+from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.process import ProcessError
 from podiumd_tests.process import Runner
@@ -32,6 +33,8 @@ if TYPE_CHECKING:
     from collections.abc import Generator
     from collections.abc import Mapping
     from collections.abc import Sequence
+
+    from podiumd_tests.json_data import JsonObject
 
 DEFAULT_TIMEOUT = 30
 # Django project path in every Maykin image (Open Zaak, Open Klant, Objecten, Open Inwoner).
@@ -50,15 +53,15 @@ class Kube:
     """kubectl bound to one context and default namespace."""
 
     def __init__(self, context: str, namespace: str, runner: Runner = run_process) -> None:
-        self.context = context
-        self.namespace = namespace
-        self.runner = runner
+        self.context: str = context
+        self.namespace: str = namespace
+        self.runner: Runner = runner
 
     def command(self, *args: str, namespace: str | None = None, all_namespaces: bool = False) -> list[str]:
         """Full kubectl argv for the given arguments."""
         if all_namespaces:
             return ["kubectl", "--context", self.context, *args, "--all-namespaces"]
-        ns = namespace if namespace is not None else self.namespace
+        ns = self.namespace if namespace is None else namespace
         return ["kubectl", "--context", self.context, "--namespace", ns, *args]
 
     def run(
@@ -93,25 +96,10 @@ class Kube:
         """One object as a dict, or None when it does not exist."""
         return self._get_object(("get", kind, name, "--ignore-not-found", "-o", "json"), namespace)
 
-    def _get_object(
-        self, args: tuple[str, ...], namespace: str | None, *, all_namespaces: bool = False
-    ) -> dict[str, object] | None:
-        out = self.run(*args, namespace=namespace, all_namespaces=all_namespaces)
-        if not out.strip():
-            return None
-        command = self.command(*args, namespace=namespace, all_namespaces=all_namespaces)
-        try:
-            data: object = json.loads(out)
-        except json.JSONDecodeError as exc:
-            raise KubeError(command, f"invalid JSON: {exc}") from exc
-        if not isinstance(data, dict):
-            raise KubeError(command, "expected a JSON object")
-        return cast("dict[str, object]", data)
-
     def items(
         self, kind: str, *, namespace: str | None = None, all_namespaces: bool = False
     ) -> list[dict[str, object]]:
-        """The items of a `kubectl get <kind>` list."""
+        """Return the items of a `kubectl get <kind>` list."""
         items = self.get_json(kind, namespace=namespace, all_namespaces=all_namespaces).get("items", [])
         return cast("list[dict[str, object]]", items) if isinstance(items, list) else []
 
@@ -120,7 +108,7 @@ class Kube:
         self.run("get", "--raw", "/readyz", f"--request-timeout={timeout}s", timeout=timeout + 5)
 
     def logs(self, deployment: str, *, since: str, container: str | None = None) -> str:
-        """The log lines a deployment's pod wrote in the last `since` (e.g. "5m")."""
+        """Return the log lines a deployment's pod wrote in the last `since` (e.g. "5m")."""
         args = ["logs", f"deployment/{deployment}", f"--since={since}"]
         return self.run(*args, *([f"--container={container}"] if container else []))
 
@@ -133,7 +121,7 @@ class Kube:
 
         The code goes over stdin, so nothing in it appears in argv or errors.
         The stdout also holds Django's own chatter ("118 objects imported
-        automatically"); use django_value() to pick out one printed value.
+        automatically"); use django_values() to pick out the printed values.
         `shell -c` reads stdin itself: plain `shell` checks stdin without
         waiting and falls back to the interactive interpreter when the code
         has not arrived yet.
@@ -156,7 +144,7 @@ class Kube:
     def port_forward(
         self, service: str, port: int, *, namespace: str | None = None, timeout: int = DEFAULT_TIMEOUT
     ) -> Generator[int]:
-        """A free local port forwarded to a Service's port while the context is open."""
+        """Yield a free local port forwarded to a Service's port while the context is open."""
         command = self.command(
             "port-forward", f"service/{service}", f":{port}", "--address=127.0.0.1", namespace=namespace
         )
@@ -167,19 +155,38 @@ class Kube:
         try:
             yield forwarded_port(command, process, timeout)
         finally:
-            process.terminate()
-            process.wait(timeout)
+            _stop(process, timeout)
 
     def secret_value(self, name: str, key: str, *, namespace: str | None = None) -> str:
-        """Decoded value of one key of a Kubernetes secret, in the profile namespace unless given."""
-        data = decode_secret_data(section(self.get_json("secret", name, namespace=namespace), "data"))
+        """Return the decoded value of one key of a Kubernetes secret, in the profile namespace unless given."""
+        data = decode_secret(section(self.get_json("secret", name, namespace=namespace), "data"))
         if key not in data:
             raise KubeError(self.command("get", "secret", name, namespace=namespace), f"no key {key!r}")
         return data[key]
 
+    def _get_object(
+        self, args: tuple[str, ...], namespace: str | None, *, all_namespaces: bool = False
+    ) -> dict[str, object] | None:
+        out = self.run(*args, namespace=namespace, all_namespaces=all_namespaces)
+        if not out.strip():
+            return None
+        command = self.command(*args, namespace=namespace, all_namespaces=all_namespaces)
+        try:
+            data: object = json.loads(out)
+        except json.JSONDecodeError as exc:
+            raise KubeError(command, f"invalid JSON: {exc}") from exc
+        if not isinstance(data, dict):
+            raise KubeError(command, "expected a JSON object")
+        return cast("dict[str, object]", data)
+
+
+def _stop(process: subprocess.Popen[str], timeout: int) -> None:
+    process.terminate()
+    process.wait(timeout)
+
 
 def forwarded_port(command: Sequence[str], process: subprocess.Popen[str], timeout: int) -> int:
-    """The local port `kubectl port-forward` reports; KubeError when it exits or reports none in time.
+    """Return the local port `kubectl port-forward` reports; KubeError when it exits or reports none in time.
 
     A thread keeps reading its output: kubectl blocks once a full pipe holds its "Handling connection" lines.
     """
@@ -192,19 +199,38 @@ def forwarded_port(command: Sequence[str], process: subprocess.Popen[str], timeo
         lines.put("")
 
     threading.Thread(target=drain, daemon=True).start()
+    return _reported_port(command, lines, timeout)
+
+
+def _reported_port(command: Sequence[str], lines: queue.Queue[str], timeout: int) -> int:
+    """Return the port in the first "Forwarding from" line; KubeError at the end of the output or after timeout."""
     seen: list[str] = []
     deadline = time.monotonic() + timeout
-    while (remaining := deadline - time.monotonic()) > 0:
+    remaining = deadline - time.monotonic()
+    while remaining > 0:
         try:
             line = lines.get(timeout=remaining)
         except queue.Empty:
             break
-        if not line:
-            raise KubeError(command, "".join(seen) or "exited")
-        if match := FORWARDING.match(line.strip()):
-            return int(match.group(1))
-        seen.append(line)
+        port = _forwarding_port(command, line, seen)
+        if port is not None:
+            return port
+        remaining = deadline - time.monotonic()
     raise KubeError(command, f"no forwarded port within {timeout}s")
+
+
+def _forwarding_port(command: Sequence[str], line: str, seen: list[str]) -> int | None:
+    """Return the port of a "Forwarding from" line; KubeError at the end of the output ("").
+
+    Any other line goes to seen, for that error.
+    """
+    if not line:
+        raise KubeError(command, "".join(seen) or "exited")
+    match = FORWARDING.match(line.strip())
+    if match:
+        return int(match.group(1))
+    seen.append(line)
+    return None
 
 
 def cluster_service(url: str) -> tuple[str, str, int] | None:
@@ -216,23 +242,54 @@ def cluster_service(url: str) -> tuple[str, str, int] | None:
     return match["service"], match["namespace"], parts.port or 80
 
 
-def decode_secret_data(data: Mapping[str, object]) -> dict[str, str]:
-    """The base64 `data` of a Secret, decoded."""
-    return {k: base64.b64decode(str(v)).decode() for k, v in data.items()}
+def decode_secret(data: Mapping[str, object]) -> dict[str, str]:
+    """Return the base64 `data` of a Secret, decoded."""
+    return {key: base64.b64decode(str(value)).decode() for key, value in data.items()}
 
 
-def django_value(output: str) -> str:
-    """The value a Django shell snippet printed as print("PTEST_VALUE=" + value)."""
-    for line in output.splitlines():
-        if line.startswith(DJANGO_VALUE_MARKER):
-            return line.removeprefix(DJANGO_VALUE_MARKER)
-    msg = f"no {DJANGO_VALUE_MARKER} line in Django shell output"
-    raise ValueError(msg)
+def django_values(output: str) -> list[str]:
+    """Return the values a Django shell printed as print("PTEST_VALUE=" + value), in order."""
+    values = [
+        line.removeprefix(DJANGO_VALUE_MARKER) for line in output.splitlines() if line.startswith(DJANGO_VALUE_MARKER)
+    ]
+    if not values:
+        msg = f"no {DJANGO_VALUE_MARKER} line in Django shell output"
+        raise ValueError(msg)
+    return values
 
 
 def metadata_name(item: Mapping[str, object]) -> str:
     """metadata.name of a Kubernetes object, or an empty string."""
     return str(section(item, "metadata").get("name", ""))
+
+
+def metadata_labels(item: Mapping[str, object]) -> JsonObject:
+    """metadata.labels of a Kubernetes object, or an empty mapping."""
+    return section(section(item, "metadata"), "labels")
+
+
+def is_condition_true(item: Mapping[str, object], kind: str) -> bool:
+    """Whether the object's status has the condition of this type with status True."""
+    matching = [
+        condition for condition in entries(section(item, "status").get("conditions")) if condition.get("type") == kind
+    ]
+    return any(condition.get("status") == "True" for condition in matching)
+
+
+def metadata_namespace(item: Mapping[str, object]) -> str:
+    """metadata.namespace of a Kubernetes object, or an empty string."""
+    return str(section(item, "metadata").get("namespace", ""))
+
+
+def refresh_context(command: Sequence[str], runner: Runner = run_process) -> None:
+    """Run a command that rewrites a context in the kubeconfig; the current context stays."""
+    try:
+        current = run_checked(runner, ["kubectl", "config", "current-context"], DEFAULT_TIMEOUT, KubeError).strip()
+    except KubeError:  # a kubeconfig without current context
+        current = ""
+    run_checked(runner, list(command), 120, KubeError)
+    if current:
+        run_checked(runner, ["kubectl", "config", "use-context", current], DEFAULT_TIMEOUT, KubeError)
 
 
 def context_names(runner: Runner = run_process) -> list[str]:

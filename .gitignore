@@ -12,3 +12,5 @@ session_memory.json
 # IDE project files.
 .idea/
 .envrc
+.coverage
+.claude/worktrees/

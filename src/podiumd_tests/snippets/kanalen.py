@@ -12,10 +12,13 @@ def run(params):
 
     kanaal_model = apps.get_model("datamodel", "Kanaal")
     wanted = params["kanalen"]
-    existing = {k.naam: k for k in kanaal_model.objects.filter(naam__in=list(wanted))}
+    existing = {kanaal.naam: kanaal for kanaal in kanaal_model.objects.filter(naam__in=list(wanted))}
 
     if params["action"] == "status":
-        present = all(n in existing and set(f) <= set(existing[n].filters) for n, f in wanted.items())
+        kanalen_present = set(wanted) <= set(existing)
+        present = kanalen_present and all(
+            set(filters) <= set(existing[naam].filters) for naam, filters in wanted.items()
+        )
         return {"present": present}
 
     record = params.get("record") or {}
@@ -24,23 +27,36 @@ def run(params):
 
     if params["action"] == "remove":
         kanaal_model.objects.filter(naam__in=sorted(created)).delete()
-        for naam, filters in added.items():
-            kanaal = existing.get(naam)
-            if kanaal is not None and naam not in created:
-                kanaal.filters = [f for f in kanaal.filters if f not in filters]
-                kanaal.save()
+        _remove_filters(existing, added, created)
         return {"present": False}
 
     for naam, filters in wanted.items():
-        kanaal = existing.get(naam)
-        if kanaal is None:
-            kanaal_model.objects.create(naam=naam, documentatie_link="", filters=list(filters))
+        missing = _add(kanaal_model, existing.get(naam), naam, filters)
+        if missing is None:
             created.add(naam)
-            continue
-        missing = [f for f in filters if f not in kanaal.filters]
-        if missing:
-            kanaal.filters = [*kanaal.filters, *missing]
-            kanaal.save()
+        elif missing:
             added.setdefault(naam, set()).update(missing)
-    record = {"created": sorted(created), "filters": {n: sorted(f) for n, f in sorted(added.items())}}
+    added_filters = {naam: sorted(filters) for naam, filters in sorted(added.items())}
+    record = {"created": sorted(created), "filters": added_filters}
     return {"present": True, "record": record}
+
+
+def _remove_filters(existing, added, created):
+    """Take the added filters off the kanalen that apply did not create."""
+    for naam, filters in added.items():
+        kanaal = existing.get(naam)
+        if kanaal is not None and naam not in created:
+            kanaal.filters = [kanaal_filter for kanaal_filter in kanaal.filters if kanaal_filter not in filters]
+            kanaal.save()
+
+
+def _add(kanaal_model, kanaal, naam, filters):
+    """Create the kanaal (None), or add the filters it lacks (those filters)."""
+    if kanaal is None:
+        kanaal_model.objects.create(naam=naam, documentatie_link="", filters=list(filters))
+        return None
+    missing = [kanaal_filter for kanaal_filter in filters if kanaal_filter not in kanaal.filters]
+    if missing:
+        kanaal.filters = [*kanaal.filters, *missing]
+        kanaal.save()
+    return missing

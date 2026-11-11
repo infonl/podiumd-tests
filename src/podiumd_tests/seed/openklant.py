@@ -21,25 +21,28 @@ if TYPE_CHECKING:
 # BSNs of the BRP test set and KvK numbers of the KvK test set are shared by every team;
 # generated numbers keep tests independent of what others left behind.
 _rng = random.SystemRandom()
+# A remainder of 10 has no single-digit check digit.
+_NO_CHECK_DIGIT = 10
 
 
 def random_bsn() -> str:
-    """A random 9-digit number that passes the BSN eleven test (elfproef)."""
+    """Return a random 9-digit number that passes the BSN eleven test (elfproef)."""
     while True:
         digits = [_rng.randint(0, 9) for _ in range(8)]
-        total = sum(d * w for d, w in zip(digits, range(9, 1, -1), strict=True))
+        weights = range(9, 1, -1)
+        total = sum(digit * weight for digit, weight in zip(digits, weights, strict=True))
         last = total % 11
-        if last < 10 and digits[0] != 0:  # the check digit is weighted -1
+        if last != _NO_CHECK_DIGIT and digits[0] != 0:  # the check digit is weighted -1
             return "".join(map(str, [*digits, last]))
 
 
 def random_kvk_nummer() -> str:
-    """A random 8-digit KvK number."""
+    """Return a random 8-digit KvK number."""
     return str(_rng.randint(10_000_000, 99_999_999))
 
 
 def random_nummer() -> str:
-    """A random 10-digit nummer for a partij, klantcontact or internetaak.
+    """Return a random 10-digit nummer for a partij, klantcontact or internetaak.
 
     Open Klant 2.15 numbers new objects as highest + 1 without a lock: parallel creates
     then collide on the unique nummer and get 500. An explicit nummer avoids that race.
@@ -55,12 +58,12 @@ def _create(openklant: ApiClient, registry: ResourceRegistry, path: str, body: d
 
 
 def ref(obj: JsonObject) -> dict[str, str]:
-    """The {"uuid": …} reference Open Klant uses between its objects."""
+    """Return the {"uuid": …} reference Open Klant uses between its objects."""
     return {"uuid": str(obj["uuid"])}
 
 
 def make_partij(openklant: ApiClient, registry: ResourceRegistry, **fields: object) -> JsonObject:
-    """A persoon-partij named after the run tag; fields override the defaults."""
+    """Create a persoon-partij named after the run tag; fields override the defaults."""
     body: dict[str, object] = {
         "nummer": random_nummer(),
         "soortPartij": "persoon",
@@ -78,7 +81,7 @@ def make_partij(openklant: ApiClient, registry: ResourceRegistry, **fields: obje
 
 
 def make_organisatie(openklant: ApiClient, registry: ResourceRegistry) -> JsonObject:
-    """An organisatie-partij named after the run tag."""
+    """Create an organisatie-partij named after the run tag."""
     return make_partij(
         openklant, registry, soortPartij="organisatie", partijIdentificatie={"naam": registry.tagged("bv")}
     )
@@ -87,7 +90,7 @@ def make_organisatie(openklant: ApiClient, registry: ResourceRegistry) -> JsonOb
 def make_partij_identificator(
     openklant: ApiClient, registry: ResourceRegistry, partij: JsonObject, kind: str, number: str
 ) -> JsonObject:
-    """A BSN ("bsn"), KvK ("kvk_nummer") or RSIN ("rsin") identificator of a partij."""
+    """Create a BSN ("bsn"), KvK ("kvk_nummer") or RSIN ("rsin") identificator of a partij."""
     objecttype = "natuurlijk_persoon" if kind == "bsn" else "niet_natuurlijk_persoon"
     register = "brp" if kind == "bsn" else "hr"
     body: dict[str, object] = {
@@ -110,12 +113,12 @@ def make_digitaal_adres(
     adres: str,
     betrokkene: JsonObject | None = None,
 ) -> JsonObject:
-    """An e-mail address of a partij (its standard address), of a klantcontact's betrokkene, or of no one."""
+    """Create an e-mail address, or telefoonnummer when adres has no @, of a partij (standard address) or betrokkene."""
     body: dict[str, object] = {
         "verstrektDoorBetrokkene": ref(betrokkene) if betrokkene else None,
         "verstrektDoorPartij": ref(partij) if partij else None,
         "adres": adres,
-        "soortDigitaalAdres": "email",
+        "soortDigitaalAdres": "email" if "@" in adres else "telefoonnummer",
         "omschrijving": registry.tagged("adres"),
         "isStandaardAdres": partij is not None,
     }
@@ -123,7 +126,7 @@ def make_digitaal_adres(
 
 
 def klantcontact_body(registry: ResourceRegistry, **fields: object) -> dict[str, object]:
-    """A klantcontact by phone whose onderwerp carries the run tag; fields override the defaults."""
+    """Return a klantcontact by phone whose onderwerp carries the run tag; fields override the defaults."""
     return {
         "nummer": random_nummer(),
         "kanaal": "telefoon",
@@ -138,14 +141,14 @@ def klantcontact_body(registry: ResourceRegistry, **fields: object) -> dict[str,
 
 
 def make_klantcontact(openklant: ApiClient, registry: ResourceRegistry, **fields: object) -> JsonObject:
-    """A klantcontact (klantcontact_body) in Open Klant."""
+    """Create a klantcontact (klantcontact_body) in Open Klant."""
     return _create(openklant, registry, "klantcontacten", klantcontact_body(registry, **fields))
 
 
 def make_betrokkene(
     openklant: ApiClient, registry: ResourceRegistry, klantcontact: JsonObject, partij: JsonObject | None
 ) -> JsonObject:
-    """A klant betrokken at a klantcontact, for a partij or anonymous."""
+    """Create a klant betrokken at a klantcontact, for a partij or anonymous."""
     body: dict[str, object] = {
         "wasPartij": ref(partij) if partij else None,
         "hadKlantcontact": ref(klantcontact),
@@ -164,7 +167,7 @@ def make_actor(
     name: str | None = None,
     objecttype: str = "act",
 ) -> JsonObject:
-    """An actor of a kind (medewerker, organisatorische_eenheid, geautomatiseerde_actor); default name: the run tag.
+    """Create an actor (medewerker, organisatorische_eenheid, geautomatiseerde_actor); default name: the run tag.
 
     objecttype: its actoridentificator's codeObjecttype; ITA reads "grp" and "afd" as groep and afdeling.
     """
@@ -186,16 +189,21 @@ def make_actor(
 def make_internetaak(
     openklant: ApiClient, registry: ResourceRegistry, klantcontact: JsonObject, actoren: list[JsonObject]
 ) -> JsonObject:
-    """An internetaak to handle, raised by a klantcontact and assigned to actors."""
+    """Create an internetaak to handle, raised by a klantcontact and assigned to actors."""
     body: dict[str, object] = {
         "nummer": random_nummer(),
         "gevraagdeHandeling": "Terugbellen",
         "aanleidinggevendKlantcontact": ref(klantcontact),
-        "toegewezenAanActoren": [ref(a) for a in actoren],
+        "toegewezenAanActoren": [ref(actor) for actor in actoren],
         "toelichting": registry.tagged("internetaak"),
         "status": "te_verwerken",
     }
     return _create(openklant, registry, "internetaken", body)
+
+
+def close_internetaak(openklant: ApiClient, taak: JsonObject) -> JsonObject:
+    """Return the internetaak set to verwerkt, as a KCC medewerker closes it."""
+    return openklant.patch(str(taak["url"]), {"status": "verwerkt"})
 
 
 # (codeObjecttype, codeRegister, codeSoortObjectId) of what an onderwerpobject points at.
@@ -244,18 +252,20 @@ def delete_klantcontact_tree(openklant: ApiClient, url: str) -> None:
 def partijen_of(openklant: ApiClient, object_id: str) -> list[str]:
     """URLs of the partijen identified by a BSN or KvK number."""
     identificatoren = openklant.list("partij-identificatoren", {"partijIdentificatorObjectId": object_id})
-    return list(dict.fromkeys(str(section(i, "identificeerdePartij")["url"]) for i in identificatoren))
+    return list(
+        dict.fromkeys(str(section(identificator, "identificeerdePartij")["url"]) for identificator in identificatoren)
+    )
 
 
 def expanded(openklant: ApiClient, url: str, key: str) -> list[JsonObject]:
-    """The objects that `expand=key` inlines in the object at the URL."""
+    """Return the objects that `expand=key` inlines in the object at the URL."""
     return entries(section(openklant.get(url, {"expand": key}), "_expand").get(key))
 
 
 def klantcontacten_about(openklant: ApiClient, onderwerp: str, inhoud: str | None = None) -> list[JsonObject]:
-    """The klantcontacten with the onderwerp and, when given, the inhoud."""
+    """Return the klantcontacten with the onderwerp and, when given, the inhoud."""
     found = openklant.list("klantcontacten", {"onderwerp": onderwerp})
-    return [k for k in found if inhoud is None or k.get("inhoud") == inhoud]
+    return [klantcontact for klantcontact in found if inhoud is None or klantcontact.get("inhoud") == inhoud]
 
 
 def clean_up_klantcontacten(
@@ -265,8 +275,8 @@ def clean_up_klantcontacten(
     registry.add(
         f"klantcontacten {onderwerp} {inhoud or ''}".rstrip(),
         lambda: [
-            delete_klantcontact_tree(openklant, str(k["url"]))
-            for k in klantcontacten_about(openklant, onderwerp, inhoud)
+            delete_klantcontact_tree(openklant, str(klantcontact["url"]))
+            for klantcontact in klantcontacten_about(openklant, onderwerp, inhoud)
         ],
     )
 
@@ -279,13 +289,15 @@ def delete_partij(openklant: ApiClient, partij: str) -> None:
         openklant.get(str(ref["url"])) for ref in entries(openklant.get(partij).get("partijIdentificatoren"))
     ]
     # A sub-identificator (a vestigingsnummer under its kvk_nummer) protects its parent.
-    for identificator in sorted(identificatoren, key=lambda i: i.get("subIdentificatorVan") is None):
+    for identificator in sorted(
+        identificatoren, key=lambda identificator: identificator.get("subIdentificatorVan") is None
+    ):
         openklant.delete(str(identificator["url"]))
     openklant.delete(partij)
 
 
 def make_submission_contact(openklant: ApiClient, registry: ResourceRegistry, kenmerk: str, adres: str) -> None:
-    """The e-mail address a form's submitter left, as Open Formulieren registers it in Open Klant.
+    """Create the e-mail address a form's submitter left, as Open Formulieren registers it in Open Klant.
 
     A klantcontact about the submission (onderwerpobject with its kenmerk) with a betrokkene and the
     address; ZAC finds it for the productaanvraag with that kenmerk. Cleanup deletes the whole tree,

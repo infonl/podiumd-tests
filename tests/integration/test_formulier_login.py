@@ -15,11 +15,11 @@ from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.bootstrap.steps import NAW_DATA
 from podiumd_tests.browser import browser_session
 from podiumd_tests.browser import keycloak_login
+from podiumd_tests.browser import leave_login_callback
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.openformulieren import registered_zaak
 from podiumd_tests.openformulieren import submit
-from podiumd_tests.responses import url_host
 from podiumd_tests.seed.openzaak import ZAKEN
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
     from playwright.sync_api import Page
 
-    from podiumd_tests.bootstrap.steps import KeycloakUser
+    from podiumd_tests.bootstrap.keycloak import KeycloakUser
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
@@ -44,7 +44,7 @@ INWONER, _, BEDRIJF = IDENTITIES
 REGISTRATION_TIMEOUT = 90
 
 
-def submit_after_login(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # one flow
+def submit_after_login(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -59,7 +59,7 @@ def submit_after_login(  # pylint: disable=too-many-arguments,too-many-positiona
     login = next(o for o in entries(form["loginOptions"]) if o.get("identifier") == method)
     page.goto(f"{login['url']}?next={form_url}")
     keycloak_login(page, user.username, podiumd_env.credentials.get(user.store_key))
-    page.wait_for_url(lambda url: url_host(url) == url_host(base) and "/callback" not in url)
+    leave_login_callback(page, base, "/callback")
     # The form's SDK in the page shares the session and overwrites it with its own requests,
     # which loses the submission the API calls below put in it (403).
     page.goto("about:blank")
@@ -77,7 +77,17 @@ def submit_after_login(  # pylint: disable=too-many-arguments,too-many-positiona
 
 
 @pytest.mark.tc("ARCH-019")
-def test_digid_submission_has_the_inwoner_as_initiator(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "TA regression/183-of-digid-zaak-rol.spec.ts",
+    "A DigiD-logged-in inwoner's form registers a zaak with a BSN initiator role and the form's PDF report as document.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner logs in to the test form in Open Formulieren with DigiD
+    When the inwoner submits the form
+    Then a zaak in Open Zaak gets the form as document
+    And its initiator is the inwoner, by BSN
+""")
+def test_digid_submission_has_the_inwoner_as_initiator(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -91,7 +101,21 @@ def test_digid_submission_has_the_inwoner_as_initiator(  # pylint: disable=too-m
     assert [section(r, "betrokkeneIdentificatie").get("inpBsn") for r in initiators] == [INWONER.attributes["bsn"][0]]
 
 
-def test_eherkenning_submission_has_the_vestiging_as_initiator(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "TA regression/158-of-eherkenning-vestiging.spec.ts",
+    "An eHerkenning submission is attributed to the vestiging within the KvK entity.",
+)
+@pytest.mark.source(
+    "TA regression/159-of-zaak-keten.spec.ts",
+    "A completed eHerkenning submission creates a zaak in Open Zaak with the company's KvK as initiator.",
+)
+@pytest.mark.scenario("""
+    Given a company logs in to the test form in Open Formulieren with eHerkenning
+    When the company submits the form
+    Then a zaak in Open Zaak gets the form as document
+    And its initiator is the company's vestiging, by KvK and vestigingsnummer
+""")
+def test_eherkenning_submission_has_the_vestiging_as_initiator(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,

@@ -9,7 +9,6 @@ import socket
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
-from pathlib import Path
 
 import pytest
 
@@ -21,6 +20,7 @@ from podiumd_tests.lock import holder
 from podiumd_tests.lock import is_stale
 from podiumd_tests.lock import lease_holder
 from podiumd_tests.lock import release_lease
+from podiumd_tests.lock import running_hold
 from podiumd_tests.lock import take_lease
 
 
@@ -58,6 +58,18 @@ def test_release_deletes_only_its_own_lease(fake_runner):
     assert not any("delete" in c for c in fake_runner.calls)
 
 
+def test_release_deletes_its_own_lease(fake_runner):
+    fake_runner.answers = {"get lease": (0, lease("me", datetime.now(tz=UTC))), "": (0, "")}
+    release_lease(Kube("ctx", "podiumd", fake_runner), "me")
+    assert any("delete" in c for c in fake_runner.calls)
+
+
+def test_a_lease_another_run_creates_first_refuses(fake_runner):
+    fake_runner.answers = {"get lease": (0, ""), "delete lease": (0, ""), "create": (1, "AlreadyExists")}
+    with pytest.raises(LockBusyError, match="was just taken by another run"):
+        take_lease(Kube("ctx", "podiumd", fake_runner), "me", 3600)
+
+
 def test_lock_file_is_taken_and_released_without_cluster(tmp_path, profile_factory, fake_runner):
     lock = tmp_path / "lock"
     env = Environment(profile_factory(settings={"lock_file": str(lock)}), fake_runner, environ={})
@@ -70,14 +82,18 @@ def test_a_held_lock_file_refuses_and_names_its_holder(tmp_path, profile_factory
     lock = tmp_path / "lock"
     lock.write_text("podiumd-minikube deploy 2026-10-07T10:00:00\n", encoding="utf-8")
     env = Environment(profile_factory(settings={"lock_file": str(lock)}), fake_runner, environ={})
-    with pytest.raises(LockBusyError, match="held by: podiumd-minikube deploy"), held(env, "bootstrap"):
-        pass
+    with pytest.raises(LockBusyError, match="held by: podiumd-minikube deploy"), held(env, "bootstrap"):  # noqa: WPS328  # enter is under test
+        ...
     assert lock.exists()
 
 
+# Above any pid: Linux's pid_max is at most 2**22 (PID_MAX_LIMIT), macOS's highest pid is 99998.
+DEAD_PID = 2**22 + 1
+
+
 def dead_pid():
-    """A pid above the kernel's highest, so no process has it."""
-    return int(Path("/proc/sys/kernel/pid_max").read_text(encoding="utf-8")) + 1
+    """A pid no process can have, on Linux and macOS alike."""
+    return DEAD_PID
 
 
 def test_a_lock_of_a_dead_run_of_this_host_is_stale():
@@ -118,3 +134,12 @@ def test_release_leaves_a_lock_file_another_took_over(tmp_path, profile_factory,
     with held(env, "run full"):
         lock.write_text("podiumd-minikube deploy 2026-10-10T18:00:00\n", encoding="utf-8")
     assert lock.read_text(encoding="utf-8").startswith("podiumd-minikube")
+
+
+def test_running_hold_is_the_line_of_a_running_podiumd_tests_process(tmp_path):
+    lock = tmp_path / "lock"
+    assert running_hold(lock) is None
+    lock.write_text(f"{holder('run chaos minikube')} 2026-10-22T10:00:00+00:00\n", encoding="utf-8")
+    assert running_hold(lock) == f"{holder('run chaos minikube')} 2026-10-22T10:00:00+00:00"
+    lock.write_text("podiumd-minikube deploy 2026-10-22T10:00:00+00:00\n", encoding="utf-8")
+    assert running_hold(lock) is None

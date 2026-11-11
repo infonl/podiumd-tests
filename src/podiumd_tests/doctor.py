@@ -6,26 +6,40 @@ Any fail means exit code 2.
 
 from __future__ import annotations
 
+import re
+import shlex
 import shutil
 import socket
+import sys
 import threading
 import time
 
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import Literal
 
 import requests
 
+from podiumd_tests.bootstrap import runner
+from podiumd_tests.cilium import CILIUM
+from podiumd_tests.cilium import HUBBLE
+from podiumd_tests.cilium import agent_pods
 from podiumd_tests.components import deployed_components
 from podiumd_tests.credentials import SecretError
 from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import context_names
+from podiumd_tests.kube import refresh_context
 from podiumd_tests.lock import lease_holder
+from podiumd_tests.mock_server import MockServer
+from podiumd_tests.process import ProcessError
+from podiumd_tests.process import run_checked
 from podiumd_tests.responses import get_root
 from podiumd_tests.responses import is_server_error
 from podiumd_tests.responses import url_host
+from podiumd_tests.workloads import replica_drift
+from podiumd_tests.workloads import unhealthy_pods
 from podiumd_tests.workloads import unready_workloads
 
 if TYPE_CHECKING:
@@ -42,6 +56,8 @@ DNS_TIMEOUT = 12.0
 HTTP_TIMEOUT = (5, 10)  # connect, read
 DOWN_HINT = "environment down or DNS removed? (scheduled shutdown)"
 SYMBOLS: dict[Status, str] = {"ok": "✔", "warn": "!", "fail": "✘", "skip": "-"}
+BROWSER_INSTALL = (sys.executable, "-m", "playwright", "install", "chromium")
+INSTALL_LOCATION = re.compile(r"Install location:\s+(\S+)")
 
 
 @dataclass(frozen=True)
@@ -67,30 +83,60 @@ def _cluster(env: Environment) -> list[Check]:
         known = context_names(env.kube.runner)
     except KubeError as exc:
         return [Check("kube context", "fail", str(exc))]
-    if context not in known:
+    refreshed = "" if context in known else _refresh(env)
+    if context not in known and not refreshed:
         hint = "add it with `az aks get-credentials` or `minikube start`; without it cluster tests skip"
         return [Check("kube context", no_access, f"{context} not in kubeconfig", hint)]
     checks = [Check("kube context", "ok", context)]
-    try:
-        env.kube.api_reachable()
-    except KubeError as exc:
-        checks.append(Check("kube API", no_access, str(exc), "cluster stopped or deleted? (scheduled shutdown)"))
+    unreachable = _api_error(env)
+    # A new cluster (fresh install, minikube restart) has a new API address under the same context name.
+    if unreachable and not refreshed:
+        refreshed = _refresh(env)
+        if refreshed:
+            unreachable = _api_error(env)
+    if unreachable:
+        checks.append(Check("kube API", no_access, unreachable, "cluster stopped or deleted? (scheduled shutdown)"))
         return checks
-    checks.append(Check("kube API", "ok", "readyz"))
-    checks.append(_lock(env))
-    for namespace in env.namespaces:
-        try:
-            env.kube.run("get", "namespace", namespace, "-o", "name")
-        except KubeError as exc:
-            checks.append(Check(f"namespace {namespace}", "fail", str(exc)))
-            continue
-        checks.append(Check(f"namespace {namespace}", "ok"))
-        checks.append(_workloads(env, namespace))
+    checks.extend(
+        (
+            Check("kube API", "ok", f"readyz; context rewritten by {refreshed}" if refreshed else "readyz"),
+            _lock(env),
+        )
+    )
+    checks.extend(check for namespace in env.namespaces for check in _namespace(env, namespace))
     return checks
 
 
+def _namespace(env: Environment, namespace: str) -> list[Check]:
+    try:
+        env.kube.run("get", "namespace", namespace, "-o", "name")
+    except KubeError as exc:
+        return [Check(f"namespace {namespace}", "fail", str(exc))]
+    return [Check(f"namespace {namespace}", "ok"), _workloads(env, namespace)]
+
+
+def _refresh(env: Environment) -> str:
+    """Rewrite the profile's context from its cluster; the command run, or "" when there is none or it failed."""
+    command = env.profile.context_refresh
+    if command is None:
+        return ""
+    try:
+        refresh_context(command, env.kube.runner)
+    except KubeError:
+        return ""
+    return " ".join(command[:3])
+
+
+def _api_error(env: Environment) -> str:
+    try:
+        env.kube.api_reachable()
+    except KubeError as exc:
+        return str(exc)
+    return ""
+
+
 def _lock(env: Environment) -> Check:
-    if env.profile.smoke_only:
+    if env.profile.is_smoke_only:
         return Check("lock", "skip", f"{env.profile.name} is smoke-only: no run takes the lock")
     try:
         current = lease_holder(env.kube)
@@ -105,7 +151,14 @@ def _workloads(env: Environment, namespace: str) -> Check:
     items = env.workloads([namespace])
     not_ready = unready_workloads(items)
     if not_ready:
-        return Check(f"workloads {namespace}", "warn", "not ready: " + ", ".join(not_ready))
+        return Check(f"workloads {namespace}", "warn", f"not ready: {', '.join(not_ready)}")
+    try:
+        drift = replica_drift(env, [namespace])
+    except KubeError as exc:
+        return Check(f"workloads {namespace}", "warn", f"{len(items)} ready; Helm releases unreadable: {exc}")
+    if drift:
+        hint = "a test left it scaled? `kubectl scale` back, or redeploy"
+        return Check(f"workloads {namespace}", "warn", f"replicas differ from Helm: {', '.join(drift)}", hint)
     return Check(f"workloads {namespace}", "ok", f"{len(items)} ready")
 
 
@@ -113,9 +166,7 @@ def _getaddrinfo(host: str) -> None:
     socket.getaddrinfo(host, None)
 
 
-def resolve_hosts(
-    hosts: Iterable[str], resolve: Resolver = _getaddrinfo, timeout: float = DNS_TIMEOUT
-) -> dict[str, str]:
+def resolve_all(hosts: Iterable[str], resolve: Resolver = _getaddrinfo, timeout: float = DNS_TIMEOUT) -> dict[str, str]:
     """Look up all hosts in parallel; the error per host, "" when it resolved.
 
     The system resolver has no timeout and can take 10-20 s per unknown host;
@@ -137,7 +188,7 @@ def resolve_hosts(
         thread.start()
     deadline = time.monotonic() + timeout
     for thread in threads:
-        thread.join(max(0.0, deadline - time.monotonic()))
+        thread.join(max(0, deadline - time.monotonic()))
     done = dict(results)
     return {host: done.get(host, f"DNS lookup gave no answer within {timeout:g}s") for host in unique}
 
@@ -173,7 +224,7 @@ def _url_checks(env: Environment, session: requests.Session, console: dict[str, 
     # In host-header mode the requests go to the ingress IP; the hosts need not resolve.
     dns_errors: dict[str, str] = {}
     if env.profile.access.mode == "direct":
-        dns_errors = resolve_hosts((url_host(console[c]) for c, _ in urls), resolve)
+        dns_errors = resolve_all((url_host(console[component]) for component, _ in urls), resolve)
     checks: dict[str, Check] = {}
     reachable: list[tuple[str, str]] = []
     absent = _not_deployed(env)
@@ -187,59 +238,114 @@ def _url_checks(env: Environment, session: requests.Session, console: dict[str, 
             reachable.append((component, url))
     if reachable:
         with ThreadPoolExecutor(max_workers=min(len(reachable), 16)) as pool:
-            futures = {c: pool.submit(_url_check, session, c, u, console[c]) for c, u in reachable}
-            checks.update({c: f.result() for c, f in futures.items()})
+            futures = {
+                component: pool.submit(_url_check, session, component, url, console[component])
+                for component, url in reachable
+            }
+            checks.update({component: future.result() for component, future in futures.items()})
     return [checks[component] for component, _ in urls]
 
 
 def _not_deployed(env: Environment) -> dict[str, str]:
     """Components with a URL in the profile but no deployment: their checks skip, as their tests do."""
     reasons = env.capabilities.reasons
-    return {c: reasons[c] for c in env.profile.urls if c in reasons and c not in env.capabilities.present}
+    return {
+        component: reasons[component]
+        for component in env.profile.urls
+        if component in reasons and component not in env.capabilities.present
+    }
 
 
 def _secrets(env: Environment, *, cluster_ok: bool) -> list[Check]:
-    checks: list[Check] = []
     absent = _not_deployed(env) if cluster_ok else {}
-    for name in env.credentials.names:
-        spec = env.profile.secrets[name]
-        if not cluster_ok and spec.needs_cluster:
-            checks.append(Check(f"secret {name}", "skip", "no cluster"))
-            continue
-        # The deployment or Secret it is read from names its component (contact-web: kiss, omc: omc).
-        owners = deployed_components([spec.options.get("deployment") or spec.options.get("name") or ""])
-        if owners & absent.keys():
-            checks.append(Check(f"secret {name}", "skip", absent[min(owners & absent.keys())]))
-            continue
-        try:
-            env.credentials.get(name)
-        except SecretError as exc:
-            checks.append(Check(f"secret {name}", "fail", str(exc)))
-        else:
-            checks.append(Check(f"secret {name}", "ok", env.profile.secrets[name].source))
-    return checks
+    return [_secret(env, name, absent, cluster_ok=cluster_ok) for name in env.credentials.names]
+
+
+def _secret(env: Environment, name: str, absent: dict[str, str], *, cluster_ok: bool) -> Check:
+    spec = env.profile.secrets[name]
+    if not cluster_ok and spec.is_in_cluster:
+        return Check(f"secret {name}", "skip", "no cluster")
+    # The deployment or Secret it is read from names its component (contact-web: kiss, omc: omc).
+    owners = deployed_components([spec.options.get("deployment") or spec.options.get("name") or ""])
+    if owners & absent.keys():
+        return Check(f"secret {name}", "skip", absent[min(owners & absent.keys())])
+    try:
+        env.credentials.get(name)
+    except SecretError as exc:
+        return Check(f"secret {name}", "fail", str(exc))
+    return Check(f"secret {name}", "ok", env.profile.secrets[name].source)
 
 
 def _capabilities(env: Environment) -> Check:
     caps = env.capabilities
     absent = sorted(set(caps.reasons))
-    detail = "present: " + (", ".join(sorted(caps.present)) or "none")
+    present = ", ".join(sorted(caps.present)) or "none"
+    detail = f"present: {present}"
     if absent:
-        detail += "; absent: " + ", ".join(absent)
+        detail = f"{detail}; absent: {', '.join(absent)}"
     return Check("capabilities", "ok", detail)
 
 
+def _cilium(env: Environment) -> Check:
+    caps = env.capabilities
+    if CILIUM not in caps.present:
+        return Check("cilium", "skip", caps.reasons.get(CILIUM, ""))
+    agents = agent_pods(env.kube)
+    problems = unhealthy_pods(agents)
+    if problems:
+        return Check("cilium", "warn", "; ".join(problems), "pod traffic on those nodes may fail")
+    hubble = "Hubble relay present" if HUBBLE in caps.present else "no Hubble"
+    return Check("cilium", "ok", f"{len(agents)} agents ready; {hubble}")
+
+
+def _browser(env: Environment) -> Check:
+    """Check that the browser builds the installed playwright needs are on disk; a new playwright needs new ones."""
+    dry_run = [*BROWSER_INSTALL[:-1], "--dry-run", BROWSER_INSTALL[-1]]
+    hint = f"run `{shlex.join(BROWSER_INSTALL)}`"
+    try:
+        planned = run_checked(env.kube.runner, dry_run, 60)
+    except ProcessError as exc:
+        return Check("browser", "fail", str(exc), hint)
+    locations = [Path(found) for found in INSTALL_LOCATION.findall(planned)]
+    missing = [location.name for location in locations if not location.is_dir()]
+    if missing:
+        return Check("browser", "fail", f"not installed: {', '.join(missing)}", hint)
+    return Check("browser", "ok", ", ".join(location.name for location in locations))
+
+
+def _infra(env: Environment) -> Check:
+    """Check that the mock server runs this checkout's code; a change in infra/ needs its bootstrap step again."""
+    step = MockServer()
+    name = f"bootstrap {step.name}"
+    if env.profile.is_smoke_only:
+        return Check(name, "skip", f"{env.profile.name} is smoke-only: never bootstrapped")
+    outcome = runner.check(env, [step])[0]
+    if outcome.action == "present":
+        return Check(name, "ok", "current")
+    if outcome.action == "missing":
+        hint = f"run `podiumd-tests bootstrap --env {env.profile.name} --step {step.name}`"
+        return Check(name, "fail", "missing, or older than infra/ in this checkout", hint)
+    return Check(name, "skip" if outcome.action == "skipped" else "warn", outcome.detail)
+
+
 def run_checks(
-    env: Environment, which: Callable[[str], str | None] = shutil.which, resolve: Resolver = _getaddrinfo
+    env: Environment,
+    which: Callable[[str], str | None] = shutil.which,
+    resolve: Resolver = _getaddrinfo,
+    *,
+    infra: bool = False,
 ) -> list[Check]:
-    """Run all preflight checks; dependent checks are skipped after a failure."""
+    """Run all preflight checks; dependent checks are skipped after a failure.
+
+    infra: also check podiumd-tests' own infra (the mock server), which tiers beyond smoke need; bootstrap creates it.
+    """
     checks = [Check("profile", "ok", str(env.profile.path or env.profile.name))]
     checks.append(_kubectl(which))
-    if any(c.status == "fail" and c.name == "tool kubectl" for c in checks):
+    if any(check.status == "fail" and check.name == "tool kubectl" for check in checks):
         return [*checks, Check("cluster", "skip", "kubectl missing")]
     cluster = _cluster(env)
     checks += cluster
-    cluster_ok = all(c.status == "ok" for c in cluster if c.name in {"kube context", "kube API"})
+    cluster_ok = all(check.status == "ok" for check in cluster if check.name in {"kube context", "kube API"})
     checks += (
         _urls(env, resolve)
         if cluster_ok or env.profile.access.mode == "direct"
@@ -248,21 +354,26 @@ def run_checks(
     checks += _secrets(env, cluster_ok=cluster_ok)
     # Without cluster access the capabilities come from the profile alone (and "cluster" is absent).
     checks.append(_capabilities(env))
-    return [Check(c.name, c.status, env.redactor.redact(c.detail), c.hint) for c in checks]
+    checks.append(_browser(env))
+    if cluster_ok:
+        checks.append(_cilium(env))
+        if infra:
+            checks.append(_infra(env))
+    return [Check(check.name, check.status, env.redactor.redact(check.detail), check.hint) for check in checks]
 
 
-def failed(checks: list[Check]) -> bool:
-    """True when any check failed."""
-    return any(c.status == "fail" for c in checks)
+def has_failure(checks: list[Check]) -> bool:
+    """Return True when any check failed."""
+    return any(check.status == "fail" for check in checks)
 
 
-def format_checks(checks: list[Check]) -> str:
+def checklist(checks: list[Check]) -> str:
     """Checklist text for the terminal, with hints for failures and warnings."""
-    width = max((len(c.name) for c in checks), default=0)
+    width = max((len(check.name) for check in checks), default=0)
     lines: list[str] = []
-    for c in checks:
-        line = f"{SYMBOLS[c.status]} {c.name.ljust(width)}  {c.detail}".rstrip()
-        if c.hint and c.status in {"fail", "warn"}:
-            line += f"\n  {' ' * width}  hint: {c.hint}"
+    for check in checks:
+        line = f"{SYMBOLS[check.status]} {check.name.ljust(width)}  {check.detail}".rstrip()
+        if check.hint and check.status in {"fail", "warn"}:
+            line = f"{line}\n  {' ' * width}  hint: {check.hint}"
         lines.append(line)
     return "\n".join(lines)

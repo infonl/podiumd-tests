@@ -11,50 +11,23 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
-from podiumd_tests.auth.keycloak_admin import for_environment
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.basisregistraties import EREBOS
+from podiumd_tests.bootstrap import names
+from podiumd_tests.bootstrap.bpmn import ZacBpmnProcess
+from podiumd_tests.bootstrap.keycloak import KeycloakRoles
+from podiumd_tests.bootstrap.keycloak import KeycloakUser
 from podiumd_tests.bootstrap.kiss import KissKanalen
-from podiumd_tests.bootstrap.names import CATALOGI_SCOPES
-from podiumd_tests.bootstrap.names import ITA_OBJECTTYPES
-from podiumd_tests.bootstrap.names import KANALEN
-from podiumd_tests.bootstrap.names import KISS_OBJECTTYPES
-from podiumd_tests.bootstrap.names import NRC_CLIENT_ID
-from podiumd_tests.bootstrap.names import NRC_STORE_KEY
-from podiumd_tests.bootstrap.names import OBJECTEN_STORE_KEY
-from podiumd_tests.bootstrap.names import OBJECTTYPEN_STORE_KEY
-from podiumd_tests.bootstrap.names import OGONE_MERCHANT
-from podiumd_tests.bootstrap.names import OGONE_STORE_KEY
-from podiumd_tests.bootstrap.names import OPENKLANT_OPENINWONER_STORE_KEY
-from podiumd_tests.bootstrap.names import OPENKLANT_STORE_KEY
-from podiumd_tests.bootstrap.names import PREFIX
-from podiumd_tests.bootstrap.names import PRODUCTAANVRAAG_OBJECTTYPE
-from podiumd_tests.bootstrap.names import TEST_BESLUITTYPE
-from podiumd_tests.bootstrap.names import TEST_CATALOGUS_DOMEIN
-from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
-from podiumd_tests.bootstrap.names import TEST_FORM
-from podiumd_tests.bootstrap.names import TEST_IOT
-from podiumd_tests.bootstrap.names import TEST_ZAAKTYPE
-from podiumd_tests.bootstrap.names import WORLDLINE_MERCHANT
-from podiumd_tests.bootstrap.names import WORLDLINE_STORE_KEY
-from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
-from podiumd_tests.bootstrap.names import ZGW_COMPONENTS
-from podiumd_tests.bootstrap.names import ZGW_NOAUTH_CLIENT_ID
-from podiumd_tests.bootstrap.names import ZGW_NOAUTH_STORE_KEY
-from podiumd_tests.bootstrap.names import ZGW_OPENBAAR_CLIENT_ID
-from podiumd_tests.bootstrap.names import ZGW_OPENBAAR_STORE_KEY
-from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_CLIENT_ID
-from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_STORE_KEY
-from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.oidc_mock import KeycloakOidcMock
 from podiumd_tests.bootstrap.oidc_mock import oidc_params
 from podiumd_tests.bootstrap.omc import OmcAbonnement
-from podiumd_tests.bootstrap.zac import ZacEmailConfirmation
+from podiumd_tests.bootstrap.zac import AANVULLENDE_INFORMATIE
+from podiumd_tests.bootstrap.zac import EMAIL_CONFIRMATION
+from podiumd_tests.bootstrap.zac import ZacParameters
 from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.clients.platform import openklant_client
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
-from podiumd_tests.json_data import section
 from podiumd_tests.mock_server import MockServer
 from podiumd_tests.mock_server import mock_server_root
 from podiumd_tests.payments import OGONE_ENDPOINT
@@ -70,14 +43,15 @@ if TYPE_CHECKING:
 
     import requests
 
-    from podiumd_tests.bootstrap import Context
-    from podiumd_tests.bootstrap import Step
+    from podiumd_tests.bootstrap.runner import Context
+    from podiumd_tests.bootstrap.runner import Step
+    from podiumd_tests.django_snippets import SnippetCall
     from podiumd_tests.json_data import JsonObject
 
 
 @dataclass(frozen=True)
 class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarative step definition
-    """A step done by one Django snippet with actions status, apply and remove.
+    """A step done by one Django snippet with actions status, apply and remove (and ensure, see _ensure.py).
 
     Secret mode (default): a random secret is generated here, sent to the snippet and stored
     under store_key. Record mode (record=True), for wiring that adds to shared objects: apply
@@ -98,135 +72,80 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
     # Parameters known only at run time, e.g. a stored secret or an in-cluster URL.
     context_params: Callable[[Context], dict[str, object]] | None = None
 
-    def _run(self, ctx: Context, action: str, **extra: object) -> dict[str, object]:
-        deployment = ctx.env.deployment_for(self.requires[0])
-        runtime = self.context_params(ctx) if self.context_params else {}
-        params = {**self.params, **runtime, "action": action, **extra}
-        return cast("dict[str, object]", run_snippet(ctx.env.kube, deployment, self.snippet, params))
-
-    def _refused(self, ctx: Context) -> bool:
-        return self.opt_in is not None and not ctx.env.profile.allows(self.opt_in)
-
     def is_present(self, ctx: Context, /) -> bool:
         """Not allowed (nothing to do), or the objects exist and what the step stores is in the credentials Secret."""
-        if self._refused(ctx):
+        if self._is_refused(ctx):
             return True
-        stored = self.store_key is None or self.store_key in ctx.store.read()
-        return bool(self._run(ctx, "status")["present"]) and stored
+        return self.is_present_in(ctx, self._run(ctx, "status"))
 
-    def _stored_record(self, ctx: Context) -> object:
-        return json.loads(ctx.store.read().get(self.store_key or "", "{}"))
+    def status_call(self, ctx: Context, /) -> tuple[str, SnippetCall] | None:
+        """Return is_present's snippet call and its deployment; None when not allowed (present without a shell)."""
+        return None if self._is_refused(ctx) else self._call(ctx, "status")
+
+    def is_present_in(self, ctx: Context, status: object, /) -> bool:
+        """Return is_present for the result of status_call."""
+        stored = self._is_stored(ctx)
+        return bool(cast("dict[str, object]", status)["present"]) and stored
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Create the objects: with a new random secret, or extending the stored record."""
-        if self._refused(ctx):
+        if self._is_refused(ctx):
             ctx.notes.append(f"not allowed: profile setting {self.opt_in} is off")
             return {}
-        if self.store_key is None:
-            self._apply(ctx)
-            return {}
-        if self.record:
-            result = self._apply(ctx, record=self._stored_record(ctx))
-            return {self.store_key: json.dumps(result["record"], sort_keys=True)}
-        secret = secrets.token_hex(20)  # 40 characters: the longest TokenAuth.token allows
-        self._apply(ctx, secret=secret)
-        return {self.store_key: secret}
+        return self._applied(ctx, "apply") or {}
 
-    def _apply(self, ctx: Context, **extra: object) -> dict[str, object]:
-        """Run apply; the snippet's "notes" go to the step's outcome."""
-        result = self._run(ctx, "apply", **extra)
-        ctx.notes.extend(str(n) for n in cast("list[object]", result.get("notes") or []))
-        return result
+    def ensure(self, ctx: Context, /) -> dict[str, str] | None:
+        """Apply unless is_present, in one Django shell; the credentials to store, None when present."""
+        if self._is_refused(ctx):
+            return None
+        return self._applied(ctx, "ensure", stored=self._is_stored(ctx))
 
     def remove(self, ctx: Context, /) -> tuple[str, ...]:
         """Delete the objects, or undo what the stored record lists."""
         self._run(ctx, "remove", **({"record": self._stored_record(ctx)} if self.record else {}))
         return () if self.store_key is None else (self.store_key,)
 
+    def _call(self, ctx: Context, action: str, **extra: object) -> tuple[str, SnippetCall]:
+        deployment = ctx.env.deployment_for(self.requires[0])
+        runtime = self.context_params(ctx) if self.context_params else {}
+        return deployment, (self.snippet, {**self.params, **runtime, "action": action, **extra})
 
-@dataclass(frozen=True)
-class KeycloakUser:
-    """Test user ptest-bootstrap-<key> with a random password, and the wanted roles the realm has.
+    def _run(self, ctx: Context, action: str, **extra: object) -> dict[str, object]:
+        deployment, (snippet, params) = self._call(ctx, action, **extra)
+        return cast("dict[str, object]", run_snippet(ctx.env.kube, deployment, snippet, params))
 
-    Admin calls go through auth.keycloak_admin.for_environment.
-    """
+    def _is_refused(self, ctx: Context) -> bool:
+        return self.opt_in is not None and not ctx.env.profile.is_allowed(self.opt_in)
 
-    key: str
-    realm_roles: tuple[str, ...] = ()
-    client_roles: tuple[tuple[str, str], ...] = ()
-    groups: tuple[str, ...] = ()
-    attributes: dict[str, list[str]] = field(default_factory=dict[str, list[str]])
-    requires: tuple[str, ...] = ("keycloak",)
-    wiring: bool = False
+    def _stored_record(self, ctx: Context) -> object:
+        return json.loads(ctx.store.read().get(self.store_key or "", "{}"))
 
-    @property
-    def name(self) -> str:
-        """Step name."""
-        return f"keycloak-user-{self.key}"
+    def _is_stored(self, ctx: Context) -> bool:
+        return self.store_key is None or self.store_key in ctx.store.read()
 
-    @property
-    def username(self) -> str:
-        """The user's name in Keycloak."""
-        return f"{PREFIX}-{self.key}"
+    def _applied(self, ctx: Context, action: str, **extra: object) -> dict[str, str] | None:
+        """Run apply or ensure; the credentials to store, None when ensure found the step present."""
+        if self.store_key is None:
+            return None if self._apply(ctx, action, **extra) is None else {}
+        if self.record:
+            result = self._apply(ctx, action, record=self._stored_record(ctx), **extra)
+            return None if result is None else {self.store_key: json.dumps(result["record"], sort_keys=True)}
+        secret = secrets.token_hex(20)  # 40 characters: the longest TokenAuth.token allows
+        return None if self._apply(ctx, action, secret=secret, **extra) is None else {self.store_key: secret}
 
-    @property
-    def store_key(self) -> str:
-        """Key of the password in the credentials Secret."""
-        return keycloak_password_key(self.key)
-
-    def is_present(self, ctx: Context, /) -> bool:
-        """The user exists with the wanted attributes, realm roles and groups that the realm has.
-
-        Its password must be in the credentials Secret. A role or group the realm gets later makes the step apply again.
-        """
-        admin = for_environment(ctx.env)
-        user = admin.user(self.username)
-        if user is None or self.store_key not in ctx.store.read():
-            return False
-        attributes = section(user, "attributes")
-        if any(attributes.get(name) != values for name, values in self.attributes.items()):
-            return False
-        user_id = str(user["id"])
-        roles = {str(r["name"]) for r in admin.realm_roles(self.realm_roles)}
-        groups = {g for g in self.groups if admin.group_id(g)}
-        return roles <= admin.user_realm_roles(user_id) and groups <= admin.user_groups(user_id)
-
-    def apply(self, ctx: Context, /) -> dict[str, str]:
-        """Create or update the user with a new password and the wanted roles and groups that exist."""
-        admin = for_environment(ctx.env)
-        password = admin.new_password()
-        user = admin.save_user(self.username, password, self.attributes)
-        realm_roles = admin.realm_roles(self.realm_roles)
-        admin.add_realm_roles(user, realm_roles)
-        missing = sorted(set(self.realm_roles) - {str(r["name"]) for r in realm_roles})
-        for client, role in self.client_roles:
-            found = admin.client_role(client, role)
-            if found:
-                admin.add_client_role(user, *found)
-            else:
-                missing.append(f"{client}:{role}")
-        for group in self.groups:
-            group_id = admin.group_id(group)
-            if group_id:
-                admin.join_group(user, group_id)
-            else:
-                missing.append(f"group {group}")
-        if missing:
-            ctx.notes.append("not in realm: " + ", ".join(missing))
-        return {self.store_key: password}
-
-    def remove(self, ctx: Context, /) -> tuple[str, ...]:
-        """Delete the user."""
-        admin = for_environment(ctx.env)
-        user = admin.user_id(self.username)
-        if user:
-            admin.delete_user(user)
-        return (self.store_key,)
+    def _apply(self, ctx: Context, action: str, **extra: object) -> dict[str, object] | None:
+        """Run apply or ensure; its result, None when ensure created nothing. Its "notes" go to the outcome."""
+        result = self._run(ctx, action, **extra)
+        if action == "ensure" and not result["created"]:
+            return None
+        notes = cast("list[object]", result.get("notes") or [])
+        ctx.notes.extend(str(note) for note in notes)
+        return result
 
 
 # The groep of the KCC test user in ITA: ITA shows a contactverzoek only to members of the
 # afdeling or groep it is assigned to (or to a functioneel beheerder).
-ITA_GROEP = f"{PREFIX}-groep"
+ITA_GROEP = f"{names.PREFIX}-groep"
 
 
 @dataclass(frozen=True)
@@ -250,13 +169,9 @@ class ItaMedewerker:
         """The user's samaccountname."""
         return self.user.attributes["samaccountname"][0]
 
-    def _found(self, ctx: Context) -> list[JsonObject]:
-        query = {"data_attr": f"identificatie__exact__{self.identificatie}"}
-        return objecten_client(ctx.env).list("objects", query)
-
     def is_present(self, ctx: Context, /) -> bool:
-        """A Medewerker object with the user's identificatie exists."""
-        return OBJECTEN_STORE_KEY in ctx.store.read() and bool(self._found(ctx))
+        """Return whether a Medewerker object with the user's identificatie exists."""
+        return names.OBJECTEN_STORE_KEY in ctx.store.read() and bool(self._found(ctx))
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Recreate the Medewerker object."""
@@ -276,11 +191,20 @@ class ItaMedewerker:
 
     def remove(self, ctx: Context, /) -> tuple[str, ...]:
         """Delete the user's Medewerker objects."""
-        if OBJECTEN_STORE_KEY not in ctx.store.read():
+        if names.OBJECTEN_STORE_KEY not in ctx.store.read():
             return ()
         for found in self._found(ctx):
             objecten_client(ctx.env).delete(str(found["url"]))
         return ()
+
+    def _found(self, ctx: Context) -> list[JsonObject]:
+        query = {"data_attr": f"identificatie__exact__{self.identificatie}"}
+        return objecten_client(ctx.env).list("objects", query)
+
+
+def _actoren_api(ctx: Context) -> tuple[requests.Session, str, dict[str, str]]:
+    url = f"{ctx.env.profile.urls['openklant']}/klantinteracties/api/v1/actoren"
+    return ctx.env.session(), url, {"Authorization": f"Token {ctx.store.read()[names.OPENKLANT_STORE_KEY]}"}
 
 
 @dataclass(frozen=True)
@@ -302,28 +226,18 @@ class OpenKlantActor:
     @property
     def email(self) -> str:
         """The test user's e-mail, which ITA and KISS match the actor on."""
-        return user_email(f"{PREFIX}-{self.user}")
-
-    def _api(self, ctx: Context) -> tuple[requests.Session, str, dict[str, str]]:
-        url = ctx.env.profile.urls["openklant"] + "/klantinteracties/api/v1/actoren"
-        return ctx.env.session(), url, {"Authorization": f"Token {ctx.store.read()[OPENKLANT_STORE_KEY]}"}
-
-    def _uuids(self, ctx: Context) -> list[str]:
-        http, url, headers = self._api(ctx)
-        params = {"actoridentificatorObjectId": self.email}
-        response = expect_status(http.get(url, params=params, headers=headers), HTTPStatus.OK)
-        return [str(a["uuid"]) for a in entries(cast("dict[str, object]", response.json()).get("results"))]
+        return user_email(f"{names.PREFIX}-{self.user}")
 
     def is_present(self, ctx: Context, /) -> bool:
-        """An actor with the user's e-mail exists."""
-        return OPENKLANT_STORE_KEY in ctx.store.read() and bool(self._uuids(ctx))
+        """Return whether an actor with the user's e-mail exists."""
+        return names.OPENKLANT_STORE_KEY in ctx.store.read() and bool(self._uuids(ctx))
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Recreate the actor."""
         self.remove(ctx)
-        http, url, headers = self._api(ctx)
+        http, url, headers = _actoren_api(ctx)
         body = {
-            "naam": f"{PREFIX}-{self.user}",
+            "naam": f"{names.PREFIX}-{self.user}",
             "soortActor": "medewerker",
             "indicatieActief": True,
             "actoridentificator": {
@@ -338,28 +252,30 @@ class OpenKlantActor:
 
     def remove(self, ctx: Context, /) -> tuple[str, ...]:
         """Delete the user's actors."""
-        if OPENKLANT_STORE_KEY not in ctx.store.read():
+        if names.OPENKLANT_STORE_KEY not in ctx.store.read():
             return ()
-        http, url, headers = self._api(ctx)
+        http, url, headers = _actoren_api(ctx)
         for uuid in self._uuids(ctx):
             expect_status(http.delete(f"{url}/{uuid}", headers=headers), HTTPStatus.NO_CONTENT)
         return ()
 
-
-def keycloak_password_key(key: str) -> str:
-    """Key of a test user's password in the credentials Secret."""
-    return f"{PREFIX.replace('-', '_')}_{key}_password"
+    def _uuids(self, ctx: Context) -> list[str]:
+        http, url, headers = _actoren_api(ctx)
+        params = {"actoridentificatorObjectId": self.email}
+        response = expect_status(http.get(url, params=params, headers=headers), HTTPStatus.OK)
+        actors = entries(cast("dict[str, object]", response.json()).get("results"))
+        return [str(actor["uuid"]) for actor in actors]
 
 
 def openformulieren_params(ctx: Context) -> dict[str, object]:
-    """The ZGW client secret, and Open Zaak's URL as Open Formulieren calls it.
+    """Return the ZGW client secret, and Open Zaak's URL as Open Formulieren calls it.
 
     Default: the profile URL, which is also the URL Open Zaak puts in its own resources; a
     different api_root would not match the zaaktype URLs Open Zaak returns.
     """
     env = ctx.env
     return {
-        "secret": ctx.store.read().get(ZGW_STORE_KEY, ""),  # empty only before openzaak-client ran
+        "secret": ctx.store.read().get(names.ZGW_STORE_KEY, ""),  # empty only before openzaak-client ran
         "openzaak_url": env.profile.settings.get("openzaak_internal_url", env.profile.urls["openzaak"]),
     }
 
@@ -375,8 +291,8 @@ def openinwoner_openklant_params(ctx: Context) -> dict[str, object]:
         msg = "no Open Klant actor for the KCC test user: run bootstrap step openklant-actor-kcc first"
         raise LookupError(msg)
     return {
-        "api_root": ctx.env.profile.urls["openklant"] + "/klantinteracties/api/v1/",
-        "token": ctx.store.read().get(OPENKLANT_OPENINWONER_STORE_KEY, ""),
+        "api_root": f"{ctx.env.profile.urls['openklant']}/klantinteracties/api/v1/",
+        "token": ctx.store.read().get(names.OPENKLANT_OI_STORE_KEY, ""),
         "config": {
             "mijn_vragen_kanaal": "contactformulier",
             "mijn_vragen_actor": str(actor[0]["uuid"]),
@@ -389,7 +305,7 @@ def openinwoner_openklant_params(ctx: Context) -> dict[str, object]:
     }
 
 
-def django_user_step(  # pylint: disable=too-many-arguments  # mirrors the snippet's parameters
+def django_user_step(  # noqa: PLR0913  # mirrors the snippet's parameters
     component: str,
     key: str,
     groups: tuple[str, ...] = (),
@@ -398,8 +314,8 @@ def django_user_step(  # pylint: disable=too-many-arguments  # mirrors the snipp
     fields: dict[str, str] | None = None,
     api_token: bool = False,
 ) -> SnippetStep:
-    """A local Django user ptest-bootstrap-<key> in a component, with groups and a random password or API token."""
-    username = f"{PREFIX}-{key}"
+    """Return a component's local Django user ptest-bootstrap-<key>, with groups and a random password or API token."""
+    username = f"{names.PREFIX}-{key}"
     params: dict[str, object] = {
         "username": username,
         "email": user_email(username),
@@ -419,10 +335,10 @@ def django_user_step(  # pylint: disable=too-many-arguments  # mirrors the snipp
 
 def django_secret_key(component: str, key: str, kind: str = "password") -> str:
     """Key of a Django test user's password or API token in the credentials Secret."""
-    return f"{PREFIX.replace('-', '_')}_{component}_{key}_{kind}"
+    return f"{names.PREFIX.replace('-', '_')}_{component}_{key}_{kind}"
 
 
-def openzaak_client_step(  # pylint: disable=too-many-arguments  # mirrors the snippet's parameters
+def openzaak_client_step(  # noqa: PLR0913  # mirrors the snippet's parameters
     name: str,
     client_id: str,
     store_key: str,
@@ -431,26 +347,27 @@ def openzaak_client_step(  # pylint: disable=too-many-arguments  # mirrors the s
     max_va: str = "zeer_geheim",
     exclude: tuple[str, ...] = (),
     components: dict[str, tuple[str, ...]] | None = None,
-    catalogi_scopes: tuple[str, ...] = CATALOGI_SCOPES,
+    catalogi_scopes: tuple[str, ...] = names.CATALOGI_SCOPES,
 ) -> SnippetStep:
-    """A ZGW client in Open Zaak with rights on the test catalogus only."""
+    """Return a ZGW client in Open Zaak with rights on the test catalogus only."""
+    granted = names.ZGW_COMPONENTS if components is None else components
     params: dict[str, object] = {
         "client_id": client_id,
         "scopes": {"ztc": list(catalogi_scopes)},
         "catalogus": {
-            "domein": TEST_CATALOGUS_DOMEIN,
-            "rsin": TEST_CATALOGUS_RSIN,
+            "domein": names.TEST_CATALOGUS_DOMEIN,
+            "rsin": names.TEST_CATALOGUS_RSIN,
             "owns": owns_catalogus,
             "max_va": max_va,
             "exclude": list(exclude),
-            "components": {c: list(p) for c, p in (ZGW_COMPONENTS if components is None else components).items()},
+            "components": {component: list(prefixes) for component, prefixes in granted.items()},
         },
     }
     return SnippetStep(name, ("openzaak",), "zgw_client", store_key, params)
 
 
 def token_step(component: str, modules: tuple[str, ...], store_key: str, **extra: object) -> SnippetStep:
-    """A TokenAuth step in the first of the token models modules the app has; the identifier is its store key."""
+    """Return a TokenAuth step in the first of the token models modules the app has; the identifier is its store key."""
     params: dict[str, object] = {"modules": modules, "identifier": store_key, **extra}
     return SnippetStep(f"{component}-token", (component,), "token_auth", store_key, params)
 
@@ -481,21 +398,48 @@ OAB_ROLES = {
     # The functioneel beheerder: the only role that may change OAB's archive configuration.
     "beheerder": "Administrator",
 }
-# The klantcontactmedewerker of KISS and ITA (TA kcc-medewerker).
-# The test admin: ZAC beheerder, PABC administrator, KISS beheerder and admin of the Django apps' SSO.
+# The test admin: ZAC beheerder, PABC administrator, KISS beheerder and redacteur, ZaakBrug console tester, admin of
+# the Django apps' SSO.
 ADMIN = KeycloakUser(
     "admin",
     # beheerders: podiumd's pabc-dataset.json maps it to every ZAC role in all domains (ExternalsPodiumD).
-    realm_roles=("Registreerders", "Behandelaar", "Coordinator", "Functioneel-beheerder", "beheerders"),
-    client_roles=(("pabc", "administrator"), ("kiss", "Beheerder")),
+    realm_roles=(
+        "Registreerders",
+        "Behandelaar",
+        "Coordinator",
+        "Functioneel-beheerder",
+        "beheerders",
+        names.ZAC_FUNCTIONAL_ROLE,
+    ),
+    # zaakbrug_admin: Frank!Framework's IbisTester on ZaakBrug's console (oauthRoleMapping).
+    client_roles=(
+        ("pabc", "administrator"),
+        ("kiss", "Beheerder"),
+        ("kiss", "Redacteur"),
+        ("zaakbrug", "zaakbrug_admin"),
+    ),
     groups=("beheerders",),
 )
+# The klantcontactmedewerker of KISS and ITA (TA kcc-medewerker).
 KCC = KeycloakUser(
     "kcc",
     realm_roles=("Klantcontactmedewerker",),
     client_roles=(("kiss", "Klantcontactmedewerker"), ("ita", "ITA_Gebruiker")),
     # ITA refuses a login without it ("Verwachtewaarde voor de samaccountname ontbreekt").
-    attributes={"samaccountname": [f"{PREFIX}-kcc"]},
+    attributes={"samaccountname": [f"{names.PREFIX}-kcc"]},
+)
+# One user per ZAC application role of step zac-bpmn-process, with only that realm role; keycloak-roles creates
+# the realm roles, so the users need wiring.
+ZAC_ROLE_USERS = {
+    roles[0]: KeycloakUser(name.removeprefix(f"{names.PREFIX}-"), realm_roles=(name,), wiring=True)
+    for name, roles in names.ZAC_FUNCTIONAL_ROLES.items()
+    if name != names.ZAC_FUNCTIONAL_ROLE
+}
+# ITA's functioneel beheerder: Alle contactverzoeken, reopening a closed contactverzoek.
+ITA_BEHEERDER = KeycloakUser(
+    "ita-beheerder",
+    client_roles=(("ita", "ITA_Gebruiker"), ("ita", "ITA_Functioneel_Beheerder")),
+    attributes={"samaccountname": [f"{names.PREFIX}-ita-beheerder"]},
 )
 # Test identities for DigiD and eHerkenning logins (TA testinwoner, testinwoner2, testbedrijf):
 # the Keycloak attributes become the bsn and eHerkenning claims of the mock.
@@ -589,12 +533,12 @@ NAW_DATA = {"achternaam": "Testpersoon", "voornamen": "PodiumD"}
 # Open Formulieren's registration of a test form as a zaak of the test zaaktype (step openformulieren-zgw-group).
 ZGW_REGISTRATION = {
     "backend": "zgw-create-zaak",
-    "api_group": PREFIX,
+    "api_group": names.PREFIX,
     "options": {
-        "catalogue": {"domain": TEST_CATALOGUS_DOMEIN, "rsin": TEST_CATALOGUS_RSIN},
-        "case_type_identification": TEST_ZAAKTYPE,
-        "document_type_description": TEST_IOT,
-        "organisatie_rsin": TEST_CATALOGUS_RSIN,
+        "catalogue": {"domain": names.TEST_CATALOGUS_DOMEIN, "rsin": names.TEST_CATALOGUS_RSIN},
+        "case_type_identification": names.TEST_ZAAKTYPE,
+        "document_type_description": names.TEST_IOT,
+        "organisatie_rsin": names.TEST_CATALOGUS_RSIN,
         "zaak_vertrouwelijkheidaanduiding": "openbaar",
     },
 }
@@ -613,7 +557,7 @@ OF_LOA = {"claim_path": ["authsp_level"], "default": LOA_DEFAULT, "value_mapping
 
 
 def openinwoner_number(user: KeycloakUser) -> dict[str, str]:
-    """The bsn or kvk an Open Inwoner account of a test identity is found by."""
+    """Return the bsn or kvk an Open Inwoner account of a test identity is found by."""
     key = "bsn" if "bsn" in user.attributes else "kvk"
     return {key: user.attributes[key][0]}
 
@@ -629,30 +573,30 @@ class OpenInwonerPartijen:
     requires: tuple[str, ...] = ("openinwoner", "openklant")
     wiring: bool = True
 
-    def is_present(self, _ctx: Context, /) -> bool:
-        """Always: Open Inwoner creates the partijen."""
+    def is_present(self, _ctx: Context, /) -> bool:  # noqa: PLR6301  # a Step method
+        """Return True: Open Inwoner creates the partijen."""
         return True
 
-    def apply(self, _ctx: Context, /) -> dict[str, str]:
+    def apply(self, _ctx: Context, /) -> dict[str, str]:  # noqa: PLR6301  # a Step method
         """Nothing."""
         return {}
 
-    def remove(self, ctx: Context, /) -> tuple[str, ...]:
+    def remove(self, ctx: Context, /) -> tuple[str, ...]:  # noqa: PLR6301  # a Step method
         """Delete the partijen identified by a test identity's vestigingsnummer, bsn or kvk."""
-        if OPENKLANT_STORE_KEY not in ctx.store.read():
+        if names.OPENKLANT_STORE_KEY not in ctx.store.read():
             return ()
         openklant = openklant_client(ctx.env)
         # A vestiging's partij goes first: its identificator protects the kvk_nummer's.
         for key in ("vestigingsnummer", "bsn", "kvk"):
-            for user in IDENTITIES:
-                for number in user.attributes.get(key, []):
-                    for partij in partijen_of(openklant, number):
-                        delete_partij(openklant, partij)
+            numbers = [number for user in IDENTITIES for number in user.attributes.get(key, [])]
+            for number in numbers:
+                for partij in partijen_of(openklant, number):
+                    delete_partij(openklant, partij)
         return ()
 
 
 def openinwoner_account(user: KeycloakUser) -> dict[str, str]:
-    """The Open Inwoner account prepared for a DigiD test identity: its bsn, e-mail and name.
+    """Return the Open Inwoner account prepared for a DigiD test identity: its bsn, e-mail and name.
 
     The DigiD login uses it as a complete profile; for eHerkenning Open Inwoner always
     creates its own account, so none is prepared.
@@ -663,47 +607,61 @@ def openinwoner_account(user: KeycloakUser) -> dict[str, str]:
 STEPS: tuple[Step, ...] = (
     # podiumd-tests' own infra (infra/), for the integration chains.
     MockServer(),
-    openzaak_client_step("openzaak-client", ZGW_CLIENT_ID, ZGW_STORE_KEY, owns_catalogus=True),
+    openzaak_client_step("openzaak-client", names.ZGW_CLIENT_ID, names.ZGW_STORE_KEY, owns_catalogus=True),
     # TA's restricted Open Formulieren client: vertrouwelijkheid openbaar at most, no deletes.
     openzaak_client_step(
         "openzaak-client-openbaar",
-        ZGW_OPENBAAR_CLIENT_ID,
-        ZGW_OPENBAAR_STORE_KEY,
+        names.ZGW_OPENBAAR_CLIENT_ID,
+        names.ZGW_OPENBAAR_STORE_KEY,
         max_va="openbaar",
         exclude=("verwijderen",),
     ),
     # A client without any autorisatie (TA reg-22d).
     openzaak_client_step(
-        "openzaak-client-noauth", ZGW_NOAUTH_CLIENT_ID, ZGW_NOAUTH_STORE_KEY, components={}, catalogi_scopes=()
+        "openzaak-client-noauth",
+        names.ZGW_NOAUTH_CLIENT_ID,
+        names.ZGW_NOAUTH_STORE_KEY,
+        components={},
+        catalogi_scopes=(),
+    ),
+    # A client that cannot change a closed zaak, reopen it or force a document unlock (ZGW rules zrc-007, zrc-008).
+    openzaak_client_step(
+        "openzaak-client-gesloten",
+        names.ZGW_GESLOTEN_CLIENT_ID,
+        names.ZGW_GESLOTEN_STORE_KEY,
+        exclude=("geforceerd", "heropenen"),
     ),
     SnippetStep(
         "opennotificaties-client",
         ("opennotificaties",),
         "zgw_client",
-        NRC_STORE_KEY,
-        {"client_id": NRC_CLIENT_ID, "scopes": {"nrc": ["notificaties.consumeren", "notificaties.publiceren"]}},
+        names.NRC_STORE_KEY,
+        {"client_id": names.NRC_CLIENT_ID, "scopes": {"nrc": ["notificaties.consumeren", "notificaties.publiceren"]}},
     ),
-    token_step("openklant", ("openklant.components.token.models",), OPENKLANT_STORE_KEY),
+    token_step("openklant", ("openklant.components.token.models",), names.OPENKLANT_STORE_KEY),
+    SnippetStep(
+        "openvtb-token", ("openvtb",), "openvtb_token", names.OPENVTB_STORE_KEY, {"username": f"{names.PREFIX}-openvtb"}
+    ),
     token_step(
         "objecttypen",
         # Open Object (podiumd 4.10) serves the Objecttypen API with Objecten's tokens.
         ("objecttypes.token.models", "objects.token.models"),
-        OBJECTTYPEN_STORE_KEY,
+        names.OBJECTTYPEN_STORE_KEY,
         objecttypen_api=True,
     ),
     token_step(
         "objecten",
         ("objects.token.models",),
-        OBJECTEN_STORE_KEY,
-        object_types=[PRODUCTAANVRAAG_OBJECTTYPE, *ITA_OBJECTTYPES, *KISS_OBJECTTYPES],
+        names.OBJECTEN_STORE_KEY,
+        object_types=[names.PRODUCTAANVRAAG_OBJECTTYPE, *names.ITA_OBJECTTYPES, *names.KISS_OBJECTTYPES],
     ),
     # Only reads and deletes the zaken ZAC creates for the test's productaanvragen.
     SnippetStep(
         "openzaak-client-productaanvraag",
         ("openzaak", "zac"),
         "zgw_client",
-        ZGW_PRODUCTAANVRAAG_STORE_KEY,
-        {"client_id": ZGW_PRODUCTAANVRAAG_CLIENT_ID, "scopes": {}},
+        names.ZGW_PRODUCTAANVRAAG_STORE_KEY,
+        {"client_id": names.ZGW_PRODUCTAANVRAAG_CLIENT_ID, "scopes": {}},
         context_params=productaanvraag_zaaktypen,
     ),
     SnippetStep(
@@ -712,11 +670,81 @@ STEPS: tuple[Step, ...] = (
         "openzaak_zaaktype",
         None,
         {
-            "domein": TEST_CATALOGUS_DOMEIN,
-            "rsin": TEST_CATALOGUS_RSIN,
-            "identificatie": TEST_ZAAKTYPE,
-            "iot_omschrijving": TEST_IOT,
-            "besluittype": TEST_BESLUITTYPE,
+            "domein": names.TEST_CATALOGUS_DOMEIN,
+            "rsin": names.TEST_CATALOGUS_RSIN,
+            "identificatie": names.TEST_ZAAKTYPE,
+            "iot_omschrijving": names.TEST_IOT,
+            "besluittype": names.TEST_BESLUITTYPE,
+        },
+    ),
+    SnippetStep(
+        "openzaak-besluittype-bijlage",
+        ("openzaak",),
+        "openzaak_besluittype_iot",
+        None,
+        {
+            "domein": names.TEST_CATALOGUS_DOMEIN,
+            "rsin": names.TEST_CATALOGUS_RSIN,
+            "besluittype": names.TEST_BESLUITTYPE,
+            "iot": names.TEST_IOT,
+        },
+    ),
+    SnippetStep(
+        "openzaak-zaaktype-archief",
+        ("openzaak",),
+        "openzaak_zaaktype",
+        None,
+        {
+            "domein": names.TEST_CATALOGUS_DOMEIN,
+            "rsin": names.TEST_CATALOGUS_RSIN,
+            "identificatie": names.ARCHIEF_ZAAKTYPE,
+            "iot_omschrijving": names.ARCHIEF_IOT,
+            "besluittype": names.ARCHIEF_BESLUITTYPE,
+            "archief": True,
+        },
+    ),
+    # A short-identificatie published zaaktype for ZaakBrug's ZDS (StUF code is at most 10 chars); only where
+    # ZaakBrug runs. Same snippet, so unbootstrap deletes it and its zaken as for the klacht zaaktype.
+    SnippetStep(
+        "openzaak-zaaktype-zaakbrug",
+        ("openzaak", "zaakbrug"),
+        "openzaak_zaaktype",
+        None,
+        {
+            "domein": names.TEST_CATALOGUS_DOMEIN,
+            "rsin": names.TEST_CATALOGUS_RSIN,
+            "identificatie": names.ZAAKBRUG_ZAAKTYPE,
+            "iot_omschrijving": names.ZAAKBRUG_IOT,
+            "besluittype": names.ZAAKBRUG_BESLUITTYPE,
+        },
+    ),
+    # The zaaktype of podiumd-tests' BPMN process in ZAC (step zac-bpmn-process).
+    SnippetStep(
+        "openzaak-zaaktype-bpmn",
+        ("openzaak", "zac"),
+        "openzaak_zaaktype",
+        None,
+        {
+            "domein": names.TEST_CATALOGUS_DOMEIN,
+            "rsin": names.TEST_CATALOGUS_RSIN,
+            "identificatie": names.BPMN_ZAAKTYPE,
+            "iot_omschrijving": names.BPMN_IOT,
+            "besluittype": names.BPMN_BESLUITTYPE,
+        },
+    ),
+    # ZaakBrug's statuses on a zaak of an expired zaaktype version: version 1 valid in 2020, version 2 from 2021.
+    SnippetStep(
+        "openzaak-zaaktype-zaakbrug-versies",
+        ("openzaak", "zaakbrug"),
+        "openzaak_zaaktype",
+        None,
+        {
+            "domein": names.TEST_CATALOGUS_DOMEIN,
+            "rsin": names.TEST_CATALOGUS_RSIN,
+            "identificatie": names.ZAAKBRUG_VERSIES_ZAAKTYPE,
+            "iot_omschrijving": names.ZAAKBRUG_VERSIES_IOT,
+            "besluittype": names.ZAAKBRUG_VERSIES_BESLUITTYPE,
+            "versions": [["2020-01-01", "2020-12-31"], ["2021-01-01", None]],
         },
     ),
     # Platform wiring.
@@ -726,7 +754,7 @@ STEPS: tuple[Step, ...] = (
         ("openzaak", "openformulieren"),
         "catalogus_autorisatie",
         "ptest_bootstrap_of_autorisatie_record",
-        {"domein": TEST_CATALOGUS_DOMEIN, "rsin": TEST_CATALOGUS_RSIN},
+        {"domein": names.TEST_CATALOGUS_DOMEIN, "rsin": names.TEST_CATALOGUS_RSIN},
         record=True,
         wiring=True,
         context_params=lambda ctx: {"client_id": ctx.env.profile.settings.get("zgw_client_id", "formulier")},
@@ -736,7 +764,12 @@ STEPS: tuple[Step, ...] = (
         ("openformulieren", "openzaak"),
         "openformulieren_zgw_group",
         None,
-        {"prefix": PREFIX, "client_id": ZGW_CLIENT_ID, "domein": TEST_CATALOGUS_DOMEIN, "rsin": TEST_CATALOGUS_RSIN},
+        {
+            "prefix": names.PREFIX,
+            "client_id": names.ZGW_CLIENT_ID,
+            "domein": names.TEST_CATALOGUS_DOMEIN,
+            "rsin": names.TEST_CATALOGUS_RSIN,
+        },
         wiring=True,
         context_params=openformulieren_params,
     ),
@@ -747,7 +780,7 @@ STEPS: tuple[Step, ...] = (
         "openformulieren_form",
         None,
         {
-            "slug": TEST_FORM,
+            "slug": names.TEST_FORM,
             "components": TEST_FORM_COMPONENTS,
             "registration": ZGW_REGISTRATION,
             # Logins through Keycloak's mock (step openformulieren-oidc-mock).
@@ -760,16 +793,21 @@ STEPS: tuple[Step, ...] = (
         "openformulieren-ogone",
         ("openformulieren",),
         "openformulieren_ogone",
-        OGONE_STORE_KEY,
-        {"label": OGONE_MERCHANT, "pspid": PREFIX, "hash_algorithm": OGONE_HASH, "endpoint": OGONE_ENDPOINT},
+        names.OGONE_STORE_KEY,
+        {
+            "label": names.OGONE_MERCHANT,
+            "pspid": names.PREFIX,
+            "hash_algorithm": OGONE_HASH,
+            "endpoint": OGONE_ENDPOINT,
+        },
     ),
     # The Worldline merchant; its endpoint is the mock server (step infra-mock-server).
     SnippetStep(
         "openformulieren-worldline",
         ("openformulieren", "cluster"),
         "openformulieren_worldline",
-        WORLDLINE_STORE_KEY,
-        {"pspid": WORLDLINE_MERCHANT},
+        names.WORLDLINE_STORE_KEY,
+        {"pspid": names.WORLDLINE_MERCHANT},
         context_params=lambda ctx: {"endpoint": mock_server_root(ctx.env)},
     ),
     # Register a submission only once it is paid (draaiboek OF-022), where the profile allows it.
@@ -787,7 +825,7 @@ STEPS: tuple[Step, ...] = (
         ("opennotificaties",),
         "kanalen",
         "ptest_bootstrap_kanalen_record",
-        {"kanalen": KANALEN},
+        {"kanalen": names.KANALEN},
         record=True,
         wiring=True,
     ),
@@ -796,8 +834,11 @@ STEPS: tuple[Step, ...] = (
     # Open Archiefbeheer role users (TA seed-oab-users: recordmanager-test, reviewer-test, ...);
     # OAB logs them in locally, as in podiumd-minikube.
     *(django_user_step("openarchiefbeheer", key, (group,)) for key, group in OAB_ROLES.items()),
+    KeycloakRoles((KCC, ADMIN, ITA_BEHEERDER, *ZAC_ROLE_USERS.values())),
     KCC,
     ADMIN,
+    ITA_BEHEERDER,
+    *ZAC_ROLE_USERS.values(),
     OpenKlantActor("kcc"),
     ItaMedewerker(KCC),
     *IDENTITIES,
@@ -811,19 +852,19 @@ STEPS: tuple[Step, ...] = (
         {
             "clients": {
                 "oidc-digid": {
-                    "provider": f"{PREFIX}-digid",
+                    "provider": f"{names.PREFIX}-digid",
                     "scopes": ["openid", "bsn"],
                     "options": {"identity_settings": {"bsn_claim_path": ["bsn"]}},
                 },
                 "oidc-eherkenning": {
-                    "provider": f"{PREFIX}-eherkenning",
+                    "provider": f"{names.PREFIX}-eherkenning",
                     "scopes": ["openid", "eherkenning"],
                     "options": {"identity_settings": EHERKENNING_CLAIMS},
                 },
             },
             "eherkenning_site": True,
-            "accounts": [openinwoner_account(u) for u in IDENTITIES if "bsn" in u.attributes],
-            "identities": [openinwoner_number(u) for u in IDENTITIES],
+            "accounts": [openinwoner_account(user) for user in IDENTITIES if "bsn" in user.attributes],
+            "identities": [openinwoner_number(user) for user in IDENTITIES],
         },
         record=True,
         wiring=True,
@@ -838,12 +879,12 @@ STEPS: tuple[Step, ...] = (
         {
             "clients": {
                 "oidc-digid": {
-                    "provider": f"{PREFIX}-digid",
+                    "provider": f"{names.PREFIX}-digid",
                     "scopes": ["openid", "bsn"],
                     "options": {"identity_settings": {"bsn_claim_path": ["bsn"]}, "loa_settings": OF_LOA},
                 },
                 "oidc-eherkenning": {
-                    "provider": f"{PREFIX}-eherkenning",
+                    "provider": f"{names.PREFIX}-eherkenning",
                     "scopes": ["openid", "eherkenning"],
                     # The mock sends no acting subject; Open Formulieren needs it only in strict mode.
                     "options": {
@@ -863,7 +904,11 @@ STEPS: tuple[Step, ...] = (
         ("openinwoner",),
         "oi_cms_pages",
         "ptest_bootstrap_openinwoner_cms_pages_record",
-        {"pages": OI_PAGES, "author": f"{PREFIX}-cms@example.invalid", "contact_email": "noreply@example.invalid"},
+        {
+            "pages": OI_PAGES,
+            "author": f"{names.PREFIX}-cms@example.invalid",
+            "contact_email": "noreply@example.invalid",
+        },
         record=True,
         wiring=True,
     ),
@@ -874,21 +919,10 @@ STEPS: tuple[Step, ...] = (
         ("openinwoner", "openzaak"),
         "oi_zgw_group",
         "ptest_bootstrap_openinwoner_zgw_group_record",
-        {"name": f"{PREFIX}-openzaak"},
+        {"name": f"{names.PREFIX}-openzaak"},
         record=True,
         wiring=True,
-        context_params=lambda ctx: {"zaken_url": ctx.env.profile.urls["openzaak"] + "/zaken/api/v1/"},
-    ),
-    # Open Inwoner reads company names from KvK (profile setting openinwoner_kvk_api_root), for TA 118.
-    SnippetStep(
-        "openinwoner-kvk",
-        ("openinwoner",),
-        "oi_kvk",
-        "ptest_bootstrap_openinwoner_kvk_record",
-        {},
-        record=True,
-        wiring=True,
-        context_params=lambda ctx: {"api_root": ctx.env.profile.settings.get("openinwoner_kvk_api_root", "")},
+        context_params=lambda ctx: {"zaken_url": f"{ctx.env.profile.urls['openzaak']}/zaken/api/v1/"},
     ),
     # Open Inwoner scans uploads with the environment's ClamAV (profile setting clamav), for TA 123.
     SnippetStep(
@@ -908,11 +942,11 @@ STEPS: tuple[Step, ...] = (
         "oi_zaaktype_config",
         "ptest_bootstrap_openinwoner_zaaktype_config_record",
         {
-            "group": f"{PREFIX}-openzaak",
-            "domein": TEST_CATALOGUS_DOMEIN,
-            "rsin": TEST_CATALOGUS_RSIN,
-            "identificatie": TEST_ZAAKTYPE,
-            "iot_omschrijving": TEST_IOT,
+            "group": f"{names.PREFIX}-openzaak",
+            "domein": names.TEST_CATALOGUS_DOMEIN,
+            "rsin": names.TEST_CATALOGUS_RSIN,
+            "identificatie": names.TEST_ZAAKTYPE,
+            "iot_omschrijving": names.TEST_IOT,
         },
         record=True,
         wiring=True,
@@ -923,8 +957,8 @@ STEPS: tuple[Step, ...] = (
         "openklant-token-openinwoner",
         ("openklant",),
         "token_auth",
-        OPENKLANT_OPENINWONER_STORE_KEY,
-        {"modules": ("openklant.components.token.models",), "identifier": OPENKLANT_OPENINWONER_STORE_KEY},
+        names.OPENKLANT_OI_STORE_KEY,
+        {"modules": ("openklant.components.token.models",), "identifier": names.OPENKLANT_OI_STORE_KEY},
         wiring=True,
     ),
     SnippetStep(
@@ -932,14 +966,18 @@ STEPS: tuple[Step, ...] = (
         ("openinwoner", "openklant"),
         "oi_openklant",
         "ptest_bootstrap_openinwoner_openklant_record",
-        {"subjects": ["Algemene vraag", "Vraag over zaak"], "group": f"{PREFIX}-openzaak"},
+        {"subjects": ["Algemene vraag", "Vraag over zaak"], "group": f"{names.PREFIX}-openzaak"},
         record=True,
         wiring=True,
         context_params=openinwoner_openklant_params,
     ),
     OpenInwonerPartijen(),
     # ZAC's ontvangstbevestiging of productaanvragen, where the profile allows it (draaiboek OF-002).
-    ZacEmailConfirmation(ADMIN),
+    ZacParameters(ADMIN, "zac-email-confirmation", "zac_email_confirmation", EMAIL_CONFIRMATION),
+    # ZAC's human task Aanvullende informatie for that zaaktype, where the profile allows it: the taken tests start it.
+    ZacParameters(ADMIN, "zac-aanvullende-informatie", "zac_aanvullende_informatie", AANVULLENDE_INFORMATIE),
+    # podiumd-tests' BPMN process in ZAC, for zaaktype ptest-bootstrap-bpmn (needs PABC to know that zaaktype).
+    ZacBpmnProcess(ADMIN),
     # KISS's contactmoment kanalen, where the profile allows it (draaiboek KI-053-055).
     KissKanalen(ADMIN),
     # A besluittype for the zaaktype ZAC handles, where the profile allows it: ZAC's inrichtingscheck needs one.
@@ -948,11 +986,11 @@ STEPS: tuple[Step, ...] = (
         ("openzaak", "zac"),
         "openzaak_besluittype",
         None,
-        {"omschrijving": f"{PREFIX}-zac-besluit"},
+        {"omschrijving": f"{names.PREFIX}-zac-besluit"},
         wiring=True,
         context_params=lambda ctx: {
             "zaaktype": ctx.env.profile.settings.get("productaanvraag_zaaktype", "")
-            if ctx.env.profile.allows("zac_besluittype")
+            if ctx.env.profile.is_allowed("zac_besluittype")
             else ""
         },
     ),

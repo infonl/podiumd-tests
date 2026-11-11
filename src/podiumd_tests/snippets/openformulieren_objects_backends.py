@@ -5,17 +5,21 @@ configured objecttype, catalogus and types through the live APIs.
 """
 
 
-def run(params):
+def run(_params):
     from openforms.forms.models import FormRegistrationBackend
     from openforms.registrations.contrib.objects_api.config import ObjectsAPIOptionsSerializer
 
-    del params  # run() takes params like every snippet; this one has none
     backends = FormRegistrationBackend.objects.filter(
         backend="objects_api", form__active=True, form___is_deleted=False
     ).select_related("form")
     found = []
     for backend in backends:
         serializer = ObjectsAPIOptionsSerializer(data=backend.options, context={"validate_business_logic": True})
-        errors = {} if serializer.is_valid() else {k: [str(e) for e in v] for k, v in serializer.errors.items()}
-        found.append({"form": backend.form.slug, "backend": backend.key, "errors": errors})
+        found.append({"form": backend.form.slug, "backend": backend.key, "errors": _errors(serializer)})
     return found
+
+
+def _errors(serializer):
+    if serializer.is_valid():
+        return {}
+    return {field: [str(error) for error in messages] for field, messages in serializer.errors.items()}

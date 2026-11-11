@@ -1,3 +1,4 @@
+---
 # Reusable: run a tier of podiumd-tests against one environment from another repository's workflow,
 # e.g. podiumd-infra. The caller grants `id-token: write` and passes its Azure OIDC identity:
 #
@@ -12,7 +13,7 @@
 # as on a console. Results are the job's artifact, and summary.md its step summary.
 name: run
 
-on:
+"on":
   workflow_call:
     inputs:
       env:
@@ -87,8 +88,14 @@ jobs:
           RESOURCE_GROUP: ${{ inputs.aks-resource-group }}
           AKS_NAME: ${{ inputs.aks-name }}
         run: |
-          context=$(python -c 'import os; from podiumd_tests.config import default_envs_dir, load_profile; print(load_profile(os.environ["PODIUMD_TESTS_ENV"], default_envs_dir()).kube.context)')
-          az aks get-credentials --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" --context "$context" --overwrite-existing
+          context=$(python - <<'PY'
+          import os
+          from podiumd_tests.config import default_envs_dir, load_profile
+          print(load_profile(os.environ["PODIUMD_TESTS_ENV"], default_envs_dir()).kube.context)
+          PY
+          )
+          az aks get-credentials --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" --context "$context" \
+            --overwrite-existing
           kubelogin convert-kubeconfig -l azurecli
       - name: Bootstrap (all tiers but smoke)
         if: inputs.tier != 'smoke'

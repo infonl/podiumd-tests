@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-import fcntl
+import base64
 import hashlib
+import hmac
 import html
 import re
+import struct
 import tempfile
+import time
 
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -15,6 +18,7 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from podiumd_tests.lock import file_lock
 from podiumd_tests.responses import describe
 
 if TYPE_CHECKING:
@@ -23,6 +27,9 @@ if TYPE_CHECKING:
     import requests
 
 LOGIN_LOCKS = Path(tempfile.gettempdir()) / "podiumd-tests-logins"
+# Keycloak's default OTP policy: time-based, SHA1, 6 digits, 30 seconds.
+TOTP_PERIOD = 30
+TOTP_DIGITS = 6
 
 
 def realm_url(keycloak_url: str, realm: str, path: str = "") -> str:
@@ -33,6 +40,19 @@ def realm_url(keycloak_url: str, realm: str, path: str = "") -> str:
 def admin_realm_url(keycloak_url: str, realm: str) -> str:
     """URL of a realm in the Keycloak admin REST API."""
     return f"{keycloak_url}/admin/realms/{realm}"
+
+
+def totp(secret: str, at: float | None = None) -> str:
+    """Return the RFC 6238 code of a base32 secret (spaces allowed) at a time, default now."""
+    compact = secret.replace(" ", "").upper()
+    key = base64.b32decode(compact + "=" * (-len(compact) % 8))
+    moment = time.time() if at is None else at
+    counter = struct.pack(">Q", int(moment) // TOTP_PERIOD)
+    digest = hmac.new(key, counter, hashlib.sha1).digest()
+    offset = digest[-1] & 0xF
+    truncated = struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
+    code = truncated % 10**TOTP_DIGITS
+    return str(code).zfill(TOTP_DIGITS)
 
 
 def discovery_url(keycloak_url: str, realm: str) -> str:
@@ -48,14 +68,8 @@ def one_login_at_a_time(username: str) -> Generator[None]:
     is in progress ("Invalid user credentials"; keycloak#33527), and parallel test workers share
     the test users.
     """
-    LOGIN_LOCKS.mkdir(exist_ok=True)
-    lock = LOGIN_LOCKS / hashlib.sha256(username.encode()).hexdigest()[:16]
-    with lock.open("w") as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(handle, fcntl.LOCK_UN)
+    with file_lock(LOGIN_LOCKS / hashlib.sha256(username.encode()).hexdigest()[:16]):
+        yield
 
 
 class TokenError(Exception):
@@ -91,7 +105,7 @@ def password_grant(session: requests.Session, keycloak_url: str, realm: str, log
 
 
 def login_form_action(page_text: str) -> str | None:
-    """The URL Keycloak's login form posts to; None when the page has no login form."""
+    """Return the URL Keycloak's login form posts to; None when the page has no login form."""
     form = re.search(r'<form[^>]*id="kc-form-login"[^>]*>', page_text)
     action = re.search(r'action="([^"]+)"', form[0]) if form else None
     return html.unescape(action[1]) if action else None
@@ -118,5 +132,6 @@ def form_login(http: requests.Session, start_url: str, username: str, password: 
     )
     if form_post:
         fields = dict(re.findall(r'NAME="([^"]+)"\s+VALUE="([^"]*)"', form_post[2], re.IGNORECASE))
-        response = http.post(html.unescape(form_post[1]), data={k: html.unescape(v) for k, v in fields.items()})
+        form_data = {name: html.unescape(field_value) for name, field_value in fields.items()}
+        response = http.post(html.unescape(form_post[1]), data=form_data)
     return response

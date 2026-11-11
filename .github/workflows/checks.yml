@@ -1,7 +1,8 @@
+---
 # The suite's own code checks (run_python_checks: lint, types, dead code, unit tests); no environment needed.
 name: checks
 
-on:
+"on":
   push:
     branches: [main]
   pull_request:

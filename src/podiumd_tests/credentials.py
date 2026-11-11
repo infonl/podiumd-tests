@@ -23,6 +23,8 @@ if TYPE_CHECKING:
 
 ENV_PREFIX = "PODIUMD_TESTS_SECRET_"
 REDACTED = "***"
+# Shorter values would mask ordinary text.
+MIN_SECRET_LENGTH = 4
 
 
 class SecretError(Exception):
@@ -37,7 +39,7 @@ class Redactor:
 
     def add(self, value: str) -> None:
         """Remember a secret value so it gets masked."""
-        if len(value) >= 4:  # very short values would mask ordinary text
+        if len(value) >= MIN_SECRET_LENGTH:
             self._values.add(value)
 
     def redact(self, text: str) -> str:
@@ -62,10 +64,10 @@ class SecretResolver:
         redactor: Redactor,
         environ: dict[str, str] | None = None,
     ) -> None:
-        self._profile = profile
-        self._kube = kube
-        self._redactor = redactor
-        self._environ = dict(os.environ) if environ is None else environ
+        self._profile: Profile = profile
+        self._kube: Kube = kube
+        self._redactor: Redactor = redactor
+        self._environ: dict[str, str] = dict(os.environ) if environ is None else environ
         self._cache: dict[str, str] = {}
         self._stored: dict[str, str] | None = None
 
@@ -78,9 +80,9 @@ class SecretResolver:
         """Value of a secret; SecretError if it cannot be resolved."""
         if name not in self._cache:
             value = self._resolve(name)
-            # Usernames and published dev defaults such as "admin" are no secret; masking them garbles
-            # ordinary text such as test ids ("keycloak-admin").
-            if not name.endswith("_username") and not self._is_dev_default(name):
+            # Usernames and published dev defaults such as "admin" are no secret, also when another source
+            # returns that value (minikube's Keycloak admin password); masking them garbles test ids.
+            if not name.endswith("_username") and not self._is_dev_default(name) and value not in self._dev_defaults():
                 self._redactor.add(value)
             self._cache[name] = value
         return self._cache[name]
@@ -94,15 +96,20 @@ class SecretResolver:
         for value in self._bootstrap().values():
             self._redactor.add(value)
 
-    def configured(self, name: str) -> bool:
-        """True when the secret has a source: the profile, its env var, or the credentials Secret."""
-        return name in self._profile.secrets or bool(self._environ.get(env_var_name(name))) or name in self._bootstrap()
+    def is_configured(self, name: str) -> bool:
+        """Return True when the secret has a source: the profile, its env var, or the credentials Secret."""
+        overridden = bool(self._environ.get(env_var_name(name)))
+        return name in self._profile.secrets or overridden or name in self._bootstrap()
 
     def forget(self, *names: str) -> None:
         """Drop these secrets and the credentials Secret's contents from the cache, after bootstrap changed them."""
         self._stored = None
         for name in names:
             self._cache.pop(name, None)
+
+    def optional(self, name: str) -> str | None:
+        """Value of a secret that an environment may lack; None when it has no source."""
+        return self.get(name) if self.is_configured(name) else None
 
     def _bootstrap(self) -> dict[str, str]:
         """Contents of the credentials Secret, read once; empty without cluster access."""
@@ -113,13 +120,12 @@ class SecretResolver:
                 self._stored = {}
         return self._stored
 
-    def optional(self, name: str) -> str | None:
-        """Value of a secret that an environment may lack; None when it has no source."""
-        return self.get(name) if self.configured(name) else None
-
     def _is_dev_default(self, name: str) -> bool:
         spec = self._profile.secrets.get(name)
         return spec is not None and spec.source == "dev_default" and not self._environ.get(env_var_name(name))
+
+    def _dev_defaults(self) -> set[str]:
+        return {spec.options["value"] for spec in self._profile.secrets.values() if spec.source == "dev_default"}
 
     def _resolve(self, name: str) -> str:
         override = self._environ.get(env_var_name(name))

@@ -1,7 +1,8 @@
+---
 # SSC Twente ExternalsPodiumD environment ontw-info (applications/gemeenten/info/ontw/).
-# Every tier, chaos included (user, 2026-10-13).
+# Every tier except chaos.
 estate: externals
-allowed_tiers: [smoke, core, full, perf, chaos]
+allowed_tiers: [smoke, core, full, perf]
 kube:
   context: aks-blue-ontw-info
   namespace: podiumd

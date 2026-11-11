@@ -15,10 +15,14 @@ from typing import cast
 import pytest
 
 from podiumd_tests.bootstrap.names import TEST_FORM
+from podiumd_tests.bootstrap.steps import ZGW_REGISTRATION
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
-from podiumd_tests.openformulieren import delete_submission
+from podiumd_tests.openformulieren import file_value
+from podiumd_tests.openformulieren import forget_submission
+from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import start_submission
+from podiumd_tests.openformulieren import upload_file
 from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
@@ -43,6 +47,16 @@ def fixture_form(http: requests.Session, urls: dict[str, str], need_bootstrap: C
 
 
 @pytest.mark.core
+@pytest.mark.source(
+    "TA regression/75-of-zaaktype-matching.spec.ts",
+    "Checks that the form configuration stays intact between deploys: the form is active and its step has the expected field.",
+)
+@pytest.mark.scenario("""
+    Given the test form in Open Formulieren
+    When a visitor opens the form
+    Then the form is active, not in maintenance and accepts submissions
+    And it has one step with the klacht field
+""")
 def test_test_form_takes_submissions(http: requests.Session, form: JsonObject) -> None:
     """The form is active, out of maintenance and has its one step with the klacht field (TA reg-75)."""
     assert (form["active"], form["maintenanceMode"], form["submissionAllowed"]) == (True, False, "yes")
@@ -53,6 +67,16 @@ def test_test_form_takes_submissions(http: requests.Session, form: JsonObject) -
     assert "klacht_omschrijving" in keys
 
 
+@pytest.mark.source(
+    "TA regression/75-of-zaaktype-matching.spec.ts",
+    "Checks that the form's login configuration is consistent: public, or authenticated with login options.",
+)
+@pytest.mark.scenario("""
+    Given the test form in Open Formulieren
+    When a visitor opens the form
+    Then a form that requires a login offers a login option
+    And the test form offers a DigiD login
+""")
 def test_login_options_fit_login_required(form: JsonObject) -> None:
     """A form that requires a login offers one; the test form offers DigiD without requiring it (TA reg-75)."""
     options = [str(o.get("identifier")) for o in entries(form["loginOptions"])]
@@ -60,6 +84,20 @@ def test_login_options_fit_login_required(form: JsonObject) -> None:
     assert "digid_oidc" in options
 
 
+@pytest.mark.source(
+    "TA regression/79-of-form-cosign-config.spec.ts",
+    "Checks that Open Formulieren serves the form's cosign, confirmation mail and required-field feature flags.",
+)
+@pytest.mark.source(
+    "TA regression/153-of-features-direct.spec.ts",
+    "Checks that the form exposes its cosignLoginOptions, so the co-signer feature is present.",
+)
+@pytest.mark.scenario("""
+    Given the test form in Open Formulieren
+    When a visitor opens the form
+    Then the form gives its cosign, confirmation mail, required field and pausing settings
+    And the resume link of a paused form has a lifetime longer than zero
+""")
 def test_form_publishes_its_settings(form: JsonObject) -> None:
     """The SDK gets the settings it renders with: cosign, confirmation mail, asterisks, pausing (TA reg-79, reg-153)."""
     assert isinstance(form["cosignLoginOptions"], list)
@@ -80,7 +118,16 @@ def test_form_publishes_its_settings(form: JsonObject) -> None:
     ],
 )
 @pytest.mark.tc("INT-017")
-def test_upload_of_a_false_file_is_refused(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "TA regression/178-blacklist-upload.spec.ts",
+    "An uploaded file with a blacklisted or invalid format is refused with a message.",
+)
+@pytest.mark.scenario("""
+    Given a visitor filling in a form in Open Formulieren
+    When the visitor uploads a file whose content does not match its name, or without extension
+    Then Open Formulieren refuses the file with a reason
+""")
+def test_upload_of_a_false_file_is_refused(
     http: requests.Session,
     urls: dict[str, str],
     podiumd_env: Environment,
@@ -92,7 +139,7 @@ def test_upload_of_a_false_file_is_refused(  # pylint: disable=too-many-argument
     """A file whose content does not match its name, or that has no extension, is refused with a reason (TA reg-178)."""
     need_bootstrap("openformulieren-form")
     submission, headers = start_submission(http, urls["openformulieren"], TEST_FORM)
-    registry.add(f"submission {submission['id']}", lambda: delete_submission(podiumd_env, str(submission["id"])))
+    forget_submission(podiumd_env, registry, str(submission["id"]))
     upload = {"file": (name, b"plain text, no PDF", "application/pdf")}
     response = http.post(f"{urls['openformulieren']}/api/v2/formio/fileupload", files=upload, headers=headers)
     expect_status(response, HTTPStatus.BAD_REQUEST)
@@ -100,6 +147,15 @@ def test_upload_of_a_false_file_is_refused(  # pylint: disable=too-many-argument
 
 
 @pytest.mark.requires("cluster")
+@pytest.mark.source(
+    "MK test_productaanvraag_flow.py",
+    "Validates the form's Objects API registration backend against the live Catalogi and Objecttypen APIs.",
+)
+@pytest.mark.scenario("""
+    Given the active forms in Open Formulieren that register in the Objects API
+    When their registration settings are checked
+    Then each finds its objecttype and types in the live APIs
+""")
 def test_objects_api_registrations_are_valid(podiumd_env: Environment) -> None:
     """Every active form's Objects API registration resolves its objecttype and types (MK test_productaanvraag_flow.py)."""
     backends = cast(
@@ -113,7 +169,35 @@ def test_objects_api_registrations_are_valid(podiumd_env: Environment) -> None:
     assert [f"{b['form']}/{b['backend']}: {b['errors']}" for b in backends if b["errors"]] == []
 
 
+@pytest.mark.requires("cluster")
+@pytest.mark.source(
+    "podiumd-tests",
+    "An Objects API group no form uses yet can still hold a Service with a wrong token; every group must read with its own Services.",
+)
+@pytest.mark.scenario("""
+    Given the Objects API groups in Open Formulieren
+    When each group reads objects and objecttypes with its own connections
+    Then every group reads them without an error
+""")
+def test_objects_api_groups_read(podiumd_env: Environment) -> None:
+    """Every Objects API group, used by a form or not, lists objects and objecttypes with its own Services."""
+    groups = cast(
+        "list[dict[str, object]]",
+        run_snippet(
+            podiumd_env.kube, podiumd_env.deployment_for("openformulieren"), "openformulieren_objects_groups", {}
+        ),
+    )
+    assert groups, "no Objects API group in Open Formulieren"
+    assert [f"{g['group']}: {g['errors']}" for g in groups if g["errors"]] == []
+
+
 @pytest.mark.tc("INT-003")
+@pytest.mark.source("draaiboek INT-003", "Integratieteam link check of PDOK.")
+@pytest.mark.scenario("""
+    Given a visitor filling in a form in Open Formulieren
+    When the visitor searches for a known address
+    Then the PDOK Locatieserver finds the address with its postcode
+""")
 def test_address_search_reaches_pdok(
     http: requests.Session,
     urls: dict[str, str],
@@ -127,9 +211,62 @@ def test_address_search_reaches_pdok(
     """
     need_bootstrap("openformulieren-form")
     submission, headers = start_submission(http, urls["openformulieren"], TEST_FORM)
-    registry.add(f"submission {submission['id']}", lambda: delete_submission(podiumd_env, str(submission["id"])))
+    forget_submission(podiumd_env, registry, str(submission["id"]))
     found = http.get(
-        urls["openformulieren"] + "/api/v2/geo/address-search", params={"q": PDOK_ADDRESS}, headers=headers
+        f"{urls['openformulieren']}/api/v2/geo/address-search", params={"q": PDOK_ADDRESS}, headers=headers
     )
     labels = [str(a.get("label")) for a in entries(expect_status(found, HTTPStatus.OK).json())]
     assert any("1015CJ Amsterdam" in label for label in labels), labels
+
+
+BIJLAGE = {
+    "type": "file",
+    "key": "bijlage",
+    "label": "Bijlage",
+    "fileMaxSize": "20KB",
+    "storage": "url",
+    "url": "",
+    "multiple": False,
+    "file": {"type": []},
+}
+
+
+@pytest.mark.requires("cluster")
+@pytest.mark.source(
+    "external GemeenteNijmegen/open-forms-testautomatisering helpers/file-upload.ts",
+    "Uploads of 109 B, 13 kB, 555 kB and 1.5 MB: a form takes files up to its field's maximum size.",
+)
+@pytest.mark.parametrize(("size", "accepted"), [(109, True), (13_000, True), (555_000, False)])
+@pytest.mark.scenario("""
+    Given a form with a file field of at most 20 kB
+    When a visitor attaches a file of 109 B, 13 kB or 555 kB
+    Then the step accepts the small files
+    And refuses the file above the maximum, naming the size
+""")
+def test_file_field_takes_files_up_to_its_maximum(  # parametrized size
+    http: requests.Session,
+    urls: dict[str, str],
+    podiumd_env: Environment,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+    size: int,
+    accepted: bool,  # noqa: FBT001  # parameter
+) -> None:
+    """A step with a file within fileMaxSize is saved; above it Open Formulieren answers 413."""
+    need_bootstrap("openformulieren-zgw-group")
+    base = urls["openformulieren"]
+    slug = registry.tagged(f"upload-{size}")
+    make_form(podiumd_env, registry, slug, [BIJLAGE], ZGW_REGISTRATION)
+    submission, headers = start_submission(http, base, slug)
+    forget_submission(podiumd_env, registry, str(submission["id"]))
+    upload = expect_status(upload_file(http, base, submission, headers, "bijlage.txt", b"x" * size), HTTPStatus.OK)
+    step = entries(submission["steps"])[0]
+    data = {"bijlage": [file_value(base, upload.json())]}
+    response = http.put(str(step["url"]), json={"data": data}, headers=headers)
+    if accepted:
+        expect_status(response, HTTPStatus.CREATED, HTTPStatus.OK)
+    else:
+        expect_status(response, HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+        assert re.search(r"maximale bestandsgrootte|maximum file size", response.text, re.IGNORECASE), response.text[
+            :300
+        ]

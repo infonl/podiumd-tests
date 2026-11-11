@@ -2,24 +2,39 @@
 
 Ported from MK/PI test_metrics.py and test_monitoring_logging.py. Datasource
 names differ per estate ("loki" vs "Loki"), so they are found by type; the Loki
-test skips where no Loki datasource exists. Grafana outside minikube needs the
+tests skip where no Loki datasource exists. Grafana outside minikube needs the
 secrets grafana_username and grafana_password.
 """
 
 from __future__ import annotations
 
+from datetime import UTC
+from datetime import datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
 import pytest
 
+from podiumd_tests.components import COMPONENTS
+from podiumd_tests.components import deployed_components
+from podiumd_tests.grafana import LOKI_LAG
+from podiumd_tests.grafana import MONITOR_POOLS
 from podiumd_tests.grafana import Grafana
 from podiumd_tests.grafana import down_targets
 from podiumd_tests.grafana import grafana_auth
+from podiumd_tests.grafana import is_logged_before
+from podiumd_tests.grafana import monitors_without_targets
+from podiumd_tests.grafana import otel_jobs_query
+from podiumd_tests.grafana import pods_in_loki
+from podiumd_tests.grafana import running_pods_not_in_loki
 from podiumd_tests.grafana import target_count
+from podiumd_tests.grafana import without_metrics
+from podiumd_tests.json_data import section
+from podiumd_tests.kube import metadata_name
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
+from podiumd_tests.workloads import is_chart_older_than
 
 if TYPE_CHECKING:
     import requests
@@ -28,6 +43,35 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
 
 pytestmark = [pytest.mark.smoke, pytest.mark.requires("grafana")]
+
+# Known monitors without targets, by name suffix: they xfail instead of fail.
+EMPTY_MONITORS = {
+    "-traefik": "[podiumd-chart-14] monitoring-logging 1.0.18 renders a Traefik PodMonitor by default, but the edge"
+    " is NGINX Gateway Fabric; fixed in monitoring-logging 1.0.19 (helm-charts #622)",
+    **dict.fromkeys(
+        ("-kube-controller-manager", "-kube-etcd", "-kube-scheduler", "-kube-proxy"),
+        "[podiumd-chart-18] kube-prometheus-stack's control-plane and kube-proxy monitors have no targets on AKS"
+        " (managed control plane; Cilium without kube-proxy); off by default in monitoring-logging 1.0.19"
+        " (helm-charts #481)",
+    ),
+}
+# Known components without metrics before podiumd 4.10.0: they xfail instead of fail (helm-charts #625 and the
+# 4.10.0 values-enable-observability.yaml).
+METRICS_GAPS_BEFORE_4_10 = {
+    "eck-operator": "[podiumd-chart-15] podiumd before 4.10.0: values-enable-observability.yaml sets"
+    " config.metricsPort, which eck-operator 3.x ignores; set config.metrics.port",
+    **dict.fromkeys(
+        ("openarchiefbeheer", "referentielijsten", "openvtb", "frankgateway", "openbao"),
+        "[podiumd-chart-19] podiumd before 4.10.0: values-enable-observability.yaml enables no metrics for Open"
+        " Archiefbeheer, Referentielijsten, Open VTB, Frank!Gateway and OpenBao (helm-charts #625)",
+    ),
+    "zac": "[podiumd-chart-20] podiumd before 4.10.0: ZAC exports no OTEL metrics without"
+    " -Dotel.metrics.exporter=otlp in its javaOptions (helm-charts #625)",
+}
+OTEL_OFF = (
+    "no app sends OTEL metrics: settings.otel is disabled for all Maykin apps"
+    " (minikube: `podiumd-minikube deploy --full --otel`)"
+)
 
 
 @pytest.fixture(scope="module", name="grafana")
@@ -42,27 +86,195 @@ def fixture_grafana(http: requests.Session, urls: dict[str, str], credentials: S
     return grafana
 
 
+@pytest.mark.source(
+    "MK test_metrics.py",
+    "Metrics profile: Grafana's provisioned datasources and Prometheus' scrape targets are healthy, not just Running.",
+)
+@pytest.mark.source(
+    "MK test_monitoring_logging.py",
+    "monitoring-logging stack: Grafana datasources, healthy Prometheus scrape targets and Loki pod logs.",
+)
+@pytest.mark.source(
+    "PI test_metrics.py",
+    "Metrics checks adapted from podiumd-minikube: Grafana datasources provisioned, Prometheus scrape targets healthy.",
+)
+@pytest.mark.source(
+    "PI test_monitoring_logging.py",
+    "monitoring-logging checks adapted from podiumd-minikube: Grafana datasources, scrape targets and Loki pod logs.",
+)
+@pytest.mark.scenario("""
+    When Grafana's datasources are read
+    Then there is a Prometheus datasource
+""")
 def test_prometheus_datasource_provisioned(grafana: Grafana) -> None:
     """Grafana has a Prometheus datasource."""
     kinds = sorted({str(d.get("type")) for d in grafana.datasources})
     assert grafana.uid("prometheus"), f"no prometheus datasource; types: {kinds}"
 
 
+@pytest.mark.source(
+    "MK test_metrics.py",
+    "Metrics profile: Grafana's provisioned datasources and Prometheus' scrape targets are healthy, not just Running.",
+)
+@pytest.mark.source(
+    "MK test_monitoring_logging.py",
+    "monitoring-logging stack: Grafana datasources, healthy Prometheus scrape targets and Loki pod logs.",
+)
+@pytest.mark.source(
+    "PI test_metrics.py",
+    "Metrics checks adapted from podiumd-minikube: Grafana datasources provisioned, Prometheus scrape targets healthy.",
+)
+@pytest.mark.source(
+    "PI test_monitoring_logging.py",
+    "monitoring-logging checks adapted from podiumd-minikube: Grafana datasources, scrape targets and Loki pod logs.",
+)
+@pytest.mark.scenario("""
+    When Prometheus' scrape targets are read through Grafana
+    Then there are scrape targets
+    And all of them are up
+""")
 def test_prometheus_scrape_targets_up(grafana: Grafana) -> None:
     """Prometheus has scrape targets, and all of them are up."""
     if not grafana.uid("prometheus"):
         pytest.skip("no prometheus datasource")
     body = grafana.proxy("prometheus", "/api/v1/targets")
     assert target_count(body), "no active scrape targets"
-    down = down_targets(body)
+    started = section(grafana.proxy("prometheus", "/api/v1/status/runtimeinfo"), "data").get("startTime")
+    down = down_targets(body, datetime.now(UTC) - datetime.fromisoformat(str(started)))
     assert not down, f"scrape targets down: {down}"
 
 
+@pytest.mark.source(
+    "MK test_monitoring_logging.py",
+    "monitoring-logging stack: Alloy discovers and forwards the namespace's pod logs to Loki.",
+)
+@pytest.mark.source(
+    "PI test_monitoring_logging.py",
+    "monitoring-logging checks adapted from podiumd-minikube: Loki has the namespace's pod logs.",
+)
+@pytest.mark.scenario("""
+    When Loki is asked through Grafana for logs of the application namespace
+    Then it has recent log streams of that namespace
+""")
 def test_loki_has_pod_logs(grafana: Grafana, podiumd_env: Environment) -> None:
     """Loki has recent log streams of the application namespace (Alloy forwards them)."""
     if not grafana.uid("loki"):
         pytest.skip("no loki datasource (metrics without logging)")
-    query = f'{{namespace="{podiumd_env.profile.kube.namespace}"}}'
+    query = f'{{namespace="{podiumd_env.profile.kube.namespace}"}}'  # noqa: B907  # LogQL label matcher
     body = grafana.proxy("loki", "/loki/api/v1/query_range", {"query": query, "limit": "5"})
     assert body["status"] == "success"
     assert cast("dict[str, object]", body["data"])["result"], f"no log streams for {query}: is Alloy forwarding logs?"
+
+
+@pytest.mark.source(
+    "podiumd-tests",
+    "Scrape-target checks missed a ServiceMonitor or PodMonitor that Prometheus never selects or that matches no pod.",
+)
+@pytest.mark.cluster
+@pytest.mark.requires("cluster")
+@pytest.mark.scenario("""
+    Given the ServiceMonitors and PodMonitors of the environment
+    When Prometheus' scrape targets are read
+    Then every monitor has scrape targets
+""")
+def test_every_monitor_has_scrape_targets(grafana: Grafana, podiumd_env: Environment) -> None:
+    """Every ServiceMonitor and PodMonitor has scrape targets: Prometheus selects it and it matches running pods."""
+    if not grafana.uid("prometheus"):
+        pytest.skip("no prometheus datasource")
+    monitors = [
+        f"{pool}/{section(m, 'metadata').get('namespace')}/{metadata_name(m)}"
+        for kind, pool in MONITOR_POOLS.items()
+        for m in podiumd_env.items(kind)
+    ]
+    if not monitors:
+        pytest.skip("no ServiceMonitor or PodMonitor in the environment's namespaces")
+    missing = monitors_without_targets(monitors, grafana.proxy("prometheus", "/api/v1/targets"))
+    known = {reason for m in missing for suffix, reason in EMPTY_MONITORS.items() if m.endswith(suffix)}
+    unknown = [m for m in missing if not any(m.endswith(suffix) for suffix in EMPTY_MONITORS)]
+    assert not unknown, f"monitors without scrape targets: {unknown}"
+    if known:
+        pytest.xfail("; ".join(sorted(known)))
+    # Under --runxfail pytest.xfail returns, so the known gaps fail with their symptom.
+    assert not missing, f"monitors without scrape targets: {missing}"
+
+
+@pytest.mark.source(
+    "podiumd-tests",
+    "Every deployed component must report series in Prometheus, through a monitor target or OTEL remote write.",
+)
+@pytest.mark.cluster
+@pytest.mark.requires("cluster")
+@pytest.mark.scenario("""
+    Given every deployed component
+    When Prometheus is read through Grafana
+    Then each component has a scrape target that is up, or sends OpenTelemetry metrics
+""")
+def test_every_component_reports_metrics(grafana: Grafana, podiumd_env: Environment) -> None:
+    """Every deployed component has series in Prometheus: a monitor target that is up, or OTEL remote write."""
+    if not grafana.uid("prometheus"):
+        pytest.skip("no prometheus datasource")
+    if not any(podiumd_env.items(kind) for kind in MONITOR_POOLS):
+        pytest.skip("no ServiceMonitor or PodMonitor in the environment's namespaces")
+    deployed = deployed_components(podiumd_env.workload_names)
+    otel_apps = [c for c in deployed if COMPONENTS[c].otel_services]
+    otel = grafana.proxy("prometheus", "/api/v1/query", {"query": otel_jobs_query(otel_apps)}) if otel_apps else {}
+    no_monitor, no_otel = without_metrics(deployed, grafana.proxy("prometheus", "/api/v1/targets"), otel)
+    otel_off = bool(otel_apps) and len(no_otel) == len(otel_apps)
+    missing = no_monitor if otel_off else no_monitor + no_otel
+    gaps = METRICS_GAPS_BEFORE_4_10 if is_chart_older_than(podiumd_env, (4, 10, 0)) else {}
+    unknown = [c for c in missing if c not in gaps]
+    assert not unknown, f"components without metrics in Prometheus: {unknown}"
+    if missing:
+        reasons = sorted({gaps[c] for c in missing})
+        if otel_off:
+            reasons.append(OTEL_OFF)
+        pytest.xfail("; ".join(reasons))
+    assert not missing, f"components without metrics in Prometheus: {missing}"
+    if otel_off:
+        pytest.skip(OTEL_OFF)
+
+
+# Long enough for a quiet pod to log once, short enough to show that shipping stopped.
+LOG_WINDOW = "15m"
+
+
+@pytest.mark.source(
+    "podiumd-tests",
+    "A namespace-wide Loki check missed single pods whose logs are not shipped; each logging pod needs a Loki stream.",
+)
+@pytest.mark.cluster
+@pytest.mark.requires("cluster")
+@pytest.mark.scenario("""
+    Given every running pod that wrote log lines in the last 15 minutes
+    When Loki is asked through Grafana for the log lines of that window
+    Then Loki has log lines of each such pod
+""")
+def test_every_pod_logs_to_loki(grafana: Grafana, podiumd_env: Environment) -> None:
+    """Every running pod that wrote log lines in the last LOG_WINDOW has log lines of that window in Loki.
+
+    A short window catches log shipping that stopped; with 24 h, earlier lines hid it.
+    """
+    if not grafana.uid("loki"):
+        pytest.skip("no loki datasource (metrics without logging)")
+    namespaces = "|".join(podiumd_env.namespaces)
+    query = f'sum by (namespace, pod) (count_over_time({{namespace=~"{namespaces}"}}[{LOG_WINDOW}]))'  # noqa: B907  # LogQL
+    in_loki = pods_in_loki(grafana.proxy("loki", "/loki/api/v1/query", {"query": query}))
+    now = datetime.now(UTC)
+    candidates = running_pods_not_in_loki(podiumd_env.items("pods"), in_loki, now)
+    missing = [
+        f"{section(p, 'metadata').get('namespace')}/{metadata_name(p)}"
+        for p in candidates
+        if is_logged_before(
+            podiumd_env.kube.run(
+                "logs",
+                f"pod/{metadata_name(p)}",
+                "--all-containers",
+                f"--since={LOG_WINDOW}",
+                "--timestamps",
+                "--limit-bytes=1024",
+                namespace=str(section(p, "metadata").get("namespace")),
+            ),
+            now - LOKI_LAG,
+        )
+    ]
+    assert not missing, f"pods whose logs are not in Loki: {missing}"

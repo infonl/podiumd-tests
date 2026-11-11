@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- podiumd-tests' BPMN process for ZAC: intake (assign), select and sign documents, summary, close the zaak.
+     Modelled on ZAC's own test processes (src/itest/resources/bpmn, ZAC 5.9.1). -->
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="http://podiumd-tests">
+  <process id="ptestBpmnProcess" name="podiumd-tests BPMN process" isExecutable="true">
+    <startEvent id="start" flowable:initiator="initiator"/>
+    <userTask id="intake" name="Intake" flowable:assignee="${var:get(zaakBehandelaar)}"
+              flowable:candidateGroups="${zaakGroep}" flowable:formKey="ptestIntakeForm" flowable:formFieldValidation="false"/>
+    <serviceTask id="assign" name="Assign" flowable:class="net.atos.zac.flowable.delegate.UpdateZaakAssignmentDelegate">
+      <extensionElements>
+        <flowable:field name="groepId"><flowable:expression><![CDATA[${AM_TeamBehandelaar_Groep}]]></flowable:expression></flowable:field>
+        <flowable:field name="behandelaarGebruikersnaam"><flowable:expression><![CDATA[${AM_TeamBehandelaar_Medewerker}]]></flowable:expression></flowable:field>
+        <flowable:field name="reden"><flowable:expression><![CDATA[podiumd-tests ${zaakIdentificatie}]]></flowable:expression></flowable:field>
+      </extensionElements>
+    </serviceTask>
+    <userTask id="selectDocuments" name="Select documents to sign" flowable:assignee="${var:get(zaakBehandelaar)}"
+              flowable:candidateGroups="${zaakGroep}" flowable:formKey="ptestSelectDocumentsForm" flowable:formFieldValidation="false"/>
+    <userTask id="signDocuments" name="Sign the selected documents" flowable:assignee="${var:get(zaakBehandelaar)}"
+              flowable:candidateGroups="${zaakGroep}" flowable:formKey="ptestSignDocumentsForm" flowable:formFieldValidation="false"/>
+    <serviceTask id="sign" name="Sign" flowable:class="net.atos.zac.flowable.delegate.SignDocumentDelegate"/>
+    <userTask id="summary" name="Summary" flowable:assignee="${var:get(zaakBehandelaar)}"
+              flowable:candidateGroups="${zaakGroep}" flowable:formKey="ptestSummaryForm" flowable:formFieldValidation="false"/>
+    <serviceTask id="close" name="Close the zaak" flowable:class="net.atos.zac.flowable.delegate.UpdateZaakJavaDelegate">
+      <extensionElements>
+        <flowable:field name="statustypeOmschrijving"><flowable:expression><![CDATA[${ZK_Status}]]></flowable:expression></flowable:field>
+        <flowable:field name="resultaattypeOmschrijving"><flowable:expression><![CDATA[${ZK_Result}]]></flowable:expression></flowable:field>
+      </extensionElements>
+    </serviceTask>
+    <endEvent id="end"/>
+    <sequenceFlow id="f1" sourceRef="start" targetRef="intake"/>
+    <sequenceFlow id="f2" sourceRef="intake" targetRef="assign"/>
+    <sequenceFlow id="f3" sourceRef="assign" targetRef="selectDocuments"/>
+    <sequenceFlow id="f4" sourceRef="selectDocuments" targetRef="signDocuments"/>
+    <sequenceFlow id="f5" sourceRef="signDocuments" targetRef="sign"/>
+    <sequenceFlow id="f6" sourceRef="sign" targetRef="summary"/>
+    <sequenceFlow id="f7" sourceRef="summary" targetRef="close"/>
+    <sequenceFlow id="f8" sourceRef="close" targetRef="end"/>
+  </process>
+</definitions>

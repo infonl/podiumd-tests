@@ -7,8 +7,12 @@ from podiumd_tests.components import deployed_components
 
 
 def test_deployment_aliases():
-    names = ["notificaties-celery", "openzaak", "podiumd-minikube-grafana", "kiss-frontend"]
+    names = ["notificaties-celery", "openzaak", "monitoring-logging-grafana", "kiss-frontend"]
     assert deployed_components(names) == {"opennotificaties", "openzaak", "grafana", "kiss"}
+
+
+def test_monitoring_logging_grafana_on_ssc_is_grafana():
+    assert deployed_components(["podiumd-grafana"]) == {"grafana"}
 
 
 @pytest.mark.parametrize(
@@ -18,13 +22,25 @@ def test_deployment_aliases():
         ("ontw-mijn.dimpact.icatt.nl", "openinwoner"),
         ("test-openzaak.dimpact.nl", "openzaak"),
         ("openformulieren-nginx.local", "openformulieren"),
+        ("ontw-office-addin.dimpact.nl", "zgw-office-addin"),
+        ("office-addin.local", "zgw-office-addin"),
         ("apisix-admin.kees00.pd.test-rig.nl", None),
         ("unknown.local", None),
     ],
 )
-def test_component_for_host(host, component):
+def test_component_for_host(host, component):  # noqa: FNE008  # the name is the test id
     assert component_for_host(host) == component
 
 
 def test_kiss_deployed_under_its_chart_name_contact():
     assert deployed_components(["contact-web", "ita-web"]) == {"kiss", "ita"}
+
+
+def test_new_410_components_by_deployment():
+    names = ["openvtb", "podiumd-zaakbrug", "zgw-office-addin-frontend", "zgw-office-addin-backend"]
+    assert deployed_components(names) == {"openvtb", "zaakbrug", "zgw-office-addin"}
+
+
+def test_components_without_url_by_workload():
+    names = ["elastic-operator", "redis-ha", "clamav", "podiumd-openbao"]
+    assert deployed_components(names) == {"eck-operator", "redis", "clamav", "openbao"}

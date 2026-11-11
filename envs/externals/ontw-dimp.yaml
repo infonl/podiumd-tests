@@ -1,3 +1,4 @@
+---
 # SSC Twente ExternalsPodiumD environment ontw-dimp (applications/gemeenten/dimp/ontw/).
 # Every tier, chaos included (user, 2026-10-13).
 estate: externals
@@ -23,6 +24,14 @@ urls:
   openarchiefbeheer: https://ontw-abc.dimpact.nl
   openbeheer: https://ontw-openbeheer.dimpact.nl
   grafana: https://ontw-podiumd-logs.dimpact.nl
+settings:
+  # Azure Policy admits only images from acrprodmgmt; its Python mirror (ExternalsPodiumD pipelines/images.yml).
+  mock_server_image: acrprodmgmt.azurecr.io/library/python:3.14.7-slim
 secrets:
+  # keycloak-operator's master admin, as on podiumd-infra (checked on ontw-dimp 2026-10-29).
+  keycloak_admin_username:
+    k8s_secret: {name: keycloak-podiumd-admin, key: username}
+  keycloak_admin_password:
+    k8s_secret: {name: keycloak-podiumd-admin, key: password}
   pabc_api_key:
     pod_env: {deployment: pabc, var: API_KEY__0}

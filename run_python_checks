@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 #
-# Runs the code quality checks, fastest first, stopping at the first failure.
-# Adapted from dimpact-samenwerking/helm-charts charts/podiumd/bin/run_python_checks
-# (same tools, same settings) for this repo's src/ layout.
+# Runs the code quality checks, all at the same time, and lists every failed step.
 set -euo pipefail
 
 usage() {
     cat <<'EOF'
 Usage: run_python_checks [-h|--help]
 
-Runs ruff check, shellcheck, ruff format --check, jscpd, pymarkdown,
-vulture, bandit, pylint, basedpyright and pytest (unit_tests/ only),
-fastest first. Stops at the first failure. Upgrades the dev tools in
-.venv first when last upgraded over a day ago.
+Runs ruff check, shellcheck, actionlint, ruff format --check, flake8
+(wemake-python-styleguide and plugins), yamllint, jscpd, pymarkdown, vulture,
+deptry, bandit, pylint, basedpyright, pytest (unit_tests/ only, with coverage
+threshold from pyproject.toml) and pip-audit (only warns), all at the same
+time; prints each step's log in that order and lists every failed step.
+Upgrades the dev tools in .venv first when last upgraded over a day ago.
 EOF
 }
 
@@ -31,6 +31,8 @@ if [[ -x .venv/bin/python3 ]]; then
     if [[ ! -e "${stamp}" || pyproject.toml -nt "${stamp}" || -z "$(find "${stamp}" -mmin -1440)" ]]; then
         echo "=== upgrading .venv dev tools ==="
         python3 -m pip install -q -U --upgrade-strategy eager -e '.[dev]'
+        # A new playwright needs its own browser build; without it every UI test fails at launch.
+        python3 -m playwright install chromium > /dev/null
         touch "${stamp}"
     fi
 fi
@@ -44,51 +46,64 @@ mapfile -t test_files < <(find "${TEST_DIRS[@]}" -name '*.py')
 wait "$!"
 # Shell scripts: sh/bash/dash/ksh shebang, or *.sh.
 mapfile -t shell_scripts < <(
-    find . -path ./.venv -prune -o -path ./.git -prune -o -path ./results -prune -o -path '*/__pycache__' -prune \
+    find . -path ./.venv -prune -o -path ./.git -prune -o -path ./results -prune -o -path ./.claude/worktrees -prune \
+        -o -path '*/__pycache__' -prune -o -path ./.ruff_cache -prune -o -path ./.pytest_cache -prune \
         -o -type f -print0 |
-        xargs -0 awk 'FNR == 1 && (/^#!.*[\/ ](ba|da|k)?sh([ \t]|$)/ || FILENAME ~ /\.sh$/) {print FILENAME} {nextfile}' |
+        # LC_ALL=C: BSD awk (macOS) stops on bytes that are not valid UTF-8; only the shebang matters here.
+        LC_ALL=C xargs -0 awk 'FNR == 1 && (/^#!.*[\/ ](ba|da|k)?sh([ \t]|$)/ || FILENAME ~ /\.sh$/) {print FILENAME} {nextfile}' |
         sort
 )
 wait "$!"
-# results/: generated run summaries; bug-reports/: drafts for others, not in git.
+# results/: generated run summaries; bug-reports/: drafts for others, not in git; .claude/worktrees/: agents' checkouts.
 mapfile -t markdown_files < <(
     find . -path ./.venv -prune -o -path ./.git -prune -o -path ./results -prune -o -path ./bug-reports -prune \
-        -o -name '*.md' -print | sort
+        -o -path ./.claude/worktrees -prune -o -name '*.md' -print | sort
 )
 wait "$!"
 
-echo "=== ruff check ==="
-ruff check .
+# Each check is a step function. Its output goes to its own log; the logs are printed in order once all groups end.
+logs=$(mktemp -d)
+trap 'rm -rf "$logs"' EXIT
 
-echo "=== shellcheck (${#shell_scripts[@]} shell script(s)) ==="
-if ((${#shell_scripts[@]})); then
-    shellcheck "${shell_scripts[@]}"
-fi
+step_ruff_check() { ruff check .; }
 
-echo "=== ruff format --check ==="
-ruff format --check .
+step_shellcheck() {
+    if ((${#shell_scripts[@]})); then
+        shellcheck "${shell_scripts[@]}"
+    fi
+}
+
+step_actionlint() { actionlint; }
+
+step_ruff_format() { ruff format --check .; }
+
+# Settings in pyproject.toml [tool.flake8] (flake8-pyproject): only the rules ruff does not have.
+step_flake8() { flake8 src tests unit_tests infra; }
+
+# Settings in .yamllint.
+step_yamllint() { git ls-files -z '*.yaml' '*.yml' .yamllint | xargs -0 yamllint --strict; }
 
 # Weak mode and low thresholds also catch short copies with renamed
 # identifiers. Import lines and typed parameter lines (same-shaped
 # signatures) are not duplication.
-echo "=== jscpd (duplicate code) ==="
-jscpd --exit-code 1 --format python --mode weak --min-lines 4 --min-tokens 35 --reporters console \
-    --ignore '**/__pycache__/**' \
-    --ignore-pattern 'from .* import .*,import .*, +[a-z_]+: [^=\n]+\x2c\n' \
-    src
+step_jscpd() {
+    jscpd --exit-code 1 --format python --mode weak --min-lines 4 --min-tokens 35 --reporters console \
+        --ignore '**/__pycache__/**' \
+        --ignore-pattern 'from .* import .*,import .*, +[a-z_]+: [^=\n]+\x2c\n' \
+        src
+}
 
-# Same rules as podiumd's verify-podiumd markdown check
-# (quality_gates.markdown_disabled_rules default and MARKDOWN_PLUGIN_SETTINGS).
-echo "=== pymarkdown (${#markdown_files[@]} file(s)) ==="
-# podiumd-tests: front-matter on, for the rule files in .claude/memory/.
-pymarkdown -d md013,md014 -s 'plugins.md024.siblings_only=$!True' -s 'extensions.front-matter.enabled=$!True' \
-    scan "${markdown_files[@]}"
+# Front matter on, for the rule files in .claude/memory/.
+step_pymarkdown() {
+    pymarkdown -d md013,md014 -s 'plugins.md024.siblings_only=$!True' -s 'extensions.front-matter.enabled=$!True' \
+        scan "${markdown_files[@]}"
+}
 
 # vulture does not link TypedDict fields to string-key reads (row["app"]),
 # so all TypedDict fields go into a generated whitelist.
-typeddict_whitelist=$(mktemp --suffix=.py)
-trap 'rm -f "$typeddict_whitelist"' EXIT
-python3 - "$SRC" > "$typeddict_whitelist" <<'PY'
+step_vulture() {
+    local typeddict_whitelist="$logs/typeddict_whitelist.py"
+    python3 - "$SRC" > "$typeddict_whitelist" <<'PY'
 import ast
 import pathlib
 import sys
@@ -110,37 +125,84 @@ for c in classes:
             if isinstance(st, ast.AnnAssign) and isinstance(st.target, ast.Name):
                 print(st.target.id)
 PY
+    vulture "$SRC" tests "$typeddict_whitelist"
+}
 
-echo "=== vulture (dead code) ==="
-vulture "$SRC" tests "$typeddict_whitelist"
+step_deptry() { deptry src tests; }
 
 # Test directories excluded: every assert would flag B101.
-echo "=== bandit (security) ==="
-bandit -c pyproject.toml -r "$SRC" -q
+step_bandit() { bandit -c pyproject.toml -r "$SRC" -q; }
 
 # Test directories get TESTS_PYLINT_DISABLE on top (pylint has no per-directory config).
 # False positives under tests/:
-TESTS_PYLINT_DISABLE=missing-function-docstring,wrong-import-position,unused-argument,protected-access
+TESTS_PYLINT_DISABLE=missing-function-docstring
 TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,unused-variable,redefined-outer-name,duplicate-code
 # Not enforced for tests:
-TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,import-outside-toplevel,consider-using-from-import
-TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,use-implicit-booleaness-not-comparison,too-many-positional-arguments
-TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,too-many-arguments,too-many-locals,import-error,superfluous-parens
+TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,consider-using-from-import,use-implicit-booleaness-not-comparison
+TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,import-error,superfluous-parens
 TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,too-many-lines,subprocess-run-check,missing-class-docstring
 TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,useless-return,unnecessary-lambda,too-few-public-methods
 TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,line-too-long,comparison-of-constants
-echo "=== pylint (src) ==="
-pylint "$SRC"
+# -j 0: one process per CPU.
+step_pylint_src() { pylint -j 0 "$SRC"; }
 
-echo "=== pylint (tests) ==="
-if ((${#test_files[@]})); then
-    pylint --disable="$TESTS_PYLINT_DISABLE" "${test_files[@]}"
+step_pylint_tests() {
+    if ((${#test_files[@]})); then
+        pylint -j 0 --disable="$TESTS_PYLINT_DISABLE" "${test_files[@]}"
+    fi
+}
+
+step_basedpyright() { basedpyright "$SRC" "${TEST_DIRS[@]}"; }
+
+# Coverage source and threshold: [tool.coverage] in pyproject.toml. More than 8 workers start slower than they gain.
+step_pytest() { python3 -m pytest -q -n auto --maxprocesses 8 --cov --cov-report=term-missing:skip-covered unit_tests; }
+
+# Known vulnerabilities in the packages of .venv, as a warning: a new advisory appears without a code change and must
+# not block a commit; the pip-audit workflow reports it. --skip-editable: podiumd-tests itself is not on PyPI. Own
+# cache: pip-audit cannot read the cache entries of a newer pip.
+step_pip_audit() {
+    if python3 -c 'import socket; socket.create_connection(("pypi.org", 443), 5).close()' 2> /dev/null; then
+        pip-audit --progress-spinner off --skip-editable --cache-dir .venv/.pip-audit-cache ||
+            echo "WARNING: pip-audit found known vulnerabilities: upgrade the package named above"
+    else
+        echo "WARNING: pypi.org not reachable, pip-audit skipped"
+    fi
+}
+
+# Runs one step, its output in its own log; records "<seconds> ok|FAILED".
+run_step() {
+    local start=$SECONDS
+    if "step_$1" > "$logs/$1.log" 2>&1; then
+        echo "$((SECONDS - start)) ok" > "$logs/$1.status"
+    else
+        echo "$((SECONDS - start)) FAILED" > "$logs/$1.status"
+        return 1
+    fi
+}
+
+# All steps start at the same time (every step is short, so fail-fast groups take longer), and the run lists every
+# failed step. pip-audit only waits on PyPI and never fails.
+steps=(
+    ruff_check shellcheck actionlint ruff_format flake8 yamllint jscpd pymarkdown vulture deptry bandit
+    pylint_src pylint_tests basedpyright pytest pip_audit
+)
+pids=()
+for name in "${steps[@]}"; do
+    run_step "$name" &
+    pids+=("$!")
+done
+for pid in "${pids[@]}"; do
+    wait "$pid" || true
+done
+failed=()
+for name in "${steps[@]}"; do
+    read -r seconds status < "$logs/$name.status"
+    echo "=== $name (${seconds}s, $status) ==="
+    cat "$logs/$name.log"
+    [[ $status == ok ]] || failed+=("$name")
+done
+if ((${#failed[@]})); then
+    echo "=== FAILED: ${failed[*]} ==="
+    exit 1
 fi
-
-echo "=== basedpyright (type checking) ==="
-basedpyright "$SRC" "${TEST_DIRS[@]}"
-
-echo "=== pytest (unit_tests) ==="
-python3 -m pytest -q unit_tests
-
 echo "=== all checks passed ==="

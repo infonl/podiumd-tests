@@ -9,10 +9,13 @@ from typing import cast
 from podiumd_tests.bootstrap.steps import OF_REDACTEUR
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 from podiumd_tests.results import TAG_PREFIX
+from podiumd_tests.results import now_iso
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak
+from podiumd_tests.wait import Clock
 from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
@@ -27,8 +30,12 @@ if TYPE_CHECKING:
     from podiumd_tests.seed.registry import ResourceRegistry
 
 
+# Seconds after a failed report download to try it again, for the failure message.
+REPORT_RETRIES = (2, 5, 10, 30)
+
+
 def form_and_headers(http: requests.Session, base_url: str, slug: str) -> tuple[JsonObject, dict[str, str]]:
-    """The form, and the headers the session's writes to Open Formulieren's API need."""
+    """Return the form, and the headers the session's writes to Open Formulieren's API need."""
     form_response = expect_status(http.get(f"{base_url}/api/v2/forms/{slug}"), HTTPStatus.OK)
     # Every write echoes the CSRF token that API responses carry in this header.
     headers = {"X-CSRFToken": form_response.headers.get("X-CSRFToken", ""), "Referer": f"{base_url}/{slug}/"}
@@ -46,7 +53,7 @@ def start_submission(http: requests.Session, base_url: str, slug: str) -> tuple[
     return submission, headers
 
 
-def submit(  # pylint: disable=too-many-arguments  # one flow
+def submit(  # noqa: PLR0913  # one flow
     env: Environment,
     http: requests.Session,
     registry: ResourceRegistry,
@@ -62,21 +69,42 @@ def submit(  # pylint: disable=too-many-arguments  # one flow
     and `submission`: the submission's uuid. Cleanup deletes the submission. With registers,
     also wait_for_registration; a form waiting for a co-signer does not register yet.
     """
-    base_url = env.profile.urls["openformulieren"]
-    submission, headers = start_submission(http, base_url, slug)
-    registry.add(f"submission {submission['id']}", lambda: delete_submission(env, str(submission["id"])))
+    submission, headers = start_submission(http, env.profile.urls["openformulieren"], slug)
+    forget_submission(env, registry, str(submission["id"]))
+    return complete_submission(env, http, submission, headers, data, timeout=timeout, registers=registers)
+
+
+def complete_submission(  # noqa: PLR0913  # one flow
+    env: Environment,
+    http: requests.Session,
+    submission: JsonObject,
+    headers: dict[str, str],
+    data: Mapping[str, object],
+    *,
+    timeout: float,
+    registers: bool = True,
+) -> JsonObject:
+    """Fill the submission's single step with data, complete it and return its final status (see submit)."""
     step = entries(submission["steps"])[0]
-    expect_status(
-        http.put(str(step["url"]), json={"data": dict(data)}, headers=headers), HTTPStatus.CREATED, HTTPStatus.OK
-    )
-    complete = _json(
-        http.post(f"{submission['url']}/_complete", json={"privacyPolicyAccepted": True}, headers=headers),
-        HTTPStatus.OK,
-    )
+    response = http.put(str(step["url"]), json={"data": dict(data)}, headers=headers)
+    expect_status(response, HTTPStatus.CREATED, HTTPStatus.OK)
+    complete = _complete(http, str(submission["url"]), headers, timeout=timeout)
     status = _processed(http, str(complete["statusUrl"]), str(submission["id"]), timeout=timeout)
     if registers:
         wait_for_registration(env, str(submission["id"]), timeout=timeout)
     return {**status, "submission": submission["id"]}
+
+
+def _complete(http: requests.Session, submission_url: str, headers: dict[str, str], *, timeout: float) -> JsonObject:
+    """Complete the submission; waits out Open Formulieren's throttle (HTTP 429), which parallel test workers hit."""
+
+    def attempt() -> tuple[requests.Response] | None:
+        response = http.post(f"{submission_url}/_complete", json={"privacyPolicyAccepted": True}, headers=headers)
+        # In a tuple: a Response is falsy for any error status, which wait_until would retry.
+        return None if response.status_code == HTTPStatus.TOO_MANY_REQUESTS else (response,)
+
+    response = wait_until(attempt, timeout=timeout, description=f"{submission_url}/_complete not throttled")[0]
+    return _json(response, HTTPStatus.OK)
 
 
 def wait_for_registration(env: Environment, submission: str, *, timeout: float) -> None:
@@ -95,6 +123,36 @@ def wait_for_registration(env: Environment, submission: str, *, timeout: float) 
         raise AssertionError(msg)
 
 
+def download_report(env: Environment, http: requests.Session, status: JsonObject) -> bytes:
+    """Return the submission's PDF report through the inwoner's download link.
+
+    A failed download fails the test, after retries that record when the web pod serves the file
+    (a 404 although the worker wrote it: NFS cache or another test's same-named report).
+    """
+    url, first = str(status["reportDownloadUrl"]), now_iso("milliseconds")
+    response = http.get(url)
+    if response.status_code == HTTPStatus.OK:
+        return response.content
+    lines = [
+        f"report download: HTTP {response.status_code} at {first}; status done at {status.get('doneAt')}",
+        f"  web pod at {now_iso('milliseconds')}: {_report_state(env, status)}",
+    ]
+    clock = Clock()
+    start = clock.now()
+    for delay in REPORT_RETRIES:
+        clock.sleep(max(0, start + delay - clock.now()))
+        at, code = now_iso("milliseconds"), http.get(url).status_code
+        lines.append(f"  retry +{delay}s at {at}: HTTP {code}; web pod: {_report_state(env, status)}")
+        if code == HTTPStatus.OK:
+            break
+    raise AssertionError("\n".join(lines))
+
+
+def _report_state(env: Environment, status: JsonObject) -> object:
+    params: dict[str, object] = {"uuid": str(status["submission"]), "action": "report"}
+    return run_snippet(env.kube, env.deployment_for("openformulieren"), "openformulieren_submission", params)
+
+
 def registration_state(env: Environment, submission: str) -> dict[str, str]:
     """Open Formulieren's registration status of the submission (pending, in_progress, success, failed) and error."""
     params: dict[str, object] = {"uuid": submission, "action": "registration"}
@@ -103,13 +161,14 @@ def registration_state(env: Environment, submission: str) -> dict[str, str]:
 
 
 def _processed(http: requests.Session, status_url: str, submission: str, *, timeout: float) -> JsonObject:
-    """The submission's public status once Open Formulieren processed it; AssertionError when that failed."""
+    """Return the submission's public status once Open Formulieren processed it; AssertionError when that failed."""
 
     def finished() -> JsonObject | None:
         status = _json(http.get(status_url), HTTPStatus.OK)
         return status if status.get("status") in {"done", "failed"} else None
 
     status = wait_until(finished, timeout=timeout, description=f"submission {submission} done")
+    status = {**status, "doneAt": now_iso("milliseconds")}
     if status.get("status") == "failed":
         msg = f"submission {submission} failed: {status.get('errorMessage')}"
         raise AssertionError(msg)
@@ -123,7 +182,7 @@ def _processed(http: requests.Session, status_url: str, submission: str, *, time
 def registered_zaak(
     env: Environment, openzaak: ApiClient, registry: ResourceRegistry, status: JsonObject
 ) -> JsonObject:
-    """The zaak a submission registered; cleanup deletes the submission, then the zaak.
+    """Return the zaak a submission registered; cleanup deletes the submission, then the zaak.
 
     Open Zaak reissues a deleted zaak's identificatie, and Open Formulieren refuses to register a
     zaak whose identificatie a remaining submission holds as public reference: in the reverse
@@ -133,20 +192,18 @@ def registered_zaak(
     zaken = openzaak.list(f"{ZAKEN}/zaken", {"identificatie": str(status["publicReference"])})
 
     def delete() -> None:
-        try:
-            delete_submission(env, submission)
-        finally:
-            for zaak in zaken:
-                delete_zaak(openzaak, str(zaak["url"]), with_documents=True)
+        for zaak in zaken:
+            delete_zaak(openzaak, str(zaak["url"]), with_documents=True)
 
-    registry.add(f"submission {submission} and its zaak", delete)
+    registry.add(f"zaken of submission {submission}", delete)
+    forget_submission(env, registry, submission)  # LIFO: before the zaken
     if len(zaken) != 1:
         msg = f"submission {submission}: {len(zaken)} zaken with identificatie {status['publicReference']}"
         raise AssertionError(msg)
     return zaken[0]
 
 
-def make_form(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # mirrors the snippet's parameters
+def make_form(  # noqa: PLR0913, PLR0917  # mirrors the snippet's parameters
     env: Environment,
     registry: ResourceRegistry,
     slug: str,
@@ -156,46 +213,86 @@ def make_form(  # pylint: disable=too-many-arguments,too-many-positional-argumen
     payment: Mapping[str, object] | None = None,
     **settings: object,
 ) -> None:
-    """A one-step test form (snippet openformulieren_form) that cleanup deletes with its submissions.
+    """Create a one-step test form (snippet openformulieren_form) that cleanup deletes with its submissions.
 
     payment: {"backend", "merchant", "price"} for a form that asks for a payment.
     """
     deployment = env.deployment_for("openformulieren")
     params: dict[str, object] = {
         "slug": slug,
-        "components": [dict(c) for c in components],
+        "components": [dict(component) for component in components],
         "registration": dict(registration),
         "auth_backends": list(auth_backends),
         "payment": dict(payment or {}),
     }
     run_snippet(env.kube, deployment, "openformulieren_form", {**params, "settings": settings, "action": "apply"})
-    registry.add(f"form {slug}", lambda: remove_form(env, slug))
+    registry.add_snippet(f"form {slug}", env.kube, deployment, "openformulieren_form", _removal(slug))
 
 
 def remove_form(env: Environment, slug: str) -> None:
     """Delete a test form with its step, product and submissions."""
-    params: dict[str, object] = {"slug": slug, "action": "remove"}
-    run_snippet(env.kube, env.deployment_for("openformulieren"), "openformulieren_form", params)
+    run_snippet(env.kube, env.deployment_for("openformulieren"), "openformulieren_form", _removal(slug))
+
+
+def _removal(slug: str) -> dict[str, object]:
+    """Parameters of snippet openformulieren_form that delete the form."""
+    return {"slug": slug, "action": "remove"}
 
 
 def tagged_forms(env: Environment) -> list[str]:
-    """The slugs of the forms, steps and products whose name starts with ptest-, bootstrap ones included."""
+    """Return the slugs of the forms, steps and products whose name starts with ptest-, bootstrap ones included."""
     params: dict[str, object] = {"prefix": TAG_PREFIX, "action": "list"}
     found = run_snippet(env.kube, env.deployment_for("openformulieren"), "openformulieren_form", params)
     return [str(slug) for slug in cast("list[object]", found)]
 
 
+def upload_file(  # noqa: PLR0913, PLR0917  # one upload
+    http: requests.Session, base_url: str, submission: JsonObject, headers: dict[str, str], name: str, content: bytes
+) -> requests.Response:
+    """Upload a file for a submission, as the form's file field does; the temporary upload's response."""
+    files = {"file": (name, content, "text/plain")}
+    data = {"submission": str(submission["url"])}
+    return http.post(f"{base_url}/api/v2/formio/fileupload", files=files, data=data, headers=headers)
+
+
+def file_value(base_url: str, upload: JsonObject, content_type: str = "text/plain") -> dict[str, object]:
+    """Return the value of a Form.io file field that holds one temporary upload."""
+    reference = {"url": upload["url"], "name": upload["name"], "size": upload["size"]}
+    return {
+        **reference,
+        "storage": "url",
+        "originalName": upload["name"],
+        "type": content_type,
+        "data": {**reference, "baseUrl": base_url, "form": "", "project": ""},
+    }
+
+
+def can_submit_step(
+    http: requests.Session, step: JsonObject, headers: dict[str, str], data: Mapping[str, object]
+) -> bool:
+    """Return whether the form's logic lets the step with this data go on (its Volgende button)."""
+    response = http.post(f"{step['url']}/_check-logic", json={"data": dict(data)}, headers=headers)
+    return bool(section(_json(response, HTTPStatus.OK), "step")["canSubmit"])
+
+
+def set_logic_rules(editor: requests.Session, base_url: str, form: JsonObject, rules: Sequence[JsonObject]) -> None:
+    """Replace the form's logic rules, as the form designer saves them."""
+    response = editor.put(f"{base_url}/api/v2/forms/{form['uuid']}/logic-rules", json=[dict(rule) for rule in rules])
+    expect_status(response, HTTPStatus.OK)
+
+
 def redacteur_session(env: Environment) -> requests.Session:
-    """A session on Open Formulieren's API as the test form editor (bootstrap OF_REDACTEUR), by its API token."""
+    """Return a session on Open Formulieren's API as the test form editor (bootstrap OF_REDACTEUR), by its API token."""
     http = env.session()
     http.headers["Authorization"] = f"Token {env.credentials.get(str(OF_REDACTEUR.store_key))}"
     return http
 
 
-def delete_submission(env: Environment, uuid: str) -> None:
-    """Delete a submission, so its public reference cannot block a later registration."""
+def forget_submission(env: Environment, registry: ResourceRegistry, uuid: str) -> None:
+    """Cleanup deletes the submission, so its public reference cannot block a later registration."""
     params: dict[str, object] = {"uuid": uuid, "action": "delete"}
-    run_snippet(env.kube, env.deployment_for("openformulieren"), "openformulieren_submission", params)
+    deployment = env.deployment_for("openformulieren")
+    registry.add_snippet(f"submission {uuid}", env.kube, deployment, "openformulieren_submission", params)
 
 
 def _json(response: requests.Response, *expected: int) -> JsonObject:

@@ -8,6 +8,7 @@ import subprocess  # nosec B404
 
 from typing import TYPE_CHECKING
 from typing import Protocol
+from typing import override
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -31,13 +32,21 @@ class ProcessError(Exception):
     """An external command failed. The message holds the command line, so it can be pasted and rerun."""
 
     def __init__(self, command: Sequence[str], detail: str) -> None:
-        self.command = shlex.join(command)
+        # All arguments go to Exception, so pickle and copy can rebuild the error.
+        super().__init__(command, detail)
+        self.command: str = shlex.join(command)
         # kubectl repeats client-side noise (E1005 memcache...) before the real error, and kubectl exec
         # ends with its own exit-code line after the program's error; keep the last real line.
-        lines = [line for line in detail.strip().splitlines() if line.strip() and not KUBECTL_EXEC_EXIT.match(line)]
+        written = detail.strip().splitlines()
+        lines = [line for line in written if line.strip() and not KUBECTL_EXEC_EXIT.match(line)]
         # A Python program may log warnings after its exception; the exception is the real error.
         errors = [line for line in lines if PYTHON_EXCEPTION.match(line)]
-        super().__init__(f"{self.command}: {(errors or lines or ['failed'])[-1]}")
+        self.message: str = f"{self.command}: {(errors or lines or ['failed'])[-1]}"
+
+    @override
+    def __str__(self) -> str:
+        """Return the command line and its error."""
+        return self.message
 
 
 def run_process(args: Sequence[str], timeout: int, stdin: str | None = None) -> subprocess.CompletedProcess[str]:
@@ -47,15 +56,27 @@ def run_process(args: Sequence[str], timeout: int, stdin: str | None = None) -> 
     )
 
 
-def start_process(args: Sequence[str]) -> subprocess.Popen[str]:
-    """Start a fixed argv in the background, never through a shell; stdout and stderr share one pipe."""
+def start_process(
+    args: Sequence[str],
+    stdin: int | None = None,
+    stdout: int | None = None,
+    stderr: int | None = None,
+) -> subprocess.Popen[str]:
+    """Start a fixed argv in the background, never through a shell.
+
+    By default stdin is closed and stdout and stderr share one pipe; pass fds (e.g. a pty) to redirect them.
+    """
     return subprocess.Popen(  # nosec B603  # noqa: S603
-        list(args), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+        list(args),
+        stdin=subprocess.DEVNULL if stdin is None else stdin,
+        stdout=subprocess.PIPE if stdout is None else stdout,
+        stderr=subprocess.STDOUT if stderr is None else stderr,
+        text=True,
     )
 
 
-def run_checked[E: ProcessError](
-    runner: Runner, command: Sequence[str], timeout: int, error: type[E] = ProcessError, stdin: str | None = None
+def run_checked[ErrorT: ProcessError](
+    runner: Runner, command: Sequence[str], timeout: int, error: type[ErrorT] = ProcessError, stdin: str | None = None
 ) -> str:
     """stdout of a command; `error` when it is missing, times out or exits non-zero."""
     try:

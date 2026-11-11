@@ -48,18 +48,26 @@ def test_return_url_is_the_outcomes_url_with_the_feedback(outcome, base):
     assert query["SHASIGN"] == ogone_shasign({k: v for k, v in query.items() if k != "action"}, "pw")
 
 
+class ReturnHttp:
+    """A session whose GET of the payment's return URL, without redirects, answers response."""
+
+    def __init__(self, response):
+        self.response: requests.Response = response
+
+    def get(self, url, *, allow_redirects):
+        assert (url, allow_redirects) == ("https://of.test/payment/1/return", False)
+        return self.response
+
+
 def test_payment_return_reads_the_forms_action_params(response_factory):
     params = {"of_payment_status": "completed"}
-    location = "https://of.test/form/?" + urlencode({"_of_action": "payment", "_of_action_params": json.dumps(params)})
+    query = urlencode({"_of_action": "payment", "_of_action_params": json.dumps(params)})
+    location = f"https://of.test/form/?{query}"
     response = response_factory(status=302)
     response.headers["Location"] = location
 
-    class Http:
-        def get(self, url, *, allow_redirects):
-            assert (url, allow_redirects) == ("https://of.test/payment/1/return", False)
-            return response
-
-    assert payment_return(cast("requests.Session", Http()), "https://of.test/payment/1/return") == params
+    http = ReturnHttp(response)
+    assert payment_return(cast("requests.Session", http), "https://of.test/payment/1/return") == params
 
 
 CHECKOUT = "0123456789abcdef0123456789abcdef"

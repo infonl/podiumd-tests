@@ -20,12 +20,12 @@ if TYPE_CHECKING:
 
 
 def user_email(username: str) -> str:
-    """The e-mail address create_user gives a user; Open Klant actors are matched on it."""
+    """Return the e-mail address create_user gives a user; Open Klant actors are matched on it."""
     return f"{username}@example.invalid"
 
 
 def realm_of(env: Environment) -> str:
-    """The realm the applications log in to (settings.keycloak_realm, default podiumd)."""
+    """Return the realm the applications log in to (settings.keycloak_realm, default podiumd)."""
     return env.profile.settings.get("keycloak_realm", "podiumd")
 
 
@@ -36,29 +36,28 @@ def for_environment(env: Environment, realm: str | None = None) -> KeycloakAdmin
     return KeycloakAdmin(env.session(cookies=False), url, realm or realm_of(env), admin)
 
 
-class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method per Admin REST call
+class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
     """Admin calls on one realm, with a token of an admin user in the master realm."""
 
     def __init__(self, http: requests.Session, url: str, realm: str, admin: tuple[str, str]) -> None:
-        self.http = http
-        self.realm = realm
-        self.base = admin_realm_url(url, realm)
+        self.http: requests.Session = http
+        self.realm: str = realm
+        self.url: str = url
+        self.base: str = admin_realm_url(url, realm)
         token = password_grant(http, url, "master", PasswordLogin("admin-cli", *admin))
-        self.headers = {"Authorization": f"Bearer {token}"}
+        self.headers: dict[str, str] = {"Authorization": f"Bearer {token}"}
 
-    def _get(self, path: str, params: dict[str, str] | None = None) -> object:
-        return expect_status(self.http.get(self.base + path, params=params, headers=self.headers), HTTPStatus.OK).json()
-
-    def _send(self, method: str, path: str, body: object, *expected: int) -> None:
-        response = self.http.request(method, self.base + path, json=body, headers=self.headers)
-        expect_status(response, *(expected or (HTTPStatus.NO_CONTENT,)))
+    def server_info(self) -> JsonObject:
+        """GET /admin/serverinfo: the server's version, themes and providers."""
+        url = f"{self.url}/admin/serverinfo"
+        return cast("JsonObject", expect_status(self.http.get(url, headers=self.headers), HTTPStatus.OK).json())
 
     def representation(self) -> JsonObject:
-        """The realm's own settings, e.g. smtpServer."""
+        """Return the realm's own settings, e.g. smtpServer."""
         return cast("JsonObject", self._get(""))
 
     def user(self, username: str) -> JsonObject | None:
-        """The user with exactly this username, or None."""
+        """Return the user with exactly this username, or None."""
         users = cast("list[JsonObject]", self._get("/users", {"username": username, "exact": "true"}))
         return users[0] if users else None
 
@@ -68,7 +67,7 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
         return str(user["id"]) if user else None
 
     def users(self, search: str) -> list[JsonObject]:
-        """The users whose username, e-mail or name contains the text."""
+        """Return the users whose username, e-mail or name contains the text."""
         count = self.count_users(search)
         return cast(
             "list[JsonObject]",
@@ -80,10 +79,14 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
         return cast("int", self._get("/users/count", {"search": search}))
 
     def create_user(
-        self, username: str, password: str, attributes: dict[str, list[str]], name: tuple[str, str] | None = None
+        self,
+        username: str,
+        password: str,
+        attributes: dict[str, list[str]],
+        name: tuple[str, str] | None = None,
     ) -> str:
         """Create an enabled user without required actions, by default named PodiumD <username>; its id."""
-        body = {**_user_body(username, attributes, name), "credentials": [_password(password)]}
+        body = {**_user_body(username, attributes, name), "credentials": [_password_credential(password)]}
         self._send("POST", "/users", body, HTTPStatus.CREATED)
         user_id = self.user_id(username)
         if user_id is None:
@@ -95,7 +98,11 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
         return user_id
 
     def save_user(
-        self, username: str, password: str, attributes: dict[str, list[str]], name: tuple[str, str] | None = None
+        self,
+        username: str,
+        password: str,
+        attributes: dict[str, list[str]],
+        name: tuple[str, str] | None = None,
     ) -> str:
         """Create the user, or update an existing one in place with a new password; its id.
 
@@ -105,17 +112,17 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
         if user_id is None:
             return self.create_user(username, password, attributes, name)
         self._send("PUT", f"/users/{user_id}", _user_body(username, attributes, name), HTTPStatus.NO_CONTENT)
-        self._send("PUT", f"/users/{user_id}/reset-password", _password(password), HTTPStatus.NO_CONTENT)
+        self._send("PUT", f"/users/{user_id}/reset-password", _password_credential(password), HTTPStatus.NO_CONTENT)
         return user_id
 
     def new_password(self) -> str:
-        """A random password that the realm's passwordPolicy accepts."""
+        """Return a random password that the realm's passwordPolicy accepts."""
         return conforming_password(str(self.representation().get("passwordPolicy") or ""))
 
     def password_refusal(self, user_id: str, password: str) -> str | None:
         """Keycloak's reason to refuse the password as the user's new one; None when it takes it."""
         response = self.http.put(
-            f"{self.base}/users/{user_id}/reset-password", json=_password(password), headers=self.headers
+            f"{self.base}/users/{user_id}/reset-password", json=_password_credential(password), headers=self.headers
         )
         if response.status_code == HTTPStatus.NO_CONTENT:
             return None
@@ -130,20 +137,55 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
         """Delete a user."""
         self._send("DELETE", f"/users/{user_id}", None)
 
+    def delete_user_named(self, username: str) -> None:
+        """Delete the user with this username, if it exists."""
+        user_id = self.user_id(username)
+        if user_id:
+            self.delete_user(user_id)
+
+    def identity_providers(self) -> list[JsonObject]:
+        """Return the realm's identity providers (brokering)."""
+        return cast("list[JsonObject]", self._get("/identity-provider/instances"))
+
+    def identity_provider_mappers(self, alias: str) -> list[JsonObject]:
+        """Return the mappers of one identity provider."""
+        return cast("list[JsonObject]", self._get(f"/identity-provider/instances/{alias}/mappers"))
+
     def realm_roles(self, names: tuple[str, ...]) -> list[JsonObject]:
-        """The realm roles with these names that exist."""
+        """Return the realm roles with these names that exist."""
         roles = cast("list[JsonObject]", self._get("/roles"))
-        return [r for r in roles if r.get("name") in names]
+        return [role for role in roles if role.get("name") in names]
+
+    def role(self, name: str, client_uuid: str | None = None) -> JsonObject | None:
+        """Return a realm role, or a role of the client with this uuid, with its attributes; None when absent."""
+        path = f"/clients/{client_uuid}/roles" if client_uuid else "/roles"
+        roles = cast("list[JsonObject]", self._get(path, {"search": name, "briefRepresentation": "false"}))
+        return next((role for role in roles if role.get("name") == name), None)
+
+    def create_role(
+        self,
+        name: str,
+        client_uuid: str | None = None,
+        attributes: dict[str, list[str]] | None = None,
+    ) -> None:
+        """Create a realm role, or a role of the client with this uuid."""
+        path = f"/clients/{client_uuid}/roles" if client_uuid else "/roles"
+        self._send("POST", path, {"name": name, "attributes": attributes or {}}, HTTPStatus.CREATED)
+
+    def delete_role(self, name: str, client_uuid: str | None = None) -> None:
+        """Delete a realm role, or a role of the client with this uuid."""
+        self._send("DELETE", f"/clients/{client_uuid}/roles/{name}" if client_uuid else f"/roles/{name}", None)
 
     def user_realm_roles(self, user_id: str) -> set[str]:
         """Names of the realm roles mapped directly to a user."""
         return {
-            str(r.get("name")) for r in cast("list[JsonObject]", self._get(f"/users/{user_id}/role-mappings/realm"))
+            str(role.get("name"))
+            for role in cast("list[JsonObject]", self._get(f"/users/{user_id}/role-mappings/realm"))
         }
 
     def user_groups(self, user_id: str) -> set[str]:
         """Names of a user's groups."""
-        return {str(g.get("name")) for g in cast("list[JsonObject]", self._get(f"/users/{user_id}/groups"))}
+        return {str(group.get("name")) for group in cast("list[JsonObject]", self._get(f"/users/{user_id}/groups"))}
 
     def add_realm_roles(self, user_id: str, roles: list[JsonObject]) -> None:
         """Map realm roles to a user."""
@@ -151,7 +193,7 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
             self._send("POST", f"/users/{user_id}/role-mappings/realm", roles)
 
     def client(self, client_id: str) -> JsonObject | None:
-        """The client with this clientId, or None."""
+        """Return the client with this clientId, or None."""
         clients = cast("list[JsonObject]", self._get("/clients", {"clientId": client_id}))
         return clients[0] if clients else None
 
@@ -162,8 +204,13 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
             return None
         uuid = str(client["id"])
         roles = cast("list[JsonObject]", self._get(f"/clients/{uuid}/roles"))
-        found = next((r for r in roles if r.get("name") == role), None)
+        found = next((candidate for candidate in roles if candidate.get("name") == role), None)
         return (uuid, found) if found else None
+
+    def user_client_roles(self, user_id: str, client_uuid: str) -> set[str]:
+        """Names of one client's roles mapped directly to a user."""
+        path = f"/users/{user_id}/role-mappings/clients/{client_uuid}"
+        return {str(role.get("name")) for role in cast("list[JsonObject]", self._get(path))}
 
     def add_client_role(self, user_id: str, client_uuid: str, role: JsonObject) -> None:
         """Map one client role to a user."""
@@ -172,7 +219,7 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
     def group_id(self, name: str) -> str | None:
         """Id of the top-level group with this name, or None."""
         groups = cast("list[JsonObject]", self._get("/groups", {"search": name, "exact": "true"}))
-        return next((str(g["id"]) for g in groups if g.get("name") == name), None)
+        return next((str(group["id"]) for group in groups if group.get("name") == name), None)
 
     def join_group(self, user_id: str, group_id: str) -> None:
         """Add a user to a group."""
@@ -183,12 +230,13 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
         self._send("PUT", f"/clients/{client['id']}", client)
 
     def client_secret(self, client_uuid: str) -> str:
-        """A confidential client's secret."""
+        """Return a confidential client's secret."""
         return str(cast("JsonObject", self._get(f"/clients/{client_uuid}/client-secret"))["value"])
 
     def client_scopes(self) -> dict[str, str]:
         """Client scope name -> id."""
-        return {str(s["name"]): str(s["id"]) for s in cast("list[JsonObject]", self._get("/client-scopes"))}
+        scopes = cast("list[JsonObject]", self._get("/client-scopes"))
+        return {str(scope["name"]): str(scope["id"]) for scope in scopes}
 
     def create_client_scope(self, scope: JsonObject) -> str:
         """Create a client scope; its id."""
@@ -202,7 +250,7 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
     def scope_mappers(self, scope_id: str) -> dict[str, str]:
         """Protocol mapper name -> id of a client scope."""
         mappers = cast("list[JsonObject]", self._get(f"/client-scopes/{scope_id}/protocol-mappers/models"))
-        return {str(m["name"]): str(m["id"]) for m in mappers}
+        return {str(mapper["name"]): str(mapper["id"]) for mapper in mappers}
 
     def add_scope_mapper(self, scope_id: str, mapper: JsonObject) -> None:
         """Add a protocol mapper to a client scope."""
@@ -216,16 +264,30 @@ class KeycloakAdmin:  # pylint: disable=too-many-public-methods  # one method pe
         """Names of the default and optional client scopes of a client."""
         found: set[str] = set()
         for kind in ("default-client-scopes", "optional-client-scopes"):
-            found |= {str(s["name"]) for s in cast("list[JsonObject]", self._get(f"/clients/{client_uuid}/{kind}"))}
+            found |= {
+                str(scope["name"]) for scope in cast("list[JsonObject]", self._get(f"/clients/{client_uuid}/{kind}"))
+            }
         return found
 
     def set_optional_scope(self, client_uuid: str, scope_id: str, *, attached: bool) -> None:
         """Attach a client scope to a client as optional, or detach it."""
         self._send("PUT" if attached else "DELETE", f"/clients/{client_uuid}/optional-client-scopes/{scope_id}", None)
 
+    def _get(self, path: str, params: dict[str, str] | None = None) -> object:
+        response = self.http.get(self.base + path, params=params, headers=self.headers)
+        return expect_status(response, HTTPStatus.OK).json()
 
-def _user_body(username: str, attributes: dict[str, list[str]], name: tuple[str, str] | None) -> JsonObject:
-    """An enabled user without required actions, by default named PodiumD <username>."""
+    def _send(self, method: str, path: str, body: object, *expected: int) -> None:
+        response = self.http.request(method, self.base + path, json=body, headers=self.headers)
+        expect_status(response, *(expected or (HTTPStatus.NO_CONTENT,)))
+
+
+def _user_body(
+    username: str,
+    attributes: dict[str, list[str]],
+    name: tuple[str, str] | None,
+) -> JsonObject:
+    """Return an enabled user without required actions, by default named PodiumD <username>."""
     first, last = name or ("PodiumD", username)
     return {
         "username": username,
@@ -239,5 +301,5 @@ def _user_body(username: str, attributes: dict[str, list[str]], name: tuple[str,
     }
 
 
-def _password(password: str) -> JsonObject:
+def _password_credential(password: str) -> JsonObject:
     return {"type": "password", "value": password, "temporary": False}

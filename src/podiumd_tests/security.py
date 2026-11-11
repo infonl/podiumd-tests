@@ -41,19 +41,25 @@ MIN_CERT_DAYS = 14
 SESSION_COOKIE = re.compile(r"session|auth|token", re.IGNORECASE)
 
 
+def _brute_force_gaps(realm: JsonObject) -> list[str]:
+    if realm.get("bruteForceProtected") is not True:
+        return ["bruteForceProtected is off"]
+    if not 0 < int(cast("int", realm.get("failureFactor") or 0)) <= MAX_FAILURE_FACTOR:
+        return [f"failureFactor {realm.get('failureFactor')} (at most {MAX_FAILURE_FACTOR})"]
+    return []
+
+
 def realm_policy_gaps(realm: JsonObject) -> list[str]:
     """Where a realm representation falls short of podiumd's realm templates; empty when it does not."""
-    gaps: list[str] = []
-    if realm.get("bruteForceProtected") is not True:
-        gaps.append("bruteForceProtected is off")
-    elif not 0 < int(cast("int", realm.get("failureFactor") or 0)) <= MAX_FAILURE_FACTOR:
-        gaps.append(f"failureFactor {realm.get('failureFactor')} (at most {MAX_FAILURE_FACTOR})")
+    gaps = _brute_force_gaps(realm)
     if int(cast("int", realm.get("accessTokenLifespan") or 0)) > MAX_ACCESS_TOKEN_SECONDS:
         gaps.append(f"accessTokenLifespan {realm.get('accessTokenLifespan')} s (at most {MAX_ACCESS_TOKEN_SECONDS})")
     if realm.get("revokeRefreshToken") is not True:
         gaps.append("revokeRefreshToken is off")
-    gaps.extend(f"{e} is off" for e in ("eventsEnabled", "adminEventsEnabled") if realm.get(e) is not True)
-    if realm.get("sslRequired") not in ("external", "all"):
+    gaps.extend(
+        f"{setting} is off" for setting in ("eventsEnabled", "adminEventsEnabled") if realm.get(setting) is not True
+    )
+    if realm.get("sslRequired") not in {"external", "all"}:
         gaps.append(f"sslRequired {realm.get('sslRequired')!r} (external or all)")
     length = re.search(r"length\((\d+)\)", str(realm.get("passwordPolicy") or ""))
     if length is None or int(length[1]) < MIN_PASSWORD_LENGTH:
@@ -64,15 +70,17 @@ def realm_policy_gaps(realm: JsonObject) -> list[str]:
 
 
 def _policy_rules(policy: str) -> dict[str, int]:
-    """The counted rules of a Keycloak passwordPolicy, e.g. {"length": 12, "digits": 1}."""
+    """Return the counted rules of a Keycloak passwordPolicy, e.g. {"length": 12, "digits": 1}."""
     rules = dict(re.findall(r"(\w+)\((\d+)\)", policy))
-    return {rule: int(count) for rule, count in rules.items() if rule in {*PASSWORD_CLASSES, "length", "maxLength"}}
+    counted = {*PASSWORD_CLASSES, "length", "maxLength"}
+    return {rule: int(count) for rule, count in rules.items() if rule in counted}
 
 
 def _password(rules: dict[str, int], broken: str | None = None) -> str:
-    """A random password that meets the rules, except the broken one, which it misses by one."""
+    """Return a random password that meets the rules, except the broken one, which it misses by one."""
     counts = {rule: rules.get(rule, 1) - (rule == broken) for rule in PASSWORD_CLASSES}
-    chars = [secrets.choice(PASSWORD_CLASSES[rule]) for rule, count in counts.items() for _ in range(count)]
+    picks = [rule for rule, count in counts.items() for _ in range(count)]
+    chars = [secrets.choice(PASSWORD_CLASSES[rule]) for rule in picks]
     wanted = max(rules.get("length", 0), PASSWORD_LENGTH)
     length = rules["length"] - 1 if broken == "length" else wanted
     filler = PASSWORD_CLASSES["upperCase" if broken == "lowerCase" else "lowerCase"]
@@ -81,7 +89,7 @@ def _password(rules: dict[str, int], broken: str | None = None) -> str:
 
 
 def conforming_password(policy: str) -> str:
-    """A random password that a realm with this passwordPolicy accepts."""
+    """Return a random password that a realm with this passwordPolicy accepts."""
     return _password(_policy_rules(policy))
 
 
@@ -92,15 +100,19 @@ def policy_breaking_passwords(policy: str) -> dict[str, str]:
 
 
 def missing_security_headers(response: requests.Response) -> list[str]:
-    """The baseline headers the response lacks: HSTS and nosniff always, frame protection on an HTML page."""
-    headers = {k.lower(): v for k, v in response.headers.items()}
+    """Return the baseline headers the response lacks: HSTS and nosniff always, frame protection on an HTML page.
+
+    A redirect's HTML body is never rendered, so it cannot be framed: frame protection applies to 2xx only.
+    """
+    headers = {name.lower(): value for name, value in response.headers.items()}
     missing: list[str] = []
     if response.url.startswith("https://") and "strict-transport-security" not in headers:
         missing.append("Strict-Transport-Security")
     # An app and its nginx may each send it: "nosniff, nosniff".
-    if {v.strip().lower() for v in headers.get("x-content-type-options", "").split(",")} != {"nosniff"}:
+    options = headers.get("x-content-type-options", "").split(",")
+    if {option.strip().lower() for option in options} != {"nosniff"}:
         missing.append("X-Content-Type-Options: nosniff")
-    html = headers.get("content-type", "").startswith("text/html")
+    html = response.ok and not response.is_redirect and headers.get("content-type", "").startswith("text/html")
     framed = "x-frame-options" in headers or "frame-ancestors" in headers.get("content-security-policy", "")
     if html and not framed:
         missing.append("X-Frame-Options or CSP frame-ancestors")
@@ -112,14 +124,14 @@ def insecure_session_cookies(response: requests.Response) -> list[str]:
     found: list[str] = []
     for cookie in cast("list[str]", response.raw.headers.getlist("Set-Cookie")):
         name, _, rest = cookie.partition("=")
-        flags = {f.strip().lower() for f in rest.split(";")[1:]}
+        flags = {flag.strip().lower() for flag in rest.split(";")[1:]}
         if SESSION_COOKIE.search(name) and not {"secure", "httponly"} <= flags:
             found.append(name)
     return found
 
 
-def foreign_origin_allowed(response: requests.Response, origin: str) -> bool:
-    """The response lets a page on origin read it: the origin echoed, or any origin with credentials."""
+def is_foreign_origin_allowed(response: requests.Response, origin: str) -> bool:
+    """Return whether the response lets a page on origin read it: the origin echoed, or any origin with credentials."""
     allowed = response.headers.get("Access-Control-Allow-Origin")
     credentials = response.headers.get("Access-Control-Allow-Credentials", "").lower() == "true"
     return allowed == origin or (allowed == "*" and credentials)

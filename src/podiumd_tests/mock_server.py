@@ -17,13 +17,15 @@ from typing import cast
 import yaml
 
 from podiumd_tests.config import REPO_ROOT
+from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from podiumd_tests.bootstrap import Context
+    from podiumd_tests.bootstrap.runner import Context
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
 
@@ -32,18 +34,38 @@ INFRA = REPO_ROOT / "infra" / "mock-server"
 RECEIVED_FILE = "/data/received.jsonl"
 # Where the mock server keeps the Worldline checkouts it plays.
 CHECKOUTS_DIR = "/data/worldline"
-# The mock server's Notify (NotifyNL) API: OMC's Notify base URL is the mock server's /notify.
-NOTIFY_EMAIL = "/notify/v2/notifications/email"
+# The mock server's Notify (NotifyNL) API. OMC's Notify client keeps only the host of its base URL
+# (podiumd-minikube sets <mock server>/notify), so the path has no /notify prefix.
+NOTIFY_EMAIL = "/v2/notifications/email"
+NOTIFY_SMS = "/v2/notifications/sms"
 ROLLOUT_TIMEOUT = 180
 
 
-def manifests() -> list[dict[str, object]]:
-    """The mock server's ConfigMap, Deployment and Service, with server.py in the ConfigMap."""
-    docs = [cast("dict[str, object]", d) for d in yaml.safe_load_all((INFRA / "manifests.yaml").read_text()) if d]
+def manifests(image: str = "") -> list[dict[str, object]]:
+    """Return the mock server's ConfigMap, Deployment and Service, with server.py; image replaces the default image."""
+    docs = [
+        cast("dict[str, object]", manifest)
+        for manifest in yaml.safe_load_all((INFRA / "manifests.yaml").read_text())
+        if manifest
+    ]
     for doc in docs:
         if doc["kind"] == "ConfigMap":
             doc["data"] = {"server.py": (INFRA / "server.py").read_text()}
+        if doc["kind"] == "Deployment" and image:
+            _container(doc)["image"] = image
     return docs
+
+
+def _container(deployment: JsonObject) -> dict[str, object]:
+    return cast(
+        "dict[str, object]",
+        entries(section(section(section(deployment, "spec"), "template"), "spec").get("containers"))[0],
+    )
+
+
+def _image(env: Environment) -> str:
+    """Return the profile's settings.mock_server_image (a registry the cluster's policy allows), or the default."""
+    return env.profile.settings.get("mock_server_image", "")
 
 
 def _entry(line: str) -> JsonObject | None:
@@ -56,7 +78,7 @@ def _entry(line: str) -> JsonObject | None:
 
 
 def mock_server_root(env: Environment) -> str:
-    """The root URL the platform reaches the mock server on from inside the cluster."""
+    """Return the root URL the platform reaches the mock server on from inside the cluster."""
     return f"http://{NAME}.{env.profile.kube.namespace}"
 
 
@@ -67,25 +89,28 @@ class Callback:
     env: Environment
     path: str
 
-    @classmethod
-    def new(cls, env: Environment, run_tag: str, *, fail_first: bool = False) -> Callback:
-        """A callback path of its own, under the run tag; fail_first: the first notification gets 500."""
-        return cls(env, f"/{run_tag}{'/fail-first' if fail_first else ''}/{secrets.token_hex(6)}")
-
     @property
     def url(self) -> str:
         """URL the platform reaches the callback on from inside the cluster."""
         return mock_server_root(self.env) + self.path
 
+    @classmethod
+    def new(cls, env: Environment, run_tag: str, *, fail_first: bool = False) -> Callback:
+        """Return a callback path of its own, under the run tag; fail_first: the first notification gets 500."""
+        return cls(env, f"/{run_tag}{'/fail-first' if fail_first else ''}/{secrets.token_hex(6)}")
+
     def received(self) -> list[JsonObject]:
         """Everything the mock server got on this path, oldest first."""
         out = self.env.kube.exec(NAME, "sh", "-c", f"cat {RECEIVED_FILE} 2>/dev/null || true")
-        return [e for e in map(_entry, out.splitlines()) if e is not None and e.get("path") == self.path]
+        parsed = map(_entry, out.splitlines())
+        return [entry for entry in parsed if entry is not None and entry.get("path") == self.path]
 
     def wait_for(self, match: Callable[[JsonObject], bool], *, timeout: float, description: str) -> JsonObject:
-        """The first received entry that matches; WaitTimeoutError when none arrives in time."""
+        """Return the first received entry that matches; WaitTimeoutError when none arrives in time."""
         return wait_until(
-            lambda: next((e for e in self.received() if match(e)), None), timeout=timeout, description=description
+            lambda: next((entry for entry in self.received() if match(entry)), None),
+            timeout=timeout,
+            description=description,
         )
 
 
@@ -97,8 +122,8 @@ class MockServer:
     requires: tuple[str, ...] = ("cluster",)
     wiring: bool = False
 
-    def is_present(self, ctx: Context, /) -> bool:
-        """The ConfigMap holds the current server.py and the Deployment has a ready replica."""
+    def is_present(self, ctx: Context, /) -> bool:  # noqa: PLR6301  # a Step method
+        """Return whether the ConfigMap holds the current server.py and the Deployment has a ready replica."""
         kube = ctx.env.kube
         config_map = kube.get_optional("configmap", NAME)
         deployment = kube.get_optional("deployment", NAME)
@@ -106,12 +131,14 @@ class MockServer:
             return False
         code = cast("dict[str, object]", config_map.get("data") or {}).get("server.py")
         ready = cast("dict[str, object]", deployment.get("status") or {}).get("readyReplicas")
-        return code == (INFRA / "server.py").read_text() and bool(ready)
+        wanted = _container(manifests(_image(ctx.env))[1])["image"]
+        same_image = _container(deployment).get("image") == wanted
+        return code == (INFRA / "server.py").read_text() and bool(ready) and same_image
 
-    def apply(self, ctx: Context, /) -> dict[str, str]:
+    def apply(self, ctx: Context, /) -> dict[str, str]:  # noqa: PLR6301  # a Step method
         """Apply the manifests, restart on new code, and wait until the Deployment is ready."""
         kube = ctx.env.kube
-        for manifest in manifests():
+        for manifest in manifests(_image(ctx.env)):
             kube.apply(manifest)
         kube.run("rollout", "restart", f"deployment/{NAME}")
         kube.run(
@@ -119,7 +146,7 @@ class MockServer:
         )
         return {}
 
-    def remove(self, ctx: Context, /) -> tuple[str, ...]:
+    def remove(self, ctx: Context, /) -> tuple[str, ...]:  # noqa: PLR6301  # a Step method
         """Delete the manifests' objects."""
         for manifest in reversed(manifests()):
             ctx.env.kube.delete(str(manifest["kind"]).lower(), metadata_name(manifest))

@@ -8,10 +8,11 @@ def objecttype_models():
     """(ObjectType, its version model) of this app's Objecttypen API."""
     try:
         from objecttypes.core.models import ObjectType
-        from objecttypes.core.models import ObjectVersion
     except ImportError:
         from objects.core.models import ObjectType
         from objects.core.models import ObjectTypeVersion as ObjectVersion
+    else:
+        from objecttypes.core.models import ObjectVersion
     return ObjectType, ObjectVersion
 
 
@@ -19,7 +20,7 @@ def objecten_name_field():
     """Field of Objecten's ObjectType with the objecttype's name: before Open Object, _name holds a copy."""
     from objects.core.models import ObjectType
 
-    return "_name" if any(f.name == "_name" for f in ObjectType._meta.get_fields()) else "name"
+    return "_name" if any(field.name == "_name" for field in ObjectType._meta.get_fields()) else "name"
 
 
 def objecten_objecttype(name):

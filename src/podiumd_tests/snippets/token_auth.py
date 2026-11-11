@@ -40,7 +40,7 @@ def _permissions(token, names):
     for object_type in object_types:
         Permission.objects.create(token_auth=token, object_type=object_type, mode="read_and_write")
     found = set(object_types.values_list(name_field, flat=True))
-    return [f"no objecttype {n}" for n in sorted(set(names) - found)]
+    return [f"no objecttype {name}" for name in sorted(set(names) - found)]
 
 
 def _missing(token, names):
@@ -51,14 +51,15 @@ def _missing(token, names):
 
     granted = set(token.permissions.values_list("object_type__pk", flat=True))
     object_types = ObjectType.objects.filter(**{f"{objecten_name_field()}__in": names})
-    return [o.pk for o in object_types if o.pk not in granted]
+    return [object_type.pk for object_type in object_types if object_type.pk not in granted]
 
 
 def _token_model(modules):
     # Objecttypen's own token model is gone in Open Object, whose single TokenAuth serves both APIs.
-    import importlib.util
+    from importlib import import_module
+    from importlib.util import find_spec
 
     for module in modules:
-        if importlib.util.find_spec(module.split(".")[0]):
-            return importlib.import_module(module).TokenAuth
+        if find_spec(module.split(".")[0]):
+            return import_module(module).TokenAuth
     raise ImportError(", ".join(modules))

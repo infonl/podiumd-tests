@@ -22,11 +22,12 @@ from podiumd_tests.browser import browser_session
 from podiumd_tests.json_data import section
 from podiumd_tests.openinwoner import LOGINS
 from podiumd_tests.openinwoner import choose_document
+from podiumd_tests.openinwoner import is_virus_scan_enabled
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.openinwoner import upload_document
-from podiumd_tests.openinwoner import virus_scan_enabled
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openklant import delete_klantcontact_tree
+from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import clean_up_new_documents
 from podiumd_tests.seed.openzaak import link_document
@@ -70,12 +71,21 @@ WHO = [
         "bedrijf",
         marks=pytest.mark.xfail(
             strict=True,
-            reason="Open Inwoner 2.4.3: with fetch_eherkenning_zaken_with_openzaak_120_params Mijn zaken lists"
+            reason="[open-inwoner-2] Open Inwoner 2.4.3 and 2.5.0: with fetch_eherkenning_zaken_with_openzaak_120_params Mijn zaken lists"
             " a zaak by nietNatuurlijkPersoon.vestigingsNummer, but its detail accepts only a vestiging rol"
             " (fetch_roles_for_zaak_and_vestigingsnummer) and answers 404; not yet reported upstream",
         ),
     ),
 ]
+
+
+@pytest.fixture(scope="module", name="virus_scan")
+def fixture_virus_scan(podiumd_env: Environment) -> None:
+    """Skips unless Open Inwoner scans uploads with ClamAV."""
+    if not is_virus_scan_enabled(podiumd_env):
+        pytest.skip(
+            "Open Inwoner scans no uploads: set profile setting clamav and run bootstrap step openinwoner-virus-scan"
+        )
 
 
 def zaak_of(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts, who: str = "inwoner") -> JsonObject:
@@ -103,7 +113,13 @@ def log_in(page: Page, podiumd_env: Environment, who: str = "inwoner") -> None:
 # Search can be switched off by test_portaal_zoeken; it runs on the same worker.
 @pytest.mark.xdist_group("openinwoner-search")
 @pytest.mark.tc("OI-091")
-def test_search_on_a_zaaknummer_opens_the_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source("draaiboek OI-091", "The portal can be searched on zaaknummer.")
+@pytest.mark.scenario("""
+    Given an inwoner with a zaak in Open Zaak is logged in to Open Inwoner
+    When the inwoner searches on the zaaknummer
+    Then the portal opens that zaak
+""")
+def test_search_on_a_zaaknummer_opens_the_zaak(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -147,7 +163,32 @@ PHONES = {
         *(pytest.param(name, marks=pytest.mark.browser_context_args(**args)) for name, args in PHONES.items()),
     ],
 )
-def test_inwoners_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "TA interaction/21-portaal-mijn-zaken-ui.spec.ts",
+    "A logged-in inwoner sees their own zaak on the portal's Mijn zaken.",
+)
+@pytest.mark.source(
+    "TA regression/95-portaal-filtering.spec.ts",
+    "Mijn zaken and its content endpoint load for a DigiD-logged-in inwoner.",
+)
+@pytest.mark.source(
+    "TA regression/61-mobile-mijn-zaken.spec.ts",
+    "Mijn zaken renders correctly on mobile viewports (iPhone 13, Pixel 5).",
+)
+@pytest.mark.source(
+    "TA regression/110-portaal-anoniem-en-mobile.spec.ts", "A citizen can use the zaken overview in the mobile view."
+)
+@pytest.mark.source(
+    "TA interaction/10-cross-component-zaak-portaal.spec.ts",
+    "A zaak with the inwoner's BSN as initiator is found by the rol filter the portal uses.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner with a zaak in Open Zaak
+    When the inwoner logs in to Open Inwoner with DigiD on a desktop or phone screen
+    Then Mijn zaken lists the zaak
+    And the page fits the width of the screen
+""")
+def test_inwoners_zaak_is_in_mijn_zaken(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -165,7 +206,16 @@ def test_inwoners_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,t
     assert overflow <= 0, f"{screen}: page {overflow}px wider than the screen"
 
 
-def test_bedrijfs_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "TA interaction/141-bedrijf-eherkenning-mijn-zaken.spec.ts",
+    "After an eHerkenning login a company sees its zaak in Mijn zaken.",
+)
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak of a company's vestiging
+    When the company logs in to Open Inwoner with eHerkenning
+    Then Mijn zaken lists the zaak
+""")
+def test_bedrijfs_zaak_is_in_mijn_zaken(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -182,7 +232,16 @@ def test_bedrijfs_zaak_is_in_mijn_zaken(  # pylint: disable=too-many-arguments,t
 
 @pytest.mark.tc("OI-014", "OI-068")
 @pytest.mark.parametrize("who", WHO)
-def test_zaak_shows_its_current_status(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "draaiboek OI-014, OI-068",
+    "Every zaak shown in the portal has the correct status, exactly matching its status in ZAC.",
+)
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak of an inwoner or company that got a second status
+    When the inwoner or company opens the zaak in Mijn zaken
+    Then the zaak shows its current status
+""")
+def test_zaak_shows_its_current_status(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -196,12 +255,26 @@ def test_zaak_shows_its_current_status(  # pylint: disable=too-many-arguments,to
     zaak = zaak_of(openzaak, registry, parts, who)
     current = parts.statustypen[1]
     make_status(openzaak, zaak, str(current["url"]))
-    open_status_page(page, podiumd_env, zaak, who)
+    open_zaak_status(page, podiumd_env, zaak, who)
     # The status page loads the zaak's data after the page itself, like the list.
     expect(page.locator("main")).to_contain_text(str(current["omschrijving"]), timeout=LIST_TIMEOUT_MS)
 
 
-def test_zaak_document_can_be_downloaded(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "TA regression/143-portaal-document-download.spec.ts",
+    "An inwoner downloads a document of their own zaak, proving the download works end to end.",
+)
+@pytest.mark.source(
+    "TA interaction/31-document-portaal-ui.spec.ts",
+    "Documents of a zaak are visible to the logged-in inwoner on the zaak's detail page.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner's zaak in Open Zaak with a definitief document
+    When the inwoner opens the zaak in Mijn zaken
+    Then the zaak shows the document
+    And the document downloads with its content
+""")
+def test_zaak_document_can_be_downloaded(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -215,18 +288,33 @@ def test_zaak_document_can_be_downloaded(  # pylint: disable=too-many-arguments,
     inhoud = registry.tagged("documentinhoud")
     document = make_document(openzaak, registry, parts.informatieobjecttype, inhoud, status="definitief")
     link_document(openzaak, registry, zaak, document)
-    open_status_page(page, podiumd_env, zaak)
-    expect(page.get_by_text(str(document["titel"])).first).to_be_visible()
-    href = page.locator(f'a[href*="{str(document["url"]).rsplit("/", 1)[-1]}"]').first.get_attribute("href")
+    open_zaak_status(page, podiumd_env, zaak)
+    # The status page loads the zaak's documents after the page itself ("Gegevens laden...").
+    expect(page.get_by_text(str(document["titel"])).first).to_be_visible(timeout=LIST_TIMEOUT_MS)
+    document_uuid = str(document["url"]).rsplit("/", 1)[-1]
+    href = page.locator(f'a[href*="{document_uuid}"]').first.get_attribute("href")  # noqa: B907  # CSS selector
     assert href, "no download link for the document"
     download = browser_session(page, podiumd_env).get(
-        re.sub(r"^/", podiumd_env.profile.urls["openinwoner"] + "/", href)
+        re.sub(r"^/", f"{podiumd_env.profile.urls['openinwoner']}/", href)
     )
     assert inhoud in download.text
 
 
 @pytest.mark.core
-def test_uploaded_document_reaches_the_zaak(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "TA interaction/162-portaal-document-upload-e2e.spec.ts",
+    "An inwoner uploads a file in the portal and the document appears on the zaak in Open Zaak.",
+)
+@pytest.mark.source(
+    "TA interaction/111-portaal-documenten-uploaden.spec.ts",
+    "Documents can be uploaded from the portal's zaak detail page.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner's zaak in Open Zaak
+    When the inwoner uploads a file on the zaak in Mijn zaken
+    Then the file is a document of the zaak in Open Zaak
+""")
+def test_uploaded_document_reaches_the_zaak(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -239,7 +327,7 @@ def test_uploaded_document_reaches_the_zaak(  # pylint: disable=too-many-argumen
     zaak = zaak_of(openzaak, registry, parts)
     clean_up_new_documents(openzaak, registry, zaak)
     bestand = f"{registry.tagged('upload')}.txt"
-    open_status_page(page, podiumd_env, zaak)
+    open_zaak_status(page, podiumd_env, zaak)
     upload_document(page, bestand, bestand.encode())
     found = wait_until(lambda: documents_of(openzaak, zaak), timeout=30, description=f"document {bestand} on the zaak")
     assert bestand in found
@@ -248,7 +336,18 @@ def test_uploaded_document_reaches_the_zaak(  # pylint: disable=too-many-argumen
 @pytest.mark.requires("cluster")
 @pytest.mark.tc("OI-010", "OI-064")
 @pytest.mark.parametrize("who", WHO)
-def test_infected_upload_is_refused(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "TA regression/123-portaal-clamav-eicar-rejectie.spec.ts",
+    "The portal refuses harmful uploads through ClamAV's virus scan.",
+)
+@pytest.mark.usefixtures("virus_scan")
+@pytest.mark.scenario("""
+    Given Open Inwoner scans uploads for viruses
+    And a zaak in Open Zaak of an inwoner or company
+    When the inwoner or company uploads a test virus file on the zaak in Mijn zaken
+    Then the zaak gets no document
+""")
+def test_infected_upload_is_refused(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -258,20 +357,25 @@ def test_infected_upload_is_refused(  # pylint: disable=too-many-arguments,too-m
     who: str,
 ) -> None:
     """With ClamAV on, an upload of the EICAR test file does not reach the zaak (TA reg-123)."""
-    if not virus_scan_enabled(podiumd_env):
-        pytest.skip(
-            "Open Inwoner scans no uploads: set profile setting clamav and run bootstrap step openinwoner-virus-scan"
-        )
     need_bootstrap(LOGINS[who][0].name, *WIRING, "openinwoner-zaaktype-config")
     zaak = zaak_of(openzaak, registry, parts, who)
     clean_up_new_documents(openzaak, registry, zaak)
-    open_status_page(page, podiumd_env, zaak, who)
+    open_zaak_status(page, podiumd_env, zaak, who)
     upload_document(page, f"{registry.tagged('eicar')}.txt", EICAR)
     assert documents_of(openzaak, zaak) == []
 
 
 @pytest.mark.tc("INT-018")
-def test_refused_file_type_cannot_be_uploaded(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "TA regression/178-blacklist-upload.spec.ts",
+    "Uploading a file with a blacklisted extension in the portal is refused with a message.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner's zaak in Open Zaak
+    When the inwoner chooses an .html file to upload on the zaak in Mijn zaken
+    Then the upload button stays disabled
+""")
+def test_refused_file_type_cannot_be_uploaded(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -282,7 +386,7 @@ def test_refused_file_type_cannot_be_uploaded(  # pylint: disable=too-many-argum
     """The upload form keeps its button disabled for a file type outside the allowed list, such as .html (TA reg-178)."""
     need_bootstrap(INWONER.name, *WIRING, "openinwoner-zaaktype-config")
     zaak = zaak_of(openzaak, registry, parts)
-    open_status_page(page, podiumd_env, zaak)
+    open_zaak_status(page, podiumd_env, zaak)
     expect(choose_document(page, f"{registry.tagged('pagina')}.html", b"<html></html>")).to_be_disabled()
 
 
@@ -291,10 +395,10 @@ def expect_listed(page: Page, zaak: JsonObject) -> None:
     expect(page.get_by_text(str(zaak["identificatie"])).first).to_be_visible(timeout=LIST_TIMEOUT_MS)
 
 
-def open_status_page(page: Page, podiumd_env: Environment, zaak: JsonObject, who: str = "inwoner") -> None:
+def open_zaak_status(page: Page, podiumd_env: Environment, zaak: JsonObject, who: str = "inwoner") -> None:
     """Log the identity in and open the zaak's status page from Mijn zaken."""
     log_in(page, podiumd_env, who)
-    page.locator(f'a[href*="{zaak["uuid"]}"]').first.click()
+    page.locator(f'a[href*="{zaak["uuid"]}"]').first.click()  # noqa: B907  # CSS selector
 
 
 def documents_of(openzaak: ApiClient, zaak: JsonObject) -> list[str]:
@@ -304,7 +408,17 @@ def documents_of(openzaak: ApiClient, zaak: JsonObject) -> list[str]:
 
 
 @pytest.mark.core
-def test_question_about_a_zaak_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "TA interaction/164-portaal-vraag-stellen-vanuit-zaak.spec.ts",
+    "A question asked from the zaak detail page lands in Open Klant as a contactmoment linked to the zaak.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner's zaak in Open Zaak
+    When the inwoner asks a question on the zaak in Mijn zaken
+    Then Open Klant has one klantcontact about the zaak
+    And it holds the question and the zaaknummer
+""")
+def test_question_about_a_zaak_reaches_open_klant(
     page: Page,
     podiumd_env: Environment,
     openzaak: ApiClient,
@@ -326,9 +440,15 @@ def test_question_about_a_zaak_reaches_open_klant(  # pylint: disable=too-many-a
         lambda: [delete_klantcontact_tree(openklant, k) for k in klantcontacten()],
     )
     vraag = registry.tagged("zaakvraag")
-    open_status_page(page, podiumd_env, zaak)
-    page.locator('#contact-form textarea[name="question"]').fill(vraag)
-    page.locator("#submit_contact").click()
+    open_zaak_status(page, podiumd_env, zaak)
+    # htmx loads the form after the page (status/content/); typing before that settles leaves the button disabled.
+    question = page.locator('#contact-form textarea[name="question"]')
+    question.wait_for()
+    page.wait_for_load_state("networkidle")
+    question.fill(vraag)
+    submit = page.locator("#submit_contact")
+    expect(submit).not_to_have_class(re.compile(r"button--disabled"))
+    submit.click()
     found = wait_until(klantcontacten, timeout=30, description=f"klantcontact about zaak {zaak['uuid']}")
     # Open Inwoner appends "Case number: <identificatie>" to the question.
     inhoud = [str(openklant.get(k).get("inhoud")) for k in found]
@@ -339,15 +459,32 @@ def test_question_about_a_zaak_reaches_open_klant(  # pylint: disable=too-many-a
 
 @pytest.mark.tc("ZAC-066")
 @pytest.mark.requires("zac")
-def test_zaak_started_in_zac_shows_in_mijn_zaken(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source("draaiboek ZAC-066", "The portal shows zaken from ZAC correctly.")
+@pytest.mark.scenario("""
+    Given a behandelaar starts a zaak in ZAC
+    And makes the inwoner its initiator
+    When the inwoner logs in to Open Inwoner with DigiD
+    Then Mijn zaken lists the zaak
+""")
+def test_zaak_started_in_zac_shows_in_mijn_zaken(
     page: Page,
     podiumd_env: Environment,
     zac: requests.Session,
     urls: dict[str, str],
+    openzaak: ApiClient,
+    zac_parameters: JsonObject,
     zac_zaak: Callable[..., JsonObject],
     need_bootstrap: Callable[..., None],
 ) -> None:
-    """A zaak started in ZAC with the inwoner as initiator is listed in the inwoner's Mijn zaken."""
+    """A zaak started in ZAC with the inwoner as initiator is listed in the inwoner's Mijn zaken.
+
+    Open Inwoner lists only zaken of an extern zaaktype, so an intern zaaktype in ZAC skips.
+    """
+    zaaktype = openzaak.get(f"{CATALOGI}/zaaktypen/{section(zac_parameters, 'zaaktype')['uuid']}")
+    if zaaktype.get("indicatieInternOfExtern") != "extern":
+        pytest.skip(
+            f"ZAC's zaaktype {zaaktype.get('identificatie')} is intern: Open Inwoner lists only extern zaaktypen"
+        )
     need_bootstrap(INWONER.name, *WIRING)
     zaak = zac_zaak()
 

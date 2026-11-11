@@ -21,12 +21,7 @@ def run(params):
     secrets = JWTSecret.objects.filter(identifier=client_id)
     catalogus_params = params.get("catalogus")
     if params["action"] == "status":
-        present = applicaties.exists() and secrets.exists()
-        if catalogus_params and not _catalogi(catalogus_params).exists():
-            present = False
-        if params.get("zaaktypen") and not _zaaktype_rights_present(applicaties, params["zaaktypen"]):
-            present = False
-        return {"present": bool(present)}
+        return {"present": _present(params, applicaties, secrets)}
     if params["action"] == "remove":
         removed = applicaties.delete()[0] + secrets.delete()[0]
         if catalogus_params and catalogus_params["owns"]:
@@ -44,13 +39,27 @@ def run(params):
     return {"present": True, "notes": notes}
 
 
+def _present(params, applicaties, secrets):
+    present = applicaties.exists() and secrets.exists()
+    catalogus_params = params.get("catalogus")
+    if catalogus_params and not _catalogi(catalogus_params).exists():
+        present = False
+    if params.get("zaaktypen") and not _zaaktype_rights_present(applicaties, params["zaaktypen"]):
+        present = False
+    return bool(present)
+
+
 def _zaaktype_rights_present(applicaties, zaaktypen_params):
+    from openzaak.components.catalogi.models import ZaakType
     from vng_api_common.authorizations.models import Autorisatie
 
     rights = Autorisatie.objects.filter(applicatie__in=applicaties)
-    # A right on another Open Zaak URL (e.g. http before the switch to https) is stale.
-    prefix = zaaktypen_params["base_url"].rstrip("/") + "/"
-    if not rights.filter(component="zrc", zaaktype__startswith=prefix).exists():
+    # Every published version needs its right: a zaaktype published after bootstrap has none. A right
+    # on another Open Zaak URL (e.g. http before the switch to https) is stale.
+    base = zaaktypen_params["base_url"].rstrip("/")
+    versions = ZaakType.objects.filter(identificatie__in=zaaktypen_params["identificaties"], concept=False)
+    granted = set(rights.filter(component="zrc").values_list("zaaktype", flat=True))
+    if not versions.exists() or any(base + zaaktype.get_absolute_api_url() not in granted for zaaktype in versions):
         return False
     return not zaaktypen_params.get("document_scopes") or rights.filter(component="drc").exists()
 
@@ -81,8 +90,8 @@ def _zaaktype_autorisaties(applicatie, zaaktypen_params):
                     "max_vertrouwelijkheidaanduiding": zaaktypen_params["max_va"],
                 },
             )
-    missing = sorted(set(wanted) - {z.identificatie for z in found})
-    return [f"no published zaaktype {i}" for i in missing]
+    missing = sorted(set(wanted) - {zaaktype.identificatie for zaaktype in found})
+    return [f"no published zaaktype {identificatie}" for identificatie in missing]
 
 
 def _catalogi(catalogus_params):
@@ -123,7 +132,9 @@ def _catalogus_autorisaties(applicatie, catalogus_params):
     excluded = catalogus_params["exclude"]
     for component, prefixes in catalogus_params["components"].items():
         scopes = sorted(
-            label for label in labels if label.startswith(tuple(prefixes)) and not any(w in label for w in excluded)
+            label
+            for label in labels
+            if label.startswith(tuple(prefixes)) and not any(exclusion in label for exclusion in excluded)
         )
         if scopes:
             CatalogusAutorisatie.objects.create(

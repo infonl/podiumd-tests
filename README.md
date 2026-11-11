@@ -21,7 +21,8 @@ You need:
 - Python 3.12 or newer;
 - `kubectl` with a context for the environment;
 - for AKS environments: `az` (logged in) and `kubelogin`, to get and use the
-  kube context;
+  kube context; with the profile's `kube.aks`, doctor rewrites the context
+  when the cluster's API address changed;
 - network access to the environment's URLs (for ExternalsPodiumD: the VPN, and
   `KUBECONFIG` including the cluster's kubeconfig).
 
@@ -85,7 +86,7 @@ Exit codes: 0 pass, 1 test failures, 2 configuration or preflight error,
 ## Tiers
 
 A profile's `allowed_tiers` limits which tiers may run against that
-environment. `core`, `full` and `chaos` run on 4 pytest-xdist workers; profile
+environment. `core`, `full` and `chaos` run on pytest-xdist workers, half the machine's CPUs and at most 8; profile
 setting `pytest_workers` changes that (1 runs serially).
 
 | Tier | Runs | Changes the environment |
@@ -94,7 +95,7 @@ setting `pytest_workers` changes that (1 runs serially).
 | `core` | smoke plus the tests marked `core`: the key user flows (create a zaak, submit a form, a contactverzoek from KISS to ITA, notifications). | yes: creates test data tagged with the run and deletes it at the end |
 | `full` | smoke, `tests/component` (one component's behaviour) and `tests/integration` (chains across components), except destructive tests. | yes: as `core` |
 | `perf` | `tests/perf`: Locust load with the response-time thresholds of `perf.yaml`. | read-mostly; load on the environment |
-| `chaos` | only tests marked `destructive`: a component or SMTP stopped and recovery, changes to global settings (Open Archiefbeheer). Opt-in. | yes: disrupts other users meanwhile |
+| `chaos` | only tests marked `destructive`: a component or SMTP stopped and recovery, changes to global settings (Open Archiefbeheer), and on a profile with setting `replicas_command` the tests that need several pods (fixture `several_replicas` switches them on once per run). Opt-in. | yes: disrupts other users meanwhile |
 
 ## Bootstrap and cleanup
 
@@ -181,7 +182,8 @@ rights (SCC Twente), run the container image from a machine that has access.
 ## Development
 
 ```bash
-./run_python_checks   # ruff, shellcheck, jscpd, pymarkdown, vulture, bandit, pylint, basedpyright, pytest
+./run_python_checks   # ruff, shellcheck, actionlint, flake8 (wemake, plugins), yamllint, jscpd, pymarkdown, vulture, deptry, bandit, pylint, basedpyright, pytest, pip-audit
+git config core.hooksPath .githooks   # once per clone: commits run the checks first
 ```
 
 A bare `pytest` runs only the offline unit tests in `unit_tests/`. The

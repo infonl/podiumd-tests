@@ -1,7 +1,8 @@
+---
 # SSC Twente ExternalsPodiumD environment ontw-dim2 (applications/gemeenten/dim2/ontw/).
-# Every tier, chaos included (user, 2026-10-13).
+# Every tier except chaos.
 estate: externals
-allowed_tiers: [smoke, core, full, perf, chaos]
+allowed_tiers: [smoke, core, full, perf]
 kube:
   context: aks-blue-ontw-dim2
   namespace: podiumd
@@ -21,3 +22,12 @@ urls:
   ita: https://ontw-ita.dim2.dimpact.nl
   openarchiefbeheer: https://ontw-abc.dim2.dimpact.nl
   grafana: https://ontw-podiumd-logs.dim2.dimpact.nl
+secrets:
+  # The realm-scoped podiumd admin the chart creates; needed to make the test users.
+  keycloak_admin_username:
+    k8s_secret: {name: keycloak-podiumd-admin, key: username}
+  keycloak_admin_password:
+    k8s_secret: {name: keycloak-podiumd-admin, key: password}
+bootstrap:
+  # The environment owner agreed to test wiring here (DigiD/eHerkenning mock, OpenKlant2, CMS pages, KISS kanalen).
+  wiring: true

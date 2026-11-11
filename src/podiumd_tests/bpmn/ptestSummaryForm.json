@@ -1,0 +1,34 @@
+{
+  "display": "form",
+  "name": "ptestSummaryForm",
+  "title": "Summary",
+  "path": "ptestsummaryform",
+  "type": "form",
+  "components": [
+    {
+      "type": "textfield",
+      "key": "AM_TeamBehandelaar_Groep",
+      "label": "Groep",
+      "input": true
+    },
+    {
+      "type": "textfield",
+      "key": "ZK_Status",
+      "label": "Status",
+      "input": true
+    },
+    {
+      "type": "textfield",
+      "key": "ZK_Result",
+      "label": "Resultaat",
+      "input": true
+    },
+    {
+      "type": "button",
+      "key": "submit",
+      "label": "Submit",
+      "action": "submit",
+      "input": true
+    }
+  ]
+}

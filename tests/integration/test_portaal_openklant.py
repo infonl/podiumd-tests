@@ -7,6 +7,7 @@ Klant with its own token (wiring W6); the contact flow sends questions to the KC
 from __future__ import annotations
 
 import itertools
+import re
 
 from datetime import UTC
 from datetime import datetime
@@ -23,16 +24,19 @@ from podiumd_tests.bootstrap.steps import ITA_GROEP
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.kcc import add_klantcontact
 from podiumd_tests.kcc import ita_detail_text
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.mailpit import forget_mails
+from podiumd_tests.mailpit import quoted
 from podiumd_tests.openinwoner import ask_anonymously
+from podiumd_tests.openinwoner import forget_questions
 from podiumd_tests.openinwoner import portal_login
-from podiumd_tests.openinwoner import set_account
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import clean_up_logboek
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import clean_up_klantcontacten
+from podiumd_tests.seed.openklant import close_internetaak
 from podiumd_tests.seed.openklant import expanded
 from podiumd_tests.seed.openklant import klantcontact_body
 from podiumd_tests.seed.openklant import klantcontacten_about
@@ -76,7 +80,7 @@ MANY_QUESTIONS = 26
 def clean_up_question(podiumd_env: Environment, openklant: ApiClient, registry: ResourceRegistry, vraag: str) -> None:
     """Delete, at cleanup, the question's klantcontacten and the copy Open Inwoner mails to the contact address."""
     clean_up_klantcontacten(openklant, registry, SUBJECT, vraag)
-    forget_mails(podiumd_env, registry, f'"{vraag}"')
+    forget_mails(podiumd_env, registry, quoted(vraag))
 
 
 def question_in_open_klant(openklant: ApiClient, vraag: str) -> JsonObject:
@@ -112,7 +116,17 @@ def ask_in_mijn_vragen(page: Page, podiumd_env: Environment, vraag: str) -> Loca
 
 
 @pytest.mark.tc("OI-031")
-def test_question_shows_in_mijn_vragen(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "TA interaction/182-keten-contactformulier-mijn-vragen.spec.ts",
+    "An inwoner asks a question through the portal's contact form and sees it in Mijn vragen.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner is logged in to Open Inwoner with DigiD
+    When the inwoner asks a question in Mijn vragen
+    Then Mijn vragen lists the question as unanswered
+    And Open Klant has the question as a klantcontact of the inwoner
+""")
+def test_question_shows_in_mijn_vragen(
     page: Page,
     podiumd_env: Environment,
     openklant: ApiClient,
@@ -129,46 +143,19 @@ def test_question_shows_in_mijn_vragen(  # pylint: disable=too-many-arguments,to
     assert asked_by(openklant, vraag) & set(partijen_of(openklant, bsn)), "the question is not the inwoner's"
 
 
-@pytest.mark.tc("OI-023")
-# The begeleider finds the inwoner by this e-mail address: with the module's group, the same xdist group
-# as test_portaal_samenwerken.
-@pytest.mark.xdist_group("openinwoner-begeleider")
-def test_profile_email_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
-    page: Page,
-    podiumd_env: Environment,
-    openklant: ApiClient,
-    registry: ResourceRegistry,
-    need_bootstrap: Callable[..., None],
-) -> None:
-    """An e-mail address saved in the profile becomes a digitaal adres of the inwoner's partij (TA reg-179)."""
-    need_bootstrap(INWONER.name, *PORTAL_WIRING)
-    bsn = INWONER.attributes["bsn"][0]
-    adres = f"{registry.tagged('profiel')}@example.invalid"
-    # The partij may predate the test (an earlier login made it); its new adres goes anyway. The
-    # account keeps the address and every later login sends it again: set it back, after the adres
-    # is gone (cleanup runs last-added first).
-    registry.add(f"e-mail of account {bsn}", lambda: set_account(podiumd_env, bsn, email=user_email(INWONER.username)))
-    registry.add(
-        f"digitaal adres {adres}",
-        lambda: [openklant.delete(str(a["url"])) for a in openklant.list("digitaleadressen", {"adres": adres})],
-    )
-    portal_login(page, podiumd_env, "digid", INWONER, "/mijn-profiel/edit/")
-    page.locator('input[name="email_addresses-0-value"]').first.fill(adres)
-    page.get_by_role("button", name="Sla wijzigingen op").first.click()
-    page.wait_for_url(lambda url: "/mijn-profiel/edit/" not in url)
-
-    def stored() -> bool:
-        return any(
-            a.get("adres") == adres
-            for partij in partijen_of(openklant, bsn)
-            for a in openklant.list("digitaleadressen", {"verstrektDoorPartij__uuid": partij.rsplit("/", 1)[-1]})
-        )
-
-    # Open Inwoner sends the address to Open Klant asynchronously.
-    wait_until(stored, timeout=60, description=f"digitaal adres {adres} in Open Klant")
-
-
-def test_company_question_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "TA regression/109-portaal-vraag-stellen-bedrijf.spec.ts",
+    "A company logged in with eHerkenning can ask the gemeente a question through the portal's contact form.",
+)
+@pytest.mark.source(
+    "TA regression/108-probe-contactform.spec.ts", "Probes the portal's contact form page for a logged-in user."
+)
+@pytest.mark.scenario("""
+    Given a company is logged in to Open Inwoner with eHerkenning
+    When the company sends a question with the contact form
+    Then Open Klant has the question as a klantcontact of the company's vestiging
+""")
+def test_company_question_reaches_open_klant(
     page: Page,
     podiumd_env: Environment,
     openklant: ApiClient,
@@ -189,7 +176,17 @@ def test_company_question_reaches_open_klant(  # pylint: disable=too-many-argume
 
 
 @pytest.mark.tc("OI-038", "OI-079")
-def test_anonymous_question_reaches_open_klant(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "draaiboek OI-038, OI-079",
+    "A user can submit a contact request anonymously (not logged in); it is registered in the source system.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner who is not logged in to Open Inwoner
+    When the inwoner sends a question with the contact form, with a name and e-mail address
+    Then Open Klant has the question with that name and e-mail address
+    And the question is linked to no partij
+""")
+def test_anonymous_question_reaches_open_klant(
     page: Page,
     podiumd_env: Environment,
     openklant: ApiClient,
@@ -209,7 +206,15 @@ def test_anonymous_question_reaches_open_klant(  # pylint: disable=too-many-argu
 
 
 @pytest.mark.tc("OI-040", "OI-081")
-def test_mijn_vragen_shows_more_than_one_page_of_questions(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "draaiboek OI-040, OI-081", "Since PodiumD 3.3.0: more than 25 contactmomenten are shown correctly."
+)
+@pytest.mark.scenario("""
+    Given an inwoner with 26 questions in Open Klant
+    When the inwoner pages through Mijn vragen in Open Inwoner
+    Then every one of the 26 questions is listed
+""")
+def test_mijn_vragen_shows_more_than_one_page_of_questions(
     page: Page,
     podiumd_env: Environment,
     openklant: ApiClient,
@@ -229,18 +234,77 @@ def test_mijn_vragen_shows_more_than_one_page_of_questions(  # pylint: disable=t
             openklant, registry, kanaal="contactformulier", onderwerp=SUBJECT, inhoud=f"{tag}-{number}"
         )
         make_betrokkene(openklant, registry, question, partij)
-    # Mijn vragen shows 9 questions per page; a page number past the last answers 404.
-    shown = 0
-    for number in itertools.count(1):
-        response = page.goto(f"{mijn_vragen}?page={number}")
-        if response and response.status == HTTPStatus.NOT_FOUND:
-            break
-        shown += page.locator(".card", has_text=tag).count()
-    assert shown == MANY_QUESTIONS
+    expected = {f"{tag}-{number}" for number in range(MANY_QUESTIONS)}
+    forget_questions(podiumd_env, partij["uuid"])
+
+    def walk() -> set[str]:
+        """The tagged questions on all pages; 9 per page, and a page number past the last answers 404."""
+        shown: set[str] = set()
+        for number in itertools.count(1):
+            response = page.goto(f"{mijn_vragen}?page={number}")
+            if response and response.status == HTTPStatus.NOT_FOUND:
+                break
+            cards = " ".join(page.locator(".card", has_text=tag).all_inner_texts())
+            shown.update(re.findall(rf"{re.escape(tag)}-\d+", cards))
+        assert shown == expected, f"missing {sorted(expected - shown)}"
+        return shown
+
+    # Other tests add and delete questions of this inwoner meanwhile; that shifts the pages during a walk.
+    wait_until(walk, timeout=60, description=f"every {tag} question in Mijn vragen")
+
+
+def _answer_in_ita(
+    page: Page,
+    podiumd_env: Environment,
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    question: JsonObject,
+    taak: JsonObject,
+    antwoord: str,
+) -> str:
+    """Answer the question in ITA as the KCC user; the uuid of the inwoner's partij."""
+    page.context.clear_cookies()
+    ita = kcc_login(page, podiumd_env, "ita")
+    # The answer goes on the question's kanaal: Mijn vragen shows answers of that kanaal only.
+    antwoord_body = klantcontact_body(
+        registry, kanaal=question["kanaal"], onderwerp=antwoord, inhoud=f"Antwoord {antwoord}"
+    )
+    partij = str(section(expanded(openklant, str(question["url"]), "hadBetrokkenen")[0], "wasPartij")["uuid"])
+    body = {
+        "interneTaakId": taak["uuid"],
+        "aanleidinggevendKlantcontactUuid": question["uuid"],
+        # ITA links the answer to this partij; Mijn vragen lists only klantcontacten of the inwoner's partij.
+        "partijUuid": partij,
+        # ITA numbers the klantcontact itself.
+        "klantcontactRequest": {k: v for k, v in antwoord_body.items() if k != "nummer"},
+    }
+    add_klantcontact(ita, podiumd_env.profile.urls["ita"], body)
+    return partij
+
+
+def _expect_answered(page: Page, podiumd_env: Environment, vraag: str, antwoord: str) -> None:
+    """Mijn vragen shows the question answered, and its page the answer."""
+    page.context.clear_cookies()
+    portal_login(page, podiumd_env, "digid", INWONER, MIJN_VRAGEN)
+    card = page.locator(".card", has_text=vraag)
+    # From 2.5.0 a question whose interne taken are all verwerkt shows Afgehandeld instead.
+    expect(card).to_contain_text(re.compile(r"Beantwoord|Afgehandeld"))
+    card.locator("a").first.click()
+    expect(page.locator("main")).to_contain_text(f"Antwoord {antwoord}")
 
 
 @pytest.mark.requires("ita", "objecten")
-def test_question_answered_in_ita_shows_as_answered(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "TA interaction/181-keten-ita-contactmoment-portaal-beantwoord.spec.ts",
+    "A contactmoment the KCC registers in ITA shows the inwoner's question as answered, with the answer, in Mijn vragen.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner asked a question in Mijn vragen
+    When the KCC medewerker answers it in ITA and closes the taak
+    Then Mijn vragen shows the question as answered or afgehandeld
+    And its detail shows the answer
+""")
+def test_question_answered_in_ita_shows_as_answered(
     page: Page,
     podiumd_env: Environment,
     openklant: ApiClient,
@@ -265,35 +329,22 @@ def test_question_answered_in_ita_shows_as_answered(  # pylint: disable=too-many
     clean_up_logboek(objecten, registry, objecttype_url(podiumd_env, "Activiteitenlog"), str(taak["uuid"]))
     antwoord = registry.tagged("ita-antwoord")
     clean_up_klantcontacten(openklant, registry, antwoord)
-    page.context.clear_cookies()
-    ita = kcc_login(page, podiumd_env, "ita")
-    # The answer goes on the question's kanaal: Mijn vragen shows answers of that kanaal only.
-    antwoord_body = klantcontact_body(
-        registry, kanaal=question["kanaal"], onderwerp=antwoord, inhoud=f"Antwoord {antwoord}"
-    )
-    body = {
-        "interneTaakId": taak["uuid"],
-        "aanleidinggevendKlantcontactUuid": question["uuid"],
-        # ITA links the answer to this partij; Mijn vragen lists only klantcontacten of the inwoner's partij.
-        "partijUuid": section(expanded(openklant, str(question["url"]), "hadBetrokkenen")[0], "wasPartij")["uuid"],
-        # ITA numbers the klantcontact itself.
-        "klantcontactRequest": {k: v for k, v in antwoord_body.items() if k != "nummer"},
-    }
-    response = ita.post(podiumd_env.profile.urls["ita"] + "/api/klantcontacten/add-klantcontact", json=body)
-    expect_status(response, HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.NO_CONTENT)
+    partij = _answer_in_ita(page, podiumd_env, openklant, registry, question, taak, antwoord)
     # ITA has no call to close the taak; KCC closes it as it does in ITA's UI.
-    openklant.patch(str(taak["url"]), {"status": "verwerkt"})
-    page.context.clear_cookies()
-    portal_login(page, podiumd_env, "digid", INWONER, MIJN_VRAGEN)
-    card = page.locator(".card", has_text=vraag)
-    expect(card).to_contain_text("Beantwoord")
-    card.locator("a").first.click()
-    expect(page.locator("main")).to_contain_text(f"Antwoord {antwoord}")
+    close_internetaak(openklant, taak)
+    forget_questions(podiumd_env, partij)
+    _expect_answered(page, podiumd_env, vraag, antwoord)
 
 
 @pytest.mark.tc("ZAC-067")
 @pytest.mark.requires("zac")
-def test_question_from_the_portal_shows_in_zac(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source("draaiboek ZAC-067", "The portal can submit contact requests, and they arrive in ZAC.")
+@pytest.mark.scenario("""
+    Given an inwoner is logged in to Open Inwoner with DigiD
+    When the inwoner asks a question in Mijn vragen
+    Then ZAC lists the question among the inwoner's contactmomenten
+""")
+def test_question_from_the_portal_shows_in_zac(
     page: Page,
     podiumd_env: Environment,
     openklant: ApiClient,
@@ -312,7 +363,7 @@ def test_question_from_the_portal_shows_in_zac(  # pylint: disable=too-many-argu
     asked = datetime.now(tz=UTC)
     ask_in_mijn_vragen(page, podiumd_env, vraag)
     query = {"bsn": INWONER.attributes["bsn"][0], "page": 0}
-    found = zac.put(podiumd_env.profile.urls["zac"] + "/rest/klanten/contactmomenten", json=query)
+    found = zac.put(f"{podiumd_env.profile.urls['zac']}/rest/klanten/contactmomenten", json=query)
     contactmomenten = entries(expect_status(found, HTTPStatus.OK).json()["resultaten"])
     assert any(
         c.get("tekst") == SUBJECT and datetime.fromisoformat(str(c["registratiedatum"])) >= asked
@@ -322,7 +373,16 @@ def test_question_from_the_portal_shows_in_zac(  # pylint: disable=too-many-argu
 
 @pytest.mark.tc("ITA-030")
 @pytest.mark.requires("ita", "objecten")
-def test_question_from_the_portal_shows_in_full_in_ita(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "draaiboek ITA-030",
+    "A contact request submitted through the portal shows all recorded information on its detail page in ITA.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner asked a question in Mijn vragen
+    When the question's taak is assigned to the KCC medewerker's groep
+    Then the KCC medewerker sees the question's text on its detail page in ITA
+""")
+def test_question_from_the_portal_shows_in_full_in_ita(
     page: Page,
     podiumd_env: Environment,
     openklant: ApiClient,

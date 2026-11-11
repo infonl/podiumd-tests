@@ -1,5 +1,6 @@
 """Unit tests for reading Locust's stats and checking them against perf.yaml."""
 
+from podiumd_tests.perf.runs import locust_command
 from podiumd_tests.perf.stats import SETTINGS
 from podiumd_tests.perf.stats import STATS
 from podiumd_tests.perf.stats import EndpointStats
@@ -38,7 +39,7 @@ def test_violations_name_each_exceeded_limit():
     stats = read_stats(CSV)["oz_zaken"]
     assert violations(stats, Threshold(1500, 0.01, 1.5, 200)) == ["p95 1600 ms > 1500 ms", "2/100 failed > 1%"]
     assert violations(stats, Threshold(2000, 0.05, 1.5, 200)) == []
-    assert violations(EndpointStats(0, 0, 0.0), Threshold(2000, 0.05, 1.5, 200)) == ["no requests"]
+    assert violations(EndpointStats(0, 0, 0), Threshold(2000, 0.05, 1.5, 200)) == ["no requests"]
 
 
 def perf_run(root, name, p95, settings='{"users": "5"}'):
@@ -58,7 +59,7 @@ def test_earlier_stats_take_only_older_runs_of_the_env_with_the_same_settings(tm
     history = earlier_stats(current)
     assert [h["oz_zaken"].p95_ms for h in history] == [300.0]
     assert baseline_p95(history, "oz_zaken") is None  # one earlier run is no baseline
-    assert baseline_p95([*history, *history, *history], "oz_zaken") == 300.0
+    assert baseline_p95([*history, *history, *history], "oz_zaken") == 300
     assert baseline_p95([*history, *history, *history], "kc_discovery") is None
 
 
@@ -66,3 +67,10 @@ def test_a_slowdown_must_pass_both_the_ratio_and_the_margin():
     threshold = Threshold(1500, 0.01, 1.5, 200)
     assert slowdown_limit(threshold, 130) == 330  # small numbers: the margin
     assert slowdown_limit(threshold, 1000) == 1500  # large numbers: the ratio
+
+
+def test_locust_command_runs_headless_against_the_environment(tmp_path):
+    command = locust_command(tmp_path / "lf.py", "10", "150s", tmp_path / "out", "ontw-dim1")
+    assert command[1:5] == ["-m", "locust", "-f", str(tmp_path / "lf.py")]
+    assert command[command.index("--users") + 1] == command[command.index("--spawn-rate") + 1] == "10"
+    assert command[-4:] == ["--csv", str(tmp_path / "out"), "--podiumd-env", "ontw-dim1"]

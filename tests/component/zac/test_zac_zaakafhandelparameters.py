@@ -16,6 +16,7 @@ from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import CATALOGI
+from podiumd_tests.zac import inrichtingscheck_problems
 from podiumd_tests.zac import zaakafhandelparameters
 
 if TYPE_CHECKING:
@@ -24,9 +25,21 @@ if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
 
-pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "keycloak")]
+pytestmark = [
+    pytest.mark.component,
+    pytest.mark.requires("zac", "openzaak", "keycloak"),
+    pytest.mark.source(
+        "PI test_zac_zaakafhandelparameters.py",
+        "A published zaaktype is unusable in ZAC until its zaakafhandelparameters are valide; guards against a reseed losing them.",
+    ),
+]
 
 
+@pytest.mark.scenario("""
+    Given the zaaktype for productaanvragen is published in Open Zaak
+    When the beheerder opens its zaakafhandelparameters in ZAC
+    Then ZAC reports them as valide
+""")
 def test_zaakafhandelparameters_are_valide(
     zac: requests.Session, urls: dict[str, str], openzaak: ApiClient, podiumd_env: Environment
 ) -> None:
@@ -41,6 +54,11 @@ def test_zaakafhandelparameters_are_valide(
         assert expect_status(zac.get(url), HTTPStatus.OK).json()["valide"], zaaktype["url"]
 
 
+@pytest.mark.scenario("""
+    Given ZAC has zaakafhandelparameters for a set of zaaktypen
+    When the beheerder clears ZAC's catalogus cache and runs the inrichtingscheck
+    Then none of those zaaktypen fails the inrichtingscheck
+""")
 def test_handled_zaaktypen_pass_zacs_inrichtingscheck(zac: requests.Session, urls: dict[str, str]) -> None:
     """Every zaaktype ZAC has zaakafhandelparameters for passes ZAC's own inrichtingscheck (Admin, Inrichtingscheck).
 
@@ -52,10 +70,8 @@ def test_handled_zaaktypen_pass_zacs_inrichtingscheck(zac: requests.Session, url
     handled = {section(p, "zaaktype").get("identificatie") for p in zaakafhandelparameters(zac, urls["zac"])}
     checks = get_entries(zac, f"{urls['zac']}/rest/health-check/zaaktypes")
     failing = {
-        str(section(c, "zaaktype").get("identificatie")): sorted(
-            k for k, v in c.items() if v is False and k != "valide"
-        )
+        str(section(c, "zaaktype").get("identificatie")): problems
         for c in checks
-        if section(c, "zaaktype").get("identificatie") in handled and not c.get("valide")
+        if section(c, "zaaktype").get("identificatie") in handled and (problems := inrichtingscheck_problems(c))
     }
     assert not failing, f"ZAC's inrichtingscheck fails: {failing}"

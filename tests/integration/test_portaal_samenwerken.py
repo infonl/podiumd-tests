@@ -18,6 +18,7 @@ from playwright.sync_api import expect
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.bootstrap.steps import OI_BEGELEIDER
 from podiumd_tests.mailpit import forget_mails
+from podiumd_tests.mailpit import quoted
 from podiumd_tests.openinwoner import LOGINS
 from podiumd_tests.openinwoner import begeleider_login
 from podiumd_tests.openinwoner import portal_login
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
 
     from playwright.sync_api import Page
 
+    from podiumd_tests.bootstrap.keycloak import KeycloakUser
     from podiumd_tests.environment import Environment
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -35,37 +37,34 @@ pytestmark = [
     pytest.mark.integration,
     pytest.mark.ui,
     pytest.mark.requires("openinwoner", "keycloak", "cluster"),
-    # Every case resets the one begeleider's plans and contacts, and finds the inwoner by the e-mail
-    # address test_profile_email_reaches_open_klant changes. xdist joins a test's group names, so the
-    # two groups here make the same group as that test's module group plus its own.
+    # Every case resets the one begeleider's plans and contacts.
     pytest.mark.xdist_group("openinwoner-begeleider"),
-    pytest.mark.xdist_group("openinwoner-vragen"),
+    pytest.mark.source("draaiboek OI-089", "From the portal a gemeente can seek collaboration with a citizen."),
+    pytest.mark.source("draaiboek OI-090", "From the portal a gemeente can seek collaboration with a company."),
 ]
 
 CONTACTS = "/mijn-profiel/contacts/"
 SAMENWERKEN = "/samenwerken/"
 
 
-@pytest.mark.tc("OI-089", "OI-090")
-@pytest.mark.parametrize("who", sorted(LOGINS))
-def test_begeleider_starts_a_samenwerking(
-    page: Page, podiumd_env: Environment, registry: ResourceRegistry, need_bootstrap: Callable[..., None], who: str
+def _prepare(
+    page: Page, podiumd_env: Environment, registry: ResourceRegistry, method: str, identity: KeycloakUser
 ) -> None:
-    """A plan the begeleider makes with the identity as contact shows in the identity's Samenwerken."""
-    identity, method = LOGINS[who]
-    need_bootstrap(identity.name, OI_BEGELEIDER.name, "openinwoner-oidc-mock", "openinwoner-cms-pages")
-    portal = podiumd_env.profile.urls["openinwoner"]
+    """Drop the begeleider's plans, contacts and mails, also after the test, and give the identity an account."""
     reset_begeleider(podiumd_env)
     registry.add("plans and contacts of the begeleider", lambda: reset_begeleider(podiumd_env))
     # Open Inwoner mails both sides about the contact request.
-    forget_mails(podiumd_env, registry, f'to:"{OI_BEGELEIDER.params["email"]}"')
-    forget_mails(podiumd_env, registry, f'to:"{user_email(identity.username)}" subject:"contactpersoon"')
+    forget_mails(podiumd_env, registry, f"to:{quoted(str(OI_BEGELEIDER.params['email']))}")
+    forget_mails(podiumd_env, registry, f'to:{quoted(user_email(identity.username))} subject:"contactpersoon"')
     # The first login makes the identity's account, which the begeleider finds by its e-mail address.
     portal_login(page, podiumd_env, method, identity, CONTACTS)
     page.context.clear_cookies()
 
+
+def _add_contact(page: Page, podiumd_env: Environment, who: str, identity: KeycloakUser) -> None:
+    """The begeleider adds the identity's account as a contact, found by its e-mail address."""
     begeleider_login(page, podiumd_env)
-    page.goto(portal + CONTACTS + "create/")
+    page.goto(f"{podiumd_env.profile.urls['openinwoner']}{CONTACTS}create/")
     page.locator('input[name="first_name"]').fill("PodiumD")
     page.locator('input[name="last_name"]').fill(who)
     page.locator('input[name="email"]').fill(user_email(identity.username))
@@ -74,14 +73,19 @@ def test_begeleider_starts_a_samenwerking(
         page.locator('form:has(input[name="email"]) [type="submit"]').click()
     page.context.clear_cookies()
 
+
+def _approve_contact(page: Page, podiumd_env: Environment, method: str, identity: KeycloakUser) -> None:
+    """The identity approves the begeleider's contact request."""
     portal_login(page, podiumd_env, method, identity, CONTACTS)
     with page.expect_navigation():
         page.locator('button[name="contact_approve"]').first.click()
     page.context.clear_cookies()
 
-    title = registry.tagged("samenwerking")
+
+def _make_plan(page: Page, podiumd_env: Environment, title: str) -> None:
+    """The begeleider makes a samenwerking with its only contact."""
     begeleider_login(page, podiumd_env)
-    page.goto(portal + SAMENWERKEN + "create/")
+    page.goto(f"{podiumd_env.profile.urls['openinwoner']}{SAMENWERKEN}create/")
     page.locator('input[name="title"]').fill(title)
     page.locator('[name="goal"]').fill("Samen een doel halen")
     # A read-only flatpickr field: set the date through flatpickr, which formats it for the form.
@@ -94,5 +98,26 @@ def test_begeleider_starts_a_samenwerking(
         page.locator('form:has(input[name="title"]) [type="submit"]').click()
     page.context.clear_cookies()
 
+
+@pytest.mark.tc("OI-089", "OI-090")
+@pytest.mark.parametrize("who", sorted(LOGINS))
+@pytest.mark.scenario("""
+    Given an inwoner or company has an account in Open Inwoner
+    When the begeleider of the gemeente adds the account as contact
+    And the inwoner or company approves the contact
+    And the begeleider makes a samenwerking with the contact
+    Then the inwoner or company sees the samenwerking in Samenwerken
+""")
+def test_begeleider_starts_a_samenwerking(
+    page: Page, podiumd_env: Environment, registry: ResourceRegistry, need_bootstrap: Callable[..., None], who: str
+) -> None:
+    """A plan the begeleider makes with the identity as contact shows in the identity's Samenwerken."""
+    identity, method = LOGINS[who]
+    need_bootstrap(identity.name, OI_BEGELEIDER.name, "openinwoner-oidc-mock", "openinwoner-cms-pages")
+    _prepare(page, podiumd_env, registry, method, identity)
+    _add_contact(page, podiumd_env, who, identity)
+    _approve_contact(page, podiumd_env, method, identity)
+    title = registry.tagged("samenwerking")
+    _make_plan(page, podiumd_env, title)
     portal_login(page, podiumd_env, method, identity, SAMENWERKEN)
     expect(page.locator("main")).to_contain_text(title)

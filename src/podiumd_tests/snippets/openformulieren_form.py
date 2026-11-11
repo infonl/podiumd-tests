@@ -5,7 +5,7 @@ products whose name starts with param prefix). Params: action, slug, components 
 components of the step), registration ({"backend", "options"}; "api_group" names the ZGW
 API group whose pk goes into the options, "objects_api" is the Objecten API root of the Objects
 API group whose identifier goes into the options), auth_backends (login plugins, e.g. digid_oidc),
-settings (other Form fields), payment (optional {"backend": ogone-legacy or worldline, "merchant":
+settings (other Form fields); apply clears Open Formulieren's catalogi lookup cache; payment (optional {"backend": ogone-legacy or worldline, "merchant":
 an Ogone merchant's label or a Worldline merchant's pspid, "price"}: a product named after the form
 carries the price). Submissions of the form are test data and go with it.
 """
@@ -25,9 +25,9 @@ def run(params):
         prefix = params["prefix"]
         steps = FormDefinition.objects.filter(slug__startswith=prefix, slug__endswith="-step")
         return sorted(
-            {*Form.objects.filter(slug__startswith=prefix).values_list("slug", flat=True)}
+            set(Form.objects.filter(slug__startswith=prefix).values_list("slug", flat=True))
             | {slug.removesuffix("-step") for slug in steps.values_list("slug", flat=True)}
-            | {*Product.objects.filter(name__startswith=prefix).values_list("name", flat=True)}
+            | set(Product.objects.filter(name__startswith=prefix).values_list("name", flat=True))
         )
 
     slug = params["slug"]
@@ -48,7 +48,8 @@ def run(params):
         name=f"{slug} step",
         configuration={"display": "form", "components": params["components"]},
     )
-    form = Form.objects.create(slug=slug, name=slug, active=True, **params["settings"], **_payment(params, slug))
+    payment_fields = _payment(params, slug)
+    form = Form.objects.create(slug=slug, name=slug, active=True, **params["settings"], **payment_fields)
     FormStep.objects.create(form=form, form_definition=definition, order=0, slug="stap")
     FormVariable.objects.create_for_form(form)
     registration = params["registration"]
@@ -61,11 +62,16 @@ def run(params):
     )
     for backend in params["auth_backends"]:
         FormAuthenticationBackend.objects.create(form=form, backend=backend, options={})
+    # Open Formulieren caches catalogus and zaaktype lookups for 12 hours: after a re-bootstrap it would register
+    # zaken on the deleted zaaktype of the earlier bootstrap.
+    from django.core.cache import caches
+
+    caches["catalogi_client"].clear()
     return {"present": True}
 
 
 def _options(registration):
-    """The registration backend's options with the pk or identifier of the API group they name."""
+    """Return the registration backend's options with the pk or identifier of the API group they name."""
     from openforms.registrations.contrib.zgw_apis.models import ZGWApiGroupConfig
 
     options = dict(registration["options"])
@@ -97,7 +103,7 @@ def _status(params, forms):
 
 
 def _payment(params, slug):
-    """The Form fields of a form that asks for a payment."""
+    """Return the Form fields of a form that asks for a payment."""
     from openforms.products.models import Product
 
     payment = params.get("payment")

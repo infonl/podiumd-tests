@@ -3,32 +3,51 @@
 import ast
 import base64
 import json
+import subprocess
+import threading
 
 from dataclasses import dataclass
 from dataclasses import field
+from dataclasses import replace
+from typing import override
 
 import pytest
 
 from podiumd_tests import cli
-from podiumd_tests.bootstrap import Context
-from podiumd_tests.bootstrap import bootstrap
-from podiumd_tests.bootstrap import check
-from podiumd_tests.bootstrap import failed
-from podiumd_tests.bootstrap import refusal
-from podiumd_tests.bootstrap import unbootstrap
+from podiumd_tests.auth.keycloak_admin import KeycloakAdmin
+from podiumd_tests.bootstrap.keycloak import KeycloakRoles
+from podiumd_tests.bootstrap.keycloak import KeycloakUser
+from podiumd_tests.bootstrap.keycloak import keycloak_password_key
+from podiumd_tests.bootstrap.names import OBJECTEN_STORE_KEY
+from podiumd_tests.bootstrap.names import OPENKLANT_OI_STORE_KEY
 from podiumd_tests.bootstrap.names import OPENKLANT_STORE_KEY
 from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.oidc_mock import KEYCLOAK_STORE_KEY
 from podiumd_tests.bootstrap.oidc_mock import KeycloakOidcMock
+from podiumd_tests.bootstrap.oidc_mock import oidc_params
+from podiumd_tests.bootstrap.runner import Context
+from podiumd_tests.bootstrap.runner import Outcome
+from podiumd_tests.bootstrap.runner import bootstrap
+from podiumd_tests.bootstrap.runner import check
+from podiumd_tests.bootstrap.runner import has_failure
+from podiumd_tests.bootstrap.runner import in_dependency_order
+from podiumd_tests.bootstrap.runner import outcome_report
+from podiumd_tests.bootstrap.runner import refusal
+from podiumd_tests.bootstrap.runner import unbootstrap
+from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.bootstrap.steps import STEPS
-from podiumd_tests.bootstrap.steps import KeycloakUser
+from podiumd_tests.bootstrap.steps import ItaMedewerker
 from podiumd_tests.bootstrap.steps import OpenInwonerPartijen
 from podiumd_tests.bootstrap.steps import OpenKlantActor
 from podiumd_tests.bootstrap.steps import SnippetStep
-from podiumd_tests.bootstrap.steps import keycloak_password_key
+from podiumd_tests.bootstrap.steps import openformulieren_params
+from podiumd_tests.bootstrap.steps import openinwoner_openklant_params
 from podiumd_tests.bootstrap.steps import productaanvraag_zaaktypen
+from podiumd_tests.capabilities import Capabilities
+from podiumd_tests.components import COMPONENTS
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.credentials import env_var_name
+from podiumd_tests.django_snippets import snippet_source
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
@@ -78,13 +97,33 @@ def test_smoke_only_profiles_are_refused(profile_factory):
 
 def test_bootstrap_applies_missing_steps_and_stores_credentials(env_factory, fake_runner, profile_factory):
     env = cluster_env(env_factory, fake_runner, profile_factory)
-    missing, present = FakeStep("a"), FakeStep("b", present=True)
+    # One component: the steps run in order, so the last stdin is the credentials write of a.
+    missing, present = FakeStep("a", ("openzaak",)), FakeStep("b", ("openzaak",), present=True)
     outcomes = bootstrap(env, [missing, present])
     assert [(o.step, o.action) for o in outcomes] == [("a", "created"), ("b", "present")]
     assert missing.log == ["apply"]
     assert present.log == []
     assert "t0ken-value" in fake_runner.stdins[-1]
     assert "t0ken-value" not in " ".join(" ".join(c) for c in fake_runner.calls)
+
+
+def test_each_outcome_has_the_seconds_its_step_took(env_factory, fake_runner, profile_factory, monkeypatch):
+    env = cluster_env(env_factory, fake_runner, profile_factory)
+    clock = iter([10.0, 12.5, 20.0, 20.25])
+    monkeypatch.setattr("podiumd_tests.bootstrap.runner.time.monotonic", lambda: next(clock))
+    # a and b share a component, so they run one after the other and read the clock in this order.
+    steps = [FakeStep("a", ("openzaak",)), FakeStep("b", ("openzaak",), present=True), FakeStep("c", ("zac",))]
+    outcomes = bootstrap(env, steps)
+    assert [(o.step, o.seconds) for o in outcomes] == [("a", 2.5), ("b", 0.25), ("c", 0)]
+
+
+def test_outcome_report_shows_seconds_and_the_total():
+    outcomes = [Outcome("zac-bpmn-process", "created", "key", 12.34), Outcome("a", "present", seconds=1.0)]
+    assert outcome_report(outcomes).splitlines() == [
+        "created  zac-bpmn-process   12.3s  key",
+        "present  a                   1.0s",
+        "         total              13.3s",
+    ]
 
 
 def test_rotate_reapplies_present_steps(env_factory, fake_runner, profile_factory):
@@ -116,6 +155,31 @@ def test_check_changes_nothing(env_factory, fake_runner, profile_factory):
     assert step.log == []
 
 
+@dataclass
+class OptInStep(FakeStep):
+    """A FakeStep behind a profile setting that is off; like FakeStep, it reports present."""
+
+    present: bool = True
+
+    def not_allowed(self, _ctx):  # noqa: PLR6301  # the optional Step method
+        return "profile setting fake_opt_in is off"
+
+
+def test_check_and_bootstrap_skip_a_step_the_profile_does_not_allow(env_factory, fake_runner, profile_factory):
+    env = cluster_env(env_factory, fake_runner, profile_factory)
+    step = OptInStep()
+    for outcome in (check(env, [step])[0], bootstrap(env, [step])[0]):
+        assert (outcome.action, outcome.detail) == ("skipped", "profile setting fake_opt_in is off")
+    assert step.log == []
+
+
+def test_unbootstrap_still_removes_a_step_the_profile_no_longer_allows(env_factory, fake_runner, profile_factory):
+    env = cluster_env(env_factory, fake_runner, profile_factory)
+    step = OptInStep()
+    assert [o.action for o in unbootstrap(env, [step])] == ["removed"]
+    assert step.log == ["remove"]
+
+
 def test_store_merges_and_removes_keys(fake_runner):
     fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (0, stored({"a": "1", "b": "2"}))
     fake_runner.answers["apply -f -"] = (0, "")
@@ -131,16 +195,16 @@ def test_store_merges_and_removes_keys(fake_runner):
 def test_resolver_falls_back_to_bootstrap_credentials(env_factory, fake_runner):
     fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (0, stored({"zgw_secret": "boot"}))
     creds = env_factory().credentials
-    assert creds.configured("zgw_secret")
+    assert creds.is_configured("zgw_secret")
     assert creds.get("zgw_secret") == "boot"
-    assert not creds.configured("other")
+    assert not creds.is_configured("other")
 
 
 def test_resolver_sees_what_bootstrap_stored_after_forget(env_factory, fake_runner):
     key = "get secret podiumd-tests-credentials --ignore-not-found"
     fake_runner.answers[key] = (0, "")
     creds = env_factory().credentials
-    assert not creds.configured("admin_password")
+    assert not creds.is_configured("admin_password")
     fake_runner.answers[key] = (0, stored({"admin_password": "new"}))
     creds.forget("admin_password")
     assert creds.get("admin_password") == "new"
@@ -155,12 +219,17 @@ def test_cli_refuses_bootstrap_on_smoke_only_profiles(tmp_path, capsys):
     assert "smoke-only" in capsys.readouterr().err
 
 
-def snippet_params(code):
-    """The params a snippet call was sent with: the string constant passed to _json.loads."""
+def snippet_calls(code):
+    """The [name, source, params] calls a Django shell was sent, from the list passed to _json.loads."""
     calls = [
         n for n in ast.walk(ast.parse(code)) if isinstance(n, ast.Call) and getattr(n.func, "attr", None) == "loads"
     ]
     return json.loads(ast.literal_eval(calls[0].args[0]))
+
+
+def snippet_params(code):
+    """The params the first snippet was sent with."""
+    return snippet_calls(code)[0][2]
 
 
 def snippet_answer(value):
@@ -193,7 +262,7 @@ KC = "https://kc.example.test"
 REALM = "/admin/realms/podiumd"
 
 
-def keycloak_answers(*, user_exists, has_group):
+def keycloak_answers(*, user_exists, has_group) -> dict[str, tuple[int, object]]:
     return {
         "POST /realms/master/protocol/openid-connect/token": (200, {"access_token": "admin-token"}),
         f"GET {REALM}": (200, {"passwordPolicy": "length(50) and digits(3)"}),
@@ -242,8 +311,22 @@ def test_keycloak_user_gets_existing_roles_and_reports_missing_ones(
     assert ctx.notes == ["not in realm: Coordinator, group beheerders"]
 
 
+def test_keycloak_user_fails_when_the_realm_has_none_of_its_roles(env_factory, fake_runner, profile_factory, fake_http):
+    # A realm imported with skipRoles/skipGroups has no roles, client roles or groups: the user gets nothing.
+    ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
+    answers = keycloak_answers(user_exists=True, has_group=False)
+    answers[f"GET {REALM}/roles"] = (200, [])
+    answers[f"GET {REALM}/clients/c1/roles"] = (200, [])
+    fake_http(answers)
+    user = KeycloakUser(
+        "admin", realm_roles=("Behandelaar",), client_roles=(("pabc", "administrator"),), groups=("beheerders",)
+    )
+    with pytest.raises(ValueError, match="skipRoles/skipGroups"):
+        user.apply(ctx)
+
+
 @pytest.mark.parametrize(("mapped", "present"), [([], False), ([{"name": "Behandelaar"}], True)])
-def test_keycloak_user_is_present_only_with_the_realms_wanted_roles(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+def test_keycloak_user_is_present_only_with_the_realms_wanted_roles(
     env_factory, fake_runner, profile_factory, fake_http, mapped, present
 ):
     ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
@@ -258,11 +341,199 @@ def test_keycloak_user_is_present_only_with_the_realms_wanted_roles(  # pylint: 
     assert user.is_present(ctx) is present
 
 
+@pytest.mark.parametrize(("mapped", "present"), [([], False), ([{"name": "administrator"}], True)])
+def test_keycloak_user_is_present_only_with_the_realms_wanted_client_roles(
+    env_factory, fake_runner, profile_factory, fake_http, mapped, present
+):
+    # A client role the realm gets later (a redeploy that imports roles) makes the step apply again.
+    ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
+    secret = stored({keycloak_password_key("admin"): "pw"})
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (0, secret)
+    answers = keycloak_answers(user_exists=True, has_group=True)
+    answers[f"GET {REALM}/users/u1/role-mappings/realm"] = (200, [])
+    answers[f"GET {REALM}/users/u1/groups"] = (200, [])
+    answers[f"GET {REALM}/users/u1/role-mappings/clients/c1"] = (200, mapped)
+    fake_http(answers)
+    user = KeycloakUser("admin", client_roles=(("pabc", "administrator"), ("pabc", "missing")))
+    assert user.is_present(ctx) is present
+
+
 def test_keycloak_user_remove_deletes_only_an_existing_user(env_factory, fake_runner, profile_factory, fake_http):
     ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
     sent = fake_http(keycloak_answers(user_exists=False, has_group=True))
     assert KeycloakUser("kcc").remove(ctx) == (keycloak_password_key("kcc"),)
     assert all(r.method != "DELETE" for r in sent)
+
+
+@pytest.mark.parametrize(
+    ("stored_keys", "attributes"),
+    [((), {}), ((keycloak_password_key("kcc"),), {"samaccountname": ["someone-else"]})],
+    ids=["no-password-stored", "other-attribute"],
+)
+def test_keycloak_user_is_absent_without_its_password_or_attributes(
+    env_factory, fake_runner, profile_factory, fake_http, stored_keys, attributes
+):
+    ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
+    secret = stored(dict.fromkeys(stored_keys, "pw"))
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (0, secret)
+    answers = keycloak_answers(user_exists=True, has_group=True)
+    answers[f"GET {REALM}/users"] = (200, [{"id": "u1", "attributes": attributes}])
+    fake_http(answers)
+    assert KCC.is_present(ctx) is False
+
+
+def test_keycloak_user_joins_existing_groups_and_reports_missing_client_roles(
+    env_factory, fake_runner, profile_factory, fake_http
+):
+    ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
+    answers = keycloak_answers(user_exists=True, has_group=True)
+    answers[f"GET {REALM}/clients"] = (200, [])
+    sent = fake_http(answers)
+    KeycloakUser("admin", client_roles=(("pabc", "administrator"),), groups=("beheerders",)).apply(ctx)
+    assert ("PUT", f"{REALM}/users/u1/groups/g1") in [(r.method, r.url.removeprefix(KC)) for r in sent]
+    assert ctx.notes == ["not in realm: pabc:administrator"]
+
+
+def test_keycloak_user_remove_deletes_an_existing_user(env_factory, fake_runner, profile_factory, fake_http):
+    ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
+    sent = fake_http(keycloak_answers(user_exists=True, has_group=True))
+    KeycloakUser("kcc").remove(ctx)
+    assert [r.url.removeprefix(KC) for r in sent if r.method == "DELETE"] == [f"{REALM}/users/u1"]
+
+
+ROLE_USERS = (
+    KeycloakUser("admin", realm_roles=("Behandelaar", "Coordinator"), client_roles=(("pabc", "administrator"),)),
+    KeycloakUser("kcc", client_roles=(("pabc", "missing"),)),
+)
+
+
+def test_keycloak_roles_creates_the_missing_roles_and_records_them(
+    env_factory, fake_runner, profile_factory, fake_http
+):
+    ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
+    answers = keycloak_answers(user_exists=True, has_group=True)
+    answers[f"POST {REALM}/roles"] = (201, None)
+    answers[f"POST {REALM}/clients/c1/roles"] = (201, None)
+    sent = fake_http(answers)
+    step = KeycloakRoles(ROLE_USERS)
+    assert step.is_present(ctx) is False
+    values = step.apply(ctx)
+    assert json.loads(values[step.store_key]) == ["Coordinator", "pabc:missing"]
+    created = [(r.url.removeprefix(KC), json.loads(r.body)) for r in sent if r.method == "POST" and "/roles" in r.url]
+    marker = {"attributes": {"ptest-bootstrap": ["keycloak-roles"]}}
+    assert created == [
+        (f"{REALM}/roles", {"name": "Coordinator", **marker}),
+        (f"{REALM}/clients/c1/roles", {"name": "missing", **marker}),
+    ]
+
+
+def test_keycloak_roles_remove_deletes_only_recorded_roles_it_still_owns(
+    env_factory, fake_runner, profile_factory, fake_http
+):
+    ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
+    step = KeycloakRoles(ROLE_USERS)
+    # Behandelaar was taken over by a realm import, which dropped the attribute.
+    record = json.dumps(["Coordinator", "Behandelaar", "pabc:missing", "gone:role"])
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (
+        0,
+        stored({step.store_key: record}),
+    )
+    answers = keycloak_answers(user_exists=True, has_group=True)
+    answers[f"GET {REALM}/clients"] = (200, [])
+    answers[f"GET {REALM}/roles"] = (
+        200,
+        [{"name": "Coordinator", "attributes": {"ptest-bootstrap": ["keycloak-roles"]}}, {"name": "Behandelaar"}],
+    )
+    answers[f"DELETE {REALM}/roles/Coordinator"] = (204, None)
+    sent = fake_http(answers)
+    assert step.remove(ctx) == (step.store_key,)
+    # The clients are gone, so their roles went with them.
+    assert [r.url.removeprefix(KC) for r in sent if r.method == "DELETE"] == [f"{REALM}/roles/Coordinator"]
+
+
+def test_step_names():
+    assert [KCC.name, ItaMedewerker(KCC).name, OpenKlantActor("kcc").name] == [
+        "keycloak-user-kcc",
+        "objecten-medewerker-kcc",
+        "openklant-actor-kcc",
+    ]
+
+
+OBJ = "https://obj.example.test"
+
+
+def objecten_ctx(env_factory, fake_runner, profile_factory, values):
+    env = cluster_env(env_factory, fake_runner, profile_factory, urls={"objecten": OBJ})
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (0, stored(values))
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "objecten"}}]}))
+    fake_runner.answers["exec -i deploy/objecten"] = snippet_answer({"uuid": "ot1"})
+    return Context(env, CredentialStore(env.kube))
+
+
+def test_ita_medewerker_recreates_the_users_medewerker_object(env_factory, fake_runner, profile_factory, fake_http):
+    ctx = objecten_ctx(env_factory, fake_runner, profile_factory, {OBJECTEN_STORE_KEY: "tok"})
+    sent = fake_http(
+        {
+            "GET /api/v2/objects": (200, [{"url": f"{OBJ}/api/v2/objects/o1"}]),
+            "DELETE /api/v2/objects/o1": (204, None),
+            "POST /api/v2/objects": (201, {"url": f"{OBJ}/api/v2/objects/o2"}),
+        }
+    )
+    step = ItaMedewerker(KCC)
+    assert step.is_present(ctx)
+    assert step.apply(ctx) == {}
+    assert [r.method for r in sent] == ["GET", "GET", "DELETE", "POST"]
+    assert "identificatie__exact__ptest-bootstrap-kcc" in sent[0].url
+    body = json.loads(sent[-1].body)
+    assert body["type"] == f"{OBJ}/api/v2/objecttypes/ot1"
+    assert body["record"]["data"]["groepen"] == [{"groepsnaam": "ptest-bootstrap-groep"}]
+
+
+def test_steps_without_their_token_stored_find_and_remove_nothing(env_factory, fake_runner, profile_factory, fake_http):
+    ctx = objecten_ctx(env_factory, fake_runner, profile_factory, {})
+    sent = fake_http()
+    assert not ItaMedewerker(KCC).is_present(ctx)
+    assert not OpenKlantActor("kcc").is_present(ctx)
+    for step in (ItaMedewerker(KCC), OpenKlantActor("kcc"), OpenInwonerPartijen()):
+        assert step.remove(ctx) == ()
+    assert OpenInwonerPartijen().is_present(ctx)
+    assert OpenInwonerPartijen().apply(ctx) == {}
+    assert sent == []
+
+
+def test_a_step_without_store_key_stores_nothing(env_factory, fake_runner, profile_factory):
+    ctx = objecten_ctx(env_factory, fake_runner, profile_factory, {})
+    fake_runner.answers["exec -i deploy/objecten"] = snippet_answer({})
+    assert SnippetStep("x", ("objecten",), "token_auth", None).apply(ctx) == {}
+    assert snippet_params(fake_runner.stdins[-1]) == {"action": "apply"}
+
+
+def test_openformulieren_params_prefer_the_internal_open_zaak_url(env_factory, fake_runner, profile_factory):
+    settings = {"openzaak_internal_url": "http://openzaak.podiumd.svc.cluster.local:8000"}
+    env = cluster_env(env_factory, fake_runner, profile_factory, settings=settings)
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (0, stored({ZGW_STORE_KEY: "s"}))
+    assert openformulieren_params(Context(env, CredentialStore(env.kube))) == {
+        "secret": "s",
+        "openzaak_url": "http://openzaak.podiumd.svc.cluster.local:8000",
+    }
+
+
+@pytest.mark.parametrize("actoren", [[{"uuid": "a1"}], []])
+def test_openinwoner_openklant_params_send_questions_to_the_kcc_actor(
+    env_factory, fake_runner, profile_factory, fake_http, actoren
+):
+    env = cluster_env(env_factory, fake_runner, profile_factory, urls={"openklant": OK})
+    values = {OPENKLANT_STORE_KEY: "tok", OPENKLANT_OI_STORE_KEY: "oi-tok"}
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (0, stored(values))
+    fake_http({f"GET {ACTOREN}": (200, actoren)})
+    ctx = Context(env, CredentialStore(env.kube))
+    if not actoren:
+        with pytest.raises(LookupError, match="run bootstrap step openklant-actor-kcc first"):
+            openinwoner_openklant_params(ctx)
+        return
+    params = openinwoner_openklant_params(ctx)
+    assert (params["api_root"], params["token"]) == (f"{OK}/klantinteracties/api/v1/", "oi-tok")
+    assert section(params, "config")["mijn_vragen_actor"] == "a1"
 
 
 def test_wiring_steps_skip_unless_the_profile_allows_wiring(env_factory, fake_runner, profile_factory):
@@ -292,18 +563,19 @@ def test_record_mode_hands_the_stored_record_to_apply_and_remove(env_factory, fa
     assert snippet_params(fake_runner.stdins[-1]) == {"kanalen": {}, "action": "remove", "record": earlier}
 
 
+class BrokenStep(FakeStep):
+    @override
+    def remove(self, _ctx):
+        raise KubeError(["kubectl", "exec"], "DisallowedHost: example.com")
+
+
 def test_a_failing_step_does_not_stop_the_others(env_factory, fake_runner, profile_factory):
     env = cluster_env(env_factory, fake_runner, profile_factory)
-
-    class Broken(FakeStep):
-        def remove(self, _ctx):
-            raise KubeError(["kubectl", "exec"], "DisallowedHost: example.com")
-
     later = FakeStep("later", present=True)
-    outcomes = unbootstrap(env, [later, Broken("broken", present=True)])
+    outcomes = unbootstrap(env, [later, BrokenStep("broken", present=True)])
     assert [(o.step, o.action) for o in outcomes] == [("broken", "failed"), ("later", "removed")]
     assert "DisallowedHost" in outcomes[0].detail
-    assert failed(outcomes)
+    assert has_failure(outcomes)
 
 
 OK = "https://ok.example.test"
@@ -369,17 +641,16 @@ def test_openinwoner_partijen_remove_deletes_the_partijen_of_the_test_identities
     searched = [r.url.split("ObjectId=")[1] for r in sent if "partijIdentificatorObjectId" in r.url]
     assert searched == ["000037178601", "999990019", "999993653", "68750110"]
     # The vestiging's sub-identificator goes before the kvk_nummer it refers to.
+    deletes = ["/partij-identificatoren/i2", "/partij-identificatoren/i1", "/partijen/p1"]
     assert [r.url.removeprefix(OK + api) for r in sent if r.method == "DELETE"] == [
-        "/partij-identificatoren/i2",
-        "/partij-identificatoren/i1",
-        "/partijen/p1",
-    ] * 4
+        path for _ in range(4) for path in deletes
+    ]
 
 
 def test_snippet_notes_reach_the_outcome(env_factory, fake_runner, profile_factory):
     env = cluster_env(env_factory, fake_runner, profile_factory, urls={"objecten": "https://objecten.example.test"})
     fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "objecten"}}]}))
-    fake_runner.answers["exec -i deploy/objecten"] = snippet_answer({"present": False, "notes": ["no objecttype X"]})
+    fake_runner.answers["exec -i deploy/objecten"] = snippet_answer({"created": True, "notes": ["no objecttype X"]})
     step = SnippetStep("objecten-token", ("objecten",), "token_auth", "tok", {"modules": ("m",), "object_types": ["X"]})
     outcome = bootstrap(env, [step])[0]
     assert outcome.action == "created"
@@ -460,6 +731,82 @@ def test_oidc_mock_remove_undoes_the_record(env_factory, fake_runner, profile_fa
     assert any(r.method == "PUT" and r.url.endswith("/clients/c1") for r in sent)
 
 
+EHERKENNING_MAPPERS = [
+    {"id": f"m{i}", "name": n} for i, n in enumerate(("kvk-claim", "vestigingsnr-claim", "namequalifier-claim"))
+]
+CLIENT_SCOPES = [{"name": "bsn"}, {"name": "eherkenning"}]
+
+
+@pytest.mark.parametrize(
+    ("changes", "present"),
+    [
+        ({}, True),
+        ({f"GET {REALM}/client-scopes/s-eh/protocol-mappers/models": (200, EHERKENNING_MAPPERS[:1])}, False),
+        ({f"GET {REALM}/clients/c1/optional-client-scopes": (200, CLIENT_SCOPES[:1])}, False),
+        ({f"GET {REALM}/clients": (200, [{"id": "c1", "clientId": "openinwoner", "redirectUris": []}])}, False),
+    ],
+    ids=["complete", "mapper-missing", "scope-not-attached", "redirect-missing"],
+)
+def test_oidc_mock_is_present(env_factory, fake_runner, profile_factory, fake_http, changes, present):
+    ctx = oidc_mock_ctx(env_factory, fake_runner, profile_factory)
+    answers = oidc_mock_answers(EHERKENNING_MAPPERS)
+    answers[f"GET {REALM}/clients"] = (200, [{"id": "c1", "clientId": "openinwoner", "redirectUris": [f"{OI}/*"]}])
+    answers[f"GET {REALM}/clients/c1/optional-client-scopes"] = (200, CLIENT_SCOPES)
+    fake_http(answers | changes)
+    assert KeycloakOidcMock().is_present(ctx) is present
+
+
+def test_oidc_mock_creates_missing_scopes_and_notes_a_missing_client(
+    env_factory, fake_runner, profile_factory, fake_http, monkeypatch
+):
+    ctx = oidc_mock_ctx(env_factory, fake_runner, profile_factory)
+    answers = oidc_mock_answers(EHERKENNING_MAPPERS)
+    answers[f"GET {REALM}/client-scopes"] = (200, [{"id": "s-bsn", "name": "bsn"}])
+    answers[f"GET {REALM}/clients"] = (200, [])
+    fake_http(answers)
+    created = []
+    monkeypatch.setattr(KeycloakAdmin, "create_client_scope", lambda _self, scope: created.append(scope) or "s-eh")
+    record = json.loads(KeycloakOidcMock().apply(ctx)[KEYCLOAK_STORE_KEY])
+    assert [c["name"] for c in created] == ["eherkenning"]
+    assert (record["scopes"], record["mappers"]) == (["eherkenning"], {})
+    assert ctx.notes == ["realm podiumd has no client openinwoner"]
+
+
+def test_oidc_mock_remove_deletes_created_scopes_and_skips_a_deleted_client(
+    env_factory, fake_runner, profile_factory, fake_http
+):
+    ctx = oidc_mock_ctx(env_factory, fake_runner, profile_factory)
+    record = {"scopes": ["bsn"], "attached": {"openinwoner": ["bsn"]}}
+    fake_runner.answers["get secret podiumd-tests-credentials --ignore-not-found"] = (
+        0,
+        stored({KEYCLOAK_STORE_KEY: json.dumps(record)}),
+    )
+    answers = oidc_mock_answers(EHERKENNING_MAPPERS)
+    answers[f"GET {REALM}/clients"] = (200, [])
+    answers[f"DELETE {REALM}/client-scopes/s-bsn"] = (204, None)
+    sent = fake_http(answers)
+    KeycloakOidcMock().remove(ctx)
+    assert [r.url.removeprefix(KC + REALM) for r in sent if r.method == "DELETE"] == ["/client-scopes/s-bsn"]
+
+
+@pytest.mark.parametrize("clients", [[{"id": "c1"}], []])
+def test_oidc_params_carry_the_client_secret(env_factory, fake_runner, profile_factory, fake_http, clients):
+    ctx = oidc_mock_ctx(env_factory, fake_runner, profile_factory)
+    answers = oidc_mock_answers(EHERKENNING_MAPPERS)
+    answers[f"GET {REALM}/clients"] = (200, clients)
+    answers[f"GET {REALM}/clients/c1/client-secret"] = (200, {"value": "s3cret"})
+    fake_http(answers)
+    if not clients:
+        with pytest.raises(LookupError, match="realm podiumd has no client openinwoner"):
+            oidc_params("openinwoner")(ctx)
+        return
+    assert oidc_params("openinwoner")(ctx) == {
+        "endpoint": f"{KC}/realms/podiumd/protocol/openid-connect",
+        "client_id": "openinwoner",
+        "secret": "s3cret",
+    }
+
+
 def test_an_opt_in_step_does_nothing_unless_the_profile_allows_it(env_factory, fake_runner, profile_factory):
     env = cluster_env(env_factory, fake_runner, profile_factory)
     ctx = Context(env, CredentialStore(env.kube))
@@ -468,3 +815,302 @@ def test_an_opt_in_step_does_nothing_unless_the_profile_allows_it(env_factory, f
     assert step.apply(ctx) == {}
     assert ctx.notes == ["not allowed: profile setting of_wait_for_payment is off"]
     assert not any("exec" in c for c in fake_runner.calls)
+
+
+# Run-time params come from Open Klant, Keycloak and the mock server; the shells do not depend on them.
+SNIPPET_STEPS = [replace(step, context_params=None) for step in STEPS if isinstance(step, SnippetStep)]
+# Steps behind an opt-in setting that is off run no shell.
+RUNNING = [step for step in SNIPPET_STEPS if step.opt_in is None]
+# One deployment per component here: objecttypen and objecten share one on Open Object.
+K = len({step.requires[0] for step in RUNNING})
+DEPLOYMENTS = sorted({prefix for component in COMPONENTS.values() for prefix in component.deployment_prefixes})
+VOLATILE = ("action", "secret", "record", "stored")
+
+
+def _object_key(name, params):
+    return json.dumps([name, {k: v for k, v in params.items() if k not in VOLATILE}], sort_keys=True)
+
+
+class SnippetCluster:
+    """Django deployments that run snippet steps: counts shells, keeps the step objects and the credentials Secret."""
+
+    def __init__(self):
+        self.shells: list[str] = []
+        self.calls: list[tuple[str, str]] = []
+        self.objects: set[str] = set()
+        self.secret: dict[str, str] = {}
+        # Steps whose status fails, by their snippet's identifier or username param.
+        self.broken: set[str] = set()
+
+    def __call__(self, args, _timeout, stdin=None):
+        line = " ".join(args)
+        if "exec -i deploy/" in line:
+            self.shells.append(line.split("deploy/")[1].split()[0])
+            values = [self._run(name, params) for name, _, params in snippet_calls(stdin)]
+            if None in values:
+                return subprocess.CompletedProcess(list(args), 1, "", "Traceback: DoesNotExist")
+            out = "".join(f"PTEST_VALUE={json.dumps(value)}\n" for value in values)
+            return subprocess.CompletedProcess(list(args), 0, out, "")
+        return subprocess.CompletedProcess(list(args), 0, self._kubectl(line, stdin), "")
+
+    def make_present(self, steps):
+        for step in steps:
+            self.objects.add(_object_key(step.snippet, step.params))
+            if step.store_key:
+                self.secret[step.store_key] = "{}"
+
+    def _kubectl(self, line, stdin):
+        if "get deployments" in line:
+            return json.dumps({"items": [{"metadata": {"name": name}} for name in DEPLOYMENTS]})
+        if "get secret podiumd-tests-credentials" in line:
+            return stored(self.secret) if self.secret else ""
+        if "apply -f -" in line:
+            self.secret = json.loads(stdin)["stringData"]
+        return ""
+
+    def _run(self, name, params):
+        name = name.removeprefix("snippets/").removesuffix(".py")
+        key = _object_key(name, params)
+        action = params["action"]
+        self.calls.append((name, action))
+        if self.broken & {params.get("identifier"), params.get("username")}:
+            return None
+        if action == "status":
+            return {"present": key in self.objects}
+        if action == "ensure" and key in self.objects and params["stored"]:
+            return {"created": False}
+        self.objects.add(key)
+        return {"present": True, "record": {}, "created": True}
+
+
+@pytest.fixture(name="cluster")
+def fixture_cluster():
+    return SnippetCluster()
+
+
+@pytest.fixture(name="env")
+def fixture_env(env_factory, profile_factory, cluster):
+    env = env_factory(profile_factory(), runner=cluster)
+    env.capabilities = Capabilities(frozenset(("cluster", *COMPONENTS)), {})
+    return env
+
+
+def test_ensure_runs_status_then_apply_only_when_missing():
+    log = []
+
+    def step_run(params):
+        log.append(params["action"])
+        return {"present": params["present"], "record": {"n": 1}}
+
+    namespace = {"run": step_run}
+    source = compile(snippet_source("_ensure"), "_ensure", "exec")
+    exec(source, namespace)  # noqa: S102  # pylint: disable=exec-used  # the snippet as the Django shell runs it
+    ensure = namespace["run"]
+    assert ensure({"action": "ensure", "present": True, "stored": True}) == {"created": False}
+    assert ensure({"action": "ensure", "present": True, "stored": False}) == {
+        "present": True,
+        "record": {"n": 1},
+        "created": True,
+    }
+    assert ensure({"action": "ensure", "present": False, "stored": True})["created"]
+    assert log == ["status", "status", "apply", "status", "apply"]
+
+
+@dataclass(frozen=True)
+class PlainStep:
+    """A snippet step without ensure and batched status: is_present, then apply."""
+
+    step: SnippetStep
+
+    @property
+    def name(self):
+        return self.step.name
+
+    @property
+    def requires(self):
+        return self.step.requires
+
+    @property
+    def wiring(self):
+        return self.step.wiring
+
+    def is_present(self, ctx):
+        return self.step.is_present(ctx)
+
+    def apply(self, ctx):
+        return self.step.apply(ctx)
+
+    def remove(self, ctx):
+        return self.step.remove(ctx)
+
+
+def _bootstrapped(env, cluster, steps, *, rotate=False):
+    outcomes = [(o.step, o.action, o.detail) for o in bootstrap(env, steps, rotate=rotate)]
+    return outcomes, set(cluster.objects), set(cluster.secret)
+
+
+def _state(cluster):
+    return set(cluster.objects), dict(cluster.secret), set(cluster.broken)
+
+
+def _restore(cluster, state):
+    objects, secret, broken = state
+    cluster.objects = set(objects)
+    cluster.secret = dict(secret)
+    cluster.broken = set(broken)
+    cluster.shells.clear()
+
+
+SCENARIOS = {
+    "fresh": (),
+    "everything": RUNNING,
+    "all but openzaak-client": RUNNING[1:],
+    "all but the last": RUNNING[:-1],
+    "every other": RUNNING[::2],
+}
+
+
+@pytest.mark.parametrize("present", SCENARIOS.values(), ids=SCENARIOS.keys())
+@pytest.mark.parametrize("secrets", [True, False], ids=["stored", "objects-only"])
+@pytest.mark.parametrize("rotate", [False, True])
+def test_bootstrap_outcomes_and_objects_are_those_of_is_present_then_apply(env, cluster, present, secrets, rotate):
+    cluster.make_present(present)
+    if not secrets:
+        cluster.secret.clear()
+    before = _state(cluster)
+    expected = _bootstrapped(env, cluster, [PlainStep(step) for step in SNIPPET_STEPS], rotate=rotate)
+    plain_shells = len(cluster.shells)
+    _restore(cluster, before)
+    assert _bootstrapped(env, cluster, SNIPPET_STEPS, rotate=rotate) == expected
+    assert len(cluster.shells) <= plain_shells
+
+
+@pytest.mark.parametrize("present", SCENARIOS.values(), ids=SCENARIOS.keys())
+def test_check_outcomes_are_those_of_is_present(env, cluster, present):
+    cluster.make_present(present)
+    cluster.broken.add(OPENKLANT_STORE_KEY)
+
+    def outcomes(steps):
+        return [(o.step, o.action, o.detail) for o in check(env, steps)]
+
+    assert outcomes(SNIPPET_STEPS) == outcomes([PlainStep(step) for step in SNIPPET_STEPS])
+
+
+def test_fresh_bootstrap_runs_one_shell_per_step_and_at_most_one_status_shell_per_deployment(env, cluster):
+    bootstrap(env, SNIPPET_STEPS)
+    # Parallel steps of other deployments may batch their status before the first create invalidates it.
+    deployments = {step.requires[0] for step in RUNNING}
+    assert len(RUNNING) + 1 <= len(cluster.shells) <= len(RUNNING) + len(deployments)
+
+
+def test_after_a_created_step_each_snippet_step_runs_one_shell(env, cluster):
+    bootstrap(env, [FakeStep("mock-server"), *SNIPPET_STEPS])
+    assert len(cluster.shells) == len(RUNNING)
+    assert {action for _, action in cluster.calls} == {"ensure"}
+
+
+def test_rebootstrap_runs_one_shell_per_deployment(env, cluster):
+    cluster.make_present(RUNNING)
+    outcomes = bootstrap(env, SNIPPET_STEPS)
+    assert {o.action for o in outcomes} == {"present"}
+    assert len(cluster.shells) == K
+    assert sorted(cluster.shells) == sorted({step.requires[0] for step in RUNNING})
+
+
+def test_a_failed_step_ends_the_batches(env, cluster):
+    cluster.make_present(RUNNING)
+    cluster.broken.add(OPENKLANT_STORE_KEY)
+    outcomes = {o.step: o for o in bootstrap(env, SNIPPET_STEPS)}
+    assert outcomes["openklant-token"].action == "failed"
+    assert "DoesNotExist" in outcomes["openklant-token"].detail
+    assert {o.action for name, o in outcomes.items() if name != "openklant-token"} == {"present"}
+
+
+def test_check_runs_one_shell_per_deployment(env, cluster):
+    cluster.make_present(RUNNING[1:])
+    outcomes = check(env, SNIPPET_STEPS)
+    assert [o.step for o in outcomes if o.action == "missing"] == [RUNNING[0].name]
+    assert len(cluster.shells) == K
+    assert {action for _, action in cluster.calls} == {"status"}
+
+
+def test_a_failed_batch_checks_each_step_alone_and_names_the_broken_one(env, cluster):
+    cluster.make_present(RUNNING)
+    cluster.broken.add(OPENKLANT_STORE_KEY)
+    outcomes = {o.step: o for o in check(env, SNIPPET_STEPS)}
+    assert outcomes["openklant-token"].action == "failed"
+    assert {o.action for name, o in outcomes.items() if name != "openklant-token"} == {"present"}
+    assert cluster.shells.count("openklant") == 3
+
+
+def test_a_step_whose_params_fail_checks_itself(env, cluster):
+    def no_actor(_ctx):
+        msg = "no Open Klant actor for the KCC test user"
+        raise LookupError(msg)
+
+    steps = [replace(s, context_params=no_actor) if s.name == "openklant-token" else s for s in SNIPPET_STEPS]
+    cluster.make_present(RUNNING)
+    outcomes = {o.step: o for o in check(env, steps)}
+    assert (outcomes["openklant-token"].action, outcomes["openklant-token"].detail) == (
+        "failed",
+        "no Open Klant actor for the KCC test user",
+    )
+    assert len(cluster.shells) == K
+
+
+def test_ensure_makes_a_new_secret_when_the_objects_exist_without_it(env, cluster):
+    step = next(s for s in SNIPPET_STEPS if s.name == "openzaak-client")
+    cluster.make_present([step])
+    cluster.secret = {}
+    outcome = bootstrap(env, [step])[0]
+    assert (outcome.action, outcome.detail) == ("created", step.store_key)
+    assert len(cluster.secret[step.store_key]) == 40
+    assert len(cluster.shells) == 1
+
+
+def test_rotate_applies_without_status(env, cluster):
+    cluster.make_present(RUNNING)
+    bootstrap(env, SNIPPET_STEPS, rotate=True)
+    assert {action for _, action in cluster.calls} == {"apply"}
+
+
+def test_check_reports_missing_and_present(env, cluster):
+    cluster.make_present(RUNNING[:1])
+    outcomes = check(env, SNIPPET_STEPS[:2])
+    assert [o.action for o in outcomes] == ["present", "missing"]
+
+
+def test_a_step_after_a_created_one_checks_itself_again(env, cluster):
+    # The second finds what the first created: a status can depend on an earlier step.
+    first = SnippetStep("first", ("openzaak",), "zgw_client", None, {"client_id": "shared"})
+    outcomes = bootstrap(env, [first, replace(first, name="second")])
+    assert [o.action for o in outcomes] == ["created", "present"]
+    assert len(cluster.shells) == 3
+
+
+def test_a_skipped_step_stays_out_of_the_batch(env, cluster):
+    cluster.make_present(RUNNING[:2])
+    skipped = replace(RUNNING[2], requires=("openzaak", "elsewhere"))
+    outcomes = check(env, [*RUNNING[:2], skipped])
+    assert [o.action for o in outcomes] == ["present", "present", "skipped"]
+    assert len(cluster.calls) == 2
+    assert len(cluster.shells) == 1
+
+
+def test_steps_sharing_a_component_run_in_order_and_others_in_parallel():
+    started: list[str] = []
+    gate = threading.Event()
+
+    def run(step):
+        started.append(step.name)
+        if step.name == "a1":
+            # b1 shares no component with a1, so it starts while a1 waits; a2 must not.
+            assert gate.wait(5), "b1 did not start while a1 ran"
+        if step.name == "b1":
+            gate.set()
+        return Outcome(step.name, "present")
+
+    steps = [FakeStep("a1", ("openzaak",)), FakeStep("b1", ("keycloak",)), FakeStep("a2", ("openzaak", "zac"))]
+    outcomes = in_dependency_order(steps, run, workers=2)
+    assert [o.step for o in outcomes] == ["a1", "b1", "a2"]
+    assert started.index("a2") > started.index("a1")

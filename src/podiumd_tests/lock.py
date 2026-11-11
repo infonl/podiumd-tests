@@ -14,6 +14,7 @@ run as Ctrl-C does.
 
 from __future__ import annotations
 
+import fcntl
 import getpass
 import json
 import os
@@ -43,6 +44,18 @@ if TYPE_CHECKING:
 HOLDER = "podiumd-tests"
 LEASE = "podiumd-tests-lock"
 LEASE_SECONDS = 3 * 3600
+
+
+@contextmanager
+def file_lock(path: Path) -> Generator[None]:
+    """Hold an exclusive lock on the file (created if absent) while the block runs; other processes wait."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 class LockBusyError(Exception):
@@ -86,7 +99,7 @@ def _lease(kube: Kube, who: str, seconds: int, now: datetime) -> dict[str, objec
 
 
 def lease_holder(kube: Kube, now: datetime | None = None) -> str | None:
-    """The holder and start of the unexpired lease, or None when no run holds it."""
+    """Return the holder and start of the unexpired lease, or None when no run holds it."""
     found = kube.get_optional("lease", LEASE)
     if found is None:
         return None
@@ -118,6 +131,15 @@ def release_lease(kube: Kube, who: str) -> None:
     found = kube.get_optional("lease", LEASE)
     if found is not None and section(found, "spec").get("holderIdentity") == who:
         kube.delete("lease", LEASE)
+
+
+def running_hold(lock: Path) -> str | None:
+    """Return the lock file's line while a running podiumd-tests process of this user@host holds it, else None."""
+    try:
+        line = lock.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return None
+    return line if line.startswith(f"{HOLDER} {_me()} pid ") and not is_stale(line) else None
 
 
 def _take_file(lock: Path, who: str) -> None:
@@ -171,9 +193,15 @@ def held(env: Environment, what: str) -> Generator[None]:
     if lock is not None:
         _take_file(lock, who)
     try:
-        if kube is not None:
-            take_lease(kube, who, int(settings.get("lock_lease_seconds", LEASE_SECONDS)))
-        with _interrupt_on_sigterm(lambda: _release(kube, lock, who)):
+        with _leased(kube, who, settings), _interrupt_on_sigterm(lambda: _release(kube, lock, who)):
             yield
     finally:
         _release(kube, lock, who)
+
+
+@contextmanager
+def _leased(kube: Kube | None, who: str, settings: dict[str, str]) -> Generator[None]:
+    """Hold the lease while the block runs, with cluster access; _release returns it."""
+    if kube is not None:
+        take_lease(kube, who, int(settings.get("lock_lease_seconds", LEASE_SECONDS)))
+    yield

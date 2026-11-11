@@ -18,18 +18,35 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
     from podiumd_tests.seed.registry import ResourceRegistry
 
-pytestmark = [pytest.mark.component, pytest.mark.requires("referentielijsten")]
+pytestmark = [
+    pytest.mark.component,
+    pytest.mark.requires("referentielijsten"),
+    pytest.mark.source(
+        "podiumd-tests",
+        "Referentielijsten is a read-only API: it refuses writes and lists a tabel with exactly its items.",
+    ),
+]
 
 
+@pytest.mark.scenario("""
+    When a client creates a tabel through the Referentielijsten API
+    Then Referentielijsten refuses the request
+""")
 def test_api_cannot_be_written(http: requests.Session, urls: dict[str, str]) -> None:
     """Tabellen are maintained in the admin: the API refuses a new tabel."""
-    response = http.post(urls["referentielijsten"] + "/api/v1/tabellen", json={"code": "ptest", "naam": "ptest"})
+    response = http.post(f"{urls['referentielijsten']}/api/v1/tabellen", json={"code": "ptest", "naam": "ptest"})
     assert response.status_code in {HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN, HTTPStatus.METHOD_NOT_ALLOWED}, (
         describe(response)
     )
 
 
 @pytest.mark.requires("cluster")
+@pytest.mark.scenario("""
+    Given a tabel with the items Ja and Nee made in the Referentielijsten admin
+    When a client lists the tabellen and the tabel's items through the API
+    Then the tabellen include the tabel
+    And the tabel has exactly the items Ja and Nee
+""")
 def test_items_of_a_tabel_are_listed(
     http: requests.Session, urls: dict[str, str], podiumd_env: Environment, registry: ResourceRegistry
 ) -> None:
@@ -45,8 +62,8 @@ def test_items_of_a_tabel_are_listed(
         ),
     )
     run_snippet(podiumd_env.kube, deployment, "referentielijsten_tabel", params)
-    api = urls["referentielijsten"] + "/api/v1"
-    tabellen = expect_status(http.get(api + "/tabellen", params={"code": code}), HTTPStatus.OK).json()
+    api = f"{urls['referentielijsten']}/api/v1"
+    tabellen = expect_status(http.get(f"{api}/tabellen", params={"code": code}), HTTPStatus.OK).json()
     assert code in {t.get("code") for t in entries(tabellen.get("results"))}
-    found = expect_status(http.get(api + "/items", params={"tabel__code": code}), HTTPStatus.OK).json()
+    found = expect_status(http.get(f"{api}/items", params={"tabel__code": code}), HTTPStatus.OK).json()
     assert sorted((i["code"], i["naam"]) for i in entries(found.get("results"))) == [("ja", "Ja"), ("nee", "Nee")]

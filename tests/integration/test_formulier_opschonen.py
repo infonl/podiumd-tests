@@ -18,13 +18,17 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
     from podiumd_tests.seed.registry import ResourceRegistry
 
-pytestmark = [pytest.mark.integration, pytest.mark.requires("openformulieren", "mailpit", "cluster")]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.requires("openformulieren", "mailpit", "cluster"),
+    pytest.mark.source("draaiboek OF-067", "Form data is removed after a successful registration."),
+]
 
 TIMEOUT = 90
 LIMIT_DAYS = 1
 
 
-def kept_after_removal(podiumd_env: Environment, submission: str, age_days: int) -> bool:
+def is_kept_after_removal(podiumd_env: Environment, submission: str, age_days: int) -> bool:
     """Whether the submission survives the data removal task at this age (snippet openformulieren_data_removal)."""
     params: dict[str, object] = {"uuid": submission, "age_days": age_days}
     result = run_snippet(
@@ -34,9 +38,14 @@ def kept_after_removal(podiumd_env: Environment, submission: str, age_days: int)
 
 
 @pytest.mark.tc("OF-067")
-def test_registered_submission_is_removed_after_the_limit(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.scenario("""
+    Given a form in Open Formulieren that removes registered submissions after 1 day
+    When an inwoner submits the form and it is registered
+    Then Open Formulieren's data removal keeps the submission within the limit
+    And deletes it once the limit has passed
+""")
+def test_registered_submission_is_removed_after_the_limit(
     http: requests.Session,
-    urls: dict[str, str],
     podiumd_env: Environment,
     mailpit: ApiClient,
     registry: ResourceRegistry,
@@ -57,5 +66,5 @@ def test_registered_submission_is_removed_after_the_limit(  # pylint: disable=to
     )
     submission = str(submit(podiumd_env, http, registry, slug, {"omschrijving": slug}, timeout=TIMEOUT)["submission"])
     assert slug in received(mailpit, registry, timeout=TIMEOUT, to=address), "not registered"
-    assert kept_after_removal(podiumd_env, submission, 0), "removed within the limit"
-    assert not kept_after_removal(podiumd_env, submission, LIMIT_DAYS + 1), "kept after the limit"
+    assert is_kept_after_removal(podiumd_env, submission, 0), "removed within the limit"
+    assert not is_kept_after_removal(podiumd_env, submission, LIMIT_DAYS + 1), "kept after the limit"

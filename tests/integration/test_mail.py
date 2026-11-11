@@ -24,7 +24,18 @@ if TYPE_CHECKING:
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
-pytestmark = [pytest.mark.integration, pytest.mark.requires("cluster", "mailpit")]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.requires("cluster", "mailpit"),
+    pytest.mark.source(
+        "MK test_mailpit.py",
+        "Verifies Mailpit receives mail sent by a real component and that its API and web UI show it.",
+    ),
+    pytest.mark.source(
+        "PI test_mailpit.py",
+        "Verifies Mailpit receives mail sent by a real component (openzaak) and that its web UI shows it.",
+    ),
+]
 
 DELIVERY_TIMEOUT = 30
 
@@ -50,6 +61,11 @@ def send_and_receive(
 
 @pytest.mark.tc("INT-009")
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
+@pytest.mark.scenario("""
+    Given an app with a Django admin
+    When the app sends a mail with its own settings
+    Then the mail arrives in Mailpit from the app's sender address
+""")
 def test_app_mail_reaches_mailpit(
     podiumd_env: Environment, mailpit: ApiClient, registry: ResourceRegistry, component: str
 ) -> None:
@@ -60,10 +76,15 @@ def test_app_mail_reaches_mailpit(
 
 @pytest.mark.ui
 @pytest.mark.requires("openzaak")
-def test_sent_mail_shows_in_the_mailpit_ui(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.scenario("""
+    Given Open Zaak sent a mail
+    When a user opens Mailpit's web interface
+    Then the mail is listed by its subject
+""")
+def test_sent_mail_shows_in_the_mailpit_ui(
     page: Page, podiumd_env: Environment, mailpit: ApiClient, registry: ResourceRegistry, urls: dict[str, str]
 ) -> None:
     """Mailpit's web interface lists a mail an app sent, by its subject (MK test_mailpit.py)."""
     message, _ = send_and_receive(podiumd_env, mailpit, registry, "openzaak")
-    page.goto(urls["mailpit"] + "/")
+    page.goto(f"{urls['mailpit']}/")
     expect(page.get_by_text(str(message["Subject"])).first).to_be_visible()

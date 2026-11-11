@@ -61,8 +61,8 @@ Research notes:
 | R16 | **Fast, read-only smoke.** Under 2 minutes, and safe for any environment. |
 | R17 | **Preflight (`podiumd-tests doctor --env X`).** A read-only check of everything a run needs, without running any test (§8b). It runs on its own, and as a short version at the start of every `run`, `bootstrap` and `perf`. Each failed check is one line, with a fix hint. Exit code 2. |
 | R18 | **Each run records its environment.** Every run writes a `run.json` with the environment, chart version, detected component image tags, capabilities, the suite's git SHA and the selection used. This makes results comparable across versions without folders per version (§7). |
-| R19 | **Code quality: the same checks as podiumd.** Use the checks and settings of `helm-charts/charts/podiumd/bin/run_python_checks` and its `pyproject.toml`, unchanged (§8a). |
-| R20 | **Allowed scope per environment.** Each profile has an `allowed_tiers` setting, for example `[smoke]` for a gemeente environment that may only receive smoke tests, or `[smoke, core, full, perf]`. The CLI refuses `bootstrap`, `seed-volume` and every tier outside the list. It says why, and offers no override flag. ExternalsPodiumD (user, 2026-10-13): the ontw-* environments and test-dimp run every tier, chaos included; every other test-* and acc-* environment only ever runs smoke. |
+| R19 | **Code quality: strict checks.** `run_python_checks` runs them with the settings in `pyproject.toml` and `.yamllint` (§8a). |
+| R20 | **Allowed scope per environment.** Each profile has an `allowed_tiers` setting, for example `[smoke]` for a gemeente environment that may only receive smoke tests, or `[smoke, core, full, perf]`. The CLI refuses `bootstrap`, `seed-volume` and every tier outside the list. It says why, and offers no override flag. ExternalsPodiumD (user, 2026-11-05): ontw-dimp runs every tier, chaos included; ontw-icat, ontw-info, ontw-mayk, ontw-dim1 and ontw-dim2 every tier except chaos; ontw-dim3 and every test-* and acc-* environment only ever run smoke. |
 | R21 | **Pipeline-neutral execution (§7a).** There is no pipeline-specific code in the suite. |
 | R22 | **Minimal toolset, reuse first.** Add no language, framework or library unless existing ones cannot do the job. Before writing new code, reuse the existing code: the stdlib, the libraries the source suites already use (`requests`, `PyYAML`, Playwright; ZGW JWTs are signed with the stdlib, as in MK, so no JWT library), and the MK, PI and EX helpers. A new dependency needs a one-line reason in `pyproject.toml`. That rules out, for example, `httpx` (use `requests`), `pydantic-settings` (use dataclasses plus `PyYAML`), `tenacity` (use a small `wait_until`), the `kubernetes` Python client (use the `kubectl` CLI; reasons in §8), `mypy` (use basedpyright, as in podiumd), pre-commit, and Allure (a Java or Node CLI to build its HTML). The user chose pytest-html for a readable report per run (2026-10-12). |
 
@@ -315,18 +315,23 @@ Why this layout:
 
 ## 8a. Code quality checks
 
-`run_python_checks` is a copy of `dimpact-samenwerking/helm-charts/charts/podiumd/bin/run_python_checks`, modified for this layout. It runs the same checks with the same settings, fastest first, and stops at the first failure:
+`run_python_checks` runs these checks all at the same time, prints each one's log in this order and lists every failed step:
 
 1. `ruff check`
-2. `shellcheck`
+2. `shellcheck`, then `actionlint` on `.github/workflows/`
 3. `ruff format --check`
-4. `jscpd` (weak mode, `--min-lines 4 --min-tokens 35`, the same ignore pattern)
-5. `pymarkdown` (`-d md013,md014`, `plugins.md024.siblings_only`)
-6. `vulture` (with the generated TypedDict whitelist)
-7. `bandit -c pyproject.toml`
-8. `pylint src`, then `pylint tests unit_tests` with the same `TESTS_PYLINT_DISABLE` list
-9. `basedpyright` (`typeCheckingMode = "strict"`, relaxed under the test directories)
-10. `pytest` on `unit_tests`
+4. `flake8` with wemake-python-styleguide and plugins (`[tool.flake8]`: only the rules ruff lacks: WPS, bugbear B907 and B042, CCE001 class member order, FNE005 and FNE008 function names)
+5. `yamllint --strict` on the tracked YAML files (`.yamllint`)
+6. `jscpd` (weak mode, `--min-lines 4 --min-tokens 35`, the same ignore pattern)
+7. `pymarkdown` (`-d md013,md014`, `plugins.md024.siblings_only`)
+8. `vulture` (with the generated TypedDict whitelist), then `deptry src tests` (`[tool.deptry]`)
+9. `bandit -c pyproject.toml`
+10. `pylint -j 0 src` and `pylint -j 0` on the test directories with the same `TESTS_PYLINT_DISABLE` list
+11. `basedpyright` (`typeCheckingMode = "strict"`, relaxed under the test directories)
+12. `pytest -n auto --maxprocesses 8` on `unit_tests`
+13. `pip-audit` on the `.venv` packages, a warning only (skipped when pypi.org is unreachable); the `pip-audit` workflow runs it weekly and on `pyproject.toml` changes
+
+Ruff `PL` owns the count rules, so pylint disables them (`[tool.pylint."messages control"]`).
 
 **Copied from podiumd `bin/pyproject.toml` as-is:**
 
@@ -381,7 +386,7 @@ The output is a checklist in the terminal, plus `doctor.json` for pipelines. Exi
 | Session output | Kept in this directory (`PLAN.md`, `docs/`) |
 | Sources | TA, MK, PI and EX (header table) |
 | Tiers | `smoke`, `core`, `full`, `perf`, `chaos`. TA "maintenance" becomes CLI commands (§3) |
-| ExternalsPodiumD scope | ontw-* and test-dimp: every tier; other test-* and acc-*: smoke only (R20, 2026-10-13) |
+| ExternalsPodiumD scope | ontw-dimp: every tier; ontw-icat, -info, -mayk, -dim1, -dim2: every tier except chaos; ontw-dim3, test-* and acc-*: smoke only (R20, 2026-11-05) |
 | Repo hosting | A GitHub project under `infonl` |
 | Pipelines | Later: GitHub Actions in podiumd-infra, likely Azure DevOps for SSC Twente. The implementation is open, so the code is kept pipeline-neutral (§7a) |
 
@@ -453,7 +458,7 @@ None open. A new profile defaults to `allowed_tiers: [smoke]`.
 
 ## 13. Open work
 
-Updated 2026-10-10. The detail lives where it is kept up to date: blocked ports as `todo` rows in `MIGRATION.md` (`grep '| todo |' MIGRATION.md`), product bugs as strict xfails whose reason names the bug (a fix makes the test fail, so it gets noticed).
+Updated 2026-10-14. The detail lives where it is kept up to date: blocked ports as `todo` rows in `MIGRATION.md` (`grep '| todo |' MIGRATION.md`), product bugs as strict xfails whose reason names the bug (a fix makes the test fail, so it gets noticed).
 
 **Blocked ports (waiting for an environment):**
 
@@ -477,13 +482,15 @@ Updated 2026-10-10. The detail lives where it is kept up to date: blocked ports 
 | Open Notificaties | an unreachable callback URL answers 500 instead of 400 | `test_abonnement_with_an_unreachable_callback_is_refused` |
 | Open Inwoner 2.4.3 | the admin still offers the deprecated `deactivated_on`, which does not stop a DigiD login | `test_disabled_account_cannot_log_in[deactivated]` |
 | Open Inwoner 2.4.3 | with `fetch_eherkenning_zaken_with_openzaak_120_params` Mijn zaken lists a company's zaak by `nietNatuurlijkPersoon.vestigingsNummer`, but its detail accepts only a `vestiging` rol and answers 404 | `WHO` in `test_portaal_zaken.py` (zaak status, infected upload) |
-| Open Formulieren 3.5.5, 3.5.8 | an anonymous submission of a form without name fields registers an initiator rol without `betrokkeneIdentificatie`, which Open Zaak 1.29.3 refuses (400): the zaak and PDF exist, the registration fails; Open Formulieren's public status still reports success | `test_anonymous_submission_without_a_name_registers` |
 | ZAC 5.4.5 | `SensitiveDataService` forgets a person's temporaryPersonId 12 h after its last read, but its BSN→id cache keeps handing that id out: the first use after 12 h (adding the person as betrokkene) answers 410 "Geen persoon gevonden" | `test_betrokkenen_with_the_same_and_different_roles_are_listed` retries once |
 | ZAC 5.4.5 | a zaak started through the API without startdatum answers 500 (NullPointerException); its UI always sends one | none |
 | Open Formulieren 3.5.5 | mail goes through django_yubin's queue, but nothing schedules its `retry_emails`: a mail that fails during an SMTP outage stays "Mislukt" and is never sent | `test_form_mail_is_sent_after_a_mail_outage` |
 | Open Formulieren 3.5.5, 3.5.8 | with `wait_for_payment_to_register` on, its payment status update skips itself: the zaak of a paid form stays `betalingsindicatie: nog_niet` | `test_zaak_of_a_paid_form_is_marked_paid` |
 | Open Formulieren 3.5.5, 3.5.8 | not a bug: the ZGW pre-registration creates the zaak when the form is completed, before the payment, so an unpaid form leaves a zaak (the draaiboek expects none, OF-022) | `test_unpaid_form_leaves_no_zaak` |
 | ZAC 5.4.5 | mail goes straight to SMTP (MailService.sendMail): during an SMTP outage ZAC logs "Failed to send mail" and drops it, no queue, no retry; the draaiboek expects a queue | `test_zac_mail_is_sent_after_a_mail_outage` |
+| ZAC 5.9.1 | not a bug: `POST /rest/zaken/zaak` answers only the identificatie (5.4.5: the whole zaak) | `zac.create_zaak` reads the zaak by identificatie |
+| ZAC 5.9.1 | the document upload takes `vertrouwelijkheidaanduiding` only as ZAC's enum constant (`OPENBAAR`); the API value `openbaar` answers 500 (RESTEasy `valueOf` on the multipart field) | `uploaded_document` sends `OPENBAAR` |
+| ZAC 5.9.1, podiumd chart | ZAC finds the behandelaar roltype only by omschrijving `Behandelaar` (ZAC 82d2d9d74, #6767); the chart's `zaaktype-voor-e2e-testen` had `Behandelaar e2e`, so every zaak start answered 404; fixed in helm-charts PR #577 (a new zaaktype version) | the ZAC zaak tests |
 | KISS | its Haal Centraal BRP proxy rewrites the JSON body but keeps the client's Content-Length: a request with whitespace in its JSON answers 500 ("Content-Length promised …"); KISS's own frontend sends compact JSON | `test_person_unknown_to_kiss_is_found_in_the_brp` sends compact JSON |
 | ITA 3.3.2 | its access guard reads Open Klant's deprecated `toegewezenAanActor` (a bare reference) over the expanded actor: a groep member gets 403 on a contactverzoek assigned to the groep first; fixed in ITA 3.3.4 (ITA#582) | `test_contactverzoek_from_kiss_shows_in_full_in_ita` |
 | mozilla-django-oidc-db 2.0.1 | it migrates the deprecated flat group fields (make_users_staff, groups_claim) into `options.group_settings` but reads `options.groups_settings` at login: KeyError, the admin's OIDC callback answers 500 (Open Inwoner on minikube; found by podiumd-minikube) | `test_one_login_opens_every_admin[openinwoner]` |
@@ -492,7 +499,7 @@ Updated 2026-10-10. The detail lives where it is kept up to date: blocked ports 
 | Open Inwoner | no "did you mean" on a search without hits, as the draaiboek asks (OI-097); only the autocomplete is fuzzy | `test_no_results_suggest_what_was_meant` |
 | mozilla-django-oidc | an unconfigured admin login answers 500 (`ImproperlyConfigured`) instead of refusing | none: every estate configures it |
 | PABC, ITA, Open Archiefbeheer, Open Formulieren, Open Beheer, Grafana | no HSTS on their own responses (PABC, ITA, Open Archiefbeheer and Open Beheer also no nosniff; PABC no frame protection); neither estate's edge adds security headers. ZAC sends neither either; its chart's nginx adds them | `test_security_headers` (xfail per app) |
-| podiumd chart | Open Beheer's and Referentielijsten's main containers have `resources: {}` (no CPU or memory request) | `test_containers_request_cpu_and_memory` warns (`KNOWN_WITHOUT_REQUESTS`) |
+| podiumd chart | Open Beheer's and Referentielijsten's main containers had `resources: {}` (no CPU or memory request); fixed in podiumd 4.10.0 (helm-charts #591, #615) | `test_containers_request_cpu_and_memory` |
 
 **Configuration finding for the estates:** KISS's Objecten token has no rights on Activiteitenlog, so KISS shows none of ITA's activities (`test_kiss_reads_itas_logboek`, the same in ExternalsPodiumD, podiumd-infra and minikube).
 

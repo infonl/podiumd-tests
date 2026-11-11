@@ -38,12 +38,22 @@ class ProfileError(Exception):
 
 
 @dataclass(frozen=True)
+class AksCluster:
+    """The Azure AKS cluster behind a kube context."""
+
+    subscription: str
+    resource_group: str
+    name: str
+
+
+@dataclass(frozen=True)
 class KubeSettings:
     """kubectl context and namespaces of an environment."""
 
     context: str
     namespace: str
     monitoring_namespace: str | None = None
+    aks: AksCluster | None = None
 
 
 @dataclass(frozen=True)
@@ -85,7 +95,7 @@ class SecretSpec:
     options: dict[str, str] = field(default_factory=dict[str, str])
 
     @property
-    def needs_cluster(self) -> bool:
+    def is_in_cluster(self) -> bool:
         """True when resolving it reads the cluster."""
         return self.source in CLUSTER_SECRET_SOURCES
 
@@ -108,11 +118,23 @@ class Profile:  # pylint: disable=too-many-instance-attributes  # mirrors the YA
     path: Path | None = None
 
     @property
-    def smoke_only(self) -> bool:
+    def is_smoke_only(self) -> bool:
         """Only smoke runs are allowed: nothing writes to the environment, so nothing takes its lock."""
         return set(self.allowed_tiers) <= {"smoke"}
 
-    def allows(self, setting: str) -> bool:
+    @property
+    def context_refresh(self) -> list[str] | None:
+        """The command that writes kube.context into the kubeconfig from the cluster, if known."""
+        context = self.kube.context
+        aks = self.kube.aks
+        if aks:
+            cluster = ["--subscription", aks.subscription, "--resource-group", aks.resource_group, "--name", aks.name]
+            return ["az", "aks", "get-credentials", *cluster, "--context", context, "--overwrite-existing"]
+        if self.estate == "minikube":
+            return ["minikube", "update-context", "--profile", context]
+        return None
+
+    def is_allowed(self, setting: str) -> bool:
         """Whether an opt-in setting that changes the owner's configuration is "true"."""
         return self.settings.get(setting, "").lower() == "true"  # settings are strings
 
@@ -149,7 +171,7 @@ def _mapping(value: object, where: str) -> dict[str, object]:
     if not isinstance(value, dict):
         msg = f"{where}: expected a mapping"
         raise ProfileError(msg)
-    return {str(k): v for k, v in cast("dict[object, object]", value).items()}
+    return {str(key): item for key, item in cast("dict[object, object]", value).items()}
 
 
 def _optional_text(data: dict[str, object], key: str, where: str) -> str | None:
@@ -168,6 +190,13 @@ def _required_text(data: dict[str, object], key: str, where: str) -> str:
         msg = f"{where}: missing {key}"
         raise ProfileError(msg)
     return value
+
+
+def _parse_aks(value: object, where: str) -> AksCluster | None:
+    if value is None:
+        return None
+    data = _mapping(value, where)
+    return AksCluster(*(_required_text(data, key, where) for key in ("subscription", "resource_group", "name")))
 
 
 def _parse_urls(value: object, where: str) -> dict[str, str]:
@@ -195,7 +224,8 @@ def _parse_secrets(value: object, where: str) -> dict[str, SecretSpec]:
             msg = f"{where}.{name}: unknown source {source!r}"
             raise ProfileError(msg)
         option_map = {"value": str(options)} if source == "dev_default" else _mapping(options, f"{where}.{name}")
-        secrets[name] = SecretSpec(name, source, {k: str(v) for k, v in option_map.items()})
+        options = {key: str(option) for key, option in option_map.items()}
+        secrets[name] = SecretSpec(name, source, options)
     return secrets
 
 
@@ -223,12 +253,24 @@ def _parse_access(value: object, where: str) -> Access:
     return Access("host-header", ref, ca_bundle)
 
 
-def _wiring(value: object, estate: str, where: str) -> bool:
+def _is_wiring_allowed(value: object, estate: str, where: str) -> bool:
     wiring = _mapping(value or {}, where).get("wiring", WIRING_BY_ESTATE[estate])
     if not isinstance(wiring, bool):
         msg = f"{where}.wiring: expected true or false"
         raise ProfileError(msg)
     return wiring
+
+
+def _parse_tiers(value: object, where: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or not value:
+        msg = f"{where}: allowed_tiers must be a non-empty list"
+        raise ProfileError(msg)
+    tiers = tuple(str(tier) for tier in cast("list[object]", value))
+    unknown = [tier for tier in tiers if tier not in TIERS]
+    if unknown:
+        msg = f"{where}.allowed_tiers: unknown tier(s) {', '.join(unknown)}"
+        raise ProfileError(msg)
+    return tiers
 
 
 def parse_profile(raw: object, *, name: str, path: Path | None = None) -> Profile:
@@ -244,20 +286,14 @@ def parse_profile(raw: object, *, name: str, path: Path | None = None) -> Profil
         context=_required_text(kube_map, "context", f"{where}.kube"),
         namespace=_required_text(kube_map, "namespace", f"{where}.kube"),
         monitoring_namespace=_optional_text(kube_map, "monitoring_namespace", f"{where}.kube"),
+        aks=_parse_aks(kube_map.get("aks"), f"{where}.kube.aks"),
     )
-    tiers_raw = data.get("allowed_tiers")
-    if not isinstance(tiers_raw, list) or not tiers_raw:
-        msg = f"{where}: allowed_tiers must be a non-empty list"
-        raise ProfileError(msg)
-    tiers = tuple(str(t) for t in cast("list[object]", tiers_raw))
-    unknown = [t for t in tiers if t not in TIERS]
-    if unknown:
-        msg = f"{where}.allowed_tiers: unknown tier(s) {', '.join(unknown)}"
-        raise ProfileError(msg)
+    tiers = _parse_tiers(data.get("allowed_tiers"), where)
     secrets = _parse_secrets(data.get("secrets") or {}, f"{where}.secrets")
-    if estate != "minikube" and any(s.source == "dev_default" for s in secrets.values()):
+    if estate != "minikube" and any(secret.source == "dev_default" for secret in secrets.values()):
         msg = f"{where}.secrets: dev_default is only allowed for minikube"
         raise ProfileError(msg)
+    settings = _mapping(data.get("settings") or {}, f"{where}.settings")
     return Profile(
         name=name,
         estate=estate,
@@ -266,7 +302,7 @@ def parse_profile(raw: object, *, name: str, path: Path | None = None) -> Profil
         allowed_tiers=tiers,
         secrets=secrets,
         access=_parse_access(data.get("access"), f"{where}.access"),
-        settings={str(k): str(v) for k, v in _mapping(data.get("settings") or {}, f"{where}.settings").items()},
-        wiring=_wiring(data.get("bootstrap"), estate, f"{where}.bootstrap"),
+        settings={key: str(setting) for key, setting in settings.items()},
+        wiring=_is_wiring_allowed(data.get("bootstrap"), estate, f"{where}.bootstrap"),
         path=path,
     )

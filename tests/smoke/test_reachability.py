@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.components import COMPONENTS
 from podiumd_tests.components import DJANGO_APPS
+from podiumd_tests.components import HOSTED
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
@@ -28,7 +28,28 @@ pytestmark = pytest.mark.smoke
 MAX_SECONDS = 5.0
 
 
-@pytest.mark.parametrize("component", [requiring(c, c) for c in sorted(COMPONENTS)])
+@pytest.mark.source(
+    "TA smoke/81-continuiteit-pings.spec.ts",
+    "Continuity pings: every PodiumD component is reachable through its ingress and answers within 5 s.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/81-continuiteit-pings.spec.ts",
+    "Continuity pings: every PodiumD component is reachable through its ingress and answers within 5 s.",
+)
+@pytest.mark.source(
+    "MK test_reachability.py",
+    "External reachability via the edge, replaying the Host-header curl checks of the chart's manual verification.",
+)
+@pytest.mark.source(
+    "PI test_reachability.py",
+    "External reachability over real HTTPS with real DNS and certificates, adapted from podiumd-minikube.",
+)
+@pytest.mark.parametrize("component", [requiring(c, c) for c in sorted(HOSTED)])
+@pytest.mark.scenario("""
+    When the root of each deployed component is opened through its ingress
+    Then it answers without a server error
+    And it answers within 5 seconds
+""")
 def test_root_answers(http: requests.Session, urls: dict[str, str], component: str) -> None:
     """The root of each component answers without a server error, within 5 s (81).
 
@@ -39,8 +60,37 @@ def test_root_answers(http: requests.Session, urls: dict[str, str], component: s
     assert response.elapsed.total_seconds() < MAX_SECONDS
 
 
+@pytest.mark.source(
+    "MK test_reachability.py",
+    "External reachability via the edge, including the Open Formulieren admin login page, as its root answers 403.",
+)
+@pytest.mark.source(
+    "PI test_reachability.py",
+    "External reachability over real HTTPS, including the Open Formulieren admin login page, as its root answers 403.",
+)
+@pytest.mark.source(
+    "TA smoke/00-environment-preflight.spec.ts",
+    "Preflight that detects dead infrastructure; 00h and 00l check the Open Formulieren and Open Archiefbeheer admin.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/00-environment-preflight.spec.ts",
+    "Preflight that detects dead infrastructure; 00h and 00l check the Open Formulieren and Open Archiefbeheer admin.",
+)
+@pytest.mark.source(
+    "TA smoke/81-continuiteit-pings.spec.ts",
+    "Continuity pings: every PodiumD component is reachable through its ingress and answers within 5 s.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/81-continuiteit-pings.spec.ts",
+    "Continuity pings: every PodiumD component is reachable through its ingress and answers within 5 s.",
+)
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
+@pytest.mark.scenario("""
+    When the Django admin login page of each deployed Maykin app is opened
+    Then it answers 200 OK
+    And the browser ends on the login page
+""")
 def test_django_admin_login_page(http: requests.Session, urls: dict[str, str], component: str) -> None:
     """The admin login page renders (MK/PI admin login reachable, 00h, 00l, 81)."""
-    response = expect_status(http.get(urls[component] + "/admin/login/"), HTTPStatus.OK)
+    response = expect_status(http.get(f"{urls[component]}/admin/login/"), HTTPStatus.OK)
     assert "login" in response.url

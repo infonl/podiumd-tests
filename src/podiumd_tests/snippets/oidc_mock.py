@@ -22,14 +22,16 @@ ENDPOINTS = {
 def run(params):
     from mozilla_django_oidc_db.models import OIDCClient
 
-    clients = {c.identifier: c for c in OIDCClient.objects.filter(identifier__in=list(params["clients"]))}
+    clients = {
+        client.identifier: client for client in OIDCClient.objects.filter(identifier__in=list(params["clients"]))
+    }
     if params["action"] == "status":
         return {"present": _present(params, clients)}
     record = params.get("record") or {}
     if params["action"] == "remove":
         _remove(record, clients)
         if params.get("identities") and "accounts_before" in record:
-            _delete_accounts(_accounts(params["identities"]).exclude(pk__in=record["accounts_before"]))
+            _delete(_accounts(params["identities"]).exclude(pk__in=record["accounts_before"]))
         return {"present": False}
     for key, empty in (("clients", {}), ("created", []), ("providers", [])):
         record.setdefault(key, empty)
@@ -38,26 +40,18 @@ def run(params):
         _site(record)
     if params.get("identities"):
         record.setdefault("accounts_before", list(_accounts(params["identities"]).values_list("pk", flat=True)))
-        _create_accounts(params.get("accounts") or [])
+        _create(params.get("accounts") or [])
     return {"present": True, "record": record}
 
 
 def _clients(params, clients, record):
     from mozilla_django_oidc_db.models import OIDCClient
-    from mozilla_django_oidc_db.models import OIDCProvider
 
     for identifier, wanted in params["clients"].items():
-        provider, created = OIDCProvider.objects.get_or_create(identifier=wanted["provider"])
-        if created:
-            record["providers"].append(wanted["provider"])
-        for field, path in ENDPOINTS.items():
-            setattr(provider, field, f"{params['endpoint']}/{path}")
-        provider.save()
+        provider = _provider(params, wanted["provider"], record)
         client = clients.get(identifier) or OIDCClient(identifier=identifier)
         if client.pk and identifier not in record["clients"]:
-            # Every stored field except the key: what remove puts back.
-            fields = client._meta.concrete_fields
-            record["clients"][identifier] = {f.attname: getattr(client, f.attname) for f in fields if f.attname != "id"}
+            record["clients"][identifier] = _stored_fields(client)
         client.oidc_provider = provider
         client.oidc_rp_client_id = params["client_id"]
         client.oidc_rp_client_secret = params["secret"]
@@ -70,6 +64,25 @@ def _clients(params, clients, record):
         client.save()
 
 
+def _provider(params, identifier, record):
+    """Return the OIDC provider with Keycloak's endpoints, created (and recorded) if missing."""
+    from mozilla_django_oidc_db.models import OIDCProvider
+
+    provider, created = OIDCProvider.objects.get_or_create(identifier=identifier)
+    if created:
+        record["providers"].append(identifier)
+    for field, path in ENDPOINTS.items():
+        setattr(provider, field, f"{params['endpoint']}/{path}")
+    provider.save()
+    return provider
+
+
+def _stored_fields(client):
+    """Every stored field of the client except the key: what remove puts back."""
+    fields = client._meta.concrete_fields
+    return {column.attname: getattr(client, column.attname) for column in fields if column.attname != "id"}
+
+
 def _site(record):
     from open_inwoner.configurations.models import SiteConfiguration
 
@@ -80,8 +93,8 @@ def _site(record):
 
 
 def _accounts(identities):
-    """The Open Inwoner accounts with the identities' bsn or kvk."""
-    from django.db.models import Q
+    """Return the Open Inwoner accounts with the identities' bsn or kvk."""
+    from django.db.models import Q  # noqa: WPS347  # Django's query object
     from open_inwoner.accounts.models import User
 
     query = Q(pk__in=[])
@@ -90,7 +103,7 @@ def _accounts(identities):
     return User.objects.filter(query)
 
 
-def _delete_accounts(accounts):
+def _delete(accounts):
     # Rendering a page for a logged-in account creates CMS static alias Versions with
     # created_by that account, a protected, non-null foreign key: hand them over to another user,
     # a superuser when there is one (with SSO-only admins there is none).
@@ -108,7 +121,7 @@ def _delete_accounts(accounts):
     accounts.delete()
 
 
-def _create_accounts(accounts):
+def _create(accounts):
     from open_inwoner.accounts.choices import LoginTypeChoices
     from open_inwoner.accounts.models import User
 
@@ -127,6 +140,10 @@ def _create_accounts(accounts):
 
 
 def _present(params, clients):
+    return _clients_present(params, clients) and _site_present(params) and _accounts_present(params)
+
+
+def _clients_present(params, clients):
     from mozilla_django_oidc_db.models import OIDCProvider
 
     for identifier, wanted in params["clients"].items():
@@ -136,32 +153,31 @@ def _present(params, clients):
         provider = OIDCProvider.objects.filter(identifier=wanted["provider"]).first()
         if provider is None or provider.oidc_op_token_endpoint != f"{params['endpoint']}/token":
             return False
-    if params.get("eherkenning_site"):
-        from open_inwoner.configurations.models import SiteConfiguration
-
-        if not SiteConfiguration.get_solo().eherkenning_enabled:
-            return False
-    if params.get("accounts"):
-        from open_inwoner.accounts.models import User
-
-        if not all(User.objects.filter(bsn=u["bsn"]).exists() for u in params["accounts"]):
-            return False
     return True
+
+
+def _site_present(params):
+    if not params.get("eherkenning_site"):
+        return True
+    from open_inwoner.configurations.models import SiteConfiguration
+
+    return bool(SiteConfiguration.get_solo().eherkenning_enabled)
+
+
+def _accounts_present(params):
+    if not params.get("accounts"):
+        return True
+    from open_inwoner.accounts.models import User
+
+    bsns = [account["bsn"] for account in params["accounts"]]
+    return all(User.objects.filter(bsn=bsn).exists() for bsn in bsns)
 
 
 def _remove(record, clients):
     from mozilla_django_oidc_db.models import OIDCProvider
 
     for identifier, client in clients.items():
-        if identifier in record.get("created", []):
-            client.delete()
-            continue
-        old = record.get("clients", {}).get(identifier)
-        if old is None:
-            continue
-        for field, value in old.items():
-            setattr(client, field, value)
-        client.save()
+        _undo_client(record, identifier, client)
     OIDCProvider.objects.filter(identifier__in=record.get("providers", [])).delete()
     if "eherkenning_enabled" in record:
         from open_inwoner.configurations.models import SiteConfiguration
@@ -169,3 +185,16 @@ def _remove(record, clients):
         site = SiteConfiguration.get_solo()
         site.eherkenning_enabled = record["eherkenning_enabled"]
         site.save()
+
+
+def _undo_client(record, identifier, client):
+    """Delete the client when apply created it, else put its recorded fields back."""
+    if identifier in record.get("created", []):
+        client.delete()
+        return
+    old = record.get("clients", {}).get(identifier)
+    if old is None:
+        return
+    for field, value in old.items():
+        setattr(client, field, value)
+    client.save()

@@ -29,7 +29,7 @@ def run(params):
         )
 
     if params["action"] == "status":
-        return {"present": bool(applicatie and catalogus and all(covered(c) for c in COMPONENTS))}
+        return {"present": bool(applicatie and catalogus and all(covered(component) for component in COMPONENTS))}
     if params["action"] == "remove":
         CatalogusAutorisatie.objects.filter(id__in=created).delete()
         return {"present": False}

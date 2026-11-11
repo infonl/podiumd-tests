@@ -8,19 +8,18 @@ order: objects that refer to others go first.
 from __future__ import annotations
 
 import json
-import re
 
+from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime
-from datetime import timedelta
+from functools import partial
 from typing import TYPE_CHECKING
 
-from podiumd_tests.bootstrap import check
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_STORE_KEY
 from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
+from podiumd_tests.bootstrap.runner import check
 from podiumd_tests.bootstrap.steps import STEPS
 from podiumd_tests.clients.platform import mailpit_client
 from podiumd_tests.clients.platform import objecten_client
@@ -33,44 +32,49 @@ from podiumd_tests.openformulieren import remove_form
 from podiumd_tests.openformulieren import tagged_forms
 from podiumd_tests.results import RUN_TAG
 from podiumd_tests.results import run_started
+from podiumd_tests.seed.catalogi import remove_catalogus_type
+from podiumd_tests.seed.catalogi import tagged_catalogus_types
 from podiumd_tests.seed.opennotificaties import delete_abonnement
 from podiumd_tests.seed.openzaak import BESLUITEN
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
+from podiumd_tests.seed.openzaak import delete_besluit
 from podiumd_tests.seed.openzaak import delete_zaak
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from datetime import datetime
 
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
 
-AGE = re.compile(r"(\d+)([mhd])")
-_UNITS = {"m": "minutes", "h": "hours", "d": "days"}
-
 # The audit trail names sweep as the actor of its deletions.
 SWEEP_TAG = "podiumd-tests-sweep"
+# Fields that name a swept object, first present one wins.
+_NAME_KEYS = ("url", "name", "Subject", "ID")
 
 
-def parse_age(text: str) -> timedelta:
-    """An age such as 30m, 24h or 7d; ValueError otherwise."""
-    found = AGE.fullmatch(text.strip())
-    if found is None:
-        msg = f"age {text!r}: expected a number with m, h or d, e.g. 24h"
-        raise ValueError(msg)
-    return timedelta(**{_UNITS[found.group(2)]: int(found.group(1))})
+def _line(entry: Swept) -> str:
+    return f"{entry.action:<8} {entry.kind:<20} {entry.name} {entry.detail}".rstrip()
 
 
-def format_swept(swept: list[Swept]) -> str:
-    """One line per leftover or skipped kind, for the terminal."""
-    lines = [f"{s.action:<8} {s.kind:<20} {s.name} {s.detail}".rstrip() for s in swept]
+def sweep_report(swept: list[Swept]) -> str:
+    """One line per leftover or skipped kind, and one count of the kept objects, for the terminal."""
+    shown = [entry for entry in swept if entry.action != "kept"]
+    lines = [_line(entry) for entry in shown]
+    kept = Counter(entry.kind for entry in swept if entry.action == "kept")
+    if kept:
+        kinds = ", ".join(f"{kind} {count}" for kind, count in kept.items())
+        lines.append(
+            f"kept     {kept.total()} run-tagged objects of runs after the cutoff ({kinds}): lower --older-than"
+        )
     return "\n".join(lines) or "nothing to sweep"
 
 
 def is_stale(item: object, cutoff: datetime) -> bool:
-    """The item carries a run tag of a run that started before cutoff (a legacy tag always counts)."""
+    """Return whether the item carries a run tag of a run that started before cutoff (a legacy tag always counts)."""
     for tag in RUN_TAG.findall(json.dumps(item)):
         started = run_started(tag)
         if started is None or started < cutoff:
@@ -95,6 +99,8 @@ class Finder:  # pylint: disable=too-many-instance-attributes  # a record of one
     delete: Callable[[ApiClient], Callable[[JsonObject], None]] = _delete
     # Adds what tells whether an item is stale, from outside the item.
     with_context: Callable[[Environment, ApiClient, list[JsonObject]], list[JsonObject]] | None = None
+    # A profile setting without which the bootstrap client has no rights to list this kind.
+    setting: str = ""
 
     def items(self, env: Environment, client: ApiClient) -> list[JsonObject]:
         """Everything the list returns; Mailpit's search answers with "messages"."""
@@ -113,11 +119,11 @@ def _openzaak_productaanvraag(env: Environment) -> ApiClient:
 
 
 def with_productaanvraag(env: Environment, openzaak: ApiClient, zaken: list[JsonObject]) -> list[JsonObject]:
-    """The zaken, each started for a run-tagged productaanvraag with that object under "productaanvraag".
+    """Return the zaken, each started for a run-tagged productaanvraag with that object under "productaanvraag".
 
     The kenmerk of a productaanvraag that Open Formulieren registers is its public reference, without a run tag.
     """
-    by_url = {str(z["url"]): z for z in zaken}
+    by_url = {str(zaak["url"]): zaak for zaak in zaken}
     for item in objecten_client(env).list("objects", {}):
         if not RUN_TAG.search(json.dumps(item)):
             continue
@@ -126,6 +132,10 @@ def with_productaanvraag(env: Environment, openzaak: ApiClient, zaken: list[Json
             if zaak in by_url:
                 by_url[zaak] = {**by_url[zaak], "productaanvraag": item}
     return list(by_url.values())
+
+
+def _besluit(client: ApiClient) -> Callable[[JsonObject], None]:
+    return lambda item: delete_besluit(client, str(item["url"]))
 
 
 def _zaak(client: ApiClient) -> Callable[[JsonObject], None]:
@@ -149,6 +159,7 @@ FINDERS: tuple[Finder, ...] = (
         _openzaak,
         f"{BESLUITEN}/besluiten",
         {"verantwoordelijkeOrganisatie": TEST_CATALOGUS_RSIN},
+        _besluit,
     ),
     Finder("zaak", "openzaak", "openzaak-client", _openzaak, f"{ZAKEN}/zaken", RSIN, _zaak),
     Finder(
@@ -160,6 +171,7 @@ FINDERS: tuple[Finder, ...] = (
         {},
         _zaak,
         with_productaanvraag,
+        "productaanvraag_zaaktype",
     ),
     Finder("document", "openzaak", "openzaak-client", _openzaak, f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", RSIN),
     Finder(
@@ -191,50 +203,76 @@ class Swept:
 
     kind: str
     name: str
-    action: str  # "deleted", "found" (dry run), "failed" or "skipped"
+    action: str  # "deleted", "found" (dry run), "failed", "skipped" or "kept" (run after the cutoff)
     detail: str = ""
 
 
 def _name(item: JsonObject) -> str:
-    return str(item.get("url") or item.get("slug") or item.get("Subject") or item.get("ID") or "?")
+    return str(next((item[key] for key in _NAME_KEYS if item.get(key)), "?"))
+
+
+_DELETE_ERRORS = (AssertionError, OSError, ValueError)
 
 
 def _sweep_items(
     kind: str, items: list[JsonObject], delete: Callable[[JsonObject], None], cutoff: datetime, *, dry_run: bool
 ) -> list[Swept]:
-    swept: list[Swept] = []
-    for item in items:
-        if not is_stale(item, cutoff):
-            continue
-        if dry_run:
-            swept.append(Swept(kind, _name(item), "found"))
-            continue
-        try:
-            delete(item)
-        except (AssertionError, OSError, ValueError) as exc:
-            swept.append(Swept(kind, _name(item), "failed", f"{type(exc).__name__}: {exc}"))
-        else:
-            swept.append(Swept(kind, _name(item), "deleted"))
-    return swept
+    swept = [_swept(kind, item, delete, cutoff, dry_run=dry_run) for item in items]
+    return [entry for entry in swept if entry is not None]
+
+
+def _swept(
+    kind: str, item: JsonObject, delete: Callable[[JsonObject], None], cutoff: datetime, *, dry_run: bool
+) -> Swept | None:
+    """Return what happened to one object; None for a fresh one without the run tag."""
+    if not is_stale(item, cutoff):
+        return Swept(kind, _name(item), "kept") if RUN_TAG.search(json.dumps(item)) else None
+    if dry_run:
+        return Swept(kind, _name(item), "found")
+    try:
+        delete(item)
+    except _DELETE_ERRORS as exc:
+        return Swept(kind, _name(item), "failed", f"{type(exc).__name__}: {exc}")
+    return Swept(kind, _name(item), "deleted")
+
+
+def _skip_reason(env: Environment, finder: Finder, present: set[str]) -> str | None:
+    """Why the finder cannot run: its component, bootstrap step or profile setting is missing; else None."""
+    reason = env.capabilities.skip_reason(finder.component)
+    if reason is None and finder.step and finder.step not in present:
+        reason = f"bootstrap step {finder.step} missing"
+    if reason is None and finder.setting and not env.profile.settings.get(finder.setting):
+        reason = f"profile {env.profile.name} has no settings.{finder.setting}"
+    return reason
+
+
+# Kinds the APIs cannot list or delete, with their component: listed and deleted with a Django snippet.
+SNIPPET_KINDS = (("form", "openformulieren"), ("catalogus type", "openzaak"))
+
+
+def _sweep_by_snippet(env: Environment, kind: str, cutoff: datetime, *, dry_run: bool) -> list[Swept]:
+    if kind == "form":
+        names, remove = tagged_forms(env), partial(remove_form, env)
+    else:
+        names, remove = tagged_catalogus_types(env), partial(remove_catalogus_type, env)
+    items: list[JsonObject] = [{"name": name} for name in names]
+    return _sweep_items(kind, items, lambda item: remove(str(item["name"])), cutoff, dry_run=dry_run)
 
 
 def sweep(env: Environment, cutoff: datetime, *, dry_run: bool) -> list[Swept]:
-    """Delete (or with dry_run, list) the stale run-tagged objects of every finder, then the test forms."""
-    present = {o.step for o in check(env, STEPS) if o.action == "present"}
+    """Delete (or with dry_run, list) the stale run-tagged objects of every finder, then the snippet kinds."""
+    present = {outcome.step for outcome in check(env, STEPS) if outcome.action == "present"}
     swept: list[Swept] = []
     for finder in FINDERS:
-        reason = env.capabilities.skip_reason(finder.component)
-        if reason is None and finder.step and finder.step not in present:
-            reason = f"bootstrap step {finder.step} missing"
+        reason = _skip_reason(env, finder, present)
         if reason:
             swept.append(Swept(finder.kind, "", "skipped", reason))
             continue
         client = finder.client(env)
         swept += _sweep_items(finder.kind, finder.items(env, client), finder.delete(client), cutoff, dry_run=dry_run)
-    reason = env.capabilities.skip_reason("openformulieren", "cluster")
-    if reason:
-        return [*swept, Swept("form", "", "skipped", reason)]
-    forms: list[JsonObject] = [{"slug": slug} for slug in tagged_forms(env)]
-    return swept + _sweep_items(
-        "form", forms, lambda item: remove_form(env, str(item["slug"])), cutoff, dry_run=dry_run
-    )
+    for kind, component in SNIPPET_KINDS:
+        reason = env.capabilities.skip_reason(component, "cluster")
+        swept += (
+            [Swept(kind, "", "skipped", reason)] if reason else _sweep_by_snippet(env, kind, cutoff, dry_run=dry_run)
+        )
+    return swept

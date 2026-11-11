@@ -23,12 +23,26 @@ ROUTES = {
     "brp": "/haalcentraal/api/brp/personen",
     "bag": "/lvbag/individuelebevragingen/v2/adressen",
     "kvk-basisprofiel": "/api/v1/basisprofielen/68750110",
-    "kvk-vestiging": "/api/v1/vestigingsprofielen/000037171195",
+    "kvk-vestiging": "/api/v1/vestigingsprofielen/000037178598",
     "kvk-zoeken": "/api/v2/zoeken?naam=test",
 }
 
 
+@pytest.mark.source(
+    "TA smoke/192-frankgateway-health.spec.ts",
+    "Frank!Gateway outway health: BAG, KVK and BRP traffic actually passes through the gateway.",
+)
+@pytest.mark.source(
+    "MK test_frankgateway.py",
+    "frankgateway profile: the outway serves the api-proxy's paths.",
+)
 @pytest.mark.parametrize("path", [pytest.param(p, id=n) for n, p in ROUTES.items()])
+@pytest.mark.scenario("""
+    When each base registration route (BRP, BAG, KVK) of the Frank!Gateway outway is called
+    Then the outway has a route for it
+    And its upstream is available
+    And the BRP route refuses GET with 405 Method Not Allowed
+""")
 def test_outway_routes_to_upstream(http: requests.Session, urls: dict[str, str], path: str) -> None:
     """The outway has a route, and its upstream is available (no 503).
 
@@ -39,3 +53,22 @@ def test_outway_routes_to_upstream(http: requests.Session, urls: dict[str, str],
     assert response.status_code != HTTPStatus.SERVICE_UNAVAILABLE, f"{path}: upstream unavailable"
     if path == ROUTES["brp"]:
         expect_status(response, HTTPStatus.METHOD_NOT_ALLOWED)
+
+
+@pytest.mark.source(
+    "TA smoke/192-frankgateway-health.spec.ts",
+    "Frank!Gateway outway: the KVK route reaches KVK's test dataset and injects the OpenBao-backed API key.",
+)
+@pytest.mark.scenario("""
+    When the KVK basisprofiel of a test company is asked for through the Frank!Gateway outway
+    Then KVK answers 200 OK with that kvkNummer
+    And so accepts the API key the outway adds from OpenBao
+""")
+def test_outway_key_is_accepted_by_the_kvk_upstream(http: requests.Session, urls: dict[str, str]) -> None:
+    """The KvK basisprofiel route answers 200 with the kvkNummer: the outway's API key (OpenBao) is accepted.
+
+    A missing or wrong key would get 401/403 from KvK, not the profile; on minikube the KvK mock answers.
+    """
+    response = http.get(urls["frankgateway"] + ROUTES["kvk-basisprofiel"], headers={"Accept": "application/json"})
+    body = expect_status(response, HTTPStatus.OK).json()
+    assert str(body.get("kvkNummer")) == "68750110", f"no basisprofiel in the answer: {body}"

@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 
     from podiumd_tests.json_data import JsonObject
 
+type _Headers = dict[str, str] | Callable[[], dict[str, str]]
+
 MAX_PAGES = 50
 
 
@@ -25,19 +27,17 @@ class ApiClient:
     headers is a dict, or a function that returns them per request (e.g. a fresh ZGW token).
     """
 
-    def __init__(
-        self, http: requests.Session, base_url: str, headers: dict[str, str] | Callable[[], dict[str, str]]
-    ) -> None:
-        self.http = http
-        self.base_url = base_url.rstrip("/")
-        self._headers = headers
+    def __init__(self, http: requests.Session, base_url: str, headers: _Headers) -> None:
+        self.http: requests.Session = http
+        self.base_url: str = base_url.rstrip("/")
+        self._headers: _Headers = headers
 
     def url(self, path: str) -> str:
         """Absolute URL of a path below the API root; absolute URLs pass unchanged."""
         return path if path.startswith(("http://", "https://")) else f"{self.base_url}/{path.lstrip('/')}"
 
     def headers(self) -> dict[str, str]:
-        """The headers for the next request."""
+        """Return the headers for the next request."""
         return self._headers() if callable(self._headers) else self._headers
 
     def request(self, method: str, path: str, *expected: int, **kwargs: object) -> requests.Response:

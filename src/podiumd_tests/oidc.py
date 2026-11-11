@@ -8,6 +8,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
+from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.auth.keycloak import login_form_action
 from podiumd_tests.components import DJANGO_APPS
 from podiumd_tests.responses import UnexpectedStatusError
@@ -22,8 +23,10 @@ if TYPE_CHECKING:
 
     import requests
 
+    from podiumd_tests.environment import Environment
+
 AUTH_PATH = re.compile(r"^/realms/(?P<realm>[^/]+)/protocol/openid-connect/auth$")
-LOGIN_FORM = re.compile(r"""(name|id)=["']username["']""")
+LOGIN_FORM = re.compile(r"(name|id)=[\"']username[\"']")
 
 # Where an app's login starts. A Django admin may log in through Keycloak or only locally.
 CHALLENGE = "/api/challenge?returnUrl=%2F"
@@ -35,6 +38,8 @@ LOGIN_PATHS = {
     "ita": CHALLENGE,
     "pabc": CHALLENGE,
     "openbeheer": "/auth/oidc/authenticate/?next=/",
+    "openvtb": "/auth/oidc/authenticate/?next=/admin/",
+    "zaakbrug": "/iaf/gui",
 }
 # An app with one replica busy with browser logins (Open Formulieren on kees00) can take longer than
 # the session's default timeout to send its login redirect.
@@ -49,10 +54,10 @@ class LoginPageError(AssertionError):
 
 def keycloak_hosts(urls: Mapping[str, str]) -> frozenset[str]:
     """Hosts of Keycloak: apps log in through keycloak, Django admins on some estates through keycloak-admin."""
-    return frozenset(url_host(urls[c]) for c in ("keycloak", "keycloak-admin") if c in urls)
+    return frozenset(url_host(urls[component]) for component in ("keycloak", "keycloak-admin") if component in urls)
 
 
-def logs_in_through_keycloak(http: requests.Session, start_url: str, hosts: Collection[str]) -> bool:
+def has_keycloak_login(http: requests.Session, start_url: str, hosts: Collection[str]) -> bool:
     """Whether the login at start_url redirects to Keycloak; UnexpectedStatusError for a server error.
 
     A failing app must fail the test, not look like an app without a Keycloak login.
@@ -65,7 +70,7 @@ def logs_in_through_keycloak(http: requests.Session, start_url: str, hosts: Coll
 
 
 def keycloak_login_realm(response: requests.Response, hosts: Collection[str]) -> str:
-    """The realm of the Keycloak login form that a redirect chain ended on; LoginPageError otherwise.
+    """Return the realm of the Keycloak login form that a redirect chain ended on; LoginPageError otherwise.
 
     Keycloak sends a client it refuses (unknown redirect URI, invalid_scope) back to the app or to an error page.
     A form that posts to another host (the realm's frontendUrl) cannot log in.
@@ -79,6 +84,12 @@ def keycloak_login_realm(response: requests.Response, hosts: Collection[str]) ->
     if not match:
         msg = f"not an OIDC auth endpoint: {response.url}"
         raise LoginPageError(msg)
+    _check_login_form(response)
+    return match["realm"]
+
+
+def _check_login_form(response: requests.Response) -> None:
+    """LoginPageError unless the page has a login form that posts to its own host."""
     if not LOGIN_FORM.search(response.text):
         msg = f"no login form on {response.url}"
         raise LoginPageError(msg)
@@ -87,4 +98,13 @@ def keycloak_login_realm(response: requests.Response, hosts: Collection[str]) ->
         # Keycloak then misses its login cookie: "Restart login cookie not found".
         msg = f"login form on {url_host(response.url)} posts to {url_host(action)}"
         raise LoginPageError(msg)
-    return match["realm"]
+
+
+def challenge_session(env: Environment, app_url: str, username: str, password: str) -> requests.Session:
+    """Return a session on an ASP.NET app with a /api/challenge route (KISS), logged in through Keycloak's form.
+
+    ITA starts a login only for a browser navigation: kcc.kcc_login.
+    """
+    http = env.session()
+    form_login(http, app_url + CHALLENGE, username, password)
+    return http

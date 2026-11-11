@@ -24,6 +24,15 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("opennotificaties")]
 
 
 @pytest.mark.parametrize("naam", sorted(KANALEN))
+@pytest.mark.source(
+    "TA regression/53-on-kanaal-validation.spec.ts",
+    "A kanaal is found through the list filter on naam, with its filters.",
+)
+@pytest.mark.scenario("""
+    Given the test bootstrap has added the kanalen the tests publish on
+    When a client looks up a kanaal by naam in Open Notificaties
+    Then the kanaal exists with the filters the tests use
+""")
 def test_kanaal_has_the_filters_tests_use(
     opennotificaties: ApiClient, need_bootstrap: Callable[..., None], naam: str
 ) -> None:
@@ -33,6 +42,14 @@ def test_kanaal_has_the_filters_tests_use(
     assert set(KANALEN[naam]) <= set(strings(entries(found)[0]["filters"]))
 
 
+@pytest.mark.source(
+    "TA regression/53-on-kanaal-validation.spec.ts", "Creating a kanaal with an existing name answers 400."
+)
+@pytest.mark.scenario("""
+    Given Open Notificaties has a kanaal zaken
+    When a client creates another kanaal named zaken
+    Then Open Notificaties refuses it as invalid
+""")
 def test_kanaal_name_is_unique(opennotificaties: ApiClient) -> None:
     """A second kanaal named zaken is refused (TA reg-53a)."""
     opennotificaties.request("POST", "kanaal", 400, json={"naam": "zaken", "documentatieLink": "", "filters": []})
@@ -40,6 +57,14 @@ def test_kanaal_name_is_unique(opennotificaties: ApiClient) -> None:
 
 # Open Notificaties first calls the callback; only with a callback that refuses requests without
 # auth and answers 204 with it does it get to validating kanalen and filters.
+@pytest.mark.source(
+    "TA regression/53-on-kanaal-validation.spec.ts", "An abonnement on a kanaal that does not exist is refused."
+)
+@pytest.mark.scenario("""
+    Given a webhook that accepts Open Notificaties' callback check
+    When a client creates an abonnement on a kanaal that does not exist
+    Then Open Notificaties refuses it as invalid
+""")
 def test_abonnement_on_an_unknown_kanaal_is_refused(
     opennotificaties: ApiClient, registry: ResourceRegistry, callback: Callback
 ) -> None:
@@ -48,6 +73,15 @@ def test_abonnement_on_an_unknown_kanaal_is_refused(
     opennotificaties.request("POST", "abonnement", 400, json=body)
 
 
+@pytest.mark.source(
+    "TA regression/53-on-kanaal-validation.spec.ts",
+    "An abonnement with an unknown attribute in its filters answers 400.",
+)
+@pytest.mark.scenario("""
+    Given a webhook that accepts Open Notificaties' callback check
+    When a client creates an abonnement on kanaal zaken filtering on an attribute the kanaal lacks
+    Then Open Notificaties refuses it as invalid
+""")
 def test_abonnement_with_an_unknown_filter_is_refused(
     opennotificaties: ApiClient, registry: ResourceRegistry, callback: Callback
 ) -> None:
@@ -56,6 +90,15 @@ def test_abonnement_with_an_unknown_filter_is_refused(
     opennotificaties.request("POST", "abonnement", 400, json=body)
 
 
+@pytest.mark.source(
+    "podiumd-tests", "Creating an abonnement makes Open Notificaties check its callback with the abonnement's auth."
+)
+@pytest.mark.scenario("""
+    Given a webhook that accepts Open Notificaties' callback check
+    When a client creates an abonnement on kanaal zaken with that webhook as callback
+    Then Open Notificaties calls the webhook once without auth
+    And once with the abonnement's auth
+""")
 def test_abonnement_calls_its_callback_with_its_auth(
     opennotificaties: ApiClient, registry: ResourceRegistry, callback: Callback
 ) -> None:
@@ -66,9 +109,17 @@ def test_abonnement_calls_its_callback_with_its_auth(
 
 @pytest.mark.xfail(
     strict=True,
-    reason="Open Notificaties: an unreachable callback URL makes POST /abonnement answer 500 "
+    reason="[open-notificaties-1] Open Notificaties: an unreachable callback URL makes POST /abonnement answer 500 "
     "(requests ConnectionError in nrc/api/validators.py) instead of a 400; not yet reported upstream",
 )
+@pytest.mark.source(
+    "TA regression/53-on-kanaal-validation.spec.ts",
+    "Abonnement validation refuses an invalid abonnement with 400 instead of an error.",
+)
+@pytest.mark.scenario("""
+    When a client creates an abonnement on kanaal zaken with a callback that cannot be reached
+    Then Open Notificaties refuses it as invalid
+""")
 def test_abonnement_with_an_unreachable_callback_is_refused(
     opennotificaties: ApiClient, registry: ResourceRegistry
 ) -> None:

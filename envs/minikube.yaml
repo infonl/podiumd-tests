@@ -1,15 +1,17 @@
+---
 # podiumd-minikube (infonl/podiumd-minikube): *.local hosts through the NGINX Gateway Fabric
 # LoadBalancer IP (`minikube tunnel`), as ExternalsPodiumD's edge; no /etc/hosts edits needed.
 estate: minikube
 allowed_tiers: [smoke, core, full, perf, chaos]
 kube:
   context: minikube
-  namespace: podiumd-minikube
+  namespace: podiumd
+  monitoring_namespace: monitoring
 access:
   mode: host-header
   ingress_service:
     namespace: ingress-basic
-    name: public-gateway-nginx
+    name: waf
   # podiumd-minikube's local CA plus the system CAs, as its pods trust them.
   ca_bundle:
     configmap: podiumd-ca
@@ -35,14 +37,26 @@ urls:
   mailpit: https://mailpit.local
   api-proxy: https://api-proxy.local
   omc: https://omc.local
+  openvtb: https://openvtb.local
+  zaakbrug: https://zaakbrug.local
+  zgw-office-addin: https://office-addin.local
+  # podiumd-minikube profile frankgateway (on with --full).
+  openbao: https://openbao.local
   # No ingress, as on ExternalsPodiumD: reached through a port-forward.
-  frankgateway: http://frankgateway-outway.podiumd-minikube.svc.cluster.local:9080
+  frankgateway: http://frankgateway-outway.podiumd.svc.cluster.local:9080
 secrets:
   # keycloak-operator's master admin, as on podiumd-infra.
   keycloak_admin_username:
     k8s_secret: {name: keycloak-podiumd-admin, key: username}
   keycloak_admin_password:
     k8s_secret: {name: keycloak-podiumd-admin, key: password}
+  kiss_elastic_password:
+    k8s_secret: {name: kiss-es-elastic-user, key: elastic}
+  # Grafana's admin, as on podiumd-infra.
+  grafana_username:
+    k8s_secret: {name: monitoring-logging-grafana, key: admin-user, namespace: monitoring}
+  grafana_password:
+    k8s_secret: {name: monitoring-logging-grafana, key: admin-password, namespace: monitoring}
   # Well-known dev defaults of podiumd-minikube; the only place literals are allowed.
   # Superuser of every Maykin app (podiumd-minikube create-superuser Jobs).
   django_admin_username:
@@ -60,12 +74,15 @@ secrets:
   # Signs the bootstrap's OMC abonnement token; read from OMC's own Secret.
   omc_jwt_secret:
     k8s_secret: {name: omc, key: OMC_AUTH_JWT_SECRET}
+  # Test user of acc-mock, the stand-in for the acceptance Keycloak behind admin identity provider accp-dimp-oidc.
+  admin_idp_username:
+    k8s_secret: {name: keycloak-acc-mock, key: username}
+  admin_idp_password:
+    k8s_secret: {name: keycloak-acc-mock, key: password}
 settings:
   zgw_client_id: formulier
-  # As in ExternalsPodiumD and podiumd-infra, Open Inwoner has no local superuser.
-  django_admin_sso_only: openinwoner
-  # The api-proxy adds KvK's test key and routes to KvK's test API.
-  openinwoner_kvk_api_root: http://api-proxy/api/
+  # No local superuser: Open Inwoner as in ExternalsPodiumD and podiumd-infra; Open VTB (podiumd-minikube creates none).
+  django_admin_sso_only: openinwoner,openvtb
   # podiumd-minikube's opt-in clamav profile (clamd with the EICAR signature only).
   clamav: "clamav:3310"
   # podiumd's e2e zaaktype (create_required_catalogi_job), as ExternalsPodiumD; ZAC's zaakafhandelparameters
@@ -74,11 +91,14 @@ settings:
   productaanvraag_zaaktype: zaaktype-voor-e2e-testen
   # podiumd-minikube allows bootstrap to switch on ZAC's ontvangstbevestiging for that zaaktype (2026-10-09).
   zac_email_confirmation: true
+  # podiumd-minikube allows bootstrap to switch on its human task Aanvullende informatie (2026-10-21).
+  zac_aanvullende_informatie: true
   # podiumd-minikube asks bootstrap to give that zaaktype the besluittype ZAC's inrichtingscheck needs (2026-10-09).
   zac_besluittype: true
   # KISS's kanalen are runtime data no environment seeds; bootstrap adds Balie, Telefoon and Internet (2026-10-10).
   kiss_kanalen: true
-  # Open Formulieren's wait_for_payment_to_register is runtime data no environment sets; bootstrap switches it on (2026-10-10).
+  # Open Formulieren's wait_for_payment_to_register is runtime data no environment sets; bootstrap switches it on
+  # (2026-10-10).
   of_wait_for_payment: true
   # seed-volume --scale perf on one laptop; other environments take TA's counts.
   seed_volume_users: "20"
@@ -90,5 +110,10 @@ settings:
   seed_volume_kennisartikelen: "200"
   # seed-volume may add the volume zaaktype to PABC's entity types, so ZAC shows its zaken to the test admin.
   pabc_volume_zaaktype: true
+  # One pod per component by default; tests using fixture several_replicas switch redis-ha to 3 and Keycloak to 2
+  # (tier chaos).
+  replicas_command: /home/kvv/development/werk/infonl-dimpact/infonl/podiumd-minikube/bin/replicas
+  # ConfigMap where podiumd-minikube records what it deployed (local chart checkouts); run.json and summary.md show it.
+  deployed_build: podiumd/podiumd-minikube-deployed
   # Shared with the podiumd-minikube agent; bootstrap and writing runs take it.
   lock_file: /home/kvv/development/werk/infonl-dimpact/infonl/.minikube-lock

@@ -14,6 +14,7 @@ import pytest
 from playwright.sync_api import expect
 
 from podiumd_tests.bootstrap.steps import IDENTITIES
+from podiumd_tests.openinwoner import count_accounts
 from podiumd_tests.openinwoner import portal_login
 
 if TYPE_CHECKING:
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
 
     from playwright.sync_api import Page
 
-    from podiumd_tests.bootstrap.steps import KeycloakUser
+    from podiumd_tests.bootstrap.keycloak import KeycloakUser
     from podiumd_tests.environment import Environment
 
 pytestmark = [pytest.mark.component, pytest.mark.ui, pytest.mark.core, pytest.mark.requires("openinwoner", "keycloak")]
@@ -33,7 +34,21 @@ FAILED = re.compile(r"/(accounts/login|login/failure)/")
 @pytest.mark.parametrize(
     ("method", "user"), [("digid", INWONER), ("eherkenning", BEDRIJF)], ids=["digid", "eherkenning"]
 )
-def test_login_through_the_keycloak_mock_starts_a_session(  # pylint: disable=too-many-arguments,too-many-positional-arguments  # fixtures
+@pytest.mark.source(
+    "EX tests/smoke/05-portaal-digid-login.spec.ts",
+    "An inwoner logs in through the Keycloak DigiD-OIDC mock and lands on a logged-in page.",
+)
+@pytest.mark.source(
+    "EX tests/smoke/99-portaal-eherkenning-login.spec.ts",
+    "The test company logs in through the Keycloak eHerkenning-OIDC mock and gets a session.",
+)
+@pytest.mark.scenario("""
+    Given a test identity for DigiD or eHerkenning
+    When the identity logs in to Open Inwoner through Keycloak's DigiD or eHerkenning mock
+    Then the portal does not show a login or failure page
+    And the browser has an Open Inwoner session
+""")
+def test_login_through_the_keycloak_mock_starts_a_session(
     page: Page,
     podiumd_env: Environment,
     need_bootstrap: Callable[..., None],
@@ -48,12 +63,56 @@ def test_login_through_the_keycloak_mock_starts_a_session(  # pylint: disable=to
     assert "open_inwoner_sessionid" in cookies, "no Open Inwoner session cookie"
 
 
+@pytest.mark.source(
+    "TA regression/84-portaal-ingelogd-sessie.spec.ts",
+    "After a DigiD login the session opens Mijn zaken, and logging out ends it.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner logged in with DigiD
+    When the inwoner opens Mijn zaken
+    Then Mijn zaken is shown
+    When the inwoner logs out and opens Mijn zaken again
+    Then the portal asks for a login
+""")
 def test_logout_ends_the_session(page: Page, podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> None:
     """Logged in, Mijn zaken opens; after logging out it asks for a login again (TA reg-84)."""
     need_bootstrap(INWONER.name, "openinwoner-oidc-mock", "openinwoner-cms-pages")
     portal = podiumd_env.profile.urls["openinwoner"]
     portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
     expect(page).to_have_url(re.compile(r"/mijn-zaken/"))
-    page.goto(portal + "/digid-oidc/logout/")
-    page.goto(portal + "/mijn-zaken/")
+    page.goto(f"{portal}/digid-oidc/logout/")
+    page.goto(f"{portal}/mijn-zaken/")
     expect(page).to_have_url(re.compile(r"/accounts/login/\?next=/mijn-zaken/"))
+
+
+@pytest.mark.requires("cluster")
+@pytest.mark.parametrize(
+    ("method", "user", "lookup"),
+    [("digid", INWONER, "bsn"), ("eherkenning", BEDRIJF, "kvk")],
+    ids=["digid", "eherkenning"],
+)
+@pytest.mark.source(
+    "upstream maykinmedia/open-inwoner src/open_inwoner/accounts/tests/test_oidc_login_e2e.py",
+    "Logging in again with DigiD or eHerkenning reuses the existing user instead of creating one.",
+)
+@pytest.mark.scenario("""
+    Given a test identity for DigiD or eHerkenning
+    When the identity logs in to Open Inwoner twice in fresh sessions
+    Then each login succeeds
+    And Open Inwoner has one account for that BSN or KvK number
+""")
+def test_second_login_reuses_the_account(
+    page: Page,
+    podiumd_env: Environment,
+    need_bootstrap: Callable[..., None],
+    method: str,
+    user: KeycloakUser,
+    lookup: str,
+) -> None:
+    """Two logins of the same BSN or KvK number in fresh sessions leave one Open Inwoner account."""
+    need_bootstrap(user.name, "openinwoner-oidc-mock")
+    for _ in range(2):
+        page.context.clear_cookies()
+        portal_login(page, podiumd_env, method, user)
+        expect(page).not_to_have_url(FAILED)
+    assert count_accounts(podiumd_env, **{lookup: user.attributes[lookup][0]}) == 1

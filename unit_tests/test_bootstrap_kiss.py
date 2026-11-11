@@ -4,11 +4,12 @@ import base64
 import json
 
 import pytest
+import requests
 
-from podiumd_tests.bootstrap import Context
 from podiumd_tests.bootstrap import kiss as kiss_step
 from podiumd_tests.bootstrap.kiss import STORE_KEY
 from podiumd_tests.bootstrap.kiss import KissKanalen
+from podiumd_tests.bootstrap.runner import Context
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.credentials import env_var_name
@@ -25,7 +26,7 @@ def ctx(env_factory, profile_factory, fake_runner, monkeypatch):
         )
         data = {"data": {STORE_KEY: base64.b64encode(json.dumps(record).encode()).decode()}} if record else {}
         fake_runner.answers["get secret podiumd-tests-credentials"] = (0, json.dumps({"kind": "Secret", **data}))
-        monkeypatch.setattr(kiss_step, "form_login", lambda *_: None)
+        monkeypatch.setattr(kiss_step, "challenge_session", lambda *_: requests.Session())
         return Context(env, CredentialStore(env.kube))
 
     return build

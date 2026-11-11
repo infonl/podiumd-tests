@@ -1,4 +1,4 @@
-"""HS256 JWTs, and ZGW API tokens signed with the client's shared secret.
+"""HS256 and unsigned JWTs, and ZGW API tokens signed with the client's shared secret.
 
 Ported from podiumd-minikube tests/test_productaanvraag_flow.py (_zgw_jwt).
 Stdlib only: no JWT library dependency.
@@ -32,11 +32,19 @@ def zgw_headers(token: str) -> dict[str, str]:
 
 
 def hs256_jwt(payload: Mapping[str, object], secret: str, header: Mapping[str, object] | None = None) -> str:
-    """An HS256-signed JWT with this payload; header adds to typ and alg."""
+    """Return an HS256-signed JWT with this payload; header adds to typ and alg."""
     full_header = {"typ": "JWT", "alg": "HS256", **(header or {})}
-    signing_input = _b64url(json.dumps(full_header).encode()) + b"." + _b64url(json.dumps(payload).encode())
+    encoded_header = _b64url(json.dumps(full_header).encode())
+    signing_input = b".".join([encoded_header, _b64url(json.dumps(payload).encode())])
     signature = hmac.new(secret.encode(), signing_input, hashlib.sha256).digest()
-    return (signing_input + b"." + _b64url(signature)).decode()
+    return b".".join([signing_input, _b64url(signature)]).decode()
+
+
+def unsigned_jwt(payload: Mapping[str, object]) -> str:
+    """Return a JWT with this payload, alg none and an empty signature."""
+    header = json.dumps({"typ": "JWT", "alg": "none"}).encode()
+    body = _b64url(json.dumps(payload).encode())
+    return b".".join([_b64url(header), body, b""]).decode()
 
 
 def zgw_jwt(client_id: str, secret: str, *, issued_at: int | None = None, user: str | None = None) -> str:

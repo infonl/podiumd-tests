@@ -16,10 +16,27 @@ if TYPE_CHECKING:
     from podiumd_tests.seed.openzaak import ZaaktypeParts
     from podiumd_tests.seed.registry import ResourceRegistry
 
-pytestmark = [pytest.mark.integration, pytest.mark.requires("openzaak", "openklant")]
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.requires("openzaak", "openklant"),
+    pytest.mark.source(
+        "TA regression/18-klantcontact-zaak-koppeling.spec.ts",
+        "The KCC links a klantcontact to a zaak through an onderwerpobject, and the klantcontact shows that link.",
+    ),
+    pytest.mark.source(
+        "TA interaction/20-klacht-journey-e2e.spec.ts",
+        "Klacht journey: the KCC registers a klantcontact and links it to the inwoner's zaak.",
+    ),
+]
 
 
 @pytest.mark.core
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak
+    When the KCC medewerker registers a klantcontact in Open Klant about the zaak
+    Then the klantcontact shows the link to the zaak
+    And the klantcontact is found by the zaak
+""")
 def test_klantcontact_about_a_zaak_is_found_by_the_zaak(
     openklant: ApiClient, openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:

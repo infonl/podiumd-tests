@@ -66,6 +66,8 @@ VOLUME_TAG = "ptest-volume"
 VOLUME_ACTOR = f"{VOLUME_TAG}-actor"
 VOLUME_GROUP = "medewerkers"
 OBJECTEN_BATCH = 200
+# TA's partijen: 7 of every 10 are personen, the rest organisaties.
+PERSONEN_IN_TEN = 7
 # Deleting tens of thousands of objects through the ORM takes minutes.
 DELETE_TIMEOUT = 1800
 # TA's counts per scale; a profile setting seed_volume_<kind> replaces the perf count.
@@ -99,26 +101,26 @@ class Corpus:
     scenarios: list[str]
 
     def persoon(self, index: int) -> dict[str, str]:
-        """The index-th persoon, wrapping around."""
+        """Return the index-th persoon, wrapping around."""
         return self.personen[index % len(self.personen)]
 
     def organisatie(self, index: int) -> str:
-        """The index-th organisatie's name, wrapping around."""
+        """Return the index-th organisatie's name, wrapping around."""
         return self.organisaties[index % len(self.organisaties)]["naam"]
 
     def scenario(self, index: int) -> str:
-        """The index-th zaak scenario, wrapping around."""
+        """Return the index-th zaak scenario, wrapping around."""
         return self.scenarios[index % len(self.scenarios)]
 
 
 @cache
 def corpus() -> Corpus:
-    """The corpus, read once."""
+    """Return the corpus, read once."""
     text = files("podiumd_tests.seed").joinpath("volume_corpus.yaml").read_text(encoding="utf-8")
     data = cast("dict[str, list[object]]", yaml.safe_load(text))
     personen = cast("list[dict[str, str]]", data["personen"])
     organisaties = cast("list[dict[str, str]]", data["organisaties"])
-    return Corpus(personen, organisaties, [str(s) for s in data["zaak_scenarios"]])
+    return Corpus(personen, organisaties, [str(scenario) for scenario in data["zaak_scenarios"]])
 
 
 def target(env: Environment, scale: str, kind: str) -> int:
@@ -155,7 +157,9 @@ class KissSource:
     sync: str
 
 
-def _one_by_one(creator: Callable[[Environment], Callable[[int], None]]) -> Callable[[Environment, range, int], None]:
+def _one_by_one(
+    creator: Callable[[Environment], Callable[[int], None]],
+) -> Callable[[Environment, range, int], None]:
     """Create through an API, one object per call, `parallel` calls at a time."""
 
     def create(env: Environment, missing: range, parallel: int) -> None:
@@ -167,7 +171,7 @@ def _one_by_one(creator: Callable[[Environment], Callable[[int], None]]) -> Call
 
 
 def _per_thread(make: Callable[[], ApiClient]) -> Callable[[], ApiClient]:
-    """A client per worker thread: requests sessions are not thread-safe."""
+    """Return a client per worker thread: requests sessions are not thread-safe."""
     local = threading.local()
 
     def client() -> ApiClient:
@@ -198,7 +202,8 @@ def _count_zaken(env: Environment) -> int:
     zaaktype = _volume_zaaktype(openzaak)
     if zaaktype is None:
         return 0
-    return int(str(openzaak.get(f"{ZAKEN}/zaken", {"zaaktype": zaaktype, "pageSize": "1"}).get("count", 0)))
+    page = openzaak.get(f"{ZAKEN}/zaken", {"zaaktype": zaaktype, "pageSize": "1"})
+    return int(str(page.get("count", 0)))
 
 
 def _zaak_creator(env: Environment) -> Callable[[int], None]:
@@ -212,7 +217,8 @@ def _zaak_creator(env: Environment) -> Callable[[int], None]:
     def create(index: int) -> None:
         scenario = corpus().scenario(index)
         # TA's toelichting is about 900 characters.
-        toelichting = f"{VOLUME_TAG} {index}: {scenario}. " + "Toelichting van de aanvrager. " * 28
+        filler = "Toelichting van de aanvrager. " * 28
+        toelichting = f"{VOLUME_TAG} {index}: {scenario}. {filler}"
         make_zaak(openzaak(), registry, zaaktype, omschrijving=scenario[:80], toelichting=toelichting)
 
     return create
@@ -230,7 +236,7 @@ def _partij_creator(env: Environment) -> Callable[[int], None]:
     registry = ResourceRegistry(VOLUME_TAG, keep=True)
 
     def create(index: int) -> None:
-        if index % 10 < 7:
+        if index % 10 < PERSONEN_IN_TEN:
             persoon = corpus().persoon(index)
             naam = {"contactnaam": {"voornaam": persoon["voornaam"], "achternaam": persoon["achternaam"]}}
             make_partij(openklant(), registry, partijIdentificatie=naam, interneNotitie=VOLUME_TAG)
@@ -267,7 +273,8 @@ def _user_creator(env: Environment) -> Callable[[int], None]:
 
     def create(index: int) -> None:
         persoon = corpus().persoon(index)
-        username = f"{VOLUME_TAG}-{persoon['voornaam']}.{persoon['achternaam']}.{index}".lower().replace(" ", "")
+        name = f"{persoon['voornaam']}.{persoon['achternaam']}"
+        username = f"{VOLUME_TAG}-{name}.{index}".lower().replace(" ", "")
         # A fresh admin token per user: the master realm's tokens expire within minutes.
         admin = for_environment(env)
         user = admin.create_user(username, admin.new_password(), {}, (persoon["voornaam"], persoon["achternaam"]))
@@ -342,7 +349,7 @@ def _kiss_kind(name: str, source: KissSource) -> Kind:
         tekst = "Toelichting van podiumd-tests. " * 20
         for start in range(missing.start, missing.stop, OBJECTEN_BATCH):
             indexes = range(start, min(start + OBJECTEN_BATCH, missing.stop))
-            items = [source.data(f"{VOLUME_TAG} {i} {corpus().scenario(i)}", tekst) for i in indexes]
+            items = [source.data(f"{VOLUME_TAG} {index} {corpus().scenario(index)}", tekst) for index in indexes]
             _kiss_content(env, source, "create", items)
         _sync_kiss(env, source)
 
@@ -354,7 +361,7 @@ def _kiss_kind(name: str, source: KissSource) -> Kind:
 
 
 def _volume_zac_allowed(env: Environment) -> str | None:
-    if not env.profile.allows("pabc_volume_zaaktype"):
+    if not env.profile.is_allowed("pabc_volume_zaaktype"):
         return "not allowed: profile setting pabc_volume_zaaktype is off"
     return None
 
@@ -444,9 +451,9 @@ def faster(env: Environment, replicas: int) -> Generator[None]:
         for component in ("openzaak", "openklant"):
             if replicas and not env.capabilities.skip_reason(component):
                 main = env.deployment_for(component)
-                for deployment in (main, f"{main}-worker"):
-                    if deployment in env.deployment_names:
-                        stack.enter_context(scaled(env.kube, deployment, replicas))
+                present = [name for name in (main, f"{main}-worker") if name in env.deployment_names]
+                for deployment in present:
+                    stack.enter_context(scaled(env.kube, deployment, replicas))
         yield
 
 
@@ -485,21 +492,23 @@ def unseed(env: Environment) -> list[Seeded]:
     return unseeded
 
 
+# No kubectl, no Keycloak admin secret, an API refusing: this run's volume is unknown.
+_UNCOUNTABLE = (ProcessError, SecretError, AssertionError, LookupError, requests.RequestException)
+
+
 def counts(env: Environment) -> dict[str, int | None]:
-    """The volume objects per kind the environment has now; None where they cannot be counted."""
+    """Return the volume objects per kind the environment has now; None where they cannot be counted."""
     found: dict[str, int | None] = {}
     for kind in KINDS:
         try:
             found[kind.name] = None if _skipped(env, kind) else kind.count(env)
-        except (ProcessError, SecretError, AssertionError, LookupError, requests.RequestException):
-            # No kubectl, no Keycloak admin secret, an API refusing: this run's volume is unknown.
+        except _UNCOUNTABLE:
             found[kind.name] = None
     return found
 
 
-def format_seeded(seeded: list[Seeded]) -> str:
+def seed_report(seeded: list[Seeded]) -> str:
     """One line per kind: its count before and after, or why it was skipped."""
-    width = max([14, *(len(s.kind) + 1 for s in seeded)])
-    return "\n".join(
-        f"{s.kind:<{width}} {s.detail}" if s.detail else f"{s.kind:<{width}} {s.before} -> {s.after}" for s in seeded
-    )
+    width = max([14, *(len(entry.kind) + 1 for entry in seeded)])
+    outcomes = [(entry.kind, entry.detail or f"{entry.before} -> {entry.after}") for entry in seeded]
+    return "\n".join(f"{kind:<{width}} {outcome}" for kind, outcome in outcomes)

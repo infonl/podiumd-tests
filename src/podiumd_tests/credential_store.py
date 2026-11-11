@@ -7,10 +7,11 @@ credentials without profile entries.
 
 from __future__ import annotations
 
+from threading import Lock
 from typing import TYPE_CHECKING
 
 from podiumd_tests.json_data import section
-from podiumd_tests.kube import decode_secret_data
+from podiumd_tests.kube import decode_secret
 
 if TYPE_CHECKING:
     from podiumd_tests.kube import Kube
@@ -23,24 +24,28 @@ class CredentialStore:
     """Read and write the bootstrap credentials Secret."""
 
     def __init__(self, kube: Kube) -> None:
-        self.kube = kube
+        self.kube: Kube = kube
+        # Bootstrap steps run in parallel; each write reads, merges and puts the whole Secret.
+        self._lock: Lock = Lock()
 
     def read(self) -> dict[str, str]:
         """All stored values; empty when the Secret does not exist."""
         secret = self.kube.get_optional("secret", STORE_NAME)
-        return decode_secret_data(section(secret, "data")) if secret else {}
+        return decode_secret(section(secret, "data")) if secret else {}
 
     def write(self, values: dict[str, str]) -> None:
         """Merge values into the Secret, creating it when needed. Values go over stdin, not argv."""
-        self._put(self.read() | values)
+        with self._lock:
+            self._put(self.read() | values)
 
     def remove(self, *keys: str) -> None:
         """Drop keys; the Secret itself is deleted when nothing is left."""
-        remaining = {k: v for k, v in self.read().items() if k not in keys}
-        # apply would merge stringData into the old keys, so the Secret is recreated instead.
-        self.kube.delete("secret", STORE_NAME)
-        if remaining:
-            self._put(remaining)
+        with self._lock:
+            remaining = {key: value for key, value in self.read().items() if key not in keys}
+            # apply would merge stringData into the old keys, so the Secret is recreated instead.
+            self.kube.delete("secret", STORE_NAME)
+            if remaining:
+                self._put(remaining)
 
     def _put(self, values: dict[str, str]) -> None:
         self.kube.apply(

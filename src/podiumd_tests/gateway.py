@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 
 def is_no_route(response: requests.Response) -> bool:
-    """True for APISIX's own 404 about a missing route: the request reached no upstream.
+    """Return True for APISIX's own 404 about a missing route: the request reached no upstream.
 
     A 404 from the upstream itself (e.g. an unknown KVK number) is not "no route".
     """
@@ -24,4 +24,4 @@ def is_no_route(response: requests.Response) -> bool:
     except ValueError:
         return False
     message = cast("dict[str, object]", body).get("error_msg") if isinstance(body, dict) else None
-    return isinstance(message, str) and re.search("route", message, re.IGNORECASE) is not None
+    return isinstance(message, str) and re.search(r"route", message, re.IGNORECASE) is not None
