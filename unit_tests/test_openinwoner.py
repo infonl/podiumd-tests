@@ -44,14 +44,14 @@ def test_portal_login_logs_in_and_closes_the_cookie_banner(fake_page, env):
     assert page.actions[-1] == ("click", BANNER)
     landed = page.waits[0]
     assert landed(f"{PORTAL}/zaken")
-    assert not landed(f"{PORTAL}/digid-oidc/callback/?code=1")
+    assert not landed("https://keycloak.example.test/realms/podiumd")
 
 
 def test_a_first_eherkenning_login_completes_the_registration(fake_page, env):
     user, method = LOGINS["bedrijf"]
     page = fake_page(landings=[f"{PORTAL}/register/necessary/", f"{PORTAL}/"])
     portal_login(page, env, method, user, "/zaken")
-    fill = next(a for a in page.actions if a[1] == 'input[name="email"]')
+    fill = next(a for a in page.actions if a[1:2] == ('input[name="email"]',))
     assert fill[2] == user_email(user.username)
     assert ("click", "button:Voltooi registratie") in page.actions
     assert page.actions[-1] == ("goto", f"{PORTAL}/zaken")

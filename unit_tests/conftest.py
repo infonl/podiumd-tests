@@ -209,6 +209,12 @@ class FakePage:  # pylint: disable=too-many-instance-attributes  # one per Page 
     def wait_for_timeout(self, ms):
         self.actions.append(("pause", ms))
 
+    def wait_for_load_state(self):
+        self.actions.append(("load",))
+
+    def title(self):
+        return self.texts.get("title", "")
+
     def evaluate(self, script, arg=None):
         self.actions.append(("evaluate", script, arg))
         return self._evaluated.pop(0) if self._evaluated else None

@@ -11,9 +11,9 @@ from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.bootstrap.steps import OI_BEGELEIDER
 from podiumd_tests.browser import keycloak_login
+from podiumd_tests.browser import leave_login_callback
 from podiumd_tests.browser import refuse_cookies
 from podiumd_tests.django_snippets import run_snippet
-from podiumd_tests.responses import url_host
 
 if TYPE_CHECKING:
     from playwright.sync_api import Locator
@@ -33,7 +33,7 @@ def portal_login(page: Page, env: Environment, method: str, user: KeycloakUser, 
     portal = env.profile.urls["openinwoner"]
     page.goto(f"{portal}/{method}-oidc/authenticate/?next={next_path}")
     keycloak_login(page, user.username, env.credentials.get(user.store_key))
-    page.wait_for_url(lambda url: url_host(url) == url_host(portal) and "-oidc/callback" not in url)
+    leave_login_callback(page, portal, "-oidc/callback")
     refuse_cookies(page)
     if "/register/necessary/" in page.url:
         # A first eHerkenning login makes a new account that still needs an e-mail address.

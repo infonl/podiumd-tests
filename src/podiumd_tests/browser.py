@@ -114,6 +114,18 @@ def keycloak_login(page: Page, username: str, password: str) -> None:
     retry_network_change(page, submit, f"Keycloak login of {username}")
 
 
+def leave_login_callback(page: Page, app_url: str, callback: str) -> None:
+    """Wait until the login is back on the app past its OIDC callback; fail with the page title if the app refused it.
+
+    An app that refuses the callback (a broken OIDC chain) stays on it with an error page such as "Bad Request (400)".
+    """
+    page.wait_for_url(lambda url: url_host(url) == url_host(app_url))
+    page.wait_for_load_state()
+    if callback in page.url:
+        msg = f"login refused at {page.url.split('?')[0]}: {page.title()}"
+        raise AssertionError(msg)
+
+
 def configure_totp(page: Page) -> None:
     """Complete Keycloak's CONFIGURE_TOTP required action the page shows, with the key it offers."""
     page.get_by_role("link", name="Unable to scan?").click()

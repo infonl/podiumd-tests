@@ -208,3 +208,13 @@ def test_share_cookies_gives_the_browser_the_sessions_cookies():
     http.cookies.set("sessionid", "abc", domain="app.test", path="/")
     share_cookies(http, page)  # pyright: ignore[reportArgumentType]  # duck-typed page
     assert added == [{"name": "sessionid", "value": "abc", "domain": "app.test", "path": "/"}]
+
+
+def test_a_refused_login_callback_fails_with_the_page_title(fake_page):
+    app = "https://forms.example.test"
+    refused = fake_page(landings=[f"{app}/auth/digid/callback?code=c"], texts={"title": "Bad Request (400)"})
+    with pytest.raises(AssertionError, match=r"refused at https://forms.example.test/auth/digid/callback: Bad Request"):
+        browser.leave_login_callback(refused, app, "/callback")
+    passed = fake_page(landings=[f"{app}/klacht/"])
+    browser.leave_login_callback(passed, app, "/callback")
+    assert passed.url == f"{app}/klacht/"

@@ -15,11 +15,11 @@ from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.bootstrap.steps import NAW_DATA
 from podiumd_tests.browser import browser_session
 from podiumd_tests.browser import keycloak_login
+from podiumd_tests.browser import leave_login_callback
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.openformulieren import registered_zaak
 from podiumd_tests.openformulieren import submit
-from podiumd_tests.responses import url_host
 from podiumd_tests.seed.openzaak import ZAKEN
 
 if TYPE_CHECKING:
@@ -59,7 +59,7 @@ def submit_after_login(
     login = next(o for o in entries(form["loginOptions"]) if o.get("identifier") == method)
     page.goto(f"{login['url']}?next={form_url}")
     keycloak_login(page, user.username, podiumd_env.credentials.get(user.store_key))
-    page.wait_for_url(lambda url: url_host(url) == url_host(base) and "/callback" not in url)
+    leave_login_callback(page, base, "/callback")
     # The form's SDK in the page shares the session and overwrites it with its own requests,
     # which loses the submission the API calls below put in it (403).
     page.goto("about:blank")
