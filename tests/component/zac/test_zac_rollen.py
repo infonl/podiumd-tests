@@ -22,6 +22,7 @@ from podiumd_tests.pabc import decide
 from podiumd_tests.pabc import mapped_application_roles
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
+from podiumd_tests.results import TAG_PREFIX
 from podiumd_tests.zac import POLICIES
 from podiumd_tests.zac import is_zaak_listed
 from podiumd_tests.zac import rights_of
@@ -108,7 +109,9 @@ def test_rights_come_from_podiumd_tests_own_pabc_roles(
         skip_without_brp_zoeken(decision)
     assert mapped_application_roles(decision, BPMN_ZAAKTYPE) == set(ZAC_FUNCTIONAL_ROLES[role])
     covered = {str(section(r, "entityType").get("id")) for r in entries(decision.get("results")) if r.get("entityType")}
-    assert covered == {BPMN_ZAAKTYPE}
+    assert BPMN_ZAAKTYPE in covered
+    # Tests of the run add their own zaaktypen (TAG_PREFIX) to the domain at the same time.
+    assert [entity for entity in covered if not entity.startswith(TAG_PREFIX)] == [], "a zaaktype of the estate"
 
 
 @pytest.mark.source(POLICIES, "Each base role has the rights of the roles below it and the rights of its own.")
