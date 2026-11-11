@@ -34,8 +34,8 @@ share their setup. The user picks the batches to port.
 | Z6 | Documents: verplaatsen, ontkoppelen, versies, ondertekenen, refusals | 1 high, 6 medium | 8 (done) | none | 2 |
 | Z7 | CMMN taken: intake, Goedkeuren, Advies, Document verzenden | 1 high, 4 medium | 4 | human task parameters for more plan items | 2.5 |
 | Z8 | Rights per role: closed zaak, documents, admin, verdelen, brp_zoeken | 1 high (partial), 6 medium | 6 (done) | none | 2 |
-| Z9 | Productaanvraag: betrokkenen, inbox, contact, documents | 2 high, 5 medium | 5 | productaanvraag with betrokkenen and geometry | 2 |
-| Z10 | Zaakafhandelparameters: persist, new zaaktype version, PABC groups; hoofd- and deelzaak | 4 high, 3 medium | 6 | a throwaway zaaktype configured in ZAC | 3.5 |
+| Z9 | Productaanvraag: betrokkenen, inbox, contact, documents | 2 high, 5 medium | 6 (done) | step zac-bpmn-productaanvraag | 2 |
+| Z10 | Zaakafhandelparameters: persist, new zaaktype version, PABC groups; hoofd- and deelzaak | 4 high, 3 medium | 7 (done) | none (a throwaway zaaktype per run) | 3.5 |
 | Z11 | Search, werklijsten, signaleringen | 6 medium | 5 | none | 2 |
 | Z12 | Betrokkenen | 6 medium | 4 | none | 1.5 |
 | | **Total** | | **61 tests** | | **about 24** |
@@ -141,35 +141,30 @@ share their setup. The user picks the batches to port.
 - ZAC's search matches a zaak by uuid: its index keeps deleted zaken (open-zaak-1) whose identificatie Open Zaak hands
   out again.
 
-### Z9: productaanvraag (2 days, 5 tests)
+### Z9: productaanvraag (done: 6 tests)
 
-- Gaps: betrokkenen (BSN, KvK, KvK with vestigingsnummer) become initiator and betrokkene rollen with the right
-  roltype, several of them, a mismatching vestiging gives an error; a productaanvraag of a type ZAC does not handle
-  lands in Inbox productaanvragen and becomes a zaak from there; aanvraagspecifieke contactgegevens stored on the zaak;
-  the form's geometry and documents (once, kanaal E-formulier); groep and behandelaar from the zaakafhandelparameters;
-  no duplicate zaken.
-- Files: `tests/integration/test_productaanvraag.py`.
-- Bootstrap: none new; the productaanvraag objects get betrokkenen and geometry in `make_productaanvraag`.
-- Reuses: `productaanvraag_zaak`, the BRP and KvK test sets, `objecten`.
-- Risks: the inbox case leaves a productaanvraag that ZAC does not turn into a zaak by itself: delete it in cleanup.
+- Covered in `tests/integration/test_productaanvraag.py`, on the BPMN test zaaktype with productaanvraagtype
+  (bootstrap step `zac-bpmn-productaanvraag`): betrokkenen become rollen (first initiator only, BSN and KvK
+  belanghebbenden, no behandelaar); the zaak takes omschrijving, toelichting, location, kanaal, groep, behandelaar,
+  PDF, bijlage and the zaakobject; aanvraagspecifieke contactgegevens on the estate's zaaktype; the Inbox
+  productaanvragen starts a zaak with the documents; concurrent notifications start one zaak.
+- Finding podiumd-chart-42: the Productaanvraag-Dimpact objecttype refuses a company betrokkene at vestiging level
+  (strict xfail `test_company_betrokkene_at_vestiging_level_becomes_a_rol`).
+- Not covered: a vestiging that does not belong to the KvK-nummer (ZAC checks the format only); an attachment with a
+  foreign informatieobjecttype; duplicates through Open Notificaties itself.
 
-### Z10: zaakafhandelparameters (2.5 days, 4 tests)
+### Z10: zaakafhandelparameters, hoofd- and deelzaak (done: 7 tests, 11 cases)
 
-- Gaps: saved fields persist (gegevens, waarschuwingsvensters 0 to 31, zaakbeeindig gegevens, mailgegevens,
-  statusmail); a new zaaktype version keeps all of them after ZAC's synchronisation, and a changed default groep
-  applies only to new zaken (the behaviour of known issue podiumd-chart-37); only PABC-authorised groups are offered
-  and an unauthorised default groep is cleared; the inrichtingscheck rejects a zaaktype without roltype Behandelaar or
-  Initiator. From Z2: hoofdzaak and deelzaak koppelen shows on both zaken; the hoofdzaak cannot be afgehandeld while a
-  deelzaak is open, can after the deelzaak is closed or ontkoppeld; ontkoppelen of a closed deelzaak; a deelzaak
-  cannot become deel- or hoofdzaak again (IS_DEELZAAK, ALREADY_DEELZAAK, HAS_DEELZAKEN).
-- Files: new `tests/component/zac/test_zac_zaaktype_versies.py`, `test_zac_zaakafhandelparameters.py`; the hoofd- and
-  deelzaak tests in `test_zac_relaties.py`. The throwaway zaaktype lists itself as deelzaaktype.
-- Bootstrap: none; the tests make a throwaway zaaktype (`seed/catalogi.py`: `make_publishable_zaaktype`, `publish`)
-  and configure it in ZAC through the admin API as step `zac-bpmn-process` does for its zaaktype; cleanup removes the
-  zaaktype with snippet `openzaak_catalogi_types` and its PABC entity type.
-- Risks: never write the zaakafhandelparameters of an estate's zaaktype; ZAC has no call to delete a zaaktype's
-  configuration (as zac-9 notes for the BPMN one): check what a deleted throwaway zaaktype leaves in ZAC before the
-  batch, and keep the count of throwaways per run at one.
+- Covered in `tests/component/zac/test_zac_zaakafhandelparameters.py` on a throwaway zaaktype (test catalogus, PABC
+  domain ptest-bootstrap, ZAC's generic CMMN model; cleaned up except ZAC's parameter rows, which ZAC cannot delete):
+  saved values read back; a new zaaktype version keeps them and a changed default groep applies to new zaken only;
+  only groups with a role on the zaaktype are offered. In `test_zac_relaties.py`: hoofd- and deelzaak on both zaken
+  (both directions); a hoofdzaak with an open deelzaak cannot be afgehandeld; a closed deelzaak is ontkoppeld only
+  once the hoofdzaak is closed too; IS_DEELZAAK, ALREADY_DEELZAAK and HAS_DEELZAKEN refused.
+- ZAC's rule differs from the scenario "ontkoppelen also for a closed deelzaak": ZAC 5.9.1 allows it only when both
+  zaken are open or both closed; the test asserts ZAC's rule.
+- Not covered: the inrichtingscheck (lists only the default catalogus); the waarschuwingsvenster limit and clearing an
+  unauthorised default groep (ZAC's UI only).
 
 ### Z11: search, werklijsten and signaleringen (2 days, 5 tests)
 

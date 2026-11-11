@@ -26,10 +26,10 @@ The batches that close the gaps of [`kiss-ita-scenario-gaps.md`](kiss-ita-scenar
 | K6 | Nieuws en werkinstructies | 23 medium | 5 | none | 1.5 |
 | I1 | Forward to a medewerker, groepsmailbox rules | 7 high, 8 medium | 6 (done) | none | 2 |
 | I2 | Afsluiten and historie | 3 high, 8 medium | 5 (done) | none | 2 |
-| I3 | Reminder to a medewerker | 3 high | 1 (extended) | none | 0.5 |
-| I4 | Zaak koppelen and the logboek | 10 medium | 3 | none | 1.5 |
+| I3 | Reminder to a medewerker | 3 high | 1 (extended, done; not run live) | none | 0.5 |
+| I4 | Zaak koppelen and the logboek | 10 medium | 3 (done) | none | 1.5 |
 | I5 | Beheer and forward-form data | 9 medium | 3 | none | 1 |
-| I6 | Detail data: digitale adressen fallback, klantnaam, duplicate nummer | 6 medium | 3 | none | 1 |
+| I6 | Detail data: digitale adressen fallback, klantnaam, duplicate nummer | 6 medium | 3 (done) | none | 1 |
 | | **Total** | **27 high, 82 medium** | **37** | | **about 16** |
 
 ## Batches
@@ -108,25 +108,32 @@ The batches that close the gaps of [`kiss-ita-scenario-gaps.md`](kiss-ita-scenar
 - `test_question_answered_in_ita_shows_as_answered` closes through ITA's `close-with-klantcontact`.
 - ITA's helpers and fixtures are in `src/podiumd_tests/ita.py`.
 
-### I3: reminder to a medewerker (0.5 day, 1 test extended)
+### I3: reminder to a medewerker (done: 1 test extended; not run live)
 
-- Gaps: a medewerker's reminder with the werkvoorraad link; a contactverzoek for a medewerker and an afdeling reminds
-  both; the klantnaam of a betrokkene is not in the body. Extends the destructive CronJob test.
+- Covered in `test_afdeling_gets_one_reminder_for_its_overdue_contactverzoeken`: an overdue contactverzoek of a klant
+  assigned to a medewerker and an afdeling reminds both ("1 contactverzoek wacht op jou"), the medewerker's mail
+  linking to `/`, the afdeling's to `/afdelings-contacten`, neither with the klant's name.
+- Not run live: podiumd 4.10.1 turns the reminder CronJob off (DRT-726), and minikube, kees00 and ExternalsPodiumD
+  follow it, so the test skips until an environment turns it on.
 
-### I4: zaak koppelen and the logboek (1.5 days, 3 tests)
+### I4: zaak koppelen and the logboek (done: 3 tests)
 
-- Gaps: `koppel-zaak` with a valid zaak, an unknown zaaknummer, a second zaak replacing the first, the zaak on the
-  detail; `/logboek` lines for assign, zaak, replaced zaak, contact gelukt, close and reopen (parametrized).
+- Covered in `tests/component/ita/test_ita_zaak.py`: koppel-zaak by zaaknummer (onderwerpobject in Open Klant,
+  zaaknummer on the detail), a second zaak replaces it, an unknown zaaknummer is refused; `/logboek` lists toegewezen,
+  zaak-gekoppeld, zaakkoppeling-gewijzigd, klantcontact and verwerkt.
+- Finding ita-3 (security): koppel-zaak works without a login (strict xfail `test_koppel_zaak_needs_a_login`).
+- ITA's ZGW secret must be at least 32 characters for HS256 (fixed on minikube; kees00 waits for podiumd-infra).
+- Not covered: the reopen in the logboek (beheerder).
 
 ### I5: beheer and forward-form data (1 day, 3 tests)
 
 - Gaps: kanalen create, edit, delete, duplicate refused, the KCC user refused; `heeftGroepsmailbox` on afdelingen and
   groepen; the forward's success message.
 
-### I6: detail data (1 day, 3 tests)
+### I6: detail data (done: 3 tests, 6 cases)
 
-- Gaps: the partij's digitale adressen when the betrokkene has none, the betrokkene's own winning, empty without;
-  the klantnaam from a BSN partij; a klantcontactnummer with two contactverzoeken gives 409.
+- Covered in `tests/component/ita/test_ita_detail.py`: the detail's e-mail is the betrokkene's own, else its
+  partij's, else none; klantNaam of a BSN partij; a klantcontactnummer of two contactverzoeken gives 409.
 
 ## Order across KISS, ITA and ZAC
 
