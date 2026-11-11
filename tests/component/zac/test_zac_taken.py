@@ -5,6 +5,8 @@ Ported from ZAC's own e2e features taken-toevoegen and taken-verdelen-vrijgeven,
 
 from __future__ import annotations
 
+from datetime import date
+from datetime import timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -33,36 +35,50 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "ke
 
 # ZAC starts the zaak's CMMN case, and runs list distributions, in the background.
 TIMEOUT = 60
+SUSPENSION_DAYS = 7
+
+
+@pytest.fixture(name="start_taak")
+def fixture_start_taak(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_group: str,
+    need_bootstrap: Callable[..., None],
+) -> Callable[..., JsonObject]:
+    """Start the task Aanvullende informatie on a zaak for the test admin in its group, without a mail.
+
+    fields: more of ZAC's RESTHumanTaskData, e.g. taakdata zaakOpschorten with a fataledatum.
+    """
+    need_bootstrap("zac-aanvullende-informatie")
+    plan_items = f"{urls['zac']}/rest/planitems"
+
+    def start(zaak: JsonObject, **fields: object) -> JsonObject:
+        def offered() -> JsonObject | None:
+            found = get_entries(zac, f"{plan_items}/zaak/{zaak['uuid']}/humanTaskPlanItems")
+            return next((p for p in found if p.get("formulierDefinitie") == "AANVULLENDE_INFORMATIE"), None)
+
+        plan_item = wait_until(
+            offered, timeout=TIMEOUT, description=f"Aanvullende informatie on {zaak['identificatie']}"
+        )
+        body = {
+            "planItemInstanceId": plan_item["id"],
+            "groep": {"id": zac_group, "naam": zac_group},
+            "medewerker": {"id": ADMIN.username, "naam": ADMIN.username},
+            "taakdata": {},
+            "taakStuurGegevens": {"sendMail": False},
+            **fields,
+        }
+        expect_status(zac.post(f"{plan_items}/doHumanTaskPlanItem", json=body), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+        taken = get_entries(zac, f"{urls['zac']}/rest/taken/zaak/{zaak['uuid']}")
+        return next(t for t in taken if t.get("formulierDefinitieId") == "AANVULLENDE_INFORMATIE")
+
+    return start
 
 
 @pytest.fixture(name="taak")
-def fixture_taak(
-    zac: requests.Session,
-    urls: dict[str, str],
-    zac_zaak: Callable[..., JsonObject],
-    zac_group: str,
-    need_bootstrap: Callable[..., None],
-) -> JsonObject:
-    """The task Aanvullende informatie, started on a new zaak for the test admin in its group, without a mail."""
-    need_bootstrap("zac-aanvullende-informatie")
-    zaak = zac_zaak()
-    plan_items = f"{urls['zac']}/rest/planitems"
-
-    def offered() -> JsonObject | None:
-        found = get_entries(zac, f"{plan_items}/zaak/{zaak['uuid']}/humanTaskPlanItems")
-        return next((p for p in found if p.get("formulierDefinitie") == "AANVULLENDE_INFORMATIE"), None)
-
-    plan_item = wait_until(offered, timeout=TIMEOUT, description=f"Aanvullende informatie on {zaak['identificatie']}")
-    body = {
-        "planItemInstanceId": plan_item["id"],
-        "groep": {"id": zac_group, "naam": zac_group},
-        "medewerker": {"id": ADMIN.username, "naam": ADMIN.username},
-        "taakdata": {},
-        "taakStuurGegevens": {"sendMail": False},
-    }
-    expect_status(zac.post(f"{plan_items}/doHumanTaskPlanItem", json=body), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    taken = get_entries(zac, f"{urls['zac']}/rest/taken/zaak/{zaak['uuid']}")
-    return next(t for t in taken if t.get("formulierDefinitieId") == "AANVULLENDE_INFORMATIE")
+def fixture_taak(zac_zaak: Callable[..., JsonObject], start_taak: Callable[..., JsonObject]) -> JsonObject:
+    """The task Aanvullende informatie, started on a new zaak."""
+    return start_taak(zac_zaak())
 
 
 def assignment(taak: JsonObject) -> tuple[object, object]:
@@ -142,3 +158,37 @@ def test_taken_from_the_list_are_released_and_assigned(
     body = {"taken": selected, "groepId": zac_group, "behandelaarGebruikersnaam": ADMIN.username, "reden": "test"}
     expect_status(zac.put(f"{taken}/lijst/verdelen", json=body), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     wait_until(lambda: is_((zac_group, ADMIN.username)), timeout=TIMEOUT, description=f"task {taak['id']} verdeeld")
+
+
+@pytest.mark.source(
+    "podiumd-tests",
+    "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, zaak-lifecycle).",
+)
+@pytest.mark.scenario("""
+    Given a zaak in ZAC
+    When the behandelaar starts the taak Aanvullende informatie with opschorten until its fatale datum
+    Then the zaak is opgeschort, and its uiterlijke einddatum afdoening moved by those days
+    When the behandelaar completes the taak with hervatten
+    Then the zaak is no longer opgeschort, and its date moved back by the days not used
+""")
+def test_aanvullende_informatie_with_opschorten_suspends_until_hervatten(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    start_taak: Callable[..., JsonObject],
+) -> None:
+    """zaakOpschorten suspends the zaak until the task's fatale datum; zaakHervatten on completion resumes it."""
+    zaak = zac_zaak()
+    original = date.fromisoformat(str(zaak["uiterlijkeEinddatumAfdoening"]))
+    fataledatum = date.today() + timedelta(days=SUSPENSION_DAYS)  # noqa: DTZ011  # ZAC's local date
+    taak = start_taak(zaak, fataledatum=fataledatum.isoformat(), taakdata={"zaakOpschorten": "true"})
+    opgeschort = read_zaak(zac, urls["zac"], str(zaak["uuid"]))
+    assert opgeschort["isOpgeschort"] is True
+    moved = date.fromisoformat(str(opgeschort["uiterlijkeEinddatumAfdoening"]))
+    assert moved == original + timedelta(days=SUSPENSION_DAYS)
+
+    body = {**taak, "taakdata": {**section(taak, "taakdata"), "zaakHervatten": "true"}}
+    expect_status(zac.patch(f"{urls['zac']}/rest/taken/complete", json=body), HTTPStatus.OK)
+    hervat = read_zaak(zac, urls["zac"], str(zaak["uuid"]))
+    assert hervat["isOpgeschort"] is False
+    assert hervat["uiterlijkeEinddatumAfdoening"] == original.isoformat()

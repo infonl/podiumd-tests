@@ -6,6 +6,8 @@ the test admin is ZAC beheerder of every domain.
 
 from __future__ import annotations
 
+import re
+
 from datetime import date
 from datetime import timedelta
 from http import HTTPStatus
@@ -23,6 +25,7 @@ from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import CATALOGI
+from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import NIET_ONTVANKELIJK
@@ -45,6 +48,25 @@ if TYPE_CHECKING:
 pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "keycloak")]
 
 _, _, BEDRIJF = IDENTITIES
+SUSPENSION_DAYS = 5
+
+
+def _zaak_url(urls: dict[str, str], zaak: JsonObject) -> str:
+    return f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}"
+
+
+def _dates(openzaak: ApiClient, urls: dict[str, str], zaak: JsonObject) -> tuple[date, date]:
+    """The zaak's einddatumGepland and uiterlijkeEinddatumAfdoening in Open Zaak."""
+    found = openzaak.get(_zaak_url(urls, zaak))
+    return date.fromisoformat(str(found["einddatumGepland"])), date.fromisoformat(
+        str(found["uiterlijkeEinddatumAfdoening"])
+    )
+
+
+def _days(duration: object) -> int | None:
+    """Days of an ISO 8601 duration of only days (P14D); None for any other."""
+    found = re.fullmatch(r"P(\d+)D", str(duration or ""))
+    return int(found.group(1)) if found else None
 
 
 @pytest.mark.tc("ZAC-006", "ZAC-010", "ZAC-019", "ZAC-022")
@@ -164,25 +186,43 @@ def test_note_can_be_added_changed_and_deleted(
     "draaiboek ZAC-042",
     "A suspended zaak can be resumed, and a resumed zaak cannot be suspended again (ZAC-042, -043).",
 )
+@pytest.mark.source(
+    "podiumd-tests",
+    "ZAC team's regression scenarios: opschorten shifts the dates and records the opschorting in Open Zaak.",
+)
 @pytest.mark.scenario("""
     Given a zaak in ZAC
-    When the behandelaar suspends the zaak
-    Then the zaak is suspended
-    When the behandelaar resumes the zaak
-    Then the zaak is no longer suspended
+    When the behandelaar suspends the zaak for 5 days with a reden
+    Then its streefdatum and fatale datum are 5 days later, and Open Zaak records the opschorting and its reden
+    When the behandelaar resumes the zaak the same day
+    Then both dates move back by the 5 days not used, and Open Zaak keeps that it was opgeschort before
     And ZAC refuses to suspend it a second time
 """)
 def test_suspended_zaak_resumes_and_cannot_be_suspended_again(
-    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    openzaak_productaanvraag: ApiClient,
 ) -> None:
-    """After a suspension and its resumption, ZAC refuses a second suspension."""
+    """Opschorten moves both dates and sets Open Zaak's opschorting; hervatten moves them back by the unused days."""
     zaak = zac_zaak()
     base = f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}"
-    suspended = expect_status(zac.patch(f"{base}/suspend", json={"reason": "test", "numberOfDays": 5}), 200).json()
-    assert suspended["isOpgeschort"]
-    expect_status(zac.patch(f"{base}/resume", json={"reason": "test"}), HTTPStatus.OK)
+    before = _dates(openzaak_productaanvraag, urls, zaak)
+    suspended = zac.patch(f"{base}/suspend", json={"reason": "podiumd-tests op", "numberOfDays": SUSPENSION_DAYS})
+    assert expect_status(suspended, HTTPStatus.OK).json()["isOpgeschort"]
+    in_open_zaak = openzaak_productaanvraag.get(_zaak_url(urls, zaak))
+    assert _dates(openzaak_productaanvraag, urls, zaak) == tuple(
+        day + timedelta(days=SUSPENSION_DAYS) for day in before
+    )
+    opschorting = section(in_open_zaak, "opschorting")
+    assert (opschorting.get("indicatie"), opschorting.get("reden")) == (True, "podiumd-tests op")
+
+    expect_status(zac.patch(f"{base}/resume", json={"reason": "podiumd-tests her"}), HTTPStatus.OK)
     assert not read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpgeschort"]
-    again = zac.patch(f"{base}/suspend", json={"reason": "nogmaals", "numberOfDays": 5})
+    assert _dates(openzaak_productaanvraag, urls, zaak) == before
+    resumed = section(openzaak_productaanvraag.get(_zaak_url(urls, zaak)), "opschorting")
+    assert (resumed.get("indicatie"), resumed.get("eerdereOpschorting")) == (False, True)
+    again = zac.patch(f"{base}/suspend", json={"reason": "nogmaals", "numberOfDays": SUSPENSION_DAYS})
     expect_status(again, HTTPStatus.FORBIDDEN, HTTPStatus.BAD_REQUEST)
 
 
@@ -190,30 +230,65 @@ def test_suspended_zaak_resumes_and_cannot_be_suspended_again(
 @pytest.mark.source("draaiboek ZAC-044", "The streefdatum and fatale datum of a zaak can be extended, once.")
 @pytest.mark.scenario("""
     Given a zaak in ZAC of a zaaktype that allows verlenging
-    When the behandelaar extends the zaak by 10 days
-    Then the zaak's uiterlijke einddatum afdoening is 10 days later
+    When the behandelaar extends the zaak by 10 days with a reden
+    Then its streefdatum and fatale datum are 10 days later, and Open Zaak records the verlenging
+    And ZAC refuses to extend it a second time
 """)
 def test_extension_moves_the_planned_and_final_dates(
     zac: requests.Session,
     urls: dict[str, str],
     openzaak: ApiClient,
+    openzaak_productaanvraag: ApiClient,
     zac_parameters: JsonObject,
     zac_zaak: Callable[..., JsonObject],
 ) -> None:
-    """Extending a zaak by some days moves its uiterlijke einddatum afdoening by that many days."""
+    """Verlengen moves both dates by its days, is stored in Open Zaak, and is allowed once."""
     zaaktype = openzaak.get(f"{CATALOGI}/zaaktypen/{section(zac_parameters, 'zaaktype')['uuid']}")
     if not zaaktype.get("verlengingMogelijk"):
         pytest.skip(f"zaaktype {zaaktype['identificatie']} allows no verlenging")
     zaak = zac_zaak()
-    final = date.fromisoformat(str(zaak["uiterlijkeEinddatumAfdoening"])) + timedelta(days=10)
+    planned, final = (day + timedelta(days=10) for day in _dates(openzaak_productaanvraag, urls, zaak))
     body = {
-        "redenVerlenging": "test",
+        "redenVerlenging": "podiumd-tests",
         "duurDagen": 10,
         "takenVerlengen": False,
+        "einddatumGepland": planned.isoformat(),
         "uiterlijkeEinddatumAfdoening": final.isoformat(),
     }
-    extended = zac.patch(f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}/verlenging", json=body)
-    assert expect_status(extended, HTTPStatus.OK).json()["uiterlijkeEinddatumAfdoening"] == final.isoformat()
+    extend = f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}/verlenging"
+    expect_status(zac.patch(extend, json=body), HTTPStatus.OK)
+    assert _dates(openzaak_productaanvraag, urls, zaak) == (planned, final)
+    verlenging = section(openzaak_productaanvraag.get(_zaak_url(urls, zaak)), "verlenging")
+    assert (verlenging.get("reden"), verlenging.get("duur")) == ("podiumd-tests", "P10D")
+    expect_status(zac.patch(extend, json={**body, "duurDagen": 5}), HTTPStatus.FORBIDDEN, HTTPStatus.BAD_REQUEST)
+
+
+@pytest.mark.source(
+    "podiumd-tests",
+    "ZAC team's regression scenarios: the streefdatum and fatale datum come from the zaaktype's doorlooptijden.",
+)
+@pytest.mark.scenario("""
+    Given a zaaktype with a servicenorm and a doorlooptijd in days
+    When the behandelaar starts a zaak of it in ZAC
+    Then its streefdatum is the startdatum plus the servicenorm
+    And its fatale datum is the startdatum plus the doorlooptijd
+""")
+def test_new_zaak_dates_come_from_the_zaaktype(
+    urls: dict[str, str],
+    openzaak: ApiClient,
+    openzaak_productaanvraag: ApiClient,
+    zac_parameters: JsonObject,
+    zac_zaak: Callable[..., JsonObject],
+) -> None:
+    """einddatumGepland is startdatum + servicenorm, uiterlijkeEinddatumAfdoening startdatum + doorlooptijd."""
+    zaaktype = openzaak.get(f"{CATALOGI}/zaaktypen/{section(zac_parameters, 'zaaktype')['uuid']}")
+    servicenorm, doorlooptijd = (_days(zaaktype.get(field)) for field in ("servicenorm", "doorlooptijd"))
+    if servicenorm is None or doorlooptijd is None:
+        pytest.skip(f"zaaktype {zaaktype['identificatie']} has no servicenorm and doorlooptijd in days")
+    zaak = zac_zaak()
+    start = date.fromisoformat(str(openzaak_productaanvraag.get(_zaak_url(urls, zaak))["startdatum"]))
+    planned = start + timedelta(days=servicenorm)
+    assert _dates(openzaak_productaanvraag, urls, zaak) == (planned, start + timedelta(days=doorlooptijd))
 
 
 @pytest.mark.tc("ZAC-045", "ZAC-062")
