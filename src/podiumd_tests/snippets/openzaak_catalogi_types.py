@@ -2,7 +2,7 @@
 
 The Catalogi API refuses to delete a published type; tests that publish types delete them here.
 Actions: list (params prefix: names starting with it), delete (params name). A zaaktype is named by its identificatie,
-an informatieobjecttype and a besluittype by their omschrijving.
+an informatieobjecttype and a besluittype by their omschrijving; the zaken of a deleted zaaktype go with it.
 """
 
 
@@ -27,6 +27,11 @@ def run(params):
                 )
             }
         )
+    from openzaak.components.zaken.models import Zaak
+
+    # A zaak protects its zaaktype; the zaken of a throwaway zaaktype are test data too.
+    zaaktypen = ZaakType.objects.filter(identificatie=params["name"], **catalogus)
+    Zaak.objects.filter(_zaaktype__in=zaaktypen).delete()
     for model, field in kinds:
         model.objects.filter(**{field: params["name"]}, **catalogus).delete()
     return {"deleted": params["name"]}
