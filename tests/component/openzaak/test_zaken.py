@@ -240,3 +240,39 @@ def test_zaken_by_zaaktype_across_pages(openzaak: ApiClient, registry: ResourceR
     listed = openzaak.list(f"{ZAKEN}/zaken", {"zaaktype": parts.zaaktype})
     assert created <= {str(z["url"]) for z in listed}
     assert all(z["zaaktype"] == parts.zaaktype for z in listed)
+
+
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW features, ZRC 1.7 reserveer_zaaknummer",
+    "A reserved zaaknummer goes to the next zaak that asks for it, and only to that one.",
+)
+@pytest.mark.scenario("""
+    Given two zaaknummers reserved in Open Zaak
+    When a zaak is created with the first one
+    Then it gets that identificatie
+    And a second zaak with the same identificatie is refused
+""")
+def test_reserved_zaaknummer_goes_to_one_zaak(
+    openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
+) -> None:
+    """POST zaaknummer_reserveren returns identificaties; a zaak takes one, a second zaak with it is a 400."""
+    reserved = openzaak.request(
+        "POST",
+        f"{ZAKEN}/zaaknummer_reserveren",
+        HTTPStatus.CREATED,
+        HTTPStatus.OK,
+        json={"bronorganisatie": TEST_CATALOGUS_RSIN, "aantal": 2},
+    ).json()
+    identificaties = [str(r["zaaknummer"]) for r in entries(reserved)]
+    assert len(set(identificaties)) == 2, reserved
+    zaak = make_zaak(openzaak, registry, parts.zaaktype, identificatie=identificaties[0])
+    assert zaak["identificatie"] == identificaties[0]
+    body = {
+        "bronorganisatie": TEST_CATALOGUS_RSIN,
+        "verantwoordelijkeOrganisatie": TEST_CATALOGUS_RSIN,
+        "zaaktype": parts.zaaktype,
+        "startdatum": today(),
+        "identificatie": identificaties[0],
+    }
+    response = openzaak.request("POST", f"{ZAKEN}/zaken", HTTPStatus.BAD_REQUEST, json=body)
+    assert "identificatie" in {str(p["name"]) for p in entries(response.json()["invalidParams"])}

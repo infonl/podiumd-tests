@@ -15,11 +15,14 @@ import pytest
 from podiumd_tests.auth.zgw_jwt import zgw_headers
 from podiumd_tests.auth.zgw_jwt import zgw_jwt
 from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
+from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.seed.openklant import random_bsn
 from podiumd_tests.seed.openzaak import BSN_FILTER
 from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
+from podiumd_tests.seed.openzaak import link_document
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_zaak
@@ -186,3 +189,28 @@ def test_client_without_autorisaties(
         "omschrijving": registry.tagged("zaak"),
     }
     openzaak_noauth.request("POST", f"{ZAKEN}/zaken", 403, json=zaak)
+
+
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW features, CHECK expand",
+    "expand shows no object the token may not read: Open Zaak 1.29.3 fixed expand showing them.",
+)
+@pytest.mark.scenario("""
+    Given an openbaar zaak with an openbaar and a vertrouwelijk document
+    When the openbaar client reads the zaak with its document links expanded
+    Then the expanded links name only the documents that client may list
+""")
+def test_expand_shows_no_more_than_the_client_may_list(
+    openzaak: ApiClient, openzaak_openbaar: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
+) -> None:
+    """expand=zaakinformatieobjecten as the openbaar client shows the same links as its own list of them."""
+    zaak = make_zaak(openzaak, registry, parts.zaaktype)
+    for vertrouwelijkheid in ("openbaar", "vertrouwelijk"):
+        document = make_document(
+            openzaak, registry, parts.informatieobjecttype, vertrouwelijkheidaanduiding=vertrouwelijkheid
+        )
+        link_document(openzaak, registry, zaak, document)
+    expanded = openzaak_openbaar.get(str(zaak["url"]), {"expand": "zaakinformatieobjecten"})
+    shown = {str(z["informatieobject"]) for z in entries(section(expanded, "_expand").get("zaakinformatieobjecten"))}
+    listed = openzaak_openbaar.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": str(zaak["url"])})
+    assert shown == {str(z["informatieobject"]) for z in listed}

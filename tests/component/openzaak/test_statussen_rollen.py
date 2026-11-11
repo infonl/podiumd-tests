@@ -260,3 +260,44 @@ def test_rol_indicatie_machtiging(
     rol = openzaak.post(f"{ZAKEN}/rollen", body)
     registry.add("rol", lambda: openzaak.delete(str(rol["url"])))
     assert rol["indicatieMachtiging"] == machtiging
+
+
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW features, ZRC zaak maken en wijzigen, ZRC rollen",
+    "A rol can name a vestiging, a medewerker or an organisatorische eenheid, and the zaak is found by it.",
+)
+@pytest.mark.parametrize(
+    ("betrokkene_type", "generiek", "filter_key", "key", "extra"),
+    [
+        ("vestiging", "initiator", "vestiging__vestigingsNummer", "vestigingsNummer", {"handelsnaam": ["ptest"]}),
+        ("medewerker", "behandelaar", "medewerker__identificatie", "identificatie", {"achternaam": "Test"}),
+        (
+            "organisatorische_eenheid",
+            "behandelaar",
+            "organisatorischeEenheid__identificatie",
+            "identificatie",
+            {"naam": "ptest"},
+        ),
+    ],
+)
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak
+    When a vestiging, a medewerker or an organisatorische eenheid is added to it as a rol
+    Then the zaak is found by that betrokkene's identificatie
+""")
+def test_rol_of_each_betrokkene_type_finds_the_zaak(  # parametrized rol kind
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    parts: ZaaktypeParts,
+    betrokkene_type: str,
+    generiek: str,
+    filter_key: str,
+    key: str,
+    extra: dict[str, object],
+) -> None:
+    """A rol of this betrokkeneType stores its identificatie, and the zaken filter on it finds only the zaak."""
+    nummer = random_kvk_nummer()[:8] if betrokkene_type == "vestiging" else registry.tagged(betrokkene_type)[:24]
+    zaak = make_zaak(openzaak, registry, parts.zaaktype)
+    make_rol(openzaak, registry, zaak, parts.roltypen[generiek], betrokkene_type, **{key: nummer, **extra})
+    found = openzaak.list(f"{ZAKEN}/zaken", {f"rol__betrokkeneIdentificatie__{filter_key}": nummer})
+    assert urls(found) == {str(zaak["url"])}
