@@ -28,7 +28,7 @@ from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import INDEX_TIMEOUT
-from podiumd_tests.zac import NIET_ONTVANKELIJK
+from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import is_zaak_listed
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_with_person
@@ -312,9 +312,7 @@ def test_aborted_zaak_is_closed_and_listed_among_the_closed_zaken(
     ZAC indexes the zaak on Open Notificaties' zaken kanaal.
     """
     zaak = zac_zaak()
-    body = {"zaakbeeindigRedenId": NIET_ONTVANKELIJK}
-    response = zac.patch(f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}/afbreken", json=body)
-    expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    expect_status(afbreken(zac, urls["zac"], zaak), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     assert not read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpen"]
 
     def is_listed() -> bool:

@@ -19,11 +19,11 @@ from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import BESLUITEN
 from podiumd_tests.seed.openzaak import delete_besluit
-from podiumd_tests.zac import NIET_ONTVANKELIJK
+from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import afhandelen
+from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import besluittypen
 from podiumd_tests.zac import read_zaak
-from podiumd_tests.zac import user_event
 from podiumd_tests.zac import vastleggen_besluit
 from podiumd_tests.zac_documents import uploaded_document
 
@@ -76,8 +76,7 @@ def fixture_in_behandeling(
 
     def start() -> JsonObject:
         zaak = zac_zaak()
-        response = user_event(zac, urls["zac"], str(zaak["uuid"]), "INTAKE_AFRONDEN", zaakOntvankelijk=True)
-        expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+        afronden_intake(zac, urls["zac"], zaak)
         return zaak
 
     return start
@@ -135,8 +134,7 @@ def test_besluit_is_recorded_after_the_intake_only(
     refused = vastleggen_besluit(zac, urls["zac"], zaak, besluittype(zaak), ingangsdatum=today)
     expect_status(refused, *REFUSED)
 
-    response = user_event(zac, urls["zac"], str(zaak["uuid"]), "INTAKE_AFRONDEN", zaakOntvankelijk=True)
-    expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    afronden_intake(zac, urls["zac"], zaak)
     created = besluit(zaak)
     assert [item["uuid"] for item in _besluiten(zac, urls["zac"], zaak)] == [created["uuid"]]
     stored = openzaak_productaanvraag.get(f"{urls['openzaak']}/{BESLUITEN}/besluiten/{created['uuid']}")
@@ -283,8 +281,6 @@ def test_zaak_with_a_besluit_cannot_be_afgebroken(
     """Afbreken of a zaak with a besluit is refused."""
     zaak = in_behandeling()
     besluit(zaak)
-    afbreken = zac.patch(
-        f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}/afbreken", json={"zaakbeeindigRedenId": NIET_ONTVANKELIJK}
-    )
-    assert afbreken.status_code >= HTTPStatus.BAD_REQUEST, f"afbreken answered {afbreken.status_code}"
+    afgebroken = afbreken(zac, urls["zac"], zaak)
+    assert afgebroken.status_code >= HTTPStatus.BAD_REQUEST, f"afbreken answered {afgebroken.status_code}"
     assert read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpen"] is True

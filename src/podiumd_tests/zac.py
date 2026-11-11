@@ -163,6 +163,12 @@ def user_event(http: requests.Session, zac_url: str, zaak_uuid: str, actie: str,
     return http.post(f"{zac_url}/rest/planitems/doUserEventListenerPlanItem", json=body)
 
 
+def afronden_intake(http: requests.Session, zac_url: str, zaak: JsonObject) -> None:
+    """Finish the zaak's intake as ontvankelijk: status In behandeling, with ZAAK_AFHANDELEN offered."""
+    response = user_event(http, zac_url, str(zaak["uuid"]), "INTAKE_AFRONDEN", zaakOntvankelijk=True)
+    expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+
+
 def resultaattypen(http: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:
     """Return the resultaattypen ZAC offers for the zaak's zaaktype."""
     zaaktype = section(zaak, "zaaktype")["uuid"]
@@ -181,6 +187,12 @@ def afhandelen(http: requests.Session, zac_url: str, zaak: JsonObject) -> reques
     resultaattype = _resultaattype_without_besluit(http, zac_url, zaak)
     fields = {"resultaattypeUuid": resultaattype, "resultaatToelichting": "podiumd-tests"}
     return user_event(http, zac_url, str(zaak["uuid"]), "ZAAK_AFHANDELEN", **fields)
+
+
+def afbreken(http: requests.Session, zac_url: str, zaak: JsonObject) -> requests.Response:
+    """Abort the zaak as niet ontvankelijk; ZAC's answer."""
+    body = {"zaakbeeindigRedenId": NIET_ONTVANKELIJK}
+    return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/afbreken", json=body)
 
 
 def afsluiten(http: requests.Session, zac_url: str, zaak: JsonObject) -> requests.Response:

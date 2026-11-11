@@ -15,8 +15,9 @@ from podiumd_tests.json_data import section
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
-from podiumd_tests.zac import NIET_ONTVANKELIJK
+from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import afhandelen
+from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import afsluiten
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import user_event
@@ -43,11 +44,6 @@ def _status(zac: requests.Session, zac_url: str, zaak: JsonObject) -> str:
     return str(section(read_zaak(zac, zac_url, str(zaak["uuid"])), "status").get("naam"))
 
 
-def _ontvankelijk(zac: requests.Session, zac_url: str, zaak: JsonObject) -> None:
-    response = user_event(zac, zac_url, str(zaak["uuid"]), "INTAKE_AFRONDEN", zaakOntvankelijk=True)
-    expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-
-
 def _afhandelen(zac: requests.Session, zac_url: str, zaak: JsonObject) -> JsonObject:
     """Afhandelen with the first resultaattype that needs no besluit; the zaak as ZAC shows it after."""
     expect_status(afhandelen(zac, zac_url, zaak), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
@@ -66,7 +62,7 @@ def test_ontvankelijk_intake_puts_the_zaak_in_behandeling(
     """INTAKE_AFRONDEN with zaakOntvankelijk gives status In behandeling and the user event ZAAK_AFHANDELEN."""
     zaak = zac_zaak()
     assert _status(zac, urls["zac"], zaak) == "Intake"
-    _ontvankelijk(zac, urls["zac"], zaak)
+    afronden_intake(zac, urls["zac"], zaak)
     assert _status(zac, urls["zac"], zaak) == "In behandeling"
     listeners = zac.get(f"{urls['zac']}/rest/planitems/zaak/{zaak['uuid']}/userEventListenerPlanItems").json()
     assert [item.get("userEventListenerActie") for item in listeners] == ["ZAAK_AFHANDELEN"]
@@ -111,7 +107,7 @@ def test_afhandelen_closes_the_zaak_with_its_resultaat(
 ) -> None:
     """ZAAK_AFHANDELEN sets status Afgerond, the resultaat and Open Zaak's archive fields."""
     zaak = zac_zaak()
-    _ontvankelijk(zac, urls["zac"], zaak)
+    afronden_intake(zac, urls["zac"], zaak)
     closed = _afhandelen(zac, urls["zac"], zaak)
     assert (section(closed, "status").get("naam"), closed["isOpen"]) == ("Afgerond", False)
     assert section(closed, "resultaat").get("resultaattype")
@@ -133,7 +129,7 @@ def test_heropend_zaak_loses_its_resultaat_and_can_be_closed_again(
     """heropenen: status Heropend, resultaat and archiefActiedatum cleared; afbreken refused; afsluiten closes again."""
     zaak = zac_zaak()
     uuid = str(zaak["uuid"])
-    _ontvankelijk(zac, urls["zac"], zaak)
+    afronden_intake(zac, urls["zac"], zaak)
     closed = _afhandelen(zac, urls["zac"], zaak)
     if not section(closed, "rechten").get("heropenen"):
         pytest.skip("the test admin may not reopen zaken of this zaaktype in the estate's PABC dataset")
@@ -141,10 +137,7 @@ def test_heropend_zaak_loses_its_resultaat_and_can_be_closed_again(
     reopened = expect_status(response, HTTPStatus.OK).json()
     assert (section(reopened, "status").get("naam"), reopened["isOpen"]) == ("Heropend", True)
     assert (reopened.get("resultaat"), reopened.get("archiefActiedatum")) == (None, None)
-    afbreken = zac.patch(
-        f"{urls['zac']}/rest/zaken/zaak/{uuid}/afbreken", json={"zaakbeeindigRedenId": NIET_ONTVANKELIJK}
-    )
-    expect_status(afbreken, *REFUSED)
+    expect_status(afbreken(zac, urls["zac"], zaak), *REFUSED)
     again = expect_status(afsluiten(zac, urls["zac"], zaak), HTTPStatus.OK)
     assert again.json()["isOpen"] is False
 
@@ -159,7 +152,7 @@ def test_afhandelen_needs_a_resultaat(
 ) -> None:
     """ZAAK_AFHANDELEN without resultaattypeUuid answers 400 and leaves the zaak open."""
     zaak = zac_zaak()
-    _ontvankelijk(zac, urls["zac"], zaak)
+    afronden_intake(zac, urls["zac"], zaak)
     response = user_event(zac, urls["zac"], str(zaak["uuid"]), "ZAAK_AFHANDELEN")
     expect_status(response, HTTPStatus.BAD_REQUEST)
     assert read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpen"] is True
