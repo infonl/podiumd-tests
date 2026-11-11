@@ -18,6 +18,7 @@ from podiumd_tests.kcc import KENNIS_URL
 from podiumd_tests.kcc import LOGBOEK_HINT
 from podiumd_tests.kcc import add_klantcontact
 from podiumd_tests.kcc import expect_ita_group_access_bug
+from podiumd_tests.kcc import hit_afdeling
 from podiumd_tests.kcc import internetaken_of
 from podiumd_tests.kcc import ita_detail_text
 from podiumd_tests.kcc import kcc_login
@@ -33,10 +34,12 @@ from podiumd_tests.kcc import kiss_medewerkers
 from podiumd_tests.kcc import kiss_onderwerpobject
 from podiumd_tests.kcc import kiss_register
 from podiumd_tests.kcc import kiss_search_hits
+from podiumd_tests.kcc import kiss_search_sources
 from podiumd_tests.kcc import kiss_sync_cronjob
 from podiumd_tests.kcc import kiss_website_crawlers
 from podiumd_tests.kcc import kiss_zaak
 from podiumd_tests.kcc import kiss_zaken
+from podiumd_tests.kcc import medewerker_data
 from podiumd_tests.kcc import vac_data
 from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.seed.registry import ResourceRegistry
@@ -328,3 +331,22 @@ MONDAY_10 = datetime(2026, 11, 2, 10, tzinfo=UTC)
 )
 def test_weekday_hours_before_skips_the_weekend(moment, hours, expected):
     assert kcc.weekday_hours_before(moment, hours) == expected
+
+
+def test_kiss_search_filters_on_the_sources_and_lists_them(fake_http):
+    source = {"index": "search-vac", "name": "vac"}
+    sent = fake_http({"GET /api/search/sources": (200, [source]), "POST /api/search": (200, {"hits": {"hits": []}})})
+    assert kiss_search_sources(requests.Session(), KISS) == [source]
+    kiss_search_hits(requests.Session(), KISS, "q", [source])
+    assert json.loads(sent[-1].body)["filters"] == [source]
+
+
+@pytest.mark.parametrize("key", ["afdelingnaam", "afdelingNaam"])
+def test_hit_afdeling_reads_the_first_afdeling_in_any_case(key):
+    hit = {"_source": {"object_bron": "VAC", "VAC": {"afdelingen": [{key: "A"}, {key: "B"}]}}}
+    assert hit_afdeling(hit) == "A"
+    assert hit_afdeling({"_source": {"object_bron": "VAC", "VAC": {}}}) is None
+
+
+def test_medewerker_data_names_the_medewerker_after_the_title():
+    assert medewerker_data("t")["identificatie"] == medewerker_data("t")["achternaam"] == "t"

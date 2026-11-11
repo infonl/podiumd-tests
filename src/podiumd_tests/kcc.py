@@ -363,10 +363,33 @@ def kiss_website_crawlers(env: Environment) -> dict[str, str]:
     return crawlers
 
 
-def kiss_search_hits(kiss: requests.Session, kiss_url: str, query: str) -> list[JsonObject]:
-    """Return the hits of KISS's search for the query in all its sources."""
-    response = kiss.post(f"{kiss_url}/api/search", json={"query": query, "page": 1, "filters": []})
+def kiss_search_sources(kiss: requests.Session, kiss_url: str) -> list[JsonObject]:
+    """Return KISS's search sources (name, index), as its source filter offers them."""
+    return entries(expect_status(kiss.get(f"{kiss_url}/api/search/sources"), HTTPStatus.OK).json())
+
+
+def kiss_search_hits(
+    kiss: requests.Session, kiss_url: str, query: str, sources: list[JsonObject] | None = None
+) -> list[JsonObject]:
+    """Return the hits of KISS's search for the query in the sources (default: all)."""
+    filters = [{"name": source["name"], "index": source["index"]} for source in sources or []]
+    response = kiss.post(f"{kiss_url}/api/search", json={"query": query, "page": 1, "filters": filters})
     return entries(section(expect_status(response, HTTPStatus.OK).json(), "hits").get("hits"))
+
+
+def hit_afdeling(hit: JsonObject) -> str | None:
+    """Return the afdeling KISS takes from a search hit: its record's first afdeling, key afdelingnaam in any case."""
+    source = section(hit, "_source")
+    afdelingen = entries(section(source, str(source.get("object_bron"))).get("afdelingen"))
+    if not afdelingen:
+        return None
+    names = {key.lower(): value for key, value in afdelingen[0].items()}
+    return str(names["afdelingnaam"]) if "afdelingnaam" in names else None
+
+
+def medewerker_data(titel: str) -> dict[str, object]:
+    """Return a Medewerker for Objecten (KISS's smoelenboek) with the title as its identificatie and achternaam."""
+    return {"identificatie": titel, "voornaam": "PodiumD", "achternaam": titel, "afdelingen": [], "groepen": []}
 
 
 def vac_data(titel: str, antwoord: str = "Antwoord van podiumd-tests.") -> dict[str, object]:
