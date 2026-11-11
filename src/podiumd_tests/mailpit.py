@@ -43,13 +43,22 @@ def delete_message(mailpit: ApiClient, message_id: str) -> None:
     mailpit.request("DELETE", "messages", HTTPStatus.OK, json={"IDs": [message_id]})
 
 
+def received_message(
+    mailpit: ApiClient, registry: ResourceRegistry, *, timeout: float, to: str, subject: str | None = None
+) -> JsonObject:
+    """Return the first mail to the address (wait_for_mail) with headers, HTML and attachments; cleanup deletes
+    every mail to the address.
+    """
+    message = wait_for_mail(mailpit, timeout=timeout, to=to, subject=subject)
+    registry.add(f"mail to {to}", lambda: delete_mails(mailpit, f"to:{quoted(to)}"))
+    return mailpit.get(f"message/{message['ID']}")
+
+
 def received(
     mailpit: ApiClient, registry: ResourceRegistry, *, timeout: float, to: str, subject: str | None = None
 ) -> str:
-    """Return the HTML of the first mail to the address (wait_for_mail); cleanup deletes every mail to the address."""
-    message = wait_for_mail(mailpit, timeout=timeout, to=to, subject=subject)
-    registry.add(f"mail to {to}", lambda: delete_mails(mailpit, f"to:{quoted(to)}"))
-    return str(mailpit.get(f"message/{message['ID']}").get("HTML"))
+    """Return the HTML of the first mail to the address (received_message)."""
+    return str(received_message(mailpit, registry, timeout=timeout, to=to, subject=subject).get("HTML"))
 
 
 def delete_mails(mailpit: ApiClient, query: str) -> None:

@@ -172,6 +172,18 @@ def vastleggen_besluit(
     return http.post(f"{zac_url}/rest/zaken/besluit", json=body)
 
 
+def afzenders(http: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:
+    """Return the afzenders ZAC offers for mail from the zaak."""
+    return get_entries(http, f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/afzender")
+
+
+def send_mail(
+    http: requests.Session, zac_url: str, zaak: JsonObject, mail: JsonObject, *, acknowledge: bool = False
+) -> requests.Response:
+    """Send a mail from the zaak (RestMailGegevens), or its ontvangstbevestiging with acknowledge; ZAC's answer."""
+    return http.post(f"{zac_url}/rest/mail/{'acknowledge' if acknowledge else 'send'}/{zaak['uuid']}", json=mail)
+
+
 def koppel(
     http: requests.Session, zac_url: str, zaak: JsonObject, ander: JsonObject, relatie: str
 ) -> requests.Response:

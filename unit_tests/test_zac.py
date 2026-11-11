@@ -243,3 +243,19 @@ def test_besluit_calls_send_zacs_fields(fake_http):
     assert json.loads(sent[-1].body) == {"zaakUuid": "z1", "besluittypeUuid": "bt1", "ingangsdatum": "2026-11-11"}
     zac.clear_ztc_cache(http, ZAC)
     assert sent[-1].method == "DELETE"
+
+
+def test_send_mail_and_its_acknowledge_variant(fake_http):
+    sent = fake_http(
+        {
+            "GET /rest/zaken/zaak/z1/afzender": (200, [{"mail": "noreply@example.test"}]),
+            "POST /rest/mail/send/z1": (204, None),
+            "POST /rest/mail/acknowledge/z1": (204, None),
+        }
+    )
+    http, zaak = requests.Session(), {"uuid": "z1"}
+    assert zac.afzenders(http, ZAC, zaak) == [{"mail": "noreply@example.test"}]
+    zac.send_mail(http, ZAC, zaak, {"onderwerp": "x"})
+    assert sent[-1].url.endswith("/rest/mail/send/z1")
+    zac.send_mail(http, ZAC, zaak, {"onderwerp": "x"}, acknowledge=True)
+    assert sent[-1].url.endswith("/rest/mail/acknowledge/z1")

@@ -10,12 +10,12 @@ versions is not counted.
 | Tier | Tests | Functions | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 210 | 37 | 9 |
-| component | 544 | 322 | 31 |
+| component | 548 | 326 | 31 |
 | integration | 119 | 70 | 10 |
 | perf | 54 | 3 | 0 |
-| **full tier** | **846** | **411** |  |
+| **full tier** | **850** | **415** |  |
 
-Unit tests (`unit_tests/`, functions): 608. Perf endpoints (`perf/runs.py`): 22.
+Unit tests (`unit_tests/`, functions): 609. Perf endpoints (`perf/runs.py`): 22.
 
 ## Per area
 
@@ -50,7 +50,7 @@ Unit tests (`unit_tests/`, functions): 608. Perf endpoints (`perf/runs.py`): 22.
 | component | platform | 69 | 18 |
 | component | referentielijsten | 2 | 2 |
 | component | zaakbrug | 12 | 11 |
-| component | zac | 70 | 55 |
+| component | zac | 74 | 59 |
 | component | zgw_office_addin | 4 | 3 |
 | integration | continuiteit | 19 | 10 |
 | integration | formulier_betaling | 19 | 6 |
@@ -91,7 +91,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | ZAC | 15 |
 | draaiboek | 87 |
 | external | 101 |
-| podiumd-tests | 276 |
+| podiumd-tests | 280 |
 | upstream | 65 |
 
 ## Expected failures per known issue
