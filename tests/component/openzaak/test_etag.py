@@ -42,8 +42,10 @@ def is_unchanged(openzaak: ApiClient, url: str, tag: str) -> bool:
     return response.status_code == HTTPStatus.NOT_MODIFIED
 
 
+# Non-strict: fails every run alone (3 of 3 with --runxfail, minikube), but passes in every full tier of
+# 2026-11-11 on minikube and kees00: parallel writes make Open Zaak recalculate the zaak's ETag.
 STALE = pytest.mark.xfail(
-    strict=True,
+    strict=False,
     reason="[open-zaak-11] Open Zaak 1.29.3 keeps a zaak's stored ETag after a PATCH or a change of its rollen, so "
     "If-None-Match answers 304 for a changed zaak; probably fixed in 1.31.1 (open-zaak#2577)",
 )
