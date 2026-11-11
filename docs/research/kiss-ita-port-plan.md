@@ -22,13 +22,13 @@ The batches that close the gaps of [`kiss-ita-scenario-gaps.md`](kiss-ita-scenar
 | K2 | Contactverzoek through KISS, to afdeling, groep and medewerker | 6 high | 4 (done) | none | 2 |
 | K3 | Zaak in KISS | 3 high | 2 (done) | none | 1 |
 | K4 | Search variants (person, company) | 2 high, 7 medium | 0 (parameters, done) | none | 0.5 |
-| K5 | Search sources: smoelenboek, source filter, afdeling on a kennisartikel | 7 medium | 3 | a kennisartikel with afdelingen | 1 |
-| K6 | Nieuws en werkinstructies | 23 medium | 5 | none | 1.5 |
+| K5 | Search sources: smoelenboek, source filter, afdeling on a kennisartikel | 7 medium | 3 (done) | a kennisartikel with afdelingen | 1 |
+| K6 | Nieuws en werkinstructies | 23 medium | 4 (done) | none | 1.5 |
 | I1 | Forward to a medewerker, groepsmailbox rules | 7 high, 8 medium | 6 (done) | none | 2 |
 | I2 | Afsluiten and historie | 3 high, 8 medium | 5 (done) | none | 2 |
 | I3 | Reminder to a medewerker | 3 high | 1 (extended, done; not run live) | none | 0.5 |
 | I4 | Zaak koppelen and the logboek | 10 medium | 3 (done) | none | 1.5 |
-| I5 | Beheer and forward-form data | 9 medium | 3 | none | 1 |
+| I5 | Beheer and forward-form data | 9 medium | 2 (done) | none | 1 |
 | I6 | Detail data: digitale adressen fallback, klantnaam, duplicate nummer | 6 medium | 3 (done) | none | 1 |
 | | **Total** | **27 high, 82 medium** | **37** | | **about 16** |
 
@@ -76,16 +76,19 @@ The batches that close the gaps of [`kiss-ita-scenario-gaps.md`](kiss-ita-scenar
   KvK test sets behind Frank!Gateway hold KISS's test persons and companies with the same counts.
 - Not covered: client-side validation (an invalid BSN, a 2-letter achternaam filter).
 
-### K5: search sources (1 day, 3 tests)
+### K5: search sources (done: 3 tests, 5 cases)
 
-- Gaps: a smoelenboek hit; the source filter (VAC, Kennisbank); the afdeling of a kennisartikel hit (`afdelingnaam`
-  and `afdelingNaam`). Builds on `test_kiss_kennis`.
+- Covered in `tests/integration/test_kiss_kennis.py`: a smoelenboek hit after the smoelenboek sync; the source filter
+  on VAC or Kennisbank gives hits of that index only; KISS takes the afdeling of a kennisartikel (`afdelingnaam`) and
+  a VAC (`afdelingNaam`) from the hit. The Kennisartikel objecttype refuses `afdelingNaam`.
 
-### K6: nieuws en werkinstructies (1.5 days, 5 tests)
+### K6: nieuws en werkinstructies (done: 4 tests, 8 cases)
 
-- Gaps: the lifecycle of both types in beheer (list, detail, change titel, publicatiedatum and belangrijk, delete
-  asserted); the publication window (future start hidden, past end hidden, future end shown); skill and type filters
-  with search; marking unread. In `tests/component/kiss/test_kiss_beheer.py`.
+- Covered in `tests/component/kiss/test_kiss_beheer.py`: a nieuwsbericht or werkinstructie in the beheer list and
+  detail, changed (titel, publicatiedatum, belangrijk) and deleted; the publication window (future publicatiedatum
+  and past einddatum hidden, future einddatum shown); skill filters (one, several, none) and the type filter with a
+  search, skills as labels; marking unread.
+- The tests that change the count of important berichten share an xdist group.
 
 ### I1: forward to a medewerker (done: 6 tests, 11 cases)
 
@@ -125,10 +128,11 @@ The batches that close the gaps of [`kiss-ita-scenario-gaps.md`](kiss-ita-scenar
 - ITA's ZGW secret must be at least 32 characters for HS256 (fixed on minikube; kees00 waits for podiumd-infra).
 - Not covered: the reopen in the logboek (beheerder).
 
-### I5: beheer and forward-form data (1 day, 3 tests)
+### I5: beheer and forward-form data (done: 2 tests, 3 cases)
 
-- Gaps: kanalen create, edit, delete, duplicate refused, the KCC user refused; `heeftGroepsmailbox` on afdelingen and
-  groepen; the forward's success message.
+- Covered in `tests/component/ita/test_ita_beheer.py`: kanalen added, renamed, deleted by the beheerder, a duplicate
+  naam refused, the KCC user refused; `heeftGroepsmailbox` on afdelingen and groepen. The forward's success message is
+  asserted in `test_ita_doorsturen.py` (I1).
 
 ### I6: detail data (done: 3 tests, 6 cases)
 
