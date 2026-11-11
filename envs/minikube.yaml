@@ -42,6 +42,7 @@ urls:
   zgw-office-addin: https://office-addin.local
   # podiumd-minikube profile frankgateway (on with --full).
   openbao: https://openbao.local
+  inway: https://inway.local
   # No ingress, as on ExternalsPodiumD: reached through a port-forward.
   frankgateway: http://frankgateway-outway.podiumd.svc.cluster.local:9080
 secrets:
@@ -81,6 +82,10 @@ secrets:
     k8s_secret: {name: keycloak-acc-mock, key: password}
 settings:
   zgw_client_id: formulier
+  # The inway's consumer tests: podiumd-minikube's test-only client CA (.crt and .key) and its consumer command;
+  # paths relative to the directory that holds podiumd-tests.
+  inway_client_ca: podiumd-minikube/.pki/client-ca
+  inway_consumers_command: podiumd-minikube/bin/openbao-consumers
   # No local superuser: Open Inwoner as in ExternalsPodiumD and podiumd-infra; Open VTB (podiumd-minikube creates none).
   django_admin_sso_only: openinwoner,openvtb
   # podiumd-minikube's opt-in clamav profile (clamd with the EICAR signature only).

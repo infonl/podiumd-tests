@@ -1,0 +1,135 @@
+# fg-echo: the upstream of the inway's /echo/* test route (podiumd-minikube's frankgateway profile). It answers
+# "Hello!Frank" and mirrors the request headers. Applied and deleted by bootstrap step inway-consumers where the
+# profile sets inway_client_ca; on kees00 podiumd-infra's waf-mtls-check --setup owns it. The route names the
+# Service, so it keeps the name fg-echo. It reflects what it gets: never route real credentials to it.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fg-echo-app
+  labels:
+    app: fg-echo
+    app.kubernetes.io/managed-by: podiumd-tests
+data:
+  app.py: |
+    import json
+    import os
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    GREETING = os.environ.get("GREETING", "Hello!Frank")
+    PORT = int(os.environ.get("PORT", "8080"))
+
+
+    class Echo(BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def respond(self):
+            body = json.dumps(
+                {
+                    "message": GREETING,
+                    "method": self.command,
+                    "path": self.path,
+                    # Lower-cased so a test can look a header up without
+                    # caring how the proxy in front happened to spell it.
+                    "headers": {k.lower(): v for k, v in self.headers.items()},
+                },
+                indent=2,
+            ).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        do_GET = do_POST = do_PUT = do_PATCH = do_DELETE = respond
+
+        def log_message(self, fmt, *args):
+            print(fmt % args, flush=True)
+
+
+    ThreadingHTTPServer(("", PORT), Echo).serve_forever()
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fg-echo
+  labels:
+    app: fg-echo
+    app.kubernetes.io/managed-by: podiumd-tests
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fg-echo
+  template:
+    metadata:
+      labels:
+        app: fg-echo
+      annotations:
+        # Restart the pod when the script changes; a ConfigMap edit alone does
+        # not roll a Deployment, and a fixture that silently serves the old
+        # code is worse than one that is plainly down.
+        checksum/app: "hello-frank-v1"
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+      containers:
+        - name: fg-echo
+          image: python:3.12-alpine
+          command: ["python3", "/app/app.py"]
+          env:
+            - name: GREETING
+              value: "Hello!Frank"
+            - name: PORT
+              value: "8080"
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: app
+              mountPath: /app
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+      volumes:
+        - name: app
+          configMap:
+            name: fg-echo-app
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fg-echo
+  labels:
+    app: fg-echo
+    app.kubernetes.io/managed-by: podiumd-tests
+spec:
+  selector:
+    app: fg-echo
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

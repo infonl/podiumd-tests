@@ -11,6 +11,7 @@ from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.bootstrap import names
 from podiumd_tests.bootstrap.bpmn import ZacBpmnProcess
+from podiumd_tests.bootstrap.inway import InwayConsumers
 from podiumd_tests.bootstrap.keycloak import KeycloakRoles
 from podiumd_tests.bootstrap.keycloak import KeycloakUser
 from podiumd_tests.bootstrap.kiss import KissKanalen
@@ -510,6 +511,7 @@ def openinwoner_account(user: KeycloakUser) -> dict[str, str]:
 STEPS: tuple[Step, ...] = (
     # podiumd-tests' own infra (infra/), for the integration chains.
     MockServer(),
+    InwayConsumers(),
     openzaak_client_step("openzaak-client", names.ZGW_CLIENT_ID, names.ZGW_STORE_KEY, owns_catalogus=True),
     # TA's restricted Open Formulieren client: vertrouwelijkheid openbaar at most, no deletes.
     openzaak_client_step(
