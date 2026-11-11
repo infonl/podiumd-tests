@@ -10,7 +10,7 @@ versions is not counted.
 | Tier | Tests | Functions | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 210 | 37 | 9 |
-| component | 668 | 404 | 40 |
+| component | 668 | 404 | 41 |
 | integration | 140 | 84 | 11 |
 | perf | 54 | 3 | 0 |
 | **full tier** | **991** | **507** |  |
@@ -104,6 +104,7 @@ Ids of infonl/podiumd-known-issues.
 | ita-1 | 1 |
 | ita-2 | 1 |
 | ita-3 | 1 |
+| ita-4 | 1 |
 | kiss-2 | 1 |
 | kiss-4 | 1 |
 | omc-1 | 1 |

@@ -78,6 +78,12 @@ def test_closing_a_contactverzoek_moves_it_to_mijn_historie(
     assert internetaak["uuid"] in uuids(my_internetaken(ita, urls["ita"], afgerond=True))
 
 
+# Intermittent: 1 in 259 full runs; a parallel test's cleanup deletes its klantcontacten while ITA builds the list.
+@pytest.mark.xfail(
+    strict=False,
+    reason="[ita-4] ITA 3.3.4 answers 500 for Mijn historie when a listed contactverzoek is deleted before it fetches "
+    "its klantcontact; not yet reported upstream",
+)
 @pytest.mark.source(SCENARIOS, "Mijn historie lists the contactverzoek assigned and closed last on top.")
 @pytest.mark.scenario("""
     Given the KCC medewerker is logged in to ITA
