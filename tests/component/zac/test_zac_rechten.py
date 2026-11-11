@@ -22,7 +22,9 @@ from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import HEROPEND
 from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import POLICIES
 from podiumd_tests.zac import afsluiten
@@ -44,6 +46,7 @@ if TYPE_CHECKING:
 
     import requests
 
+    from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
@@ -144,10 +147,7 @@ def test_closed_zaak_rights_follow_the_role(
 def test_closed_zaak_is_changed_only_by_a_recordmanager(
     zac_as: Callable[[str], requests.Session], urls: dict[str, str], closed_bpmn_zaak: JsonObject
 ) -> None:
-    """Behandelaar and coordinator get 403 for an edit and heropenen; the recordmanager edits, but gets 403 for a date.
-
-    The recordmanager's heropenen is left to the rechten: the BPMN test zaaktype has no statustype Heropend.
-    """
+    """Behandelaar and coordinator get 403 for an edit and heropenen; the recordmanager edits, but gets 403 for a date."""
     zaak, zac_url = closed_bpmn_zaak, urls["zac"]
     omschrijving = f"{zaak['omschrijving']}-gewijzigd"
     for role in ("behandelaar", "coordinator"):
@@ -161,6 +161,26 @@ def test_closed_zaak_is_changed_only_by_a_recordmanager(
     assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
     refused = heropenen(zac_as("behandelaar"), zac_url, zaak)
     assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
+
+
+@pytest.mark.requires("pabc")
+@pytest.mark.source(POLICIES, "A recordmanager may heropenen a closed zaak; ZAC gives it the status Heropend.")
+@pytest.mark.scenario("""
+    Given an afgehandelde zaak of the BPMN test zaaktype
+    When a recordmanager heropent it with a reden
+    Then ZAC shows the zaak open with status Heropend
+    And Open Zaak has the zaak without einddatum and with status Heropend
+""")
+def test_recordmanager_heropent_a_closed_zaak(
+    zac_as: Callable[[str], requests.Session], urls: dict[str, str], openzaak: ApiClient, closed_bpmn_zaak: JsonObject
+) -> None:
+    """The recordmanager's heropenen answers 200; ZAC and Open Zaak have the zaak open with statustype Heropend."""
+    response = heropenen(zac_as("recordmanager"), urls["zac"], closed_bpmn_zaak)
+    reopened = expect_status(response, HTTPStatus.OK).json()
+    assert (section(reopened, "status").get("naam"), reopened["isOpen"]) == (HEROPEND, True)
+    in_open_zaak = openzaak.get(f"{urls['openzaak']}/{ZAKEN}/zaken/{closed_bpmn_zaak['uuid']}")
+    statustype = openzaak.get(str(openzaak.get(str(in_open_zaak["status"]))["statustype"]))
+    assert (in_open_zaak["einddatum"], statustype["omschrijving"]) == (None, HEROPEND)
 
 
 def _locked(
