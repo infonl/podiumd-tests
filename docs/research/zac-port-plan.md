@@ -32,12 +32,12 @@ share their setup. The user picks the batches to port.
 | Z4 | Opschorten, verlengen and their dates | 3 high (partial), 2 medium | 4 (done) | none | 1.5 |
 | Z5 | Mail from a zaak | 2 high, 2 medium | 4 (done) | none | 2 |
 | Z6 | Documents: verplaatsen, ontkoppelen, versies, ondertekenen, refusals | 1 high, 6 medium | 8 (done) | none | 2 |
-| Z7 | CMMN taken: intake, Goedkeuren, Advies, Document verzenden | 1 high, 4 medium | 4 | human task parameters for more plan items | 2.5 |
+| Z7 | CMMN taken: intake, Goedkeuren, Advies, Document verzenden | 1 high, 4 medium | 7 (done) | step openzaak-iot-email | 2.5 |
 | Z8 | Rights per role: closed zaak, documents, admin, verdelen, brp_zoeken | 1 high (partial), 6 medium | 6 (done) | none | 2 |
 | Z9 | Productaanvraag: betrokkenen, inbox, contact, documents | 2 high, 5 medium | 6 (done) | step zac-bpmn-productaanvraag | 2 |
 | Z10 | Zaakafhandelparameters: persist, new zaaktype version, PABC groups; hoofd- and deelzaak | 4 high, 3 medium | 7 (done) | none (a throwaway zaaktype per run) | 3.5 |
-| Z11 | Search, werklijsten, signaleringen | 6 medium | 5 | none | 2 |
-| Z12 | Betrokkenen | 6 medium | 4 | none | 1.5 |
+| Z11 | Search, werklijsten, signaleringen | 6 medium | 8 (done) | none | 2 |
+| Z12 | Betrokkenen | 6 medium | 4 (done) | none | 1.5 |
 | | **Total** | | **61 tests** | | **about 24** |
 
 ## Batches
@@ -115,17 +115,15 @@ share their setup. The user picks the batches to port.
   removed the link: the document is then on no zaak and not in Ontkoppelde documenten); the 500 MB limit (ZAC gives it
   at `/rest/configuratie/max-file-size-mb`).
 
-### Z7: CMMN taken (2.5 days, 4 tests)
+### Z7: CMMN taken (done: 7 tests, 9 cases)
 
-- Gaps: intake afronden ontvankelijk, then start and complete Goedkeuren, Advies intern, Advies extern (with e-mail,
-  prefilled initiator) and Document verzenden: mandatory fields, toelichting stored, mail sent, completed taken leave
-  the lists; aanvullende informatie with each outcome and its mail and PDF; Goedkeuren signs the selected document;
-  taak fatale datum capped at the zaak's.
-- Files: `tests/component/zac/test_zac_taken.py`.
-- Bootstrap: `ZacParameters` activates only AANVULLENDE_INFORMATIE today; add the other human task plan items as
-  further `ZacPart`s (opt-in profile settings, as `zac_aanvullende_informatie`), since they change the estate's
-  zaakafhandelparameters.
-- Risks: environments that do not allow the opt-in skip these tests.
+- Covered in `tests/component/zac/test_zac_taken.py` on a throwaway zaaktype with every human task on: an open Advies
+  intern holds off afhandelen and leaves Mijn taken once completed; Goedkeuren ondertekent the selected document, a
+  second one is refused; Advies extern mails the adviseur (mail and its PDF on the zaak); Document verzenden records
+  the verzenddatum; a taak's fatale datum stays within the zaak's; Aanvullende informatie mails and returns the zaak to
+  Intake (3 uitkomsten). Bootstrap step `openzaak-iot-email`: ZAC stores sent mail as a document of the type "e-mail".
+- Finding zac-12: the Advies referentietabel is not stored on the first save of human task parameters (strict xfail).
+- Not covered: mandatory form fields and the prefilled initiator (ZAC's UI only); Advies extern's vastleggen variant.
 
 ### Z8: rights per role (done: 6 tests, 13 cases)
 
@@ -166,26 +164,21 @@ share their setup. The user picks the batches to port.
 - Not covered: the inrichtingscheck (lists only the default catalogus); the waarschuwingsvenster limit and clearing an
   unauthorised default groep (ZAC's UI only).
 
-### Z11: search, werklijsten and signaleringen (2 days, 5 tests)
+### Z11: search, werklijsten and signaleringen (done: 8 tests, 10 cases)
 
-- Gaps: signalering settings take effect, dashboard and mail signals for zaak and taak toegewezen and document
-  toegevoegd; a completed taak leaves the takenlijst; text search finds zaken (also the Open Formulieren kenmerk) and
-  Solr special characters give no error; verdelen to a group without behandelaar removes the behandelaar; werkvoorraad
-  indicaties DEELZAAK, HOOFDZAAK, VERLENGD, OPGESCHORT, HEROPEND.
-- Files: `tests/component/zac/test_zac_toekennen.py`, new `test_zac_zoeken.py`.
-- Reuses: `search`, `wait_in_werkvoorraad`, the role users (a signalering goes to another user than the one who acts),
-  Z1, Z2 and Z4 for the zaken with indicaties.
-- Risks: signaleringen for expiry need ZAC's signaleringen CronJob: leave those out; Solr indexing delays need
-  `wait_until`.
+- Covered in `test_zac_zoeken.py` (text search by kenmerk, Solr special characters, werkvoorraad indicaties OPSCHORTING,
+  VERLENGD, HEROPEND, HOOFDZAAK and DEELZAAK), `test_zac_signaleringen.py` (a zaak on my name and a new document on
+  the dashboard until opened, a setting off gives none, a taak on my name), `test_zac_toekennen.py` (verdeeld to a
+  group alone loses its behandelaar), `test_zac_bpmn.py` (a completed taak leaves the takenlijst).
+- Not covered: signalering mails (the test users have no e-mail in Keycloak); expiry signals (ZAC's signaleringen
+  CronJob).
 
-### Z12: betrokkenen (1.5 days, 4 tests)
+### Z12: betrokkenen (done: 4 tests)
 
-- Gaps: the same person with the same rol cannot be added twice; betrokkene and initiator ontkoppelen (reden
-  required); initiator changed from persoon to bedrijf and back keeps one initiator; a bedrijf rol stored in Open Zaak
-  as niet-natuurlijk persoon with only KvK and vestigingsnummer; the e-mail address ZAC takes from Open Klant (single,
-  voorkeur, else first).
-- Files: `tests/component/zac/test_zac_klanten.py`.
-- Reuses: `send_with_person`, `person_key`, the BRP and KvK test sets, `make_digitaal_adres`.
+- Covered in `test_zac_klanten.py`: the same person with the same rol is added once (409); a betrokkene is ontkoppeld
+  with a reden in the historie; the initiator changes from persoon to bedrijf and back (a toelichting required, one
+  initiator in Open Zaak); a person's e-mail is the voorkeur address, else the first.
+- Finding (zac-13 pending reproduction on minikube): ontkoppelen of a betrokkene or the initiator works without a reden.
 
 ## Not planned
 
