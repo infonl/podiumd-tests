@@ -267,6 +267,11 @@ def run_cronjob(kube: Kube, cronjob: str, job: str, timeout: int = 300, env: Var
         kube.delete("job", job)
 
 
+def cronjob_ending(env: Environment, suffix: str) -> str | None:
+    """Return the name of the environment's first CronJob whose name ends with suffix (charts prefix the release)."""
+    return next((name for name in map(metadata_name, env.items("cronjobs")) if name.endswith(suffix)), None)
+
+
 def _job_log(kube: Kube, job: str) -> str:
     """Return the last lines a Job's container wrote; its previous run when it restarts."""
     for previous in ([], ["--previous"]):

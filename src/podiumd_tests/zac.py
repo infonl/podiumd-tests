@@ -713,6 +713,12 @@ def toekennen_taak(http: requests.Session, zac_url: str, taak: JsonObject, groep
     expect_status(http.patch(f"{zac_url}/rest/taken/toekennen", json=body), HTTPStatus.NO_CONTENT, HTTPStatus.OK)
 
 
+def wijzig_taak(http: requests.Session, zac_url: str, taak_id: str, **fields: object) -> None:
+    """Change these fields (fataledatum, toelichting) of the open taak, as its form saves them."""
+    taak = expect_status(http.get(f"{zac_url}/rest/taken/{taak_id}"), HTTPStatus.OK).json()
+    expect_status(http.put(f"{zac_url}/rest/taken/taakdata", json={**taak, **fields}), HTTPStatus.OK)
+
+
 def opschorten(
     http: requests.Session, zac_url: str, zaak: JsonObject, days: int, reden: str = "podiumd-tests"
 ) -> requests.Response:

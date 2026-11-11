@@ -16,6 +16,7 @@ from podiumd_tests.kube import KubeError
 from podiumd_tests.workloads import ClusterState
 from podiumd_tests.workloads import chart_version
 from podiumd_tests.workloads import component_versions
+from podiumd_tests.workloads import cronjob_ending
 from podiumd_tests.workloads import deployed_build
 from podiumd_tests.workloads import disruptions
 from podiumd_tests.workloads import failed_jobs
@@ -302,3 +303,9 @@ def test_one_off_job_sets_env_in_each_container():
     copied = entries(section(section(section(job, "spec"), "template"), "spec").get("containers"))[0]
     assert copied["env"] == [{"name": "A", "value": "1"}, {"name": "POLLER_MODE", "value": "herinnering"}]
     assert container["env"] == [{"name": "POLLER_MODE", "value": "nieuw"}, {"name": "A", "value": "1"}]
+
+
+def test_cronjob_ending_finds_the_cronjob_or_none():
+    env = SimpleNamespace(items=lambda _kind: [{"metadata": {"name": n}} for n in ("zac-sig-del", "zac-signaleren")])
+    assert cronjob_ending(env, "-signaleren") == "zac-signaleren"  # pyright: ignore[reportArgumentType]
+    assert cronjob_ending(env, "-x") is None  # pyright: ignore[reportArgumentType]

@@ -581,6 +581,14 @@ def test_toekennen_and_toekennen_taak_send_group_and_behandelaar(fake_http):
     }
 
 
+def test_wijzig_taak_saves_the_read_taak_with_the_fields(fake_http):
+    sent = fake_http(
+        {"GET /rest/taken/t1": (200, {"id": "t1", "toelichting": "x"}), "PUT /rest/taken/taakdata": (200, {})}
+    )
+    zac.wijzig_taak(requests.Session(), ZAC, "t1", fataledatum="2026-11-10")
+    assert json.loads(sent[-1].body) == {"id": "t1", "toelichting": "x", "fataledatum": "2026-11-10"}
+
+
 def test_opschorten_verlengen_and_heropenen_send_days_dates_and_reden(fake_http):
     sent = fake_http(
         {
