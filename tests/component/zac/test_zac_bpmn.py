@@ -23,12 +23,15 @@ from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
+from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import complete_task
+from podiumd_tests.zac import deliver_notificatie
 from podiumd_tests.zac import end_process
 from podiumd_tests.zac import is_taak_listed
 from podiumd_tests.zac import is_task_open
+from podiumd_tests.zac import notificatie
 from podiumd_tests.zac import open_task
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import wait_in_werkvoorraad
@@ -36,6 +39,7 @@ from podiumd_tests.zac import wait_in_werkvoorraad
 if TYPE_CHECKING:
     import requests
 
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -202,4 +206,33 @@ def test_afbreken_ends_the_process_and_its_taken(
     task = open_task(zac, urls["zac"], uuid, INTAKE)
     end_process(zac, urls["zac"], uuid)
     assert not read_zaak(zac, urls["zac"], uuid)["isProcesGestuurd"]
+    assert not is_task_open(zac, urls["zac"], str(task["id"]))
+
+
+@pytest.mark.requires("cluster")
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-14] ZAC 5.9.1 deletes only the CMMN case of a deleted zaak (NotificationReceiver."
+    "handleFlowableProcessData): its BPMN process keeps its taken open; not yet reported upstream",
+)
+@pytest.mark.source(
+    "podiumd-tests",
+    "ZAC's signaleringen job stops at an overdue taak of a deleted zaak; a deleted zaak must leave no open taak.",
+)
+@pytest.mark.scenario("""
+    Given a BPMN zaak in ZAC with its intake taak open
+    When ZAC handles Open Notificaties' notificatie that the zaak is deleted
+    Then ZAC no longer has the intake taak open
+""")
+def test_deleted_zaak_leaves_no_open_taak(
+    podiumd_env: Environment, zac: requests.Session, urls: dict[str, str], bpmn_zaak: JsonObject
+) -> None:
+    """After the zaak's DELETE notificatie the intake task is AFGEROND.
+
+    The zaak stays in Open Zaak, which ZAC's handler does not read: ZAC still reads the task and cleanup ends the
+    process. After a real delete ZAC answers 404 for each task of the zaak and nothing ends the process.
+    """
+    task = open_task(zac, urls["zac"], str(bpmn_zaak["uuid"]), INTAKE)
+    deleted = notificatie("zaken", "zaak", f"{urls['openzaak']}/{ZAKEN}/zaken/{bpmn_zaak['uuid']}", "destroy")
+    assert deliver_notificatie(podiumd_env, deleted, 1) == [HTTPStatus.NO_CONTENT]
     assert not is_task_open(zac, urls["zac"], str(task["id"]))

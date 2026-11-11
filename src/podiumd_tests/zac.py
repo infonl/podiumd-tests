@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 
+from datetime import UTC
 from datetime import date
+from datetime import datetime
 from datetime import timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
@@ -532,7 +534,21 @@ def reindex_zaken(env: Environment) -> None:
     env.kube.exec(env.deployment_for("zac"), "sh", "-c", command, timeout=REINDEX_TIMEOUT)
 
 
-def deliver_notificatie(env: Environment, notificatie: JsonObject, times: int) -> list[int]:
+def notificatie(kanaal: str, resource: str, url: str, actie: str, **kenmerken: object) -> JsonObject:
+    """Return the notificatie Open Notificaties delivers for the resource (url) and actie."""
+    return {
+        "kanaal": kanaal,
+        "hoofdObject": url,
+        "resource": resource,
+        "resourceUrl": url,
+        "actie": actie,
+        # ZAC reads microseconds and a zone.
+        "aanmaakdatum": datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+        "kenmerken": kenmerken,
+    }
+
+
+def deliver_notificatie(env: Environment, message: JsonObject, times: int) -> list[int]:
     """Deliver the notificatie to ZAC this many times at once, as Open Notificaties does; ZAC's HTTP statuses.
 
     Sent inside the ZAC pod with ZAC's own key for Open Notificaties; ZAC handles it before it answers.
@@ -542,7 +558,7 @@ def deliver_notificatie(env: Environment, notificatie: JsonObject, times: int) -
         f' -H "Authorization: $OPEN_NOTIFICATIONS_API_SECRET_KEY" --data "$1" {IN_POD}/rest/notificaties'
     )
     command = f"for i in {' '.join(map(str, range(times)))}; do {post} & done; wait"
-    output = env.kube.exec(env.deployment_for("zac"), "sh", "-c", command, "sh", json.dumps(notificatie))
+    output = env.kube.exec(env.deployment_for("zac"), "sh", "-c", command, "sh", json.dumps(message))
     return [int(line) for line in output.split()]
 
 

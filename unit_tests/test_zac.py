@@ -131,6 +131,19 @@ def test_productaanvraag_zaak_finds_the_zaak_by_kenmerk_and_cleanup_deletes_it(f
     assert sent[-1].method == "DELETE"
 
 
+def test_notificatie_names_the_resource_as_main_object_with_the_kenmerken():
+    deleted = zac.notificatie("zaken", "zaak", "https://oz.test/zaken/z1", "destroy", zaaktype="zt")
+    assert {key: value for key, value in deleted.items() if key != "aanmaakdatum"} == {
+        "kanaal": "zaken",
+        "hoofdObject": "https://oz.test/zaken/z1",
+        "resource": "zaak",
+        "resourceUrl": "https://oz.test/zaken/z1",
+        "actie": "destroy",
+        "kenmerken": {"zaaktype": "zt"},
+    }
+    assert str(deleted["aanmaakdatum"]).endswith("Z")
+
+
 def test_reindex_zaken_calls_zacs_internal_endpoint_in_the_pod(env_factory, fake_runner):
     fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "zac"}}]}))
     fake_runner.answers["exec deploy/zac"] = (0, "")

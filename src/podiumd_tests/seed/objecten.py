@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC
-from datetime import datetime
 from typing import TYPE_CHECKING
 from typing import cast
 
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.seed.openzaak import today
+from podiumd_tests.zac import notificatie
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -76,17 +75,7 @@ def make_productaanvraag(
 
 def created_notificatie(created: JsonObject) -> JsonObject:
     """Return the notificatie Objecten sends for the new object."""
-    url = str(created["url"])
-    return {
-        "kanaal": "objecten",
-        "hoofdObject": url,
-        "resource": "object",
-        "resourceUrl": url,
-        "actie": "create",
-        # ZAC reads microseconds and a zone.
-        "aanmaakdatum": datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
-        "kenmerken": {"objectType": created["type"]},
-    }
+    return notificatie("objecten", "object", str(created["url"]), "create", objectType=created["type"])
 
 
 def clean_up_logboek(objecten: ApiClient, registry: ResourceRegistry, logboek_type: str, internetaak: str) -> None:
