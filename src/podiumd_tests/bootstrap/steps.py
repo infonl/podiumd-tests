@@ -677,6 +677,20 @@ STEPS: tuple[Step, ...] = (
             "besluittype": names.TEST_BESLUITTYPE,
         },
     ),
+    SnippetStep(
+        "openzaak-zaaktype-archief",
+        ("openzaak",),
+        "openzaak_zaaktype",
+        None,
+        {
+            "domein": names.TEST_CATALOGUS_DOMEIN,
+            "rsin": names.TEST_CATALOGUS_RSIN,
+            "identificatie": names.ARCHIEF_ZAAKTYPE,
+            "iot_omschrijving": names.ARCHIEF_IOT,
+            "besluittype": names.ARCHIEF_BESLUITTYPE,
+            "archief": True,
+        },
+    ),
     # A short-identificatie published zaaktype for ZaakBrug's ZDS (StUF code is at most 10 chars); only where
     # ZaakBrug runs. Same snippet, so unbootstrap deletes it and its zaken as for the klacht zaaktype.
     SnippetStep(

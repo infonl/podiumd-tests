@@ -55,6 +55,10 @@ ZAAKBRUG_BESLUITTYPE = "ptest-bootstrap-zb-besluit"
 ZAAKBRUG_VERSIES_ZAAKTYPE = "ZBVERSIE"
 ZAAKBRUG_VERSIES_IOT = "ptest-bootstrap-zbv-bijlage"
 ZAAKBRUG_VERSIES_BESLUITTYPE = "ptest-bootstrap-zbv-besluit"
+# A zaaktype with a resultaattype per brondatum afleidingswijze, for the archiefactiedatum tests.
+ARCHIEF_ZAAKTYPE = "ptest-bootstrap-archief"
+ARCHIEF_IOT = "ptest-bootstrap-archief-bijlage"
+ARCHIEF_BESLUITTYPE = "ptest-bootstrap-archief-besluit"
 TEST_FORM = "ptest-bootstrap-klacht"
 # The Ogone merchant of the payment tests in Open Formulieren; the tests play Ogone with its passphrase.
 OGONE_MERCHANT = "ptest-bootstrap-ogone"

@@ -6,6 +6,8 @@ a resultaat and the eindstatus is new (TA's seed had no resultaattype).
 
 from __future__ import annotations
 
+from datetime import date
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -63,7 +65,7 @@ def test_statussen_in_order(openzaak: ApiClient, registry: ResourceRegistry, par
     When it gets a resultaat and the eindstatus
     Then the zaak has an einddatum
     And its archiefnominatie is vernietigen
-    And it has an archiefactiedatum
+    And its archiefactiedatum is 3650 days after the einddatum
 """)
 def test_zaak_closes_with_resultaat_and_eindstatus(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
@@ -74,7 +76,9 @@ def test_zaak_closes_with_resultaat_and_eindstatus(
     closed = close_zaak(openzaak, make_zaak(openzaak, registry, parts.zaaktype), parts)
     assert closed["einddatum"]
     assert closed["archiefnominatie"] == "vernietigen"
-    assert closed["archiefactiedatum"]
+    # The test zaaktype's resultaattype: afleidingswijze afgehandeld, archiefactietermijn 3650 days.
+    einddatum = date.fromisoformat(str(closed["einddatum"]))
+    assert closed["archiefactiedatum"] == (einddatum + timedelta(days=3650)).isoformat()
 
 
 @pytest.mark.source("podiumd-tests", "Deleting a zaak with a resultaat must answer 204; Open Zaak 1.29.3 answers 500.")
