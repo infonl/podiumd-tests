@@ -14,12 +14,19 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.bpmn import INTAKE
+from podiumd_tests.bootstrap.bpmn import SELECT
+from podiumd_tests.bootstrap.bpmn import SIGN
+from podiumd_tests.bootstrap.bpmn import SUMMARY
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
+from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import complete_task
+from podiumd_tests.zac import is_taak_listed
 from podiumd_tests.zac import open_task
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import wait_in_werkvoorraad
@@ -33,9 +40,7 @@ if TYPE_CHECKING:
 pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "pabc", "keycloak")]
 
 FEATURE = "ZAC features/9-bpmn.feature"
-# The process's tasks (src/podiumd_tests/bpmn/ptestBpmnProcess.bpmn) and the test zaaktype's last statustype.
-INTAKE, SELECT = "Intake", "Select documents to sign"
-SIGN, SUMMARY = "Sign the selected documents", "Summary"
+# The test zaaktype's last statustype.
 EINDSTATUS = "Afgehandeld"
 
 
@@ -114,6 +119,32 @@ def test_intake_assigns_the_zaak_and_its_next_task(
     assert (section(zaak, "groep").get("id"), section(zaak, "behandelaar").get("id")) == (zac_group, ADMIN.username)
     task = open_task(zac, urls["zac"], str(bpmn_zaak["uuid"]), SELECT)
     assert (section(task, "groep").get("id"), section(task, "behandelaar").get("id")) == (zac_group, ADMIN.username)
+
+
+@pytest.mark.source(
+    "podiumd-tests",
+    "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md,"
+    " zoeken-werklijsten-dashboard): a completed taak leaves the takenlijst.",
+)
+@pytest.mark.scenario("""
+    Given a BPMN zaak in ZAC whose intake taak is in the takenlijst
+    When the behandelaar submits the intake
+    Then the takenlijst no longer lists the intake taak
+""")
+def test_completed_taak_leaves_the_takenlijst(
+    zac: requests.Session, urls: dict[str, str], bpmn_zaak: JsonObject, zac_group: str
+) -> None:
+    """ZAC's search for taken drops the intake task once it is completed."""
+    task = open_task(zac, urls["zac"], str(bpmn_zaak["uuid"]), INTAKE)
+    wait_until(
+        lambda: is_taak_listed(zac, urls["zac"], task), timeout=INDEX_TIMEOUT, description=f"task {task['id']} listed"
+    )
+    intake(zac, urls["zac"], bpmn_zaak, zac_group)
+    wait_until(
+        lambda: not is_taak_listed(zac, urls["zac"], task),
+        timeout=INDEX_TIMEOUT,
+        description=f"task {task['id']} gone from the takenlijst",
+    )
 
 
 @pytest.mark.source(FEATURE, "Bob verifies the documents to sign and confirms signing.")

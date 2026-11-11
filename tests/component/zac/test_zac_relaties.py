@@ -26,6 +26,7 @@ from podiumd_tests.zac import koppel
 from podiumd_tests.zac import koppel_zoekresultaat
 from podiumd_tests.zac import ontkoppel
 from podiumd_tests.zac import read_zaak
+from podiumd_tests.zac import wait_for_indicatie
 from podiumd_tests.zac import wait_in_werkvoorraad
 
 if TYPE_CHECKING:
@@ -209,7 +210,7 @@ def _linked(
     When the behandelaar links the second as deelzaak of the first, from either zaak
     Then the first shows the second as deelzaak and the second the first as hoofdzaak
     And Open Zaak records the first as hoofdzaak of the second
-    And ZAC marks them hoofdzaak and deelzaak
+    And ZAC marks them hoofdzaak and deelzaak, also in the werkvoorraad
 """)
 def test_hoofd_and_deelzaak_show_on_both_zaken(
     zac: requests.Session,
@@ -226,6 +227,8 @@ def test_hoofd_and_deelzaak_show_on_both_zaken(
     assert openzaak.get(_zaak_url(urls["openzaak"], deel)).get("hoofdzaak") == _zaak_url(urls["openzaak"], hoofd)
     assert HOOFDZAAK in strings(read_zaak(zac, urls["zac"], str(hoofd["uuid"])).get("indicaties"))
     assert DEELZAAK in strings(read_zaak(zac, urls["zac"], str(deel["uuid"])).get("indicaties"))
+    wait_for_indicatie(zac, urls["zac"], hoofd, HOOFDZAAK)
+    wait_for_indicatie(zac, urls["zac"], deel, DEELZAAK)
 
 
 @EIGEN_ZAAKTYPE

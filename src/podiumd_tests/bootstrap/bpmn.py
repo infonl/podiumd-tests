@@ -46,6 +46,9 @@ if TYPE_CHECKING:
     from podiumd_tests.json_data import JsonObject
 
 PROCESS_KEY = "ptestBpmnProcess"
+# The process's tasks (bpmn/ptestBpmnProcess.bpmn).
+INTAKE, SELECT = "Intake", "Select documents to sign"
+SIGN, SUMMARY = "Sign the selected documents", "Summary"
 ZAC_APPLICATION = "zaakafhandelcomponent"
 FILES = Path(__file__).parent.parent / "bpmn"
 DEFINITIONS = "/rest/bpmn-process-definitions"

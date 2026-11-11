@@ -29,9 +29,9 @@ from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import complete_task
 from podiumd_tests.zac import human_tasks_offered
+from podiumd_tests.zac import is_taak_listed
 from podiumd_tests.zac import open_task
 from podiumd_tests.zac import read_zaak
-from podiumd_tests.zac import search
 from podiumd_tests.zac import start_human_task
 from podiumd_tests.zac import user_events_offered
 from podiumd_tests.zac_documents import document_url
@@ -88,12 +88,6 @@ def _started(
     return open_task(zac, zac_url, str(zaak["uuid"]), name)
 
 
-def _is_in_mijn_taken(zac: requests.Session, zac_url: str, taak: JsonObject) -> bool:
-    """ZAC's Mijn taken lists the task."""
-    found = search(zac, zac_url, type="TAAK", zoeken={"TAAK_ZAAK_ID": taak["zaakIdentificatie"]}, alleenMijnTaken=True)
-    return any(r.get("id") == taak["id"] for r in entries(found["resultaten"]))
-
-
 @pytest.fixture(name="start_taak")
 def fixture_start_taak(
     zac: requests.Session,
@@ -135,7 +129,7 @@ def test_started_task_is_in_mijn_taken(
     """The started task has the chosen group and behandelaar, and ZAC's Mijn taken lists it."""
     assert assignment(taak) == (zac_group, ADMIN.username)
     wait_until(
-        lambda: _is_in_mijn_taken(zac, urls["zac"], taak),
+        lambda: is_taak_listed(zac, urls["zac"], taak, alleenMijnTaken=True),
         timeout=TIMEOUT,
         description=f"task {taak['id']} in Mijn taken",
     )
@@ -278,12 +272,18 @@ def test_open_advies_intern_holds_off_afhandelen(
     )
     assert (taak.get("toelichting"), section(taak, "taakdata").get("vraag")) == (TOELICHTING, VRAAG)
     assert "ZAAK_AFHANDELEN" not in _acties(zac, zac_url, behandeling)
-    wait_until(lambda: _is_in_mijn_taken(zac, zac_url, taak), timeout=TIMEOUT, description=f"task {taak['id']} listed")
+    wait_until(
+        lambda: is_taak_listed(zac, zac_url, taak, alleenMijnTaken=True),
+        timeout=TIMEOUT,
+        description=f"task {taak['id']} listed",
+    )
 
     afgerond = complete_task(zac, zac_url, taak, {"advies": ADVIES})
     assert (afgerond.get("status"), section(afgerond, "taakdata").get("advies")) == ("AFGEROND", ADVIES)
     wait_until(
-        lambda: not _is_in_mijn_taken(zac, zac_url, taak), timeout=TIMEOUT, description=f"task {taak['id']} gone"
+        lambda: not is_taak_listed(zac, zac_url, taak, alleenMijnTaken=True),
+        timeout=TIMEOUT,
+        description=f"task {taak['id']} gone",
     )
     assert "ZAAK_AFHANDELEN" in _acties(zac, zac_url, behandeling)
 

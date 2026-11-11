@@ -23,6 +23,7 @@ from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import afhandelen
 from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import besluittypen
+from podiumd_tests.zac import heropenen
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import vastleggen_besluit
 from podiumd_tests.zac_documents import uploaded_document
@@ -234,8 +235,7 @@ def test_zaak_with_a_besluit_is_afgehandeld_and_heropend(
     eerste = besluit(zaak)
     _afhandelen(zac, urls["zac"], zaak)
     assert read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpen"] is False
-    heropenen = zac.patch(f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}/heropenen", json={"reden": "podiumd-tests"})
-    expect_status(heropenen, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    expect_status(heropenen(zac, urls["zac"], zaak), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     assert section(read_zaak(zac, urls["zac"], str(zaak["uuid"])), "status").get("naam") == "Heropend"
 
     tweede = besluit(zaak)

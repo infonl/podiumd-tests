@@ -27,6 +27,7 @@ from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import POLICIES
 from podiumd_tests.zac import afsluiten
 from podiumd_tests.zac import assignment
+from podiumd_tests.zac import heropenen
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import rights_of
 from podiumd_tests.zac import verdelen
@@ -157,8 +158,7 @@ def test_closed_zaak_is_changed_only_by_a_recordmanager(
     later = (date.fromisoformat(str(zaak["uiterlijkeEinddatumAfdoening"])) + timedelta(days=1)).isoformat()
     refused = wijzig_zaak(recordmanager, zac_url, zaak, uiterlijkeEinddatumAfdoening=later)
     assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
-    heropenen = f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/heropenen"
-    refused = zac_as("behandelaar").patch(heropenen, json={"reden": "podiumd-tests"})
+    refused = heropenen(zac_as("behandelaar"), zac_url, zaak)
     assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
 
 

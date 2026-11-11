@@ -30,8 +30,10 @@ from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import is_zaak_listed
+from podiumd_tests.zac import opschorten
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_with_person
+from podiumd_tests.zac import verlengen
 from podiumd_tests.zac import wait_in_werkvoorraad
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
@@ -207,9 +209,8 @@ def test_suspended_zaak_resumes_and_cannot_be_suspended_again(
 ) -> None:
     """Opschorten moves both dates and sets Open Zaak's opschorting; hervatten moves them back by the unused days."""
     zaak = zac_zaak()
-    base = f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}"
     before = _dates(openzaak_productaanvraag, urls, zaak)
-    suspended = zac.patch(f"{base}/suspend", json={"reason": "podiumd-tests op", "numberOfDays": SUSPENSION_DAYS})
+    suspended = opschorten(zac, urls["zac"], zaak, SUSPENSION_DAYS, "podiumd-tests op")
     assert expect_status(suspended, HTTPStatus.OK).json()["isOpgeschort"]
     in_open_zaak = openzaak_productaanvraag.get(_zaak_url(urls, zaak))
     assert _dates(openzaak_productaanvraag, urls, zaak) == tuple(
@@ -218,12 +219,13 @@ def test_suspended_zaak_resumes_and_cannot_be_suspended_again(
     opschorting = section(in_open_zaak, "opschorting")
     assert (opschorting.get("indicatie"), opschorting.get("reden")) == (True, "podiumd-tests op")
 
-    expect_status(zac.patch(f"{base}/resume", json={"reason": "podiumd-tests her"}), HTTPStatus.OK)
+    resume = f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}/resume"
+    expect_status(zac.patch(resume, json={"reason": "podiumd-tests her"}), HTTPStatus.OK)
     assert not read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpgeschort"]
     assert _dates(openzaak_productaanvraag, urls, zaak) == before
     resumed = section(openzaak_productaanvraag.get(_zaak_url(urls, zaak)), "opschorting")
     assert (resumed.get("indicatie"), resumed.get("eerdereOpschorting")) == (False, True)
-    again = zac.patch(f"{base}/suspend", json={"reason": "nogmaals", "numberOfDays": SUSPENSION_DAYS})
+    again = opschorten(zac, urls["zac"], zaak, SUSPENSION_DAYS, "nogmaals")
     expect_status(again, HTTPStatus.FORBIDDEN, HTTPStatus.BAD_REQUEST)
 
 
@@ -249,19 +251,11 @@ def test_extension_moves_the_planned_and_final_dates(
         pytest.skip(f"zaaktype {zaaktype['identificatie']} allows no verlenging")
     zaak = zac_zaak()
     planned, final = (day + timedelta(days=10) for day in _dates(openzaak_productaanvraag, urls, zaak))
-    body = {
-        "redenVerlenging": "podiumd-tests",
-        "duurDagen": 10,
-        "takenVerlengen": False,
-        "einddatumGepland": planned.isoformat(),
-        "uiterlijkeEinddatumAfdoening": final.isoformat(),
-    }
-    extend = f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}/verlenging"
-    expect_status(zac.patch(extend, json=body), HTTPStatus.OK)
+    expect_status(verlengen(zac, urls["zac"], zaak, 10), HTTPStatus.OK)
     assert _dates(openzaak_productaanvraag, urls, zaak) == (planned, final)
     verlenging = section(openzaak_productaanvraag.get(_zaak_url(urls, zaak)), "verlenging")
     assert (verlenging.get("reden"), verlenging.get("duur")) == ("podiumd-tests", "P10D")
-    expect_status(zac.patch(extend, json={**body, "duurDagen": 5}), HTTPStatus.FORBIDDEN, HTTPStatus.BAD_REQUEST)
+    expect_status(verlengen(zac, urls["zac"], zaak, 5), HTTPStatus.FORBIDDEN, HTTPStatus.BAD_REQUEST)
 
 
 @pytest.mark.source(

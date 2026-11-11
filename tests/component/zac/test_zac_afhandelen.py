@@ -19,6 +19,7 @@ from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import afhandelen
 from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import afsluiten
+from podiumd_tests.zac import heropenen
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import user_event
 
@@ -128,13 +129,11 @@ def test_heropend_zaak_loses_its_resultaat_and_can_be_closed_again(
 ) -> None:
     """heropenen: status Heropend, resultaat and archiefActiedatum cleared; afbreken refused; afsluiten closes again."""
     zaak = zac_zaak()
-    uuid = str(zaak["uuid"])
     afronden_intake(zac, urls["zac"], zaak)
     closed = _afhandelen(zac, urls["zac"], zaak)
     if not section(closed, "rechten").get("heropenen"):
         pytest.skip("the test admin may not reopen zaken of this zaaktype in the estate's PABC dataset")
-    response = zac.patch(f"{urls['zac']}/rest/zaken/zaak/{uuid}/heropenen", json={"reden": "podiumd-tests"})
-    reopened = expect_status(response, HTTPStatus.OK).json()
+    reopened = expect_status(heropenen(zac, urls["zac"], zaak), HTTPStatus.OK).json()
     assert (section(reopened, "status").get("naam"), reopened["isOpen"]) == ("Heropend", True)
     assert (reopened.get("resultaat"), reopened.get("archiefActiedatum")) == (None, None)
     expect_status(afbreken(zac, urls["zac"], zaak), *REFUSED)

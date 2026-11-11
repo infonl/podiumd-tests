@@ -479,3 +479,67 @@ def test_deliver_notificatie_posts_it_in_the_zac_pod_this_many_times(env_factory
     assert "for i in 0 1;" in argv[-3]
     assert "$OPEN_NOTIFICATIONS_API_SECRET_KEY" in argv[-3]
     assert json.loads(argv[-1]) == {"actie": "create"}
+
+
+def test_taak_listed_searches_by_zaak_identificatie_and_matches_the_id(fake_http):
+    sent = fake_http({"PUT /rest/zoeken/list": (200, {"resultaten": [{"id": "t1"}]})})
+    taak = {"id": "t1", "zaakIdentificatie": "ZAAK-1"}
+    assert zac.is_taak_listed(requests.Session(), ZAC, taak, alleenMijnTaken=True)
+    assert not zac.is_taak_listed(requests.Session(), ZAC, {**taak, "id": "t2"})
+    body = json.loads(sent[0].body)
+    assert (body["type"], body["zoeken"], body["alleenMijnTaken"]) == ("TAAK", {"TAAK_ZAAK_ID": "ZAAK-1"}, True)
+
+
+def test_wait_for_indicatie_needs_the_indicatie_on_the_open_zaak(fake_http):
+    found = {"resultaten": [{"id": "z1", "indicaties": ["OPSCHORTING"]}]}
+    sent = fake_http({"PUT /rest/zoeken/list": (200, found)})
+    zaak = {"uuid": "z1", "identificatie": "ZAAK-1"}
+    zac.wait_for_indicatie(requests.Session(), ZAC, zaak, "OPSCHORTING")
+    assert json.loads(sent[0].body)["alleenOpenstaandeZaken"] is True
+    assert zac.zaak_zoekresultaat(requests.Session(), ZAC, {**zaak, "uuid": "z2"}) is None
+
+
+def test_toekennen_and_toekennen_taak_send_group_and_behandelaar(fake_http):
+    sent = fake_http({"PATCH /rest/zaken/toekennen": (200, {}), "PATCH /rest/taken/toekennen": (204, None)})
+    http = requests.Session()
+    zac.toekennen(http, ZAC, {"uuid": "z1"}, "g1", "u1")
+    assert json.loads(sent[-1].body) == {
+        "zaakUUID": "z1",
+        "groepId": "g1",
+        "behandelaarGebruikersnaam": "u1",
+        "reden": "podiumd-tests",
+    }
+    zac.toekennen_taak(http, ZAC, {"id": "t1", "zaakUuid": "z1"}, "g1", "u1")
+    assert json.loads(sent[-1].body) == {
+        "taakId": "t1",
+        "zaakUuid": "z1",
+        "groepId": "g1",
+        "behandelaarId": "u1",
+        "reden": "podiumd-tests",
+    }
+
+
+def test_opschorten_verlengen_and_heropenen_send_days_dates_and_reden(fake_http):
+    sent = fake_http(
+        {
+            "PATCH /rest/zaken/zaak/z1/suspend": (200, {}),
+            "PATCH /rest/zaken/zaak/z1/verlenging": (200, {}),
+            "PATCH /rest/zaken/zaak/z1/heropenen": (200, {}),
+        }
+    )
+    http = requests.Session()
+    zaak = {"uuid": "z1", "einddatumGepland": "2026-01-10", "uiterlijkeEinddatumAfdoening": "2026-01-31"}
+    zac.opschorten(http, ZAC, zaak, 3, "op")
+    assert json.loads(sent[-1].body) == {"reason": "op", "numberOfDays": 3}
+    zac.verlengen(http, ZAC, zaak, 2)
+    assert json.loads(sent[-1].body) == {
+        "redenVerlenging": "podiumd-tests",
+        "duurDagen": 2,
+        "takenVerlengen": False,
+        "einddatumGepland": "2026-01-12",
+        "uiterlijkeEinddatumAfdoening": "2026-02-02",
+    }
+    zac.verlengen(http, ZAC, {"uuid": "z1", "uiterlijkeEinddatumAfdoening": "2026-01-31"}, 2)
+    assert "einddatumGepland" not in json.loads(sent[-1].body)
+    zac.heropenen(http, ZAC, zaak)
+    assert json.loads(sent[-1].body) == {"reden": "podiumd-tests"}

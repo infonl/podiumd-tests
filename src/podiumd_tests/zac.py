@@ -14,6 +14,7 @@ from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.bootstrap.names import ZAC_BASE_ROLES
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.json_data import strings
 from podiumd_tests.oidc import LOGIN_PATHS
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
@@ -499,13 +500,28 @@ def search(http: requests.Session, zac_url: str, **query: object) -> JsonObject:
     return cast("JsonObject", expect_status(http.put(f"{zac_url}/rest/zoeken/list", json=body), HTTPStatus.OK).json())
 
 
-def is_zaak_listed(http: requests.Session, zac_url: str, zaak: JsonObject, **flags: bool) -> bool:
-    """ZAC's search for zaken lists the zaak; flags are its alleen* filters (alleenOpenstaandeZaken: werkvoorraad).
+def zaak_zoekresultaat(http: requests.Session, zac_url: str, zaak: JsonObject, **flags: bool) -> JsonObject | None:
+    """Return the zaak as ZAC's search for zaken lists it, or None; flags are its alleen* filters.
 
     Matched by uuid: ZAC's index can hold deleted zaken whose identificatie Open Zaak gave out again (open-zaak-1).
     """
     found = search(http, zac_url, type="ZAAK", zoeken={"ZAAK_IDENTIFICATIE": zaak["identificatie"]}, **flags)
-    return any(resultaat.get("id") == zaak["uuid"] for resultaat in entries(found["resultaten"]))
+    matches = (item for item in entries(found["resultaten"]) if item.get("id") == zaak["uuid"])
+    return next(matches, None)
+
+
+def is_zaak_listed(http: requests.Session, zac_url: str, zaak: JsonObject, **flags: bool) -> bool:
+    """ZAC's search for zaken lists the zaak; flags are its alleen* filters (alleenOpenstaandeZaken: werkvoorraad)."""
+    return zaak_zoekresultaat(http, zac_url, zaak, **flags) is not None
+
+
+def is_taak_listed(http: requests.Session, zac_url: str, taak: JsonObject, **flags: bool) -> bool:
+    """ZAC's search for taken lists the taak; flags are its alleen* filters (alleenMijnTaken: Mijn taken).
+
+    Matched by id: ZAC's index can hold taken of deleted zaken whose identificatie Open Zaak gave out again.
+    """
+    found = search(http, zac_url, type="TAAK", zoeken={"TAAK_ZAAK_ID": taak["zaakIdentificatie"]}, **flags)
+    return any(item.get("id") == taak["id"] for item in entries(found["resultaten"]))
 
 
 def open_task(http: requests.Session, zac_url: str, zaak_uuid: str, name: str) -> JsonObject:
@@ -576,7 +592,67 @@ def wait_in_werkvoorraad(http: requests.Session, zac_url: str, zaak: JsonObject)
     )
 
 
+def wait_for_indicatie(http: requests.Session, zac_url: str, zaak: JsonObject, indicatie: str) -> None:
+    """Wait until ZAC's werkvoorraad lists the zaak with the indicatie (OPSCHORTING, HEROPEND, DEELZAAK, ...)."""
+
+    def is_shown() -> bool:
+        found = zaak_zoekresultaat(http, zac_url, zaak, alleenOpenstaandeZaken=True)
+        return found is not None and indicatie in strings(found.get("indicaties"))
+
+    description = f"zaak {zaak['identificatie']} {indicatie} in the werkvoorraad"
+    wait_until(is_shown, timeout=INDEX_TIMEOUT, description=description)
+
+
 def count_zaken_found(zac: requests.Session, zac_url: str, zaaktype_omschrijving: str) -> int:
     """How many zaken of the zaaktype ZAC's search shows the session's user."""
     found = search(zac, zac_url, rows=1, type="ZAAK", filters={"ZAAKTYPE": {"values": [zaaktype_omschrijving]}})
     return int(str(found["totaal"]))
+
+
+def toekennen(
+    http: requests.Session, zac_url: str, zaak: JsonObject, groep: str, behandelaar: str | None
+) -> requests.Response:
+    """Assign the zaak to the group and behandelaar, as from the zaak; ZAC's answer."""
+    body = {
+        "zaakUUID": zaak["uuid"],
+        "groepId": groep,
+        "behandelaarGebruikersnaam": behandelaar,
+        "reden": "podiumd-tests",
+    }
+    return http.patch(f"{zac_url}/rest/zaken/toekennen", json=body)
+
+
+def toekennen_taak(http: requests.Session, zac_url: str, taak: JsonObject, groep: str, behandelaar: str) -> None:
+    """Assign the open taak to the group and behandelaar, as from the taak."""
+    body = {
+        "taakId": taak["id"],
+        "zaakUuid": taak["zaakUuid"],
+        "groepId": groep,
+        "behandelaarId": behandelaar,
+        "reden": "podiumd-tests",
+    }
+    expect_status(http.patch(f"{zac_url}/rest/taken/toekennen", json=body), HTTPStatus.NO_CONTENT, HTTPStatus.OK)
+
+
+def opschorten(
+    http: requests.Session, zac_url: str, zaak: JsonObject, days: int, reden: str = "podiumd-tests"
+) -> requests.Response:
+    """Suspend the zaak for the days with the reden; ZAC's answer."""
+    body = {"reason": reden, "numberOfDays": days}
+    return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/suspend", json=body)
+
+
+def verlengen(http: requests.Session, zac_url: str, zaak: JsonObject, days: int) -> requests.Response:
+    """Extend the zaak by the days, with its streefdatum and fatale datum as ZAC shows the zaak; ZAC's answer."""
+    moved = {
+        field: (date.fromisoformat(str(zaak[field])) + timedelta(days=days)).isoformat()
+        for field in ("einddatumGepland", "uiterlijkeEinddatumAfdoening")
+        if zaak.get(field)
+    }
+    body = {"redenVerlenging": "podiumd-tests", "duurDagen": days, "takenVerlengen": False, **moved}
+    return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/verlenging", json=body)
+
+
+def heropenen(http: requests.Session, zac_url: str, zaak: JsonObject) -> requests.Response:
+    """Reopen the closed zaak with a reden; ZAC's answer."""
+    return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/heropenen", json={"reden": "podiumd-tests"})
