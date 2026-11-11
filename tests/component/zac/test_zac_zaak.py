@@ -33,6 +33,7 @@ from podiumd_tests.zac import is_zaak_listed
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_with_person
 from podiumd_tests.zac import wait_in_werkvoorraad
+from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
 from podiumd_tests.zac_documents import zaak_documents
 
@@ -383,7 +384,7 @@ def test_document_can_be_deleted(
     document = uploaded_document(zac, urls["zac"], zaak, registry)
     assert document["uuid"] in [d.get("uuid") for d in zaak_documents(zac, urls["zac"], zaak)]
     deleted = zac.delete(
-        f"{urls['zac']}/rest/informatieobjecten/informatieobject/{document['uuid']}",
+        document_url(urls["zac"], document),
         json={"zaakUuid": zaak["uuid"], "reden": "test"},
     )
     expect_status(deleted, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
@@ -414,7 +415,7 @@ def test_word_saves_an_edited_document_as_a_new_version(
     """
     zaak = zac_zaak()
     document = uploaded_document(zac, urls["zac"], zaak, registry, suffix="docx", status="in_bewerking")
-    documents = f"{urls['zac']}/rest/informatieobjecten/informatieobject/{document['uuid']}"
+    documents = document_url(urls["zac"], document)
     of_zaak = {"zaak": str(zaak["uuid"])}
     link = str(expect_status(zac.get(f"{documents}/edit", params=of_zaak), HTTPStatus.OK).json())
     scheme, _, url = link.partition(":")
@@ -475,7 +476,7 @@ def test_word_document_is_converted_to_pdf(
     """A definitief Word document converted in ZAC becomes a PDF: its current version has the PDF format and content."""
     zaak = zac_zaak()
     document = uploaded_document(zac, urls["zac"], zaak, registry, suffix=suffix)
-    documents = f"{urls['zac']}/rest/informatieobjecten/informatieobject/{document['uuid']}"
+    documents = document_url(urls["zac"], document)
     converted = zac.post(f"{documents}/convert", params={"zaak": str(zaak["uuid"])}, timeout=60)
     expect_status(converted, HTTPStatus.NO_CONTENT, HTTPStatus.OK)
     current = expect_status(zac.get(documents, params={"zaak": str(zaak["uuid"])}), HTTPStatus.OK).json()

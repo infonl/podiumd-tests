@@ -133,6 +133,11 @@ def read_zaak(http: requests.Session, zac_url: str, uuid: str) -> JsonObject:
     return cast("JsonObject", expect_status(http.get(f"{zac_url}/rest/zaken/zaak/{uuid}"), HTTPStatus.OK).json())
 
 
+def zaak_historie(http: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:
+    """Return ZAC's historie of the zaak, newest first."""
+    return get_entries(http, f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/historie")
+
+
 def user_event(http: requests.Session, zac_url: str, zaak_uuid: str, actie: str, **fields: object) -> requests.Response:
     """Run a CMMN user event of the zaak: INTAKE_AFRONDEN or ZAAK_AFHANDELEN, at its open plan item; ZAC's answer."""
     listeners = http.get(f"{zac_url}/rest/planitems/zaak/{zaak_uuid}/userEventListenerPlanItems")

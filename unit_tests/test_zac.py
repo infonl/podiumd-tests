@@ -214,6 +214,11 @@ def test_koppel_and_ontkoppel_send_zacs_link_data(fake_http):
     }
 
 
+def test_zaak_historie_lists_zacs_answer(fake_http):
+    fake_http({"GET /rest/zaken/zaak/z1/historie": (200, [{"actie": "AANGEMAAKT"}])})
+    assert zac.zaak_historie(requests.Session(), ZAC, {"uuid": "z1"}) == [{"actie": "AANGEMAAKT"}]
+
+
 def test_koppel_zoekresultaat_matches_the_uuid_not_the_identificatie(fake_http):
     deleted = {"id": "old", "identificatie": "ZAAK-2", "nietKoppelbaarReden": "AFGEHANDELD"}
     current = {"id": "z2", "identificatie": "ZAAK-2", "nietKoppelbaarReden": None}
