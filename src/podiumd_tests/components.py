@@ -62,6 +62,8 @@ COMPONENTS: dict[str, Component] = {
     "frankgateway": Component(
         ("frankgateway",), ("frankgateway-outway", "frankgateway", "frank-gateway"), monitored=True
     ),
+    # Frank!Gateway's inway, behind the edge's client-certificate check.
+    "inway": Component(("inway",), ("frankgateway-inway",)),
     # The chart names its StatefulSet and ServiceMonitor <helm release>-openbao.
     "openbao": Component(("openbao",), ("openbao", "podiumd-openbao"), monitored=True),
     # podiumd's nginx in front of BRP, KvK and BAG (Frank!Gateway replaces it in newer charts).

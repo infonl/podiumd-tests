@@ -37,7 +37,15 @@ urls:
   # Off the public edge until known issue zgw-office-addin-1 is fixed.
   zgw-office-addin: http://zgw-office-addin-frontend.podiumd.svc.cluster.local
   openbao: https://openbao.kees00.pd.test-rig.nl
+  inway: https://inway.kees00.pd.test-rig.nl
 secrets:
+  # The inway's test identities: podiumd-infra's waf-mtls-check --setup makes and registers them.
+  inway_partner_a:
+    keyvault: {vault: podiumd-kees00-kv, name: waf-mtls-test-partner-a-kees00}
+  inway_partner_b:
+    keyvault: {vault: podiumd-kees00-kv, name: waf-mtls-test-partner-b-kees00}
+  inway_partner_c:
+    keyvault: {vault: podiumd-kees00-kv, name: waf-mtls-test-partner-c-kees00}
   keycloak_admin_username:
     k8s_secret: {name: keycloak-podiumd-admin, key: username}
   keycloak_admin_password:
