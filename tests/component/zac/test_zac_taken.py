@@ -31,6 +31,7 @@ from podiumd_tests.zac import complete_task
 from podiumd_tests.zac import human_tasks_offered
 from podiumd_tests.zac import is_taak_listed
 from podiumd_tests.zac import open_task
+from podiumd_tests.zac import read_taak
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import start_human_task
 from podiumd_tests.zac import user_events_offered
@@ -176,7 +177,7 @@ def test_taken_from_the_list_are_released_and_assigned(
     selected = [{"taakId": taak["id"], "zaakUuid": taak["zaakUuid"]}]
 
     def is_(wanted: tuple[object, object]) -> bool:
-        return assignment(expect_status(zac.get(f"{taken}/{taak['id']}"), HTTPStatus.OK).json()) == wanted
+        return assignment(read_taak(zac, urls["zac"], str(taak["id"]))) == wanted
 
     expect_status(zac.put(f"{taken}/lijst/vrijgeven", json={"taken": selected, "reden": "test"}), 200, 204)
     wait_until(lambda: is_((zac_group, None)), timeout=LIST_TIMEOUT, description=f"task {taak['id']} vrijgegeven")

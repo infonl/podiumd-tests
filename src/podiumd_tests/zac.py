@@ -156,6 +156,16 @@ def behandelaar_groups(http: requests.Session, zac_url: str, omschrijving: str) 
     return {str(group["id"]) for group in get_entries(http, url)}
 
 
+def active_groups(http: requests.Session, zac_url: str) -> set[str]:
+    """Return the ids of the groups ZAC offers: Keycloak's groups without attribute active false."""
+    return {str(group["id"]) for group in get_entries(http, f"{zac_url}/rest/identity/groups")}
+
+
+def group_members(http: requests.Session, zac_url: str, groep: str) -> set[str]:
+    """Return the usernames ZAC offers as behandelaar in the group: its Keycloak members."""
+    return {str(user["id"]) for user in get_entries(http, f"{zac_url}/rest/identity/groups/{groep}/users")}
+
+
 # Fields of ZAC's inrichtingscheck that its verdict valide does not require.
 NOT_REQUIRED_FOR_VALIDE = {
     "valide",
@@ -533,6 +543,11 @@ def open_task(http: requests.Session, zac_url: str, zaak_uuid: str, name: str) -
         return next((task for task in open_tasks if task.get("naam") == name), None)
 
     return wait_until(found, timeout=TASK_TIMEOUT, description=f"open task {name!r} on zaak {zaak_uuid}")
+
+
+def read_taak(http: requests.Session, zac_url: str, taak_id: str) -> JsonObject:
+    """ZAC's view of a taak."""
+    return cast("JsonObject", expect_status(http.get(f"{zac_url}/rest/taken/{taak_id}"), HTTPStatus.OK).json())
 
 
 def complete_task(http: requests.Session, zac_url: str, task: JsonObject, data: JsonObject) -> JsonObject:

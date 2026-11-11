@@ -543,3 +543,17 @@ def test_opschorten_verlengen_and_heropenen_send_days_dates_and_reden(fake_http)
     assert "einddatumGepland" not in json.loads(sent[-1].body)
     zac.heropenen(http, ZAC, zaak)
     assert json.loads(sent[-1].body) == {"reden": "podiumd-tests"}
+
+
+def test_groups_members_and_taak_are_read_from_zac(fake_http):
+    fake_http(
+        {
+            "GET /rest/identity/groups": (200, [{"id": "g1", "naam": "G", "active": True}]),
+            "GET /rest/identity/groups/g1/users": (200, [{"id": "u1", "naam": "U"}]),
+            "GET /rest/taken/t1": (200, {"id": "t1"}),
+        }
+    )
+    http = requests.Session()
+    assert zac.active_groups(http, ZAC) == {"g1"}
+    assert zac.group_members(http, ZAC, "g1") == {"u1"}
+    assert zac.read_taak(http, ZAC, "t1") == {"id": "t1"}

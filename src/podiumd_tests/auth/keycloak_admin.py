@@ -225,6 +225,15 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
         """Add a user to a group."""
         self._send("PUT", f"/users/{user_id}/groups/{group_id}", None)
 
+    def leave_group(self, user_id: str, group_id: str) -> None:
+        """Remove a user from a group."""
+        self._send("DELETE", f"/users/{user_id}/groups/{group_id}", None)
+
+    def update_group(self, group_id: str, **fields: object) -> None:
+        """Replace these fields of a group's representation, e.g. description or attributes."""
+        group = cast("JsonObject", self._get(f"/groups/{group_id}"))
+        self._send("PUT", f"/groups/{group_id}", {**group, **fields})
+
     def create_group(self, name: str, realm_roles: tuple[str, ...]) -> str:
         """Create a top-level group with these realm roles; its id."""
         self._send("POST", "/groups", {"name": name}, HTTPStatus.CREATED)
@@ -238,6 +247,12 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
     def delete_group(self, group_id: str) -> None:
         """Delete a group; its members stay."""
         self._send("DELETE", f"/groups/{group_id}", None)
+
+    def delete_group_named(self, name: str) -> None:
+        """Delete the top-level group with this name, if it exists."""
+        group_id = self.group_id(name)
+        if group_id:
+            self.delete_group(group_id)
 
     def update_client(self, client: JsonObject) -> None:
         """Replace a client's representation (from client())."""

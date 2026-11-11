@@ -7,6 +7,7 @@ from datetime import timedelta
 from types import SimpleNamespace
 from typing import cast
 
+import pytest
 import requests
 
 from podiumd_tests.clients.api import ApiClient
@@ -108,20 +109,39 @@ def test_forget_leaves_pabc_alone_without_the_entity_type(monkeypatch):
     assert deleted == []
 
 
-def test_role_group_carries_the_functional_role_and_cleanup_deletes_it(monkeypatch):
+def test_role_group_carries_the_functional_role_and_cleanup_deletes_it_by_name(monkeypatch):
     calls = []
     admin = SimpleNamespace(
         create_group=lambda name, roles: calls.append(("create", name, roles)) or "g1",
-        delete_group=lambda group: calls.append(("delete", group)),
+        delete_group_named=lambda name: calls.append(("delete", name)),
     )
     monkeypatch.setattr(zac_zaaktype, "for_environment", lambda _env: admin)
     registry = ResourceRegistry(RUN)
-    assert zac_zaaktype.make_role_group(env(), registry, "raadpleger") == f"{RUN}-zac-raadpleger"
+    name = zac_zaaktype.make_role_group(env(), registry, "raadpleger")
+    assert name.startswith(f"{RUN}-zac-raadpleger-")
+    assert name != zac_zaaktype.make_role_group(env(), ResourceRegistry(RUN), "raadpleger")
     registry.cleanup()
-    assert calls == [
-        ("create", f"{RUN}-zac-raadpleger", ("ptest-bootstrap-zac-raadpleger",)),
-        ("delete", "g1"),
-    ]
+    assert calls[0] == ("create", name, ("ptest-bootstrap-zac-raadpleger",))
+    assert calls[-1] == ("delete", name)
+
+
+def test_group_member_is_a_run_tagged_user_in_the_group_that_cleanup_deletes(monkeypatch):
+    calls = []
+    admin = SimpleNamespace(
+        new_password=lambda: "pw",
+        create_user=lambda username, _password, _attributes: calls.append(("create", username)) or "u1",
+        group_id={"ptest-g": "g1"}.get,
+        join_group=lambda user, group: calls.append(("join", user, group)),
+        delete_user_named=lambda username: calls.append(("delete", username)),
+    )
+    monkeypatch.setattr(zac_zaaktype, "for_environment", lambda _env: admin)
+    registry = ResourceRegistry(RUN)
+    lid = zac_zaaktype.make_group_member(env(), registry, "ptest-g")
+    assert lid.startswith(f"{RUN}-zac-lid-")
+    registry.cleanup()
+    assert calls == [("create", lid), ("join", "u1", "g1"), ("delete", lid)]
+    with pytest.raises(LookupError, match="Keycloak group ptest-x not found"):
+        zac_zaaktype.make_group_member(env(), registry, "ptest-x")
 
 
 def test_make_zac_zaaktype_configures_the_granted_zaaktype_in_the_admins_group(monkeypatch):

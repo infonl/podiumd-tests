@@ -133,6 +133,30 @@ def test_create_group_maps_the_realm_roles_and_delete_group_removes_it(admin):
     assert json.loads(sent[4].body) == [{"name": "r1", "id": "1"}]
 
 
+def test_update_group_replaces_fields_of_its_representation_and_leave_group_removes_a_member(admin):
+    keycloak, sent = admin(
+        {
+            ("GET", "/groups/g1"): (200, {"id": "g1", "name": "ptest-g", "attributes": {}}),
+            ("PUT", "/groups/g1"): (204, None),
+            ("DELETE", "/users/u1/groups/g1"): (204, None),
+        }
+    )
+    keycloak.update_group("g1", description="Nieuw")
+    keycloak.leave_group("u1", "g1")
+    assert calls(sent) == ["GET /groups/g1", "PUT /groups/g1", "DELETE /users/u1/groups/g1"]
+    assert json.loads(sent[2].body) == {"id": "g1", "name": "ptest-g", "attributes": {}, "description": "Nieuw"}
+
+
+@pytest.mark.parametrize(
+    ("found", "expected"),
+    [([{"name": "ptest-g", "id": "g1"}], ["GET /groups", "DELETE /groups/g1"]), ([], ["GET /groups"])],
+)
+def test_delete_group_named_deletes_only_an_existing_group(admin, found, expected):
+    keycloak, sent = admin({("GET", "/groups"): (200, found), ("DELETE", "/groups/g1"): (204, None)})
+    keycloak.delete_group_named("ptest-g")
+    assert calls(sent) == expected
+
+
 def test_create_group_that_does_not_appear_is_an_error(admin):
     keycloak, _ = admin({("POST", "/groups"): (201, None), ("GET", "/groups"): (200, [])})
     with pytest.raises(LookupError, match="group ptest-g not found after creating it"):

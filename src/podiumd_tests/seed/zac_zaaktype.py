@@ -128,11 +128,25 @@ def make_role_group(env: Environment, registry: ResourceRegistry, role: str) -> 
 
     PABC authorises a group by its realm roles; the role is mapped in domain ZAC_DOMAIN only.
     """
-    name = registry.tagged(f"zac-{role}")
-    group = for_environment(env).create_group(name, (f"{ZAC_FUNCTIONAL_ROLE}-{role}",))
-    # A fresh admin token: the master realm's tokens expire within minutes.
-    registry.add(f"Keycloak group {name}", lambda: for_environment(env).delete_group(group))
+    name = registry.tagged(f"zac-{role}-{secrets.token_hex(3)}")
+    for_environment(env).create_group(name, (f"{ZAC_FUNCTIONAL_ROLE}-{role}",))
+    # A fresh admin token: the master realm's tokens expire within minutes. By name: a test may delete it first.
+    registry.add(f"Keycloak group {name}", lambda: for_environment(env).delete_group_named(name))
     return name
+
+
+def make_group_member(env: Environment, registry: ResourceRegistry, group: str) -> str:
+    """Create a run-tagged Keycloak user in the group; its username. Cleanup deletes it."""
+    admin = for_environment(env)
+    username = registry.tagged(f"zac-lid-{secrets.token_hex(3)}")
+    user_id = admin.create_user(username, admin.new_password(), {})
+    registry.add(f"Keycloak user {username}", lambda: for_environment(env).delete_user_named(username))
+    group_id = admin.group_id(group)
+    if group_id is None:
+        msg = f"Keycloak group {group} not found"
+        raise LookupError(msg)
+    admin.join_group(user_id, group_id)
+    return username
 
 
 def make_zac_zaaktype(
