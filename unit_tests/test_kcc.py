@@ -53,7 +53,7 @@ def test_kiss_register_picks_the_default_open_klant_2_systeem(fake_http):
 def test_kiss_register_skips_without_an_open_klant_2_systeem(fake_http):
     esuite = {"systemen": [{"identifier": "esuite", "isDefault": True, "registryVersion": "OpenKlant1"}]}
     fake_http({"/api/environment/registers": (200, esuite)})
-    with pytest.raises(pytest.skip.Exception, match="no Open Klant 2 register"):
+    with pytest.raises(pytest.skip.Exception, match=r"no Open Klant 2 register, only esuite \(OpenKlant1\)"):
         kiss_register(requests.Session(), KISS)
 
 

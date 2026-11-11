@@ -62,7 +62,8 @@ def kiss_register(kiss: requests.Session, kiss_url: str) -> dict[str, str]:
         key=lambda systeem: not systeem.get("isDefault"),
     )
     if not openklant2:
-        pytest.skip("KISS has no Open Klant 2 register (REGISTERS__<n>__REGISTRY_VERSION=OpenKlant2), only e-Suite")
+        found = ", ".join(f"{systeem.get('identifier')} ({systeem.get('registryVersion')})" for systeem in systemen)
+        pytest.skip(f"KISS has no Open Klant 2 register, only {found}: its klantcontacten go to the e-Suite")
     return {"systemIdentifier": str(openklant2[0]["identifier"])}
 
 
