@@ -91,6 +91,50 @@ def test_identificatie_is_unique_under_concurrent_creates(
     assert len(openzaak.list(f"{ZAKEN}/zaken", {"identificatie": identificatie})) == 1
 
 
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW business rule zrc-002",
+    "The identificatie of a zaak is unique per bronorganisatie, also when a zaak is changed.",
+)
+@pytest.mark.scenario("""
+    Given two zaken in Open Zaak
+    When the second zaak is given the identificatie of the first
+    Then Open Zaak refuses the change
+    And the error names the identificatie
+""")
+@pytest.mark.parametrize("method", ["PUT", "PATCH"])
+def test_identificatie_cannot_be_changed_to_one_in_use(
+    openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts, method: str
+) -> None:
+    """PUT or PATCH of a zaak to another zaak's identificatie answers 400 and names identificatie."""
+    eerste = make_zaak(openzaak, registry, parts.zaaktype)
+    tweede = make_zaak(openzaak, registry, parts.zaaktype)
+    fields = {"identificatie": eerste["identificatie"]}
+    body = {**openzaak.get(str(tweede["url"])), **fields} if method == "PUT" else fields
+    response = openzaak.request(method, str(tweede["url"]), HTTPStatus.BAD_REQUEST, json=body)
+    assert "identificatie" in {str(p["name"]) for p in entries(response.json()["invalidParams"])}
+
+
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW business rule zrc-009",
+    "A zaak without vertrouwelijkheidaanduiding gets its zaaktype's; an explicit one is kept.",
+)
+@pytest.mark.scenario("""
+    Given the test zaaktype
+    When a zaak is created without a vertrouwelijkheidaanduiding
+    Then the zaak has the vertrouwelijkheidaanduiding of its zaaktype
+    And a zaak created with one keeps it
+""")
+def test_vertrouwelijkheidaanduiding_defaults_to_the_zaaktypes(
+    openzaak: ApiClient, registry: ResourceRegistry, test_zaaktype: JsonObject
+) -> None:
+    """A zaak without vertrouwelijkheidaanduiding takes the zaaktype's; an explicit value is kept."""
+    zaaktype = str(test_zaaktype["url"])
+    derived = make_zaak(openzaak, registry, zaaktype, vertrouwelijkheidaanduiding=None)
+    explicit = make_zaak(openzaak, registry, zaaktype, vertrouwelijkheidaanduiding="geheim")
+    assert derived["vertrouwelijkheidaanduiding"] == test_zaaktype["vertrouwelijkheidaanduiding"]
+    assert explicit["vertrouwelijkheidaanduiding"] == "geheim"
+
+
 def relations(zaak: JsonObject) -> list[tuple[object, object]]:
     """(url, aardRelatie) of a zaak's relevanteAndereZaken."""
     return [(r["url"], r["aardRelatie"]) for r in entries(zaak["relevanteAndereZaken"])]

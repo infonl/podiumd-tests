@@ -67,7 +67,7 @@ def delete_zaak(openzaak: ApiClient, url: str, *, with_documents: bool = False) 
 
 
 def make_zaak(openzaak: ApiClient, registry: ResourceRegistry, zaaktype: str, **fields: object) -> JsonObject:
-    """Create a zaak of a zaaktype whose omschrijving carries the run tag; fields override the defaults."""
+    """Create a zaak of a zaaktype whose omschrijving carries the run tag; fields override defaults, None drops one."""
     body: dict[str, object] = {
         "bronorganisatie": TEST_CATALOGUS_RSIN,
         "verantwoordelijkeOrganisatie": TEST_CATALOGUS_RSIN,
@@ -77,7 +77,8 @@ def make_zaak(openzaak: ApiClient, registry: ResourceRegistry, zaaktype: str, **
         "vertrouwelijkheidaanduiding": "openbaar",
         **fields,
     }
-    zaak = openzaak.post(f"{ZAKEN}/zaken", body)
+    given = {field: value for field, value in body.items() if value is not None}
+    zaak = openzaak.post(f"{ZAKEN}/zaken", given)
     url = str(zaak["url"])
     registry.add(f"zaak {url}", lambda: delete_zaak(openzaak, url))
     return zaak
