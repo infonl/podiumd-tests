@@ -11,7 +11,7 @@ access:
   mode: host-header
   ingress_service:
     namespace: ingress-basic
-    name: public-gateway-nginx
+    name: waf
   # podiumd-minikube's local CA plus the system CAs, as its pods trust them.
   ca_bundle:
     configmap: podiumd-ca
