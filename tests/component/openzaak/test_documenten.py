@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.json_data import entries
+from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import link_document
 from podiumd_tests.seed.openzaak import make_document
@@ -23,6 +24,8 @@ from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.openzaak import today
 
 if TYPE_CHECKING:
+    import requests
+
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.openzaak import ZaaktypeParts
@@ -195,3 +198,113 @@ def test_large_documents_with_the_same_name_keep_their_own_content(
         stored.append(download.content if download.status_code == HTTPStatus.OK else b"")
     assert unlocked == [HTTPStatus.NO_CONTENT for _ in range(SAME_NAME_UPLOADS)]
     assert [s == c for s, c in zip(stored, contents, strict=True)] == [True for _ in range(SAME_NAME_UPLOADS)]
+
+
+NOWHERE = "http://openzaak.invalid/documenten/api/v1/enkelvoudiginformatieobjecten/00000000-0000-0000-0000-000000000000"
+
+
+def invalid_names(response: requests.Response) -> set[str]:
+    """The names in a 400 answer's invalidParams."""
+    return {str(p["name"]) for p in entries(response.json()["invalidParams"])}
+
+
+def objectinformatieobjecten(openzaak: ApiClient, document: JsonObject) -> list[JsonObject]:
+    """The objectinformatieobjecten Documenten API keeps for a document."""
+    return entries(openzaak.list(f"{DOCUMENTEN}/objectinformatieobjecten", {"informatieobject": str(document["url"])}))
+
+
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW business rules zrc-004, zrc-005, drc-00x",
+    "A zaakinformatieobject gets aardRelatie hoort_bij and a registratiedatum; Documenten API mirrors it as an "
+    "objectinformatieobject, created and deleted with it; its zaak and informatieobject cannot change.",
+)
+@pytest.mark.scenario("""
+    Given a zaak and a document in Open Zaak
+    When the document is linked to the zaak
+    Then the link is registered now, as "hoort bij"
+    And the document's record in Documenten names the zaak
+    And the link cannot be moved to another zaak or document
+    And deleting the link removes the record in Documenten
+""")
+def test_zaak_document_link_is_mirrored_and_fixed(
+    openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
+) -> None:
+    """A zaakinformatieobject has fixed zaak and informatieobject and lives as long as its objectinformatieobject."""
+    zaak = make_zaak(openzaak, registry, parts.zaaktype)
+    other_zaak = make_zaak(openzaak, registry, parts.zaaktype)
+    document = make_document(openzaak, registry, parts.informatieobjecttype)
+    other_document = make_document(openzaak, registry, parts.informatieobjecttype)
+    link = link_document(openzaak, registry, zaak, document)
+    assert str(link["aardRelatieWeergave"]).lower().startswith("hoort bij"), link["aardRelatieWeergave"]
+    assert str(link["registratiedatum"]).startswith(today()), link["registratiedatum"]
+    mirrored = objectinformatieobjecten(openzaak, document)
+    assert [(o["object"], o["objectType"]) for o in mirrored] == [(zaak["url"], "zaak")]
+    for field, value in (("zaak", other_zaak["url"]), ("informatieobject", other_document["url"])):
+        response = openzaak.request("PATCH", str(link["url"]), HTTPStatus.BAD_REQUEST, json={field: value})
+        assert field in invalid_names(response)
+    openzaak.delete(str(link["url"]))
+    assert objectinformatieobjecten(openzaak, document) == []
+
+
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW business rule zrc-003",
+    "A zaakinformatieobject whose informatieobject URL does not resolve is refused.",
+)
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak
+    When it is linked to a document that does not exist
+    Then Open Zaak refuses the link and names the informatieobject
+""")
+def test_link_to_a_document_that_does_not_exist_is_refused(
+    openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
+) -> None:
+    """POST of a zaakinformatieobject with an informatieobject URL that does not resolve answers 400, not 500."""
+    zaak = make_zaak(openzaak, registry, parts.zaaktype)
+    body = {"zaak": zaak["url"], "informatieobject": NOWHERE}
+    response = openzaak.request("POST", f"{ZAKEN}/zaakinformatieobjecten", HTTPStatus.BAD_REQUEST, json=body)
+    assert "informatieobject" in invalid_names(response)
+
+
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW business rules drc-002 to drc-004",
+    "An objectinformatieobject is refused for an object that does not resolve or is no zaak, a second time, and "
+    "without the zaakinformatieobject in Zaken API.",
+)
+@pytest.mark.parametrize(
+    "case",
+    [
+        pytest.param(
+            "object-does-not-exist",
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason="[open-zaak-6] Open Zaak 1.29.3 answers 500 (no Service for the object URL's host); "
+                "not yet reported upstream",
+            ),
+        ),
+        "object-is-no-zaak",
+        "already-mirrored",
+        "not-linked",
+    ],
+)
+@pytest.mark.scenario("""
+    Given a zaak and a document in Open Zaak
+    When a record linking them is added to Documenten directly
+    Then Open Zaak refuses it unless the zaak exists and holds the document in Zaken
+    And it refuses a second record for the same link
+""")
+def test_objectinformatieobject_follows_the_zaak(
+    openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts, case: str
+) -> None:
+    """POST of an objectinformatieobject that does not mirror a zaakinformatieobject answers 400."""
+    zaak = make_zaak(openzaak, registry, parts.zaaktype)
+    document = make_document(openzaak, registry, parts.informatieobjecttype)
+    target = {
+        "object-does-not-exist": NOWHERE.replace("documenten/api/v1/enkelvoudiginformatieobjecten", f"{ZAKEN}/zaken"),
+        "object-is-no-zaak": str(parts.statustypen[0]["url"]),
+    }.get(case, str(zaak["url"]))
+    if case == "already-mirrored":
+        link_document(openzaak, registry, zaak, document)
+    body = {"informatieobject": document["url"], "object": target, "objectType": "zaak"}
+    response = openzaak.request("POST", f"{DOCUMENTEN}/objectinformatieobjecten", HTTPStatus.BAD_REQUEST, json=body)
+    expected = "unique" if case == "already-mirrored" else "inconsistent-relation"
+    assert [p["code"] for p in entries(response.json()["invalidParams"])] == [expected], response.text
