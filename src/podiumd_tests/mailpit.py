@@ -31,11 +31,15 @@ def wait_for_mail(
     query = " ".join(f"{field}:{quoted(value)}" for field, value in criteria if value)
 
     def found() -> JsonObject | None:
-        page = mailpit.get("search", {"query": query})
-        messages = entries(page.get("messages"))
+        messages = search(mailpit, query)
         return next((message for message in messages if subject in {None, message.get("Subject")}), None)
 
     return wait_until(found, timeout=timeout, interval=1, description=f"mail {query} in Mailpit")
+
+
+def search(mailpit: ApiClient, query: str) -> list[JsonObject]:
+    """Return the messages a Mailpit search finds, e.g. to:"address"."""
+    return entries(mailpit.get("search", {"query": query}).get("messages"))
 
 
 def delete_message(mailpit: ApiClient, message_id: str) -> None:

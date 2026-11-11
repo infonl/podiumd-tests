@@ -16,7 +16,6 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.bootstrap.steps import ITA_GROEP
-from podiumd_tests.clients.platform import mailpit_client
 from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.ita import answer_body
 from podiumd_tests.ita import assign_to_me
@@ -27,13 +26,10 @@ from podiumd_tests.kcc import expect_ita_group_access_bug
 from podiumd_tests.kcc import ita_afhandeltermijn_hours
 from podiumd_tests.kcc import ita_bijna_verlopen_hours
 from podiumd_tests.kcc import weekday_hours_before
-from podiumd_tests.mailpit import received
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.results import TAG_PREFIX
 from podiumd_tests.seed.objecten import clean_up_logboek
-from podiumd_tests.seed.objecten import make_object
-from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import clean_up_klantcontacten
 from podiumd_tests.seed.openklant import close_internetaak
 from podiumd_tests.seed.openklant import klantcontact_body
@@ -156,57 +152,6 @@ def test_kanalen_answer_the_kcc_user(ita: requests.Session, urls: dict[str, str]
     assert isinstance(expect_status(ita.get(f"{urls['ita']}/api/kanalen"), HTTPStatus.OK).json(), list)
 
 
-@pytest.mark.parametrize("soort", ["Afdeling", "Groep"])
-@pytest.mark.source(
-    "TA regression/184-ita-doorsturen-mutatie.spec.ts",
-    "Checks forwarding a contactverzoek in ITA to an afdeling or a groep assigns it there.",
-)
-@pytest.mark.source(
-    f"{ITA_E2E}/Contactverzoek/ContactverzoekDoorsturenGroepsmailboxScenarios.cs",
-    "An afdeling or groep with a groepsmailbox gets the forwarded contactverzoek by mail.",
-)
-@pytest.mark.scenario("""
-    Given the KCC medewerker is logged in to ITA
-    And a contactverzoek, and an afdeling or groep with a groepsmailbox
-    When the medewerker forwards the contactverzoek to the afdeling or groep
-    Then the contactverzoek is assigned to it in Open Klant
-    And its groepsmailbox gets the mail "Contactverzoek Doorgestuurd" with the klantcontact's nummer, where mail is tested
-""")
-def test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep(
-    ita: requests.Session,
-    urls: dict[str, str],
-    podiumd_env: Environment,
-    openklant: ApiClient,
-    objecten: ApiClient,
-    registry: ResourceRegistry,
-    internetaak: JsonObject,
-    soort: str,
-) -> None:
-    """Forwarding to an afdeling or groep assigns the internetaak to its Open Klant actor (TA reg-184).
-
-    ITA creates that actor (objectId = the identificatie); TA's actorType/actorIdentifier body gets 400.
-    """
-    identificatie = registry.tagged(soort.lower())
-    data = {"naam": identificatie, "identificatie": identificatie, "email": f"{identificatie}@example.invalid"}
-    make_object(objecten, registry, objecttype_url(podiumd_env, soort), data)
-    actoren = {"actoridentificatorObjectId": identificatie}
-    registry.add(
-        f"actoren of {identificatie}",
-        lambda: [openklant.delete(str(a["url"])) for a in openklant.list("actoren", actoren)],
-    )
-    forward = ita.post(
-        f"{urls['ita']}/api/internetaken/{internetaak['uuid']}/forward", json={soort.lower(): identificatie}
-    )
-    expect_status(forward, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    assigned = entries(openklant.get(f"internetaken/{internetaak['uuid']}")["toegewezenAanActoren"])
-    assert {str(a["uuid"]) for a in assigned} & {str(a["uuid"]) for a in openklant.list("actoren", actoren)}
-    if podiumd_env.capabilities.skip_reason("mailpit") is None:
-        # ITA mails the afdeling's or groep's mailbox about the forwarded contactverzoek.
-        nummer = openklant.get(str(section(internetaak, "aanleidinggevendKlantcontact")["url"]))["nummer"]
-        subject = f"Contactverzoek Doorgestuurd - {nummer}"
-        received(mailpit_client(podiumd_env), registry, timeout=MAIL_TIMEOUT, to=data["email"], subject=subject)
-
-
 @pytest.mark.requires("kiss", "objecten", "cluster")
 # Non-strict: an estate setting; environments with helm-charts #684's permission (minikube, kees00) pass.
 @pytest.mark.xfail(
@@ -241,48 +186,6 @@ def test_kiss_reads_itas_logboek(
     written = wait_until(lambda: objecten.list("objects", query), timeout=30, description="ITA's logboek entry")
     kiss = objecten_client(podiumd_env, "kiss_logboek_token")
     assert [o["url"] for o in kiss.list("objects", query)] == [o["url"] for o in written]
-
-
-@pytest.mark.source(
-    f"{ITA_E2E}/Contactverzoek/ContactverzoekDoorsturenGroepsmailboxScenarios.cs",
-    "Forwarding to an afdeling without groepsmailbox and without medewerker is refused.",
-)
-@pytest.mark.scenario("""
-    Given the KCC medewerker is logged in to ITA
-    And a contactverzoek, and an afdeling without e-mail address
-    When the medewerker forwards it to the afdeling without choosing a medewerker
-    Then ITA refuses it
-    And the contactverzoek stays unassigned in Open Klant
-""")
-def test_forward_to_an_afdeling_without_mailbox_is_refused(
-    ita: requests.Session,
-    urls: dict[str, str],
-    podiumd_env: Environment,
-    openklant: ApiClient,
-    objecten: ApiClient,
-    registry: ResourceRegistry,
-    internetaak: JsonObject,
-) -> None:
-    """ITA refuses to forward to an afdeling that has no e-mail address when no medewerker is chosen; nothing changes."""
-    identificatie = registry.tagged("afdeling")
-    make_object(
-        objecten,
-        registry,
-        objecttype_url(podiumd_env, "Afdeling"),
-        {"naam": identificatie, "identificatie": identificatie},
-    )
-    registry.add(
-        f"actoren of {identificatie}",
-        lambda: [
-            openklant.delete(str(a["url"]))
-            for a in openklant.list("actoren", {"actoridentificatorObjectId": identificatie})
-        ],
-    )
-    forward = ita.post(
-        f"{urls['ita']}/api/internetaken/{internetaak['uuid']}/forward", json={"afdeling": identificatie}
-    )
-    expect_status(forward, HTTPStatus.BAD_REQUEST)
-    assert entries(openklant.get(f"internetaken/{internetaak['uuid']}")["toegewezenAanActoren"]) == []
 
 
 @pytest.mark.source(

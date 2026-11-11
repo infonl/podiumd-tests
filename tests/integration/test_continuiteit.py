@@ -13,6 +13,7 @@ import pytest
 
 from playwright.sync_api import expect
 
+from podiumd_tests import ita as ita_calls
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.bootstrap.names import TEST_FORM
 from podiumd_tests.bootstrap.steps import IDENTITIES
@@ -34,7 +35,6 @@ from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import is_root_answering
 from podiumd_tests.responses import is_server_error
 from podiumd_tests.seed.objecten import clean_up_logboek
-from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import make_productaanvraag
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import clean_up_klantcontacten
@@ -457,25 +457,13 @@ def test_ita_mail_is_sent_after_a_mail_outage(
     need_bootstrap(KCC.name, "openklant-actor-kcc")
     ita = kcc_login(page, podiumd_env, "ita")
     ita_url = podiumd_env.profile.urls["ita"]
-    groep = registry.tagged("groep")
-    adres = f"{groep}@example.invalid"
-    make_object(
-        objecten,
-        registry,
-        objecttype_url(podiumd_env, "Groep"),
-        {"naam": groep, "identificatie": groep, "email": adres},
-    )
-    registry.add(
-        f"actoren of {groep}",
-        lambda: [
-            openklant.delete(str(a["url"])) for a in openklant.list("actoren", {"actoridentificatorObjectId": groep})
-        ],
-    )
+    groep = ita_calls.make_eenheid(podiumd_env, objecten, openklant, registry, "Groep", with_mailbox=True)
+    adres = ita_calls.mailbox(groep)
     klantcontact = make_klantcontact(openklant, registry)
     taak = make_internetaak(openklant, registry, klantcontact, [])
     clean_up_logboek(objecten, registry, objecttype_url(podiumd_env, "Activiteitenlog"), str(taak["uuid"]))
     forget_mails(podiumd_env, registry, f'to:"{adres}"')  # noqa: B907  # Mailpit search; see about_vraag
-    expect_status(ita.post(f"{ita_url}/api/internetaken/{taak['uuid']}/aan-mij-toewijzen", json={}), 200, 201, 204)
+    ita_calls.assign_to_me(ita, ita_url, taak)
     with component_down(podiumd_env, http, "mailpit"):
         forward = ita.post(f"{ita_url}/api/internetaken/{taak['uuid']}/forward", json={"groep": groep})
         expect_status(forward, HTTPStatus.OK, HTTPStatus.NO_CONTENT)

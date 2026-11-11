@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
@@ -16,6 +18,7 @@ from podiumd_tests.kcc import kcc_login
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.objecten import clean_up_logboek
+from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import make_internetaak
 from podiumd_tests.seed.openklant import make_klantcontact
@@ -137,3 +140,81 @@ def my_afdelingen_and_groepen(ita: requests.Session, ita_url: str) -> list[str]:
 def uuids(taken: list[JsonObject]) -> list[str]:
     """Return the uuids of ITA's list items, in their order."""
     return [str(taak.get("uuid")) for taak in taken]
+
+
+def clean_up_actoren(openklant: ApiClient, registry: ResourceRegistry, object_id: str) -> None:
+    """Delete, at cleanup, the Open Klant actoren ITA creates for an afdeling, groep or medewerker it forwards to."""
+    query = {"actoridentificatorObjectId": object_id}
+
+    def delete() -> None:
+        for actor in openklant.list("actoren", query):
+            openklant.delete(str(actor["url"]))
+
+    registry.add(f"actoren of {object_id}", delete)
+
+
+def mailbox(identificatie: str) -> str:
+    """Return the e-mail address the tests give an afdeling, groep or medewerker."""
+    return f"{identificatie}@example.invalid"
+
+
+def make_eenheid(  # noqa: PLR0913  # the clients, cleanup and the eenheid
+    env: Environment,
+    objecten: ApiClient,
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    soort: str,
+    *,
+    with_mailbox: bool,
+) -> str:
+    """Create an afdeling or groep (soort Afdeling, Groep) in Objecten, with a groepsmailbox or none; its identificatie.
+
+    Its naam is its identificatie, unique: ITA refuses an identificatie that several objects share.
+    """
+    identificatie = registry.tagged(f"{soort.lower()}-{uuid.uuid4().hex[:8]}")
+    data = {"naam": identificatie, "identificatie": identificatie}
+    if with_mailbox:
+        data["email"] = mailbox(identificatie)
+    make_object(objecten, registry, objecttype_url(env, soort), data)
+    clean_up_actoren(openklant, registry, identificatie)
+    return identificatie
+
+
+def make_medewerker(  # noqa: PLR0913  # the clients, cleanup and the medewerker's links
+    env: Environment,
+    objecten: ApiClient,
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    *,
+    with_email: bool,
+    afdeling: str | None = None,
+    groep: str | None = None,
+) -> str:
+    """Create a Medewerker in Objecten of the afdeling or groep (by naam), with an e-mail address or none.
+
+    Returns its identificatie.
+    """
+    identificatie = registry.tagged(f"medewerker-{uuid.uuid4().hex[:8]}")
+    data: dict[str, object] = {
+        "identificatie": identificatie,
+        "voornaam": "PodiumD",
+        "achternaam": identificatie,
+        "afdelingen": [{"afdelingnaam": afdeling}] if afdeling else [],
+        "groepen": [{"groepsnaam": groep}] if groep else [],
+    }
+    if with_email:
+        data["emails"] = [{"email": mailbox(identificatie)}]
+    make_object(objecten, registry, objecttype_url(env, "Medewerker"), data)
+    clean_up_actoren(openklant, registry, identificatie)
+    return identificatie
+
+
+def forward(ita: requests.Session, ita_url: str, taak: JsonObject, **target: str) -> requests.Response:
+    """Forward the internetaak to a medewerker, afdeling or groep (by identificatie) as ITA's Doorsturen tab does."""
+    return ita.post(f"{ita_url}/api/internetaken/{taak['uuid']}/forward", json=target)
+
+
+def medewerkers(ita: requests.Session, ita_url: str, **query: str) -> list[str]:
+    """Return the identificaties ITA's medewerker picker offers: by search, or by afdelingOfGroep and type."""
+    found = expect_status(ita.get(f"{ita_url}/api/medewerkers", params=query), HTTPStatus.OK).json()
+    return [str(medewerker.get("identificatie")) for medewerker in entries(found)]

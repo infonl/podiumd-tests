@@ -1,7 +1,10 @@
 """Unit tests for ITA's calls on a contactverzoek and its lists."""
 
+from __future__ import annotations
+
 import json
 
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qs
 from urllib.parse import urlsplit
 
@@ -9,7 +12,12 @@ import pytest
 import requests
 
 from podiumd_tests import ita
+from podiumd_tests.json_data import section
 from podiumd_tests.responses import UnexpectedStatusError
+from podiumd_tests.seed.registry import ResourceRegistry
+
+if TYPE_CHECKING:
+    from podiumd_tests.json_data import JsonObject
 
 ITA = "https://ita.example.test"
 TAAK = {"uuid": "t-1", "aanleidinggevendKlantcontact": {"uuid": "k-1", "url": "https://ok/k-1"}}
@@ -86,3 +94,55 @@ def test_make_contactverzoek_cleans_up_itas_logboek(monkeypatch):
     monkeypatch.setattr(ita, "clean_up_logboek", lambda _obj, _reg, soort, uuid: made.append((soort, uuid)))
     assert ita.make_contactverzoek(None, None, None, "logboek", [{"uuid": "a"}]) is TAAK  # pyright: ignore[reportArgumentType]
     assert made == [({"uuid": "k-1"}, [{"uuid": "a"}]), ("logboek", "t-1")]
+
+
+class _Store:
+    """Objecten and Open Klant stand-ins that record what is created and deleted."""
+
+    def __init__(self):
+        self.objects: list[JsonObject] = []
+        self.deleted: list[str] = []
+
+    def delete(self, url):
+        self.deleted.append(url)
+
+    def list(self, _path, query):
+        return [{"url": f"https://ok/actor/{query['actoridentificatorObjectId']}", "store": id(self)}]
+
+    def post(self, _path, body):
+        self.objects.append(body)
+        return {"url": f"https://obj/{len(self.objects)}"}
+
+
+@pytest.mark.parametrize(("soort", "with_mailbox"), [("Afdeling", True), ("Groep", False)])
+def test_make_eenheid_has_a_mailbox_or_none_and_cleans_up_its_actoren(monkeypatch, soort, with_mailbox):
+    monkeypatch.setattr(ita, "objecttype_url", lambda _env, name: f"type {name}")
+    store, registry = _Store(), ResourceRegistry("ptest-x")
+    identificatie = ita.make_eenheid(None, store, store, registry, soort, with_mailbox=with_mailbox)  # pyright: ignore[reportArgumentType]
+    data = section(section(store.objects[0], "record"), "data")
+    assert (store.objects[0]["type"], data["naam"]) == (f"type {soort}", identificatie)
+    expected = ita.mailbox(identificatie) if with_mailbox else None
+    assert data.get("email") == expected
+    registry.cleanup()
+    assert f"https://ok/actor/{identificatie}" in store.deleted
+
+
+def test_make_medewerker_links_the_afdeling_and_has_no_email_when_asked(monkeypatch):
+    monkeypatch.setattr(ita, "objecttype_url", lambda _env, name: f"type {name}")
+    store = _Store()
+    ita.make_medewerker(None, store, store, ResourceRegistry("ptest-x"), with_email=False, afdeling="a")  # pyright: ignore[reportArgumentType]
+    data = section(section(store.objects[0], "record"), "data")
+    assert (data["afdelingen"], data["groepen"], "emails" in data) == ([{"afdelingnaam": "a"}], [], False)
+
+
+def test_forward_and_medewerkers_call_itas_routes(fake_http):
+    sent = fake_http(
+        {
+            "POST /api/internetaken/t-1/forward": (200, {"notificationResult": "ok"}),
+            "GET /api/medewerkers": (200, [{"identificatie": "m-1"}]),
+        }
+    )
+    ita.forward(requests.Session(), ITA, TAAK, medewerker="m-1", afdeling="a")
+    assert json.loads(sent[0].body) == {"medewerker": "m-1", "afdeling": "a"}
+    assert ita.medewerkers(requests.Session(), ITA, afdelingOfGroep="a", type="Afdeling") == ["m-1"]
+    assert parse_qs(urlsplit(sent[1].url).query) == {"afdelingOfGroep": ["a"], "type": ["Afdeling"]}
