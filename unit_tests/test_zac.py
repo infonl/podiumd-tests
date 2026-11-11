@@ -170,3 +170,30 @@ def test_open_task_skips_completed_tasks_and_complete_task_sends_the_form_data(f
     assert task["id"] == "t-2"
     assert zac.complete_task(http, "https://zac.example.test", task, {"veld": "y"}) == {"status": "AFGEROND"}
     assert json.loads(sent[-1].body)["taakdata"] == {"bestaand": "x", "veld": "y"}
+
+
+def test_user_event_runs_the_open_plan_item_of_the_action(fake_http):
+    sent = fake_http(
+        {
+            "GET /rest/planitems/zaak/z1/userEventListenerPlanItems": (
+                200,
+                [{"id": "p1", "naam": "Intake afronden", "userEventListenerActie": "INTAKE_AFRONDEN"}],
+            ),
+            "POST /rest/planitems/doUserEventListenerPlanItem": (204, None),
+        }
+    )
+    http = requests.Session()
+    zac.user_event(http, ZAC, "z1", "INTAKE_AFRONDEN", zaakOntvankelijk=True)
+    assert json.loads(sent[-1].body) == {
+        "zaakUuid": "z1",
+        "planItemInstanceId": "p1",
+        "actie": "INTAKE_AFRONDEN",
+        "zaakOntvankelijk": True,
+    }
+    with pytest.raises(AssertionError, match=r"offers no ZAAK_AFHANDELEN: \['Intake afronden'\]"):
+        zac.user_event(http, ZAC, "z1", "ZAAK_AFHANDELEN")
+
+
+def test_resultaattypen_are_those_of_the_zaaktype(fake_http):
+    fake_http({"GET /rest/zaken/resultaattypes/zt1": (200, [{"id": "r1"}])})
+    assert zac.resultaattypen(requests.Session(), ZAC, {"zaaktype": {"uuid": "zt1"}}) == [{"id": "r1"}]
