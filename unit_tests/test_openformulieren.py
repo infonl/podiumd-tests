@@ -202,3 +202,29 @@ def test_redacteur_session_carries_the_api_token(env_factory, profile_factory):
     environ = {env_var_name(str(OF_REDACTEUR.store_key)): "t0ken"}
     http = redacteur_session(env_factory(profile_factory(urls={"openformulieren": OF}), environ))
     assert http.headers["Authorization"] == "Token t0ken"
+
+
+def test_upload_file_value_and_logic_helpers(fake_http):
+    base = "https://forms.example.test"
+    step = {"url": f"{base}/api/v2/submissions/s1/steps/st1"}
+    upload = {"url": f"{base}/api/v2/submissions/files/f1", "name": "a.txt", "size": 3}
+    sent = fake_http(
+        {
+            "POST /api/v2/formio/fileupload": (200, upload),
+            "POST /api/v2/submissions/s1/steps/st1/_check-logic": (200, {"step": {"canSubmit": False}}),
+            "PUT /api/v2/forms/u1/logic-rules": (200, []),
+        }
+    )
+    http = requests.Session()
+    response = openformulieren.upload_file(http, base, {"url": f"{base}/api/v2/submissions/s1"}, {}, "a.txt", b"abc")
+    assert response.json() == upload
+    assert b"submissions/s1" in sent[0].body
+    value = openformulieren.file_value(base, upload)
+    assert (value["url"], value["originalName"], value["data"]) == (
+        upload["url"],
+        "a.txt",
+        {**upload, "baseUrl": base, "form": "", "project": ""},
+    )
+    assert openformulieren.can_submit_step(http, step, {}, {"akkoord": "nee"}) is False
+    openformulieren.set_logic_rules(http, base, {"uuid": "u1"}, [{"order": 0}])
+    assert json.loads(sent[-1].body) == [{"order": 0}]
