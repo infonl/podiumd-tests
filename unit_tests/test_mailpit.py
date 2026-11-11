@@ -10,11 +10,20 @@ from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.mailpit import delete_message
 from podiumd_tests.mailpit import forget_mails
 from podiumd_tests.mailpit import mail_queue
+from podiumd_tests.mailpit import own_address
 from podiumd_tests.mailpit import received
 from podiumd_tests.mailpit import wait_for_mail
 from podiumd_tests.seed.registry import ResourceRegistry
 
 API = "https://mailpit.example.test/api/v1"
+
+
+def test_own_address_is_run_tagged_and_new_each_time():
+    registry = ResourceRegistry("ptest-2611111200abcd")
+    first, second = own_address(registry), own_address(registry)
+    assert first.startswith("ptest-2611111200abcd-ontvanger-")
+    assert first.endswith("@example.com")
+    assert first != second
 
 
 def test_wait_for_mail_skips_partial_subject_matches(fake_http):

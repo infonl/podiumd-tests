@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
@@ -16,6 +18,11 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
+
+
+def own_address(registry: ResourceRegistry) -> str:
+    """Return a new run-tagged address for one test's mail: the tests of a run read and delete each other's mail."""
+    return f"{registry.tagged(f'ontvanger-{uuid.uuid4().hex[:8]}')}@example.com"
 
 
 def quoted(value: str) -> str:

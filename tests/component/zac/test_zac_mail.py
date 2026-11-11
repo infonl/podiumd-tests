@@ -5,8 +5,6 @@ The mails go to run-tagged addresses at Mailpit; cleanup deletes them.
 
 from __future__ import annotations
 
-import uuid
-
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -15,6 +13,7 @@ import pytest
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
+from podiumd_tests.mailpit import own_address
 from podiumd_tests.mailpit import received_message
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
@@ -54,8 +53,7 @@ def fixture_mail(zac: requests.Session, urls: dict[str, str], registry: Resource
     def build(zaak: JsonObject, **fields: object) -> JsonObject:
         return {
             "verzender": afzenders(zac, urls["zac"], zaak)[0]["mail"],
-            # One address per mail: the tests of a run read and delete each other's mail otherwise.
-            "ontvanger": f"{registry.tagged(f'ontvanger-{uuid.uuid4().hex[:8]}')}@example.com",
+            "ontvanger": own_address(registry),
             "onderwerp": "Zaak {ZAAK_NUMMER}",
             "body": "<p>Over zaak {ZAAK_NUMMER}: {ZAAK_OMSCHRIJVING}</p>",
             "createDocumentFromMail": False,
