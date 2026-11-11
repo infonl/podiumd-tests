@@ -22,9 +22,10 @@ from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.bootstrap.steps import ITA_GROEP
 from podiumd_tests.bootstrap.steps import KCC
+from podiumd_tests.ita import answer_body
+from podiumd_tests.ita import close_with_klantcontact
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
-from podiumd_tests.kcc import add_klantcontact
 from podiumd_tests.kcc import ita_detail_text
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.mailpit import forget_mails
@@ -36,7 +37,6 @@ from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import clean_up_logboek
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import clean_up_klantcontacten
-from podiumd_tests.seed.openklant import close_internetaak
 from podiumd_tests.seed.openklant import expanded
 from podiumd_tests.seed.openklant import klantcontact_body
 from podiumd_tests.seed.openklant import klantcontacten_about
@@ -262,7 +262,7 @@ def _answer_in_ita(
     taak: JsonObject,
     antwoord: str,
 ) -> str:
-    """Answer the question in ITA as the KCC user; the uuid of the inwoner's partij."""
+    """Answer the question in ITA as the KCC user and close its taak; the uuid of the inwoner's partij."""
     page.context.clear_cookies()
     ita = kcc_login(page, podiumd_env, "ita")
     # The answer goes on the question's kanaal: Mijn vragen shows answers of that kanaal only.
@@ -270,15 +270,8 @@ def _answer_in_ita(
         registry, kanaal=question["kanaal"], onderwerp=antwoord, inhoud=f"Antwoord {antwoord}"
     )
     partij = str(section(expanded(openklant, str(question["url"]), "hadBetrokkenen")[0], "wasPartij")["uuid"])
-    body = {
-        "interneTaakId": taak["uuid"],
-        "aanleidinggevendKlantcontactUuid": question["uuid"],
-        # ITA links the answer to this partij; Mijn vragen lists only klantcontacten of the inwoner's partij.
-        "partijUuid": partij,
-        # ITA numbers the klantcontact itself.
-        "klantcontactRequest": {k: v for k, v in antwoord_body.items() if k != "nummer"},
-    }
-    add_klantcontact(ita, podiumd_env.profile.urls["ita"], body)
+    # ITA links the answer to this partij; Mijn vragen lists only klantcontacten of the inwoner's partij.
+    close_with_klantcontact(ita, podiumd_env.profile.urls["ita"], answer_body(taak, antwoord_body, partij))
     return partij
 
 
@@ -330,8 +323,6 @@ def test_question_answered_in_ita_shows_as_answered(
     antwoord = registry.tagged("ita-antwoord")
     clean_up_klantcontacten(openklant, registry, antwoord)
     partij = _answer_in_ita(page, podiumd_env, openklant, registry, question, taak, antwoord)
-    # ITA has no call to close the taak; KCC closes it as it does in ITA's UI.
-    close_internetaak(openklant, taak)
     forget_questions(podiumd_env, partij)
     _expect_answered(page, podiumd_env, vraag, antwoord)
 
