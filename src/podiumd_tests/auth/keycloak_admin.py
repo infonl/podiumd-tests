@@ -225,6 +225,20 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
         """Add a user to a group."""
         self._send("PUT", f"/users/{user_id}/groups/{group_id}", None)
 
+    def create_group(self, name: str, realm_roles: tuple[str, ...]) -> str:
+        """Create a top-level group with these realm roles; its id."""
+        self._send("POST", "/groups", {"name": name}, HTTPStatus.CREATED)
+        group = self.group_id(name)
+        if group is None:
+            msg = f"group {name} not found after creating it"
+            raise LookupError(msg)
+        self._send("POST", f"/groups/{group}/role-mappings/realm", self.realm_roles(realm_roles))
+        return group
+
+    def delete_group(self, group_id: str) -> None:
+        """Delete a group; its members stay."""
+        self._send("DELETE", f"/groups/{group_id}", None)
+
     def update_client(self, client: JsonObject) -> None:
         """Replace a client's representation (from client())."""
         self._send("PUT", f"/clients/{client['id']}", client)
