@@ -105,6 +105,9 @@ Done 2026-10-21, verified on minikube: 1 and 2 (cfd2671), 3 (84ff644; known issu
 
 ### Phase 2: KISS and ITA scenarios
 
+The full comparison of both suites against this suite, and the batches for what is left:
+[kiss-ita-scenario-gaps.md](kiss-ita-scenario-gaps.md), [kiss-ita-port-plan.md](kiss-ita-port-plan.md).
+
 Done 2026-10-21, verified on minikube: 11 and 12 (6d70c35), 9, 14, 15 and 16 (c7c2bf0). Not ported: 10's form
 prefill and 13 (UI only; their API paths are covered). 17 (ea51d9a): chaos tier; it skips where the reminder
 CronJob is off, as in podiumd 4.10 (DRT-726).
