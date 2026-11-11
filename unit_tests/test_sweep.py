@@ -120,6 +120,19 @@ def test_sweep_deletes_stale_mails_and_forms_and_skips_what_it_cannot_reach(swep
     assert [s.method for s in sent].count("DELETE") == 2  # one per Mailpit finder
     skipped = {s.kind: s.detail for s in swept if s.action == "skipped"}
     assert skipped["zaak"].startswith("requires: openzaak")
+    assert skipped["catalogus type"].startswith("requires: openzaak")
+
+
+def test_sweep_removes_stale_catalogus_types(swept_env, monkeypatch):
+    removed = []
+    monkeypatch.setattr(sweep_module, "FINDERS", ())
+    monkeypatch.setattr(sweep_module, "tagged_catalogus_types", lambda _env: [f"{OLD}-zt", "ptest-bootstrap-klacht"])
+    monkeypatch.setattr(sweep_module, "remove_catalogus_type", lambda _env, name: removed.append(name))
+    swept = sweep_module.sweep(swept_env({"openzaak", "cluster"}), NOW - timedelta(hours=24), dry_run=False)
+    assert [(s.kind, s.action, s.name) for s in swept if s.kind == "catalogus type"] == [
+        ("catalogus type", "deleted", f"{OLD}-zt")
+    ]
+    assert removed == [f"{OLD}-zt"]
 
 
 def test_sweep_names_a_missing_bootstrap_step_setting_and_cluster(swept_env, fake_http, monkeypatch):

@@ -11,6 +11,7 @@ import json
 
 from collections import Counter
 from dataclasses import dataclass
+from functools import partial
 from typing import TYPE_CHECKING
 
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
@@ -31,6 +32,8 @@ from podiumd_tests.openformulieren import remove_form
 from podiumd_tests.openformulieren import tagged_forms
 from podiumd_tests.results import RUN_TAG
 from podiumd_tests.results import run_started
+from podiumd_tests.seed.catalogi import remove_catalogus_type
+from podiumd_tests.seed.catalogi import tagged_catalogus_types
 from podiumd_tests.seed.opennotificaties import delete_abonnement
 from podiumd_tests.seed.openzaak import BESLUITEN
 from podiumd_tests.seed.openzaak import CATALOGI
@@ -50,7 +53,7 @@ if TYPE_CHECKING:
 # The audit trail names sweep as the actor of its deletions.
 SWEEP_TAG = "podiumd-tests-sweep"
 # Fields that name a swept object, first present one wins.
-_NAME_KEYS = ("url", "slug", "Subject", "ID")
+_NAME_KEYS = ("url", "name", "Subject", "ID")
 
 
 def _line(entry: Swept) -> str:
@@ -243,8 +246,21 @@ def _skip_reason(env: Environment, finder: Finder, present: set[str]) -> str | N
     return reason
 
 
+# Kinds the APIs cannot list or delete, with their component: listed and deleted with a Django snippet.
+SNIPPET_KINDS = (("form", "openformulieren"), ("catalogus type", "openzaak"))
+
+
+def _sweep_by_snippet(env: Environment, kind: str, cutoff: datetime, *, dry_run: bool) -> list[Swept]:
+    if kind == "form":
+        names, remove = tagged_forms(env), partial(remove_form, env)
+    else:
+        names, remove = tagged_catalogus_types(env), partial(remove_catalogus_type, env)
+    items: list[JsonObject] = [{"name": name} for name in names]
+    return _sweep_items(kind, items, lambda item: remove(str(item["name"])), cutoff, dry_run=dry_run)
+
+
 def sweep(env: Environment, cutoff: datetime, *, dry_run: bool) -> list[Swept]:
-    """Delete (or with dry_run, list) the stale run-tagged objects of every finder, then the test forms."""
+    """Delete (or with dry_run, list) the stale run-tagged objects of every finder, then the snippet kinds."""
     present = {outcome.step for outcome in check(env, STEPS) if outcome.action == "present"}
     swept: list[Swept] = []
     for finder in FINDERS:
@@ -254,10 +270,9 @@ def sweep(env: Environment, cutoff: datetime, *, dry_run: bool) -> list[Swept]:
             continue
         client = finder.client(env)
         swept += _sweep_items(finder.kind, finder.items(env, client), finder.delete(client), cutoff, dry_run=dry_run)
-    reason = env.capabilities.skip_reason("openformulieren", "cluster")
-    if reason:
-        return [*swept, Swept("form", "", "skipped", reason)]
-    forms: list[JsonObject] = [{"slug": slug} for slug in tagged_forms(env)]
-    return swept + _sweep_items(
-        "form", forms, lambda item: remove_form(env, str(item["slug"])), cutoff, dry_run=dry_run
-    )
+    for kind, component in SNIPPET_KINDS:
+        reason = env.capabilities.skip_reason(component, "cluster")
+        swept += (
+            [Swept(kind, "", "skipped", reason)] if reason else _sweep_by_snippet(env, kind, cutoff, dry_run=dry_run)
+        )
+    return swept
