@@ -23,7 +23,6 @@ from podiumd_tests.json_data import strings
 from podiumd_tests.mailpit import own_address
 from podiumd_tests.mailpit import received_message
 from podiumd_tests.responses import expect_status
-from podiumd_tests.responses import get_entries
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import afronden_intake
@@ -35,6 +34,8 @@ from podiumd_tests.zac import open_task
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import start_human_task
 from podiumd_tests.zac import user_events_offered
+from podiumd_tests.zac_beheer import referentietabel
+from podiumd_tests.zac_beheer import referentietabel_values
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
 from podiumd_tests.zac_documents import zaak_documents
@@ -309,10 +310,8 @@ def test_advies_intern_offers_the_advies_referentietabel(
     """The taak's tabellen hold the values of the referentietabel the human task parameters name for field ADVIES."""
     zac_url = urls["zac"]
     taak = _started(zac, zac_url, behandeling, ADVIES_INTERN, zac_group, taakdata={"vraag": VRAAG})
-    advies = next(t for t in get_entries(zac, f"{zac_url}/rest/referentietabellen") if t.get("code") == "ADVIES")
-    tabel = expect_status(zac.get(f"{zac_url}/rest/referentietabellen/{advies['id']}"), HTTPStatus.OK).json()
-    wanted = strings([value.get("name") for value in entries(tabel.get("values"))])
-    assert strings(section(taak, "tabellen").get("ADVIES")) == wanted
+    wanted = referentietabel_values(referentietabel(zac, zac_url, "ADVIES"))
+    assert sorted(strings(section(taak, "tabellen").get("ADVIES"))) == sorted(wanted)
 
 
 @ZAC_TEAM
