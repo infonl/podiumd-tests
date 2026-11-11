@@ -36,6 +36,7 @@ from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import delete_partij
 from podiumd_tests.seed.openklant import partijen_of
 from podiumd_tests.seed.openzaak import today
+from podiumd_tests.zac import HEROPEND
 
 if TYPE_CHECKING:
     import requests
@@ -641,9 +642,9 @@ STEPS: tuple[Step, ...] = (
         },
     ),
     # The zaaktype of podiumd-tests' BPMN process in ZAC (step zac-bpmn-process).
-    SnippetStep(
+    ZacCatalogusStep(
         "openzaak-zaaktype-bpmn",
-        ("openzaak", "zac"),
+        ("openzaak", "zac", "keycloak"),
         "openzaak_zaaktype",
         None,
         {
@@ -652,7 +653,9 @@ STEPS: tuple[Step, ...] = (
             "identificatie": names.BPMN_ZAAKTYPE,
             "iot_omschrijving": names.BPMN_IOT,
             "besluittype": names.BPMN_BESLUITTYPE,
+            "statustypen": ["Ingediend", "In behandeling", HEROPEND, "Afgehandeld"],
         },
+        admin=ADMIN,
     ),
     # The informatieobjecttype ZAC stores mails as; throwaway ZAC zaaktypen of the tests link it.
     SnippetStep(

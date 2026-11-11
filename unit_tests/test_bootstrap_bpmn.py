@@ -17,10 +17,13 @@ from podiumd_tests.bootstrap.names import ZAC_DOMAIN
 from podiumd_tests.bootstrap.names import ZAC_FUNCTIONAL_ROLES
 from podiumd_tests.bootstrap.runner import Context
 from podiumd_tests.bootstrap.steps import ADMIN
+from podiumd_tests.bootstrap.steps import STEPS
+from podiumd_tests.bootstrap.zac import ZacCatalogusStep
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.credentials import env_var_name
 from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.seed.openzaak import published_zaaktype
+from podiumd_tests.zac import HEROPEND
 
 ZAAKTYPE = {
     "url": "https://oz/catalogi/api/v1/zaaktypen/zt-1/",
@@ -250,3 +253,10 @@ def test_remove_deletes_forms_process_and_pabc_objects(
     # Only a refused delete of the process adds a note; the note on the zaaktype link stays last.
     assert len(ctx.notes) == notes
     assert ctx.notes[-1].startswith("zaaktype-bpmn-configuration")
+
+
+def test_bpmn_zaaktype_has_heropend_before_its_eindstatus_and_clears_zacs_cache():
+    step = next(step for step in STEPS if step.name == "openzaak-zaaktype-bpmn")
+    assert isinstance(step, ZacCatalogusStep)
+    statustypen = step.params["statustypen"]
+    assert HEROPEND in statustypen[:-1]  # pyright: ignore[reportIndexIssue]

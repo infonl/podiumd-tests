@@ -507,7 +507,7 @@ def fixture_zac_zaak(
 @pytest.fixture(name="bpmn_zaaktype")
 def fixture_bpmn_zaaktype(openzaak: ApiClient, need_bootstrap: Callable[..., None]) -> JsonObject:
     """Return the BPMN test zaaktype, which ZAC handles with podiumd-tests' BPMN process."""
-    need_bootstrap("zac-bpmn-process")
+    need_bootstrap("openzaak-zaaktype-bpmn", "zac-bpmn-process")
     return published_zaaktype(openzaak, names.BPMN_ZAAKTYPE, "openzaak-zaaktype-bpmn")
 
 

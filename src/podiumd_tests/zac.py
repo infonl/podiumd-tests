@@ -653,6 +653,10 @@ def verlengen(http: requests.Session, zac_url: str, zaak: JsonObject, days: int)
     return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/verlenging", json=body)
 
 
+# The statustype omschrijving heropenen sets; ZAC answers 500 for a zaaktype without it.
+HEROPEND = "Heropend"
+
+
 def heropenen(http: requests.Session, zac_url: str, zaak: JsonObject) -> requests.Response:
     """Reopen the closed zaak with a reden; ZAC's answer."""
     return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/heropenen", json={"reden": "podiumd-tests"})

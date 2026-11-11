@@ -19,6 +19,7 @@ from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import BESLUITEN
 from podiumd_tests.seed.openzaak import delete_besluit
+from podiumd_tests.zac import HEROPEND
 from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import afhandelen
 from podiumd_tests.zac import afronden_intake
@@ -236,7 +237,7 @@ def test_zaak_with_a_besluit_is_afgehandeld_and_heropend(
     _afhandelen(zac, urls["zac"], zaak)
     assert read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpen"] is False
     expect_status(heropenen(zac, urls["zac"], zaak), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    assert section(read_zaak(zac, urls["zac"], str(zaak["uuid"])), "status").get("naam") == "Heropend"
+    assert section(read_zaak(zac, urls["zac"], str(zaak["uuid"])), "status").get("naam") == HEROPEND
 
     tweede = besluit(zaak)
     assert {item["uuid"] for item in _besluiten(zac, urls["zac"], zaak)} == {eerste["uuid"], tweede["uuid"]}

@@ -15,6 +15,7 @@ from podiumd_tests.json_data import section
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
+from podiumd_tests.zac import HEROPEND
 from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import afhandelen
 from podiumd_tests.zac import afronden_intake
@@ -134,7 +135,7 @@ def test_heropend_zaak_loses_its_resultaat_and_can_be_closed_again(
     if not section(closed, "rechten").get("heropenen"):
         pytest.skip("the test admin may not reopen zaken of this zaaktype in the estate's PABC dataset")
     reopened = expect_status(heropenen(zac, urls["zac"], zaak), HTTPStatus.OK).json()
-    assert (section(reopened, "status").get("naam"), reopened["isOpen"]) == ("Heropend", True)
+    assert (section(reopened, "status").get("naam"), reopened["isOpen"]) == (HEROPEND, True)
     assert (reopened.get("resultaat"), reopened.get("archiefActiedatum")) == (None, None)
     expect_status(afbreken(zac, urls["zac"], zaak), *REFUSED)
     again = expect_status(afsluiten(zac, urls["zac"], zaak), HTTPStatus.OK)
