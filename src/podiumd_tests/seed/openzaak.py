@@ -189,7 +189,7 @@ def make_rol(
     return _create(openzaak, registry, f"{ZAKEN}/rollen", body)
 
 
-def _document_body(
+def document_body(
     registry: ResourceRegistry, informatieobjecttype: str, size: int, **fields: object
 ) -> dict[str, object]:
     """Build an enkelvoudig informatieobject of size bytes whose titel carries the run tag; fields override defaults."""
@@ -218,7 +218,7 @@ def make_document(
 ) -> JsonObject:
     """Create an enkelvoudig informatieobject with text inhoud whose titel carries the run tag."""
     content = inhoud.encode()
-    body = _document_body(registry, informatieobjecttype, len(content), **fields)
+    body = document_body(registry, informatieobjecttype, len(content), **fields)
     body = {"inhoud": base64.b64encode(content).decode(), **body}
     return _create(openzaak, registry, f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", body)
 
@@ -227,7 +227,7 @@ def make_document_in_parts(
     openzaak: ApiClient, registry: ResourceRegistry, informatieobjecttype: str, content: bytes, **fields: object
 ) -> JsonObject:
     """Create a document without inhoud whose bestandsdelen carry content; it stays locked (unlock merges them)."""
-    body = _document_body(registry, informatieobjecttype, len(content), formaat="application/octet-stream", **fields)
+    body = document_body(registry, informatieobjecttype, len(content), formaat="application/octet-stream", **fields)
     document = _create(openzaak, registry, f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", body)
     # The parts are multipart uploads: the client's JSON Content-Type must not go along.
     headers = {name: value for name, value in openzaak.headers().items() if name.lower() != "content-type"}

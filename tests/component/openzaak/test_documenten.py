@@ -18,6 +18,7 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
+from podiumd_tests.seed.openzaak import document_body
 from podiumd_tests.seed.openzaak import link_document
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_document_in_parts
@@ -111,6 +112,12 @@ def test_document_versions_and_definitief(
     assert (signed["versie"], signed["status"]) == (2, "definitief")
     newer = new_version(openzaak, signed, "versie drie")
     assert (newer["versie"], newer["bestandsomvang"]) == (3, len(b"versie drie"))
+    eerste = openzaak.get(str(document["url"]), {"versie": "1"})
+    assert (eerste["versie"], eerste["status"], eerste["bestandsomvang"]) == (
+        1,
+        document["status"],
+        len("versie één".encode()),
+    )
 
 
 @pytest.mark.source(
@@ -366,3 +373,140 @@ def test_locked_document_needs_its_lock(
     openzaak_gesloten.request("POST", f"{url}/unlock", HTTPStatus.BAD_REQUEST, *REFUSED, json={})
     openzaak.request("POST", f"{url}/unlock", HTTPStatus.NO_CONTENT, json={})
     assert openzaak.get(url)["locked"] is False
+
+
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW business rule drc-005",
+    "A document still in progress cannot have an ontvangstdatum.",
+)
+@pytest.mark.parametrize("status", ["in_bewerking", "ter_vaststelling"])
+@pytest.mark.parametrize("method", ["POST", "PATCH"])
+@pytest.mark.scenario("""
+    Given a document that is in progress or awaiting approval
+    When it is given an ontvangstdatum, on create or on change
+    Then Open Zaak refuses it: such a status does not apply to a received document
+""")
+def test_document_in_progress_has_no_ontvangstdatum(
+    openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts, status: str, method: str
+) -> None:
+    """status in_bewerking or ter_vaststelling with an ontvangstdatum answers 400 on POST and PATCH."""
+    fields = {"status": status, "ontvangstdatum": today()}
+    path = f"{DOCUMENTEN}/enkelvoudiginformatieobjecten"
+    if method == "POST":
+        inhoud = base64.b64encode(b"podiumd-tests").decode()
+        body = {
+            **document_body(registry, parts.informatieobjecttype, len(b"podiumd-tests")),
+            "inhoud": inhoud,
+            **fields,
+        }
+        response = openzaak.request("POST", path, HTTPStatus.BAD_REQUEST, json=body)
+    else:
+        document = make_document(openzaak, registry, parts.informatieobjecttype)
+        url = str(document["url"])
+        lock = openzaak.request("POST", f"{url}/lock", HTTPStatus.OK, json={}).json()["lock"]
+        response = openzaak.request("PATCH", url, HTTPStatus.BAD_REQUEST, json={**fields, "lock": lock})
+        openzaak.request("POST", f"{url}/unlock", HTTPStatus.NO_CONTENT, json={"lock": lock})
+    codes = [p["code"] for p in entries(response.json()["invalidParams"])]
+    assert codes == ["invalid_for_received"], response.text
+
+
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW business rule drc-007",
+    "A document without vertrouwelijkheidaanduiding gets its informatieobjecttype's; an explicit one is kept.",
+)
+@pytest.mark.scenario("""
+    Given the test informatieobjecttype
+    When a document is created without a vertrouwelijkheidaanduiding
+    Then it has the vertrouwelijkheidaanduiding of its informatieobjecttype
+    And a document created with one keeps it
+""")
+def test_document_vertrouwelijkheidaanduiding_defaults_to_the_informatieobjecttypes(
+    openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
+) -> None:
+    """A document without vertrouwelijkheidaanduiding takes the informatieobjecttype's; an explicit value is kept."""
+    iot = openzaak.get(parts.informatieobjecttype)
+    body = {**document_body(registry, parts.informatieobjecttype, 3), "inhoud": base64.b64encode(b"abc").decode()}
+    body.pop("vertrouwelijkheidaanduiding")
+    derived = openzaak.post(f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", body)
+    registry.add(f"document {derived['url']}", lambda: openzaak.delete(str(derived["url"])))
+    explicit = make_document(openzaak, registry, parts.informatieobjecttype, vertrouwelijkheidaanduiding="geheim")
+    assert derived["vertrouwelijkheidaanduiding"] == iot["vertrouwelijkheidaanduiding"]
+    assert explicit["vertrouwelijkheidaanduiding"] == "geheim"
+
+
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW features, DRC Identificatie uniek",
+    "A document's identificatie is unique per bronorganisatie, on create and on change.",
+)
+@pytest.mark.parametrize(
+    "method",
+    [
+        "POST",
+        pytest.param(
+            "PATCH",
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason="[open-zaak-9] Open Zaak 1.29.3 accepts a PATCH to another document's identificatie (the update "
+                "serializer drops UniekeIdentificatieValidator); not yet reported upstream",
+            ),
+        ),
+    ],
+)
+@pytest.mark.scenario("""
+    Given a document in Open Zaak
+    When a second document is created or changed to have the same identificatie
+    Then Open Zaak refuses it and names the identificatie
+""")
+def test_document_identificatie_is_unique(
+    openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts, method: str
+) -> None:
+    """POST or PATCH to an identificatie in use for the same bronorganisatie answers 400."""
+    eerste = make_document(openzaak, registry, parts.informatieobjecttype)
+    if method == "POST":
+        inhoud = base64.b64encode(b"podiumd-tests").decode()
+        body = {**document_body(registry, parts.informatieobjecttype, len(b"podiumd-tests")), "inhoud": inhoud}
+        body["identificatie"] = eerste["identificatie"]
+        response = openzaak.request(
+            "POST", f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", HTTPStatus.BAD_REQUEST, json=body
+        )
+    else:
+        tweede = make_document(openzaak, registry, parts.informatieobjecttype)
+        url = str(tweede["url"])
+        lock = openzaak.request("POST", f"{url}/lock", HTTPStatus.OK, json={}).json()["lock"]
+        unlock = {"lock": lock}
+        registry.add(
+            f"unlock {url}", lambda: openzaak.request("POST", f"{url}/unlock", HTTPStatus.NO_CONTENT, json=unlock)
+        )
+        change = {"identificatie": eerste["identificatie"], "lock": lock}
+        response = openzaak.request("PATCH", url, HTTPStatus.BAD_REQUEST, json=change)
+    assert "identificatie" in invalid_names(response), response.text
+
+
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW business rule drc-007",
+    "A document's vertrouwelijkheidaanduiding is one of the choices or derived from its informatieobjecttype.",
+)
+@pytest.mark.xfail(
+    strict=True,
+    reason="[open-zaak-10] Open Zaak 1.29.3 answers 500 to a document with an empty vertrouwelijkheidaanduiding "
+    "(has_auth filters on None) for a client without heeft_alle_autorisaties; not yet reported upstream",
+)
+@pytest.mark.scenario("""
+    When a document is created with an empty vertrouwelijkheidaanduiding
+    Then Open Zaak refuses it as invalid, or gives it the vertrouwelijkheidaanduiding of its informatieobjecttype
+""")
+def test_document_with_empty_vertrouwelijkheidaanduiding_is_no_server_error(
+    openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
+) -> None:
+    """POST of a document with vertrouwelijkheidaanduiding "" answers 400 or 201, not 500."""
+    inhoud = base64.b64encode(b"abc").decode()
+    body = {
+        **document_body(registry, parts.informatieobjecttype, 3),
+        "inhoud": inhoud,
+        "vertrouwelijkheidaanduiding": "",
+    }
+    path = f"{DOCUMENTEN}/enkelvoudiginformatieobjecten"
+    response = openzaak.request("POST", path, HTTPStatus.BAD_REQUEST, HTTPStatus.CREATED, json=body)
+    if response.status_code == HTTPStatus.CREATED:
+        url = str(response.json()["url"])
+        registry.add(f"document {url}", lambda: openzaak.delete(url))
