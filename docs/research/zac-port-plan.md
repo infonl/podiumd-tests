@@ -29,7 +29,7 @@ share their setup. The user picks the batches to port.
 | Z1 | Zaak lifecycle: intake, afhandelen, heropenen, statuses | 5 high, 3 medium | 5 | none | 2 |
 | Z2 | Zaak koppelen (gerelateerd; hoofd- and deelzaak in Z10) | 1 high, 2 medium | 5 (done) | none | 1.5 |
 | Z3 | Besluiten in ZAC | 1 high, 3 medium | 7 (done) | besluit rights for the cleanup client | 1.5 |
-| Z4 | Opschorten, verlengen and their dates | 3 high (partial), 2 medium | 4 | none | 1.5 |
+| Z4 | Opschorten, verlengen and their dates | 3 high (partial), 2 medium | 4 (done) | none | 1.5 |
 | Z5 | Mail from a zaak | 2 high, 2 medium | 4 | none | 2 |
 | Z6 | Documents: verplaatsen, ontkoppelen, versies, ondertekenen, refusals | 1 high, 6 medium | 6 | none | 2 |
 | Z7 | CMMN taken: intake, Goedkeuren, Advies, Document verzenden | 1 high, 4 medium | 4 | human task parameters for more plan items | 2.5 |
@@ -83,16 +83,16 @@ share their setup. The user picks the batches to port.
 - The tests run one after another (xdist group): Open Zaak gives besluiten created at the same time the same
   identificatie (open-zaak-8).
 
-### Z4: opschorten and verlengen (1.5 days, 4 tests)
+### Z4: opschorten and verlengen (done: 4 tests, 2 of them extended)
 
-- Gaps: opschorten shifts streef- and fatale datum and records indicatie, reden and eerdere opschorting in Open Zaak;
-  hervatten recalculates with the actual duration; verlengen moves both dates, only once, refused beyond the
-  zaaktype's maximum; aanvullende informatie with opschorten suspends and completing it with hervatten resumes;
-  streef- and fatale datum come from the zaaktype's doorlooptijden.
-- Files: `tests/component/zac/test_zac_zaak.py` (extends `test_suspended_zaak_resumes_and_cannot_be_suspended_again`
-  and `test_extension_moves_the_planned_and_final_dates`).
-- Reuses: `zac_zaak`, `open_task`, `complete_task`, Open Zaak reads of the zaak's opschorting.
-- Risks: dates in days: compute expectations from the zaak's own startdatum, not today.
+- Covered: opschorten moves both dates and sets Open Zaak's opschorting (indicatie, reden); hervatten the same day
+  moves them back by the unused days and keeps eerdereOpschorting; a second opschorting is refused; verlengen moves
+  both dates, Open Zaak records reden and duur, a second verlenging is refused; a new zaak's dates come from the
+  zaaktype's servicenorm and doorlooptijd (`test_zac_zaak.py`); Aanvullende informatie with opschorten suspends until
+  the task's fatale datum and completing it with hervatten resumes (`test_zac_taken.py`, minikube only: the
+  bootstrap step zac-aanvullende-informatie is off on kees00).
+- Not covered: a verlenging beyond the zaaktype's verlengingstermijn (ZAC and Open Zaak accept 400 days against P14D
+  through the API; only ZAC's form limits it).
 
 ### Z5: mail from a zaak (2 days, 4 tests)
 
