@@ -678,6 +678,18 @@ STEPS: tuple[Step, ...] = (
         },
     ),
     SnippetStep(
+        "openzaak-besluittype-bijlage",
+        ("openzaak",),
+        "openzaak_besluittype_iot",
+        None,
+        {
+            "domein": names.TEST_CATALOGUS_DOMEIN,
+            "rsin": names.TEST_CATALOGUS_RSIN,
+            "besluittype": names.TEST_BESLUITTYPE,
+            "iot": names.TEST_IOT,
+        },
+    ),
+    SnippetStep(
         "openzaak-zaaktype-archief",
         ("openzaak",),
         "openzaak_zaaktype",
