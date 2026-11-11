@@ -97,7 +97,8 @@ def test_smoke_only_profiles_are_refused(profile_factory):
 
 def test_bootstrap_applies_missing_steps_and_stores_credentials(env_factory, fake_runner, profile_factory):
     env = cluster_env(env_factory, fake_runner, profile_factory)
-    missing, present = FakeStep("a"), FakeStep("b", present=True)
+    # One component: the steps run in order, so the last stdin is the credentials write of a.
+    missing, present = FakeStep("a", ("openzaak",)), FakeStep("b", ("openzaak",), present=True)
     outcomes = bootstrap(env, [missing, present])
     assert [(o.step, o.action) for o in outcomes] == [("a", "created"), ("b", "present")]
     assert missing.log == ["apply"]
