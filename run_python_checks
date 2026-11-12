@@ -26,9 +26,10 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 if [[ -x .venv/bin/python3 ]]; then
     PATH="$PWD/.venv/bin:$PATH"
     # CI installs the latest dev tools; upgrade .venv to them at most once a day
-    # and whenever pyproject.toml changes.
+    # and whenever pyproject.toml changes. Not through a symlinked .venv (a git
+    # worktree's): the editable install would point the shared .venv at it.
     stamp=.venv/.dev-upgraded
-    if [[ ! -e "${stamp}" || pyproject.toml -nt "${stamp}" || -z "$(find "${stamp}" -mmin -1440)" ]]; then
+    if [[ ! -L .venv ]] && [[ ! -e "${stamp}" || pyproject.toml -nt "${stamp}" || -z "$(find "${stamp}" -mmin -1440)" ]]; then
         echo "=== upgrading .venv dev tools ==="
         python3 -m pip install -q -U --upgrade-strategy eager -e '.[dev]'
         # A new playwright needs its own browser build; without it every UI test fails at launch.
