@@ -12,10 +12,13 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.bpmn import EINDSTATUS
+from podiumd_tests.bootstrap.bpmn import IN_BEHANDELING
 from podiumd_tests.bootstrap.bpmn import INTAKE
 from podiumd_tests.bootstrap.bpmn import SELECT
 from podiumd_tests.bootstrap.bpmn import SIGN
 from podiumd_tests.bootstrap.bpmn import SUMMARY
+from podiumd_tests.bootstrap.bpmn import complete_intake
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
@@ -44,30 +47,21 @@ if TYPE_CHECKING:
 pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "pabc", "keycloak")]
 
 FEATURE = "ZAC features/9-bpmn.feature"
-# The test zaaktype's last statustype.
-EINDSTATUS = "Afgehandeld"
 
 
 def intake(zac: requests.Session, zac_url: str, zaak: JsonObject, group: str) -> None:
-    """Complete the intake: assign the zaak to the group and the test admin, and choose its end status and resultaat."""
-    data = {
-        "AM_TeamBehandelaar_Groep": group,
-        "AM_TeamBehandelaar_Medewerker": ADMIN.username,
-        "ZK_Status": EINDSTATUS,
-        "ZK_Result": EINDSTATUS,
-    }
-    complete_task(zac, zac_url, open_task(zac, zac_url, str(zaak["uuid"]), INTAKE), data)
+    """Complete the intake for the group and the test admin."""
+    complete_intake(zac, zac_url, zaak, (group, ADMIN.username))
 
 
 def signed_document(zac: requests.Session, zac_url: str, zaak: JsonObject, registry: ResourceRegistry) -> str:
     """Upload a PDF to the zaak, then select and sign it in the process's two document tasks; its uuid."""
     uuid = str(zaak["uuid"])
-    uploaded = uploaded_document(zac, zac_url, zaak, registry, suffix="pdf")
-    document, name = str(uploaded["uuid"]), str(uploaded["titel"])
-    row = [{"selected": True, "titel": name, "uuid": document}]
+    document = uploaded_document(zac, zac_url, zaak, registry, suffix="pdf")
+    row = [{"selected": True, "titel": document["titel"], "uuid": document["uuid"]}]
     complete_task(zac, zac_url, open_task(zac, zac_url, uuid, SELECT), {"ZAAK_Documenten_Ondertekenen_Selectie": row})
     complete_task(zac, zac_url, open_task(zac, zac_url, uuid, SIGN), {"ZAAK_Documenten_Te_Ondertekenen": row})
-    return document
+    return str(document["uuid"])
 
 
 @pytest.mark.source(FEATURE, "Bob creates a BPMN zaak; it is in the werkvoorraad.")
@@ -93,16 +87,17 @@ def test_bpmn_zaak_starts_with_its_intake_form(
 @pytest.mark.scenario("""
     Given a BPMN zaak in ZAC with its intake task open
     When the behandelaar submits the intake with a group and a behandelaar
-    Then the zaak is assigned to that group and behandelaar
+    Then the zaak is assigned to that group and behandelaar, and has the status In behandeling
     And the next task, selecting documents to sign, is for that group and behandelaar
 """)
 def test_intake_assigns_the_zaak_and_its_next_task(
     zac: requests.Session, urls: dict[str, str], bpmn_zaak: JsonObject, zac_group: str
 ) -> None:
-    """The intake form's group and behandelaar go to the zaak (UpdateZaakAssignmentDelegate) and the next task."""
+    """The intake's group and behandelaar go to the zaak and the next task; the process sets the status after it."""
     intake(zac, urls["zac"], bpmn_zaak, zac_group)
     zaak = read_zaak(zac, urls["zac"], str(bpmn_zaak["uuid"]))
     assert (section(zaak, "groep").get("id"), section(zaak, "behandelaar").get("id")) == (zac_group, ADMIN.username)
+    assert section(zaak, "status").get("naam") == IN_BEHANDELING
     task = open_task(zac, urls["zac"], str(bpmn_zaak["uuid"]), SELECT)
     assert (section(task, "groep").get("id"), section(task, "behandelaar").get("id")) == (zac_group, ADMIN.username)
 
