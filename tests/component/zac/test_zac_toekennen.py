@@ -5,29 +5,44 @@ Ported from ZAC's own e2e features zaken-verdelen-vrijgeven and bpmn (toekennen)
 
 from __future__ import annotations
 
+from collections import Counter
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
 
 from podiumd_tests.bootstrap.steps import ADMIN
+from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openzaak import CATALOGI
+from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import assignment
+from podiumd_tests.zac import listed_assignment
 from podiumd_tests.zac import read_zaak
+from podiumd_tests.zac import search_all
 from podiumd_tests.zac import toekennen
 from podiumd_tests.zac import verdelen
 from podiumd_tests.zac import vrijgeven
+from podiumd_tests.zac import zaaktype_filter
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     import requests
 
+    from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "keycloak")]
+
+# More zaken than one page of ZAC's werklijsten (WERKLIJST_ROWS).
+BULK = 100
+WERKLIJST_ROWS = 25
+# ZAC indexes, assigns and releases BULK zaken one by one: its job assigned 63 in 120 s on minikube.
+BULK_TIMEOUT = 600
 
 
 @pytest.mark.source("ZAC features/9-bpmn.feature", "Bob changes the group and user a zaak is assigned to.")
@@ -100,3 +115,42 @@ def test_zaak_verdeeld_to_a_group_alone_loses_its_behandelaar(
         timeout=LIST_TIMEOUT,
         description=f"zaak {zaak['identificatie']} verdeeld to {groep}",
     )
+
+
+@pytest.mark.slow
+@pytest.mark.xdist_group("zac-eigen-zaaktype")
+@pytest.mark.source("podiumd-tests", "Verdelen and vrijgeven of more zaken than one werklijst page.")
+@pytest.mark.scenario("""
+    Given 100 zaken of a zaaktype of their own in the werkvoorraad
+    When the behandelaar assigns all of them to a group and a behandelaar
+    Then the werkvoorraad lists all 100 with that group and behandelaar
+    When the behandelaar releases all of them
+    Then the werkvoorraad lists all 100 with that group and no behandelaar
+""")
+def test_hundred_zaken_are_assigned_and_released(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_eigen_zaaktype: JsonObject,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    zac_group: str,
+) -> None:
+    """Verdelen and vrijgeven of BULK zaken reach each of them, as the werkvoorraad lists them page by page."""
+    zaaktype = section(zac_eigen_zaaktype, "zaaktype")
+    zaaktype_url = openzaak.url(f"{CATALOGI}/zaaktypen/{zaaktype['uuid']}")
+    uuids = sorted(str(make_zaak(openzaak, registry, zaaktype_url)["uuid"]) for _ in range(BULK))
+    query = {"type": "ZAAK", "alleenOpenstaandeZaken": True, "filters": zaaktype_filter(str(zaaktype["omschrijving"]))}
+
+    def are_all(wanted: tuple[object, object] | None) -> bool:
+        """None: any assignment. On a mismatch, wait_until reports the listed assignments' counts."""
+        found = search_all(zac, urls["zac"], WERKLIJST_ROWS, **query)
+        listed = {str(item["id"]): listed_assignment(item) for item in found}
+        assert sorted(listed) == uuids, f"listed {len(listed)} of {BULK} zaken"
+        assert wanted is None or set(listed.values()) == {wanted}, f"listed {Counter(listed.values())}"
+        return True
+
+    wait_until(lambda: are_all(None), timeout=BULK_TIMEOUT, description=f"{BULK} zaken in the werkvoorraad")
+    expect_status(verdelen(zac, urls["zac"], uuids, zac_group, ADMIN.username), HTTPStatus.NO_CONTENT)
+    wait_until(lambda: are_all((zac_group, ADMIN.username)), timeout=BULK_TIMEOUT, description=f"{BULK} zaken verdeeld")
+    expect_status(vrijgeven(zac, urls["zac"], uuids), HTTPStatus.NO_CONTENT)
+    wait_until(lambda: are_all((zac_group, None)), timeout=BULK_TIMEOUT, description=f"{BULK} zaken vrijgegeven")

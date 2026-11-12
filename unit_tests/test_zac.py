@@ -170,6 +170,20 @@ def test_count_zaken_found(fake_http):
     assert json.loads(sent[0].body)["filters"] == {"ZAAKTYPE": {"values": ["Klacht"]}}
 
 
+def test_search_all_reads_every_page_of_rows(fake_http):
+    sent = fake_http({"PUT /rest/zoeken/list": (200, {"totaal": 5, "resultaten": [{"id": "z1"}, {"id": "z2"}]})})
+    found = zac.search_all(requests.Session(), ZAC, 2, type="ZAAK")
+    assert len(found) == 6
+    assert [json.loads(request.body)["page"] for request in sent] == [0, 1, 2]
+    assert {json.loads(request.body)["rows"] for request in sent} == {2}
+
+
+def test_search_all_reads_one_page_when_nothing_is_found(fake_http):
+    sent = fake_http({"PUT /rest/zoeken/list": (200, {"totaal": 0, "resultaten": []})})
+    assert zac.search_all(requests.Session(), ZAC, 25, type="ZAAK") == []
+    assert len(sent) == 1
+
+
 def test_zac_session_logs_in_through_keycloak(env_factory, profile_factory, monkeypatch):
     logins = []
     monkeypatch.setattr(zac, "form_login", lambda _http, url, user, password: logins.append((url, user, password)))
@@ -443,6 +457,11 @@ def test_verdelen_and_vrijgeven_send_the_selection(fake_http):
 def test_assignment_is_group_and_behandelaar():
     assert zac.assignment({"groep": {"id": "g1"}, "behandelaar": {"id": "u1"}}) == ("g1", "u1")
     assert zac.assignment({"groep": {"id": "g1"}, "behandelaar": None}) == ("g1", None)
+
+
+def test_listed_assignment_is_group_and_behandelaar_of_a_search_result():
+    assert zac.listed_assignment({"groepId": "g1", "behandelaarGebruikersnaam": "u1"}) == ("g1", "u1")
+    assert zac.listed_assignment({"groepId": "g1"}) == ("g1", None)
 
 
 def test_configure_zaaktype_saves_the_cmmn_model_groep_resultaattype_and_user_events(fake_http):

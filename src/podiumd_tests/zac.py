@@ -362,6 +362,11 @@ def assignment(item: JsonObject) -> tuple[object, object]:
     return section(item, "groep").get("id"), section(item, "behandelaar").get("id")
 
 
+def listed_assignment(item: JsonObject) -> tuple[object, object]:
+    """(group id, behandelaar id) of a zaak as ZAC's search lists it."""
+    return item.get("groepId"), item.get("behandelaarGebruikersnaam")
+
+
 def verdelen(
     http: requests.Session, zac_url: str, uuids: list[str], groep: str, behandelaar: str | None
 ) -> requests.Response:
@@ -575,6 +580,20 @@ def search(http: requests.Session, zac_url: str, **query: object) -> JsonObject:
     return cast("JsonObject", expect_status(http.put(f"{zac_url}/rest/zoeken/list", json=body), HTTPStatus.OK).json())
 
 
+def search_all(http: requests.Session, zac_url: str, rows: int, **query: object) -> list[JsonObject]:
+    """Return every result of ZAC's search with these RestZoekParameters, read page by page of rows."""
+    found = search(http, zac_url, rows=rows, **query)
+    results = entries(found["resultaten"])
+    for page in range(1, -(-int(str(found["totaal"])) // rows)):
+        results.extend(entries(search(http, zac_url, page=page, rows=rows, **query)["resultaten"]))
+    return results
+
+
+def zaaktype_filter(zaaktype_omschrijving: str) -> JsonObject:
+    """ZAC's search filter on zaken of the zaaktype."""
+    return {"ZAAKTYPE": {"values": [zaaktype_omschrijving]}}
+
+
 def zaak_zoekresultaat(http: requests.Session, zac_url: str, zaak: JsonObject, **flags: bool) -> JsonObject | None:
     """Return the zaak as ZAC's search for zaken lists it, or None; flags are its alleen* filters.
 
@@ -691,7 +710,7 @@ def wait_for_indicatie(http: requests.Session, zac_url: str, zaak: JsonObject, i
 
 def count_zaken_found(zac: requests.Session, zac_url: str, zaaktype_omschrijving: str) -> int:
     """How many zaken of the zaaktype ZAC's search shows the session's user."""
-    found = search(zac, zac_url, rows=1, type="ZAAK", filters={"ZAAKTYPE": {"values": [zaaktype_omschrijving]}})
+    found = search(zac, zac_url, rows=1, type="ZAAK", filters=zaaktype_filter(zaaktype_omschrijving))
     return int(str(found["totaal"]))
 
 
