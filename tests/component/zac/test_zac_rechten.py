@@ -16,6 +16,7 @@ import pytest
 
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
+from podiumd_tests.bootstrap.bpmn import INTAKE
 from podiumd_tests.bootstrap.names import ZAC_BASE_ROLES
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import KCC
@@ -31,10 +32,13 @@ from podiumd_tests.zac import afsluiten
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import can_open_zaak
 from podiumd_tests.zac import heropenen
+from podiumd_tests.zac import open_task
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import rights_of
 from podiumd_tests.zac import verdelen
+from podiumd_tests.zac import verdelen_taken
 from podiumd_tests.zac import vrijgeven
+from podiumd_tests.zac import vrijgeven_taken
 from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zac_session
 from podiumd_tests.zac_betrokkenen import wijzig_initiator
@@ -382,6 +386,30 @@ def test_only_a_coordinator_verdeelt_and_vrijgeeft(
     wait_until(lambda: is_((zac_group, ADMIN.username)), timeout=LIST_TIMEOUT, description="zaak verdeeld")
     expect_status(vrijgeven(coordinator, zac_url, uuids), HTTPStatus.NO_CONTENT)
     wait_until(lambda: is_((zac_group, None)), timeout=LIST_TIMEOUT, description="zaak vrijgegeven")
+
+
+@pytest.mark.requires("pabc")
+@pytest.mark.source(POLICIES, "Only a coordinator or a role above it may verdelen and vrijgeven taken from the list.")
+@pytest.mark.scenario("""
+    Given the intake taak of a zaak of the BPMN test zaaktype
+    When a behandelaar verdeelt or vrijgeeft it from the takenlijst
+    Then ZAC refuses both
+""")
+def test_only_a_coordinator_verdeelt_and_vrijgeeft_taken(
+    zac: requests.Session,
+    zac_as: Callable[[str], requests.Session],
+    urls: dict[str, str],
+    bpmn_zaak: JsonObject,
+    zac_group: str,
+) -> None:
+    """Verdelen and vrijgeven of taken answer 403 to the behandelaar."""
+    taken = [open_task(zac, urls["zac"], str(bpmn_zaak["uuid"]), INTAKE)]
+    behandelaar = zac_as("behandelaar")
+    for refused in (
+        verdelen_taken(behandelaar, urls["zac"], taken, zac_group, ADMIN.username),
+        vrijgeven_taken(behandelaar, urls["zac"], taken),
+    ):
+        assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
 
 
 @pytest.mark.requires("pabc")

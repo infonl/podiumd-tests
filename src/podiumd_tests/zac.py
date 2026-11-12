@@ -402,6 +402,41 @@ def vrijgeven(http: requests.Session, zac_url: str, uuids: list[str]) -> request
     return http.put(f"{zac_url}/rest/zaken/lijst/vrijgeven", json={"uuids": uuids, "reden": "podiumd-tests"})
 
 
+def toekennen_mij(http: requests.Session, zac_url: str, zaak: JsonObject, groep: str) -> requests.Response:
+    """Assign the zaak to the group and the session's user from the werkvoorraad; ZAC's answer."""
+    body = {"zaakUUID": zaak["uuid"], "groepId": groep, "reden": "podiumd-tests"}
+    return http.put(f"{zac_url}/rest/zaken/lijst/toekennen/mij", json=body)
+
+
+def _taak_refs(taken: list[JsonObject]) -> list[JsonObject]:
+    return [{"taakId": taak["id"], "zaakUuid": taak["zaakUuid"]} for taak in taken]
+
+
+def verdelen_taken(
+    http: requests.Session, zac_url: str, taken: list[JsonObject], groep: str, behandelaar: str | None
+) -> requests.Response:
+    """Assign the taken from the werkvoorraad to the group and behandelaar; ZAC's answer, before its background job."""
+    body = {
+        "taken": _taak_refs(taken),
+        "groepId": groep,
+        "behandelaarGebruikersnaam": behandelaar,
+        "reden": "podiumd-tests",
+    }
+    return http.put(f"{zac_url}/rest/taken/lijst/verdelen", json=body)
+
+
+def vrijgeven_taken(http: requests.Session, zac_url: str, taken: list[JsonObject]) -> requests.Response:
+    """Release the taken from the werkvoorraad; ZAC's answer, before its background job."""
+    body = {"taken": _taak_refs(taken), "reden": "podiumd-tests"}
+    return http.put(f"{zac_url}/rest/taken/lijst/vrijgeven", json=body)
+
+
+def taak_toekennen_mij(http: requests.Session, zac_url: str, taak: JsonObject) -> requests.Response:
+    """Assign the taak to the session's user from the werkvoorraad; ZAC's answer."""
+    body = {"taakId": taak["id"], "zaakUuid": taak["zaakUuid"], "groepId": "", "reden": "podiumd-tests"}
+    return http.patch(f"{zac_url}/rest/taken/lijst/toekennen/mij", json=body)
+
+
 # ZAC's access rules (OPA policies), the source of the expected rights per role.
 POLICIES = "upstream infonl/dimpact-zaakafhandelcomponent src/main/resources/policies"
 

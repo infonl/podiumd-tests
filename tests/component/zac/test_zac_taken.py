@@ -43,6 +43,8 @@ from podiumd_tests.zac import read_taak
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import start_human_task
 from podiumd_tests.zac import user_events_offered
+from podiumd_tests.zac import verdelen_taken
+from podiumd_tests.zac import vrijgeven_taken
 from podiumd_tests.zac_beheer import referentietabel
 from podiumd_tests.zac_beheer import referentietabel_values
 from podiumd_tests.zac_documents import document_url
@@ -198,16 +200,14 @@ def test_taken_from_the_list_are_released_and_assigned(
     zac: requests.Session, urls: dict[str, str], taak: JsonObject, zac_group: str
 ) -> None:
     """Vrijgeven takes the behandelaar away from the selected task; verdelen gives it back."""
-    taken = f"{urls['zac']}/rest/taken"
-    selected = [{"taakId": taak["id"], "zaakUuid": taak["zaakUuid"]}]
 
     def is_(wanted: tuple[object, object]) -> bool:
         return assignment(read_taak(zac, urls["zac"], str(taak["id"]))) == wanted
 
-    expect_status(zac.put(f"{taken}/lijst/vrijgeven", json={"taken": selected, "reden": "test"}), 200, 204)
+    expect_status(vrijgeven_taken(zac, urls["zac"], [taak]), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     wait_until(lambda: is_((zac_group, None)), timeout=LIST_TIMEOUT, description=f"task {taak['id']} vrijgegeven")
-    body = {"taken": selected, "groepId": zac_group, "behandelaarGebruikersnaam": ADMIN.username, "reden": "test"}
-    expect_status(zac.put(f"{taken}/lijst/verdelen", json=body), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    verdeeld = verdelen_taken(zac, urls["zac"], [taak], zac_group, ADMIN.username)
+    expect_status(verdeeld, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     wait_until(
         lambda: is_((zac_group, ADMIN.username)), timeout=LIST_TIMEOUT, description=f"task {taak['id']} verdeeld"
     )

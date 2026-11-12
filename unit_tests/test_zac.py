@@ -497,6 +497,33 @@ def test_verdelen_and_vrijgeven_send_the_selection(fake_http):
     assert json.loads(sent[-1].body) == {"uuids": ["z1"], "reden": "podiumd-tests"}
 
 
+def test_taken_verdelen_and_vrijgeven_send_the_selected_taken(fake_http):
+    sent = fake_http({"PUT /rest/taken/lijst/verdelen": (204, None), "PUT /rest/taken/lijst/vrijgeven": (204, None)})
+    http = requests.Session()
+    taak = {"id": "t1", "zaakUuid": "z1", "naam": "Intake"}
+    selected = [{"taakId": "t1", "zaakUuid": "z1"}]
+    zac.verdelen_taken(http, ZAC, [taak], "g1", None)
+    assert json.loads(sent[-1].body) == {
+        "taken": selected,
+        "groepId": "g1",
+        "behandelaarGebruikersnaam": None,
+        "reden": "podiumd-tests",
+    }
+    zac.vrijgeven_taken(http, ZAC, [taak])
+    assert json.loads(sent[-1].body) == {"taken": selected, "reden": "podiumd-tests"}
+
+
+def test_toekennen_mij_sends_the_zaak_or_taak(fake_http):
+    sent = fake_http(
+        {"PUT /rest/zaken/lijst/toekennen/mij": (200, {}), "PATCH /rest/taken/lijst/toekennen/mij": (200, {})}
+    )
+    http = requests.Session()
+    zac.toekennen_mij(http, ZAC, {"uuid": "z1"}, "g1")
+    assert json.loads(sent[-1].body) == {"zaakUUID": "z1", "groepId": "g1", "reden": "podiumd-tests"}
+    zac.taak_toekennen_mij(http, ZAC, {"id": "t1", "zaakUuid": "z1"})
+    assert json.loads(sent[-1].body)["taakId"] == "t1"
+
+
 def test_assignment_is_group_and_behandelaar():
     assert zac.assignment({"groep": {"id": "g1"}, "behandelaar": {"id": "u1"}}) == ("g1", "u1")
     assert zac.assignment({"groep": {"id": "g1"}, "behandelaar": None}) == ("g1", None)
