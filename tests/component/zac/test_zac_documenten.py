@@ -12,15 +12,26 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import strings
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import DOCUMENTEN
+from podiumd_tests.seed.openzaak import make_document
+from podiumd_tests.seed.openzaak import zaaktype_parts
+from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import INDEX_TIMEOUT
+from podiumd_tests.zac import NOTIFICATION_TIMEOUT
+from podiumd_tests.zac import clean_up_zaak
+from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac_documents import FILES
+from podiumd_tests.zac_documents import INBOX_DOCUMENTEN
 from podiumd_tests.zac_documents import ONTKOPPELDE_DOCUMENTEN
 from podiumd_tests.zac_documents import delete_ontkoppeld_document
 from podiumd_tests.zac_documents import document_url
+from podiumd_tests.zac_documents import inbox_documenten
+from podiumd_tests.zac_documents import koppelbare_zaken
 from podiumd_tests.zac_documents import max_file_size_mb
 from podiumd_tests.zac_documents import nieuwe_versie
 from podiumd_tests.zac_documents import ontkoppel_document
@@ -71,8 +82,19 @@ def _toelichtingen(zac: requests.Session, zac_url: str, zaak: JsonObject, actie:
     )
 
 
+def _koppelbaar(zac: requests.Session, zac_url: str, document: JsonObject, zaak: JsonObject) -> JsonObject | None:
+    """The zaak as ZAC's zaak search for moving the document lists it, or None."""
+    found = koppelbare_zaken(zac, zac_url, str(zaak["identificatie"]), document["informatieobjectTypeUUID"])
+    resultaten = entries(expect_status(found, HTTPStatus.OK).json().get("resultaten"))
+    return next((item for item in resultaten if item.get("id") == zaak["uuid"]), None)
+
+
 @pytest.mark.scenario("""
     Given two zaken in ZAC, the first with a document
+    When the behandelaar searches a zaak to move the document to without a zoekterm
+    Then ZAC refuses the search
+    When the behandelaar searches the second zaak by its zaaknummer
+    Then ZAC lists it as a zaak the document can move to
     When the behandelaar moves the document to the second zaak
     Then the second zaak has the document and the first no longer
     And the second zaak's historie records the move
@@ -80,9 +102,18 @@ def _toelichtingen(zac: requests.Session, zac_url: str, zaak: JsonObject, actie:
 def test_document_is_moved_to_another_zaak(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
 ) -> None:
-    """Verplaatsen from a zaak links the document to the other zaak only; GEKOPPELD in that zaak's historie."""
+    """The zaak search refuses a blank zoekterm; verplaatsen links the document to the other zaak only."""
     zaak, ander = zac_zaak(), zac_zaak()
     document = uploaded_document(zac, urls["zac"], zaak, registry)
+    for blank in ("", " "):
+        refused = koppelbare_zaken(zac, urls["zac"], blank, document["informatieobjectTypeUUID"])
+        expect_status(refused, HTTPStatus.BAD_REQUEST)
+    listed = wait_until(
+        lambda: _koppelbaar(zac, urls["zac"], document, ander),
+        timeout=INDEX_TIMEOUT,
+        description=f"{ander['identificatie']} in ZAC's zaak search",
+    )
+    assert listed.get("nietKoppelbaarReden") is None
     moved = verplaats_document(zac, urls["zac"], document, str(zaak["identificatie"]), ander)
     expect_status(moved, HTTPStatus.NO_CONTENT, HTTPStatus.OK)
     assert document["uuid"] not in _uuids(zac, urls["zac"], zaak)
@@ -118,6 +149,44 @@ def test_ontkoppeld_document_is_gekoppeld_to_another_zaak(
     expect_status(moved, HTTPStatus.NO_CONTENT, HTTPStatus.OK)
     assert document["uuid"] in _uuids(zac, urls["zac"], ander)
     assert _ontkoppeld(zac, urls["zac"], zaak, document) is None
+
+
+@pytest.mark.requires("opennotificaties")
+@pytest.mark.scenario("""
+    Given a document in Open Zaak on no zaak
+    Then ZAC lists it in its Inbox documenten
+    When the behandelaar koppelt it from the Inbox documenten to a zaak
+    Then the zaak has the document and the Inbox documenten no longer list it
+    And the zaak's historie records the koppeling from the Inbox documenten
+""")
+def test_inbox_document_is_gekoppeld_to_a_zaak(
+    zac: requests.Session,
+    urls: dict[str, str],
+    openzaak: ApiClient,
+    bpmn_zaaktype: JsonObject,
+    bpmn_parameters: JsonObject,
+    registry: ResourceRegistry,
+) -> None:
+    """A document on no zaak is in ZAC's Inbox documenten; verplaatsen from there links it and removes the entry."""
+    document = make_document(openzaak, registry, zaaktype_parts(openzaak, bpmn_zaaktype).informatieobjecttype)
+    titel = str(document["titel"])
+    listed = wait_until(
+        lambda: next(iter(inbox_documenten(zac, urls["zac"], titel)), None),
+        timeout=NOTIFICATION_TIMEOUT,
+        description=f"{titel} in ZAC's Inbox documenten",
+    )
+    # After the document, so cleanup deletes the zaak and its link before the document.
+    zaak = create_zaak(zac, urls["zac"], bpmn_parameters, omschrijving=registry.tagged("inbox"))
+    clean_up_zaak(zac, urls["zac"], openzaak, registry, zaak)
+
+    inbox_document = {"uuid": listed["enkelvoudiginformatieobjectUUID"]}
+    moved = verplaats_document(zac, urls["zac"], inbox_document, INBOX_DOCUMENTEN, zaak)
+    expect_status(moved, HTTPStatus.NO_CONTENT, HTTPStatus.OK)
+    assert inbox_document["uuid"] in _uuids(zac, urls["zac"], zaak)
+    assert inbox_documenten(zac, urls["zac"], titel) == []
+    assert f"Verplaatst: {INBOX_DOCUMENTEN} -> {zaak['identificatie']}" in _toelichtingen(
+        zac, urls["zac"], zaak, "GEKOPPELD"
+    )
 
 
 @pytest.mark.xfail(

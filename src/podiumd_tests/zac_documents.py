@@ -193,16 +193,39 @@ def zaak_documents(zac: requests.Session, zac_url: str, zaak: JsonObject) -> lis
     return entries(expect_status(listed, HTTPStatus.OK).json())
 
 
-# The bron of a document that ZAC moves from its ontkoppelde documenten.
+# The bron of a document that ZAC moves from its ontkoppelde documenten or its Inbox documenten.
 ONTKOPPELDE_DOCUMENTEN = "ontkoppelde-documenten"
+INBOX_DOCUMENTEN = "inbox-documenten"
 
 
 def verplaats_document(
     zac: requests.Session, zac_url: str, document: JsonObject, bron: str, zaak: JsonObject
 ) -> requests.Response:
-    """Move the document from bron (a zaak's identificatie or ONTKOPPELDE_DOCUMENTEN) to the zaak; ZAC's answer."""
+    """Move the document from bron (a zaak's identificatie, ONTKOPPELDE_DOCUMENTEN or INBOX_DOCUMENTEN) to the zaak.
+
+    ZAC's answer. A taak's documents are moved with the identificatie of the taak's zaak as bron.
+    """
     body = {"documentUUID": document["uuid"], "bron": bron, "nieuweZaakID": zaak["identificatie"]}
     return zac.post(f"{zac_url}/rest/informatieobjecten/informatieobject/verplaats", json=body)
+
+
+def koppelbare_zaken(
+    zac: requests.Session, zac_url: str, zoekterm: str, informatieobjecttype_uuid: object
+) -> requests.Response:
+    """Search the zaken to move or koppel a document of the informatieobjecttype to; ZAC's answer."""
+    body = {
+        "zaakIdentificator": zoekterm,
+        "informationObjectTypeUuid": informatieobjecttype_uuid,
+        "page": 0,
+        "rows": 10,
+    }
+    return zac.put(f"{zac_url}/rest/zoeken/zaken", json=body)
+
+
+def inbox_documenten(zac: requests.Session, zac_url: str, titel: str) -> list[JsonObject]:
+    """Return the entries of ZAC's Inbox documenten whose titel contains titel."""
+    listed = zac.put(f"{zac_url}/rest/inboxdocumenten", json={"titel": titel, "page": 0, "maxResults": 100})
+    return entries(expect_status(listed, HTTPStatus.OK).json().get("resultaten"))
 
 
 def ontkoppelde_documenten(zac: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:

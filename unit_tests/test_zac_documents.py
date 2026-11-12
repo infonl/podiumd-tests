@@ -111,6 +111,24 @@ def test_verplaats_document_names_the_bron_and_the_target_zaak(fake_http):
     }
 
 
+def test_koppelbare_zaken_sends_the_zoekterm_and_the_informatieobjecttype(fake_http):
+    sent = fake_http({"PUT /rest/zoeken/zaken": (400, None)})
+    response = zac_documents.koppelbare_zaken(requests.Session(), ZAC, " ", "iot1")
+    assert response.status_code == 400
+    assert json.loads(sent[-1].body) == {
+        "zaakIdentificator": " ",
+        "informationObjectTypeUuid": "iot1",
+        "page": 0,
+        "rows": 10,
+    }
+
+
+def test_inbox_documenten_filters_on_the_titel(fake_http):
+    sent = fake_http({"PUT /rest/inboxdocumenten": (200, {"resultaten": [{"id": 3}], "totaal": 1})})
+    assert zac_documents.inbox_documenten(requests.Session(), ZAC, "ptest-x") == [{"id": 3}]
+    assert json.loads(sent[-1].body) == {"titel": "ptest-x", "page": 0, "maxResults": 100}
+
+
 def test_ontkoppel_document_cleanup_deletes_only_its_detached_entry(fake_http):
     detached = {"resultaten": [{"id": 7, "documentUUID": "d1"}, {"id": 8, "documentUUID": "d2"}]}
     sent = fake_http(

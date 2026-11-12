@@ -48,7 +48,7 @@ REINDEX_TIMEOUT = 1800
 PRODUCTAANVRAAG_TIMEOUT = 120
 # ZAC indexes a zaak in Solr after Open Notificaties tells it about the change.
 INDEX_TIMEOUT = 60
-# Open Notificaties delivers a catalogus change to ZAC.
+# Open Notificaties delivers a change in Open Zaak to ZAC.
 NOTIFICATION_TIMEOUT = 60
 # A BPMN process reaches its next user task after ZAC's service tasks have run.
 TASK_TIMEOUT = 30
