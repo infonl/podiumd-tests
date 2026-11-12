@@ -9,13 +9,17 @@ a test runs its cases worst first: a cached success cannot then answer a later d
 from __future__ import annotations
 
 import hashlib
+import secrets
 import ssl
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+from podiumd_tests.process import run_checked
+
 if TYPE_CHECKING:
-    from pathlib import Path
+    from podiumd_tests.process import Runner
 
 # The inway route to the fg-echo test upstream; fg-echo answers this greeting.
 ECHO_PATH = "/echo/hello"
@@ -24,6 +28,9 @@ ALLOWED = "partner-a"
 # Signed by the edge's client CA; partner-a and partner-b are registered consumers.
 IDENTITIES = ("partner-a", "partner-b", "partner-c")
 PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----"
+OPENSSL_TIMEOUT = 30
+# The status of a TLS handshake the edge refuses.
+TLS_REFUSED = 0
 
 
 @dataclass(frozen=True)
@@ -37,6 +44,8 @@ class Case:
     # Sends partner-a's fingerprint as verified client-certificate headers.
     forged: bool = False
     plain_http: bool = False
+    # A self-signed certificate for the identity's name instead of its stored one.
+    self_signed: bool = False
 
 
 # Worst first, as the consumer cache requires.
@@ -57,6 +66,14 @@ CASES = (
         ((401, "client_certificate_not_verified"), (401, "client_certificate_required"), (301, "")),
         forged=True,
         plain_http=True,
+    ),
+    # 401 in passthrough mode; 400 or a refused handshake where the edge checks the certificate against its client CA.
+    Case(
+        "untrusted-certificate",
+        "a self-signed certificate in the allowed consumer's name",
+        ALLOWED,
+        ((401, "unknown_client_certificate"), (400, "SSL certificate"), (TLS_REFUSED, "")),
+        self_signed=True,
     ),
     Case(
         "unknown-certificate",
@@ -109,3 +126,21 @@ def forged_headers(allowed_pem: str) -> dict[str, str]:
 def is_expected(case: Case, status: int, body: str) -> bool:
     """Return whether the case accepts this answer."""
     return any(status == expected and part in body for expected, part in case.answers)
+
+
+def make_identity(runner: Runner, client_ca: Path | None, directory: Path, name: str) -> str:
+    """Return a new key and a certificate for CN=name signed by the client CA, as certificate PEM + key PEM.
+
+    Without a client CA the certificate is self-signed.
+    """
+    key, request, certificate = (str(directory / f"{name}.{suffix}") for suffix in ("key", "csr", "pem"))
+    new_key = ["openssl", "req", "-newkey", "rsa:2048", "-nodes", "-keyout", key, "-subj", f"/CN={name}"]
+    if client_ca is None:
+        run_checked(runner, [*new_key, "-x509", "-days", "1", "-out", certificate], OPENSSL_TIMEOUT)
+    else:
+        signed = ["openssl", "x509", "-req", "-in", request, "-CA", f"{client_ca}.crt", "-CAkey", f"{client_ca}.key"]
+        # A serial of its own: -CAcreateserial would write a serial file next to the CA, in the owner's directory.
+        serial = f"0x{secrets.token_hex(16)}"
+        run_checked(runner, [*new_key, "-new", "-out", request], OPENSSL_TIMEOUT)
+        run_checked(runner, [*signed, "-set_serial", serial, "-days", "365", "-out", certificate], OPENSSL_TIMEOUT)
+    return Path(certificate).read_text(encoding="ascii") + Path(key).read_text(encoding="ascii")

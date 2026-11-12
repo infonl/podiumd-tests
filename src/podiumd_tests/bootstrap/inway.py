@@ -7,7 +7,6 @@ client CA; partner-a and partner-b are registered as consumers in OpenBao throug
 
 from __future__ import annotations
 
-import secrets
 import tempfile
 
 from dataclasses import dataclass
@@ -20,20 +19,19 @@ import yaml
 from podiumd_tests.config import REPO_ROOT
 from podiumd_tests.inway import IDENTITIES
 from podiumd_tests.inway import fingerprint
+from podiumd_tests.inway import make_identity
 from podiumd_tests.inway import secret_name
 from podiumd_tests.inway import split
 from podiumd_tests.process import run_checked
 
 if TYPE_CHECKING:
     from podiumd_tests.bootstrap.runner import Context
-    from podiumd_tests.process import Runner
 
 FG_ECHO = REPO_ROOT / "infra" / "fg-echo" / "manifests.yaml"
 CLIENT_CA = "inway_client_ca"
 CONSUMERS_COMMAND = "inway_consumers_command"
 CONSUMERS = ("partner-a", "partner-b")
 ROLLOUT_TIMEOUT = 120
-OPENSSL_TIMEOUT = 30
 CONSUMERS_TIMEOUT = 180
 
 
@@ -92,15 +90,3 @@ class InwayConsumers:
             raise ValueError(msg)
         # Relative to the directory that holds podiumd-tests.
         return REPO_ROOT.parent / settings[CLIENT_CA], str(REPO_ROOT.parent / settings[CONSUMERS_COMMAND])
-
-
-def make_identity(runner: Runner, client_ca: Path, directory: Path, name: str) -> str:
-    """Return a new key and a certificate for CN=name signed by the client CA, as certificate PEM + key PEM."""
-    key, request, certificate = (str(directory / f"{name}.{suffix}") for suffix in ("key", "csr", "pem"))
-    new_request = ["openssl", "req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", key, "-out", request]
-    signed = ["openssl", "x509", "-req", "-in", request, "-CA", f"{client_ca}.crt", "-CAkey", f"{client_ca}.key"]
-    # A serial of its own: -CAcreateserial would write a serial file next to the CA, in the owner's directory.
-    serial = f"0x{secrets.token_hex(16)}"
-    run_checked(runner, [*new_request, "-subj", f"/CN={name}"], OPENSSL_TIMEOUT)
-    run_checked(runner, [*signed, "-set_serial", serial, "-days", "365", "-out", certificate], OPENSSL_TIMEOUT)
-    return Path(certificate).read_text(encoding="ascii") + Path(key).read_text(encoding="ascii")

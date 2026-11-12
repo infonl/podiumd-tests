@@ -10,12 +10,12 @@ versions is not counted.
 | Tier | Tests | Functions | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 210 | 37 | 9 |
-| component | 682 | 415 | 41 |
+| component | 683 | 415 | 41 |
 | integration | 141 | 85 | 11 |
 | perf | 54 | 3 | 0 |
-| **full tier** | **1005** | **518** |  |
+| **full tier** | **1006** | **518** |  |
 
-Unit tests (`unit_tests/`, functions): 711. Perf endpoints (`perf/runs.py`): 22.
+Unit tests (`unit_tests/`, functions): 712. Perf endpoints (`perf/runs.py`): 22.
 
 ## Per area
 
@@ -32,7 +32,7 @@ Unit tests (`unit_tests/`, functions): 711. Perf endpoints (`perf/runs.py`): 22.
 | smoke | web_security | 96 | 4 |
 | smoke | zgw_auth | 4 | 2 |
 | component | basisregistraties | 23 | 16 |
-| component | frankgateway | 5 | 1 |
+| component | frankgateway | 6 | 1 |
 | component | ita | 45 | 30 |
 | component | keycloak | 22 | 13 |
 | component | kiss | 50 | 21 |
@@ -91,7 +91,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | TA | 264 |
 | ZAC | 18 |
 | draaiboek | 87 |
-| external | 110 |
+| external | 111 |
 | podiumd-tests | 345 |
 | upstream | 140 |
 

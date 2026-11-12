@@ -3,6 +3,8 @@
 import pytest
 
 from podiumd_tests import inway
+from podiumd_tests.process import run_checked
+from podiumd_tests.process import run_process
 
 # A self-signed certificate (CN=unit); its SHA-1 fingerprint from `openssl x509 -fingerprint -sha1`.
 CERTIFICATE = """\
@@ -59,3 +61,26 @@ def test_is_expected_needs_a_listed_status_with_its_body_part(status, body, expe
 
 def test_cases_run_the_allowed_consumer_last():
     assert inway.CASES[-1].identity == inway.ALLOWED
+
+
+def _identity(directory):
+    """A CA and an identity it signed, made with the real openssl."""
+    ca = directory / "ca"
+    command = ["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", f"{ca}.key", "-out", f"{ca}.crt"]
+    run_checked(run_process, [*command, "-subj", "/CN=unit-ca", "-days", "1"], 30)
+    return inway.make_identity(run_process, ca, directory, "partner-x")
+
+
+def test_make_identity_signs_a_certificate_with_the_client_ca(tmp_path):
+    certificate, key = inway.split(_identity(tmp_path))
+    issuer = run_checked(run_process, ["openssl", "x509", "-noout", "-issuer", "-subject"], 30, stdin=certificate)
+    assert "CN=unit-ca" in issuer
+    assert "CN=partner-x" in issuer
+    assert key.startswith("-----BEGIN PRIVATE KEY-----")
+    assert not list(tmp_path.glob("*.srl"))
+
+
+def test_make_identity_without_a_client_ca_is_self_signed(tmp_path):
+    certificate, _ = inway.split(inway.make_identity(run_process, None, tmp_path, "partner-a"))
+    names = run_checked(run_process, ["openssl", "x509", "-noout", "-issuer", "-subject"], 30, stdin=certificate)
+    assert names.count("CN=partner-a") == 2

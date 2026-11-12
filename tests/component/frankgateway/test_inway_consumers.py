@@ -8,20 +8,22 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+import requests
 
 from podiumd_tests.inway import ALLOWED
 from podiumd_tests.inway import CASES
 from podiumd_tests.inway import ECHO_PATH
 from podiumd_tests.inway import IDENTITIES
+from podiumd_tests.inway import TLS_REFUSED
 from podiumd_tests.inway import forged_headers
 from podiumd_tests.inway import identity_files
 from podiumd_tests.inway import is_expected
+from podiumd_tests.inway import make_identity
 from podiumd_tests.inway import secret_name
+from podiumd_tests.process import run_process
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-    import requests
 
     from podiumd_tests.credentials import SecretResolver
     from podiumd_tests.inway import Case
@@ -49,9 +51,9 @@ def fixture_identities(credentials: SecretResolver) -> None:
 @pytest.mark.parametrize("case", [pytest.param(case, id=case.name) for case in CASES])
 @pytest.mark.scenario("""
     Given consumers partner-a and partner-b in OpenBao, and an inway route that allows partner-a only
-    When a partner calls the route with its client certificate, or with hand-written certificate headers
+    When a partner calls the route with its client certificate, a self-signed one, or hand-written certificate headers
     Then partner-a gets the upstream's answer
-    And partner-b is refused as not allowed, an unknown certificate as unknown
+    And partner-b is refused as not allowed, an unknown or self-signed certificate as unknown
     And hand-written certificate headers never count as a verified certificate
 """)
 def test_inway_admits_only_the_allowed_consumer(
@@ -68,9 +70,13 @@ def test_inway_admits_only_the_allowed_consumer(
     headers = forged_headers(credentials.get(secret_name(ALLOWED))) if case.forged else {}
     certificate = None
     if case.identity:
-        certificate = identity_files(credentials.get(secret_name(case.identity)), case.identity, tmp_path)
-    response = http.get(url, headers=headers, cert=certificate, allow_redirects=False)
-    accepted = " or ".join(f"{status} {part}".strip() for status, part in case.answers)
-    assert is_expected(case, response.status_code, response.text), (
-        f"{case.what}: {response.status_code} {response.text[:200]}, expected {accepted}"
-    )
+        pem = make_identity(run_process, None, tmp_path, case.identity) if case.self_signed else None
+        certificate = identity_files(pem or credentials.get(secret_name(case.identity)), case.identity, tmp_path)
+    try:
+        response = http.get(url, headers=headers, cert=certificate, allow_redirects=False)
+    except requests.exceptions.SSLError as exc:
+        status, body = TLS_REFUSED, str(exc)
+    else:
+        status, body = response.status_code, response.text
+    accepted = " or ".join(f"{expected} {part}".strip() for expected, part in case.answers)
+    assert is_expected(case, status, body), f"{case.what}: {status} {body[:200]}, expected {accepted}"
