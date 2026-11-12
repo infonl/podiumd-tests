@@ -18,7 +18,7 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 |---|---|---|---|---|---|
 | zaak-lifecycle | 25 | 3 | 0 | 3 | 3 |
 | betrokkenen-klant | 14 | 1 | 0 | 0 | 2 |
-| documenten-mail | 24 | 2 | 0 | 1 | 5 |
+| documenten-mail | 26 | 0 | 0 | 1 | 5 |
 | taken-cmmn | 9 | 2 | 0 | 0 | 1 |
 | bpmn | 6 | 0 | 0 | 0 | 2 |
 | autorisatie-iam | 20 | 2 | 1 | 2 | 2 |
@@ -26,7 +26,7 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | beheer-zaps | 12 | 3 | 0 | 2 | 3 |
 | integraties-intake | 8 | 1 | 0 | 1 | 2 |
 | overig | 3 | 0 | 0 | 0 | 6 |
-| **total** | **136** | **18** | **1** | **9** | **28** |
+| **total** | **138** | **16** | **1** | **9** | **28** |
 
 ## zaak-lifecycle
 
@@ -89,7 +89,7 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | high | E-mail versturen from a zaak, with and without a document attachment: mail arrives, a PDF of the mail is stored on the zaak, Verzenden is enabled once an ontvanger is filled in | covered |  | `test_email_with_an_attachment_arrives_and_is_kept_on_the_zaak`, `test_email_without_keeping_it_adds_no_document` | zac-rest | mailpit |  |
 | high | Document verplaatsen to another zaak (from zaak or taak) and koppelen from Inbox/Ontkoppelde documenten; zaak search refuses empty input; move in historie | covered | From a taak ZAC sends the same request as from the zaak | `test_document_is_moved_to_another_zaak`, `test_ontkoppeld_document_is_gekoppeld_to_another_zaak`, `test_inbox_document_is_gekoppeld_to_a_zaak` | zac-rest |  |  |
 | medium | Zaak mails (E-mail versturen, Bevestiging, Aanvullende informatie, intake afronden, zaak afhandelen, signaleringen) are built from the ZAPs mail templates with the ZAPs afzender and reply-to; afzender holds only the address | covered |  | `test_email_with_an_attachment_arrives_and_is_kept_on_the_zaak`, `test_zaakafhandelparameters_choose_the_mailtemplate` | zac-rest | mailpit |  |
-| medium | CMMN E-mail versturen requires a vertrouwelijkheidaanduiding and the stored mail PDF gets it; mail paths without that choice (ontvangstbevestiging, taak mails, intake/afhandelen, productaanvraag, signalering) store an openbaar PDF visible in the portal | partial | Visibility in Open Inwoner | `test_email_needs_a_vertrouwelijkheidaanduiding`, `test_email_with_an_attachment_arrives_and_is_kept_on_the_zaak`, `test_ontvangstbevestiging_is_sent_once_and_clears_the_indicatie`, `test_zac_mails_the_initiator_an_ontvangstbevestiging` | zac-rest | mailpit |  |
+| medium | CMMN E-mail versturen requires a vertrouwelijkheidaanduiding and the stored mail PDF gets it; mail paths without that choice (ontvangstbevestiging, taak mails, intake/afhandelen, productaanvraag, signalering) store an openbaar PDF visible in the portal | covered |  | `test_email_needs_a_vertrouwelijkheidaanduiding`, `test_email_with_an_attachment_arrives_and_is_kept_on_the_zaak`, `test_ontvangstbevestiging_is_sent_once_and_clears_the_indicatie`, `test_zac_mails_the_initiator_an_ontvangstbevestiging`, `test_only_openbaar_zac_mail_shows_in_the_portal` | zac-rest | mailpit |  |
 | medium | Signalering mails: taak assigned to me (also via verdelen), taak about to expire / expired with ZAAK_NUMMER and ZAAK_OMSCHRIJVING filled in, zaak assigned with a link that opens the zaak | covered |  | `test_zaak_on_my_name_gives_a_signalering_mail`, `test_overdue_taak_gives_a_mail`, `test_taak_on_my_name_gives_a_signalering_mail` | zac-rest | mailpit |  |
 | medium | Dashboard signal Mijn zaken met recent toegevoegde documenten (and its mail) for a document another user added | covered |  | `test_zaak_on_my_name_and_new_document_show_on_the_dashboard_until_opened`, `test_new_document_gives_a_signalering_mail` | zac-rest |  |  |
 | medium | Document up to 500 MB can be added to a zaak; above the limit a clear refusal | covered |  | `test_document_above_the_maximum_file_size_is_refused`, `test_document_of_the_maximum_file_size_is_added` | zac-rest |  |  |
@@ -109,7 +109,7 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | low | Document historie: labels and correct timestamps for bewerken, nieuwe versie, converteren, ondertekenen | covered |  | `test_document_historie_shows_versie_conversion_and_ondertekening` | zac-rest |  |  |
 | low | Vertrouwelijkheidaanduiding: only the 8 ZGW values; default taken from the documenttype and editable; documenttype list per zaaktype matches Open Zaak | covered | The default from the documenttype is UI only (not planned) | `test_document_has_one_of_the_eight_vertrouwelijkheidaanduidingen` | zac-rest |  |  |
 | low | Old documents in Inbox documenten and Ontkoppelde documenten open without error | covered | Not planned: needs documents from older ZAC versions |  | zac-rest |  |  |
-| low | Documents linked to a zaak (BPMN e2e) do not land in Inbox documenten | partial | No test of the BPMN flow itself | `test_inbox_document_is_gekoppeld_to_a_zaak` | zac-rest |  |  |
+| low | Documents linked to a zaak (BPMN e2e) do not land in Inbox documenten | covered |  | `test_inbox_document_is_gekoppeld_to_a_zaak`, `test_bpmn_zaak_documents_are_not_in_inbox_documenten` | zac-rest |  |  |
 | low | Document verzenden (by post) marks the document verzonden with verzenddatum | covered |  | `test_sent_document_is_marked_verzonden`, `test_document_verzenden_records_the_verzenddatum` | zac-rest |  |  |
 |  | Uploaded document keeps its metadata: titel, beschrijving, auteur, taal, special characters and diacritics; titel truncated to 100 characters; upload happens only on Toevoegen | partial | A txt document is uploaded and listed, but its stored metadata, diacritics and the 100-character titel limit are not checked | `test_document_can_be_deleted` | zac-rest |  |  |
 |  | Editing a Word document from the zaak saves a new version (versie +1, new content) | partial | Word through WebDAV is checked; Excel and PowerPoint (ms-excel/ms-powerpoint links) are not | `test_word_saves_an_edited_document_as_a_new_version` | zac-rest |  |  |
