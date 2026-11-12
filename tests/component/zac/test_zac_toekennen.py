@@ -20,6 +20,7 @@ from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.zac_zaaktype import make_other_domain_group
 from podiumd_tests.seed.zac_zaaktype import make_role_group
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import AFGEROND
 from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import afhandelen
 from podiumd_tests.zac import afronden_intake
@@ -35,6 +36,7 @@ from podiumd_tests.zac import verdelen
 from podiumd_tests.zac import vrijgeven
 from podiumd_tests.zac import zaaktype_filter
 from podiumd_tests.zac_signaleringen import signalering_mail
+from podiumd_tests.zac_taken import complete_task
 from podiumd_tests.zac_taken import open_task
 from podiumd_tests.zac_taken import read_taak
 from podiumd_tests.zac_taken import toekennen_taak
@@ -211,6 +213,34 @@ def test_verdelen_assigns_the_open_zaken_mails_the_behandelaar_and_skips_a_close
     )
     signalering_mail(mailpit, registry, ADMIN.username, str(bpmn_zaak["identificatie"]), timeout=LIST_TIMEOUT)
     assert assignment(read_zaak(zac, zac_url, uuids[2])) == closed_before
+
+
+@ZAC_TEAM
+@pytest.mark.scenario("""
+    Given a zaak in ZAC without behandelaar, whose taak Aanvullende informatie is afgerond
+    When the behandelaar assigns the zaak from the werkvoorraad to the admin's group and the admin
+    Then the zaak has that group and the admin
+    And the taak stays afgerond
+""")
+def test_verdelen_assigns_a_zaak_with_a_closed_taak(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    start_taak: Callable[..., JsonObject],
+    zac_group: str,
+) -> None:
+    """ZaakService.assignZaken assigns a zaak whose taak is afgerond, and leaves the taak afgerond."""
+    zac_url = urls["zac"]
+    zaak = zac_zaak()
+    taak = start_taak(zaak)
+    complete_task(zac, zac_url, taak, {"aanvullendeInformatie": "aanvullende-informatie.geleverd-akkoord"})
+    expect_status(verdelen(zac, zac_url, [str(zaak["uuid"])], zac_group, ADMIN.username), HTTPStatus.NO_CONTENT)
+    wait_until(
+        lambda: assignment(read_zaak(zac, zac_url, str(zaak["uuid"]))) == (zac_group, ADMIN.username),
+        timeout=LIST_TIMEOUT,
+        description=f"zaak {zaak['identificatie']} verdeeld",
+    )
+    assert read_taak(zac, zac_url, str(taak["id"])).get("status") == AFGEROND
 
 
 @ZAC_TEAM
