@@ -216,6 +216,8 @@ def test_verdelen_assigns_the_open_zaken_mails_the_behandelaar_and_skips_a_close
 
 
 @ZAC_TEAM
+@pytest.mark.requires("pabc", "cluster")  # fixture zac_taken_zaak's throwaway zaaktype
+@pytest.mark.xdist_group("zac-taken-zaaktype")
 @pytest.mark.scenario("""
     Given a zaak in ZAC without behandelaar, whose taak Aanvullende informatie is afgerond
     When the behandelaar assigns the zaak from the werkvoorraad to the admin's group and the admin
@@ -225,13 +227,13 @@ def test_verdelen_assigns_the_open_zaken_mails_the_behandelaar_and_skips_a_close
 def test_verdelen_assigns_a_zaak_with_a_closed_taak(
     zac: requests.Session,
     urls: dict[str, str],
-    zac_zaak: Callable[..., JsonObject],
+    zac_taken_zaak: Callable[[], JsonObject],
     start_taak: Callable[..., JsonObject],
     zac_group: str,
 ) -> None:
     """ZaakService.assignZaken assigns a zaak whose taak is afgerond, and leaves the taak afgerond."""
     zac_url = urls["zac"]
-    zaak = zac_zaak()
+    zaak = zac_taken_zaak()
     taak = start_taak(zaak)
     complete_task(zac, zac_url, taak, {"aanvullendeInformatie": "aanvullende-informatie.geleverd-akkoord"})
     expect_status(verdelen(zac, zac_url, [str(zaak["uuid"])], zac_group, ADMIN.username), HTTPStatus.NO_CONTENT)

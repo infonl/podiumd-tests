@@ -89,8 +89,7 @@ share their setup. The user picks the batches to port.
   moves them back by the unused days and keeps eerdereOpschorting; a second opschorting is refused; verlengen moves
   both dates, Open Zaak records reden and duur, a second verlenging is refused; a new zaak's dates come from the
   zaaktype's servicenorm and doorlooptijd (`test_zac_zaak.py`); Aanvullende informatie with opschorten suspends until
-  the task's fatale datum and completing it with hervatten resumes (`test_zac_taken.py`, minikube only: the
-  bootstrap step zac-aanvullende-informatie is off on kees00).
+  the task's fatale datum and completing it with hervatten resumes (`test_zac_taken.py`).
 - Not covered: a verlenging beyond the zaaktype's verlengingstermijn (ZAC and Open Zaak accept 400 days against P14D
   through the API; only ZAC's form limits it).
 

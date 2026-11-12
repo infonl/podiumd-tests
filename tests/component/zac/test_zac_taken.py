@@ -110,6 +110,8 @@ def _human_task_parameters(zaakafhandelparameters: JsonObject, plan_item: str) -
     "ZAC features/5-taken-toevoegen.feature",
     "Lacking information to finish the intake, Bob assigns an Aanvullende informatie task, which the assignee sees in Mijn taken.",
 )
+@THROWAWAY
+@TAKEN_ZAAKTYPE
 @pytest.mark.scenario("""
     Given a zaak in ZAC
     When the behandelaar starts the taak Aanvullende informatie for a group and a behandelaar
@@ -132,6 +134,8 @@ def test_started_task_is_in_mijn_taken(
     "ZAC features/5-taken-toevoegen.feature",
     "When Intake lacks information, a task Aanvullende informatie gives the zaak status 'Wacht op aanvullende informatie'.",
 )
+@THROWAWAY
+@TAKEN_ZAAKTYPE
 @pytest.mark.scenario("""
     Given a zaak in ZAC
     When the behandelaar starts the taak Aanvullende informatie on it
@@ -153,6 +157,8 @@ def test_aanvullende_informatie_gives_the_zaak_its_waiting_status(
     "ZAC features/7-taken-verdelen-vrijgeven.feature",
     "Bob assigns selected taken from the werkvoorraad to a group and user, and releases them.",
 )
+@THROWAWAY
+@TAKEN_ZAAKTYPE
 @pytest.mark.scenario("""
     Given a taak Aanvullende informatie on a zaak in ZAC, assigned to a behandelaar
     When the behandelaar releases the taak from the list
@@ -178,6 +184,8 @@ def test_taken_from_the_list_are_released_and_assigned(
 
 
 @ZAAK_LIFECYCLE
+@THROWAWAY
+@TAKEN_ZAAKTYPE
 @pytest.mark.scenario("""
     Given a zaak in ZAC, gerelateerd to another zaak
     When the behandelaar starts the taak Aanvullende informatie with opschorten until its fatale datum
@@ -189,13 +197,13 @@ def test_taken_from_the_list_are_released_and_assigned(
 def test_aanvullende_informatie_with_opschorten_suspends_once_until_hervatten(
     zac: requests.Session,
     urls: dict[str, str],
-    zac_zaak: Callable[..., JsonObject],
+    zac_taken_zaak: Callable[[], JsonObject],
     start_taak: Callable[..., JsonObject],
     zac_group: str,
 ) -> None:
     """zaakOpschorten suspends only the zaak until the task's fatale datum; zaakHervatten resumes it; never again."""
     zac_url = urls["zac"]
-    zaak, ander = zac_zaak(), zac_zaak()
+    zaak, ander = zac_taken_zaak(), zac_taken_zaak()
     expect_status(koppel(zac, zac_url, zaak, ander, GERELATEERD), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     fataledatum = (date.today() + timedelta(days=SUSPENSION_DAYS)).isoformat()  # noqa: DTZ011  # ZAC's local date
     taak = start_taak(zaak, fataledatum=fataledatum, taakdata=OPSCHORTEN)
@@ -215,6 +223,8 @@ def test_aanvullende_informatie_with_opschorten_suspends_once_until_hervatten(
 
 
 @ZAAK_LIFECYCLE
+@THROWAWAY
+@TAKEN_ZAAKTYPE
 @pytest.mark.scenario("""
     Given a zaak in its intake in ZAC, opgeschort by the taak Aanvullende informatie
     When the behandelaar completes the taak without hervatten
@@ -224,12 +234,12 @@ def test_aanvullende_informatie_with_opschorten_suspends_once_until_hervatten(
 def test_aanvullende_informatie_without_hervatten_keeps_the_zaak_opgeschort(
     zac: requests.Session,
     urls: dict[str, str],
-    zac_zaak: Callable[..., JsonObject],
+    zac_taken_zaak: Callable[[], JsonObject],
     start_taak: Callable[..., JsonObject],
 ) -> None:
     """zaakHervatten false leaves the opschorting; INTAKE_AFRONDEN then gives status In behandeling."""
     zac_url = urls["zac"]
-    zaak = zac_zaak()
+    zaak = zac_taken_zaak()
     fataledatum = (date.today() + timedelta(days=SUSPENSION_DAYS)).isoformat()  # noqa: DTZ011  # ZAC's local date
     taak = start_taak(zaak, fataledatum=fataledatum, taakdata=OPSCHORTEN)
     complete_task(zac, zac_url, taak, {"zaakHervatten": "false"})
@@ -240,6 +250,8 @@ def test_aanvullende_informatie_without_hervatten_keeps_the_zaak_opgeschort(
 
 
 @ZAAK_LIFECYCLE
+@THROWAWAY
+@TAKEN_ZAAKTYPE
 @pytest.mark.parametrize("taak_dagen", [VERLENGING_DAYS, 0], ids=["met-taken", "zonder-taken"])
 @pytest.mark.scenario("""
     Given a zaak in ZAC with an open taak Aanvullende informatie with a fatale datum
@@ -250,13 +262,13 @@ def test_aanvullende_informatie_without_hervatten_keeps_the_zaak_opgeschort(
 def test_verlengen_moves_the_fatale_datum_of_open_taken_when_asked(
     zac: requests.Session,
     urls: dict[str, str],
-    zac_zaak: Callable[..., JsonObject],
+    zac_taken_zaak: Callable[[], JsonObject],
     start_taak: Callable[..., JsonObject],
     taak_dagen: int,
 ) -> None:
     """takenVerlengen moves the open taak's fataledatum by duurDagen; without it the taak keeps its date."""
     zac_url = urls["zac"]
-    zaak = zac_zaak()
+    zaak = zac_taken_zaak()
     fataledatum = date.today() + timedelta(days=SUSPENSION_DAYS)  # noqa: DTZ011  # ZAC's local date
     taak = start_taak(zaak, fataledatum=fataledatum.isoformat())
     verlengd = verlengen(zac, zac_url, zaak, VERLENGING_DAYS, takenVerlengen=taak_dagen > 0)
@@ -294,6 +306,8 @@ def test_opschorten_without_a_taak_fatale_datum_leaves_the_zaak_running(
 
 
 @ZAC_TEAM
+@THROWAWAY
+@TAKEN_ZAAKTYPE
 @pytest.mark.scenario("""
     Given a zaak in ZAC
     When the behandelaar starts the taak Aanvullende informatie without a group
@@ -302,12 +316,10 @@ def test_opschorten_without_a_taak_fatale_datum_leaves_the_zaak_running(
 def test_taak_needs_a_group(
     zac: requests.Session,
     urls: dict[str, str],
-    zac_zaak: Callable[..., JsonObject],
-    need_bootstrap: Callable[..., None],
+    zac_taken_zaak: Callable[[], JsonObject],
 ) -> None:
     """RESTHumanTaskData's groep is the one field ZAC's backend requires; the forms' other required fields are UI only."""
-    need_bootstrap("zac-aanvullende-informatie")
-    zaak = zac_zaak()
+    zaak = zac_taken_zaak()
     refused = start_human_task(zac, urls["zac"], zaak, AANVULLENDE_INFORMATIE, None)
     expect_status(refused, HTTPStatus.BAD_REQUEST)
     assert get_entries(zac, f"{urls['zac']}/rest/taken/zaak/{zaak['uuid']}") == []

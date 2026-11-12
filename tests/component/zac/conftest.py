@@ -204,13 +204,11 @@ def fixture_start_taak(
     zac: requests.Session,
     urls: dict[str, str],
     zac_group: str,
-    need_bootstrap: Callable[..., None],
 ) -> Callable[..., JsonObject]:
-    """Start the task Aanvullende informatie on a zaak for the test admin in its group, without a mail.
+    """Start the task Aanvullende informatie on a zaak of the taken zaaktype for the test admin in its group, no mail.
 
     fields: more of ZAC's RESTHumanTaskData, e.g. taakdata zaakOpschorten with a fataledatum.
     """
-    need_bootstrap("zac-aanvullende-informatie")
 
     def start(zaak: JsonObject, **fields: object) -> JsonObject:
         return started_taak(zac, urls["zac"], zaak, AANVULLENDE_INFORMATIE, (zac_group, ADMIN.username), **fields)
@@ -219,9 +217,9 @@ def fixture_start_taak(
 
 
 @pytest.fixture(name="taak")
-def fixture_taak(zac_zaak: Callable[..., JsonObject], start_taak: Callable[..., JsonObject]) -> JsonObject:
-    """The task Aanvullende informatie, started on a new zaak."""
-    return start_taak(zac_zaak())
+def fixture_taak(zac_taken_zaak: Callable[[], JsonObject], start_taak: Callable[..., JsonObject]) -> JsonObject:
+    """The task Aanvullende informatie, started on a new zaak of the taken zaaktype."""
+    return start_taak(zac_taken_zaak())
 
 
 @pytest.fixture(name="zac_archief_zaak")
