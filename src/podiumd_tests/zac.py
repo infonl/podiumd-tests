@@ -49,6 +49,10 @@ IN_POD = "http://localhost:8080"
 REINDEX_TIMEOUT = 1800
 # Objecten notifies, Open Notificaties delivers to ZAC, and ZAC starts the zaak and its case.
 PRODUCTAANVRAAG_TIMEOUT = 120
+# ZAC's handling of a productaanvraag.
+PRODUCTAANVRAAG_SOURCE = "upstream infonl/dimpact-zaakafhandelcomponent src/main/kotlin/nl/info/zac/productaanvraag"
+# The communicatiekanaal of a zaak from a productaanvraag.
+E_FORMULIER = "E-formulier"
 # ZAC indexes a zaak in Solr after Open Notificaties tells it about the change.
 INDEX_TIMEOUT = 60
 # Open Notificaties delivers a change in Open Zaak to ZAC.
@@ -212,9 +216,18 @@ def inrichtingscheck_problems(check: JsonObject) -> list[str]:
     return sorted(problems)
 
 
+# The indicatie of a zaak whose ontvangstbevestiging ZAC has not sent.
+BEVESTIGING_NIET_VERSTUURD = "ONTVANGSTBEVESTIGING_NIET_VERSTUURD"
+
+
 def is_confirmation_sent(confirmation: JsonObject) -> bool:
     """ZAC sends this automaticEmailConfirmation: enabled, with a template and a sender."""
     return bool(confirmation.get("enabled") and confirmation.get("templateName") and confirmation.get("emailSender"))
+
+
+def mail_address(env: Environment, afzender: str) -> str:
+    """Return the address of an afzender of automaticEmailConfirmation: GEMEENTE is ZAC's GEMEENTE_MAIL."""
+    return env.variable("zac", "GEMEENTE_MAIL") if afzender == "GEMEENTE" else afzender
 
 
 def is_confirmation_on(http: requests.Session, zac_url: str, identificatie: str) -> bool:

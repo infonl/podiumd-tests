@@ -1,0 +1,111 @@
+"""Chain: a productaanvraag of a type no zaaktype in ZAC handles goes to ZAC's Inbox productaanvragen.
+
+It uses the BPMN test zaaktype for the zaak started from the inbox and the documents.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+import pytest
+
+from podiumd_tests.basisregistraties import EREBOS
+from podiumd_tests.bootstrap.bpmn import uuid_of
+from podiumd_tests.json_data import section
+from podiumd_tests.seed.objecten import make_productaanvraag
+from podiumd_tests.seed.openzaak import make_document
+from podiumd_tests.seed.openzaak import zaaktype_parts
+from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import E_FORMULIER
+from podiumd_tests.zac import NOTIFICATION_TIMEOUT
+from podiumd_tests.zac import PRODUCTAANVRAAG_SOURCE
+from podiumd_tests.zac import PRODUCTAANVRAAG_TIMEOUT
+from podiumd_tests.zac import clean_up_inbox_entries
+from podiumd_tests.zac import clean_up_zaak
+from podiumd_tests.zac import inbox_productaanvragen
+from podiumd_tests.zac import read_zaak
+from podiumd_tests.zac import start_zaak
+from podiumd_tests.zac import zaak_body
+from podiumd_tests.zac_beheer import communicatiekanalen
+from podiumd_tests.zac_documents import inbox_documenten
+from podiumd_tests.zac_documents import zaak_documents
+
+if TYPE_CHECKING:
+    import requests
+
+    from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.registry import ResourceRegistry
+
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.core,
+    pytest.mark.requires("cluster", "objecten", "opennotificaties", "zac", "openzaak"),
+]
+
+
+@pytest.mark.source(PRODUCTAANVRAAG_SOURCE, "ZAC keeps a productaanvraag of a type it does not handle in its inbox.")
+@pytest.mark.scenario("""
+    Given a PDF and a bijlage in ZAC's Inbox documenten
+    And a productaanvraag with an initiator, the PDF and the bijlage, of a type no zaaktype in ZAC handles
+    When it is added to Objecten
+    Then ZAC lists it in its Inbox productaanvragen with the initiator, the PDF and one bijlage
+    And the Inbox documenten no longer list the PDF and the bijlage
+    When the behandelaar starts a zaak from it, through E-formulier, which ZAC offers only for such a zaak
+    Then the zaak came in through E-formulier and has the PDF, the bijlage and the aanvraag's gegevens
+    And the inbox no longer lists the productaanvraag
+""")
+def test_unhandled_productaanvraag_becomes_a_zaak_from_the_inbox(
+    zac: requests.Session,
+    urls: dict[str, str],
+    objecten: ApiClient,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    productaanvraag_objecttype: str,
+    bpmn_zaaktype: JsonObject,
+    bpmn_parameters: JsonObject,
+) -> None:
+    """ZAC's Inbox productaanvragen lists the aanvraag; a zaak started from it gets its documents and gegevens."""
+    kenmerk = registry.tagged("inbox")
+    clean_up_inbox_entries(zac, urls["zac"], registry, kenmerk)
+    informatieobjecttype = zaaktype_parts(openzaak, bpmn_zaaktype).informatieobjecttype
+    pdf = make_document(openzaak, registry, informatieobjecttype, bestandsnaam="aanvraag.pdf", titel=f"{kenmerk}-pdf")
+    bijlage = make_document(openzaak, registry, informatieobjecttype, titel=f"{kenmerk}-bijlage")
+    # Before the productaanvraag: ZAC removes them from the Inbox documenten only when they are there.
+    wait_until(
+        lambda: len(inbox_documenten(zac, urls["zac"], kenmerk)) == 2,  # the PDF and the bijlage
+        timeout=NOTIFICATION_TIMEOUT,
+        description=f"the PDF and bijlage of {kenmerk} in ZAC's Inbox documenten",
+    )
+    betrokkenen = [{"inpBsn": EREBOS, "rolOmschrijvingGeneriek": "initiator"}]
+    make_productaanvraag(
+        objecten,
+        registry,
+        productaanvraag_objecttype,
+        kenmerk,
+        kenmerk,
+        betrokkenen=betrokkenen,
+        pdf=pdf["url"],
+        bijlagen=[bijlage["url"]],
+    )
+    entry = wait_until(
+        lambda: next(iter(inbox_productaanvragen(zac, urls["zac"], kenmerk)), None),
+        timeout=PRODUCTAANVRAAG_TIMEOUT,
+        description=f"productaanvraag {kenmerk} in the Inbox productaanvragen",
+    )
+    assert (entry["initiatorID"], entry["aanvraagdocumentUUID"], entry["aantalBijlagen"]) == (
+        EREBOS,
+        uuid_of(pdf["url"]),
+        1,
+    )
+    assert inbox_documenten(zac, urls["zac"], kenmerk) == []
+    assert E_FORMULIER in communicatiekanalen(zac, urls["zac"], inbox=True)
+    assert E_FORMULIER not in communicatiekanalen(zac, urls["zac"])
+    body = zaak_body(bpmn_parameters, omschrijving=registry.tagged("inbox-zaak"), communicatiekanaal=E_FORMULIER)
+    zaak = start_zaak(zac, urls["zac"], {**body, "inboxProductaanvraag": entry})
+    clean_up_zaak(zac, urls["zac"], openzaak, registry, zaak, with_documents=False)
+    documents = {str(document["uuid"]) for document in zaak_documents(zac, urls["zac"], zaak)}
+    assert documents == {uuid_of(pdf["url"]), uuid_of(bijlage["url"])}
+    shown = read_zaak(zac, urls["zac"], str(zaak["uuid"]))
+    assert (shown["communicatiekanaal"], section(shown, "zaakdata").get("omschrijving")) == (E_FORMULIER, kenmerk)
+    assert inbox_productaanvragen(zac, urls["zac"], kenmerk) == []

@@ -114,6 +114,15 @@ def test_confirmation_on(fake_http, found, on):
     assert zac.is_confirmation_on(requests.Session(), ZAC, "zt1") is on
 
 
+def test_mail_address_of_gemeente_is_zacs_gemeente_mail(env_factory, fake_runner):
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "zac"}}]}))
+    fake_runner.answers["printenv GEMEENTE_MAIL"] = (0, "noreply@gemeente.example\n")
+    env = env_factory()
+    assert zac.mail_address(env, "GEMEENTE") == "noreply@gemeente.example"
+    assert fake_runner.calls[-1][-2:] == ["printenv", "GEMEENTE_MAIL"]
+    assert zac.mail_address(env, "zaken@gemeente.example") == "zaken@gemeente.example"
+
+
 def test_person_key_retries_once_with_a_fresh_lookup_on_410(fake_http, response_factory):
     fake_http({"PUT /rest/klanten/personen": (200, {"resultaten": [{"temporaryPersonId": "p1"}]})})
     statuses = iter([410, 200])

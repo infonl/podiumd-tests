@@ -2,9 +2,9 @@
 
 Merged from MK and PI test_productaanvraag_flow.py. It uses the environment's own wiring:
 the Productaanvraag-Dimpact objecttype, the objecten kanaal and ZAC's zaakafhandelparameters
-for profile settings productaanvraag_type and productaanvraag_zaaktype. Betrokkenen, documents
-and the Inbox productaanvragen use the BPMN test zaaktype: an estate's zaaktype can have the BRP
-and KvK koppelingen off, and the suite cannot add documents of its informatieobjecttypen.
+for profile settings productaanvraag_type and productaanvraag_zaaktype. Betrokkenen and documents use the
+BPMN test zaaktype: an estate's zaaktype can have the BRP and KvK koppelingen off, and the suite cannot add
+documents of its informatieobjecttypen.
 """
 
 from __future__ import annotations
@@ -25,7 +25,6 @@ from podiumd_tests.bootstrap.bpmn import bpmn_link
 from podiumd_tests.bootstrap.bpmn import uuid_of
 from podiumd_tests.bootstrap.names import BPMN_PRODUCTAANVRAAGTYPE
 from podiumd_tests.json_data import section
-from podiumd_tests.mailpit import received
 from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import submit
 from podiumd_tests.responses import UnexpectedStatusError
@@ -37,23 +36,22 @@ from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import zaaktype_parts
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import E_FORMULIER
+from podiumd_tests.zac import NOTIFICATION_TIMEOUT
+from podiumd_tests.zac import PRODUCTAANVRAAG_SOURCE
 from podiumd_tests.zac import PRODUCTAANVRAAG_TIMEOUT
 from podiumd_tests.zac import assignment
-from podiumd_tests.zac import clean_up_inbox_entries
-from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import deliver_notificatie
 from podiumd_tests.zac import end_process_at_cleanup
-from podiumd_tests.zac import inbox_productaanvragen
 from podiumd_tests.zac import open_task
 from podiumd_tests.zac import productaanvraag_zaak
 from podiumd_tests.zac import productaanvraag_zaken
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_with_person
-from podiumd_tests.zac import start_zaak
 from podiumd_tests.zac import wait_in_werkvoorraad
-from podiumd_tests.zac import zaak_body
+from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac_betrokkenen import wijzig_initiator
-from podiumd_tests.zac_documents import zaak_documents
+from podiumd_tests.zac_documents import inbox_documenten
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -63,6 +61,7 @@ if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.openzaak import ZaaktypeParts
     from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [
@@ -96,36 +95,6 @@ def test_productaanvraag_becomes_a_zaak(
     kenmerk = registry.tagged("productaanvraag")
     make_productaanvraag(objecten, registry, productaanvraag_objecttype, productaanvraagtype, kenmerk)
     productaanvraag_zaak(openzaak_productaanvraag, registry, kenmerk)
-
-
-@pytest.mark.tc("OF-002")
-@pytest.mark.requires("openklant", "mailpit", "keycloak")
-@pytest.mark.usefixtures("ontvangstbevestiging")
-@pytest.mark.source(
-    "draaiboek OF-002",
-    "A form leads to a zaak in ZAC, which automatically sends a receipt confirmation with the zaaknummer.",
-)
-@pytest.mark.scenario("""
-    Given a form's submitter left an e-mail address in Open Klant
-    When the form's productaanvraag makes ZAC start a zaak
-    Then the submitter receives a mail with the zaaknummer
-""")
-def test_zac_mails_the_initiator_an_ontvangstbevestiging(
-    objecten: ApiClient,
-    openzaak_productaanvraag: ApiClient,
-    openklant: ApiClient,
-    mailpit: ApiClient,
-    registry: ResourceRegistry,
-    productaanvraagtype: str,
-    productaanvraag_objecttype: str,
-) -> None:
-    """ZAC mails the zaaknummer to the e-mail address the form's submitter left in Open Klant."""
-    kenmerk = registry.tagged("bevestigd")
-    adres = f"{kenmerk}@example.invalid"
-    make_submission_contact(openklant, registry, kenmerk, adres)
-    make_productaanvraag(objecten, registry, productaanvraag_objecttype, productaanvraagtype, kenmerk)
-    zaak = productaanvraag_zaak(openzaak_productaanvraag, registry, kenmerk)
-    assert str(zaak["identificatie"]) in received(mailpit, registry, timeout=PRODUCTAANVRAAG_TIMEOUT, to=adres)
 
 
 @pytest.mark.tc("FB-008")
@@ -186,12 +155,14 @@ def test_new_form_becomes_a_zac_zaak(
     wait_in_werkvoorraad(zac, podiumd_env.profile.urls["zac"], zaak)
 
 
-# ZAC's handling of a productaanvraag.
-PRODUCTAANVRAAG_SOURCE = "upstream infonl/dimpact-zaakafhandelcomponent src/main/kotlin/nl/info/zac/productaanvraag"
 # The roltoelichting of a rol ZAC takes from a productaanvraag.
 OVERGENOMEN = "Overgenomen vanuit de product aanvraag"
 # The first user task of podiumd-tests' BPMN process; ZAC starts the process after it handled the productaanvraag.
 INTAKE = "Intake"
+# The length of a zaak's toelichting in the ZGW APIs; ZAC cuts a productaanvraag's to it.
+TOELICHTING_MAX = 1000
+# The historie's name of the system user ZAC handles productaanvragen as (LoggedInUserProvider.PRODUCTAANVRAAG_GEBRUIKER).
+PRODUCTAANVRAAG_GEBRUIKER = "Productaanvraag"
 
 
 @pytest.fixture(name="bpmn_productaanvraagtype")
@@ -230,6 +201,7 @@ def productaanvraag_rollen(openzaak: ApiClient, zaak: JsonObject) -> set[tuple[s
     Then the zaak has the first initiator as its only initiator
     And the person and the company as belanghebbenden
     And no behandelaar from the productaanvraag
+    And ZAC shows the initiator with the name and address from the BRP
 """)
 def test_betrokkenen_of_a_productaanvraag_become_rollen(
     zac: requests.Session,
@@ -258,6 +230,11 @@ def test_betrokkenen_of_a_productaanvraag_become_rollen(
         ("belanghebbende", "natuurlijk_persoon", KIERKEGAARD),
         ("belanghebbende", "niet_natuurlijk_persoon", KVK_TEST_NUMMER),
     }
+    initiator = section(read_zaak(zac, urls["zac"], str(zaak["uuid"])), "initiatorIdentificatie")
+    persoon = zac.get(f"{urls['zac']}/rest/klanten/person/{initiator['temporaryPersonId']}")
+    shown = expect_status(persoon, HTTPStatus.OK).json()
+    assert (shown["bsn"], shown["naam"]) == (EREBOS, "Erebos Bultenaar")
+    assert shown.get("verblijfplaats")
 
 
 @pytest.mark.xfail(
@@ -300,10 +277,13 @@ def test_company_betrokkene_at_vestiging_level_becomes_a_rol(
 @pytest.mark.source(PRODUCTAANVRAAG_SOURCE, "ZAC takes the zaak's details, location and documents from the aanvraag.")
 @pytest.mark.scenario("""
     Given ZAC starts zaken of the BPMN test zaaktype for a productaanvraagtype
-    When a productaanvraag with omschrijving, toelichting, location, its PDF and a bijlage is added to Objecten
-    Then ZAC starts a zaak with that omschrijving and location, and the toelichting after the kenmerk
+    When a productaanvraag with omschrijving, a long toelichting, location, its PDF and two bijlagen is added
+    And one bijlage has an informatieobjecttype the zaaktype does not have
+    Then ZAC starts a zaak with that omschrijving and location, and the toelichting after the kenmerk, cut at 1000
     And the zaak came in through E-formulier and has the zaaktype's groep and default behandelaar
-    And the PDF, the bijlage and the productaanvraag are each linked to the zaak once
+    And the PDF, the other bijlage and the productaanvraag are each linked to the zaak once
+    And the bijlage of the other informatieobjecttype stays in the Inbox documenten
+    And the zaak's historie names the Productaanvraag system user for these steps
 """)
 def test_productaanvraag_zaak_takes_the_details_and_documents(
     zac: requests.Session,
@@ -314,16 +294,20 @@ def test_productaanvraag_zaak_takes_the_details_and_documents(
     productaanvraag_objecttype: str,
     bpmn_productaanvraagtype: str,
     bpmn_zaaktype: JsonObject,
+    parts: ZaaktypeParts,
 ) -> None:
     """The zaak has the aanvraag's omschrijving, toelichting, point and documents, kanaal E-formulier and the link's assignment."""
     kenmerk = registry.tagged("gegevens")
     informatieobjecttype = zaaktype_parts(openzaak, bpmn_zaaktype).informatieobjecttype
     pdf = make_document(openzaak, registry, informatieobjecttype, bestandsnaam="aanvraag.pdf")
     bijlage = make_document(openzaak, registry, informatieobjecttype, titel=registry.tagged("bijlage"))
+    # The test zaaktype's informatieobjecttype, which the BPMN test zaaktype does not have.
+    vreemd = make_document(openzaak, registry, parts.informatieobjecttype, titel=f"{kenmerk}-vreemd")
+    toelichting = "toelichting van de aanvrager ".ljust(TOELICHTING_MAX, "x")
     # Latitude first, as Open Formulieren's map component writes it; GeoJSON has longitude first.
     zaakgegevens = {
         "omschrijving": kenmerk,
-        "toelichting": "toelichting van de aanvrager",
+        "toelichting": toelichting,
         "geometry": {"type": "Point", "coordinates": [52.36673, 4.89316]},
     }
     created = make_productaanvraag(
@@ -334,11 +318,12 @@ def test_productaanvraag_zaak_takes_the_details_and_documents(
         kenmerk,
         zaakgegevens=zaakgegevens,
         pdf=pdf["url"],
-        bijlagen=[bijlage["url"]],
+        bijlagen=[bijlage["url"], vreemd["url"]],
     )
     zaak = handled_zaak(zac, urls["zac"], openzaak, registry, kenmerk)
-    assert (zaak["omschrijving"], zaak["communicatiekanaalNaam"]) == (kenmerk, "E-formulier")
-    assert str(zaak["toelichting"]).endswith(f"{kenmerk!r}. toelichting van de aanvrager")
+    assert (zaak["omschrijving"], zaak["communicatiekanaalNaam"]) == (kenmerk, E_FORMULIER)
+    assert len(str(zaak["toelichting"])) == TOELICHTING_MAX
+    assert f"{kenmerk!r}. {toelichting[:100]}" in str(zaak["toelichting"])
     assert section(zaak, "zaakgeometrie") == {"type": "Point", "coordinates": [4.89316, 52.36673]}
     link = bpmn_link(zac, urls["zac"], uuid_of(bpmn_zaaktype["url"]))
     assert link is not None
@@ -350,6 +335,13 @@ def test_productaanvraag_zaak_takes_the_details_and_documents(
     )
     zaakobjecten = openzaak.list(f"{ZAKEN}/zaakobjecten", {"zaak": str(zaak["url"])})
     assert [found["object"] for found in zaakobjecten] == [created["url"]]
+    wait_until(
+        lambda: inbox_documenten(zac, urls["zac"], str(vreemd["titel"])),
+        timeout=NOTIFICATION_TIMEOUT,
+        description=f"{vreemd['titel']} in ZAC's Inbox documenten",
+    )
+    door = {regel.get("door") for regel in zaak_historie(zac, urls["zac"], zaak)}
+    assert door == {PRODUCTAANVRAAG_GEBRUIKER}
 
 
 @pytest.mark.requires("openklant")
@@ -433,60 +425,6 @@ def test_zaakspecifiek_e_mail_address_stays_when_the_initiator_changes(
         shown = read_zaak(zac, urls["zac"], uuid)
         assert section(shown, "initiatorIdentificatie").get("bsn") == bsn
         assert section(shown, "zaakSpecificContactDetails").get("emailAddress") == adres
-
-
-@pytest.mark.source(PRODUCTAANVRAAG_SOURCE, "ZAC keeps a productaanvraag of a type it does not handle in its inbox.")
-@pytest.mark.scenario("""
-    Given a productaanvraag with an initiator, its PDF and a bijlage, of a type no zaaktype in ZAC handles
-    When it is added to Objecten
-    Then ZAC lists it in its Inbox productaanvragen with the initiator, the PDF and one bijlage
-    When the behandelaar starts a zaak from it
-    Then the zaak has the PDF, the bijlage and the aanvraag's gegevens, and the inbox no longer lists it
-""")
-def test_unhandled_productaanvraag_becomes_a_zaak_from_the_inbox(
-    zac: requests.Session,
-    urls: dict[str, str],
-    objecten: ApiClient,
-    openzaak: ApiClient,
-    registry: ResourceRegistry,
-    productaanvraag_objecttype: str,
-    bpmn_zaaktype: JsonObject,
-    bpmn_parameters: JsonObject,
-) -> None:
-    """ZAC's Inbox productaanvragen lists the aanvraag; a zaak started from it gets its documents and gegevens."""
-    kenmerk = registry.tagged("inbox")
-    clean_up_inbox_entries(zac, urls["zac"], registry, kenmerk)
-    informatieobjecttype = zaaktype_parts(openzaak, bpmn_zaaktype).informatieobjecttype
-    pdf = make_document(openzaak, registry, informatieobjecttype, bestandsnaam="aanvraag.pdf")
-    bijlage = make_document(openzaak, registry, informatieobjecttype, titel=registry.tagged("bijlage"))
-    betrokkenen = [{"inpBsn": EREBOS, "rolOmschrijvingGeneriek": "initiator"}]
-    make_productaanvraag(
-        objecten,
-        registry,
-        productaanvraag_objecttype,
-        kenmerk,
-        kenmerk,
-        betrokkenen=betrokkenen,
-        pdf=pdf["url"],
-        bijlagen=[bijlage["url"]],
-    )
-    entry = wait_until(
-        lambda: next(iter(inbox_productaanvragen(zac, urls["zac"], kenmerk)), None),
-        timeout=PRODUCTAANVRAAG_TIMEOUT,
-        description=f"productaanvraag {kenmerk} in the Inbox productaanvragen",
-    )
-    assert (entry["initiatorID"], entry["aanvraagdocumentUUID"], entry["aantalBijlagen"]) == (
-        EREBOS,
-        uuid_of(pdf["url"]),
-        1,
-    )
-    body = zaak_body(bpmn_parameters, omschrijving=registry.tagged("inbox-zaak"))
-    zaak = start_zaak(zac, urls["zac"], {**body, "inboxProductaanvraag": entry})
-    clean_up_zaak(zac, urls["zac"], openzaak, registry, zaak, with_documents=False)
-    documents = {str(document["uuid"]) for document in zaak_documents(zac, urls["zac"], zaak)}
-    assert documents == {uuid_of(pdf["url"]), uuid_of(bijlage["url"])}
-    assert section(read_zaak(zac, urls["zac"], str(zaak["uuid"])), "zaakdata").get("omschrijving") == kenmerk
-    assert inbox_productaanvragen(zac, urls["zac"], kenmerk) == []
 
 
 @pytest.mark.source(PRODUCTAANVRAAG_SOURCE, "ZAC handles a productaanvraag once, also when notified of it again.")

@@ -39,9 +39,12 @@ def referentietabel_values(tabel: JsonObject) -> list[str]:
     return [str(value["name"]) for value in entries(tabel.get("values"))]
 
 
-def communicatiekanalen(http: requests.Session, zac_url: str) -> list[str]:
-    """Return the communicatiekanalen ZAC offers when a zaak is edited: those of its referentietabel but E-formulier."""
-    response = http.get(f"{zac_url}{REFERENTIETABELLEN}/communicatiekanaal/false")
+def communicatiekanalen(http: requests.Session, zac_url: str, *, inbox: bool = False) -> list[str]:
+    """Return the communicatiekanalen of ZAC's referentietabel it offers for a zaak; E-formulier only with inbox.
+
+    inbox: for a zaak started from the Inbox productaanvragen.
+    """
+    response = http.get(f"{zac_url}{REFERENTIETABELLEN}/communicatiekanaal/{str(inbox).lower()}")
     return [str(kanaal) for kanaal in expect_status(response, HTTPStatus.OK).json()]
 
 

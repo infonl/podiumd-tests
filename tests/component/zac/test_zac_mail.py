@@ -20,6 +20,7 @@ from podiumd_tests.pdf import pdfa_problems
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import CATALOGI
+from podiumd_tests.zac import BEVESTIGING_NIET_VERSTUURD
 from podiumd_tests.zac import afhandelen
 from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import afzenders
@@ -54,7 +55,6 @@ pytestmark = [
 
 MAIL_TIMEOUT = 60
 REPLY_TO = "antwoord@example.invalid"
-NIET_VERSTUURD = "ONTVANGSTBEVESTIGING_NIET_VERSTUURD"
 
 
 @pytest.fixture(name="mail")
@@ -175,7 +175,7 @@ def test_ontvangstbevestiging_is_sent_once_and_clears_the_indicatie(
     ZAC's dialog always stores the mail; its historie line is the GEKOPPELD zaakinformatieobject of that document.
     """
     zaak = zac_zaak()
-    assert NIET_VERSTUURD in strings(read_zaak(zac, urls["zac"], str(zaak["uuid"])).get("indicaties"))
+    assert BEVESTIGING_NIET_VERSTUURD in strings(read_zaak(zac, urls["zac"], str(zaak["uuid"])).get("indicaties"))
     document = uploaded_document(zac, urls["zac"], zaak, registry)
     body = mail(
         zaak, onderwerp="Ontvangstbevestiging {ZAAK_NUMMER}", bijlagen=document["uuid"], createDocumentFromMail=True
@@ -187,7 +187,7 @@ def test_ontvangstbevestiging_is_sent_once_and_clears_the_indicatie(
     assert _stored_mail(zac, urls["zac"], zaak, message)["vertrouwelijkheidaanduiding"] == "OPENBAAR"
     historie = [(line.get("actie"), line.get("nieuweWaarde")) for line in zaak_historie(zac, urls["zac"], zaak)]
     assert ("GEKOPPELD", subject) in historie
-    assert NIET_VERSTUURD not in strings(read_zaak(zac, urls["zac"], str(zaak["uuid"])).get("indicaties"))
+    assert BEVESTIGING_NIET_VERSTUURD not in strings(read_zaak(zac, urls["zac"], str(zaak["uuid"])).get("indicaties"))
     expect_status(send_mail(zac, urls["zac"], zaak, body, acknowledge=True), *REFUSED)
 
 
