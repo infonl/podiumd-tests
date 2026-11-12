@@ -46,9 +46,8 @@ Cause: the ModSecurity-nginx connector passes a body nginx buffered to a temp fi
 `src/podiumd_minikube/waf.py`: memory limit 512Mi (`:101`), `client_max_body_size 0` (`:150`), 2 nginx workers
 (`:242`). podiumd-infra's WAF (kees00) has the same; podiumd-infra was told (2026-11-12).
 
-Request: follow podiumd-infra's fix in your port; options: a memory limit for 2 workers × 500 MB (e.g. 1536Mi), a
-WAF `client_max_body_size` of the largest supported upload (e.g. `520m`), or `modsecurity off;` for the upload
-locations only.
+Request: follow podiumd-infra #234 in your port: WAF limits.memory 512Mi → 1536Mi (2 workers × 500 MB plus baseline),
+with a comment on libmodsecurity's requestBodyFromFile; inspection stays on for the upload paths.
 
 Test: `tests/component/zac/test_zac_documenten.py::test_document_above_the_maximum_file_size_is_refused` (destructive,
 slow) fails on minikube until then.
