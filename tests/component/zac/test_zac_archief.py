@@ -23,6 +23,7 @@ from podiumd_tests.seed.catalogi import ARCHIEF_PROCESTERMIJN
 from podiumd_tests.seed.openzaak import BESLUITEN
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import after_period
+from podiumd_tests.zac import DEELZAAK
 from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import afhandelen
 from podiumd_tests.zac import afronden_intake
@@ -30,6 +31,7 @@ from podiumd_tests.zac import afsluiten
 from podiumd_tests.zac import besluittypen
 from podiumd_tests.zac import brondatum_zetten
 from podiumd_tests.zac import heropenen
+from podiumd_tests.zac import koppel
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import recorded_besluit
 from podiumd_tests.zac import resultaattypen
@@ -164,6 +166,40 @@ def test_brondatum_follows_the_afleidingswijze_of_the_resultaat(  # the fixtures
     }[afleidingswijze]
     assert closed["startdatumBewaartermijn"] == expected
     assert closed["archiefactiedatum"] == _archiefactiedatum(openzaak, closed, expected)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="[open-zaak-14] Open Zaak 1.29.3 gives a deelzaak the hoofdzaak's brondatum, not its einddatum, for "
+    "afleidingswijze hoofdzaak (by design since open-zaak#2072, against the ZGW definition); not yet reported upstream",
+)
+@pytest.mark.scenario("""
+    Given a hoofdzaak in behandeling with a deelzaak in behandeling
+    When the behandelaar afhandelt the deelzaak with a resultaat that takes its brondatum from the hoofdzaak
+    Then the deelzaak has no brondatum yet
+    When the behandelaar afhandelt the hoofdzaak
+    Then the deelzaak's brondatum is the hoofdzaak's einddatum
+    And the deelzaak's archiefactiedatum is its archiefactietermijn after that
+""")
+def test_deelzaak_takes_its_brondatum_from_the_hoofdzaak(
+    zac: requests.Session, urls: dict[str, str], openzaak: ApiClient, in_behandeling: Callable[[], JsonObject]
+) -> None:
+    """Afleidingswijze hoofdzaak: Open Zaak sets the deelzaak's startdatumBewaartermijn when the hoofdzaak closes.
+
+    Open Zaak closes a hoofdzaak only after its deelzaken.
+    """
+    zac_url = urls["zac"]
+    hoofd, deel = in_behandeling(), in_behandeling()
+    expect_status(koppel(zac, zac_url, hoofd, deel, DEELZAAK), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    resultaattype = _resultaattype(zac, zac_url, deel, "hoofdzaak")
+    expect_status(afhandelen(zac, zac_url, deel, resultaattype), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    assert _in_open_zaak(openzaak, deel)["startdatumBewaartermijn"] is None
+    resultaattype = _resultaattype(zac, zac_url, hoofd, "termijn")
+    expect_status(afhandelen(zac, zac_url, hoofd, resultaattype), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    einddatum = str(_in_open_zaak(openzaak, hoofd)["einddatum"])
+    closed = _in_open_zaak(openzaak, deel)
+    assert closed["startdatumBewaartermijn"] == einddatum
+    assert closed["archiefactiedatum"] == _archiefactiedatum(openzaak, closed, einddatum)
 
 
 @pytest.mark.scenario("""

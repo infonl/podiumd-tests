@@ -111,7 +111,7 @@ ARCHIEF_TYPES = ZaaktypeTypes(
     ("Intake", "Wacht op aanvullende informatie", "In behandeling", HEROPEND, "Afgerond"),
     ZAC_TYPES.roltypen,
     ("peildatum",),
-    ("eigenschap", "termijn", "ingangsdatum_besluit", "vervaldatum_besluit"),
+    ("eigenschap", "termijn", "ingangsdatum_besluit", "vervaldatum_besluit", "hoofdzaak"),
 )
 # The resultaattype the archief zaaktype's zaakbeeindigreden gives.
 AFBREEK_RESULTAAT = "termijn"
