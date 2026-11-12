@@ -20,3 +20,15 @@ Why it matters for the tests: the node's 6 CPUs limit the full tier, not the lap
 (podiumd 4.10.0, one pod per component) the full tier took 634-648 s with 4 pytest workers and 573 s with 6. With 6
 workers the minikube container ran at about 434% of its 600% limit, and 4 more tests failed through contention
 (Open Inwoner search, Open Zaak autorisaties).
+
+## BAG mock self links that Open Zaak can fetch (podiumd-tests, 2026-11-12)
+
+The BAG mock (`vendor/dimpact-zaakafhandelcomponent/bag/*.json`, served by `bag-mock`) answers with self links on
+`http://bag-wiremock.local:8080/...`, copied from ZAC's docker-compose setup. Open Zaak fetches that URL to validate a
+zaakobject and cannot resolve the host, so ZAC answers 400 to a new zaak with `bagObjecten`: "De URL
+`http://bag-wiremock.local:8080/...` kon niet opgehaald worden".
+
+Request: serve the self links on a URL Open Zaak can reach, e.g. the `bag-mock` Service.
+
+Test: `tests/component/zac/test_zac_zaak.py::test_new_zaak_links_the_chosen_bag_adres` fails on minikube until then
+(run 20261112-141919_minikube_full_26111214197e4a: 104 passed, this one failed).
