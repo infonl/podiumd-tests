@@ -24,6 +24,7 @@ import yaml
 
 from podiumd_tests import config
 from podiumd_tests import doctor
+from podiumd_tests import lock
 from podiumd_tests import results
 from podiumd_tests import workloads
 from podiumd_tests.bootstrap.runner import bootstrap
@@ -43,8 +44,6 @@ from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
-from podiumd_tests.lock import LockBusyError
-from podiumd_tests.lock import held
 from podiumd_tests.process import ProcessError
 from podiumd_tests.seed.volume import faster
 from podiumd_tests.seed.volume import seed
@@ -188,6 +187,17 @@ def cmd_env_init(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_lock(args: argparse.Namespace) -> int:
+    """Show who holds the environment's lock, or break a podiumd-tests hold."""
+    env = Environment(_load(args))
+    if args.action == "break":
+        removed = lock.break_holds(env)
+        print("\n".join(f"removed {hold}" for hold in removed) or "no podiumd-tests hold")
+    else:
+        print("\n".join(lock.holds(env)) or "no lock configured")
+    return EXIT_OK
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Run the preflight checks and print them."""
     env = Environment(_load(args))
@@ -292,7 +302,7 @@ def _apply_steps(
     if isinstance(env, int):
         return env
     steps = selected_steps(args.step)
-    with held(env, f"{verb} {env.profile.name}"):
+    with lock.held(env, f"{verb} {env.profile.name}"):
         outcomes = action(env, steps)
     print(outcome_report(outcomes))
     return EXIT_CONFIG if has_failure(outcomes) else EXIT_OK
@@ -315,7 +325,7 @@ def cmd_sweep(args: argparse.Namespace) -> int:
     if args.dry_run:
         swept = sweep(env, cutoff, dry_run=True)
     else:
-        with held(env, f"sweep {env.profile.name}"):
+        with lock.held(env, f"sweep {env.profile.name}"):
             swept = sweep(env, cutoff, dry_run=False)
     print(sweep_report(swept))
     return EXIT_CONFIG if any(swept_object.action == "failed" for swept_object in swept) else EXIT_OK
@@ -337,7 +347,7 @@ def cmd_seed_volume(args: argparse.Namespace) -> int:
     if isinstance(env, int):
         return env
     with (
-        held(env, f"seed-volume {env.profile.name}"),
+        lock.held(env, f"seed-volume {env.profile.name}"),
         faster(env, args.scale_cluster),
     ):
         print(seed_report(seed(env, args.scale, parallel=args.parallel)))
@@ -349,7 +359,7 @@ def cmd_unseed_volume(args: argparse.Namespace) -> int:
     env = _volume_env(args)
     if isinstance(env, int):
         return env
-    with held(env, f"unseed-volume {env.profile.name}"):
+    with lock.held(env, f"unseed-volume {env.profile.name}"):
         print(seed_report(unseed(env)))
     return EXIT_OK
 
@@ -420,7 +430,7 @@ def _run_tier(args: argparse.Namespace) -> int:
     lower_priority()
     with (
         group(f"pytest {args.tier}"),
-        nullcontext() if args.tier == "smoke" else held(env, f"run {args.tier} {profile.name}"),
+        nullcontext() if args.tier == "smoke" else lock.held(env, f"run {args.tier} {profile.name}"),
     ):
         info.exit_code = int(pytest.main(info.selection))
     info.finished = results.now_iso()
@@ -493,6 +503,13 @@ def _add_doctor_command(add_parser: _AddParser) -> None:
     doc = _env_command(add_parser, "doctor", "preflight checks for an environment")
     doc.add_argument("--json", help="also write the checks to this JSON file")
     doc.set_defaults(func=cmd_doctor)
+
+
+def _add_lock_command(add_parser: _AddParser) -> None:
+    """Add the lock subcommand."""
+    locking = _env_command(add_parser, "lock", "show the environment's lock holders, or break a podiumd-tests hold")
+    locking.add_argument("action", choices=("status", "break"), nargs="?", default="status")
+    locking.set_defaults(func=cmd_lock)
 
 
 def _add_bootstrap_commands(add_parser: _AddParser) -> None:
@@ -569,6 +586,7 @@ def build_parser() -> argparse.ArgumentParser:
     for add_commands in (
         _add_profile_commands,
         _add_doctor_command,
+        _add_lock_command,
         _add_bootstrap_commands,
         _add_volume_commands,
         _add_sweep_command,
@@ -591,7 +609,7 @@ def main(argv: list[str] | None = None) -> int:
     except ProcessError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_CONFIG
-    except LockBusyError as exc:
+    except lock.LockBusyError as exc:
         print(f"busy: {exc}", file=sys.stderr)
         return EXIT_BUSY
 

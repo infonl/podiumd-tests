@@ -14,6 +14,7 @@ import yaml
 
 from podiumd_tests import cli
 from podiumd_tests import doctor
+from podiumd_tests import lock
 from podiumd_tests.bootstrap.runner import Outcome
 from podiumd_tests.capabilities import CLUSTER
 from podiumd_tests.capabilities import Capabilities
@@ -204,7 +205,7 @@ def offline(monkeypatch, env_factory):
         yield
 
     monkeypatch.setattr(cli, "Environment", environment)
-    monkeypatch.setattr(cli, "held", held)
+    monkeypatch.setattr(lock, "held", held)
 
     def run_checks(_env, *, infra=False):
         state.infra.append(infra)
@@ -437,3 +438,15 @@ def test_lower_priority_nices_outside_ci_only(monkeypatch):
     monkeypatch.delenv("CI")
     cli.lower_priority()
     assert niced == [cli.WORKSTATION_NICE]
+
+
+def test_lock_shows_the_holders_and_breaks_only_on_request(envs, monkeypatch, capsys):
+    broken = []
+    monkeypatch.setattr(lock, "holds", lambda _env: ["lease podiumd-tests-lock: free"])
+    monkeypatch.setattr(lock, "break_holds", lambda _env: broken.append(True) or [])
+    assert cli.main([*envs(), "lock", "--env", "e"]) == cli.EXIT_OK
+    assert "lease podiumd-tests-lock: free" in capsys.readouterr().out
+    assert broken == []
+    assert cli.main([*envs(), "lock", "--env", "e", "break"]) == cli.EXIT_OK
+    assert "no podiumd-tests hold" in capsys.readouterr().out
+    assert broken == [True]
