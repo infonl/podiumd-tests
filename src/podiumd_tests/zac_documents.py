@@ -340,17 +340,20 @@ def koppelbare_zaken(
     return zac.put(f"{zac_url}/rest/zoeken/zaken", json=body)
 
 
+def inbox_documenten(zac: requests.Session, zac_url: str, titel: str) -> list[JsonObject]:
+    """Return the entries of ZAC's Inbox documenten whose titel contains titel."""
+    listed = zac.put(f"{zac_url}/rest/inboxdocumenten", json={"titel": titel, "page": 0, "maxResults": 100})
+    return entries(expect_status(listed, HTTPStatus.OK).json().get("resultaten"))
+
+
 def inbox_document(zac: requests.Session, zac_url: str, document: JsonObject) -> JsonObject | None:
     """Return the entry of the Open Zaak document in ZAC's Inbox documenten, or None.
 
-    Searched by titel, matched by uuid: the documents of one run share their titel.
+    Matched by uuid: the documents of one run share their titel.
     """
-    body = {"titel": document["titel"], "page": 0, "maxResults": 100}
-    listed = expect_status(zac.put(f"{zac_url}/rest/inboxdocumenten", json=body), HTTPStatus.OK)
-    found = entries(listed.json().get("resultaten"))
-    return next(
-        (item for item in found if item.get("enkelvoudiginformatieobjectUUID") == uuid_of(document["url"])), None
-    )
+    found = inbox_documenten(zac, zac_url, str(document["titel"]))
+    wanted = uuid_of(document["url"])
+    return next((item for item in found if item.get("enkelvoudiginformatieobjectUUID") == wanted), None)
 
 
 def delete_inbox_document(zac: requests.Session, zac_url: str, entry: JsonObject) -> requests.Response:

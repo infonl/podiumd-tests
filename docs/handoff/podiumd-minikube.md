@@ -32,3 +32,16 @@ Request: serve the self links on a URL Open Zaak can reach, e.g. the `bag-mock` 
 
 Test: `tests/component/zac/test_zac_bag.py::test_new_zaak_links_the_chosen_bag_adres` fails on minikube until then
 (run 20261112-141919_minikube_full_26111214197e4a: 104 passed, this one failed).
+
+## WAF runs out of memory on a large upload (podiumd-tests, 2026-11-12)
+
+A POST of a 500 MB + 1 byte document to `zac.local` (ZAC's upload limit is 500 MB) made pod
+`ingress-basic/waf-6df6444d47-g94wm` exit 137 (OOMKilled, memory limit 512Mi) at 15:01:46 UTC; its log shows "a client
+request body is buffered to a temporary file" for that POST. Until it restarted, every request through the edge got
+"Connection refused" on 10.96.0.200:443.
+
+Request: let the WAF stream or buffer large bodies to disk without holding them in memory (or raise its memory limit
+to cover ZAC's 500 MB uploads), so a maximum-size upload reaches ZAC.
+
+Test: `tests/component/zac/test_zac_documenten.py::test_document_above_the_maximum_file_size_is_refused` (destructive,
+slow) fails on minikube until then.

@@ -27,6 +27,7 @@ from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import BEVESTIGING_NIET_VERSTUURD
 from podiumd_tests.zac import DUE_DATES
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import afbreken
@@ -261,7 +262,7 @@ def test_zaak_with_an_initiator_is_in_the_werkvoorraad(
     )
     person = zac.get(f"{urls['zac']}/rest/klanten/person/{initiator['temporaryPersonId']}")
     assert expect_status(person, HTTPStatus.OK).json()["bsn"] == EREBOS
-    assert "ONTVANGSTBEVESTIGING_NIET_VERSTUURD" in strings(zaak.get("indicaties"))
+    assert BEVESTIGING_NIET_VERSTUURD in strings(zaak.get("indicaties"))
     wait_in_werkvoorraad(zac, urls["zac"], zaak)
 
 
