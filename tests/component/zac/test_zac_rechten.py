@@ -120,6 +120,30 @@ def fixture_closed_bpmn_zaak(zac: requests.Session, urls: dict[str, str], bpmn_z
     return expect_status(afsluiten(zac, urls["zac"], bpmn_zaak), HTTPStatus.OK).json()
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-25] ZAC 5.9.1 sends a zaak's zaakdata to a user without rechten.bekijkenZaakdata "
+    "(RestZaakConverter); only its UI hides them; not yet reported upstream",
+)
+@pytest.mark.requires("pabc")
+@pytest.mark.source(POLICIES, "Only a beheerder may see a zaak's zaakdata (bekijkenZaakdata).")
+@pytest.mark.scenario("""
+    Given a zaak of the BPMN test zaaktype with zaakdata
+    When a raadpleger opens the zaak
+    Then ZAC does not allow the raadpleger to see its zaakdata
+    And ZAC sends the zaak without its zaakdata
+""")
+def test_raadpleger_gets_no_zaakdata(
+    zac: requests.Session, zac_as: Callable[[str], requests.Session], urls: dict[str, str], bpmn_zaak: JsonObject
+) -> None:
+    """GET /rest/zaken/zaak/{uuid} holds no zaakdata when rechten.bekijkenZaakdata is false."""
+    uuid = str(bpmn_zaak["uuid"])
+    assert read_zaak(zac, urls["zac"], uuid).get("zaakdata")
+    shown = read_zaak(zac_as("raadpleger"), urls["zac"], uuid)
+    assert section(shown, "rechten").get("bekijkenZaakdata") is False
+    assert not shown.get("zaakdata"), shown["zaakdata"]
+
+
 @pytest.mark.requires("pabc")
 @pytest.mark.source(POLICIES, "On a closed zaak only a recordmanager or beheerder may change it, never its dates.")
 @pytest.mark.scenario("""

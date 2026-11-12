@@ -240,6 +240,12 @@ def test_recordmanager_sets_the_brondatum_of_a_closed_zaak(
     expect_status(brondatum_zetten(recordmanager, zac_url, zaak, _day(4)), *REFUSED)
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-32] ZAC 5.9.1 refuses a new brondatum after heropenen (403): heropenen keeps the eigenschap, so "
+    "Open Zaak derives the old brondatum again and policy brondatum_zetten forbids a second one; not yet reported "
+    "upstream",
+)
 @pytest.mark.scenario("""
     Given a zaak afgehandeld with a resultaat whose brondatum comes from an eigenschap, and a brondatum set
     When a recordmanager heropent it and it is afgehandeld again with that resultaat

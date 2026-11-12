@@ -241,6 +241,26 @@ def test_initiator_changes_from_persoon_to_bedrijf_and_back(
 
 @pytest.mark.xfail(
     strict=True,
+    reason="[zac-27] ZAC 5.9.1 answers 500 to an initiator with a vestigingsnummer and no kvkNummer "
+    "(IllegalArgumentException in composeBetrokkeneIdentification); not yet reported upstream",
+)
+@REGRESSIE
+@pytest.mark.requires("openzaak")
+@pytest.mark.scenario("""
+    Given a zaak in ZAC
+    When the behandelaar makes a vestiging without a KvK-nummer its initiator
+    Then ZAC refuses it as a bad request
+""")
+def test_initiator_vestiging_needs_a_kvk_nummer(
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
+) -> None:
+    """PATCH /rest/zaken/initiator of type VN without kvkNummer answers 400."""
+    vestiging = {"type": "VN", "vestigingsnummer": KVK_TEST_VESTIGING}
+    expect_status(wijzig_initiator(zac, urls["zac"], zac_zaak(), vestiging, None), HTTPStatus.BAD_REQUEST)
+
+
+@pytest.mark.xfail(
+    strict=True,
     reason="[zac-13] ZAC 5.9.1 ontkoppelt the initiator without a reden (RestReden is not validated); not yet "
     "reported upstream",
 )

@@ -46,6 +46,7 @@ from podiumd_tests.zac import save_zaakafhandelparameters
 from podiumd_tests.zac import send_with_person
 from podiumd_tests.zac import zaak_body
 from podiumd_tests.zac import zaakafhandelparameters
+from podiumd_tests.zac_betrokkenen import wijzig_initiator
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -74,6 +75,8 @@ ZAC_TEAM = pytest.mark.source(
 THROWAWAY = pytest.mark.requires("pabc", "cluster")
 # The tests of fixture zac_eigen_zaaktype.
 EIGEN_ZAAKTYPE = pytest.mark.xdist_group("zac-eigen-zaaktype")
+# A bedrijf from the KvK as BetrokkeneIdentificatie.
+BEDRIJF = {"type": "RSIN", "kvkNummer": KVK_TEST_NUMMER}
 
 
 @PI
@@ -291,6 +294,16 @@ def _koppelingen(zac: requests.Session, zac_url: str, uuid: str, **koppelingen: 
     return save_zaakafhandelparameters(zac, zac_url, {**parameters, "betrokkeneKoppelingen": wanted})
 
 
+def _koppelingen_for_test(
+    zac: requests.Session, zac_url: str, uuid: str, registry: ResourceRegistry, **koppelingen: object
+) -> JsonObject:
+    """_koppelingen; cleanup restores the current values in the row the zaaktype has then."""
+    current = section(read_zaakafhandelparameters(zac, zac_url, uuid), "betrokkeneKoppelingen")
+    before = {key: value for key, value in current.items() if key != "id"}
+    registry.add(f"koppelingen of {uuid}", lambda: _koppelingen(zac, zac_url, uuid, **before))
+    return _koppelingen(zac, zac_url, uuid, **koppelingen)
+
+
 @ZAC_TEAM
 @THROWAWAY
 @EIGEN_ZAAKTYPE
@@ -310,25 +323,77 @@ def test_koppelingen_decide_the_initiator_of_a_new_zaak(
 ) -> None:
     """ZAC refuses an initiator type whose koppeling is off (ZaakRestService.assertCanAddBetrokkene)."""
     zac_url, uuid = urls["zac"], _uuid(zac_eigen_zaaktype)
-    before = section(read_zaakafhandelparameters(zac, zac_url, uuid), "betrokkeneKoppelingen")
-    registry.add(f"koppelingen of {uuid}", lambda: _koppelingen(zac, zac_url, uuid, **before))
-    uit = _koppelingen(zac, zac_url, uuid, brpKoppelen=False, kvkKoppelen=False)
-    bedrijf = {"type": "RSIN", "kvkNummer": KVK_TEST_NUMMER}
+    uit = _koppelingen_for_test(zac, zac_url, uuid, registry, brpKoppelen=False, kvkKoppelen=False)
     omschrijving = registry.tagged("koppeling")
 
     def start(initiator: JsonObject) -> requests.Response:
         body = zaak_body(uit, omschrijving=omschrijving, initiatorIdentificatie=initiator)
         return zac.post(f"{zac_url}/rest/zaken/zaak", json=body)
 
-    answers = {"bedrijf": start(bedrijf), "persoon": send_with_person(zac, zac_url, EREBOS, start)}
+    answers = {"bedrijf": start(BEDRIJF), "persoon": send_with_person(zac, zac_url, EREBOS, start)}
     assert {soort: answer.status_code for soort, answer in answers.items()} == dict.fromkeys(
         answers, HTTPStatus.BAD_REQUEST
     ), {soort: describe(answer) for soort, answer in answers.items()}
 
     kvk = _koppelingen(zac, zac_url, uuid, kvkKoppelen=True)
-    zaak = create_zaak(zac, zac_url, kvk, omschrijving=omschrijving, initiatorIdentificatie=bedrijf)
+    zaak = create_zaak(zac, zac_url, kvk, omschrijving=omschrijving, initiatorIdentificatie=BEDRIJF)
     clean_up_zaak(zac, zac_url, openzaak, registry, zaak, with_documents=False)
     assert section(zaak, "initiatorIdentificatie").get("kvkNummer") == KVK_TEST_NUMMER
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-24] ZAC 5.9.1 checks the BRP and KvK koppelingen only when a zaak is created or updated, not in "
+    "updateInitiator and addBetrokkene; not yet reported upstream",
+)
+@ZAC_TEAM
+@THROWAWAY
+@EIGEN_ZAAKTYPE
+@pytest.mark.scenario("""
+    Given a zaak of a zaaktype configured in ZAC with the KvK koppeling off
+    When the behandelaar makes a bedrijf from the KvK its initiator
+    Then ZAC refuses it
+""")
+def test_koppelingen_decide_the_initiator_of_an_existing_zaak(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_eigen_zaaktype: JsonObject,
+    zac_eigen_zaak: Callable[[], JsonObject],
+    registry: ResourceRegistry,
+) -> None:
+    """PATCH /rest/zaken/initiator with a KvK initiator answers 400 while kvkKoppelen is false."""
+    zac_url = urls["zac"]
+    _koppelingen_for_test(zac, zac_url, _uuid(zac_eigen_zaaktype), registry, kvkKoppelen=False)
+    response = wijzig_initiator(zac, zac_url, zac_eigen_zaak(), BEDRIJF, None)
+    assert response.status_code == HTTPStatus.BAD_REQUEST, describe(response)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-26] ZAC 5.9.1 answers 500 msg.error.server.generic to zaakafhandelparameters read before a save "
+    "that replaced their koppelingen (Row was already updated or deleted: ZaaktypeBetrokkeneParameters); not yet "
+    "reported upstream",
+)
+@ZAC_TEAM
+@THROWAWAY
+@EIGEN_ZAAKTYPE
+@pytest.mark.scenario("""
+    Given a zaaktype configured in ZAC whose zaakafhandelparameters two beheerders opened
+    When the first beheerder saves new BRP and KvK koppelingen
+    And the second beheerder saves the copy opened before that
+    Then ZAC refuses the second save as a bad request or a conflict
+""")
+def test_outdated_zaakafhandelparameters_are_refused(
+    zac: requests.Session, urls: dict[str, str], zac_eigen_zaaktype: JsonObject, registry: ResourceRegistry
+) -> None:
+    """A PUT of zaakafhandelparameters whose koppelingen a later save replaced answers 400 or 409."""
+    zac_url, uuid = urls["zac"], _uuid(zac_eigen_zaaktype)
+    oud = read_zaakafhandelparameters(zac, zac_url, uuid)
+    kvk = not section(oud, "betrokkeneKoppelingen").get("kvkKoppelen")
+    # Without their id ZAC stores the koppelingen as a new row.
+    _koppelingen_for_test(zac, zac_url, uuid, registry, id=None, kvkKoppelen=kvk)
+    response = put_zaakafhandelparameters(zac, zac_url, oud)
+    assert response.status_code in {HTTPStatus.BAD_REQUEST, HTTPStatus.CONFLICT}, describe(response)
 
 
 @ZAC_TEAM

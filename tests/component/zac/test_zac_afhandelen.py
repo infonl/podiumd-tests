@@ -240,6 +240,11 @@ def test_afgebroken_zaak_is_afgerond_with_its_archiefactiedatum(
     _assert_archief(openzaak, closed, in_open_zaak, None)
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-31] ZAC 5.9.1 answers 500 to afbreken without zaakbeeindigRedenId (NumberFormatException in "
+    "ZaakRestService.terminateZaak); not yet reported upstream",
+)
 @pytest.mark.scenario("""
     Given an open zaak in ZAC
     When the behandelaar breaks it off without a reden

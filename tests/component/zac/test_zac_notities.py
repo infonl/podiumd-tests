@@ -35,6 +35,11 @@ ZAC_TEAM = pytest.mark.source(
     "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, zaak-lifecycle).",
 )
 BEHANDELAAR = "behandelaar"
+ZAC_21 = pytest.mark.xfail(
+    strict=True,
+    reason="[zac-21] ZAC 5.9.1 checks only notitie_rechten on notities (NoteRestService), not their author or zaak; not "
+    "yet reported upstream",
+)
 
 
 def _notities_url(zac_url: str) -> str:
@@ -111,6 +116,7 @@ def test_notitie_records_its_date_and_author(
     }
 
 
+@ZAC_21
 @ZAC_TEAM
 @pytest.mark.requires("pabc")
 @pytest.mark.scenario("""
@@ -142,6 +148,7 @@ def test_notitie_of_another_user_is_not_changed_or_deleted(
     assert van_admin == [tekst], describe(response)
 
 
+@ZAC_21
 @ZAC_TEAM
 @pytest.mark.requires("pabc")
 @pytest.mark.scenario("""

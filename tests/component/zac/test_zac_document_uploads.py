@@ -118,6 +118,34 @@ def test_document_has_one_of_the_eight_vertrouwelijkheidaanduidingen(
     assert tuple(stored) == VERTROUWELIJKHEIDAANDUIDINGEN
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-28] ZAC 5.9.1 answers 500 to an upload whose vertrouwelijkheidaanduiding is none of its enum "
+    "constants; not yet reported upstream",
+)
+@pytest.mark.parametrize("value", ["openbaar", "SUPERGEHEIM"])
+@pytest.mark.scenario("""
+    Given a zaak in ZAC
+    When the behandelaar adds a document whose vertrouwelijkheidaanduiding is in lower case or unknown
+    Then ZAC refuses it as a bad request
+    And the zaak has no document
+""")
+def test_document_with_another_vertrouwelijkheidaanduiding_is_refused(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    registry: ResourceRegistry,
+    value: str,
+) -> None:
+    """An upload with a vertrouwelijkheidaanduiding outside the eight upper-case values answers 400."""
+    zaak = zac_zaak()
+    response = upload(
+        zac, urls["zac"], zaak, registry, extension="txt", file=FILES["txt"], vertrouwelijkheidaanduiding=value
+    )
+    expect_status(response, HTTPStatus.BAD_REQUEST)
+    assert zaak_documents(zac, urls["zac"], zaak) == []
+
+
 @pytest.mark.parametrize("status", ["in_bewerking", "ter_vaststelling"])
 @pytest.mark.scenario("""
     Given a Word document on a zaak in ZAC that is not yet definitief

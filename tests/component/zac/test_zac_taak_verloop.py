@@ -111,6 +111,11 @@ def test_earlier_zaak_fatale_datum_caps_the_open_taak(
     assert read_taak(zac, zac_url, str(taak["id"])).get("fataledatum") == eerder
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-29] ZAC 5.9.1 answers 404 to the documents of a taak whose document was deleted "
+    "(ZgwErrorExceptionMapper maps the 404 before convertUUIDsToREST catches it); not yet reported upstream",
+)
 @pytest.mark.scenario("""
     Given a zaak in behandeling in ZAC with an open Advies intern
     When the behandelaar adds a document from the taak
@@ -165,6 +170,11 @@ def test_taak_historie_shows_its_reassignment_and_completion(
     assert "podiumd-tests" in {regel.get("toelichting") for regel in behandelaars}, regels
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-30] ZAC 5.9.1 never shows a taak aangemaakt in its historie (RestTaskHistoryConverter needs data on "
+    "USER_TASK_CREATED, which Flowable writes without); not yet reported upstream",
+)
 @pytest.mark.scenario("""
     Given a zaak in behandeling in ZAC
     When the behandelaar starts Advies intern

@@ -20,9 +20,11 @@ from podiumd_tests.seed.zac_zaaktype import make_other_domain_group
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import GERELATEERD
 from podiumd_tests.zac import INDEX_TIMEOUT
+from podiumd_tests.zac import ZOEKOPDRACHT
 from podiumd_tests.zac import afhandelen
 from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import csv_export
+from podiumd_tests.zac import csv_export_lines
 from podiumd_tests.zac import delete_zoekopdracht
 from podiumd_tests.zac import heropenen
 from podiumd_tests.zac import koppel_zoekresultaat
@@ -223,6 +225,30 @@ def test_csv_export_holds_the_listed_zaken(
     assert [(row.get("identificatie"), row.get("omschrijving")) for row in rows] == listed
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-23] ZAC 5.9.1's CSV export header has more names than its rows have values, some twice "
+    "(CsvService.exportToCsv counts excluded properties); not yet reported upstream",
+)
+@pytest.mark.scenario("""
+    Given two zaken in ZAC that a search lists
+    When the beheerder exports that search to CSV
+    Then the export's header names each column of its rows once
+""")
+def test_csv_export_header_names_each_column_once(
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
+) -> None:
+    """The CSV export's header has one name per value of a row, none twice."""
+    kenmerk = f"PT-{secrets.token_hex(4).upper()}"
+    # Two: the header of an export of one zaak fits its row.
+    for _ in range(2):
+        zac_zaak(toelichting=kenmerk)
+    _found_by_kenmerk(zac, urls["zac"], kenmerk, 2)
+    header, *rows = csv_export_lines(zac, urls["zac"], type="ZAAK", zoeken={"ZAAK_TOELICHTING": kenmerk})
+    assert [len(row) for row in rows] == [len(header), len(header)], header
+    assert len(set(header)) == len(header), header
+
+
 @pytest.mark.scenario("""
     Given the behandelaar's werkvoorraad of zaken
     When the behandelaar saves its search as a zoekopdracht
@@ -240,6 +266,32 @@ def test_saved_zoekopdracht_is_offered_until_deleted(
     assert [(item.get("naam"), json.loads(str(item.get("json")))) for item in offered] == [(saved["naam"], query)]
     delete_zoekopdracht(zac, urls["zac"], saved)
     assert saved["id"] not in {item.get("id") for item in zoekopdrachten(zac, urls["zac"], WERKVOORRAAD_ZAKEN)}
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-22] ZAC 5.9.1 deletes another user's saved zoekopdracht (DELETE "
+    "/rest/gebruikersvoorkeuren/zoekopdracht/{id} checks no owner); not yet reported upstream",
+)
+@pytest.mark.requires("pabc")
+@pytest.mark.scenario("""
+    Given a zoekopdracht the test admin saved in the werkvoorraad of zaken
+    When a raadpleger deletes it
+    Then ZAC refuses it
+    And the test admin's werkvoorraad still offers it
+""")
+def test_zoekopdracht_of_another_user_is_not_deleted(
+    zac: requests.Session,
+    zac_as: Callable[[str], requests.Session],
+    urls: dict[str, str],
+    registry: ResourceRegistry,
+) -> None:
+    """The raadpleger's DELETE of the admin's zoekopdracht answers 403 and leaves it."""
+    saved = save_zoekopdracht(zac, urls["zac"], registry, WERKVOORRAAD_ZAKEN, {"filters": {}})
+    response = zac_as("raadpleger").delete(f"{urls['zac']}{ZOEKOPDRACHT}/{saved['id']}")
+    offered = {item.get("id") for item in zoekopdrachten(zac, urls["zac"], WERKVOORRAAD_ZAKEN)}
+    assert saved["id"] in offered, describe(response)
+    assert response.status_code == HTTPStatus.FORBIDDEN, describe(response)
 
 
 @pytest.mark.scenario("""

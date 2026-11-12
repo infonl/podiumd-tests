@@ -752,14 +752,19 @@ def search_all(http: requests.Session, zac_url: str, rows: int, **query: object)
     return results
 
 
+def csv_export_lines(http: requests.Session, zac_url: str, **query: object) -> list[list[str]]:
+    """Return the header and rows of ZAC's CSV export of page 1 of the search with these RestZoekParameters."""
+    body = {"page": 0, "rows": 10, **query}
+    response = expect_status(http.post(f"{zac_url}/rest/csv/export", json=body), HTTPStatus.OK)
+    return list(csv.reader(io.StringIO(response.text), delimiter=";"))
+
+
 def csv_export(http: requests.Session, zac_url: str, **query: object) -> list[dict[str, str]]:
     """Return the rows of ZAC's CSV export of page 1 of the search with these RestZoekParameters, by column.
 
     ZAC 5.9.1's header repeats column names after the last column (CsvService.exportToCsv); those hold no values.
     """
-    body = {"page": 0, "rows": 10, **query}
-    response = expect_status(http.post(f"{zac_url}/rest/csv/export", json=body), HTTPStatus.OK)
-    header, *rows = csv.reader(io.StringIO(response.text), delimiter=";")
+    header, *rows = csv_export_lines(http, zac_url, **query)
     return [dict(zip(header, row, strict=False)) for row in rows]
 
 
