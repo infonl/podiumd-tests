@@ -1,4 +1,4 @@
-"""ZAC: mail from a zaak (E-mail versturen, Bevestiging versturen), as ZAC's REST API sends it for the UI.
+"""ZAC: mail from a zaak (E-mail versturen, Bevestiging versturen, afhandelen, intake afronden) as ZAC's UI sends it.
 
 The mails go to run-tagged addresses at Mailpit; cleanup deletes them.
 """
@@ -23,6 +23,7 @@ from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import afzenders
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_mail
+from podiumd_tests.zac import user_event
 from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac import zaak_mailtemplate
 from podiumd_tests.zac_documents import document_url
@@ -208,6 +209,43 @@ def test_afhandelmail_arrives_and_is_kept_on_the_zaak(
     message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=str(body["ontvanger"]))
     assert "{" not in f"{message.get('Subject')}{message.get('HTML')}"
     assert message.get("Subject") in _titles(zac, urls["zac"], zaak)
+
+
+@pytest.mark.parametrize(
+    ("ontvankelijk", "mailtemplate"),
+    [(True, "ZAAK_ONTVANKELIJK"), (False, "ZAAK_NIET_ONTVANKELIJK")],
+    ids=["ontvankelijk", "niet-ontvankelijk"],
+)
+@pytest.mark.scenario("""
+    Given a new zaak in ZAC, in the intake
+    When the behandelaar finishes the intake, ontvankelijk or not, with the mail of its mailtemplate
+    Then the mail arrives
+    And the zaak has the mail as a definitief PDF
+    And the zaak stays open only when ontvankelijk
+""")
+def test_intake_mail_arrives_and_is_kept_as_a_definitief_pdf(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    mail: Callable[..., JsonObject],
+    mailpit: ApiClient,
+    registry: ResourceRegistry,
+    ontvankelijk: bool,  # noqa: FBT001  # a parameter of the test
+    mailtemplate: str,
+) -> None:
+    """INTAKE_AFRONDEN with restMailGegevens of the mailtemplate, as ZAC's intake afronden dialog sends it."""
+    zaak = zac_zaak()
+    template = zaak_mailtemplate(zac, urls["zac"], zaak, mailtemplate)
+    if template is None:
+        pytest.skip(f"ZAC has no mailtemplate {mailtemplate}: add one in ZAC's beheer of mailtemplates")
+    body = mail(zaak, onderwerp=template["onderwerp"], body=template["body"], createDocumentFromMail=True)
+    fields = {"zaakOntvankelijk": ontvankelijk, "resultaatToelichting": "podiumd-tests", "restMailGegevens": body}
+    response = user_event(zac, urls["zac"], str(zaak["uuid"]), "INTAKE_AFRONDEN", **fields)
+    expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=str(body["ontvanger"]))
+    stored = [item for item in zaak_documents(zac, urls["zac"], zaak) if item.get("titel") == message.get("Subject")]
+    assert [(item.get("status"), item.get("formaat")) for item in stored] == [("definitief", "application/pdf")]
+    assert read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpen"] is ontvankelijk
 
 
 @pytest.mark.scenario("""
