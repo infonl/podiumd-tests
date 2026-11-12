@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import strings
+from podiumd_tests.responses import invalid_codes
 from podiumd_tests.seed.catalogi import make_concept_besluittype
 from podiumd_tests.seed.catalogi import make_concept_iot
 from podiumd_tests.seed.catalogi import make_publishable_zaaktype
@@ -150,7 +150,7 @@ def test_zaaktype_with_a_concept_type_does_not_publish(
         }
         openzaak.post(f"{CATALOGI}/zaaktype-informatieobjecttypen", ziot)
     response = openzaak.request("POST", f"{zaaktype['url']}/publish", HTTPStatus.BAD_REQUEST, json={})
-    assert [p["code"] for p in entries(response.json()["invalidParams"])] == ["concept-relation"], response.text
+    assert invalid_codes(response) == ["concept-relation"], response.text
 
 
 @pytest.mark.source(

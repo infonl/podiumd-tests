@@ -66,3 +66,13 @@ def get_entries(http: requests.Session, url: str) -> list[JsonObject]:
         found = cast("JsonObject", body)
         return entries(found.get("results") or found.get("items"))
     return entries(body)
+
+
+def invalid_codes(response: requests.Response) -> list[str]:
+    """Return the codes in a ZGW validation error's invalidParams, in order."""
+    return [str(param["code"]) for param in entries(response.json()["invalidParams"])]
+
+
+def invalid_names(response: requests.Response) -> set[str]:
+    """Return the field names in a ZGW validation error's invalidParams."""
+    return {str(param["name"]) for param in entries(response.json()["invalidParams"])}

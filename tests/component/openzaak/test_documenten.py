@@ -16,6 +16,8 @@ import pytest
 
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import REFUSED
+from podiumd_tests.responses import invalid_codes
+from podiumd_tests.responses import invalid_names
 from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import document_body
@@ -27,8 +29,6 @@ from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.openzaak import today
 
 if TYPE_CHECKING:
-    import requests
-
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.openzaak import ZaaktypeParts
@@ -212,11 +212,6 @@ def test_large_documents_with_the_same_name_keep_their_own_content(
 NOWHERE = "http://openzaak.invalid/documenten/api/v1/enkelvoudiginformatieobjecten/00000000-0000-0000-0000-000000000000"
 
 
-def invalid_names(response: requests.Response) -> set[str]:
-    """The names in a 400 answer's invalidParams."""
-    return {str(p["name"]) for p in entries(response.json()["invalidParams"])}
-
-
 def objectinformatieobjecten(openzaak: ApiClient, document: JsonObject) -> list[JsonObject]:
     """The objectinformatieobjecten Documenten API keeps for a document."""
     return entries(openzaak.list(f"{DOCUMENTEN}/objectinformatieobjecten", {"informatieobject": str(document["url"])}))
@@ -316,7 +311,7 @@ def test_objectinformatieobject_follows_the_zaak(
     body = {"informatieobject": document["url"], "object": target, "objectType": "zaak"}
     response = openzaak.request("POST", f"{DOCUMENTEN}/objectinformatieobjecten", HTTPStatus.BAD_REQUEST, json=body)
     expected = "unique" if case == "already-mirrored" else "inconsistent-relation"
-    assert [p["code"] for p in entries(response.json()["invalidParams"])] == [expected], response.text
+    assert invalid_codes(response) == [expected], response.text
 
 
 @pytest.mark.source(
@@ -406,8 +401,7 @@ def test_document_in_progress_has_no_ontvangstdatum(
         lock = openzaak.request("POST", f"{url}/lock", HTTPStatus.OK, json={}).json()["lock"]
         response = openzaak.request("PATCH", url, HTTPStatus.BAD_REQUEST, json={**fields, "lock": lock})
         openzaak.request("POST", f"{url}/unlock", HTTPStatus.NO_CONTENT, json={"lock": lock})
-    codes = [p["code"] for p in entries(response.json()["invalidParams"])]
-    assert codes == ["invalid_for_received"], response.text
+    assert invalid_codes(response) == ["invalid_for_received"], response.text
 
 
 @pytest.mark.source(

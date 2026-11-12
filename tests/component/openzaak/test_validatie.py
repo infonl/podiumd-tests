@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
-from podiumd_tests.json_data import entries
+from podiumd_tests.responses import invalid_names
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import make_concept_zaaktype
 from podiumd_tests.seed.openzaak import make_zaak
@@ -167,5 +167,5 @@ def test_invalid_zaak_names_the_field(
     else:
         changed = body if method == "PUT" else {key: body[key] for key in case.fields if key in body}
         response = openzaak.request(method, str(zaak["url"]), 400, json=changed)
-    names = {str(p["name"]) for p in entries(response.json()["invalidParams"])}
+    names = invalid_names(response)
     assert any(name == case.name or name.startswith(f"{case.name}.") for name in names), names

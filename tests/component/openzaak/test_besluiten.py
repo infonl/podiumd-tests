@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
-from podiumd_tests.json_data import entries
+from podiumd_tests.responses import invalid_codes
 from podiumd_tests.seed.openzaak import BESLUITEN
 from podiumd_tests.seed.openzaak import delete_besluit
 from podiumd_tests.seed.openzaak import make_besluit
@@ -54,10 +54,6 @@ def test_besluit_on_a_zaak(openzaak: ApiClient, registry: ResourceRegistry, part
 
 
 NOWHERE = "http://openzaak.invalid/catalogi/api/v1/besluittypen/00000000-0000-0000-0000-000000000000"
-
-
-def _codes(response: requests.Response) -> list[object]:
-    return [p["code"] for p in entries(response.json()["invalidParams"])]
 
 
 def _besluit_body(registry: ResourceRegistry, besluittype: str, **fields: object) -> dict[str, object]:
@@ -111,7 +107,7 @@ def test_besluit_needs_a_besluittype_of_the_zaaktype(
     }[case]
     body = _besluit_body(registry, besluittype, zaak=zaak["url"])
     response = openzaak.request("POST", f"{BESLUITEN}/besluiten", HTTPStatus.BAD_REQUEST, json=body)
-    assert _codes(response), response.text
+    assert invalid_codes(response), response.text
 
 
 @pytest.mark.source(
@@ -134,7 +130,7 @@ def test_besluit_identificatie_is_unique_and_fixed(
     assert eerste["identificatie"] != tweede["identificatie"]
     body = _besluit_body(registry, parts.besluittype, identificatie=eerste["identificatie"])
     response = openzaak.request("POST", f"{BESLUITEN}/besluiten", HTTPStatus.BAD_REQUEST, json=body)
-    assert _codes(response), response.text
+    assert invalid_codes(response), response.text
     changes = (
         {"besluittype": archief_parts.besluittype},
         {"identificatie": registry.tagged("besluit-id")},
@@ -142,7 +138,7 @@ def test_besluit_identificatie_is_unique_and_fixed(
     )
     for change in changes:
         response = openzaak.request("PATCH", str(tweede["url"]), HTTPStatus.BAD_REQUEST, json=change)
-        assert _codes(response), response.text
+        assert invalid_codes(response), response.text
 
 
 @pytest.mark.source(
@@ -173,7 +169,7 @@ def test_besluit_documents_follow_the_besluittype(
     for informatieobject in (nowhere, vreemd["url"]):
         body = {"besluit": besluit["url"], "informatieobject": informatieobject}
         response = openzaak.request("POST", path, HTTPStatus.BAD_REQUEST, json=body)
-        assert _codes(response), response.text
+        assert invalid_codes(response), response.text
     tweede = make_besluit(openzaak, registry, parts.besluittype)
     for change in ({"besluit": tweede["url"]}, {"informatieobject": vreemd["url"]}):
         openzaak.request("PATCH", str(link["url"]), HTTPStatus.BAD_REQUEST, HTTPStatus.METHOD_NOT_ALLOWED, json=change)

@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.bootstrap.names import BPMN_ZAAKTYPE
-from podiumd_tests.json_data import entries
+from podiumd_tests.responses import invalid_codes
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_zaak
@@ -121,5 +121,4 @@ def test_type_of_another_zaaktype_is_refused(
     path, body = request_of(Given(openzaak, registry, zaak, other))
     url = path if path.startswith("http") else f"{ZAKEN}/{path}"
     response = openzaak.request("POST", url, HTTPStatus.BAD_REQUEST, json=body)
-    params = entries(response.json()["invalidParams"])
-    assert [p["code"] for p in params] == [code], params
+    assert invalid_codes(response) == [code], response.text

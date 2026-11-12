@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.json_data import entries
 from podiumd_tests.responses import REFUSED
+from podiumd_tests.responses import invalid_codes
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import close_zaak
 from podiumd_tests.seed.openzaak import link_document
@@ -21,8 +21,6 @@ from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.openzaak import status_body
 
 if TYPE_CHECKING:
-    import requests
-
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.openzaak import ZaaktypeParts
@@ -41,10 +39,6 @@ def fixture_closable(parts: ZaaktypeParts) -> ZaaktypeParts:
 
 def _closed(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> JsonObject:
     return close_zaak(openzaak, make_zaak(openzaak, registry, parts.zaaktype), parts)
-
-
-def _codes(response: requests.Response) -> list[object]:
-    return [p["code"] for p in entries(response.json()["invalidParams"])]
 
 
 @pytest.mark.source(
@@ -86,7 +80,7 @@ def test_zaak_closes_only_with_gebruiksrechten_of_its_documents(
     openzaak.post(f"{ZAKEN}/resultaten", {"zaak": zaak["url"], "resultaattype": closable.resultaattypen[0]})
     eindstatus = status_body(zaak, str(closable.statustypen[-1]["url"]), "Afgehandeld")
     response = openzaak.request("POST", f"{ZAKEN}/statussen", HTTPStatus.BAD_REQUEST, json=eindstatus)
-    assert _codes(response) == ["indicatiegebruiksrecht-unset"], response.text
+    assert invalid_codes(response) == ["indicatiegebruiksrecht-unset"], response.text
     make_gebruiksrechten(openzaak, registry, document)
     assert openzaak.get(str(document["url"]))["indicatieGebruiksrecht"] is True
     openzaak.post(f"{ZAKEN}/statussen", eindstatus)
@@ -172,4 +166,4 @@ def test_archiefstatus_needs_the_archive_fields(
     assert zaak["archiefstatus"] == "nog_te_archiveren"
     body = {"archiefstatus": "gearchiveerd"}
     response = openzaak.request("PATCH", str(zaak["url"]), HTTPStatus.BAD_REQUEST, json=body)
-    assert _codes(response), response.text
+    assert invalid_codes(response), response.text

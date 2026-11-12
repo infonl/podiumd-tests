@@ -16,6 +16,7 @@ import pytest
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.responses import invalid_names
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.openzaak import make_zaak
@@ -111,7 +112,7 @@ def test_identificatie_cannot_be_changed_to_one_in_use(
     fields = {"identificatie": eerste["identificatie"]}
     body = {**openzaak.get(str(tweede["url"])), **fields} if method == "PUT" else fields
     response = openzaak.request(method, str(tweede["url"]), HTTPStatus.BAD_REQUEST, json=body)
-    assert "identificatie" in {str(p["name"]) for p in entries(response.json()["invalidParams"])}
+    assert "identificatie" in invalid_names(response)
 
 
 @pytest.mark.source(
@@ -275,4 +276,4 @@ def test_reserved_zaaknummer_goes_to_one_zaak(
         "identificatie": identificaties[0],
     }
     response = openzaak.request("POST", f"{ZAKEN}/zaken", HTTPStatus.BAD_REQUEST, json=body)
-    assert "identificatie" in {str(p["name"]) for p in entries(response.json()["invalidParams"])}
+    assert "identificatie" in invalid_names(response)

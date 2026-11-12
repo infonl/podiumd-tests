@@ -10,6 +10,8 @@ from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
+from podiumd_tests.responses import invalid_codes
+from podiumd_tests.responses import invalid_names
 from podiumd_tests.responses import is_root_answering
 from podiumd_tests.responses import is_server_error
 from podiumd_tests.responses import url_host
@@ -76,3 +78,10 @@ def test_a_refused_connection_is_no_answer(monkeypatch):
 
     monkeypatch.setattr(requests.Session, "get", refuse)
     assert is_root_answering(requests.Session(), "https://zac.example.test", 5) is False
+
+
+def test_invalid_codes_and_names(response_factory):
+    params = [{"name": "zaaktype", "code": "bad-url"}, {"name": "nonFieldErrors", "code": "zaaktype-mismatch"}]
+    response = response_factory(status=400, json_body={"invalidParams": params})
+    assert invalid_codes(response) == ["bad-url", "zaaktype-mismatch"]
+    assert invalid_names(response) == {"zaaktype", "nonFieldErrors"}
