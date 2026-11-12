@@ -17,8 +17,8 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | Area | covered | partial | gap | obsolete | out of scope |
 |---|---|---|---|---|---|
 | zaak-lifecycle | 5 | 14 | 9 | 3 | 3 |
-| betrokkenen-klant | 2 | 8 | 5 | 0 | 2 |
-| documenten-mail | 6 | 12 | 11 | 1 | 5 |
+| betrokkenen-klant | 3 | 7 | 5 | 0 | 2 |
+| documenten-mail | 8 | 10 | 11 | 1 | 5 |
 | taken-cmmn | 4 | 7 | 3 | 0 | 1 |
 | bpmn | 0 | 3 | 6 | 0 | 2 |
 | autorisatie-iam | 11 | 10 | 2 | 2 | 2 |
@@ -26,7 +26,7 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | beheer-zaps | 5 | 8 | 2 | 2 | 3 |
 | integraties-intake | 5 | 6 | 1 | 1 | 2 |
 | overig | 1 | 1 | 1 | 0 | 6 |
-| **total** | **41** | **77** | **49** | **9** | **28** |
+| **total** | **44** | **74** | **49** | **9** | **28** |
 
 ## zaak-lifecycle
 
@@ -65,7 +65,7 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 
 | Priority | Scenario | Status | Not asserted | Tests | Via | Depends on | Min ZAC |
 |---|---|---|---|---|---|---|---|
-| high | Zaakspecifiek e-mail address from the productaanvraag is kept when an initiator is added or changed and offered in intake afronden, e-mail versturen, ontvangstbevestiging, aanvullende informatie and afhandelen | partial | kept after an initiator is added or changed; offered in the zaak's mails | `test_aanvraagspecifieke_contactgegevens_are_on_the_zaak` | zac-rest | Open Formulieren, Open Klant, mail |  |
+| high | Zaakspecifiek e-mail address from the productaanvraag is kept when an initiator is added or changed and offered in intake afronden, e-mail versturen, ontvangstbevestiging, aanvullende informatie and afhandelen | covered | The prefill in the mail dialogs is ZAC's UI (not planned); the tests check the zaak data it reads | `test_aanvraagspecifieke_contactgegevens_are_on_the_zaak`, `test_zaakspecifiek_e_mail_address_stays_when_the_initiator_changes` | zac-rest | Open Formulieren, Open Klant, mail |  |
 | medium | Same person with the same rol cannot be added twice | covered |  | `test_same_person_with_the_same_rol_is_added_once` | zac-rest | BRP |  |
 | medium | Betrokkene ontkoppelen | covered |  | `test_betrokkene_is_ontkoppeld_with_a_reden` | zac-rest |  |  |
 | medium | Change initiator (persoon to bedrijf and back) requires reden, keeps one initiator, logged in historie | partial | historie entry of the change | `test_initiator_changes_from_persoon_to_bedrijf_and_back` | zac-rest | BRP, KvK |  |
@@ -85,9 +85,9 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 
 | Priority | Scenario | Status | Not asserted | Tests | Via | Depends on | Min ZAC |
 |---|---|---|---|---|---|---|---|
-| high | Behandelaar sends the ontvangstbevestiging from a zaak (Bevestiging versturen, optional attachment): mail arrives, is stored as a document, Geen bevestiging verstuurd indicatie and button disappear, action in historie | partial | an attachment; historie entry | `test_ontvangstbevestiging_is_sent_once_and_clears_the_indicatie` | zac-rest | mailpit | 5.9.1 |
+| high | Behandelaar sends the ontvangstbevestiging from a zaak (Bevestiging versturen, optional attachment): mail arrives, is stored as a document, Geen bevestiging verstuurd indicatie and button disappear, action in historie | covered |  | `test_ontvangstbevestiging_is_sent_once_and_clears_the_indicatie` | zac-rest | mailpit | 5.9.1 |
 | high | E-mail versturen from a zaak, with and without a document attachment: mail arrives, a PDF of the mail is stored on the zaak, Verzenden is enabled once an ontvanger is filled in | covered |  | `test_email_with_an_attachment_arrives_and_is_kept_on_the_zaak`, `test_email_without_keeping_it_adds_no_document` | zac-rest | mailpit |  |
-| high | Document verplaatsen to another zaak (from zaak or taak) and koppelen from Inbox/Ontkoppelde documenten; zaak search refuses empty input; move in historie | partial | from a taak or Inbox documenten; refusal of an empty zaak search | `test_document_is_moved_to_another_zaak`, `test_ontkoppeld_document_is_gekoppeld_to_another_zaak` | zac-rest |  |  |
+| high | Document verplaatsen to another zaak (from zaak or taak) and koppelen from Inbox/Ontkoppelde documenten; zaak search refuses empty input; move in historie | covered | From a taak ZAC sends the same request as from the zaak | `test_document_is_moved_to_another_zaak`, `test_ontkoppeld_document_is_gekoppeld_to_another_zaak`, `test_inbox_document_is_gekoppeld_to_a_zaak` | zac-rest |  |  |
 | medium | Zaak mails (E-mail versturen, Bevestiging, Aanvullende informatie, intake afronden, zaak afhandelen, signaleringen) are built from the ZAPs mail templates with the ZAPs afzender and reply-to; afzender holds only the address | partial | content from the ZAPs mail templates | `test_email_with_an_attachment_arrives_and_is_kept_on_the_zaak` | zac-rest | mailpit |  |
 | medium | CMMN E-mail versturen requires a vertrouwelijkheidaanduiding and the stored mail PDF gets it; mail paths without that choice (ontvangstbevestiging, taak mails, intake/afhandelen, productaanvraag, signalering) store an openbaar PDF visible in the portal | partial | vertrouwelijkheid of the PDFs of taak, intake, afhandel and productaanvraag mails; visibility in the portal | `test_email_needs_a_vertrouwelijkheidaanduiding`, `test_email_with_an_attachment_arrives_and_is_kept_on_the_zaak`, `test_ontvangstbevestiging_is_sent_once_and_clears_the_indicatie` | zac-rest | mailpit |  |
 | medium | Signalering mails: taak assigned to me (also via verdelen), taak about to expire / expired with ZAAK_NUMMER and ZAAK_OMSCHRIJVING filled in, zaak assigned with a link that opens the zaak | partial | mail for a taak on my name; taak about to expire; the link to the zaak | `test_zaak_on_my_name_gives_a_signalering_mail`, `test_overdue_taak_gives_a_mail` | zac-rest | mailpit |  |
