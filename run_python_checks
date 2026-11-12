@@ -21,7 +21,19 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     exit 0
 fi
 
+# Outside CI at low priority, so the laptop stays usable; before the cd, so a relative path still resolves.
+if [[ -z "${CI:-}" && -z "${RUN_PYTHON_CHECKS_NICE:-}" ]]; then
+    RUN_PYTHON_CHECKS_NICE=1 exec nice -n 10 "${BASH_SOURCE[0]}" "$@"
+fi
+
 cd "$(dirname "${BASH_SOURCE[0]}")"
+
+# Parallel processes: one per CPU in CI, 4 on a workstation.
+if [[ -n "${CI:-}" ]]; then
+    PYLINT_JOBS=0 PYTEST_PROCESSES=8
+else
+    PYLINT_JOBS=4 PYTEST_PROCESSES=4
+fi
 
 if [[ -x .venv/bin/python3 ]]; then
     PATH="$PWD/.venv/bin:$PATH"
@@ -144,19 +156,18 @@ TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,import-error,superfluous-parens
 TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,too-many-lines,subprocess-run-check,missing-class-docstring
 TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,useless-return,unnecessary-lambda,too-few-public-methods
 TESTS_PYLINT_DISABLE=$TESTS_PYLINT_DISABLE,line-too-long,comparison-of-constants
-# -j 0: one process per CPU.
-step_pylint_src() { pylint -j 0 "$SRC"; }
+step_pylint_src() { pylint -j "$PYLINT_JOBS" "$SRC"; }
 
 step_pylint_tests() {
     if ((${#test_files[@]})); then
-        pylint -j 0 --disable="$TESTS_PYLINT_DISABLE" "${test_files[@]}"
+        pylint -j "$PYLINT_JOBS" --disable="$TESTS_PYLINT_DISABLE" "${test_files[@]}"
     fi
 }
 
 step_basedpyright() { basedpyright "$SRC" "${TEST_DIRS[@]}"; }
 
 # Coverage source and threshold: [tool.coverage] in pyproject.toml. More than 8 workers start slower than they gain.
-step_pytest() { python3 -m pytest -q -n auto --maxprocesses 8 --cov --cov-report=term-missing:skip-covered unit_tests; }
+step_pytest() { python3 -m pytest -q -n auto --maxprocesses "$PYTEST_PROCESSES" --cov --cov-report=term-missing:skip-covered unit_tests; }
 
 # docs/test-overview.md matches the tests' markers.
 step_test_overview() { python3 -m podiumd_tests.overview --check; }

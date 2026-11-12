@@ -73,6 +73,14 @@ EXIT_NOT_ALLOWED = 3
 EXIT_BUSY = 4
 # pytest-xdist workers of a parallel tier at most; profile setting pytest_workers overrides, 1 runs serially.
 MAX_WORKERS = 8
+# Niceness of a run outside CI: the workstation stays usable while runs of several environments overlap.
+WORKSTATION_NICE = 10
+
+
+def lower_priority() -> None:
+    """Lower this process's priority (its pytest workers inherit it), outside CI only."""
+    if not os.environ.get("CI"):
+        os.nice(WORKSTATION_NICE)
 
 
 def default_workers(cpus: int | None) -> int:
@@ -409,6 +417,7 @@ def _run_tier(args: argparse.Namespace) -> int:
     # Smoke only reads; every other tier writes to the environment and takes its lock. Policy drops are
     # recorded by the tests that expect them (tests/component/platform/test_network_policy.py), not the run.
     before = _cluster_state(env)
+    lower_priority()
     with (
         group(f"pytest {args.tier}"),
         nullcontext() if args.tier == "smoke" else held(env, f"run {args.tier} {profile.name}"),

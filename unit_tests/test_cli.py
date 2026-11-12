@@ -427,3 +427,13 @@ def test_a_chaos_run_ends_with_a_smoke_run(monkeypatch, chaos, smoke, result):
     else:
         assert tiers == [("chaos", ["-k", "continuiteit"]), ("smoke", [])]
     assert code == result
+
+
+def test_lower_priority_nices_outside_ci_only(monkeypatch):
+    niced = []
+    monkeypatch.setattr(os, "nice", niced.append)
+    monkeypatch.setenv("CI", "true")
+    cli.lower_priority()
+    monkeypatch.delenv("CI")
+    cli.lower_priority()
+    assert niced == [cli.WORKSTATION_NICE]
