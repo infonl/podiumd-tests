@@ -217,10 +217,17 @@ def make_document(
     **fields: object,
 ) -> JsonObject:
     """Create an enkelvoudig informatieobject with text inhoud whose titel carries the run tag."""
+    body = text_document_body(registry, informatieobjecttype, inhoud, **fields)
+    return _create(openzaak, registry, f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", body)
+
+
+def text_document_body(
+    registry: ResourceRegistry, informatieobjecttype: str, inhoud: str = "podiumd-tests", **fields: object
+) -> dict[str, object]:
+    """Build an enkelvoudig informatieobject with text inhoud whose titel carries the run tag."""
     content = inhoud.encode()
     body = document_body(registry, informatieobjecttype, len(content), **fields)
-    body = {"inhoud": base64.b64encode(content).decode(), **body}
-    return _create(openzaak, registry, f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", body)
+    return {"inhoud": base64.b64encode(content).decode(), **body}
 
 
 def make_document_in_parts(

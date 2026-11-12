@@ -18,18 +18,20 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import invalid_codes
 from podiumd_tests.responses import invalid_names
+from podiumd_tests.seed.catalogi import make_concept_iot
 from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
-from podiumd_tests.seed.openzaak import document_body
 from podiumd_tests.seed.openzaak import link_document
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_document_in_parts
 from podiumd_tests.seed.openzaak import make_gebruiksrechten
 from podiumd_tests.seed.openzaak import make_zaak
+from podiumd_tests.seed.openzaak import text_document_body
 from podiumd_tests.seed.openzaak import today
 
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.openzaak import ZaaktypeParts
     from podiumd_tests.seed.registry import ResourceRegistry
@@ -388,12 +390,7 @@ def test_document_in_progress_has_no_ontvangstdatum(
     fields = {"status": status, "ontvangstdatum": today()}
     path = f"{DOCUMENTEN}/enkelvoudiginformatieobjecten"
     if method == "POST":
-        inhoud = base64.b64encode(b"podiumd-tests").decode()
-        body = {
-            **document_body(registry, parts.informatieobjecttype, len(b"podiumd-tests")),
-            "inhoud": inhoud,
-            **fields,
-        }
+        body = text_document_body(registry, parts.informatieobjecttype, **fields)
         response = openzaak.request("POST", path, HTTPStatus.BAD_REQUEST, json=body)
     else:
         document = make_document(openzaak, registry, parts.informatieobjecttype)
@@ -419,7 +416,7 @@ def test_document_vertrouwelijkheidaanduiding_defaults_to_the_informatieobjectty
 ) -> None:
     """A document without vertrouwelijkheidaanduiding takes the informatieobjecttype's; an explicit value is kept."""
     iot = openzaak.get(parts.informatieobjecttype)
-    body = {**document_body(registry, parts.informatieobjecttype, 3), "inhoud": base64.b64encode(b"abc").decode()}
+    body = text_document_body(registry, parts.informatieobjecttype)
     body.pop("vertrouwelijkheidaanduiding")
     derived = openzaak.post(f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", body)
     registry.add(f"document {derived['url']}", lambda: openzaak.delete(str(derived["url"])))
@@ -457,9 +454,7 @@ def test_document_identificatie_is_unique(
     """POST or PATCH to an identificatie in use for the same bronorganisatie answers 400."""
     eerste = make_document(openzaak, registry, parts.informatieobjecttype)
     if method == "POST":
-        inhoud = base64.b64encode(b"podiumd-tests").decode()
-        body = {**document_body(registry, parts.informatieobjecttype, len(b"podiumd-tests")), "inhoud": inhoud}
-        body["identificatie"] = eerste["identificatie"]
+        body = text_document_body(registry, parts.informatieobjecttype, identificatie=eerste["identificatie"])
         response = openzaak.request(
             "POST", f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", HTTPStatus.BAD_REQUEST, json=body
         )
@@ -493,14 +488,30 @@ def test_document_with_empty_vertrouwelijkheidaanduiding_is_no_server_error(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
     """POST of a document with vertrouwelijkheidaanduiding "" answers 400 or 201, not 500."""
-    inhoud = base64.b64encode(b"abc").decode()
-    body = {
-        **document_body(registry, parts.informatieobjecttype, 3),
-        "inhoud": inhoud,
-        "vertrouwelijkheidaanduiding": "",
-    }
+    body = text_document_body(registry, parts.informatieobjecttype, vertrouwelijkheidaanduiding="")
     path = f"{DOCUMENTEN}/enkelvoudiginformatieobjecten"
     response = openzaak.request("POST", path, HTTPStatus.BAD_REQUEST, HTTPStatus.CREATED, json=body)
     if response.status_code == HTTPStatus.CREATED:
         url = str(response.json()["url"])
         registry.add(f"document {url}", lambda: openzaak.delete(url))
+
+
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW business rule drc-001",
+    "A document cannot have an informatieobjecttype that is still a concept.",
+)
+@pytest.mark.requires("cluster")
+@pytest.mark.scenario("""
+    Given a concept informatieobjecttype in the test catalogus
+    When a document of that informatieobjecttype is created
+    Then Open Zaak refuses it: the informatieobjecttype is not published
+""")
+def test_document_needs_a_published_informatieobjecttype(
+    podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, test_zaaktype: JsonObject
+) -> None:
+    """POST of a document with a concept informatieobjecttype answers 400 not-published."""
+    iot = make_concept_iot(podiumd_env, openzaak, registry, str(test_zaaktype["catalogus"]))
+    body = text_document_body(registry, str(iot["url"]))
+    path = f"{DOCUMENTEN}/enkelvoudiginformatieobjecten"
+    response = openzaak.request("POST", path, HTTPStatus.BAD_REQUEST, json=body)
+    assert invalid_codes(response) == ["not-published"], response.text
