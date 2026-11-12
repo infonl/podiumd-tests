@@ -156,6 +156,10 @@ class Environment:
         msg = f"no deployment for {component} (looked for {', '.join(COMPONENTS[component].deployment_prefixes)})"
         raise KubeError(self.kube.command("get", "deployments"), msg)
 
+    def variable(self, component: str, name: str) -> str:
+        """Return an environment variable of the component's main deployment, e.g. GEMEENTE_MAIL of zac."""
+        return self.kube.exec(self.deployment_for(component), "printenv", name, timeout=30).strip()
+
     def admin_of(self, component: str) -> str:
         """Return the Django app whose admin serves this one's: objecten for objecttypen on Open Object, else itself.
 

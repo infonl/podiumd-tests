@@ -316,7 +316,7 @@ ITA_BIJNA_VERLOPEN_HOURS = 6
 
 def _ita_hours(env: Environment, variable: str, default: int) -> int:
     try:
-        return int(env.kube.exec(env.deployment_for("ita"), "printenv", variable, timeout=30).strip())
+        return int(env.variable("ita", variable))
     except (KubeError, ValueError):
         return default
 

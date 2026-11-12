@@ -20,7 +20,6 @@ import pytest
 
 from podiumd_tests.bootstrap.omc import notify_mock_missing
 from podiumd_tests.bootstrap.omc import omc_actor_missing
-from podiumd_tests.bootstrap.omc import omc_setting
 from podiumd_tests.bootstrap.omc import omc_token
 from podiumd_tests.json_data import section
 from podiumd_tests.mock_server import NOTIFY_EMAIL
@@ -94,7 +93,7 @@ def inwoner_zaak(
 
 def notify_request(env: Environment, channel: tuple[str, str], adres: str, template: str) -> JsonObject:
     """The mock server's record of OMC's Notify request to adres with the template of OMC setting `template`."""
-    template_id = omc_setting(env, template)
+    template_id = env.variable("omc", template)
 
     def is_wanted(entry: JsonObject) -> bool:
         body = section(entry, "body")
