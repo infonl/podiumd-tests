@@ -64,6 +64,8 @@ _, _, BEDRIJF = IDENTITIES
 SUSPENSION_DAYS = 5
 # ZAC's reden for the group and behandelaar it links to a zaak it creates.
 AANMAKEN_ZAAK = "Aanmaken zaak"
+# ZAC's toelichting of a status it sets.
+STATUS_GEWIJZIGD = "Status gewijzigd"
 
 
 def _zaak_url(urls: dict[str, str], zaak: JsonObject) -> str:
@@ -122,6 +124,35 @@ def test_new_zaak_keeps_the_chosen_fields(
     assert ("AANGEMAAKT", zaak["identificatie"]) in historie
     linked = [historie.get(("GEKOPPELD", section(zaak, rol).get("naam"))) for rol in ("groep", "behandelaar")]
     assert linked == [AANMAKEN_ZAAK, AANMAKEN_ZAAK], historie
+
+
+@pytest.mark.source("podiumd-tests", "A status change of a zaak leaves its rollen linked, also in its historie.")
+@pytest.mark.xfail(
+    strict=True,
+    reason="[open-zaak-13] Open Zaak 1.29.3 audits every rol as destroyed (and notifies rol destroy) when ZAC sets a "
+    "status through zaak_bijwerken without rollen; ZAC's historie shows them ONTKOPPELD; not yet reported upstream",
+)
+@pytest.mark.scenario("""
+    Given a new zaak in ZAC, assigned to a group and a behandelaar
+    When ZAC gives the zaak its first status
+    Then the historie shows the status change
+    And it shows no group or behandelaar as unlinked
+""")
+def test_status_change_unlinks_no_rol_in_the_historie(
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], zac_group: str
+) -> None:
+    """Once the historie has the status change, it has no ONTKOPPELD line."""
+    zaak = zac_zaak(groep={"id": zac_group, "naam": zac_group}, behandelaar={"id": ADMIN.username})
+
+    def status_changed() -> list[JsonObject] | None:
+        lines = zaak_historie(zac, urls["zac"], zaak)
+        changed = any(
+            line.get("actie") == "GEWIJZIGD" and line.get("toelichting") == STATUS_GEWIJZIGD for line in lines
+        )
+        return lines if changed else None
+
+    lines = wait_until(status_changed, timeout=INDEX_TIMEOUT, description=f"status change of {zaak['identificatie']}")
+    assert [line for line in lines if line.get("actie") == "ONTKOPPELD"] == []
 
 
 @pytest.mark.requires("opennotificaties")
