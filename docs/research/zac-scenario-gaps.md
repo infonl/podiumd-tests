@@ -19,14 +19,14 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | zaak-lifecycle | 10 | 9 | 9 | 3 | 3 |
 | betrokkenen-klant | 11 | 2 | 2 | 0 | 2 |
 | documenten-mail | 18 | 8 | 0 | 1 | 5 |
-| taken-cmmn | 5 | 3 | 3 | 0 | 1 |
-| bpmn | 0 | 0 | 6 | 0 | 2 |
+| taken-cmmn | 9 | 2 | 0 | 0 | 1 |
+| bpmn | 6 | 0 | 0 | 0 | 2 |
 | autorisatie-iam | 16 | 6 | 1 | 2 | 2 |
 | zoeken-werklijsten-dashboard | 11 | 5 | 3 | 0 | 2 |
 | beheer-zaps | 10 | 5 | 0 | 2 | 3 |
 | integraties-intake | 8 | 1 | 0 | 1 | 2 |
 | overig | 3 | 0 | 0 | 0 | 6 |
-| **total** | **92** | **39** | **24** | **9** | **28** |
+| **total** | **102** | **38** | **15** | **9** | **28** |
 
 ## zaak-lifecycle
 
@@ -121,15 +121,15 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 |---|---|---|---|---|---|---|---|
 | high | Aanvullende informatie with opschorten suspends the zaak (only once, only with a streefdatum), moves streef/fatale datum; completing with zaak hervatten resumes it and restores the dates (also for linked zaken) | covered | ZAC 5.9.1 needs a taak fatale datum, not the zaak's streefdatum, and changes no linked zaak | `test_aanvullende_informatie_with_opschorten_suspends_once_until_hervatten`, `test_opschorten_without_a_taak_fatale_datum_leaves_the_zaak_running` | zac-rest |  |  |
 | high | Intake afronden (ontvankelijk) and start/complete the CMMN taken Goedkeuren, Advies intern, Advies extern (incl. met e-mail form, prefilled initiator or aanvraagspecifiek address), Document verzenden: mandatory fields, toelichting stored, mail sent, taken in takenlijst and dashboard, completed ones leave the lists | covered | Required form fields other than the groep, and prefilled addresses, are ZAC's UI (not planned) | `test_ontvankelijk_intake_puts_the_zaak_in_behandeling`, `test_open_advies_intern_holds_off_afhandelen`, `test_goedkeuren_signs_the_selected_document`, `test_advies_extern_mails_the_adviseur`, `test_document_verzenden_records_the_verzenddatum`, `test_taak_needs_a_group`, `test_taak_started_for_a_behandelaar_is_on_their_dashboard` | zac-rest |  |  |
-| medium | Starting Aanvullende informatie sends the mail and creates one taak and one PDF, also on repeated start | partial | a repeated start | `test_aanvullende_informatie_mails_and_returns_the_zaak_to_intake` | zac-rest | mailpit |  |
+| medium | Starting Aanvullende informatie sends the mail and creates one taak and one PDF, also on repeated start | covered |  | `test_aanvullende_informatie_mails_and_returns_the_zaak_to_intake` | zac-rest | mailpit |  |
 | medium | Aanvullende informatie completes with each outcome (geleverd en akkoord, geleverd niet akkoord, niet geleverd) | covered |  | `test_aanvullende_informatie_mails_and_returns_the_zaak_to_intake` | zac-rest |  |  |
-| medium | Goedkeuren taak signs the selected document after afronden, keeps checkbox and Akkoord after Opslaan, and no longer offers a signed document | partial | the taakdata kept after Opslaan | `test_goedkeuren_signs_the_selected_document` | zac-rest |  |  |
-| medium | Taak fatale datum: empty by default for Aanvullende informatie, capped at the zaak fatale datum (also after moving the zaak date earlier); a later taak date with opschorten moves the zaak date and restores it when opschorten stops | partial | empty default for Aanvullende informatie; the cap after moving the zaak's date earlier | `test_taak_fatale_datum_stays_within_the_zaaks`, `test_aanvullende_informatie_with_opschorten_suspends_once_until_hervatten` | zac-rest |  |  |
-| medium | Document uploaded in a taak is listed with the taak; taak still opens after that document was deleted | gap | Uploads use taakObject false only |  | zac-rest |  |  |
-| low | Taak historie shows aanmaken, afronden and status changes | gap | Taak historie is not read |  | zac-rest |  |  |
+| medium | Goedkeuren taak signs the selected document after afronden, keeps checkbox and Akkoord after Opslaan, and no longer offers a signed document | covered | Hiding a signed document in the form is UI only (not planned) | `test_goedkeuren_signs_the_selected_document`, `test_saved_goedkeuren_keeps_its_taakdata_until_afronden` | zac-rest |  |  |
+| medium | Taak fatale datum: empty by default for Aanvullende informatie, capped at the zaak fatale datum (also after moving the zaak date earlier); a later taak date with opschorten moves the zaak date and restores it when opschorten stops | covered | ZAC leaves Aanvullende informatie out of the cap on purpose | `test_taak_fatale_datum_stays_within_the_zaaks`, `test_aanvullende_informatie_with_opschorten_suspends_once_until_hervatten`, `test_earlier_zaak_fatale_datum_caps_the_open_taak` | zac-rest |  |  |
+| medium | Document uploaded in a taak is listed with the taak; taak still opens after that document was deleted | partial | After a deletion ZAC answers 404 to the taak's document list (finding, not yet filed) | `test_taak_lists_its_document_until_it_is_deleted` | zac-rest |  |  |
+| low | Taak historie shows aanmaken, afronden and status changes | partial | ZAC shows no aanmaken: Flowable writes the entry without data (finding, not yet filed) | `test_taak_historie_shows_its_reassignment_and_completion`, `test_taak_historie_shows_it_aangemaakt` | zac-rest |  |  |
 | low | Taak assigned to a Keycloak group with active=false shows the group as (inactief) in the zaak takenlijst and taak | covered |  | `test_renamed_and_inactive_group_shows_on_its_zaak_and_taak` | zac-rest | Keycloak | 5.9.1 |
 | low | Renamed Keycloak group on a taak is resolved by group id (new name shown, no error) | covered |  | `test_renamed_and_inactive_group_shows_on_its_zaak_and_taak` | zac-rest | Keycloak |  |
-| low | Aanvullende informatie taak and zaak koppelen work in either order | gap | Zaak koppelen is not combined with the taak |  | zac-rest |  |  |
+| low | Aanvullende informatie taak and zaak koppelen work in either order | covered |  | `test_zaak_with_open_aanvullende_informatie_is_gekoppeld` | zac-rest |  |  |
 |  | Aanvullende informatie sets zaak status Wacht op aanvullende informatie, back to Intake after completion | covered |  | `test_aanvullende_informatie_gives_the_zaak_its_waiting_status`, `test_aanvullende_informatie_mails_and_returns_the_zaak_to_intake` | zac-rest |  |  |
 |  | Taken are assigned, reassigned, released and self-assigned (group and behandelaar), and the change shows in the werklijsten | partial | the taak in the new behandelaar's Mijn taken | `test_taken_from_the_list_are_released_and_assigned`, `test_deleted_group_leaves_its_zaak_and_taak_reassignable` | zac-rest |  |  |
 |  | Aanvullende informatie with betrokkenen, BAG object, zaak koppelen, locatie, new version and ondertekenen on the same zaak (old regression run) | partial | BAG objects and locatie; all of them on one zaak | `test_betrokkenen_with_the_same_and_different_roles_are_listed`, `test_started_task_is_in_mijn_taken`, `test_gerelateerde_zaken_show_each_other_until_ontkoppeld`, `test_nieuwe_versie_changes_the_file_and_the_metadata`, `test_document_is_ondertekend_on_a_cmmn_zaak` | zac-rest | BAG |  |
@@ -138,12 +138,12 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 
 | Priority | Scenario | Status | Not asserted | Tests | Via | Depends on | Min ZAC |
 |---|---|---|---|---|---|---|---|
-| medium | BPMN mail: SendEmailDelegate / form.io E-mail verzenden on Opslaan & afronden sends the template with ZAAKDATA variables, stores the mail PDF with the configured vertrouwelijkheidaanduiding (missing/invalid config fails the task); confirmation mail on reopening a completed taak | gap | ptestBpmnProcess has no mail task; mailpit is not checked for BPMN mails |  | zac-rest | mailpit |  |
-| medium | BPMN zaak can be opgeschort, hervat and verlengd; historie shows opschorting | gap | Suspend/resume/verlenging are tested on the CMMN productaanvraag_zaaktype only |  | zac-rest |  |  |
-| low | BPMN form fields show zaak data paths (formatted, updated on zaak change); zaakdata holds the communicatiekanaal and a belanghebbende BSN that a taak can change | gap | Zaakdata and form path values are not read |  | zac-rest |  |  |
-| low | BPMN task form ZAC_vertrouwelijkheidaanduiding is required and applied to the document | gap | Not in podiumd-tests' process |  | zac-rest |  |  |
-| low | Zaak details can be edited and saved after BPMN taken are completed | gap | No zaak update on a BPMN zaak |  | zac-rest |  |  |
-| low | Referentietabel value (DATUMCOLLEGEVERGADERING) is selectable in a BPMN taak | gap | Referentietabellen are not used |  | zac-rest |  |  |
+| medium | BPMN mail: SendEmailDelegate / form.io E-mail verzenden on Opslaan & afronden sends the template with ZAAKDATA variables, stores the mail PDF with the configured vertrouwelijkheidaanduiding (missing/invalid config fails the task); confirmation mail on reopening a completed taak | covered | The confirmation on reopening a completed taak is UI only (not planned) | `test_bpmn_mail_is_sent_and_stored_with_its_vertrouwelijkheid`, `test_bpmn_mail_without_a_valid_vertrouwelijkheid_fails_the_taak` | zac-rest | mailpit |  |
+| medium | BPMN zaak can be opgeschort, hervat and verlengd; historie shows opschorting | covered |  | `test_bpmn_zaak_is_opgeschort_hervat_and_verlengd` | zac-rest |  |  |
+| low | BPMN form fields show zaak data paths (formatted, updated on zaak change); zaakdata holds the communicatiekanaal and a belanghebbende BSN that a taak can change | covered |  | `test_bpmn_zaakdata_follow_the_zaak_and_its_taken` | zac-rest |  |  |
+| low | BPMN task form ZAC_vertrouwelijkheidaanduiding is required and applied to the document | covered | Required in the form is UI only (not planned) | `test_bpmn_mail_is_sent_and_stored_with_its_vertrouwelijkheid` | zac-rest |  |  |
+| low | Zaak details can be edited and saved after BPMN taken are completed | covered |  | `test_bpmn_zaakdata_follow_the_zaak_and_its_taken` | zac-rest |  |  |
+| low | Referentietabel value (DATUMCOLLEGEVERGADERING) is selectable in a BPMN taak | covered | UI only (not planned): the frontend reads the referentietabel itself |  | zac-rest |  |  |
 |  | BPMN taak assignment variants: hardcoded, choice, inherited from the previous taak; later taken follow a changed zaak group and behandelaar | partial | ptestBpmnProcess has one assignment path; hardcoded/inherited candidates and a zaak group change mid-process are not checked | `test_intake_assigns_the_zaak_and_its_next_task` | zac-rest |  |  |
 |  | BPMN zaak status moves from Nieuw to In behandeling as the process progresses | partial | Only the end status is checked; intermediate statuses are not | `test_summary_closes_the_zaak_with_its_resultaat` | zac-rest |  |  |
 |  | Beheer of BPMN procesdefinities and form.io forms: upload, new version increments versie, required/unlinked forms shown, ZIP download with version, delete only when not in use, form.io deletable without breaking the zaaktype | partial | Bootstrap zac-bpmn-process uploads a definition and forms through the admin API, so upload works when the BPMN tests run; versioning, in-use delete refusal and ZIP download are not checked |  | zac-rest |  |  |
