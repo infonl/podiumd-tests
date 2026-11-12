@@ -1,9 +1,9 @@
 """Frank!Gateway's inway behind the edge's client-certificate check (mTLS), and its test consumers.
 
-The edge verifies the client certificate and passes it on as X-Client-Cert-* headers; the inway's
-openbao-consumer-auth looks the fingerprint up in OpenBao (secret/frankgateway/consumers) and the route allows
-partner-a only. The inway caches the consumers for 300 s, so a test runs its cases worst first: a cached success
-cannot then answer a later denial.
+The edge passes the client certificate on as X-Client-Cert-* headers, verified against its client CA or, in
+passthrough mode (IN-3287), unchecked; the inway's openbao-consumer-auth looks the fingerprint up in OpenBao
+(secret/frankgateway/consumers) and the route allows partner-a only. The inway caches the consumers for 300 s, so
+a test runs its cases worst first: a cached success cannot then answer a later denial.
 """
 
 from __future__ import annotations
@@ -48,12 +48,13 @@ CASES = (
         ((401, "unknown_client_certificate"),),
         forged=True,
     ),
-    # 301 where the edge redirects http to https; never an answer of the inway.
+    # 301 where the edge redirects http to https; never an answer of the inway. client_certificate_required in
+    # passthrough mode, where the inway checks no verification header.
     Case(
         "forged-headers-over-http",
         "hand-written client certificate headers over http",
         "",
-        ((401, "client_certificate_not_verified"), (301, "")),
+        ((401, "client_certificate_not_verified"), (401, "client_certificate_required"), (301, "")),
         forged=True,
         plain_http=True,
     ),
@@ -97,7 +98,10 @@ def identity_files(identity_pem: str, name: str, directory: Path) -> tuple[str, 
 
 
 def forged_headers(allowed_pem: str) -> dict[str, str]:
-    """Headers that claim the allowed consumer's certificate was verified, as only the edge may send them."""
+    """Headers that claim the allowed consumer's certificate was verified, as only the edge may send them.
+
+    X-Client-Cert-Verification only counts where the inway route has a verificationHeader (not in passthrough mode).
+    """
     certificate, _ = split(allowed_pem)
     return {"X-Client-Cert-Verification": "SUCCESS", "X-Client-Cert-Fingerprint": fingerprint(certificate)}
 
