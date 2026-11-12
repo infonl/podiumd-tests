@@ -175,6 +175,8 @@ DEPLOYED = {
     f"POST {bpmn.DEFINITIONS}": (201, {}),
     f"POST {FORMS}": (201, {}),
     f"POST {bpmn.CONFIGURATION}": (200, {}),
+    # The zaaktype's link, with the productaanvraagtype of step zac-bpmn-productaanvraag.
+    f"GET {bpmn.CONFIGURATION}": (200, [{**LINK, "id": 4, "productaanvraagtype": BPMN_PRODUCTAANVRAAGTYPE}]),
 }
 
 
@@ -184,7 +186,12 @@ def test_apply_deploys_the_process_its_forms_and_the_link(ctx, fake_http, monkey
     assert ZacBpmnProcess(ADMIN).apply(ctx) == {}
     posts = [s.url.removeprefix("https://zac.example.test") for s in sent if s.method == "POST"]
     assert posts == [bpmn.DEFINITIONS, *(FORMS for _ in range(FORM_COUNT)), bpmn.CONFIGURATION]
-    assert json.loads(sent[-1].body)["zaaktypeUuid"] == "zt-1"
+    stored = json.loads(sent[-1].body)
+    assert (stored["zaaktypeUuid"], stored["id"], stored["productaanvraagtype"]) == (
+        "zt-1",
+        4,
+        BPMN_PRODUCTAANVRAAGTYPE,
+    )
     assert pabc.named("add_entity_type") == [("ptest-bootstrap-bpmn",)]
     assert pabc.named("ensure_domain") == [(ZAC_DOMAIN, ["et-new"])]
     assert {call[0] for call in pabc.named("ensure_functional_role")} == set(ZAC_FUNCTIONAL_ROLES)

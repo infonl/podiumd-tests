@@ -168,12 +168,17 @@ class ZacBpmnProcess:
         return all(domain_mappings(pabc, pabc_url, name) >= len(roles) for name, roles in wanted)
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
-        """Map the functional roles in PABC, deploy the process and its forms, and link it to the zaaktype."""
+        """Map the functional roles in PABC, deploy the process and its forms, and link it to the zaaktype.
+
+        A link the zaaktype has keeps its other fields: step zac-bpmn-productaanvraag's productaanvraagtype.
+        """
         zaaktype = published_zaaktype(_openzaak(ctx), BPMN_ZAAKTYPE, "openzaak-zaaktype-bpmn")
         self._map_roles(ctx, str(zaaktype["omschrijving"]))
         http, zac = self._zac(ctx)
         deploy_process(http, zac, PROCESS_KEY, process_files())
-        expect_status(http.post(zac + CONFIGURATION, json=self.configuration(http, zac, zaaktype)), HTTPStatus.OK)
+        existing = bpmn_link(http, zac, uuid_of(zaaktype["url"])) or {}
+        link = {**existing, **self.configuration(http, zac, zaaktype)}
+        expect_status(http.post(zac + CONFIGURATION, json=link), HTTPStatus.OK)
         return {}
 
     def configuration(self, http: requests.Session, zac: str, zaaktype: JsonObject) -> JsonObject:
