@@ -346,6 +346,24 @@ def test_besluit_calls_send_zacs_fields(fake_http):
     assert sent[-1].method == "DELETE"
 
 
+def test_recorded_besluit_is_deleted_at_cleanup(fake_http):
+    url = "https://oz.test/besluiten/api/v1/besluiten/b1"
+    sent = fake_http(
+        {
+            "POST /rest/zaken/besluit": (200, {"url": url, "identificatie": "BESLUIT-1"}),
+            "GET /besluiten/api/v1/besluitinformatieobjecten": (200, []),
+            "DELETE /besluiten/api/v1/besluiten/b1": (204, None),
+        }
+    )
+    registry = ResourceRegistry("ptest-abc")
+    openzaak = ApiClient(requests.Session(), "https://oz.test", {})
+    zaak = {"uuid": "z1"}
+    zac.recorded_besluit(requests.Session(), ZAC, openzaak, registry, zaak, {"id": "bt1"})
+    assert set(json.loads(sent[0].body)) == {"zaakUuid", "besluittypeUuid", "ingangsdatum", "toelichting"}
+    assert registry.cleanup() == []
+    assert f"{sent[-1].method} {sent[-1].url}" == f"DELETE {url}"
+
+
 def test_send_mail_and_its_acknowledge_variant(fake_http):
     sent = fake_http(
         {
