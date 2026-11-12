@@ -18,7 +18,7 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 |---|---|---|---|---|---|
 | zaak-lifecycle | 25 | 3 | 0 | 3 | 3 |
 | betrokkenen-klant | 13 | 2 | 0 | 0 | 2 |
-| documenten-mail | 22 | 4 | 0 | 1 | 5 |
+| documenten-mail | 24 | 2 | 0 | 1 | 5 |
 | taken-cmmn | 9 | 2 | 0 | 0 | 1 |
 | bpmn | 6 | 0 | 0 | 0 | 2 |
 | autorisatie-iam | 20 | 2 | 1 | 2 | 2 |
@@ -26,7 +26,7 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | beheer-zaps | 12 | 3 | 0 | 2 | 3 |
 | integraties-intake | 8 | 1 | 0 | 1 | 2 |
 | overig | 3 | 0 | 0 | 0 | 6 |
-| **total** | **133** | **21** | **1** | **9** | **28** |
+| **total** | **135** | **19** | **1** | **9** | **28** |
 
 ## zaak-lifecycle
 
@@ -104,10 +104,10 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | low | Recordmanager and beheerder can delete a document of a closed zaak | covered |  | `test_document_rights_follow_the_role_and_the_state` | zac-rest |  |  |
 | low | Signed document blocks Nieuwe versie for a behandelaar; recordmanager can still create one | covered |  | `test_document_rights_follow_the_role_and_the_state` | zac-rest |  |  |
 | low | Office documents in status in bewerking or vast te stellen cannot be converted | covered |  | `test_document_that_is_not_definitief_is_not_converted` | zac-rest |  |  |
-| low | Ontvangstdatum forces document status definitief; a document has either ontvangst- or verzenddatum | partial | Either ontvangst- or verzenddatum is UI only (not planned) | `test_received_document_is_definitief` | zac-rest |  |  |
+| low | Ontvangstdatum forces document status definitief; a document has either ontvangst- or verzenddatum | covered | Either ontvangst- or verzenddatum is UI only (not planned) | `test_received_document_is_definitief` | zac-rest |  |  |
 | low | Zaak shows documents of related zaken (gerelateerd, deelzaak) with their relation | covered |  | `test_zaak_shows_the_documents_of_its_gerelateerde_zaak`, `test_hoofd_and_deelzaak_show_each_others_documents` | zac-rest |  |  |
 | low | Document historie: labels and correct timestamps for bewerken, nieuwe versie, converteren, ondertekenen | covered |  | `test_document_historie_shows_versie_conversion_and_ondertekening` | zac-rest |  |  |
-| low | Vertrouwelijkheidaanduiding: only the 8 ZGW values; default taken from the documenttype and editable; documenttype list per zaaktype matches Open Zaak | partial | The default from the documenttype is UI only (not planned) | `test_document_has_one_of_the_eight_vertrouwelijkheidaanduidingen` | zac-rest |  |  |
+| low | Vertrouwelijkheidaanduiding: only the 8 ZGW values; default taken from the documenttype and editable; documenttype list per zaaktype matches Open Zaak | covered | The default from the documenttype is UI only (not planned) | `test_document_has_one_of_the_eight_vertrouwelijkheidaanduidingen` | zac-rest |  |  |
 | low | Old documents in Inbox documenten and Ontkoppelde documenten open without error | covered | Not planned: needs documents from older ZAC versions |  | zac-rest |  |  |
 | low | Documents linked to a zaak (BPMN e2e) do not land in Inbox documenten | partial | No test of the BPMN flow itself | `test_inbox_document_is_gekoppeld_to_a_zaak` | zac-rest |  |  |
 | low | Document verzenden (by post) marks the document verzonden with verzenddatum | covered |  | `test_sent_document_is_marked_verzonden`, `test_document_verzenden_records_the_verzenddatum` | zac-rest |  |  |
