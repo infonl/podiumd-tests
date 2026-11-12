@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.auth.keycloak_admin import for_environment
 from podiumd_tests.bootstrap.bpmn import INTAKE
 from podiumd_tests.bootstrap.names import BPMN_BESLUITTYPE
 from podiumd_tests.bootstrap.names import BPMN_ZAAKTYPE
@@ -27,10 +28,17 @@ from podiumd_tests.pabc import mapped_application_roles
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.results import TAG_PREFIX
+from podiumd_tests.seed.zac_zaaktype import make_group_member
+from podiumd_tests.seed.zac_zaaktype import make_other_domain_group
+from podiumd_tests.seed.zac_zaaktype import make_role_group
+from podiumd_tests.zac import GERELATEERD
 from podiumd_tests.zac import POLICIES
 from podiumd_tests.zac import besluittypen
 from podiumd_tests.zac import can_open_zaak
+from podiumd_tests.zac import clean_up_zaak
+from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import is_zaak_listed
+from podiumd_tests.zac import koppel_zoekresultaat
 from podiumd_tests.zac import open_task
 from podiumd_tests.zac import read_taak
 from podiumd_tests.zac import recorded_besluit
@@ -39,6 +47,7 @@ from podiumd_tests.zac import vastleggen_besluit
 from podiumd_tests.zac import wait_in_werkvoorraad
 from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zaak_body
+from podiumd_tests.zac import zac_session
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -46,6 +55,7 @@ if TYPE_CHECKING:
     import requests
 
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -317,8 +327,100 @@ def test_search_lists_only_zaken_of_zaaktypen_with_a_role(
     for zaak in (bpmn_zaak, other):
         wait_in_werkvoorraad(zac, urls["zac"], zaak)
     raadpleger = zac_as("raadpleger")
-    assert is_zaak_listed(raadpleger, urls["zac"], bpmn_zaak)
-    assert not is_zaak_listed(raadpleger, urls["zac"], other)
+    for flags in ({}, {"alleenOpenstaandeZaken": True}):
+        assert is_zaak_listed(raadpleger, urls["zac"], bpmn_zaak, **flags)
+        assert not is_zaak_listed(raadpleger, urls["zac"], other, **flags)
+
+
+@pytest.mark.source(POLICIES, "ZAC's search for zaken to link lists only zaken of zaaktypen the user holds a role for.")
+@pytest.mark.scenario("""
+    Given two zaken of the BPMN test zaaktype and a zaak of the estate's zaaktype in ZAC's werkvoorraad
+    And a test user with ZAC base role behandelaar on the BPMN test zaaktype only
+    When the user searches for each other zaak to link to the first zaak
+    Then ZAC finds the zaak of the BPMN test zaaktype
+    And not the zaak of the estate's zaaktype
+""")
+def test_koppel_search_lists_only_zaken_of_zaaktypen_with_a_role(  # three zaken and two users
+    zac: requests.Session,
+    zac_as: Callable[[str], requests.Session],
+    urls: dict[str, str],
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    bpmn_parameters: JsonObject,
+    bpmn_zaak: JsonObject,
+    zac_zaak: Callable[..., JsonObject],
+) -> None:
+    """The behandelaar's koppel search from a BPMN zaak finds the other BPMN zaak and not the estate's zaak."""
+    zac_url = urls["zac"]
+    tweede = create_zaak(zac, zac_url, bpmn_parameters, omschrijving=registry.tagged("bpmn"))
+    clean_up_zaak(zac, zac_url, openzaak, registry, tweede)
+    other = zac_zaak()
+    for zaak in (tweede, other):
+        wait_in_werkvoorraad(zac, zac_url, zaak)
+    behandelaar = zac_as("behandelaar")
+    assert koppel_zoekresultaat(behandelaar, zac_url, bpmn_zaak, tweede, GERELATEERD) is not None
+    assert koppel_zoekresultaat(behandelaar, zac_url, bpmn_zaak, other, GERELATEERD) is None
+
+
+@pytest.mark.source(
+    POLICIES, "ZAC reads the user's zaaktypen from PABC at login: its search follows a lost role at once."
+)
+@pytest.mark.scenario("""
+    Given a zaak of the BPMN test zaaktype in ZAC's werkvoorraad
+    And a user who is raadpleger on that zaaktype and on a zaaktype of another domain
+    When the user loses the role on the BPMN test zaaktype and logs in again
+    Then ZAC's search and werkvoorraad no longer list the zaak, without a reindex
+""")
+def test_search_follows_a_lost_role_without_a_reindex(
+    zac: requests.Session,
+    podiumd_env: Environment,
+    urls: dict[str, str],
+    registry: ResourceRegistry,
+    bpmn_zaak: JsonObject,
+) -> None:
+    """Listed while the user is in the BPMN zaaktype's role group; after the group is gone, not listed."""
+    zac_url = urls["zac"]
+    wait_in_werkvoorraad(zac, zac_url, bpmn_zaak)
+    group = make_role_group(podiumd_env, registry, "raadpleger")
+    other = make_other_domain_group(podiumd_env, registry, "raadpleger")
+    username, password = make_group_member(podiumd_env, registry, group, other)
+    before = zac_session(podiumd_env, username, password)
+    assert is_zaak_listed(before, zac_url, bpmn_zaak, alleenOpenstaandeZaken=True)
+
+    for_environment(podiumd_env).delete_group_named(group)
+    after = zac_session(podiumd_env, username, password)
+    assert not is_zaak_listed(after, zac_url, bpmn_zaak)
+    assert not is_zaak_listed(after, zac_url, bpmn_zaak, alleenOpenstaandeZaken=True)
+
+
+@pytest.mark.source(POLICIES, "A plus role gives no rights on a zaaktype the user holds no base role for.")
+@pytest.mark.scenario("""
+    Given a zaak of the BPMN test zaaktype in ZAC's werkvoorraad
+    And a user who is raadpleger on a zaaktype of another domain
+    And has only the plus role brp_zoeken on the BPMN test zaaktype
+    When the user searches for the zaak
+    Then ZAC's search and werkvoorraad do not list it
+""")
+def test_plus_role_in_another_domain_lists_no_zaken(  # the zaak, PABC and Keycloak
+    zac: requests.Session,
+    http: requests.Session,
+    podiumd_env: Environment,
+    urls: dict[str, str],
+    pabc_api_key: str,
+    registry: ResourceRegistry,
+    bpmn_zaak: JsonObject,
+) -> None:
+    """The user logs in on its base role elsewhere; its search does not list the BPMN zaak."""
+    skip_without_brp_zoeken(pabc_decision(http, urls, pabc_api_key, ZAC_ROLE_USERS["brp_zoeken"].realm_roles[0]))
+    zac_url = urls["zac"]
+    wait_in_werkvoorraad(zac, zac_url, bpmn_zaak)
+    groups = (
+        make_role_group(podiumd_env, registry, "brp-zoeken"),
+        make_other_domain_group(podiumd_env, registry, "raadpleger"),
+    )
+    user = zac_session(podiumd_env, *make_group_member(podiumd_env, registry, *groups))
+    assert not is_zaak_listed(user, zac_url, bpmn_zaak)
+    assert not is_zaak_listed(user, zac_url, bpmn_zaak, alleenOpenstaandeZaken=True)
 
 
 @pytest.mark.source(POLICIES, "A user without a base role cannot use ZAC, whatever plus roles it has (PR #7232).")

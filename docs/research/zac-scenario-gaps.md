@@ -21,12 +21,12 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | documenten-mail | 6 | 12 | 11 | 1 | 5 |
 | taken-cmmn | 4 | 7 | 3 | 0 | 1 |
 | bpmn | 0 | 3 | 6 | 0 | 2 |
-| autorisatie-iam | 9 | 12 | 2 | 2 | 2 |
+| autorisatie-iam | 11 | 10 | 2 | 2 | 2 |
 | zoeken-werklijsten-dashboard | 2 | 8 | 9 | 0 | 2 |
 | beheer-zaps | 5 | 8 | 2 | 2 | 3 |
 | integraties-intake | 5 | 6 | 1 | 1 | 2 |
 | overig | 1 | 1 | 1 | 0 | 6 |
-| **total** | **36** | **82** | **49** | **9** | **28** |
+| **total** | **38** | **80** | **49** | **9** | **28** |
 
 ## zaak-lifecycle
 
@@ -154,7 +154,7 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 |---|---|---|---|---|---|---|---|
 | high | Role rights matrix per PABC application role (raadpleger, behandelaar, coordinator, recordmanager, beheerder) on zaak, taak, besluit, document and notitie after login | covered |  | `test_rights_follow_the_role`, `test_taak_rights_follow_the_role`, `test_besluit_rights_follow_the_role`, `test_zac_refuses_a_call_below_its_least_role`, `test_closed_zaak_rights_follow_the_role`, `test_document_rights_follow_the_role_and_the_state` | zac-rest | OPA/PABC, Keycloak | 5.9.1 |
 | high | Raadpleger is read-only: can search and read zaken, taken (also BPMN), documenten, notities and gerelateerde zaken, but cannot create a zaak, start a taak, edit dates, use inbox, create/edit/delete notities or ontkoppelen (backend refuses) | covered |  | `test_rights_follow_the_role`, `test_taak_rights_follow_the_role`, `test_raadpleger_cannot_create_or_change_a_zaak`, `test_raadpleger_cannot_start_a_taak`, `test_zac_refuses_a_call_below_its_least_role`, `test_search_lists_only_zaken_of_zaaktypen_with_a_role`, `test_document_rights_follow_the_role_and_the_state` | zac-rest |  | 5.9.1 |
-| high | User with only a plusrol (brp_zoeken) and no ZAC basisrol is treated as a user without ZAC roles and cannot use ZAC | partial | The REST refusal is checked; the page with a message that a base role is needed, Uitloggen and no Home button is not | `test_plus_role_alone_gives_no_access` | zac-rest | OPA/PABC, Keycloak | 5.9.1 |
+| high | User with only a plusrol (brp_zoeken) and no ZAC basisrol is treated as a user without ZAC roles and cannot use ZAC | covered | The page with a message that a base role is needed is UI only (not planned) | `test_plus_role_alone_gives_no_access`, `test_plus_role_in_another_domain_lists_no_zaken` | zac-rest | OPA/PABC, Keycloak | 5.9.1 |
 | high | A user without rights on a zaaktype cannot open its zaken (direct URL gives no-rights error), even with ZAC roles on other zaaktypen | covered | Graylog login logging of rights is out of reach | `test_role_gives_no_access_to_zaken_of_other_zaaktypen` | zac-rest | OPA/PABC, Keycloak | 5.9.1 |
 | medium | Admin pages (/admin/*) and /rest/admin endpoints are refused for every role except functioneel beheerder/beheerder | covered |  | `test_beheer_is_refused_to_every_role_but_beheerder`, `test_zac_refuses_a_call_below_its_least_role` | zac-rest | OPA/PABC, Keycloak | 5.9.1 |
 | medium | Zaakspecifiek autorisatie: who may set it (behandelaar of the zaak / zaakspecifiek role / beheerder), refused without behandelaar or for a zaaktype not configured for it, cannot be unset, behandelaar cannot be removed or changed to a non-authorised user | partial | A holder of the application role zaakspecifiek_geautoriseerd setting it: PodiumD's PABC dataset has no such role | `test_marking_is_refused_without_its_conditions`, `test_handed_over_zaak_stays_open_to_the_former_behandelaar` | zac-rest | OPA/PABC, Keycloak |  |
@@ -180,7 +180,7 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 
 | Priority | Scenario | Status | Not asserted | Tests | Via | Depends on | Min ZAC |
 |---|---|---|---|---|---|---|---|
-| high | Search, werklijsten, dashboard and zaak-koppelen search show only zaken of zaaktypen the user may read in PABC (also after losing a domain, or with only a plusrol in a domain), without a Solr reindex | partial | The search of a raadpleger on one zaaktype is checked; werklijsten, dashboard, zaak-koppelen search, losing a domain and a plusrol in a second domain are not | `test_search_lists_only_zaken_of_zaaktypen_with_a_role` | zac-rest | Solr, OPA/PABC, Keycloak | 5.9.1 |
+| high | Search, werklijsten, dashboard and zaak-koppelen search show only zaken of zaaktypen the user may read in PABC (also after losing a domain, or with only a plusrol in a domain), without a Solr reindex | partial | The dashboard cards are not checked | `test_search_lists_only_zaken_of_zaaktypen_with_a_role`, `test_koppel_search_lists_only_zaken_of_zaaktypen_with_a_role`, `test_search_follows_a_lost_role_without_a_reindex`, `test_plus_role_in_another_domain_lists_no_zaken` | zac-rest | Solr, OPA/PABC, Keycloak | 5.9.1 |
 | high | Bulk verdelen and vrijgeven of zaken from the zaken-werkvoorraad (40-100 zaken, acceptable speed, reden, counts correct, mails sent, all rows updated) | partial | toewijzing mails and unassigned zaken in the selection; 100 zaken take minutes (63 of 100 assigned after 120 s on minikube) | `test_zaken_from_the_list_are_assigned_and_released`, `test_hundred_zaken_are_assigned_and_released` | zac-rest | mail, Solr |  |
 | high | Bulk verdelen and vrijgeven of taken from the taken-werkvoorraad (100 taken, speed, reden, mails) | partial | A single taak is vrijgegeven and verdeeld; volume, duration and mails are not checked | `test_taken_from_the_list_are_released_and_assigned` | zac-rest | mail, Solr |  |
 | medium | Werklijsten (Zaken-werkvoorraad, Mijn zaken, Afgehandelde zaken) keep working with more than 120 zaaktypen (Solr query by POST) | gap | Estates have fewer zaaktypen; would need seeding 120+ zaaktypen with zaakafhandelparameters, then a /rest/zoeken/list call |  | zac-rest | Solr, Open Zaak | 5.9.1 |
@@ -204,7 +204,7 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 
 | Priority | Scenario | Status | Not asserted | Tests | Via | Depends on | Min ZAC |
 |---|---|---|---|---|---|---|---|
-| high | ZAPs offer only groups authorised for the zaaktype in PABC; an unauthorised default behandelaarsgroep (also in taakgegevens) is cleared, for CMMN and BPMN | partial | clearing an unauthorised default groep (ZAC's UI only) | `test_zac_offers_the_groups_pabc_authorises_as_behandelaar` | zac-rest | Keycloak, PABC | 5.9.1 |
+| high | ZAPs offer only groups authorised for the zaaktype in PABC; an unauthorised default behandelaarsgroep (also in taakgegevens) is cleared, for CMMN and BPMN | covered | Clearing an unauthorised default groep is ZAC's UI only (not planned) | `test_zac_offers_the_groups_pabc_authorises_as_behandelaar` | zac-rest | Keycloak, PABC | 5.9.1 |
 | high | ZAPs edits persist after save (gegevens, waarschuwingsvensters 0-31, zaakbeeindig gegevens, mailgegevens/afzenders, statusmail settings); new BPMN and CMMN zaaktypen configurable | covered |  | `test_saved_zaakafhandelparameters_are_read_back`, `test_bpmn_zaak_starts_with_its_intake_form` | zac-rest |  |  |
 | high | ZAPs (incl. zaakbeeindig gegevens, mailgegevens, ontvangstbevestiging, koppelingen, BPMN configuration) are kept on a new zaaktype version after synchronisation; a changed default groep applies only to new zaken | covered |  | `test_new_zaaktype_version_keeps_the_zaakafhandelparameters`, `test_zaakafhandelparameters_are_valide` | zac-rest | Open Zaak |  |
 | medium | ZAPs default groep and behandelaar are prefilled in a new zaak | partial | a zaak started in ZAC: the tests send the default groep themselves | `test_productaanvraag_zaak_takes_the_details_and_documents`, `test_aanvraagspecifieke_contactgegevens_are_on_the_zaak` | zac-rest |  |  |

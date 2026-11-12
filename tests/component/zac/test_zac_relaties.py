@@ -18,6 +18,7 @@ from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import GERELATEERD
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import afhandelen
@@ -46,7 +47,6 @@ pytestmark = [
     ),
 ]
 
-GERELATEERD = "GERELATEERD"
 HOOFDZAAK = "HOOFDZAAK"
 DEELZAAK = "DEELZAAK"
 # The tests of fixture zac_eigen_zaaktype, a throwaway zaaktype made known to PABC and deleted with a Django snippet.

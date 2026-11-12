@@ -464,6 +464,10 @@ def ontkoppel(  # noqa: PLR0913, PLR0917  # the fields of ZAC's request
     return http.patch(f"{zac_url}/rest/zaken/zaak/ontkoppel", json=body)
 
 
+# ZAC's relatieType of two zaken linked as related.
+GERELATEERD = "GERELATEERD"
+
+
 def koppel_zoekresultaat(
     http: requests.Session, zac_url: str, zaak: JsonObject, ander: JsonObject, relatie: str
 ) -> JsonObject | None:

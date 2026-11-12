@@ -13,6 +13,7 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from podiumd_tests.auth.keycloak_admin import for_environment
+from podiumd_tests.bootstrap.bpmn import ZAC_APPLICATION
 from podiumd_tests.bootstrap.bpmn import uuid_of
 from podiumd_tests.bootstrap.names import ZAC_DOMAIN
 from podiumd_tests.bootstrap.names import ZAC_FUNCTIONAL_ROLE
@@ -20,7 +21,9 @@ from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.pabc import add_zaaktype_entity_type
 from podiumd_tests.pabc import admin_session
 from podiumd_tests.pabc import delete_entity_type
+from podiumd_tests.pabc import delete_roles_and_domain
 from podiumd_tests.pabc import ensure_domain
+from podiumd_tests.pabc import ensure_functional_role
 from podiumd_tests.pabc import zaaktype_entity_type
 from podiumd_tests.seed.catalogi import ZaaktypeTypes
 from podiumd_tests.seed.catalogi import make_publishable_zaaktype
@@ -142,18 +145,39 @@ def make_role_group(env: Environment, registry: ResourceRegistry, role: str) -> 
     return name
 
 
-def make_group_member(env: Environment, registry: ResourceRegistry, group: str) -> tuple[str, str]:
-    """Create a run-tagged Keycloak user in the group; its username and password. Cleanup deletes it."""
+def make_other_domain_group(env: Environment, registry: ResourceRegistry, role: str) -> str:
+    """Create a run-tagged Keycloak group whose new realm role has a ZAC role in a PABC domain of its own; its name.
+
+    The domain holds one run-tagged zaaktype that does not exist: a member keeps a ZAC role without any zaak of it.
+    """
+    name = registry.tagged(f"zac-domein-{secrets.token_hex(3)}")
+    keycloak = for_environment(env)
+    keycloak.create_role(name)
+    registry.add(f"Keycloak realm role {name}", lambda: for_environment(env).delete_role(name))
+    pabc, pabc_url = pabc_as_admin(env)
+    entity_type = add_zaaktype_entity_type(pabc, pabc_url, name)
+    registry.add(f"PABC entity type {name}", lambda: forget_zaaktype(env, name))
+    domain = ensure_domain(pabc, pabc_url, name, [entity_type])
+    registry.add(f"PABC domain {name}", lambda: delete_roles_and_domain(*pabc_as_admin(env), [name], name))
+    ensure_functional_role(pabc, pabc_url, name, ZAC_APPLICATION, (role,), domain)
+    keycloak.create_group(name, (name,))
+    registry.add(f"Keycloak group {name}", lambda: for_environment(env).delete_group_named(name))
+    return name
+
+
+def make_group_member(env: Environment, registry: ResourceRegistry, *groups: str) -> tuple[str, str]:
+    """Create a run-tagged Keycloak user in the groups; its username and password. Cleanup deletes it."""
     admin = for_environment(env)
     username = registry.tagged(f"zac-lid-{secrets.token_hex(3)}")
     password = admin.new_password()
     user_id = admin.create_user(username, password, {})
     registry.add(f"Keycloak user {username}", lambda: for_environment(env).delete_user_named(username))
-    group_id = admin.group_id(group)
-    if group_id is None:
-        msg = f"Keycloak group {group} not found"
-        raise LookupError(msg)
-    admin.join_group(user_id, group_id)
+    for group in groups:
+        group_id = admin.group_id(group)
+        if group_id is None:
+            msg = f"Keycloak group {group} not found"
+            raise LookupError(msg)
+        admin.join_group(user_id, group_id)
     return username, password
 
 
