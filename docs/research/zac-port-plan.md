@@ -112,8 +112,9 @@ share their setup. The user picks the batches to port.
   ondertekenen on a CMMN zaak (definitief, ONDERTEKEND, a second one refused); an .eml kept byte for byte; aac, mp3,
   exe, msi and an empty file refused.
 - Not covered: ontkoppelen needs a reden (ZAC 5.9.1 accepts an empty reden, and without one answers 500 after it has
-  removed the link: the document is then on no zaak and not in Ontkoppelde documenten); the 500 MB limit (ZAC gives it
-  at `/rest/configuratie/max-file-size-mb`).
+  removed the link: the document is then on no zaak and not in Ontkoppelde documenten); a real upload at the 500 MB
+  limit (`/rest/configuratie/max-file-size-mb`): `test_edge_accepts_zacs_largest_upload` only announces that size at
+  the edge, so no proxy in front of ZAC refuses it.
 
 ### Z7: CMMN taken (done: 7 tests, 9 cases)
 
@@ -189,8 +190,8 @@ share their setup. The user picks the batches to port.
 ## Not planned
 
 - UI-only behaviour (layout, dialogs, labels such as "(inactief)"), AD login, Graylog logging.
-- More than 120 zaaktypen in the werklijsten, the 500 MB upload, bulk verdelen of 100 zaken: they need volume
-  seeding beyond what a shared environment should carry; revisit with the perf tier's volume data.
+- More than 120 zaaktypen in the werklijsten: 120 zaaktypen with ZAC configuration and PABC rights on a shared
+  environment.
 - PDF/A conformance of generated PDFs: needs a validator (veraPDF) in the suite's image.
 - Holders of ZAC's application role zaakspecifiek_geautoriseerd: PodiumD's PABC dataset (chart 4.10.1, 4.11.0) has
   no such role.

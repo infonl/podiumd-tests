@@ -5,6 +5,8 @@ The zaak is of the zaaktype ZAC handles productaanvragen for; the test admin is 
 
 from __future__ import annotations
 
+import uuid
+
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -19,6 +21,7 @@ from podiumd_tests.zac_documents import FILES
 from podiumd_tests.zac_documents import ONTKOPPELDE_DOCUMENTEN
 from podiumd_tests.zac_documents import delete_ontkoppeld_document
 from podiumd_tests.zac_documents import document_url
+from podiumd_tests.zac_documents import max_file_size_mb
 from podiumd_tests.zac_documents import nieuwe_versie
 from podiumd_tests.zac_documents import ontkoppel_document
 from podiumd_tests.zac_documents import ontkoppelde_documenten
@@ -34,6 +37,7 @@ if TYPE_CHECKING:
     import requests
 
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -311,3 +315,25 @@ def test_upload_of_a_refused_file_type_or_an_empty_file_is_refused(
     refused = upload(zac, urls["zac"], zaak, registry, extension=extension, file=("application/octet-stream", content))
     expect_status(refused, HTTPStatus.BAD_REQUEST)
     assert _uuids(zac, urls["zac"], zaak) == []
+
+
+# Room for the multipart form around the file.
+FORM_OVERHEAD = 64 * 1024
+
+
+@pytest.mark.scenario("""
+    Given ZAC's largest document upload
+    When an upload of that size is announced through the platform's edge
+    Then no proxy in front of ZAC refuses it as too large
+""")
+def test_edge_accepts_zacs_largest_upload(
+    podiumd_env: Environment, zac: requests.Session, urls: dict[str, str]
+) -> None:
+    """The gateway, WAF and zac-nginx allow a request body of ZAC's maximum file size.
+
+    Proxies that buffer the body first are not seen past: the probe sends only 1 KiB.
+    """
+    size = max_file_size_mb(zac, urls["zac"]) * 1024 * 1024 + FORM_OVERHEAD
+    url = f"{urls['zac']}/rest/informatieobjecten/informatieobject/{uuid.uuid4()}/podiumd-tests"
+    status = podiumd_env.announced_body_status(url, size)
+    assert status != HTTPStatus.REQUEST_ENTITY_TOO_LARGE, f"the edge refuses a body of {size} bytes for {url}"

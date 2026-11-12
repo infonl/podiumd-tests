@@ -1,13 +1,16 @@
 """Unit tests for HTTP sessions in direct and host-header mode."""
 
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 from typing import cast
 
+import pytest
 import requests
 
 from requests.cookies import MockRequest
 from requests.cookies import create_cookie
 
+from podiumd_tests import sessions
 from podiumd_tests.sessions import DEFAULT_TIMEOUT
 from podiumd_tests.sessions import HostHeaderAdapter
 from podiumd_tests.sessions import make_session
@@ -65,3 +68,38 @@ def test_https_through_the_ingress_ip_verifies_the_profile_host():
 
 def test_session_verifies_with_the_given_ca_bundle():
     assert make_session({"zac": "https://zac.local"}, verify="ca.pem").verify == "ca.pem"
+
+
+class FakeTls:
+    """A TLS socket that records what is sent and answers with a fixed reply, or times out."""
+
+    def __init__(self, reply: bytes | None) -> None:
+        self.reply: bytes | None = reply
+        self.sent: bytes = b""
+        self.timeout: float = 0
+
+    def sendall(self, data: bytes) -> None:
+        self.sent += data
+
+    def settimeout(self, seconds: float) -> None:
+        self.timeout = seconds
+
+    def recv(self, _size: int) -> bytes:
+        if self.reply is None:
+            raise TimeoutError
+        return self.reply
+
+
+@pytest.mark.parametrize(("reply", "status"), [(b"HTTP/1.1 413 Request Entity Too Large\r\n", 413), (None, None)])
+def test_announced_body_status_reads_the_status_or_none(monkeypatch, reply, status):
+    fake = FakeTls(reply)
+
+    @contextmanager
+    def tls(*_args):
+        yield fake
+
+    monkeypatch.setattr(sessions, "_tls", tls)
+    assert sessions.announced_body_status("https://zac.test/rest/x", 10**9) == status
+    assert fake.sent.startswith(b"POST /rest/x HTTP/1.1\r\nHost: zac.test\r\nContent-Length: 1000000000\r\n")
+    head, body = fake.sent.split(b"\r\n\r\n")
+    assert (head.endswith(b"application/octet-stream"), body) == (True, b"x" * 1024)

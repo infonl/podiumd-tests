@@ -79,6 +79,11 @@ FILES = {
 }
 
 
+def max_file_size_mb(zac: requests.Session, zac_url: str) -> int:
+    """Return the largest document upload ZAC allows, in MiB."""
+    return int(expect_status(zac.get(f"{zac_url}/rest/configuratie/max-file-size-mb"), HTTPStatus.OK).text)
+
+
 def document_url(zac_url: str, document: JsonObject) -> str:
     """ZAC's URL of the document."""
     return f"{zac_url}/rest/informatieobjecten/informatieobject/{document['uuid']}"

@@ -10,6 +10,7 @@ from __future__ import annotations
 import socket
 import ssl
 
+from contextlib import contextmanager
 from http.cookiejar import DefaultCookiePolicy
 from typing import TYPE_CHECKING
 from typing import cast
@@ -24,6 +25,7 @@ from requests.adapters import HTTPAdapter
 from podiumd_tests.responses import url_host
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
     from collections.abc import Mapping
 
     from requests.adapters import _HostParams  # pyright: ignore[reportPrivateUsage]  # the stubs' own return types
@@ -139,8 +141,9 @@ def make_session(
     return session
 
 
-def peer_certificate(url: str, ingress_ip: str | None = None, ca_file: str | None = None) -> dict[str, object]:
-    """Return the certificate the host of an https URL presents, verified for that host; through ingress_ip if given."""
+@contextmanager
+def _tls(url: str, ingress_ip: str | None, ca_file: str | None) -> Generator[ssl.SSLSocket]:
+    """Yield a TLS connection to the host of an https URL, verified for that host; through ingress_ip if given."""
     parts = urlsplit(url)
     host = parts.hostname or ""
     context = ssl.create_default_context(cafile=ca_file)
@@ -148,4 +151,33 @@ def peer_certificate(url: str, ingress_ip: str | None = None, ca_file: str | Non
         socket.create_connection((ingress_ip or host, parts.port or 443), DEFAULT_TIMEOUT) as connection,
         context.wrap_socket(connection, server_hostname=host) as tls,
     ):
+        yield tls
+
+
+def peer_certificate(url: str, ingress_ip: str | None = None, ca_file: str | None = None) -> dict[str, object]:
+    """Return the certificate the host of an https URL presents, verified for that host; through ingress_ip if given."""
+    with _tls(url, ingress_ip, ca_file) as tls:
         return cast("dict[str, object]", tls.getpeercert())
+
+
+def announced_body_status(
+    url: str, size: int, ingress_ip: str | None = None, ca_file: str | None = None, *, wait: float = 5
+) -> int | None:
+    """Return the status of a POST to an https URL that announces size bytes and sends 1 KiB; None without answer.
+
+    nginx answers 413 to a Content-Length above client_max_body_size before reading the body; a proxy that buffers
+    the body first gives no answer within wait, and hides the limits behind it.
+    """
+    parts = urlsplit(url)
+    head = (
+        f"POST {parts.path or '/'} HTTP/1.1\r\nHost: {parts.netloc}\r\nContent-Length: {size}\r\n"
+        "Content-Type: application/octet-stream\r\n\r\n"
+    )
+    with _tls(url, ingress_ip, ca_file) as tls:
+        tls.sendall(head.encode() + b"x" * 1024)
+        tls.settimeout(wait)
+        try:
+            answer = tls.recv(64)
+        except TimeoutError:
+            return None
+    return int(answer.split(b" ", 2)[1])

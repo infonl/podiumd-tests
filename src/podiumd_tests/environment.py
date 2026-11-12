@@ -27,6 +27,7 @@ from podiumd_tests.kube import cluster_service
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.process import Runner
 from podiumd_tests.process import run_process
+from podiumd_tests.sessions import announced_body_status
 from podiumd_tests.sessions import make_session
 from podiumd_tests.sessions import peer_certificate
 
@@ -115,6 +116,10 @@ class Environment:
     def peer_certificate(self, url: str) -> dict[str, object]:
         """Return the verified certificate the host of an https profile URL presents."""
         return peer_certificate(url, self.ingress_ip(), self.ca_file)
+
+    def announced_body_status(self, url: str, size: int) -> int | None:
+        """Return the status of a POST to a profile URL that announces size bytes (sessions.announced_body_status)."""
+        return announced_body_status(url, size, self.ingress_ip(), self.ca_file)
 
     def session(self, *, cookies: bool = True) -> requests.Session:
         """HTTP session for the profile URLs; cookies=False for token APIs."""
