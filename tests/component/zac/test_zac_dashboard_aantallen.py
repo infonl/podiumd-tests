@@ -43,6 +43,7 @@ ROWS = 25
 ZAKEN = ROWS + 1
 
 
+@pytest.mark.slow
 @pytest.mark.scenario("""
     Given a new behandelaar who wants dashboard signals for zaken put on their name
     When the test admin starts 26 zaken with that behandelaar
