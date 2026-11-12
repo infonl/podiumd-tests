@@ -17,17 +17,15 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.bootstrap.bpmn import INTAKE
 from podiumd_tests.bootstrap.steps import ADMIN
-from podiumd_tests.mailpit import quoted
-from podiumd_tests.mailpit import received_mails
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.workloads import cronjob_ending
 from podiumd_tests.workloads import run_cronjob
 from podiumd_tests.zac import open_task
 from podiumd_tests.zac import toekennen_taak
 from podiumd_tests.zac import wijzig_taak
+from podiumd_tests.zac_signaleringen import signalering_mail
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -89,5 +87,4 @@ def test_overdue_taak_gives_a_mail(
         zac, urls["zac"], str(taak["id"]), fataledatum=(date.fromisoformat(today()) - timedelta(days=1)).isoformat()
     )
     signaleren()
-    query = f"to:{quoted(user_email(ADMIN.username))} {quoted(str(bpmn_zaak['identificatie']))}"
-    received_mails(mailpit, registry, query, timeout=MAIL_TIMEOUT)
+    signalering_mail(mailpit, registry, ADMIN.username, str(bpmn_zaak["identificatie"]), timeout=MAIL_TIMEOUT)

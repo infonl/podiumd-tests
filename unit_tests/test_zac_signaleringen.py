@@ -5,6 +5,7 @@ import json
 import requests
 
 from podiumd_tests import zac_signaleringen
+from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.seed.registry import ResourceRegistry
 
 ZAC = "https://zac.example.test"
@@ -42,3 +43,18 @@ def test_dashboard_lists_give_zaak_identificaties_and_taak_ids(fake_http):
     assert zac_signaleringen.signalering_zaken(http, ZAC, "ZAAK_OP_NAAM") == ["ZAAK-1"]
     assert json.loads(sent[0].body)["sortOrder"] == "DESC"
     assert zac_signaleringen.signalering_taken(http, ZAC) == ["7"]
+
+
+def test_dashboard_list_gives_the_zaken_as_zac_shows_them(fake_http):
+    shown = {"identificatie": "ZAAK-1", "omschrijving": None}
+    fake_http({"PUT /rest/signaleringen/zaken/ZAAK_OP_NAAM": (200, {"resultaten": [shown], "totaal": 1})})
+    assert zac_signaleringen.signalering_overzichten(requests.Session(), ZAC, "ZAAK_OP_NAAM") == [shown]
+
+
+def test_signalering_mail_searches_the_users_address_and_the_text(fake_http):
+    sent = fake_http({"GET /api/v1/search": (200, {"messages": [{"ID": "a"}]})})
+    mailpit = ApiClient(requests.Session(), "https://mailpit.example.test/api/v1", {})
+    mail = zac_signaleringen.signalering_mail(mailpit, ResourceRegistry("run"), "user", "ZAAK-1", timeout=0)
+    assert mail == {"ID": "a"}
+    assert "user%40example.invalid" in sent[0].url
+    assert "ZAAK-1" in sent[0].url

@@ -5,13 +5,17 @@ from __future__ import annotations
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
+from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.json_data import entries
+from podiumd_tests.mailpit import quoted
+from podiumd_tests.mailpit import received_mails
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 
 if TYPE_CHECKING:
     import requests
 
+    from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -48,11 +52,24 @@ def signalering_zaken(http: requests.Session, zac_url: str, soort: str) -> list[
 
     ZAC's list has no uuid; it reads each zaak from Open Zaak, so an identificatie there is a live zaak.
     """
+    return [str(zaak.get("identificatie")) for zaak in signalering_overzichten(http, zac_url, soort)]
+
+
+def signalering_overzichten(http: requests.Session, zac_url: str, soort: str) -> list[JsonObject]:
+    """Return the zaken on the user's dashboard list of the type, as ZAC shows them."""
     page = {"page": 0, "rows": 100, "sortField": "SIGNALERING_TIJDSTIP", "sortOrder": "DESC"}
     found = expect_status(http.put(f"{zac_url}/rest/signaleringen/zaken/{soort}", json=page), HTTPStatus.OK)
-    return [str(zaak.get("identificatie")) for zaak in entries(found.json().get("resultaten"))]
+    return entries(found.json().get("resultaten"))
 
 
 def signalering_taken(http: requests.Session, zac_url: str) -> list[str]:
     """Return the ids of the taken on the user's dashboard list Taak op naam."""
     return [str(taak.get("id")) for taak in get_entries(http, f"{zac_url}/rest/signaleringen/taken/TAAK_OP_NAAM")]
+
+
+def signalering_mail(
+    mailpit: ApiClient, registry: ResourceRegistry, username: str, text: str, *, timeout: float
+) -> JsonObject:
+    """Wait for a mail to the user's Keycloak address holding the text (a zaaknummer, a taak id); return it."""
+    query = f"to:{quoted(user_email(username))} {quoted(text)}"
+    return received_mails(mailpit, registry, query, timeout=timeout)[0]
