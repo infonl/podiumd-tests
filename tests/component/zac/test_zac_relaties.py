@@ -233,26 +233,30 @@ def test_hoofd_and_deelzaak_show_on_both_zaken(
 
 @EIGEN_ZAAKTYPE
 @THROWAWAY
+@pytest.mark.parametrize("beeindigen", [afhandelen, afbreken], ids=["afhandelen", "afbreken"])
 @pytest.mark.scenario("""
     Given a hoofdzaak in behandeling with an open deelzaak
-    When the behandelaar handles the hoofdzaak
+    When the behandelaar afhandelt or afbreekt the hoofdzaak
     Then it is refused and the hoofdzaak stays open
     When the deelzaak is ontkoppeld with a reden
-    Then the hoofdzaak can be afgehandeld
+    Then the hoofdzaak can be afgehandeld or afgebroken
 """)
 def test_hoofdzaak_is_afgehandeld_once_its_open_deelzaak_is_ontkoppeld(
-    zac: requests.Session, urls: dict[str, str], zac_eigen_zaak: Callable[[], JsonObject]
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_eigen_zaak: Callable[[], JsonObject],
+    beeindigen: Callable[[requests.Session, str, JsonObject], requests.Response],
 ) -> None:
-    """Afhandelen of a hoofdzaak with an open deelzaak is refused; after ontkoppelen it is accepted."""
+    """Afhandelen or afbreken of a hoofdzaak with an open deelzaak is refused; after ontkoppelen it is accepted."""
     hoofd, deel = zac_eigen_zaak(), zac_eigen_zaak()
     expect_status(_linked(zac, urls["zac"], hoofd, deel, "hoofdzaak"), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     afronden_intake(zac, urls["zac"], hoofd)
-    expect_status(afhandelen(zac, urls["zac"], hoofd), HTTPStatus.BAD_REQUEST)
+    expect_status(beeindigen(zac, urls["zac"], hoofd), HTTPStatus.BAD_REQUEST)
     assert not _is_closed(zac, urls["zac"], hoofd)
 
     unlinked = _linked(zac, urls["zac"], hoofd, deel, "hoofdzaak", "podiumd-tests")
     expect_status(unlinked, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    expect_status(afhandelen(zac, urls["zac"], hoofd), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    expect_status(beeindigen(zac, urls["zac"], hoofd), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     assert _is_closed(zac, urls["zac"], hoofd)
 
 
