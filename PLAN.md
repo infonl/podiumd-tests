@@ -458,7 +458,7 @@ None open. A new profile defaults to `allowed_tiers: [smoke]`.
 
 ## 13. Open work
 
-Updated 2026-10-14. The detail lives where it is kept up to date: blocked ports as `todo` rows in `MIGRATION.md` (`grep '| todo |' MIGRATION.md`), product bugs as strict xfails whose reason names the bug (a fix makes the test fail, so it gets noticed).
+Updated 2026-11-12. The detail lives where it is kept up to date: blocked ports as `todo` rows in `MIGRATION.md` (`grep '| todo |' MIGRATION.md`), product bugs as known issues with xfails (below).
 
 **Blocked ports (waiting for an environment):**
 
@@ -468,40 +468,9 @@ Updated 2026-10-14. The detail lives where it is kept up to date: blocked ports 
 | TA smoke 155, regression 156 | a profile with an `esuite` URL and credentials (eSuite is outside PodiumD) |
 | TA `perf/fg-compare.js` | an environment with both a Frank!Gateway route and a direct route to Open Zaak |
 
-**Findings to report upstream** (each a strict xfail; a reason names the upstream issue once there is one; issue texts ready to file in `bug-reports/issues/`, not committed):
+**Findings:** every product defect is a known issue in infonl/podiumd-known-issues (README index, `issues/`, `components/`) with a strict or measured non-strict xfail naming its id; that repo is the list to report upstream, not this file.
 
-| Product | Finding | Test |
-|---|---|---|
-| Open Zaak 1.29.3 | DELETE of a zaak with a resultaat answers 500 although it deletes it (open-zaak#2484, fixed on main after 1.30.0) | `test_closed_zaak_delete_answers_204` |
-| Open Zaak 1.29.3 | `_zoek` ignores an unknown filter and returns all zaken | `test_zoek_refuses_an_unknown_filter` |
-| Open Zaak 1.29.3 | audittrails need `heeft_alle_autorisaties` | `test_document_audittrail_with_catalogus_rights` |
-| Open Archiefbeheer | a destruction never finishes because of the Open Zaak 500 | `test_destruction_deletes_the_zaak_and_leaves_a_report` |
-| Open Archiefbeheer 2.0.0 | `process_review_response` is queued inside the request's transaction (no `on_commit`): a quick worker finds no ReviewResponse and the list stays `changes_requested` | non-strict xfail `RESPONSE_RACE` (open-archiefbeheer#1103 reports the symptom) on four review-response tests |
-| Open Archiefbeheer 2.0.0 | the reviewer, while the list is assigned to it, can rename the list | `test_only_the_record_manager_changes_the_list[reviewer]` |
-| Open Archiefbeheer 2.0.0 | a review response cannot empty the archiefactiedatum, so "keep forever" cannot be taken over | `test_keeping_forever_empties_the_archiefactiedatum` |
-| Open Notificaties | an unreachable callback URL answers 500 instead of 400 | `test_abonnement_with_an_unreachable_callback_is_refused` |
-| Open Inwoner 2.4.3 | the admin still offers the deprecated `deactivated_on`, which does not stop a DigiD login | `test_disabled_account_cannot_log_in[deactivated]` |
-| Open Inwoner 2.4.3 | with `fetch_eherkenning_zaken_with_openzaak_120_params` Mijn zaken lists a company's zaak by `nietNatuurlijkPersoon.vestigingsNummer`, but its detail accepts only a `vestiging` rol and answers 404 | `WHO` in `test_portaal_zaken.py` (zaak status, infected upload) |
-| ZAC 5.4.5 | `SensitiveDataService` forgets a person's temporaryPersonId 12 h after its last read, but its BSN→id cache keeps handing that id out: the first use after 12 h (adding the person as betrokkene) answers 410 "Geen persoon gevonden" | `test_betrokkenen_with_the_same_and_different_roles_are_listed` retries once |
-| ZAC 5.4.5 | a zaak started through the API without startdatum answers 500 (NullPointerException); its UI always sends one | none |
-| Open Formulieren 3.5.5 | mail goes through django_yubin's queue, but nothing schedules its `retry_emails`: a mail that fails during an SMTP outage stays "Mislukt" and is never sent | `test_form_mail_is_sent_after_a_mail_outage` |
-| Open Formulieren 3.5.5, 3.5.8 | with `wait_for_payment_to_register` on, its payment status update skips itself: the zaak of a paid form stays `betalingsindicatie: nog_niet` | `test_zaak_of_a_paid_form_is_marked_paid` |
-| Open Formulieren 3.5.5, 3.5.8 | not a bug: the ZGW pre-registration creates the zaak when the form is completed, before the payment, so an unpaid form leaves a zaak (the draaiboek expects none, OF-022) | `test_unpaid_form_leaves_no_zaak` |
-| ZAC 5.4.5 | mail goes straight to SMTP (MailService.sendMail): during an SMTP outage ZAC logs "Failed to send mail" and drops it, no queue, no retry; the draaiboek expects a queue | `test_zac_mail_is_sent_after_a_mail_outage` |
-| ZAC 5.9.1 | not a bug: `POST /rest/zaken/zaak` answers only the identificatie (5.4.5: the whole zaak) | `zac.create_zaak` reads the zaak by identificatie |
-| ZAC 5.9.1 | the document upload takes `vertrouwelijkheidaanduiding` only as ZAC's enum constant (`OPENBAAR`); the API value `openbaar` answers 500 (RESTEasy `valueOf` on the multipart field) | `uploaded_document` sends `OPENBAAR` |
-| ZAC 5.9.1, podiumd chart | ZAC finds the behandelaar roltype only by omschrijving `Behandelaar` (ZAC 82d2d9d74, #6767); the chart's `zaaktype-voor-e2e-testen` had `Behandelaar e2e`, so every zaak start answered 404; fixed in helm-charts PR #577 (a new zaaktype version) | the ZAC zaak tests |
-| KISS | its Haal Centraal BRP proxy rewrites the JSON body but keeps the client's Content-Length: a request with whitespace in its JSON answers 500 ("Content-Length promised …"); KISS's own frontend sends compact JSON | `test_person_unknown_to_kiss_is_found_in_the_brp` sends compact JSON |
-| ITA 3.3.2 | its access guard reads Open Klant's deprecated `toegewezenAanActor` (a bare reference) over the expanded actor: a groep member gets 403 on a contactverzoek assigned to the groep first; fixed in ITA 3.3.4 (ITA#582) | `test_contactverzoek_from_kiss_shows_in_full_in_ita` |
-| mozilla-django-oidc-db 2.0.1 | it migrates the deprecated flat group fields (make_users_staff, groups_claim) into `options.group_settings` but reads `options.groups_settings` at login: KeyError, the admin's OIDC callback answers 500 (Open Inwoner on minikube; found by podiumd-minikube) | `test_one_login_opens_every_admin[openinwoner]` |
-| ITA 3.3.2 | forwarding a contactverzoek during an SMTP outage answers 200 but drops the mail to the afdeling or groep (SmtpException logged), no queue, no retry; only the response's `notificationResult` says the mail failed | `test_ita_mail_is_sent_after_a_mail_outage` |
-| OMC 1.17.19, also 2.3.1 | 206 to every notification ('source' property), so no mail | `tests/integration/test_omc.py` |
-| Open Inwoner | no "did you mean" on a search without hits, as the draaiboek asks (OI-097); only the autocomplete is fuzzy | `test_no_results_suggest_what_was_meant` |
-| mozilla-django-oidc | an unconfigured admin login answers 500 (`ImproperlyConfigured`) instead of refusing | none: every estate configures it |
-| PABC, ITA, Open Archiefbeheer, Open Formulieren, Open Beheer, Grafana | no HSTS on their own responses (PABC, ITA, Open Archiefbeheer and Open Beheer also no nosniff; PABC no frame protection); neither estate's edge adds security headers. ZAC sends neither either; its chart's nginx adds them | `test_security_headers` (xfail per app) |
-| podiumd chart | Open Beheer's and Referentielijsten's main containers had `resources: {}` (no CPU or memory request); fixed in podiumd 4.10.0 (helm-charts #591, #615) | `test_containers_request_cpu_and_memory` |
-
-**Configuration finding for the estates:** KISS's Objecten token has no rights on Activiteitenlog, so KISS shows none of ITA's activities (`test_kiss_reads_itas_logboek`, the same in ExternalsPodiumD, podiumd-infra and minikube).
+**Scenario gaps:** `docs/research/zac-scenario-gaps.md` and `docs/research/kiss-ita-scenario-gaps.md` list each remaining `partial` or `gap` row with what is missing: rows waiting on a known issue's fix, rows that would change the environment owner's ALG catalogus (kept partial, user 2026-11-12), and speed rows that need volume data in the perf tier.
 
 **No network isolation (no test):** neither estate deploys NetworkPolicies (no default-deny; Keycloak's `networkPolicy` is off), and the podiumd chart's only policies, Frank!Gateway's per traffic class (`frankgateway.networkPolicies.enabled`), are off everywhere. Every pod can reach every database, Redis and Elasticsearch of the cluster. podiumd-infra's Cyso clusters run Calico, which would enforce policies; minikube's kindnet ignores them. Tests follow once an estate has a policy model.
 
