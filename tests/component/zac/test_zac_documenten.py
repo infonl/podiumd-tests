@@ -37,11 +37,13 @@ from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import documenttypen
 from podiumd_tests.zac_documents import inbox_document
 from podiumd_tests.zac_documents import koppelbare_zaken
+from podiumd_tests.zac_documents import lock_document
 from podiumd_tests.zac_documents import max_file_size_mb
 from podiumd_tests.zac_documents import nieuwe_versie
 from podiumd_tests.zac_documents import ontkoppel_document
 from podiumd_tests.zac_documents import ontkoppelde_documenten
 from podiumd_tests.zac_documents import taal
+from podiumd_tests.zac_documents import unlock_document
 from podiumd_tests.zac_documents import upload
 from podiumd_tests.zac_documents import uploaded_document
 from podiumd_tests.zac_documents import verplaats_document
@@ -366,16 +368,13 @@ def test_locked_document_cannot_be_deleted_until_unlocked(
     zaak = zac_zaak()
     document = uploaded_document(zac, urls["zac"], zaak, registry, status="in_bewerking")
     url = document_url(urls["zac"], document)
-    of_zaak = {"zaak": str(zaak["uuid"])}
-    expect_status(zac.post(f"{url}/lock", params=of_zaak), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    # Unlocked before the zaak's cleanup deletes the document.
-    registry.add(f"lock of document {document['uuid']}", lambda: zac.post(f"{url}/unlock", params=of_zaak))
-    locked = expect_status(zac.get(url, params=of_zaak), HTTPStatus.OK).json()
+    lock_document(zac, urls["zac"], zaak, document, registry)
+    locked = expect_status(zac.get(url, params={"zaak": str(zaak["uuid"])}), HTTPStatus.OK).json()
     assert "VERGRENDELD" in strings(locked.get("indicaties"))
     reden = {"zaakUuid": zaak["uuid"], "reden": "podiumd-tests"}
     expect_status(zac.delete(url, json=reden), *REFUSED)
 
-    expect_status(zac.post(f"{url}/unlock", params=of_zaak), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    expect_status(unlock_document(zac, urls["zac"], zaak, document), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     expect_status(zac.delete(url, json=reden), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     assert document["uuid"] not in _uuids(zac, urls["zac"], zaak)
 

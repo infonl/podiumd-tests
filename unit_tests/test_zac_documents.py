@@ -240,3 +240,13 @@ def test_document_historie_and_inbox_delete_use_zacs_paths(fake_http):
     assert zac_documents.document_historie(requests.Session(), ZAC, {"uuid": "d1"}) == [{"actie": "GEWIJZIGD"}]
     assert zac_documents.delete_inbox_document(requests.Session(), ZAC, {"id": 7}).status_code == 200
     assert sent[-1].method == "DELETE"
+
+
+def test_lock_document_is_unlocked_at_cleanup(fake_http):
+    url = "/rest/informatieobjecten/informatieobject/d1"
+    sent = fake_http({f"POST {url}/lock": (200, {}), f"POST {url}/unlock": (200, {})})
+    registry = ResourceRegistry("ptest-abc")
+    zac_documents.lock_document(requests.Session(), ZAC, {"uuid": "z1"}, {"uuid": "d1"}, registry)
+    assert sent[-1].url == f"{ZAC}{url}/lock?zaak=z1"
+    assert registry.cleanup() == []
+    assert sent[-1].url == f"{ZAC}{url}/unlock?zaak=z1"

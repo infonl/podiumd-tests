@@ -1,4 +1,4 @@
-"""ZAC: BAG objects chosen when a zaak is started; Open Zaak fetches each BAG URL to validate the zaakobject."""
+"""ZAC: the BAG objects and the locatie of a zaak; Open Zaak fetches each BAG URL to validate the zaakobject."""
 
 from __future__ import annotations
 
@@ -10,14 +10,23 @@ import pytest
 from podiumd_tests.basisregistraties import BAG_DAM
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import describe
+from podiumd_tests.responses import expect_status
+from podiumd_tests.zac import attempt_zaak
 from podiumd_tests.zac import bag_object
 from podiumd_tests.zac import clean_up_zaak
-from podiumd_tests.zac import recent_zaken
+from podiumd_tests.zac import koppel_bag_object
+from podiumd_tests.zac import ontkoppel_bag_object
+from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import start_zaak
+from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zaak_bag_objecten
 from podiumd_tests.zac import zaak_body
+from podiumd_tests.zac import zaak_historie
+from podiumd_tests.zac import zaaklocatie
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import requests
 
     from podiumd_tests.clients.api import ApiClient
@@ -25,6 +34,14 @@ if TYPE_CHECKING:
     from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "keycloak")]
+
+ZAC_TEAM = pytest.mark.source(
+    "podiumd-tests",
+    "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, zaak-lifecycle).",
+)
+# The Dam in Amsterdam as ZAC's locatie of a zaak, and as Open Zaak's historie shows it.
+DAM = {"type": "POINT", "point": {"latitude": 52.37, "longitude": 4.89}}
+DAM_WKT = "POINT(4.89 52.37)"
 
 # A BAG URL on a host that never resolves (RFC 2606).
 UNREACHABLE_BAG = "https://bag.example.invalid/adressen/0363200003761447"
@@ -78,11 +95,71 @@ def test_refused_bag_object_leaves_no_zaak(
 ) -> None:
     """The new zaak is refused with 400 and Open Zaak has no zaak with its omschrijving."""
     adres = {**bag_object(zac, urls["zac"], "ADRES", BAG_DAM), "url": UNREACHABLE_BAG}
-    omschrijving = registry.tagged("zac-bag-onbereikbaar")
-    body = {**zaak_body(zac_parameters, omschrijving=omschrijving), "bagObjecten": [adres]}
-    refused = zac.post(f"{urls['zac']}/rest/zaken/zaak", json=body)
-    left = [zaak for zaak in recent_zaken(openzaak_productaanvraag) if zaak.get("omschrijving") == omschrijving]
-    for zaak in left:
-        clean_up_zaak(zac, urls["zac"], openzaak_productaanvraag, registry, zaak)
+    body = {**zaak_body(zac_parameters, omschrijving=registry.tagged("zac-bag-onbereikbaar")), "bagObjecten": [adres]}
+    refused, left = attempt_zaak(zac, urls["zac"], openzaak_productaanvraag, registry, body)
     assert refused.status_code == HTTPStatus.BAD_REQUEST, describe(refused)
-    assert [zaak["identificatie"] for zaak in left] == []
+    assert left == []
+
+
+def _historie(zac: requests.Session, zac_url: str, zaak: JsonObject, label: str) -> list[tuple[object, ...]]:
+    """The zaak's historie lines of one attribuut: (oude waarde, nieuwe waarde, toelichting), newest first."""
+    lines = zaak_historie(zac, zac_url, zaak)
+    return [
+        (line.get("oudeWaarde"), line.get("nieuweWaarde"), line.get("toelichting"))
+        for line in lines
+        if line.get("attribuutLabel") == label
+    ]
+
+
+@ZAC_TEAM
+@pytest.mark.scenario("""
+    Given a zaak in ZAC
+    When the behandelaar sets its locatie to a point on the map, with a reden
+    Then the zaak has that locatie
+    When the behandelaar changes another field of the zaak
+    Then the zaak keeps its locatie
+    When the behandelaar removes the locatie with a reden
+    Then the zaak has no locatie
+    And the historie records the locatie set and removed, each with its reden
+""")
+def test_locatie_is_set_kept_and_removed_with_a_reden(
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
+) -> None:
+    """PATCH zaaklocatie sets and clears zaakgeometrie; another edit keeps it; the historie has both with the reden."""
+    zac_url, zaak = urls["zac"], zac_zaak()
+    expect_status(zaaklocatie(zac, zac_url, zaak, DAM, "podiumd-tests gezet"), HTTPStatus.OK)
+    assert read_zaak(zac, zac_url, str(zaak["uuid"])).get("zaakgeometrie") == DAM
+    expect_status(wijzig_zaak(zac, zac_url, zaak, toelichting="podiumd-tests"), HTTPStatus.OK)
+    assert read_zaak(zac, zac_url, str(zaak["uuid"])).get("zaakgeometrie") == DAM
+    expect_status(zaaklocatie(zac, zac_url, zaak, None, "podiumd-tests weg"), HTTPStatus.OK)
+    assert read_zaak(zac, zac_url, str(zaak["uuid"])).get("zaakgeometrie") is None
+    assert _historie(zac, zac_url, zaak, "zaakgeometrie") == [
+        (DAM_WKT, None, "podiumd-tests weg"),
+        (None, DAM_WKT, "podiumd-tests gezet"),
+    ]
+
+
+@ZAC_TEAM
+@pytest.mark.scenario("""
+    Given the adres Dam 1 in Amsterdam in the BAG, and a zaak in ZAC
+    When the behandelaar links the adres to the zaak, twice
+    Then the zaak lists the adres once among its BAG objects
+    When the behandelaar unlinks it with a reden
+    Then the zaak lists no BAG object
+""")
+def test_bag_adres_is_linked_once_and_unlinked(
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
+) -> None:
+    """POST /rest/bag twice gives one zaakobject; DELETE with redenWijzigen removes it.
+
+    Open Zaak fetches the adres's URL from the BAG to validate the zaakobject.
+    """
+    zac_url, zaak = urls["zac"], zac_zaak()
+    adres = bag_object(zac, zac_url, "ADRES", BAG_DAM)
+    for _ in range(2):
+        expect_status(koppel_bag_object(zac, zac_url, zaak, adres), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    linked = zaak_bag_objecten(zac, zac_url, zaak)
+    assert [section(item, "zaakobject").get("identificatie") for item in linked] == [BAG_DAM]
+    unlinked = ontkoppel_bag_object(zac, zac_url, zaak, linked[0], "podiumd-tests")
+    expect_status(unlinked, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    assert zaak_bag_objecten(zac, zac_url, zaak) == []

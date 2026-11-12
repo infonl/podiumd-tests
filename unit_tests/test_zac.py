@@ -844,3 +844,24 @@ def test_document_listed_searches_by_titel_and_matches_the_uuid(fake_http):
     assert not zac.is_document_listed(requests.Session(), ZAC, {**document, "uuid": "d2"})
     body = json.loads(sent[0].body)
     assert (body["type"], body["zoeken"]) == ("DOCUMENT", {"DOCUMENT_TITEL": "brief"})
+
+
+def test_bag_object_is_linked_and_unlinked_with_a_reden_and_the_locatie_set(fake_http):
+    sent = fake_http(
+        {
+            "POST /rest/bag": (204, None),
+            "DELETE /rest/bag": (204, None),
+            "PATCH /rest/zaken/z1/zaaklocatie": (200, {}),
+        }
+    )
+    http, zaak = requests.Session(), {"uuid": "z1"}
+    zac.koppel_bag_object(http, ZAC, zaak, {"identificatie": "a1"})
+    assert json.loads(sent[-1].body) == {"zaakUuid": "z1", "zaakobject": {"identificatie": "a1"}}
+    zac.ontkoppel_bag_object(http, ZAC, zaak, {"uuid": "o1"}, "weg")
+    assert json.loads(sent[-1].body) == {"uuid": "o1", "zaakUuid": "z1", "redenWijzigen": "weg"}
+    zac.zaaklocatie(http, ZAC, zaak, None, "weg")
+    assert json.loads(sent[-1].body) == {"geometrie": None, "reden": "weg"}
+
+
+def test_zoned_brondatum_is_the_day_at_midnight_utc():
+    assert zac.zoned_brondatum("2026-11-12") == "2026-11-12T00:00:00Z"

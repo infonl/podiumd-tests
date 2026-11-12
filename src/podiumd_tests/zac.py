@@ -70,10 +70,14 @@ def zac_session(env: Environment, username: str, password: str) -> requests.Sess
     return http
 
 
+def logged_in_user(http: requests.Session, zac_url: str) -> JsonObject:
+    """ZAC's view of the session's user: id, naam (as the historie names it), groupIds and roles."""
+    return cast("JsonObject", expect_status(http.get(f"{zac_url}/rest/identity/loggedInUser"), HTTPStatus.OK).json())
+
+
 def user_groups(http: requests.Session, zac_url: str) -> list[str]:
     """Return the ids of the groups ZAC knows the session's user in."""
-    user = expect_status(http.get(f"{zac_url}/rest/identity/loggedInUser"), HTTPStatus.OK).json()
-    return [str(group) for group in user["groupIds"]]
+    return strings(logged_in_user(http, zac_url)["groupIds"])
 
 
 def zaakafhandelparameters(http: requests.Session, zac_url: str, identificatie: str | None = None) -> list[JsonObject]:
@@ -240,6 +244,8 @@ def is_confirmation_on(http: requests.Session, zac_url: str, identificatie: str)
 
 # The reason ZAC always offers for aborting a zaak.
 NIET_ONTVANKELIJK = "ZAAK_NIET_ONTVANKELIJK"
+# The toelichting of the eindstatus ZAC sets when it aborts a zaak for that reason.
+NIET_ONTVANKELIJK_REDEN = "Zaak is niet ontvankelijk"
 
 
 def zaak_body(parameters: JsonObject, **fields: object) -> JsonObject:
@@ -310,6 +316,27 @@ def zaak_bag_objecten(http: requests.Session, zac_url: str, zaak: JsonObject) ->
     return get_entries(http, f"{zac_url}/rest/bag/zaak/{zaak['uuid']}")
 
 
+def koppel_bag_object(http: requests.Session, zac_url: str, zaak: JsonObject, bag: JsonObject) -> requests.Response:
+    """Link the BAG object (bag_object) to the zaak; ZAC links one only once. ZAC's answer."""
+    return http.post(f"{zac_url}/rest/bag", json={"zaakUuid": zaak["uuid"], "zaakobject": bag})
+
+
+def ontkoppel_bag_object(
+    http: requests.Session, zac_url: str, zaak: JsonObject, linked: JsonObject, reden: str
+) -> requests.Response:
+    """Unlink a BAG object of zaak_bag_objecten from the zaak, with the reden; ZAC's answer."""
+    body = {**linked, "zaakUuid": zaak["uuid"], "redenWijzigen": reden}
+    return http.delete(f"{zac_url}/rest/bag", json=body)
+
+
+def zaaklocatie(
+    http: requests.Session, zac_url: str, zaak: JsonObject, geometrie: JsonObject | None, reden: str
+) -> requests.Response:
+    """Set the zaak's locatie to the RestGeometry, or remove it with None, with the reden; ZAC's answer."""
+    body = {"geometrie": geometrie, "reden": reden}
+    return http.patch(f"{zac_url}/rest/zaken/{zaak['uuid']}/zaaklocatie", json=body)
+
+
 def user_events_offered(http: requests.Session, zac_url: str, zaak_uuid: str) -> list[JsonObject]:
     """Return the plan items of the CMMN user events ZAC offers on the zaak now.
 
@@ -358,6 +385,11 @@ def afhandelen(
     chosen = resultaattype or _resultaattype_without_besluit(http, zac_url, zaak)
     body = {"resultaattypeUuid": chosen, "resultaatToelichting": "podiumd-tests", **fields}
     return user_event(http, zac_url, str(zaak["uuid"]), "ZAAK_AFHANDELEN", **body)
+
+
+def zoned_brondatum(day: str) -> str:
+    """Return the date as ZAC reads a brondatum: a zoned date-time, as its UI sends it; it refuses a plain date."""
+    return f"{day}T00:00:00Z"
 
 
 def afbreken(http: requests.Session, zac_url: str, zaak: JsonObject) -> requests.Response:

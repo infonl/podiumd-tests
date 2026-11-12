@@ -163,6 +163,23 @@ def delete_document(http: requests.Session, zac_url: str, zaak: JsonObject, docu
     return http.delete(document_url(zac_url, document), json={"zaakUuid": zaak["uuid"], "reden": "podiumd-tests"})
 
 
+def unlock_document(http: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject) -> requests.Response:
+    """Unlock the zaak's document; ZAC's answer."""
+    return http.post(f"{document_url(zac_url, document)}/unlock", params={"zaak": str(zaak["uuid"])})
+
+
+def lock_document(
+    http: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject, registry: ResourceRegistry
+) -> None:
+    """Lock the zaak's document as the session's user; cleanup unlocks it, before the zaak's cleanup deletes it.
+
+    ZAC refuses that unlock once the test unlocked the document itself.
+    """
+    response = http.post(f"{document_url(zac_url, document)}/lock", params={"zaak": str(zaak["uuid"])})
+    expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    registry.add(f"lock of document {document['uuid']}", lambda: unlock_document(http, zac_url, zaak, document))
+
+
 def _form_field(value: object) -> str:
     """Return a field of ZAC's document form as its UI sends it: an object (taal) as JSON."""
     return json.dumps(value) if isinstance(value, dict) else str(value)

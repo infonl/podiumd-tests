@@ -45,7 +45,9 @@ from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zac_session
 from podiumd_tests.zac_documents import delete_document
 from podiumd_tests.zac_documents import document_url
+from podiumd_tests.zac_documents import lock_document
 from podiumd_tests.zac_documents import nieuwe_versie
+from podiumd_tests.zac_documents import unlock_document
 from podiumd_tests.zac_documents import uploaded_document
 
 if TYPE_CHECKING:
@@ -214,15 +216,6 @@ def test_heropenen_needs_a_reden(
     assert read_zaak(zac, zac_url, str(closed_bpmn_zaak["uuid"]))["isOpen"] is False
 
 
-def _locked(
-    zac: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject, registry: ResourceRegistry
-) -> None:
-    url, of_zaak = document_url(zac_url, document), {"zaak": str(zaak["uuid"])}
-    expect_status(zac.post(f"{url}/lock", params=of_zaak), HTTPStatus.OK)
-    # Unlocked before the zaak's cleanup deletes the document; ZAC refuses it once the test unlocked it.
-    registry.add(f"lock of document {document['uuid']}", lambda: zac.post(f"{url}/unlock", params=of_zaak))
-
-
 def _ondertekend(
     zac: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject, _: ResourceRegistry
 ) -> None:
@@ -236,10 +229,6 @@ def _afgehandeld(
     expect_status(afsluiten(zac, zac_url, zaak), HTTPStatus.OK)
 
 
-def _unlock(http: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject) -> requests.Response:
-    return http.post(f"{document_url(zac_url, document)}/unlock", params={"zaak": str(zaak["uuid"])})
-
-
 def _new_version(http: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject) -> requests.Response:
     return nieuwe_versie(http, zac_url, zaak, document, {"beschrijving": "podiumd-tests"})
 
@@ -248,7 +237,7 @@ def _new_version(http: requests.Session, zac_url: str, zaak: JsonObject, documen
 # (document-rechten.rego; None: no base role) and a call the recordmanager may make and the behandelaar may not.
 DOCUMENT_STATES = [
     pytest.param(
-        _locked,
+        lock_document,
         {
             "lezen": "raadpleger",
             "vergrendelen": "behandelaar",
@@ -259,7 +248,7 @@ DOCUMENT_STATES = [
             "ondertekenen": None,
             "converteren": None,
         },
-        _unlock,
+        unlock_document,
         id="vergrendeld-door-een-ander",
     ),
     pytest.param(
