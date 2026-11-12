@@ -23,6 +23,7 @@ from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import afzenders
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_mail
+from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac import zaak_mailtemplate
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
@@ -76,6 +77,11 @@ def _titles(zac: requests.Session, zac_url: str, zaak: JsonObject) -> dict[str, 
     }
 
 
+def _attachments(message: JsonObject) -> list[object]:
+    """The file names of the Mailpit message's attachments."""
+    return [item.get("FileName") for item in entries(message.get("Attachments"))]
+
+
 @pytest.mark.scenario("""
     Given a zaak in ZAC with a document
     When the behandelaar mails it with the document attached and a reply-to address
@@ -109,7 +115,7 @@ def test_email_with_an_attachment_arrives_and_is_kept_on_the_zaak(
     assert f"Over zaak {zaak['identificatie']}: {zaak['omschrijving']}" in str(message.get("HTML"))
     assert section(message, "From").get("Address") == body["verzender"]
     assert [item.get("Address") for item in entries(message.get("ReplyTo"))] == [REPLY_TO]
-    assert [item.get("FileName") for item in entries(message.get("Attachments"))] == [document["bestandsnaam"]]
+    assert _attachments(message) == [document["bestandsnaam"]]
     assert _titles(zac, urls["zac"], zaak).get(subject) == "VERTROUWELIJK"
     stored = next(item for item in zaak_documents(zac, urls["zac"], zaak) if item.get("titel") == subject)
     pdf = expect_status(zac.get(f"{document_url(urls['zac'], stored)}/download"), HTTPStatus.OK).content
@@ -140,9 +146,10 @@ def test_email_without_keeping_it_adds_no_document(
 
 
 @pytest.mark.scenario("""
-    Given a new zaak in ZAC, which shows that no ontvangstbevestiging was sent
-    When the behandelaar sends the ontvangstbevestiging and keeps it as a document
-    Then the mail arrives, the zaak has it as a document, and the indication is gone
+    Given a new zaak in ZAC with a document, which shows that no ontvangstbevestiging was sent
+    When the behandelaar sends the ontvangstbevestiging with the document attached
+    Then the mail arrives with the attachment, and the indication is gone
+    And the zaak has the mail as a document, and its historie shows it
     And a second ontvangstbevestiging is refused
 """)
 def test_ontvangstbevestiging_is_sent_once_and_clears_the_indicatie(
@@ -153,13 +160,23 @@ def test_ontvangstbevestiging_is_sent_once_and_clears_the_indicatie(
     mailpit: ApiClient,
     registry: ResourceRegistry,
 ) -> None:
-    """Bevestiging versturen clears ONTVANGSTBEVESTIGING_NIET_VERSTUURD, stores the mail, and works once."""
+    """Bevestiging versturen with bijlagen clears ONTVANGSTBEVESTIGING_NIET_VERSTUURD, stores the mail, and works once.
+
+    ZAC's dialog always stores the mail; its historie line is the GEKOPPELD zaakinformatieobject of that document.
+    """
     zaak = zac_zaak()
     assert NIET_VERSTUURD in strings(read_zaak(zac, urls["zac"], str(zaak["uuid"])).get("indicaties"))
-    body = mail(zaak, onderwerp="Ontvangstbevestiging {ZAAK_NUMMER}", createDocumentFromMail=True)
+    document = uploaded_document(zac, urls["zac"], zaak, registry)
+    body = mail(
+        zaak, onderwerp="Ontvangstbevestiging {ZAAK_NUMMER}", bijlagen=document["uuid"], createDocumentFromMail=True
+    )
     expect_status(send_mail(zac, urls["zac"], zaak, body, acknowledge=True), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=str(body["ontvanger"]))
-    assert _titles(zac, urls["zac"], zaak).get(f"Ontvangstbevestiging {zaak['identificatie']}") == "OPENBAAR"
+    message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=str(body["ontvanger"]))
+    assert _attachments(message) == [document["bestandsnaam"]]
+    subject = f"Ontvangstbevestiging {zaak['identificatie']}"
+    assert _titles(zac, urls["zac"], zaak).get(subject) == "OPENBAAR"
+    historie = [(line.get("actie"), line.get("nieuweWaarde")) for line in zaak_historie(zac, urls["zac"], zaak)]
+    assert ("GEKOPPELD", subject) in historie
     assert NIET_VERSTUURD not in strings(read_zaak(zac, urls["zac"], str(zaak["uuid"])).get("indicaties"))
     expect_status(send_mail(zac, urls["zac"], zaak, body, acknowledge=True), *REFUSED)
 
