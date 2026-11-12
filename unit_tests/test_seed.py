@@ -123,7 +123,11 @@ def test_tagged_fields_carry_the_run_tag(fake_http):
 
 @pytest.mark.parametrize(
     ("kind", "objecttype", "register"),
-    [("bsn", "natuurlijk_persoon", "brp"), ("kvk_nummer", "niet_natuurlijk_persoon", "hr")],
+    [
+        ("bsn", "natuurlijk_persoon", "brp"),
+        ("kvk_nummer", "niet_natuurlijk_persoon", "hr"),
+        ("vestigingsnummer", "vestiging", "hr"),
+    ],
 )
 def test_identificator_register_follows_its_kind(fake_http, kind, objecttype, register):
     sent = fake_http(created("partij-identificatoren"))
@@ -138,6 +142,7 @@ def test_random_numbers_have_their_format():
     assert len(bsn) == 9
     assert weighted % 11 == 0
     assert len(openklant.random_kvk_nummer()) == 8
+    assert len(openklant.random_vestigingsnummer()) == 12
     assert len(openklant.random_nummer()) == 10
 
 

@@ -28,6 +28,11 @@ from podiumd_tests.results import now_iso
 from podiumd_tests.seed.openklant import delete_klantcontact_tree
 from podiumd_tests.seed.openklant import klantcontact_body
 from podiumd_tests.seed.openklant import onderwerpobject_body
+from podiumd_tests.seed.openklant import partij_identificator_body
+from podiumd_tests.seed.openklant import random_bsn
+from podiumd_tests.seed.openklant import random_kvk_nummer
+from podiumd_tests.seed.openklant import random_nummer
+from podiumd_tests.seed.openklant import random_vestigingsnummer
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.workloads import expect_defect
 
@@ -118,6 +123,101 @@ def kiss_onderwerpobject(
     return _kiss_create(kiss, kiss_url, "onderwerpobjecten", onderwerpobject_body(klantcontact, str(zaak["uuid"])))
 
 
+def kiss_klant(
+    kiss: requests.Session, kiss_url: str, openklant: ApiClient, registry: ResourceRegistry, soort: str
+) -> tuple[JsonObject, dict[str, str]]:
+    """Create a persoon with a new BSN, or an organisatie with a new vestiging, as KISS's frontend does (createKlant).
+
+    Returns the partij and its numbers by codeSoortObjectId. KISS creates the partij without a name, and the
+    vestigingsnummer's identificator as subIdentificator of a KvK-nummer's without a partij.
+    """
+    body: dict[str, object] = {
+        "nummer": random_nummer(),  # KISS sends none; see random_nummer
+        "digitaleAdressen": [],
+        "betrokkenen": [],
+        "categorieRelaties": [],
+        "voorkeursDigitaalAdres": None,
+        "vertegenwoordigden": [],
+        "rekeningnummers": [],
+        "partijIdentificatoren": [],
+        "voorkeursRekeningnummer": None,
+        "indicatieGeheimhouding": False,
+        "indicatieActief": True,
+        "partijIdentificatie": {"contactnaam": None} if soort == "persoon" else {"naam": ""},
+        "soortPartij": soort,
+    }
+    partij = _kiss_created(kiss, kiss_url, openklant, registry, "partijen", body)
+    if soort == "persoon":
+        nummers = {"bsn": random_bsn()}
+        identificator = partij_identificator_body(partij, "bsn", nummers["bsn"])
+    else:
+        nummers = {"kvk_nummer": random_kvk_nummer(), "vestigingsnummer": random_vestigingsnummer()}
+        kvk_body = partij_identificator_body(None, "kvk_nummer", nummers["kvk_nummer"])
+        kvk = _kiss_created(kiss, kiss_url, openklant, registry, "partij-identificatoren", kvk_body)
+        identificator = {
+            **partij_identificator_body(partij, "vestigingsnummer", nummers["vestigingsnummer"]),
+            "subIdentificatorVan": {"uuid": kvk["uuid"]},
+        }
+    _kiss_created(kiss, kiss_url, openklant, registry, "partij-identificatoren", identificator)
+    return partij, nummers
+
+
+def kiss_partijen(kiss: requests.Session, kiss_url: str, nummers: dict[str, str]) -> list[JsonObject]:
+    """Return the partijen KISS's klant page finds by a BSN, or by a vestigingsnummer of the KvK-nummer.
+
+    KISS keeps a vestiging only when its identificator is a subIdentificator of the KvK-nummer's
+    (fetchKlantByKlantIdentificatorOk2).
+    """
+    kind = "bsn" if "bsn" in nummers else "vestigingsnummer"
+    found = _kiss_get(
+        kiss,
+        kiss_url,
+        f"{KISS_KLANTINTERACTIES}/partijen",
+        expand="digitaleAdressen",
+        soortPartij="persoon" if kind == "bsn" else "organisatie",
+        partijIdentificator__codeSoortObjectId=kind,
+        partijIdentificator__objectId=nummers[kind],
+    )
+    partijen = entries(found.get("results"))
+    if kind == "bsn":
+        return partijen
+    return [partij for partij in partijen if _kvk_nummer(kiss, kiss_url, partij) == nummers["kvk_nummer"]]
+
+
+def _kvk_nummer(kiss: requests.Session, kiss_url: str, partij: JsonObject) -> str | None:
+    """Return the KvK-nummer of a vestiging-partij as KISS reads it: from its identificator's subIdentificatorVan."""
+    for identificator in entries(partij.get("partijIdentificatoren")):
+        kvk = section(identificator, "subIdentificatorVan").get("uuid")
+        if kvk and section(identificator, "partijIdentificator").get("codeSoortObjectId") == "vestigingsnummer":
+            found = _kiss_get(kiss, kiss_url, f"{KISS_KLANTINTERACTIES}/partij-identificatoren/{kvk}")
+            return str(section(found, "partijIdentificator").get("objectId"))
+    return None
+
+
+def kiss_contactmomenten(kiss: requests.Session, kiss_url: str, partij: JsonObject) -> list[str]:
+    """Return the uuids of the klantcontacten on a partij's Contactmomenten tab: those it is betrokkene of."""
+    betrokkenen = _kiss_get(
+        kiss, kiss_url, f"{KISS_KLANTINTERACTIES}/betrokkenen", wasPartij__url=str(partij["url"]), pageSize="100"
+    )
+    return [
+        str(section(betrokkene, "hadKlantcontact").get("uuid")) for betrokkene in entries(betrokkenen.get("results"))
+    ]
+
+
+def _kiss_created(  # noqa: PLR0913, PLR0917  # the KISS session, cleanup and the object
+    kiss: requests.Session,
+    kiss_url: str,
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    resource: str,
+    body: JsonObject,
+) -> JsonObject:
+    """Create an object through KISS's proxy; cleanup deletes it in Open Klant."""
+    created = _kiss_create(kiss, kiss_url, resource, body)
+    registry.add(f"{resource} {created['url']}", lambda: openklant.delete(str(created["url"])))
+    return created
+
+
 def _kiss_create(kiss: requests.Session, kiss_url: str, resource: str, body: JsonObject) -> JsonObject:
     url = f"{kiss_url}{KISS_KLANTINTERACTIES}/{resource}"
     return expect_status(kiss.post(url, json=body, headers=kiss_register(kiss, kiss_url)), HTTPStatus.CREATED).json()
@@ -165,9 +265,7 @@ def kiss_actor(  # noqa: PLR0913, PLR0917  # the KISS session, cleanup and the a
             "codeSoortObjectId": "idf",
         },
     }
-    actor = _kiss_create(kiss, kiss_url, "actoren", body)
-    registry.add(f"actor {actor['url']}", lambda: openklant.delete(str(actor["url"])))
-    return actor
+    return _kiss_created(kiss, kiss_url, openklant, registry, "actoren", body)
 
 
 def kiss_contactverzoek(  # noqa: PLR0913, PLR0917  # one flow

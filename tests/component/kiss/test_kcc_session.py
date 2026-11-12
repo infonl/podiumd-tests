@@ -28,14 +28,14 @@ from podiumd_tests.kcc import KENNIS_URL
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.kcc import kiss_betrokkene
 from podiumd_tests.kcc import kiss_contactmomentdetails
+from podiumd_tests.kcc import kiss_contactmomenten
+from podiumd_tests.kcc import kiss_klant
 from podiumd_tests.kcc import kiss_klantcontact
-from podiumd_tests.kcc import kiss_klantcontacten
+from podiumd_tests.kcc import kiss_partijen
 from podiumd_tests.kcc import kiss_rapportage
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openklant import klantcontact_body
-from podiumd_tests.seed.openklant import make_organisatie
-from podiumd_tests.seed.openklant import make_partij
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -190,12 +190,13 @@ def test_contactmoment_saved_in_kiss_names_the_medewerker(
 @pytest.mark.parametrize("soort", ["persoon", "organisatie"])
 @pytest.mark.source(
     "upstream KISS-frontend Kiss.Bff.EndToEndTest ContactMomentCreation",
-    "A contactmoment for a person or a vestiging shows on that klant's Contactmomenten tab.",
+    "A contactmoment for a person (BSN) or a vestiging shows on that klant's Contactmomenten tab.",
 )
 @pytest.mark.scenario("""
-    Given a person or an organisation known in Open Klant
+    Given a person with a BSN or a company's vestiging, new to Open Klant
     When the KCC medewerker saves a contactmoment for that klant in KISS
-    Then KISS lists the contactmoment for that klant
+    Then KISS finds the klant by the BSN, or by the vestigingsnummer and KvK-nummer
+    And KISS lists the contactmoment on the klant's Contactmomenten tab
 """)
 def test_contactmoment_for_a_klant_is_listed_for_that_klant(  # fixtures
     kiss: requests.Session,
@@ -204,13 +205,13 @@ def test_contactmoment_for_a_klant_is_listed_for_that_klant(  # fixtures
     registry: ResourceRegistry,
     soort: str,
 ) -> None:
-    """A contactmoment with the partij as betrokkene is in KISS's klantcontacten of that partij."""
-    partij = make_partij(openklant, registry) if soort == "persoon" else make_organisatie(openklant, registry)
+    """A klant created as KISS does is found by its numbers; its betrokkenen lead to the contactmoment."""
+    partij, nummers = kiss_klant(kiss, urls["kiss"], openklant, registry, soort)
+    assert [found.get("url") for found in kiss_partijen(kiss, urls["kiss"], nummers)] == [partij["url"]]
     body = klantcontact_body(registry, onderwerp=registry.tagged(f"kiss-{soort}"))
     saved = kiss_klantcontact(kiss, urls["kiss"], openklant, registry, body)
     kiss_betrokkene(kiss, urls["kiss"], saved, partij)
-    listed = kiss_klantcontacten(kiss, urls["kiss"], hadBetrokkene__wasPartij__url=str(partij["url"]))
-    assert saved["uuid"] in [item.get("uuid") for item in listed]
+    assert kiss_contactmomenten(kiss, urls["kiss"], partij) == [saved["uuid"]]
 
 
 @pytest.mark.source(

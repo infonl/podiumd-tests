@@ -27,12 +27,15 @@ from podiumd_tests.kcc import kennisartikel_data
 from podiumd_tests.kcc import kiss_actor
 from podiumd_tests.kcc import kiss_betrokkene
 from podiumd_tests.kcc import kiss_contactmomentdetails
+from podiumd_tests.kcc import kiss_contactmomenten
 from podiumd_tests.kcc import kiss_contactverzoek
 from podiumd_tests.kcc import kiss_contactverzoeken_by_adres
+from podiumd_tests.kcc import kiss_klant
 from podiumd_tests.kcc import kiss_klantcontact
 from podiumd_tests.kcc import kiss_klantcontacten
 from podiumd_tests.kcc import kiss_medewerkers
 from podiumd_tests.kcc import kiss_onderwerpobject
+from podiumd_tests.kcc import kiss_partijen
 from podiumd_tests.kcc import kiss_rapportage
 from podiumd_tests.kcc import kiss_register
 from podiumd_tests.kcc import kiss_search_hits
@@ -170,6 +173,78 @@ def test_kiss_actor_is_created_through_kiss_and_cleaned_up(fake_http, soort, cod
     assert (body["soortActor"], body["actoridentificator"]["codeObjecttype"]) == codes
     registry.cleanup()
     assert deleted == ["https://ok/a/1"]
+
+
+@pytest.mark.parametrize(
+    ("soort", "partij_identificatie", "kinds"),
+    [
+        ("persoon", {"contactnaam": None}, ["bsn"]),
+        ("organisatie", {"naam": ""}, ["kvk_nummer", "vestigingsnummer"]),
+    ],
+)
+def test_kiss_klant_creates_the_partij_and_its_identificatoren_as_kiss_does(
+    fake_http, soort, partij_identificatie, kinds
+):
+    sent = fake_http(
+        {
+            "/api/environment/registers": (200, REGISTERS),
+            f"POST {KI}/partijen": (201, {"uuid": "p1", "url": "https://ok/p/1"}),
+            f"POST {KI}/partij-identificatoren": (201, {"uuid": "i1", "url": "https://ok/i/1"}),
+        }
+    )
+    deleted = []
+    registry = ResourceRegistry("ptest-run")
+    partij, nummers = kiss_klant(requests.Session(), KISS, _openklant(deleted), registry, soort)
+    posts = [json.loads(request.body) for request in sent if request.method == "POST"]
+    assert (posts[0]["soortPartij"], posts[0]["partijIdentificatie"]) == (soort, partij_identificatie)
+    identificatoren = posts[1:]
+    assert [i["partijIdentificator"]["codeSoortObjectId"] for i in identificatoren] == kinds
+    assert [i["partijIdentificator"]["objectId"] for i in identificatoren] == [nummers[kind] for kind in kinds]
+    assert identificatoren[-1]["identificeerdePartij"] == {"uuid": "p1"}
+    if soort == "organisatie":
+        assert identificatoren[0]["identificeerdePartij"] is None
+        assert identificatoren[1]["subIdentificatorVan"] == {"uuid": "i1"}
+    assert partij["uuid"] == "p1"
+    registry.cleanup()
+    assert deleted[-1] == "https://ok/p/1"
+
+
+def _vestiging(uuid, kvk):
+    identificator = {"codeSoortObjectId": "vestigingsnummer", "objectId": "v1"}
+    return {
+        "uuid": uuid,
+        "partijIdentificatoren": [{"partijIdentificator": identificator, "subIdentificatorVan": {"uuid": kvk}}],
+    }
+
+
+def test_kiss_partijen_keeps_the_vestiging_of_the_kvk_nummer(fake_http):
+    sent = fake_http(
+        {
+            "/api/environment/registers": (200, REGISTERS),
+            f"GET {KI}/partijen": (200, {"results": [_vestiging("p1", "k1"), _vestiging("p2", "k2")]}),
+            f"GET {KI}/partij-identificatoren/k1": (200, {"partijIdentificator": {"objectId": "12345678"}}),
+            f"GET {KI}/partij-identificatoren/k2": (200, {"partijIdentificator": {"objectId": "87654321"}}),
+        }
+    )
+    found = kiss_partijen(requests.Session(), KISS, {"kvk_nummer": "12345678", "vestigingsnummer": "v1"})
+    assert [partij["uuid"] for partij in found] == ["p1"]
+    assert "partijIdentificator__codeSoortObjectId=vestigingsnummer" in sent[1].url
+    assert "soortPartij=organisatie" in sent[1].url
+
+
+def test_kiss_partijen_by_bsn(fake_http):
+    sent = fake_http(
+        {"/api/environment/registers": (200, REGISTERS), f"GET {KI}/partijen": (200, {"results": [{"uuid": "p1"}]})}
+    )
+    assert kiss_partijen(requests.Session(), KISS, {"bsn": "123"}) == [{"uuid": "p1"}]
+    assert "partijIdentificator__objectId=123" in sent[-1].url
+
+
+def test_kiss_contactmomenten_are_the_klantcontacten_of_the_partijs_betrokkenen(fake_http):
+    betrokkenen = {"results": [{"hadKlantcontact": {"uuid": "kc1"}}]}
+    sent = fake_http({"/api/environment/registers": (200, REGISTERS), f"GET {KI}/betrokkenen": (200, betrokkenen)})
+    assert kiss_contactmomenten(requests.Session(), KISS, {"url": "https://ok/p/1"}) == ["kc1"]
+    assert "wasPartij__url=https" in sent[-1].url
 
 
 def test_kiss_contactverzoek_posts_the_adres_and_the_internetaak(fake_http):

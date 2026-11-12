@@ -21,15 +21,15 @@ from podiumd_tests.kcc import kcc_login
 from podiumd_tests.kcc import kiss_actor
 from podiumd_tests.kcc import kiss_contactverzoek
 from podiumd_tests.kcc import kiss_contactverzoeken_by_adres
+from podiumd_tests.kcc import kiss_klant
 from podiumd_tests.kcc import kiss_klantcontacten
 from podiumd_tests.kcc import kiss_medewerkers
+from podiumd_tests.kcc import kiss_partijen
 from podiumd_tests.kcc import kiss_sync_cronjob
 from podiumd_tests.mailpit import own_address
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
-from podiumd_tests.seed.openklant import make_organisatie
-from podiumd_tests.seed.openklant import make_partij
 from podiumd_tests.seed.openklant import random_nummer
 from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import run_cronjob
@@ -143,23 +143,25 @@ def test_contactverzoek_from_kiss_shows_in_full_in_ita(  # noqa: FNE008  # the n
 @pytest.mark.parametrize("soort", ["persoon", "organisatie"])
 @pytest.mark.source(
     f"{KISS_E2E} AnonymousContactVerzoekPersonCompany",
-    "A contactverzoek for a person or a vestiging shows on that klant's Contactverzoeken tab.",
+    "A contactverzoek for a person (BSN) or a vestiging shows on that klant's Contactverzoeken tab.",
 )
 @pytest.mark.scenario("""
-    Given a person or an organisation known in Open Klant
-    When the KCC medewerker registers a contactverzoek for that klant in KISS
-    Then KISS lists the contactverzoek for that klant
+    Given a person with a BSN or a company's vestiging, new to Open Klant
+    When the KCC medewerker registers a contactverzoek for that klant and an afdeling in KISS
+    Then KISS finds the klant by the BSN, or by the vestigingsnummer and KvK-nummer
+    And KISS lists the contactverzoek on the klant's Contactverzoeken tab
 """)
 def test_contactverzoek_for_a_klant_is_listed_for_that_klant(
     kiss: requests.Session, urls: dict[str, str], openklant: ApiClient, registry: ResourceRegistry, soort: str
 ) -> None:
-    """The internetaak is among those of the partij's klantcontacten, as KISS's Contactverzoeken tab reads them."""
-    partij = make_partij(openklant, registry) if soort == "persoon" else make_organisatie(openklant, registry)
+    """The internetaak is among those of the klantcontacten of the partij KISS finds by the klant's numbers."""
+    partij, nummers = kiss_klant(kiss, urls["kiss"], openklant, registry, soort)
     afdeling = kiss_actor(
         kiss, urls["kiss"], openklant, registry, "afdeling", registry.tagged(f"kiss-afdeling-{soort}")
     )
-    adres = _adres(registry, "telefoonnummer")
-    taak = kiss_contactverzoek(kiss, urls["kiss"], openklant, registry, [afdeling], adres, partij)
+    taak = kiss_contactverzoek(kiss, urls["kiss"], openklant, registry, [afdeling], _adres(registry, "email"), partij)
+    found = kiss_partijen(kiss, urls["kiss"], nummers)
+    assert [klant.get("url") for klant in found] == [partij["url"]]
     listed = kiss_klantcontacten(
         kiss, urls["kiss"], hadBetrokkene__wasPartij__url=str(partij["url"]), expand="leiddeTotInterneTaken"
     )

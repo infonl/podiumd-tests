@@ -41,6 +41,11 @@ def random_kvk_nummer() -> str:
     return str(_rng.randint(10_000_000, 99_999_999))
 
 
+def random_vestigingsnummer() -> str:
+    """Return a random 12-digit vestigingsnummer."""
+    return str(_rng.randint(100_000_000_000, 999_999_999_999))
+
+
 def random_nummer() -> str:
     """Return a random 10-digit nummer for a partij, klantcontact or internetaak.
 
@@ -87,14 +92,20 @@ def make_organisatie(openklant: ApiClient, registry: ResourceRegistry) -> JsonOb
     )
 
 
-def make_partij_identificator(
-    openklant: ApiClient, registry: ResourceRegistry, partij: JsonObject, kind: str, number: str
-) -> JsonObject:
-    """Create a BSN ("bsn"), KvK ("kvk_nummer") or RSIN ("rsin") identificator of a partij."""
-    objecttype = "natuurlijk_persoon" if kind == "bsn" else "niet_natuurlijk_persoon"
-    register = "brp" if kind == "bsn" else "hr"
-    body: dict[str, object] = {
-        "identificeerdePartij": ref(partij),
+# codeObjecttype and codeRegister of a partij-identificator per codeSoortObjectId.
+IDENTIFICATOR_TYPES = {
+    "bsn": ("natuurlijk_persoon", "brp"),
+    "kvk_nummer": ("niet_natuurlijk_persoon", "hr"),
+    "rsin": ("niet_natuurlijk_persoon", "hr"),
+    "vestigingsnummer": ("vestiging", "hr"),
+}
+
+
+def partij_identificator_body(partij: JsonObject | None, kind: str, number: str) -> dict[str, object]:
+    """Return a partij-identificator of kind (a key of IDENTIFICATOR_TYPES) for the partij, or for none."""
+    objecttype, register = IDENTIFICATOR_TYPES[kind]
+    return {
+        "identificeerdePartij": ref(partij) if partij else None,
         "anderePartijIdentificator": "",
         "partijIdentificator": {
             "codeObjecttype": objecttype,
@@ -103,7 +114,13 @@ def make_partij_identificator(
             "codeRegister": register,
         },
     }
-    return _create(openklant, registry, "partij-identificatoren", body)
+
+
+def make_partij_identificator(
+    openklant: ApiClient, registry: ResourceRegistry, partij: JsonObject, kind: str, number: str
+) -> JsonObject:
+    """Create a BSN ("bsn"), KvK ("kvk_nummer") or RSIN ("rsin") identificator of a partij."""
+    return _create(openklant, registry, "partij-identificatoren", partij_identificator_body(partij, kind, number))
 
 
 def make_digitaal_adres(  # noqa: PLR0913  # the address and its owner
