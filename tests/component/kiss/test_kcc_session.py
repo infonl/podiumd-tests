@@ -143,6 +143,31 @@ def test_klantcontact_through_kiss(  # noqa: FNE008  # the name is the test id
     assert kiss_klantcontact(kiss, urls["kiss"], openklant, registry, body)["onderwerp"] == body["onderwerp"]
 
 
+# KISS's frontend cuts the onderwerp (VAC title and specifieke vraag) to this length, ending in "...".
+ONDERWERP_MAX = 200
+
+
+@pytest.mark.source(
+    "upstream KISS-frontend Kiss.Bff.EndToEndTest VraagScenarios",
+    "A long VAC title and specifieke vraag are cut to fit the onderwerp of the saved klantcontact.",
+)
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to KISS
+    When the medewerker saves a contactmoment whose onderwerp KISS cut to its maximum length
+    Then Open Klant has the contactmoment with that onderwerp in full
+""")
+def test_onderwerp_of_maximum_length_is_kept_whole(
+    kiss: requests.Session, urls: dict[str, str], openklant: ApiClient, registry: ResourceRegistry
+) -> None:
+    """An onderwerp of ONDERWERP_MAX characters is saved unchanged through postklantcontacten."""
+    specifiek = f" ({registry.tagged('vraag')})"
+    onderwerp = (
+        f"{registry.tagged('vac').ljust(ONDERWERP_MAX, 'x')[: ONDERWERP_MAX - len(specifiek) - 3]}...{specifiek}"
+    )
+    body = klantcontact_body(registry, onderwerp=onderwerp)
+    assert kiss_klantcontact(kiss, urls["kiss"], openklant, registry, body)["onderwerp"] == onderwerp
+
+
 @pytest.mark.source(
     "upstream KISS-frontend Kiss.Bff.EndToEndTest AfhandelingFormScenarios",
     "KISS saves a contactmoment through its own route, which names the logged-in medewerker as actor.",
