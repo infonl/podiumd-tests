@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import base64
+import calendar
+import re
 import secrets
 
 from dataclasses import dataclass
 from datetime import UTC
+from datetime import date
 from datetime import datetime
+from datetime import timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -30,6 +34,28 @@ CATALOGI = "catalogi/api/v1"
 def today() -> str:
     """Today's date as the ZGW APIs expect it."""
     return datetime.now(tz=UTC).date().isoformat()
+
+
+# An ISO 8601 period as Open Zaak's archiefactietermijn holds it.
+_PERIOD = re.compile(r"P(?:(?P<Y>\d+)Y)?(?:(?P<M>\d+)M)?(?:(?P<W>\d+)W)?(?:(?P<D>\d+)D)?")
+MONTHS_PER_YEAR = 12
+
+
+def after_period(day: str, period: str) -> str:
+    """Return the date the period after day, as Open Zaak adds archiefactietermijn: a day past a month's end clamps."""
+    found = _PERIOD.fullmatch(period)
+    if not found:
+        msg = f"not a period of years, months, weeks and days: {period}"
+        raise ValueError(msg)
+    units = found.groupdict(default="0")
+    start = date.fromisoformat(day)
+    months = start.year * MONTHS_PER_YEAR + start.month - 1
+    months += int(units["Y"]) * MONTHS_PER_YEAR + int(units["M"])
+    year, month = divmod(months, MONTHS_PER_YEAR)
+    month_end = calendar.monthrange(year, month + 1)[1]
+    clamped = date(year, month + 1, min(start.day, month_end))
+    shift = timedelta(weeks=int(units["W"]), days=int(units["D"]))
+    return (clamped + shift).isoformat()
 
 
 def _create(openzaak: ApiClient, registry: ResourceRegistry, path: str, body: dict[str, object]) -> JsonObject:

@@ -293,11 +293,16 @@ def _resultaattype_without_besluit(http: requests.Session, zac_url: str, zaak: J
     return str(next(found)["id"])
 
 
-def afhandelen(http: requests.Session, zac_url: str, zaak: JsonObject) -> requests.Response:
-    """Run ZAAK_AFHANDELEN of a CMMN zaak with a resultaattype that needs no besluit; ZAC's answer."""
-    resultaattype = _resultaattype_without_besluit(http, zac_url, zaak)
-    fields = {"resultaattypeUuid": resultaattype, "resultaatToelichting": "podiumd-tests"}
-    return user_event(http, zac_url, str(zaak["uuid"]), "ZAAK_AFHANDELEN", **fields)
+def afhandelen(
+    http: requests.Session, zac_url: str, zaak: JsonObject, resultaattype: str | None = None, **fields: object
+) -> requests.Response:
+    """Run ZAAK_AFHANDELEN of a CMMN zaak with the resultaattype, by default one that needs no besluit; ZAC's answer.
+
+    fields are further RestUserEventListenerData, such as restMailGegevens for the afhandelmail and brondatum.
+    """
+    chosen = resultaattype or _resultaattype_without_besluit(http, zac_url, zaak)
+    body = {"resultaattypeUuid": chosen, "resultaatToelichting": "podiumd-tests", **fields}
+    return user_event(http, zac_url, str(zaak["uuid"]), "ZAAK_AFHANDELEN", **body)
 
 
 def afbreken(http: requests.Session, zac_url: str, zaak: JsonObject) -> requests.Response:

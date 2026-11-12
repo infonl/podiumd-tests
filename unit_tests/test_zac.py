@@ -397,6 +397,9 @@ def test_afhandelen_and_afsluiten_use_a_resultaattype_without_besluit(fake_http)
     assert json.loads(sent[-1].body)["resultaattypeUuid"] == "r2"
     zac.afsluiten(http, ZAC, zaak)
     assert json.loads(sent[-1].body) == {"reden": "podiumd-tests", "resultaattypeUuid": "r2"}
+    zac.afhandelen(http, ZAC, zaak, "r1", restMailGegevens={"onderwerp": "x"})
+    assert json.loads(sent[-1].body)["resultaattypeUuid"] == "r1"
+    assert json.loads(sent[-1].body)["restMailGegevens"] == {"onderwerp": "x"}
 
 
 @pytest.mark.parametrize(

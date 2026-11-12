@@ -183,6 +183,24 @@ def test_zaaktype_parts_and_close_zaak(fake_http):
     assert body(sent[1])["statustype"] == "st2"
 
 
+@pytest.mark.parametrize(
+    ("day", "period", "after"),
+    [
+        ("2026-11-12", "P5Y", "2031-11-12"),
+        ("2026-01-31", "P1M", "2026-02-28"),
+        ("2024-02-29", "P1Y", "2025-02-28"),
+        ("2026-11-12", "P1Y6M2W1D", "2028-05-27"),
+    ],
+)
+def test_after_period_clamps_to_the_end_of_the_month(day, period, after):
+    assert openzaak.after_period(day, period) == after
+
+
+def test_after_period_refuses_a_time_part():
+    with pytest.raises(ValueError, match="PT1H"):
+        openzaak.after_period("2026-11-12", "PT1H")
+
+
 def test_clean_up_new_documents_deletes_links_and_documents(fake_http):
     sent = fake_http(
         {

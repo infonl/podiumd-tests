@@ -14,7 +14,10 @@ import pytest
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
+from podiumd_tests.seed.openzaak import after_period
+from podiumd_tests.seed.openzaak import today
 from podiumd_tests.zac import HEROPEND
 from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import afhandelen
@@ -22,6 +25,7 @@ from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import afsluiten
 from podiumd_tests.zac import heropenen
 from podiumd_tests.zac import read_zaak
+from podiumd_tests.zac import resultaattypen
 from podiumd_tests.zac import user_event
 
 if TYPE_CHECKING:
@@ -96,26 +100,43 @@ def test_niet_ontvankelijk_intake_closes_the_zaak(
 
 
 @pytest.mark.scenario("""
-    Given a zaak in behandeling in ZAC
-    When the behandelaar afhandelt it with a resultaat
-    Then the zaak is Afgerond and closed, with that resultaat
-    And its archiefactiedatum in ZAC is the one Open Zaak derived from the resultaattype
+    Given the resultaattypen of the zaaktype that need no besluit
+    When the behandelaar afhandelt a zaak in behandeling with each of them
+    Then each zaak is Afgerond and closed, with that resultaat
+    And ZAC shows the archiefnominatie of the resultaattype and the archiefactiedatum Open Zaak derived
+    And that archiefactiedatum is the archiefactietermijn after the brondatum
 """)
 def test_afhandelen_closes_the_zaak_with_its_resultaat(
     zac: requests.Session,
     urls: dict[str, str],
     zac_zaak: Callable[..., JsonObject],
+    zac_parameters: JsonObject,
+    openzaak: ApiClient,
     openzaak_productaanvraag: ApiClient,
 ) -> None:
-    """ZAAK_AFHANDELEN sets status Afgerond, the resultaat and Open Zaak's archive fields."""
-    zaak = zac_zaak()
-    afronden_intake(zac, urls["zac"], zaak)
-    closed = _afhandelen(zac, urls["zac"], zaak)
-    assert (section(closed, "status").get("naam"), closed["isOpen"]) == ("Afgerond", False)
-    assert section(closed, "resultaat").get("resultaattype")
-    in_open_zaak = openzaak_productaanvraag.get(f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}")
-    assert closed.get("archiefActiedatum") == in_open_zaak["archiefactiedatum"]
-    assert in_open_zaak["archiefactiedatum"]
+    """ZAAK_AFHANDELEN per resultaattype sets status Afgerond, the resultaat, its archiefnominatie and -actiedatum."""
+    for resultaattype in resultaattypen(zac, urls["zac"], zac_parameters):
+        if resultaattype.get("besluitVerplicht"):
+            continue
+        zaak = zac_zaak()
+        afronden_intake(zac, urls["zac"], zaak)
+        # afleidingswijze eigenschap: ZAC stores the brondatum as the zaak's eigenschap.
+        brondatum = today() if resultaattype.get("datumKenmerkVerplicht") else None
+        response = afhandelen(zac, urls["zac"], zaak, str(resultaattype["id"]), brondatum=brondatum)
+        expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+        closed = read_zaak(zac, urls["zac"], str(zaak["uuid"]))
+        assert (section(closed, "status").get("naam"), closed["isOpen"]) == ("Afgerond", False)
+        assert section(section(closed, "resultaat"), "resultaattype").get("id") == resultaattype["id"]
+        in_open_zaak = openzaak_productaanvraag.get(f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}")
+        archief = openzaak.get(f"{CATALOGI}/resultaattypen/{resultaattype['id']}")
+        assert in_open_zaak["archiefnominatie"] == archief["archiefnominatie"]
+        assert closed.get("archiefNominatie") == str(archief["archiefnominatie"]).upper()
+        assert closed.get("archiefActiedatum") == in_open_zaak["archiefactiedatum"]
+        bron = {"afgehandeld": in_open_zaak["einddatum"], "eigenschap": brondatum}
+        afleiding = str(section(archief, "brondatumArchiefprocedure").get("afleidingswijze"))
+        if bron.get(afleiding):
+            expected = after_period(str(bron[afleiding]), str(archief["archiefactietermijn"]))
+            assert in_open_zaak["archiefactiedatum"] == expected
 
 
 @pytest.mark.scenario("""
