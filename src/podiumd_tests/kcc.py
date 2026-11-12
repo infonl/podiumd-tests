@@ -237,9 +237,16 @@ def kiss_contactverzoeken_by_adres(kiss: requests.Session, kiss_url: str, adres:
     ]
 
 
-def kiss_medewerkers(kiss: requests.Session, kiss_url: str, search: str, groep: str) -> list[JsonObject]:
-    """Return the smoelenboek entries KISS's contactverzoek form offers for a search within a groep."""
-    body = {"search": search, "filterField": "Smoelenboek.groepen.groepsnaam", "filterValue": groep}
+# The smoelenboek field KISS's contactverzoek form filters medewerkers on, per kind of organisatorische eenheid.
+KISS_MEDEWERKER_FILTERS = {
+    "afdeling": "Smoelenboek.afdelingen.afdelingnaam",
+    "groep": "Smoelenboek.groepen.groepsnaam",
+}
+
+
+def kiss_medewerkers(kiss: requests.Session, kiss_url: str, search: str, eenheid: str, naam: str) -> list[JsonObject]:
+    """Return the smoelenboek entries KISS's contactverzoek form offers for a search within an afdeling or groep."""
+    body = {"search": search, "filterField": KISS_MEDEWERKER_FILTERS[eenheid], "filterValue": naam}
     response = kiss.post(f"{kiss_url}/api/search/medewerkers", json=body)
     hits = entries(section(expect_status(response, HTTPStatus.OK).json(), "hits").get("hits"))
     return [section(section(hit, "_source"), "Smoelenboek") for hit in hits]

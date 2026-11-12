@@ -222,8 +222,9 @@ def test_internetaken_of_reads_the_expanded_internetaken():
 def test_kiss_medewerkers_returns_the_smoelenboek_entries(fake_http):
     hits = {"hits": {"hits": [{"_source": {"Smoelenboek": {"identificatie": "m1"}}}]}}
     sent = fake_http({"POST /api/search/medewerkers": (200, hits)})
-    assert kiss_medewerkers(requests.Session(), KISS, "m1", "groep") == [{"identificatie": "m1"}]
-    assert json.loads(sent[0].body)["filterValue"] == "groep"
+    assert kiss_medewerkers(requests.Session(), KISS, "m1", "afdeling", "a1") == [{"identificatie": "m1"}]
+    sent_body = json.loads(sent[0].body)
+    assert (sent_body["filterField"], sent_body["filterValue"]) == ("Smoelenboek.afdelingen.afdelingnaam", "a1")
 
 
 def test_kiss_contactmomentdetails_puts_and_reads_back(fake_http):

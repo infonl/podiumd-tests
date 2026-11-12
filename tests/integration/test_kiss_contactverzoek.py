@@ -170,11 +170,11 @@ def test_contactverzoek_for_a_klant_is_listed_for_that_klant(
 @pytest.mark.xdist_group("kiss-sync")  # the sync rewrites the whole index
 @pytest.mark.source(
     f"{KISS_E2E} AnonymousContactVerzoekScenarios",
-    "A contactverzoek to a medewerker picked from the smoelenboek within a groep is assigned to both.",
+    "A contactverzoek to a medewerker picked from the smoelenboek within an afdeling or groep is assigned to both.",
 )
 @pytest.mark.scenario("""
-    Given a medewerker of the KCC medewerker's groep in the smoelenboek
-    When the KCC medewerker finds that medewerker within the groep in KISS
+    Given a medewerker of an afdeling and of the KCC medewerker's groep in the smoelenboek
+    When the KCC medewerker finds that medewerker within the afdeling and within the groep in KISS
     And registers a contactverzoek for the medewerker and the groep
     Then the contactverzoek is assigned to the medewerker and the groep
     And ITA shows it to the KCC medewerker, a member of the groep
@@ -189,12 +189,13 @@ def test_contactverzoek_to_a_medewerker_from_the_smoelenboek(
     registry: ResourceRegistry,
     request: pytest.FixtureRequest,
 ) -> None:
-    """KISS's medewerker search finds a new smoelenboek entry by groep; the internetaak goes to it and ITA_GROEP."""
+    """KISS's medewerker search finds a smoelenboek entry by afdeling and groep; the internetaak goes to it and ITA_GROEP."""
     found = expect_status(kiss.get(f"{urls['kiss']}/api/environment/use-medewerkeremail"), HTTPStatus.OK).json()
     if found.get("useMedewerkeremail"):
         pytest.skip("KISS takes a medewerker's e-mail address instead of the smoelenboek (USE_MEDEWERKEREMAIL)")
     expect_ita_group_access_bug(request, podiumd_env)
     identificatie = registry.tagged("medewerker")
+    afdeling = registry.tagged("afdeling")
     cronjob = kiss_sync_cronjob(podiumd_env, "smoelenboek")
     registry.add("smoelenboek index", lambda: run_cronjob(podiumd_env.kube, cronjob, f"{identificatie}-opruimen"))
     data = {
@@ -203,17 +204,18 @@ def test_contactverzoek_to_a_medewerker_from_the_smoelenboek(
         "achternaam": identificatie,
         "emails": [{"email": f"{identificatie}@example.invalid"}],
         "groepen": [{"groepsnaam": ITA_GROEP}],
-        "afdelingen": [],
+        "afdelingen": [{"afdelingnaam": afdeling}],
     }
     make_object(objecten, registry, objecttype_url(podiumd_env, "Medewerker"), data)
     run_cronjob(podiumd_env.kube, cronjob, identificatie)
     # Elasticsearch shows new documents only after its next index refresh.
-    medewerker = wait_until(
-        lambda: kiss_medewerkers(kiss, urls["kiss"], identificatie, ITA_GROEP),
+    hits = wait_until(
+        lambda: kiss_medewerkers(kiss, urls["kiss"], identificatie, "groep", ITA_GROEP),
         timeout=60,
         description=f"KISS's smoelenboek finds {identificatie} in {ITA_GROEP}",
-    )[0]
-    assert medewerker.get("identificatie") == identificatie
+    )
+    hits += kiss_medewerkers(kiss, urls["kiss"], identificatie, "afdeling", afdeling)
+    assert [medewerker.get("identificatie") for medewerker in hits] == [identificatie, identificatie]
     actoren = [
         kiss_actor(kiss, urls["kiss"], openklant, registry, "medewerker", identificatie),
         kiss_actor(kiss, urls["kiss"], openklant, registry, "groep", ITA_GROEP),
