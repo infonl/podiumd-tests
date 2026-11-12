@@ -12,6 +12,7 @@ from podiumd_tests.json_data import section
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.zac import attempt_zaak
+from podiumd_tests.zac import attribuut_historie
 from podiumd_tests.zac import bag_object
 from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import koppel_bag_object
@@ -21,7 +22,6 @@ from podiumd_tests.zac import start_zaak
 from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zaak_bag_objecten
 from podiumd_tests.zac import zaak_body
-from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac import zaaklocatie
 
 if TYPE_CHECKING:
@@ -101,16 +101,6 @@ def test_refused_bag_object_leaves_no_zaak(
     assert left == []
 
 
-def _historie(zac: requests.Session, zac_url: str, zaak: JsonObject, label: str) -> list[tuple[object, ...]]:
-    """The zaak's historie lines of one attribuut: (oude waarde, nieuwe waarde, toelichting), newest first."""
-    lines = zaak_historie(zac, zac_url, zaak)
-    return [
-        (line.get("oudeWaarde"), line.get("nieuweWaarde"), line.get("toelichting"))
-        for line in lines
-        if line.get("attribuutLabel") == label
-    ]
-
-
 @ZAC_TEAM
 @pytest.mark.scenario("""
     Given a zaak in ZAC
@@ -133,7 +123,7 @@ def test_locatie_is_set_kept_and_removed_with_a_reden(
     assert read_zaak(zac, zac_url, str(zaak["uuid"])).get("zaakgeometrie") == DAM
     expect_status(zaaklocatie(zac, zac_url, zaak, None, "podiumd-tests weg"), HTTPStatus.OK)
     assert read_zaak(zac, zac_url, str(zaak["uuid"])).get("zaakgeometrie") is None
-    assert _historie(zac, zac_url, zaak, "zaakgeometrie") == [
+    assert attribuut_historie(zac, zac_url, zaak, "zaakgeometrie") == [
         (DAM_WKT, None, "podiumd-tests weg"),
         (None, DAM_WKT, "podiumd-tests gezet"),
     ]

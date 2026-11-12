@@ -365,9 +365,14 @@ def test_attempt_zaak_finds_the_zaken_by_omschrijving_and_cleanup_deletes_them(f
     assert [request.method for request in sent][-1] == "DELETE"
 
 
-def test_zaak_historie_lists_zacs_answer(fake_http):
-    fake_http({"GET /rest/zaken/zaak/z1/historie": (200, [{"actie": "AANGEMAAKT"}])})
-    assert zac.zaak_historie(requests.Session(), ZAC, {"uuid": "z1"}) == [{"actie": "AANGEMAAKT"}]
+def test_zaak_historie_lists_zacs_answer_and_one_attribuut_of_it(fake_http):
+    lines = [
+        {"actie": "AANGEMAAKT", "attribuutLabel": "zaak"},
+        {"attribuutLabel": "toelichting", "oudeWaarde": "a", "nieuweWaarde": "b", "toelichting": "r"},
+    ]
+    fake_http({"GET /rest/zaken/zaak/z1/historie": (200, lines)})
+    assert zac.zaak_historie(requests.Session(), ZAC, {"uuid": "z1"}) == lines
+    assert zac.attribuut_historie(requests.Session(), ZAC, {"uuid": "z1"}, "toelichting") == [("a", "b", "r")]
 
 
 def test_bag_object_and_the_zaak_bag_objecten_are_read_from_zac(fake_http):

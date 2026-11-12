@@ -305,6 +305,15 @@ def zaak_historie(http: requests.Session, zac_url: str, zaak: JsonObject) -> lis
     return get_entries(http, f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/historie")
 
 
+def attribuut_historie(http: requests.Session, zac_url: str, zaak: JsonObject, label: str) -> list[tuple[object, ...]]:
+    """Return the zaak's historie lines of one attribuut as (oude waarde, nieuwe waarde, toelichting), newest first."""
+    return [
+        (line.get("oudeWaarde"), line.get("nieuweWaarde"), line.get("toelichting"))
+        for line in zaak_historie(http, zac_url, zaak)
+        if line.get("attribuutLabel") == label
+    ]
+
+
 def bag_object(http: requests.Session, zac_url: str, soort: str, identificatie: str) -> JsonObject:
     """ZAC's view of the BAG object of this soort (ADRES, PAND, ...), as a new zaak takes it in bagObjecten."""
     response = http.get(f"{zac_url}/rest/bag/{soort}/{identificatie}")
