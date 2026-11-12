@@ -18,6 +18,7 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.pabc import DOMAINS
 from podiumd_tests.pabc import ENTITY_TYPES
 from podiumd_tests.pabc import add_entity_type
+from podiumd_tests.pabc import application_roles
 from podiumd_tests.pabc import decide
 from podiumd_tests.pabc import delete_entity_type
 from podiumd_tests.pabc import delete_roles_and_domain
@@ -83,6 +84,37 @@ def test_application_roles_include_a_handling_role(pabc: requests.Session, urls:
     """The application roles include ZAC's behandelaar or KISS's KCC role (TA reg-67)."""
     found = names(get_entries(pabc, f"{urls['pabc']}/api/v1/application-roles"))
     assert any(word in n for n in found for word in ("behandelaar", "kcc", "medewerker")), found
+
+
+# The application roles ZAC 5.9.1's policies check (policies/rollen.rego), without its system role
+# systeemrol_behandelaar_alle_zaaktypen, which ZAC gives only to its own productaanvraag user.
+ZAC_APPLICATION_ROLES = (
+    "behandelaar",
+    "coordinator",
+    "recordmanager",
+    "beheerder",
+    "raadpleger",
+    "brp_zoeken",
+    "zaakspecifiek_geautoriseerd",
+)
+
+
+# Not strict: an estate can add the role to PABC by hand.
+@pytest.mark.xfail(
+    strict=False,
+    reason="[podiumd-chart-43] podiumd 4.10.1's PABC dataset (files/pabc-dataset.json) and pabc.migrations.prefill "
+    "lack ZAC 5.9.1's application role zaakspecifiek_geautoriseerd; not reported upstream",
+)
+@pytest.mark.source("podiumd-tests", "Every application role ZAC checks must exist in PABC to be granted.")
+@pytest.mark.scenario("""
+    Given the test admin is logged in to PABC
+    When the admin lists ZAC's application roles
+    Then PABC has every role ZAC's policies check, zaakspecifiek_geautoriseerd included
+""")
+def test_pabc_has_every_application_role_zac_checks(pabc: requests.Session, urls: dict[str, str]) -> None:
+    """PABC's application roles of zaakafhandelcomponent include each of ZAC_APPLICATION_ROLES."""
+    found = {str(role.get("name")) for role in application_roles(pabc, urls["pabc"], ZAC_APPLICATION)}
+    assert set(ZAC_APPLICATION_ROLES) - found == set()
 
 
 @pytest.mark.source(
