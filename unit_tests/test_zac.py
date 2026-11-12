@@ -174,6 +174,14 @@ def test_reindex_zaken_calls_zacs_internal_endpoint_in_the_pod(env_factory, fake
     assert "herindexeren/ZAAK" in fake_runner.calls[-1][-1]
 
 
+def test_reindex_zaken_in_the_background_waits_for_its_end_in_zacs_log(env_factory, fake_runner):
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "zac"}}]}))
+    fake_runner.answers["exec deploy/zac"] = (0, "202")
+    fake_runner.answers["logs deployment/zac"] = (0, "INFO [ZAAK] Reindexing finished. Reindexed: 3 / 3")
+    zac.reindex_zaken(env_factory())
+    assert "logs" in fake_runner.calls[-1]
+
+
 def test_count_zaken_found(fake_http):
     sent = fake_http({"PUT /rest/zoeken/list": (200, {"totaal": 3})})
     assert zac.count_zaken_found(requests.Session(), ZAC, "Klacht") == 3

@@ -5,7 +5,9 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 import secrets
+import time
 
 from datetime import UTC
 from datetime import date
@@ -697,16 +699,30 @@ def clean_up_inbox_entries(
     registry.add(f"Inbox productaanvragen of type {productaanvraagtype}", delete)
 
 
+# ZAC's log line at the end of a reindex of zaken (ReindexSupportService.finishReindex).
+REINDEXED = re.compile(r"\[ZAAK\] Reindexing (finished|aborted)")
+
+
 def reindex_zaken(env: Environment) -> None:
-    """Rebuild ZAC's search index of zaken from Open Zaak, through ZAC's internal endpoint.
+    """Rebuild ZAC's search index of zaken from Open Zaak, through ZAC's internal endpoint; return once it ends.
 
     Called inside the ZAC pod with the key from its own environment, as ZAC's signaleringen
     CronJob does: the reindex outlasts an ingress timeout. ZAC first empties the index, so its
-    search misses zaken until the call returns.
+    search misses zaken until the reindex ends. ZAC 5.9 reindexes in the background (202) and logs its end.
     """
+    deployment = env.deployment_for("zac")
+    started = time.monotonic()
     url = f"{IN_POD}/rest/internal/indexeren/herindexeren/ZAAK"
-    command = f'curl -sS -f -o /dev/null -H "X-API-KEY: $ZAC_INTERNAL_ENDPOINTS_API_KEY" {url}'
-    env.kube.exec(env.deployment_for("zac"), "sh", "-c", command, timeout=REINDEX_TIMEOUT)
+    command = f'curl -sS -f -o /dev/null -w "%{{http_code}}" -H "X-API-KEY: $ZAC_INTERNAL_ENDPOINTS_API_KEY" {url}'
+    status = env.kube.exec(deployment, "sh", "-c", command, timeout=REINDEX_TIMEOUT)
+    if status.strip() != str(HTTPStatus.ACCEPTED.value):
+        return
+
+    def has_ended() -> bool:
+        since = f"{int(time.monotonic() - started) + 1}s"
+        return REINDEXED.search(env.kube.logs(deployment, since=since)) is not None
+
+    wait_until(has_ended, timeout=REINDEX_TIMEOUT, interval=5, description=f"ZAC's reindex of zaken ({deployment})")
 
 
 def notificatie(kanaal: str, resource: str, url: str, actie: str, **kenmerken: object) -> JsonObject:
