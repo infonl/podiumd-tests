@@ -480,6 +480,7 @@ def test_wijzig_zaak_sends_the_fields_with_omschrijving_zaaktype_and_reden(fake_
         "zaak": {"omschrijving": "o", "zaaktype": {"uuid": "zt1"}, "uiterlijkeEinddatumAfdoening": "2026-12-01"},
         "reden": "podiumd-tests",
     }
+    assert sent[-1].timeout == zac.WIJZIG_TIMEOUT
 
 
 def test_verdelen_and_vrijgeven_send_the_selection(fake_http):

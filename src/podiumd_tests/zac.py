@@ -368,10 +368,15 @@ def afsluiten(http: requests.Session, zac_url: str, zaak: JsonObject) -> request
     return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/afsluiten", json=body)
 
 
+# ZAC took 9 s to over 15 s to save zaakgegevens with a new group and behandelaar in a parallel run on minikube.
+WIJZIG_TIMEOUT = 60
+
+
 def wijzig_zaak(http: requests.Session, zac_url: str, zaak: JsonObject, **fields: object) -> requests.Response:
     """Change these fields (RestZaakCreateData) of the zaak, with a reden; ZAC's answer."""
     data = {"omschrijving": zaak["omschrijving"], "zaaktype": zaak["zaaktype"], **fields}
-    return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}", json={"zaak": data, "reden": "podiumd-tests"})
+    body = {"zaak": data, "reden": "podiumd-tests"}
+    return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}", json=body, timeout=WIJZIG_TIMEOUT)
 
 
 def assignment(item: JsonObject) -> tuple[object, object]:
