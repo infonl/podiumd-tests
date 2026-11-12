@@ -87,7 +87,7 @@ must succeed; most rules test POST, PUT and PATCH alike.
 | zrc-021 | without archiefnominatie, closing derives archiefnominatie and archiefactiedatum from the resultaattype's afleidingswijze: afgehandeld, hoofdzaak, eigenschap, ingangsdatum_besluit, vervaldatum_besluit, ander_datumkenmerk | partly: `test_zaak_closes_with_resultaat_and_eindstatus` (afgehandeld; archiefactiedatum set, not its value) | port | Open Archiefbeheer destroys by this date; bootstrap: a zaaktype with one resultaattype per afleidingswijze | `tests/component/openzaak/test_archivering.py` (new) |
 | zrc-022 | archiefstatus defaults to `nog_te_archiveren`; another value needs archiefnominatie and archiefactiedatum | partly: `test_statussen_rollen.py::test_archiefnominatie_can_be_set_and_filtered` | merge | the refusals are the gap | `tests/component/openzaak/test_archivering.py` |
 | zrc-023 | deleting a zaak deletes its resultaat, status, rol, zaakobject, zaakeigenschap, ZIO, OIO, klantcontact | partly: `test_zaak_lifecycle` (zaak gone), `test_closed_zaak_delete_answers_204` (xfail `open-zaak-1`) | port | Open Archiefbeheer deletes zaken; leftovers stay in Documenten | `tests/component/openzaak/test_verwijderen.py` (new) |
-| drc-001 | EIO created; with a concept informatieobjecttype: 400 | partly: every `make_document` | merge | concept case only | `tests/component/openzaak/test_documenten.py` |
+| drc-001 | EIO created; with a concept informatieobjecttype: 400 | covered: `make_document`; `test_documenten.py::test_document_needs_a_published_informatieobjecttype` (concept) | merge | concept case only | `tests/component/openzaak/test_documenten.py` |
 | drc-002 | OIO with an object URL that does not resolve or is no zaak/besluit: 400 | gap | port | one parametrized test for drc-002 to 004 | `tests/component/openzaak/test_documenten.py` |
 | drc-003 | a second OIO for the same object and informatieobject: 400 | gap | port | as drc-002 | same |
 | drc-004 | OIO without the ZIO or BIO in Zaken or Besluiten: 400 | gap | port | as drc-002 | same |
@@ -105,8 +105,8 @@ must succeed; most rules test POST, PUT and PATCH alike.
 | brc-007 | a besluit on a zaak whose zaaktype lacks the besluittype: 400 | gap | port | `zaaktype-mismatch` was wrong in 2019 (`issues_openzaak.md`) | same |
 | brc-008 | BIO whose informatieobjecttype is not in the besluittype's: 400 | gap | port | needs the test besluittype to list the test informatieobjecttype (check snippet `openzaak_zaaktype`) | same |
 | brc-009 | deleting a besluit deletes its BIOs, audittrail and OIOs | gap | port | audittrail part: `open-zaak-3` | `tests/component/openzaak/test_verwijderen.py` |
-| ztc-001 | zaaktype created; a selectielijstProcestype URL that is no procestype: 400 | partly: `test_catalogi.py::test_concept_zaaktype_crud` | merge | checks Open Zaak's link to the Selectielijst API | `tests/component/openzaak/test_catalogi.py` |
-| ztc-002 | resultaattype: omschrijvingGeneriek from its resultaattypeomschrijving; archiefnominatie and archiefactietermijn default to the selectielijstklasse's; wrong URLs refused | gap | port | depends on the Selectielijst API the environment reaches | `tests/component/openzaak/test_catalogi.py` |
+| ztc-001 | zaaktype created; a selectielijstProcestype URL that is no procestype: 400 | covered: `test_concept_zaaktype_crud`, `test_catalogi.py::test_zaaktype_selectielijst_procestype_must_be_a_procestype` | merge | checks Open Zaak's link to the Selectielijst API | `tests/component/openzaak/test_catalogi.py` |
+| ztc-002 | resultaattype: omschrijvingGeneriek from its resultaattypeomschrijving; archiefnominatie and archiefactietermijn default to the selectielijstklasse's; wrong URLs refused | covered: `test_catalogi.py::test_resultaattype_takes_its_defaults_from_the_selectielijst`, `test_resultaattype_selectielijst_urls_are_checked` | port | depends on the Selectielijst API the environment reaches | `tests/component/openzaak/test_catalogi.py` |
 | ztc-003 | selectielijstklasse procestermijn versus afleidingswijze (20 cases) | n/a | skip | validation matrix without environment input; Open Zaak's own tests | |
 | ztc-004 | afleidingswijze versus datumkenmerk (12 cases) | n/a | skip | as ztc-003 | |
 | ztc-005 | afleidingswijze versus einddatumBekend (11 cases) | n/a | skip | as ztc-003 | |
@@ -115,7 +115,7 @@ must succeed; most rules test POST, PUT and PATCH alike.
 | ztc-008 | afleidingswijze versus procestermijn (10 cases) | n/a | skip | as ztc-003 | |
 | ztc-009 | a published zaaktype, besluittype or informatieobjecttype: PUT, PATCH and DELETE refused, PATCH of eindeGeldigheid allowed | gap | port | a published type that changes breaks every zaak of it; throwaway types, removed with a Django snippet because the API refuses it | `tests/component/openzaak/test_catalogi_publicatie.py` (new) |
 | ztc-010 | eigenschap, resultaattype, roltype, statustype, ZIOT of a published zaaktype: no PUT, PATCH, DELETE; which may still be added | gap | port | as ztc-009; one parametrized test | same |
-| ztc-0xx | lists and details return only valid URLs (`datumGeldigheid`) | partly: `test_catalogi.py::test_zaaktype_versions` | merge | the version valid on a date | `tests/component/openzaak/test_catalogi.py` |
+| ztc-0xx | lists and details return only valid URLs (`datumGeldigheid`) | covered: `test_catalogi.py::test_zaaktype_versions` (list and detail with `datumGeldigheid`) | merge | the version valid on a date | `tests/component/openzaak/test_catalogi.py` |
 
 ## 1b. OneGround "ZGW features"
 
@@ -124,7 +124,7 @@ must succeed; most rules test POST, PUT and PATCH alike.
 | ZTC catalogi | read the catalogus | covered: bootstrap and `test_test_zaaktype_is_published_and_complete` | skip | covered | |
 | ZTC informatieobjecttype | IOT CRUD, filters (catalogus, status, datumGeldigheid, omschrijving), HEAD ETag, DELETE of a published IOT refused | partly: bootstrap creates one | merge | refusal into ztc-009; filters skip | `test_catalogi_publicatie.py` |
 | ZTC zaaktype | build a zaaktype with types, publish, statustype volgnummer order, roltype added after publishing, expand | partly: `test_concept_zaaktype_crud`, `test_zaaktype_versions` | merge | "added after publishing" is ztc-010 | `test_catalogi_publicatie.py` |
-| zaakobjecttype | zaakobjecttype CRUD on a concept, DELETE after publishing | gap | port | Open Archiefbeheer reads zaakobjecttypen (Catalogi 1.3) | `test_catalogi.py` |
+| zaakobjecttype | zaakobjecttype CRUD on a concept, DELETE after publishing | covered: `test_catalogi_publicatie.py::test_zaakobjecttype_changes_only_with_a_concept_zaaktype` | port | Open Archiefbeheer reads zaakobjecttypen (Catalogi 1.3) | `test_catalogi_publicatie.py` |
 | Geldigheid | overlapping validity: two concepts or concept and published allowed, two published refused | partly: `test_zaaktype_versions` (adjacent) | merge | the refusal | `test_catalogi_publicatie.py` |
 | Besluittype | besluittype with zaaktypen and IOTs, PATCH, resultaattype with besluittype | partly: bootstrap | skip | the rules are brc-007, brc-008 | |
 | different catalogi | same IOT, BT, ZT in two catalogi | gap | skip | needs a second catalogus; the client must stay on the test catalogus | |
