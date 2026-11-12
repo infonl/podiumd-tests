@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 import uuid
 
 from datetime import datetime
@@ -14,6 +15,7 @@ from urllib.parse import quote
 import pytest
 import yaml
 
+from podiumd_tests.auth.zgw_jwt import hs256_jwt
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.browser import challenge_login
 from podiumd_tests.json_data import entries
@@ -47,6 +49,8 @@ KISS_ZAKEN = "/api/zaken"
 # KISS's own route for a new klantcontact: it links the logged-in medewerker as actor.
 KISS_POST_KLANTCONTACTEN = "/api/postklantcontacten"
 KISS_CONTACTMOMENTDETAILS = "/api/contactmomentdetails"
+# KISS's managementinformatie API: contactmomentdetails with bronnen, for reporting systems.
+KISS_RAPPORTAGE = "/api/contactmomentendetails"
 KISS_POST_INTERNETAAK = "/api/postinternetaak"
 # The codeObjecttype KISS gives the actor of a contactverzoek (getActorConfig); ITA reads afd and grp.
 KISS_ACTOR_CODES = {"afdeling": "afd", "groep": "grp", "medewerker": "mdw"}
@@ -258,6 +262,19 @@ def kiss_contactmomentdetails(
     expect_status(kiss.put(kiss_url + KISS_CONTACTMOMENTDETAILS, json=body), HTTPStatus.OK)
     found = kiss.get(kiss_url + KISS_CONTACTMOMENTDETAILS, params={"id": str(klantcontact["url"])})
     return expect_status(found, HTTPStatus.OK).json()
+
+
+def kiss_rapportage(
+    http: requests.Session, kiss_url: str, key: str, start: datetime, end: datetime
+) -> list[JsonObject]:
+    """Return the contactmomentdetails started between start and end (UTC), as KISS reports them.
+
+    The token is HS256, signed with KISS's MANAGEMENTINFORMATIE_API_KEY; KISS checks only its signature and lifetime.
+    """
+    token = hs256_jwt({"exp": int(time.time()) + 300}, key)
+    params = {"from": f"{start:%Y-%m-%dT%H:%M:%SZ}", "to": f"{end:%Y-%m-%dT%H:%M:%SZ}"}
+    response = http.get(kiss_url + KISS_RAPPORTAGE, params=params, headers={"Authorization": f"Bearer {token}"})
+    return entries(expect_status(response, HTTPStatus.OK).json().get("results"))
 
 
 def ita_detail_text(ita: requests.Session, ita_url: str, taak: JsonObject) -> str:

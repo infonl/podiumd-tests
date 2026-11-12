@@ -12,6 +12,7 @@ import requests
 
 from podiumd_tests import kcc
 from podiumd_tests import workloads
+from podiumd_tests.auth.zgw_jwt import hs256_jwt
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.kcc import KENNIS_URL
@@ -32,6 +33,7 @@ from podiumd_tests.kcc import kiss_klantcontact
 from podiumd_tests.kcc import kiss_klantcontacten
 from podiumd_tests.kcc import kiss_medewerkers
 from podiumd_tests.kcc import kiss_onderwerpobject
+from podiumd_tests.kcc import kiss_rapportage
 from podiumd_tests.kcc import kiss_register
 from podiumd_tests.kcc import kiss_search_hits
 from podiumd_tests.kcc import kiss_search_sources
@@ -232,6 +234,16 @@ def test_kiss_contactmomentdetails_puts_and_reads_back(fake_http):
     assert found == {"vraag": "v"}
     put = json.loads(sent[0].body)
     assert (put["id"], put["vraag"], put["bronnen"]) == ("https://ok/kc/1", "v", [])
+
+
+def test_kiss_rapportage_signs_with_the_key_and_returns_the_results(fake_http, monkeypatch):
+    monkeypatch.setattr("podiumd_tests.kcc.time.time", lambda: 1000)
+    sent = fake_http({"GET /api/contactmomentendetails": (200, {"count": 1, "results": [{"id": "kc"}]})})
+    start = datetime(2026, 11, 12, 8, 30, tzinfo=UTC)
+    found = kiss_rapportage(requests.Session(), KISS, "k" * 32, start, start.replace(hour=9))
+    assert found == [{"id": "kc"}]
+    assert "from=2026-11-12T08%3A30%3A00Z&to=2026-11-12T09%3A30%3A00Z" in sent[0].url
+    assert sent[0].headers["Authorization"] == f"Bearer {hs256_jwt({'exp': 1300}, 'k' * 32)}"
 
 
 def test_ita_detail_text_is_the_json_of_the_internetaak(fake_http):

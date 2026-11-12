@@ -55,6 +55,9 @@ secrets:
   # KISS's Objecten token for its logboek (Activiteitenlog).
   kiss_logboek_token:
     k8s_secret: {name: contact, key: LOGBOEK_TOKEN}
+  # Signs the token of KISS's managementinformatie API (contactmomentdetails for reports).
+  kiss_managementinformatie_key:
+    k8s_secret: {name: contact, key: MANAGEMENTINFORMATIE_API_KEY}
   # Grafana's own admin (basic auth), from the monitoring stack podiumd-infra deploys with
   # grafana-deploy=true. grafana-admin in Key Vault is a Keycloak SSO user and cannot log in with basic auth.
   grafana_username:

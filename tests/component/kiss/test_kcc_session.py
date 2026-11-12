@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import json
 
+from datetime import UTC
+from datetime import datetime
+from datetime import timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -27,6 +30,7 @@ from podiumd_tests.kcc import kiss_betrokkene
 from podiumd_tests.kcc import kiss_contactmomentdetails
 from podiumd_tests.kcc import kiss_klantcontact
 from podiumd_tests.kcc import kiss_klantcontacten
+from podiumd_tests.kcc import kiss_rapportage
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openklant import klantcontact_body
@@ -41,6 +45,7 @@ if TYPE_CHECKING:
     from playwright.sync_api import Page
 
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.credentials import SecretResolver
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
@@ -184,34 +189,64 @@ def test_contactmoment_for_a_klant_is_listed_for_that_klant(  # fixtures
 
 
 @pytest.mark.source(
-    "upstream KISS-frontend Kiss.Bff.EndToEndTest AfhandelingFormScenarios, VraagScenarios",
-    "KISS keeps a contactmoment's gespreksresultaat, afdeling, vraag and the sources consulted in its own database.",
+    "upstream KISS-frontend Kiss.Bff.EndToEndTest AfhandelingFormScenarios",
+    "KISS keeps a contactmoment's gespreksresultaat, afdeling and vraag in its own database.",
 )
 @pytest.mark.scenario("""
     Given a contactmoment the KCC medewerker saved in KISS
-    When KISS stores its gespreksresultaat, afdeling, vraag and the VAC and kennisartikel consulted
+    When KISS stores its gespreksresultaat, afdeling and vraag
     Then KISS gives them back for that contactmoment, with the medewerker who registered it
 """)
 def test_kiss_keeps_the_contactmoment_details(
     kiss: requests.Session, urls: dict[str, str], openklant: ApiClient, registry: ResourceRegistry
 ) -> None:
-    """PUT /api/contactmomentdetails is read back by GET; KISS adds the medewerker (it does not return bronnen)."""
+    """PUT /api/contactmomentdetails is read back by GET; KISS adds the medewerker."""
     saved = kiss_klantcontact(kiss, urls["kiss"], openklant, registry, klantcontact_body(registry))
-    bronnen = [
-        {"soort": "VAC", "titel": registry.tagged("vac"), "url": f"{KENNIS_URL}vac"},
-        {"soort": "Kennisbank", "titel": registry.tagged("kennisartikel"), "url": f"{KENNIS_URL}kennis"},
-    ]
     fields = {
         "gespreksresultaat": "Afgehandeld",
         "verantwoordelijkeAfdeling": registry.tagged("afdeling"),
         "vraag": "podiumd-tests",
         "specifiekeVraag": registry.tagged("vraag"),
-        "bronnen": bronnen,
     }
     details = kiss_contactmomentdetails(kiss, urls["kiss"], saved, **fields)
     kept = {key: details.get(key) for key in ("gespreksresultaat", "verantwoordelijkeAfdeling", "specifiekeVraag")}
     assert kept == {key: fields[key] for key in kept}
     assert details.get("emailadresKcm") in KCC_IDS
+
+
+@pytest.mark.source(
+    "upstream KISS-frontend Kiss.Bff.EndToEndTest VraagScenarios",
+    "The VACs and kennisartikelen looked at during a vraag are saved as its gerelateerde bronnen.",
+)
+@pytest.mark.scenario("""
+    Given a contactmoment the KCC medewerker saved in KISS
+    And the medewerker looked at a VAC and a kennisartikel for the vraag
+    When KISS stores the contactmoment's details
+    Then KISS's managementinformatie reports the VAC and the kennisartikel as its bronnen
+""")
+def test_kiss_reports_the_bronnen_of_a_contactmoment(
+    kiss: requests.Session,
+    http: requests.Session,
+    urls: dict[str, str],
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    credentials: SecretResolver,
+) -> None:
+    """GET /api/contactmomentendetails has the bronnen that PUT /api/contactmomentdetails stored."""
+    key = credentials.optional("kiss_managementinformatie_key")
+    if key is None:
+        pytest.skip(
+            "secret kiss_managementinformatie_key missing: add KISS's MANAGEMENTINFORMATIE_API_KEY to the profile"
+        )
+    start = datetime.now(UTC) - timedelta(minutes=1)
+    saved = kiss_klantcontact(kiss, urls["kiss"], openklant, registry, klantcontact_body(registry))
+    bronnen = [
+        {"soort": "VAC", "titel": registry.tagged("vac"), "url": f"{KENNIS_URL}vac"},
+        {"soort": "Kennisbank", "titel": registry.tagged("kennisartikel"), "url": f"{KENNIS_URL}kennis"},
+    ]
+    kiss_contactmomentdetails(kiss, urls["kiss"], saved, vraag="podiumd-tests", bronnen=bronnen)
+    report = kiss_rapportage(http, urls["kiss"], key, start, datetime.now(UTC) + timedelta(minutes=1))
+    assert next(r for r in report if r["id"] == saved["url"])["bronnen"] == bronnen
 
 
 @pytest.mark.tc("KI-007")
