@@ -22,10 +22,12 @@ from podiumd_tests.bootstrap.names import ZAC_BASE_ROLES
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
+from podiumd_tests.lock import file_lock
 from podiumd_tests.oidc import LOGIN_PATHS
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
+from podiumd_tests.seed.openzaak import BESLUIT_CREATE_LOCK
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_besluit
 from podiumd_tests.seed.openzaak import delete_zaak
@@ -547,7 +549,8 @@ def vastleggen_besluit(
 ) -> requests.Response:
     """Record a besluit of the besluittype on the zaak, with these RestBesluitCreateData fields; ZAC's answer."""
     body = {"zaakUuid": zaak["uuid"], "besluittypeUuid": besluittype["id"], **fields}
-    return http.post(f"{zac_url}/rest/zaken/besluit", json=body)
+    with file_lock(BESLUIT_CREATE_LOCK):  # ZAC sends no identificatie
+        return http.post(f"{zac_url}/rest/zaken/besluit", json=body)
 
 
 def recorded_besluit(  # noqa: PLR0913, PLR0917  # the besluit, its zaak and its cleanup

@@ -43,8 +43,6 @@ if TYPE_CHECKING:
 pytestmark = [
     pytest.mark.component,
     pytest.mark.requires("zac", "openzaak"),
-    # One after another: Open Zaak gives besluiten created at the same time the same identificatie (open-zaak-8).
-    pytest.mark.xdist_group("zac-besluiten"),
     pytest.mark.source(
         "podiumd-tests",
         "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, zaak-lifecycle).",

@@ -6,6 +6,7 @@ import base64
 import calendar
 import re
 import secrets
+import tempfile
 
 from dataclasses import dataclass
 from datetime import UTC
@@ -13,11 +14,13 @@ from datetime import date
 from datetime import datetime
 from datetime import timedelta
 from http import HTTPStatus
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import strings
+from podiumd_tests.lock import file_lock
 from podiumd_tests.responses import expect_status
 from podiumd_tests.wait import wait_until
 
@@ -28,6 +31,9 @@ if TYPE_CHECKING:
 
 ZAKEN = "zaken/api/v1"
 DELETE_TIMEOUT = 30
+# Held by every create of a besluit without identificatie, across test workers: Open Zaak 1.29.3 gives besluiten
+# created at the same time the same identificatie and answers 500 (open-zaak-8).
+BESLUIT_CREATE_LOCK = Path(tempfile.gettempdir()) / "podiumd-tests-besluit-create.lock"
 CATALOGI = "catalogi/api/v1"
 
 
@@ -327,7 +333,11 @@ def make_besluit(openzaak: ApiClient, registry: ResourceRegistry, besluittype: s
         **fields,
     }
     given = {key: value for key, value in body.items() if value is not None}
-    besluit = openzaak.post(f"{BESLUITEN}/besluiten", given)
+    if "identificatie" in given:
+        besluit = openzaak.post(f"{BESLUITEN}/besluiten", given)
+    else:
+        with file_lock(BESLUIT_CREATE_LOCK):
+            besluit = openzaak.post(f"{BESLUITEN}/besluiten", given)
     url = str(besluit["url"])
     registry.add(f"besluit {url}", lambda: delete_besluit(openzaak, url))
     return besluit

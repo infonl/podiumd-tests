@@ -13,7 +13,9 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
+from podiumd_tests.lock import file_lock
 from podiumd_tests.responses import invalid_codes
+from podiumd_tests.seed.openzaak import BESLUIT_CREATE_LOCK
 from podiumd_tests.seed.openzaak import BESLUITEN
 from podiumd_tests.seed.openzaak import delete_besluit
 from podiumd_tests.seed.openzaak import make_besluit
@@ -205,7 +207,8 @@ def test_concurrent_besluiten_get_their_own_identificatie(
             registry.add(f"besluit {url}", lambda: delete_besluit(openzaak, url))
         return response
 
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    # The lock keeps other workers' besluiten out of this burst; the burst races only with itself.
+    with file_lock(BESLUIT_CREATE_LOCK), ThreadPoolExecutor(max_workers=8) as pool:
         responses = list(pool.map(create, range(CONCURRENT_CREATES)))
     assert all(r.status_code == HTTPStatus.CREATED for r in responses), [r.status_code for r in responses]
     assert len({r.json()["identificatie"] for r in responses}) == CONCURRENT_CREATES
