@@ -14,7 +14,10 @@ import pytest
 from podiumd_tests.auth.keycloak_admin import for_environment
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import section
+from podiumd_tests.mailpit import own_address
+from podiumd_tests.mailpit import received_message
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.zac_zaaktype import make_group_member
 from podiumd_tests.seed.zac_zaaktype import make_role_group
 from podiumd_tests.zac import active_groups
@@ -22,6 +25,7 @@ from podiumd_tests.zac import assignment
 from podiumd_tests.zac import group_members
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import toekennen
+from podiumd_tests.zac_signaleringen import mail_group_signalering
 from podiumd_tests.zac_taken import AANVULLENDE_INFORMATIE
 from podiumd_tests.zac_taken import open_task
 from podiumd_tests.zac_taken import read_taak
@@ -34,6 +38,7 @@ if TYPE_CHECKING:
     import requests
 
     from podiumd_tests.auth.keycloak_admin import KeycloakAdmin
+    from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
@@ -49,6 +54,11 @@ pytestmark = [
         " autorisatie-iam): Keycloak group changes.",
     ),
 ]
+
+
+# The longest name of a Keycloak group, and of Open Zaak's organisatorische eenheid identificatie.
+NAME_LENGTH = 255
+MAIL_TIMEOUT = 60
 
 
 def _keycloak(env: Environment) -> KeycloakAdmin:
@@ -172,3 +182,57 @@ def test_deleted_group_leaves_its_zaak_and_taak_reassignable(
     toekennen_taak(zac, zac_url, taak, zac_group, ADMIN.username)
     assert assignment(read_zaak(zac, zac_url, str(zaak["uuid"]))) == (zac_group, ADMIN.username)
     assert assignment(read_taak(zac, zac_url, str(taak["id"]))) == (zac_group, ADMIN.username)
+
+
+@pytest.mark.scenario("""
+    Given a new Keycloak group whose name has 255 characters
+    Then ZAC offers the group
+    When a zaak and its taak Aanvullende informatie are assigned to the group
+    Then the zaak and the taak show the group by its whole name
+    And Open Zaak has that name as the zaak's behandelende groep
+""")
+def test_group_with_a_255_character_name_takes_a_zaak_and_taak(
+    podiumd_env: Environment,
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_taken_zaak: Callable[[], JsonObject],
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+) -> None:
+    """Keycloak's group name and Open Zaak's organisatorische eenheid identificatie hold 255 characters."""
+    zac_url = urls["zac"]
+    group = make_role_group(podiumd_env, registry, "behandelaar", NAME_LENGTH)
+    assert group in active_groups(zac, zac_url)
+    zaak, taak = _zaak_and_taak(zac, zac_url, zac_taken_zaak, group)
+    zaak_groep, taak_groep = _groepen(zac, zac_url, zaak, taak)
+    assert zaak_groep.get("id") == taak_groep.get("id") == group
+    query = {"zaak": openzaak.url(f"{ZAKEN}/zaken/{zaak['uuid']}"), "betrokkeneType": "organisatorische_eenheid"}
+    rollen = openzaak.list(f"{ZAKEN}/rollen", query)
+    assert [section(rol, "betrokkeneIdentificatie").get("identificatie") for rol in rollen] == [group]
+
+
+@pytest.mark.requires("mailpit", "opennotificaties")
+@pytest.mark.scenario("""
+    Given a new Keycloak group with an e-mail address
+    And the beheerder has ZAC mail the group for zaken put on its name
+    When a zaak without behandelaar is assigned to the group
+    Then the group's address gets a mail with the zaaknummer
+""")
+def test_zaak_assigned_to_a_group_mails_the_group(
+    podiumd_env: Environment,
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_taken_zaak: Callable[[], JsonObject],
+    mailpit: ApiClient,
+    registry: ResourceRegistry,
+) -> None:
+    """ZAAK_OP_NAAM of a group, for a zaak without behandelaar, mails the group's Keycloak attribute email."""
+    zac_url = urls["zac"]
+    group = make_role_group(podiumd_env, registry, "behandelaar")
+    adres = own_address(registry)
+    _keycloak(podiumd_env).update_group(_group_id(podiumd_env, group), attributes={"email": [adres]})
+    mail_group_signalering(zac, zac_url, registry, group, "ZAAK_OP_NAAM")
+    zaak = zac_taken_zaak()
+    expect_status(toekennen(zac, zac_url, zaak, group, None), HTTPStatus.OK)
+    message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=adres)
+    assert str(zaak["identificatie"]) in f"{message.get('Subject')} {message.get('HTML')}"

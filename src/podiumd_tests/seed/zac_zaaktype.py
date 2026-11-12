@@ -137,12 +137,13 @@ def forget_zaaktype(env: Environment, *omschrijvingen: str) -> None:
             delete_entity_type(pabc, pabc_url, entity_type)
 
 
-def make_role_group(env: Environment, registry: ResourceRegistry, role: str) -> str:
+def make_role_group(env: Environment, registry: ResourceRegistry, role: str, length: int = 0) -> str:
     """Create a run-tagged Keycloak group with podiumd-tests' functional role for one ZAC role; its name.
 
-    PABC authorises a group by its realm roles; the role is mapped in domain ZAC_DOMAIN only.
+    PABC authorises a group by its realm roles; the role is mapped in domain ZAC_DOMAIN only. length: pad the
+    name with x to that many characters.
     """
-    name = registry.tagged(f"zac-{role}-{secrets.token_hex(3)}")
+    name = registry.tagged(f"zac-{role}-{secrets.token_hex(3)}").ljust(length, "x")
     for_environment(env).create_group(name, (f"{ZAC_FUNCTIONAL_ROLE}-{role}",))
     # A fresh admin token: the master realm's tokens expire within minutes. By name: a test may delete it first.
     registry.add(f"Keycloak group {name}", lambda: for_environment(env).delete_group_named(name))

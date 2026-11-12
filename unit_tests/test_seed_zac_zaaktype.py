@@ -135,6 +135,7 @@ def test_role_group_carries_the_functional_role_and_cleanup_deletes_it_by_name(m
     name = zac_zaaktype.make_role_group(env(), registry, "raadpleger")
     assert name.startswith(f"{RUN}-zac-raadpleger-")
     assert name != zac_zaaktype.make_role_group(env(), ResourceRegistry(RUN), "raadpleger")
+    assert len(zac_zaaktype.make_role_group(env(), ResourceRegistry(RUN), "raadpleger", 255)) == 255
     registry.cleanup()
     assert calls[0] == ("create", name, ("ptest-bootstrap-zac-raadpleger",))
     assert calls[-1] == ("delete", name)

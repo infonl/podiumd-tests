@@ -43,6 +43,22 @@ def turn_signaleringen(
         save_signalering_setting(http, zac_url, {"type": soort, "dashboard": on, "mail": mail})
 
 
+def mail_group_signalering(
+    http: requests.Session, zac_url: str, registry: ResourceRegistry, group: str, soort: str
+) -> None:
+    """Have ZAC mail the group's signalering of the type, as the beheerder sets it; cleanup turns the mail off.
+
+    ZAC mails the address in the group's Keycloak attribute email.
+    """
+    url = f"{zac_url}/rest/signaleringen/group/{group}/instellingen"
+
+    def save(*, mail: bool) -> None:
+        expect_status(http.put(url, json={"type": soort, "mail": mail}), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+
+    save(mail=True)
+    registry.add(f"ZAC signalering {soort} of group {group}", lambda: save(mail=False))
+
+
 def _save_all(http: requests.Session, zac_url: str, settings: list[JsonObject]) -> None:
     for setting in settings:
         save_signalering_setting(http, zac_url, setting)

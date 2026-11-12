@@ -31,6 +31,15 @@ def test_turn_signaleringen_saves_the_types_and_cleanup_restores_them(fake_http)
     assert saved == [{"type": "TAAK_OP_NAAM", "dashboard": True, "mail": True}, before[0]]
 
 
+def test_group_signalering_mail_is_turned_on_and_off_at_cleanup(fake_http):
+    url = "/rest/signaleringen/group/g1/instellingen"
+    sent = fake_http({f"PUT {url}": (200, {})})
+    registry = ResourceRegistry("run")
+    zac_signaleringen.mail_group_signalering(requests.Session(), ZAC, registry, "g1", "ZAAK_OP_NAAM")
+    assert registry.cleanup() == []
+    assert [json.loads(request.body)["mail"] for request in sent] == [True, False]
+
+
 def test_dashboard_lists_give_zaak_identificaties_and_taak_ids(fake_http):
     zaken = {"resultaten": [{"identificatie": "ZAAK-1"}], "totaal": 1}
     sent = fake_http(
