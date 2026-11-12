@@ -202,7 +202,7 @@ not exist in PodiumD; only the patterns port.
 | P1 fail with a clear message when Open Forms answers "Bad Request (400)" after the DigiD callback | `authentication/digid-simulator.ts` | partly: `test_formulier_login.py::submit_after_login` waits until the URL leaves `/callback`, then the submission fails without naming the 400 | merge | a broken OIDC chain then fails at the login with the page's heading | `tests/integration/test_formulier_login.py` (or `browser.keycloak_login` if more flows need it) |
 | P2 form logic blocks "Volgende" with a message (8 `disable-next` and `blokkeert` specs) | `forms/*/*-disable-next.pw.ts` | gap | port | logic rules are form configuration that upgrades break (`test_open_formulieren_finds_no_broken_forms` only checks definitions); bootstrap: a logic rule on the test form | `tests/integration/test_formulier_logica.py` (new) |
 | P3 uploads of 109 B, 13 kB, 555 kB, 1.5 MB | `helpers/file-upload.ts`, `upload-fixtures/` | partly: `test_upload_of_a_false_file_is_refused` (content type) | port | a file above the form's maximum size refused, below it accepted and in the zaak's PDF bijlage; fixtures generated at run time | `tests/component/openformulieren/test_formulier_api.py` |
-| P4 repeating group: add, save and edit a row | `helpers/repeating-group.ts` | gap | port, last | an editgrid field mapped to the registration; needs a second field type in the test form | `tests/integration/test_formulier_zaak.py` |
+| P4 repeating group: add, save and edit a row | `helpers/repeating-group.ts` | ported | port | a throwaway form with an editgrid of at most 3 rows: rows saved, a row changed, the overview shows them, a 4th row and a row without its required field refused, the submission registers | `tests/integration/test_formulier_zaak.py::test_repeating_group_rows_are_added_edited_and_submitted` |
 | P5 Flatpickr date fields by label | `helpers/open-forms-date.ts` | n/a | skip | the suite fills forms through the API | |
 | P6 happy flows of Nijmegen's forms (12 specs) | `forms/*-happy-flow.pw.ts` | n/a | skip | forms are not in PodiumD | |
 | P7 one capture per form step, lanes per BSN | `utils/form-artifacts.ts`, `docs/parallel-testresources.md` | partly: pytest-playwright's failure traces; `xdist_group` per shared identity | skip | covered by the runner | |
@@ -366,7 +366,7 @@ kees00.
 
 ### Batch 11: Open Formulieren patterns (2.5 days, 3 tests)
 
-- Patterns: P1, P2, P3; P4 only if the user wants it.
+- Patterns: P1, P2, P3, P4.
 - Files: `test_formulier_login.py`, new `test_formulier_logica.py`, `test_formulier_api.py`.
 - Bootstrap: snippet `openformulieren_form`: a logic rule that disables the next step on one answer, and a file field
   with a maximum size.

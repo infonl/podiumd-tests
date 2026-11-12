@@ -228,3 +228,14 @@ def test_upload_file_value_and_logic_helpers(fake_http):
     assert openformulieren.can_submit_step(http, step, {}, {"akkoord": "nee"}) is False
     openformulieren.set_logic_rules(http, base, {"uuid": "u1"}, [{"order": 0}])
     assert json.loads(sent[-1].body) == [{"order": 0}]
+
+
+def test_submission_summary_lists_label_and_value_in_order(fake_http):
+    summary = [
+        {"slug": "s1", "data": [{"name": "Kinderen", "value": None}, {"name": "Naam", "value": "Anna"}]},
+        {"slug": "s2", "data": [{"name": "Naam", "value": "Bram"}]},
+    ]
+    fake_http({"GET /api/v2/submissions/s/summary": (200, summary)})
+    submission = {"url": f"{OF}/api/v2/submissions/s"}
+    pairs = openformulieren.submission_summary(requests.Session(), submission, {})
+    assert pairs == [("Kinderen", None), ("Naam", "Anna"), ("Naam", "Bram")]

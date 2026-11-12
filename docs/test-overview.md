@@ -11,11 +11,11 @@ versions is not counted.
 | --- | --- | --- | --- |
 | smoke | 210 | 37 | 9 |
 | component | 672 | 408 | 41 |
-| integration | 140 | 84 | 11 |
+| integration | 141 | 85 | 11 |
 | perf | 54 | 3 | 0 |
-| **full tier** | **994** | **510** |  |
+| **full tier** | **995** | **511** |  |
 
-Unit tests (`unit_tests/`, functions): 703. Perf endpoints (`perf/runs.py`): 22.
+Unit tests (`unit_tests/`, functions): 704. Perf endpoints (`perf/runs.py`): 22.
 
 ## Per area
 
@@ -61,7 +61,7 @@ Unit tests (`unit_tests/`, functions): 703. Perf endpoints (`perf/runs.py`): 22.
 | integration | formulier_opschonen | 1 | 1 |
 | integration | formulier_pauzeren | 2 | 2 |
 | integration | formulier_wijzigen | 1 | 1 |
-| integration | formulier_zaak | 1 | 1 |
+| integration | formulier_zaak | 2 | 2 |
 | integration | formulier_zaaktype_versie | 1 | 1 |
 | integration | kiss_contactverzoek | 8 | 4 |
 | integration | kiss_kennis | 7 | 3 |
@@ -91,7 +91,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | TA | 264 |
 | ZAC | 18 |
 | draaiboek | 87 |
-| external | 101 |
+| external | 102 |
 | podiumd-tests | 343 |
 | upstream | 140 |
 

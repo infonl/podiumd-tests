@@ -85,14 +85,34 @@ def complete_submission(  # noqa: PLR0913  # one flow
     registers: bool = True,
 ) -> JsonObject:
     """Fill the submission's single step with data, complete it and return its final status (see submit)."""
-    step = entries(submission["steps"])[0]
-    response = http.put(str(step["url"]), json={"data": dict(data)}, headers=headers)
-    expect_status(response, HTTPStatus.CREATED, HTTPStatus.OK)
+    expect_status(save_step(http, submission, headers, data), HTTPStatus.CREATED, HTTPStatus.OK)
     complete = _complete(http, str(submission["url"]), headers, timeout=timeout)
     status = _processed(http, str(complete["statusUrl"]), str(submission["id"]), timeout=timeout)
     if registers:
         wait_for_registration(env, str(submission["id"]), timeout=timeout)
     return {**status, "submission": submission["id"]}
+
+
+def save_step(
+    http: requests.Session, submission: JsonObject, headers: dict[str, str], data: Mapping[str, object]
+) -> requests.Response:
+    """Save data in the submission's single step, as Volgende does; Open Formulieren's answer.
+
+    Saving checks the data's form (a repeating group's maximum of rows); required fields wait for _complete.
+    """
+    step = entries(submission["steps"])[0]
+    return http.put(str(step["url"]), json={"data": dict(data)}, headers=headers)
+
+
+def submission_summary(
+    http: requests.Session, submission: JsonObject, headers: dict[str, str]
+) -> list[tuple[str, object]]:
+    """Return the (label, value) pairs of the submission's overview page in order; a group row is a label."""
+    response = http.get(f"{submission['url']}/summary", headers=headers)
+    fields = [
+        field for step in entries(expect_status(response, HTTPStatus.OK).json()) for field in entries(step["data"])
+    ]
+    return [(str(field["name"]), field.get("value")) for field in fields]
 
 
 def _complete(http: requests.Session, submission_url: str, headers: dict[str, str], *, timeout: float) -> JsonObject:

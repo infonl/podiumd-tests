@@ -23,6 +23,7 @@ from podiumd_tests.openformulieren import complete_submission
 from podiumd_tests.openformulieren import forget_submission
 from podiumd_tests.openformulieren import form_and_headers
 from podiumd_tests.openformulieren import registered_zaak
+from podiumd_tests.openformulieren import save_step
 from podiumd_tests.openformulieren import start_submission
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import url_host
@@ -64,9 +65,8 @@ def test_paused_submission_mails_its_resume_link(
     need_bootstrap("openformulieren-form")
     submission, headers = start_submission(http, urls["openformulieren"], TEST_FORM)
     forget_submission(podiumd_env, registry, str(submission["id"]))
-    step = entries(submission["steps"])[0]
-    data = {"data": {"klacht_omschrijving": registry.tagged("gepauzeerd")}}
-    expect_status(http.put(str(step["url"]), json=data, headers=headers), HTTPStatus.CREATED, HTTPStatus.OK)
+    data = {"klacht_omschrijving": registry.tagged("gepauzeerd")}
+    expect_status(save_step(http, submission, headers, data), HTTPStatus.CREATED, HTTPStatus.OK)
     address = f"{registry.tagged('pauze')}@example.invalid"
     suspend = http.post(f"{submission['url']}/_suspend", json={"email": address}, headers=headers)
     expect_status(suspend, HTTPStatus.CREATED)
