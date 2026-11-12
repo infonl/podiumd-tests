@@ -236,10 +236,10 @@ def test_kiss_content_is_synced_after_create_and_delete(monkeypatch, snippets, p
 def test_zaken_in_zac_manage_the_pabc_entity_type(monkeypatch, profile_factory, known, added, deleted):
     adds, deletes, reindexes = [], [], []
     fakes = (
-        (volume, "zaaktype_entity_type", lambda *_args: known),
-        (zac_zaaktype, "zaaktype_entity_type", lambda *_args: known),
+        (volume, "find_entity_type", lambda *_args: known),
+        (zac_zaaktype, "find_entity_type", lambda *_args: known),
         (zac_zaaktype, "admin_session", lambda *_args: "pabc-session"),
-        (volume, "add_zaaktype_entity_type", lambda _session, _url, name: adds.append(name)),
+        (volume, "add_entity_type", lambda _session, _url, name: adds.append(name)),
         (zac_zaaktype, "delete_entity_type", lambda _session, _url, entity: deletes.append(entity)),
         (volume, "reindex_zaken", reindexes.append),
         (volume, "zac_as_admin", lambda _env: "zac-session"),

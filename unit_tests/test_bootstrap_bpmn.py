@@ -137,8 +137,8 @@ class FakePabc:
 
     def __init__(self, monkeypatch, *, entity_type=None, known=ALL):
         self.calls: list[tuple[object, ...]] = []
-        monkeypatch.setattr(bpmn, "zaaktype_entity_type", lambda _pabc, _url, _name: entity_type)
-        monkeypatch.setattr(bpmn, "add_zaaktype_entity_type", self._record("add_entity_type", "et-new"))
+        monkeypatch.setattr(bpmn, "find_entity_type", lambda _pabc, _url, _name: entity_type)
+        monkeypatch.setattr(bpmn, "add_entity_type", self._record("add_entity_type", "et-new"))
         monkeypatch.setattr(bpmn, "delete_entity_type", self._record("delete_entity_type"))
         monkeypatch.setattr(bpmn, "ensure_domain", self._record("ensure_domain", "dom-1"))
         monkeypatch.setattr(bpmn, "ensure_functional_role", self._record("ensure_functional_role"))

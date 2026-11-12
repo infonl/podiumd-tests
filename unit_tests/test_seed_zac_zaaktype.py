@@ -101,13 +101,11 @@ def test_publish_new_version_ends_the_old_one_yesterday_and_updates_the_new_one(
 def test_grant_adds_the_entity_type_to_the_domain_and_cleanup_forgets_it(monkeypatch):
     calls = []
     monkeypatch.setattr(zac_zaaktype, "admin_session", lambda *_args: "pabc")
-    monkeypatch.setattr(
-        zac_zaaktype, "add_zaaktype_entity_type", lambda _s, _u, name: calls.append(("add", name)) or "e1"
-    )
+    monkeypatch.setattr(zac_zaaktype, "add_entity_type", lambda _s, _u, name: calls.append(("add", name)) or "e1")
     monkeypatch.setattr(
         zac_zaaktype, "ensure_domain", lambda _s, _u, name, types: calls.append(("domain", name, types))
     )
-    monkeypatch.setattr(zac_zaaktype, "zaaktype_entity_type", lambda _s, _u, _name: "e1")
+    monkeypatch.setattr(zac_zaaktype, "find_entity_type", lambda _s, _u, _name, _kind: "e1")
     monkeypatch.setattr(zac_zaaktype, "delete_entity_type", lambda _s, _u, entity: calls.append(("delete", entity)))
     registry = ResourceRegistry(RUN)
     zac_zaaktype.grant_zaaktype(env(), registry, "zt")
@@ -117,10 +115,10 @@ def test_grant_adds_the_entity_type_to_the_domain_and_cleanup_forgets_it(monkeyp
 
 def test_forget_leaves_pabc_alone_without_the_entity_type(monkeypatch):
     monkeypatch.setattr(zac_zaaktype, "admin_session", lambda *_args: "pabc")
-    monkeypatch.setattr(zac_zaaktype, "zaaktype_entity_type", lambda *_args: None)
+    monkeypatch.setattr(zac_zaaktype, "find_entity_type", lambda *_args: None)
     deleted = []
     monkeypatch.setattr(zac_zaaktype, "delete_entity_type", lambda *args: deleted.append(args))
-    zac_zaaktype.forget_zaaktype(env(), "zt")
+    zac_zaaktype.forget_entity_types(env(), "zt")
     assert deleted == []
 
 
@@ -171,8 +169,8 @@ def test_other_domain_group_maps_a_new_realm_role_in_a_domain_of_its_own(monkeyp
     )
     monkeypatch.setattr(zac_zaaktype, "for_environment", lambda _env: admin)
     monkeypatch.setattr(zac_zaaktype, "pabc_as_admin", lambda _env: ("pabc", "https://pabc.test"))
-    monkeypatch.setattr(zac_zaaktype, "add_zaaktype_entity_type", lambda _pabc, _url, name: f"et-{name}")
-    monkeypatch.setattr(zac_zaaktype, "forget_zaaktype", lambda _env, *names: calls.append(("forget", *names)))
+    monkeypatch.setattr(zac_zaaktype, "add_entity_type", lambda _pabc, _url, name: f"et-{name}")
+    monkeypatch.setattr(zac_zaaktype, "forget_entity_types", lambda _env, *names: calls.append(("forget", *names)))
     monkeypatch.setattr(zac_zaaktype, "ensure_domain", lambda _pabc, _url, name, types: f"d-{name}-{types[0]}")
 
     def functional_role(_pabc, _url, name, application, roles, domain):
@@ -226,17 +224,45 @@ def test_other_domain_group_holds_the_number_of_zaaktypen_and_forgets_them_at_on
     )
     monkeypatch.setattr(zac_zaaktype, "for_environment", lambda _env: admin)
     monkeypatch.setattr(zac_zaaktype, "pabc_as_admin", lambda _env: ("pabc", "https://pabc.test"))
-    monkeypatch.setattr(zac_zaaktype, "add_zaaktype_entity_type", lambda _pabc, _url, name: f"et-{name}")
+    monkeypatch.setattr(zac_zaaktype, "add_entity_type", lambda _pabc, _url, name: f"et-{name}")
     monkeypatch.setattr(zac_zaaktype, "ensure_domain", lambda _pabc, _url, _name, types: domains.append(types) or "d")
     monkeypatch.setattr(zac_zaaktype, "ensure_functional_role", lambda *_args: None)
     name = zac_zaaktype.make_other_domain_group(env(), ResourceRegistry(RUN), "raadpleger", zaaktypen=3)
     assert domains == [[f"et-{name}", f"et-{name}-001", f"et-{name}-002"]]
 
 
+def test_other_domain_holds_the_gemeenten_and_cleanup_forgets_them(monkeypatch):
+    domains, forgotten = [], []
+    admin = SimpleNamespace(
+        create_role=lambda _name: None,
+        delete_role=lambda _name: None,
+        create_group=lambda _name, _roles: None,
+        delete_group_named=lambda _name: None,
+    )
+    monkeypatch.setattr(zac_zaaktype, "for_environment", lambda _env: admin)
+    monkeypatch.setattr(zac_zaaktype, "pabc_as_admin", lambda _env: ("pabc", "https://pabc.test"))
+    monkeypatch.setattr(
+        zac_zaaktype,
+        "add_entity_type",
+        lambda _pabc, _url, entity, kind="ZAAKTYPE", name=None: f"{kind}-{name or entity}",
+    )
+    monkeypatch.setattr(zac_zaaktype, "ensure_domain", lambda _pabc, _url, _name, types: domains.append(types) or "d")
+    monkeypatch.setattr(zac_zaaktype, "ensure_functional_role", lambda *_args: None)
+    monkeypatch.setattr(zac_zaaktype, "delete_roles_and_domain", lambda *_args: None)
+    monkeypatch.setattr(
+        zac_zaaktype, "forget_entity_types", lambda _env, *ids, kind="ZAAKTYPE": forgotten.append((kind, *ids))
+    )
+    registry = ResourceRegistry(RUN)
+    name = zac_zaaktype.make_other_domain_group(env(), registry, "brp_zoeken", gemeenten={"0530": "Hellevoetsluis"})
+    registry.cleanup()
+    assert domains == [[f"ZAAKTYPE-{name}", "GEMEENTE-Hellevoetsluis"]]
+    assert ("GEMEENTE", "0530") in forgotten
+
+
 def test_forget_deletes_each_entity_type_with_one_login(monkeypatch):
     logins, deleted = [], []
     monkeypatch.setattr(zac_zaaktype, "pabc_as_admin", lambda _env: logins.append(1) or ("pabc", "https://pabc.test"))
-    monkeypatch.setattr(zac_zaaktype, "zaaktype_entity_type", lambda _s, _u, name: {"a": "e1", "b": "e2"}.get(name))
+    monkeypatch.setattr(zac_zaaktype, "find_entity_type", lambda _s, _u, name, _kind: {"a": "e1", "b": "e2"}.get(name))
     monkeypatch.setattr(zac_zaaktype, "delete_entity_type", lambda _s, _u, entity: deleted.append(entity))
-    zac_zaaktype.forget_zaaktype(env(), "a", "x", "b")
+    zac_zaaktype.forget_entity_types(env(), "a", "x", "b")
     assert (logins, deleted) == ([1], ["e1", "e2"])

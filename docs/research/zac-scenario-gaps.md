@@ -17,7 +17,7 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | Area | covered | partial | gap | obsolete | out of scope |
 |---|---|---|---|---|---|
 | zaak-lifecycle | 25 | 3 | 0 | 3 | 3 |
-| betrokkenen-klant | 12 | 2 | 1 | 0 | 2 |
+| betrokkenen-klant | 13 | 2 | 0 | 0 | 2 |
 | documenten-mail | 22 | 4 | 0 | 1 | 5 |
 | taken-cmmn | 9 | 2 | 0 | 0 | 1 |
 | bpmn | 6 | 0 | 0 | 0 | 2 |
@@ -26,7 +26,7 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | beheer-zaps | 12 | 3 | 0 | 2 | 3 |
 | integraties-intake | 8 | 1 | 0 | 1 | 2 |
 | overig | 3 | 0 | 0 | 0 | 6 |
-| **total** | **132** | **21** | **2** | **9** | **28** |
+| **total** | **133** | **21** | **1** | **9** | **28** |
 
 ## zaak-lifecycle
 
@@ -75,7 +75,7 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | medium | Bedrijf found by KvK, vestigingsnummer, RSIN, naam, postcode+huisnummer and added as initiator and betrokkene (also without employees) | covered | A bedrijf without employees: no test company for it | `test_company_lookup`, `test_betrokkenen_with_the_same_and_different_roles_are_listed`, `test_initiator_changes_from_persoon_to_bedrijf_and_back`, `test_bedrijf_is_found_by_each_kvk_field` | zac-rest | KvK |  |
 | medium | Bedrijf initiator/betrokkene stored in Open Zaak as niet-natuurlijk persoon with only KvK and vestigingsnummer | covered |  | `test_initiator_changes_from_persoon_to_bedrijf_and_back`, `test_bedrijf_betrokkene_is_stored_with_its_kvk_and_vestigingsnummer` | zac-rest | Open Zaak, KvK |  |
 | medium | Open Klant e-mail selection for ontvangstbevestiging, initiator and persoon page: single address, voorkeur address, else the first | partial | The automatic bevestiging to the initiator's Open Klant address needs a zaaktype with brpKoppelen on and a productaanvraagtype | `test_zac_mails_the_initiator_an_ontvangstbevestiging`, `test_person_e_mail_is_the_voorkeur_address_else_the_first` | other-api | Open Klant, Open Formulieren, mail |  |
-| low | BRP person search for initiator and betrokkene restricted to the gemeenten of the PABC domain | gap | Needs gemeenten on the PABC domain in bootstrap |  | zac-rest | BRP, PABC |  |
+| low | BRP person search for initiator and betrokkene restricted to the gemeenten of the PABC domain | covered | The PABC domain and its gemeente are seeded per test, no bootstrap | `test_brp_search_is_restricted_to_the_gemeenten_of_the_domain` | zac-rest | BRP, PABC |  |
 | low | BRP indications and verblijfplaats country shown for the initiator (overleden, opschorting bijhouden, emigratie, geheimhouding, in onderzoek, curatele; Belgie) | covered |  | `test_person_shows_the_brp_indicaties`, `test_person_abroad_shows_the_country` | zac-rest | BRP test set |  |
 | low | Initiator/betrokkene with unknown, removed or mismatching KvK in Open Zaak still shown with warning; re-adding requires KvK | partial | The warning text is UI only; re-adding without KvK-nummer answers 500 (zac-27, strict xfail) | `test_initiator_with_a_vestiging_of_another_kvk_nummer_is_not_found` | zac-rest | Open Zaak, KvK |  |
 | low | KvK full profile: rechtspersoon has no e-mail/phone, hoofdvestiging has them; volledig profiel shows RSIN, addresses, single phone field | covered | In 5.9.1 the e-mail and phone come from Open Klant, also for a rechtspersoon | `test_company_lookup`, `test_bedrijf_profiles_show_the_rsin_and_addresses` | zac-rest | KvK |  |

@@ -8,10 +8,10 @@ import pytest
 import requests
 
 from podiumd_tests import pabc
-from podiumd_tests.pabc import add_zaaktype_entity_type
+from podiumd_tests.pabc import add_entity_type
 from podiumd_tests.pabc import decide
 from podiumd_tests.pabc import delete_entity_type
-from podiumd_tests.pabc import zaaktype_entity_type
+from podiumd_tests.pabc import find_entity_type
 from podiumd_tests.responses import UnexpectedStatusError
 
 PABC = "https://pabc.example.test"
@@ -23,24 +23,31 @@ ENTITY_TYPES = [
 
 def test_finds_a_zaaktype_by_its_omschrijving(fake_http):
     fake_http({"/api/v1/entity-types": (200, ENTITY_TYPES)})
-    assert zaaktype_entity_type(requests.Session(), PABC, "Test zaaktype 1") == "z-1"
-    assert zaaktype_entity_type(requests.Session(), PABC, "1916") is None
+    assert find_entity_type(requests.Session(), PABC, "Test zaaktype 1") == "z-1"
+    assert find_entity_type(requests.Session(), PABC, "1916") is None
+    assert find_entity_type(requests.Session(), PABC, "Test zaaktype 1", "GEMEENTE") is None
 
 
 def test_adds_and_deletes_an_entity_type(fake_http):
     sent = fake_http(
         {"POST /api/v1/entity-types": (201, {"id": "z-2"}), "DELETE /api/v1/entity-types/z-2": (204, None)}
     )
-    assert add_zaaktype_entity_type(requests.Session(), PABC, "ptest-volume") == "z-2"
+    assert add_entity_type(requests.Session(), PABC, "ptest-volume") == "z-2"
     delete_entity_type(requests.Session(), PABC, "z-2")
     assert b'"type": "ZAAKTYPE"' in sent[0].body
     assert [s.method for s in sent] == ["POST", "DELETE"]
 
 
+def test_adds_a_gemeente_by_its_code_and_name(fake_http):
+    sent = fake_http({"POST /api/v1/entity-types": (201, {"id": "g-1"})})
+    assert add_entity_type(requests.Session(), PABC, "0530", "GEMEENTE", "Hellevoetsluis") == "g-1"
+    assert json.loads(sent[0].body) == {"entityTypeId": "0530", "type": "GEMEENTE", "name": "Hellevoetsluis"}
+
+
 def test_a_refused_add_raises(fake_http):
     fake_http({"POST /api/v1/entity-types": (409, {"title": "exists"})})
     with pytest.raises(UnexpectedStatusError):
-        add_zaaktype_entity_type(requests.Session(), PABC, "ptest-volume")
+        add_entity_type(requests.Session(), PABC, "ptest-volume")
 
 
 def test_decide_sends_the_api_key_and_the_role_names(fake_http):

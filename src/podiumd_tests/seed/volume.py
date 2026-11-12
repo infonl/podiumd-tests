@@ -35,8 +35,8 @@ from podiumd_tests.kcc import KENNIS_URL
 from podiumd_tests.kcc import kennisartikel_data
 from podiumd_tests.kcc import kiss_sync_cronjob
 from podiumd_tests.kcc import vac_data
-from podiumd_tests.pabc import add_zaaktype_entity_type
-from podiumd_tests.pabc import zaaktype_entity_type
+from podiumd_tests.pabc import add_entity_type
+from podiumd_tests.pabc import find_entity_type
 from podiumd_tests.process import ProcessError
 from podiumd_tests.seed.openklant import make_actor
 from podiumd_tests.seed.openklant import make_internetaak
@@ -46,7 +46,7 @@ from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.registry import ResourceRegistry
-from podiumd_tests.seed.zac_zaaktype import forget_zaaktype
+from podiumd_tests.seed.zac_zaaktype import forget_entity_types
 from podiumd_tests.seed.zac_zaaktype import pabc_as_admin
 from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.workloads import run_cronjob
@@ -372,8 +372,8 @@ def _count_zaken_in_zac(env: Environment) -> int:
 def _index_zaken_in_zac(env: Environment, _missing: range, _parallel: int) -> None:
     """Make the volume zaaktype known to PABC, so the admin may see its zaken, and reindex ZAC's zaken."""
     pabc, pabc_url = pabc_as_admin(env)
-    if zaaktype_entity_type(pabc, pabc_url, VOLUME_TAG) is None:
-        add_zaaktype_entity_type(pabc, pabc_url, VOLUME_TAG)
+    if find_entity_type(pabc, pabc_url, VOLUME_TAG) is None:
+        add_entity_type(pabc, pabc_url, VOLUME_TAG)
     reindex_zaken(env)
 
 
@@ -392,7 +392,7 @@ KINDS: tuple[Kind, ...] = (
         "zac",
         _count_zaken_in_zac,
         _index_zaken_in_zac,
-        lambda env: forget_zaaktype(env, VOLUME_TAG),
+        lambda env: forget_entity_types(env, VOLUME_TAG),
         target_kind="zaken",
         refused=_volume_zac_allowed,
     ),

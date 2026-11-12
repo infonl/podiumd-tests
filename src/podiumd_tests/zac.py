@@ -630,9 +630,14 @@ def koppel_zoekresultaat(
     return next((item for item in found if item.get("id") == ander["uuid"]), None)
 
 
+def search_personen(http: requests.Session, zac_url: str, **fields: str) -> requests.Response:
+    """ZAC's BRP person search with these RestListPersonenParameters fields (bsn, gemeenteVanInschrijving, ...)."""
+    return http.put(f"{zac_url}/rest/klanten/personen", json=fields)
+
+
 def person_lookup(http: requests.Session, zac_url: str, bsn: str) -> list[JsonObject]:
     """ZAC's person lookup by BSN."""
-    response = http.put(f"{zac_url}/rest/klanten/personen", json={"bsn": bsn})
+    response = search_personen(http, zac_url, bsn=bsn)
     return entries(cast("JsonObject", expect_status(response, HTTPStatus.OK).json())["resultaten"])
 
 

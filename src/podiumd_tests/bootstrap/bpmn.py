@@ -26,7 +26,7 @@ from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.clients.platform import openzaak_client
 from podiumd_tests.json_data import entries
-from podiumd_tests.pabc import add_zaaktype_entity_type
+from podiumd_tests.pabc import add_entity_type
 from podiumd_tests.pabc import admin_session
 from podiumd_tests.pabc import application_roles
 from podiumd_tests.pabc import delete_entity_type
@@ -34,7 +34,7 @@ from podiumd_tests.pabc import delete_roles_and_domain
 from podiumd_tests.pabc import domain_mappings
 from podiumd_tests.pabc import ensure_domain
 from podiumd_tests.pabc import ensure_functional_role
-from podiumd_tests.pabc import zaaktype_entity_type
+from podiumd_tests.pabc import find_entity_type
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import published_zaaktype
 from podiumd_tests.zac import user_groups
@@ -209,7 +209,7 @@ class ZacBpmnProcess:
         ctx.notes.append(f"zaaktype-bpmn-configuration of {BPMN_ZAAKTYPE} stays: ZAC 5.9 has no call to delete it")
         pabc, pabc_url = self._pabc(ctx)
         delete_roles_and_domain(pabc, pabc_url, ZAC_FUNCTIONAL_ROLES, ZAC_DOMAIN)
-        entity_type = zaaktype_entity_type(pabc, pabc_url, BPMN_ZAAKTYPE)
+        entity_type = find_entity_type(pabc, pabc_url, BPMN_ZAAKTYPE)
         if entity_type is not None:
             delete_entity_type(pabc, pabc_url, entity_type)
         return ()
@@ -224,9 +224,9 @@ class ZacBpmnProcess:
     def _map_roles(self, ctx: Context, omschrijving: str) -> None:
         """Map the functional roles PABC can map to their application roles in domain ZAC_DOMAIN of the zaaktype."""
         pabc, pabc_url = self._pabc(ctx)
-        entity_type = zaaktype_entity_type(pabc, pabc_url, omschrijving)
+        entity_type = find_entity_type(pabc, pabc_url, omschrijving)
         if entity_type is None:
-            entity_type = add_zaaktype_entity_type(pabc, pabc_url, omschrijving)
+            entity_type = add_entity_type(pabc, pabc_url, omschrijving)
         domain = ensure_domain(pabc, pabc_url, ZAC_DOMAIN, [entity_type])
         wanted = mappable_roles(pabc, pabc_url)
         for name, roles in wanted.items():

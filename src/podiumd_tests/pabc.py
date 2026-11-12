@@ -27,6 +27,9 @@ if TYPE_CHECKING:
 
 DECISION = "/api/v1/application-roles-per-entity-type"
 ENTITY_TYPES = "/api/v1/entity-types"
+# The entity types ZAC reads from PABC: a zaaktype (by omschrijving) and a gemeente (by code) for BRP searches.
+ZAAKTYPE = "ZAAKTYPE"
+GEMEENTE = "GEMEENTE"
 DOMAINS = "/api/v1/domains"
 FUNCTIONAL_ROLES = "/api/v1/functional-roles"
 APPLICATION_ROLES = "/api/v1/application-roles"
@@ -65,17 +68,19 @@ def admin_session(env: Environment, username: str, password: str) -> requests.Se
         return thread.submit(log_in).result()
 
 
-def zaaktype_entity_type(pabc: requests.Session, pabc_url: str, omschrijving: str) -> str | None:
-    """PABC's id of the ZAAKTYPE entity type of a zaaktype omschrijving, or None."""
+def find_entity_type(pabc: requests.Session, pabc_url: str, entity_id: str, kind: str = ZAAKTYPE) -> str | None:
+    """PABC's id of the entity type of this kind (ZAAKTYPE: a zaaktype omschrijving; GEMEENTE: a code), or None."""
     for found in get_entries(pabc, pabc_url + ENTITY_TYPES):
-        if found.get("type") == "ZAAKTYPE" and found.get("entityTypeId") == omschrijving:
+        if found.get("type") == kind and found.get("entityTypeId") == entity_id:
             return str(found["id"])
     return None
 
 
-def add_zaaktype_entity_type(pabc: requests.Session, pabc_url: str, omschrijving: str) -> str:
-    """Make a zaaktype known to PABC, so roles on all entity types cover it; its id."""
-    body = {"entityTypeId": omschrijving, "type": "ZAAKTYPE", "name": omschrijving}
+def add_entity_type(
+    pabc: requests.Session, pabc_url: str, entity_id: str, kind: str = ZAAKTYPE, name: str | None = None
+) -> str:
+    """Make an entity known to PABC, so a domain can hold it (name: entity_id when None); its id."""
+    body = {"entityTypeId": entity_id, "type": kind, "name": name or entity_id}
     response = pabc.post(pabc_url + ENTITY_TYPES, json=body)
     return str(expect_status(response, HTTPStatus.CREATED).json()["id"])
 

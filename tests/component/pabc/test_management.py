@@ -17,7 +17,7 @@ from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import entries
 from podiumd_tests.pabc import DOMAINS
 from podiumd_tests.pabc import ENTITY_TYPES
-from podiumd_tests.pabc import add_zaaktype_entity_type
+from podiumd_tests.pabc import add_entity_type
 from podiumd_tests.pabc import decide
 from podiumd_tests.pabc import delete_entity_type
 from podiumd_tests.pabc import delete_roles_and_domain
@@ -157,7 +157,7 @@ def test_domain_is_deleted_once_no_functional_role_uses_it(
     """PABC answers 422 to deleting a domain with a mapping; without one it deletes the domain, not its entity types."""
     pabc_url = urls["pabc"]
     name = registry.tagged(f"pabc-{secrets.token_hex(3)}")
-    entity_type = add_zaaktype_entity_type(pabc, pabc_url, name)
+    entity_type = add_entity_type(pabc, pabc_url, name)
     registry.add(f"PABC entity type {name}", lambda: delete_entity_type(pabc, pabc_url, entity_type))
     domain = ensure_domain(pabc, pabc_url, name, [entity_type])
     registry.add(f"PABC domain {name}", lambda: delete_roles_and_domain(pabc, pabc_url, [name], name))

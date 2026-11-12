@@ -18,13 +18,15 @@ from podiumd_tests.bootstrap.bpmn import uuid_of
 from podiumd_tests.bootstrap.names import ZAC_DOMAIN
 from podiumd_tests.bootstrap.names import ZAC_FUNCTIONAL_ROLE
 from podiumd_tests.bootstrap.steps import ADMIN
-from podiumd_tests.pabc import add_zaaktype_entity_type
+from podiumd_tests.pabc import GEMEENTE
+from podiumd_tests.pabc import ZAAKTYPE
+from podiumd_tests.pabc import add_entity_type
 from podiumd_tests.pabc import admin_session
 from podiumd_tests.pabc import delete_entity_type
 from podiumd_tests.pabc import delete_roles_and_domain
 from podiumd_tests.pabc import ensure_domain
 from podiumd_tests.pabc import ensure_functional_role
-from podiumd_tests.pabc import zaaktype_entity_type
+from podiumd_tests.pabc import find_entity_type
 from podiumd_tests.seed.catalogi import ZaaktypeTypes
 from podiumd_tests.seed.catalogi import make_publishable_zaaktype
 from podiumd_tests.seed.catalogi import publish
@@ -36,6 +38,7 @@ from podiumd_tests.zac import user_groups
 from podiumd_tests.zac import zac_session
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from collections.abc import Sequence
 
     import requests
@@ -123,16 +126,16 @@ def grant_zaaktype(env: Environment, registry: ResourceRegistry, omschrijving: s
     ZAC reads a user's rights at login: a session from before has none on the zaaktype.
     """
     pabc, pabc_url = pabc_as_admin(env)
-    entity_type = add_zaaktype_entity_type(pabc, pabc_url, omschrijving)
-    registry.add(f"PABC entity type {omschrijving}", lambda: forget_zaaktype(env, omschrijving))
+    entity_type = add_entity_type(pabc, pabc_url, omschrijving)
+    registry.add(f"PABC entity type {omschrijving}", lambda: forget_entity_types(env, omschrijving))
     ensure_domain(pabc, pabc_url, ZAC_DOMAIN, [entity_type])
 
 
-def forget_zaaktype(env: Environment, *omschrijvingen: str) -> None:
-    """Delete the zaaktypen's PABC entity types, where they exist, with a new login: cleanup can run hours later."""
+def forget_entity_types(env: Environment, *entity_ids: str, kind: str = ZAAKTYPE) -> None:
+    """Delete the PABC entity types of this kind, where they exist, with a new login: cleanup can run hours later."""
     pabc, pabc_url = pabc_as_admin(env)
-    for omschrijving in omschrijvingen:
-        entity_type = zaaktype_entity_type(pabc, pabc_url, omschrijving)
+    for entity_id in entity_ids:
+        entity_type = find_entity_type(pabc, pabc_url, entity_id, kind)
         if entity_type is not None:
             delete_entity_type(pabc, pabc_url, entity_type)
 
@@ -150,11 +153,18 @@ def make_role_group(env: Environment, registry: ResourceRegistry, role: str, len
     return name
 
 
-def make_other_domain_group(env: Environment, registry: ResourceRegistry, role: str, *, zaaktypen: int = 1) -> str:
+def make_other_domain_group(
+    env: Environment,
+    registry: ResourceRegistry,
+    role: str,
+    *,
+    zaaktypen: int = 1,
+    gemeenten: Mapping[str, str] | None = None,
+) -> str:
     """Create a run-tagged Keycloak group whose new realm role has a ZAC role in a PABC domain of its own; its name.
 
     The domain holds that many run-tagged zaaktypen that do not exist, the first named as the group: a member keeps
-    a ZAC role without any zaak of them.
+    a ZAC role without any zaak of them. gemeenten (code: naam) are added to the domain as GEMEENTE entity types.
     """
     name = registry.tagged(f"zac-domein-{secrets.token_hex(3)}")
     keycloak = for_environment(env)
@@ -162,8 +172,12 @@ def make_other_domain_group(env: Environment, registry: ResourceRegistry, role: 
     registry.add(f"Keycloak realm role {name}", lambda: for_environment(env).delete_role(name))
     pabc, pabc_url = pabc_as_admin(env)
     names = [name, *(f"{name}-{number:03}" for number in range(1, zaaktypen))]
-    registry.add(f"PABC entity types {name}", lambda: forget_zaaktype(env, *names))
-    entity_types = [add_zaaktype_entity_type(pabc, pabc_url, zaaktype) for zaaktype in names]
+    registry.add(f"PABC entity types {name}", lambda: forget_entity_types(env, *names))
+    entity_types = [add_entity_type(pabc, pabc_url, zaaktype) for zaaktype in names]
+    codes = dict(gemeenten or {})
+    if codes:
+        registry.add(f"PABC gemeenten {name}", lambda: forget_entity_types(env, *codes, kind=GEMEENTE))
+        entity_types += [add_entity_type(pabc, pabc_url, code, GEMEENTE, naam) for code, naam in codes.items()]
     domain = ensure_domain(pabc, pabc_url, name, entity_types)
     registry.add(f"PABC domain {name}", lambda: delete_roles_and_domain(*pabc_as_admin(env), [name], name))
     ensure_functional_role(pabc, pabc_url, name, ZAC_APPLICATION, (role,), domain)
