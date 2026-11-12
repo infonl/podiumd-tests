@@ -441,6 +441,14 @@ def afzenders(http: requests.Session, zac_url: str, zaak: JsonObject) -> list[Js
     return get_entries(http, f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/afzender")
 
 
+def zaak_mailtemplate(http: requests.Session, zac_url: str, zaak: JsonObject, mail: str) -> JsonObject | None:
+    """Return the mailtemplate ZAC offers for this mail (ZAAK_AFGEHANDELD, ...) of the zaak; None when it has none."""
+    response = expect_status(
+        http.get(f"{zac_url}/rest/mailtemplates/{mail}/{zaak['uuid']}"), HTTPStatus.OK, HTTPStatus.NO_CONTENT
+    )
+    return cast("JsonObject", response.json()) if response.content else None
+
+
 def send_mail(
     http: requests.Session, zac_url: str, zaak: JsonObject, mail: JsonObject, *, acknowledge: bool = False
 ) -> requests.Response:

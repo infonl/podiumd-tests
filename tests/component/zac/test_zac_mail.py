@@ -18,9 +18,12 @@ from podiumd_tests.mailpit import received_message
 from podiumd_tests.pdf import pdfa_problems
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
+from podiumd_tests.zac import afhandelen
+from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import afzenders
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_mail
+from podiumd_tests.zac import zaak_mailtemplate
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
 from podiumd_tests.zac_documents import zaak_documents
@@ -159,6 +162,35 @@ def test_ontvangstbevestiging_is_sent_once_and_clears_the_indicatie(
     assert _titles(zac, urls["zac"], zaak).get(f"Ontvangstbevestiging {zaak['identificatie']}") == "OPENBAAR"
     assert NIET_VERSTUURD not in strings(read_zaak(zac, urls["zac"], str(zaak["uuid"])).get("indicaties"))
     expect_status(send_mail(zac, urls["zac"], zaak, body, acknowledge=True), *REFUSED)
+
+
+@pytest.mark.scenario("""
+    Given a zaak in behandeling in ZAC
+    When the behandelaar afhandelt it with a resultaat and the afhandelmail of its mailtemplate
+    Then the zaak is closed
+    And the afhandelmail arrives with the zaak's variables filled in
+    And the zaak has the mail as a document
+""")
+def test_afhandelmail_arrives_and_is_kept_on_the_zaak(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    mail: Callable[..., JsonObject],
+    mailpit: ApiClient,
+    registry: ResourceRegistry,
+) -> None:
+    """ZAAK_AFHANDELEN with restMailGegevens of mailtemplate ZAAK_AFGEHANDELD, as ZAC's afhandelen dialog sends it."""
+    zaak = zac_zaak()
+    template = zaak_mailtemplate(zac, urls["zac"], zaak, "ZAAK_AFGEHANDELD")
+    if template is None:
+        pytest.skip("ZAC has no mailtemplate ZAAK_AFGEHANDELD: add one in ZAC's beheer of mailtemplates")
+    afronden_intake(zac, urls["zac"], zaak)
+    body = mail(zaak, onderwerp=template["onderwerp"], body=template["body"], createDocumentFromMail=True)
+    expect_status(afhandelen(zac, urls["zac"], zaak, restMailGegevens=body), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    assert read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpen"] is False
+    message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=str(body["ontvanger"]))
+    assert "{" not in f"{message.get('Subject')}{message.get('HTML')}"
+    assert message.get("Subject") in _titles(zac, urls["zac"], zaak)
 
 
 @pytest.mark.scenario("""

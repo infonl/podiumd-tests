@@ -402,6 +402,12 @@ def test_afhandelen_and_afsluiten_use_a_resultaattype_without_besluit(fake_http)
     assert json.loads(sent[-1].body)["restMailGegevens"] == {"onderwerp": "x"}
 
 
+@pytest.mark.parametrize(("status", "found"), [(200, {"onderwerp": "Afgehandeld"}), (204, None)])
+def test_zaak_mailtemplate_is_none_without_one(fake_http, status, found):
+    fake_http({"GET /rest/mailtemplates/ZAAK_AFGEHANDELD/z1": (status, found)})
+    assert zac.zaak_mailtemplate(requests.Session(), ZAC, {"uuid": "z1"}, "ZAAK_AFGEHANDELD") == found
+
+
 @pytest.mark.parametrize(
     ("zaak", "methods"),
     [
