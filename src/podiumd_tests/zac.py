@@ -767,6 +767,12 @@ def is_taak_listed(http: requests.Session, zac_url: str, taak: JsonObject, **fla
 AANVULLENDE_INFORMATIE = "Aanvullende informatie"
 
 
+def is_document_listed(http: requests.Session, zac_url: str, document: JsonObject) -> bool:
+    """ZAC's search for documents lists the document, found by its titel."""
+    found = search(http, zac_url, type="DOCUMENT", zoeken={"DOCUMENT_TITEL": document["titel"]})
+    return any(item.get("id") == document["uuid"] for item in entries(found["resultaten"]))
+
+
 def open_task(http: requests.Session, zac_url: str, zaak_uuid: str, name: str) -> JsonObject:
     """Wait until the zaak has an open task of this name, as ZAC lists it (with its formioFormulier)."""
 

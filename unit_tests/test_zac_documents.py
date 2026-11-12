@@ -4,6 +4,8 @@ import io
 import json
 import zipfile
 
+from datetime import date
+
 import pytest
 import requests
 
@@ -123,10 +125,13 @@ def test_koppelbare_zaken_sends_the_zoekterm_and_the_informatieobjecttype(fake_h
     }
 
 
-def test_inbox_documenten_filters_on_the_titel(fake_http):
-    sent = fake_http({"PUT /rest/inboxdocumenten": (200, {"resultaten": [{"id": 3}], "totaal": 1})})
-    assert zac_documents.inbox_documenten(requests.Session(), ZAC, "ptest-x") == [{"id": 3}]
+def test_inbox_document_searches_the_titel_and_matches_the_uuid(fake_http):
+    found = [{"id": 3, "enkelvoudiginformatieobjectUUID": "d1"}, {"id": 4, "enkelvoudiginformatieobjectUUID": "d2"}]
+    sent = fake_http({"PUT /rest/inboxdocumenten": (200, {"resultaten": found, "totaal": 2})})
+    document = {"titel": "ptest-x", "url": "https://oz.example.test/documenten/api/v1/enkelvoudiginformatieobjecten/d2"}
+    assert zac_documents.inbox_document(requests.Session(), ZAC, document) == found[1]
     assert json.loads(sent[-1].body) == {"titel": "ptest-x", "page": 0, "maxResults": 100}
+    assert zac_documents.inbox_document(requests.Session(), ZAC, {**document, "url": "/d3"}) is None
 
 
 def test_ontkoppel_document_cleanup_deletes_only_its_detached_entry(fake_http):
@@ -162,3 +167,50 @@ def test_ontkoppelde_documenten_page_sends_the_page_and_its_size(fake_http):
     zaak = {"identificatie": "ZAAK-1"}
     assert zac_documents.ontkoppelde_documenten_page(requests.Session(), ZAC, zaak, 1, 1) == page
     assert json.loads(sent[-1].body) == {"zaakID": "ZAAK-1", "page": 1, "maxResults": 1}
+
+
+@pytest.mark.parametrize(
+    ("build", "main"),
+    [(zac_documents.minimal_xlsx, "xl/worksheets/sheet1.xml"), (zac_documents.minimal_pptx, "ppt/slides/slide1.xml")],
+)
+def test_minimal_office_files_relate_their_part_with_the_text(build, main):
+    with zipfile.ZipFile(io.BytesIO(build("hallo"))) as package:
+        assert "hallo" in package.read(main).decode()
+        assert f'PartName="/{main}"' in package.read("[Content_Types].xml").decode()
+        folder, _, _ = main.partition("/")
+        rels = next(name for name in package.namelist() if name.startswith(f"{folder}/_rels/"))
+        assert main.removeprefix(f"{folder}/") in package.read(rels).decode()
+
+
+def test_upload_of_size_streams_the_form_and_the_file(fake_http):
+    sent = fake_http(UPLOAD)
+    size = zac_documents.CHUNK + 3
+    response = zac_documents.upload_of_size(requests.Session(), ZAC, {"uuid": "z1"}, ResourceRegistry("ptest-x"), size)
+    assert response.status_code == 400
+    assert sent[-1].headers["Transfer-Encoding"] == "chunked"
+    body = b"".join(sent[-1].body)
+    assert b'name="informatieobjectTypeUUID"\r\n\r\niot1\r\n' in body
+    _, _, rest = body.partition(b"Content-Type: text/plain\r\n\r\n")
+    assert rest.index(b"\r\n--") == size
+
+
+def test_form_date_is_midnight_utc():
+    assert zac_documents.form_date(date(2026, 11, 1)) == "2026-11-01T00:00+00:00"
+
+
+def test_zaak_documents_asks_for_those_of_linked_zaken(fake_http):
+    sent = fake_http({"PUT /rest/informatieobjecten/informatieobjectenList": (200, [])})
+    zac_documents.zaak_documents(requests.Session(), ZAC, {"uuid": "z1"}, gekoppelde_zaken=True)
+    assert json.loads(sent[-1].body) == {"zaakUUID": "z1", "gekoppeldeZaakDocumenten": True}
+
+
+def test_document_historie_and_inbox_delete_use_zacs_paths(fake_http):
+    sent = fake_http(
+        {
+            "GET /rest/informatieobjecten/informatieobject/d1/historie": (200, [{"actie": "GEWIJZIGD"}]),
+            "DELETE /rest/inboxdocumenten/7": (200, {"isInformatieobjectDeleted": True}),
+        }
+    )
+    assert zac_documents.document_historie(requests.Session(), ZAC, {"uuid": "d1"}) == [{"actie": "GEWIJZIGD"}]
+    assert zac_documents.delete_inbox_document(requests.Session(), ZAC, {"id": 7}).status_code == 200
+    assert sent[-1].method == "DELETE"

@@ -783,3 +783,12 @@ def test_zoekopdracht_is_saved_listed_and_deleted_at_cleanup(fake_http):
     assert zac.zoekopdrachten(http, ZAC, "WERKVOORRAAD_ZAKEN") == [saved]
     assert registry.cleanup() == []
     assert sent[-1].method == "DELETE"
+
+
+def test_document_listed_searches_by_titel_and_matches_the_uuid(fake_http):
+    sent = fake_http({"PUT /rest/zoeken/list": (200, {"resultaten": [{"id": "d1"}]})})
+    document = {"uuid": "d1", "titel": "brief"}
+    assert zac.is_document_listed(requests.Session(), ZAC, document)
+    assert not zac.is_document_listed(requests.Session(), ZAC, {**document, "uuid": "d2"})
+    body = json.loads(sent[0].body)
+    assert (body["type"], body["zoeken"]) == ("DOCUMENT", {"DOCUMENT_TITEL": "brief"})

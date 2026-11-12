@@ -541,10 +541,13 @@ def test_document_can_be_deleted(
 @pytest.mark.source(
     "draaiboek ZAC-056", "A document can be edited directly; Word saves it automatically as the new version."
 )
+@pytest.mark.parametrize(
+    ("suffix", "app"), [("docx", "ms-word"), ("excel", "ms-excel"), ("powerpoint", "ms-powerpoint")]
+)
 @pytest.mark.scenario("""
-    Given a Word document in bewerking on a zaak in ZAC
-    When the behandelaar opens it for editing in Word
-    And Word saves the edited document
+    Given a Word, Excel or PowerPoint document in bewerking on a zaak in ZAC
+    When the behandelaar opens it for editing in its Office application
+    And the application saves the edited document
     Then the document has a new version
     And the download gives the saved content
 """)
@@ -554,18 +557,20 @@ def test_word_saves_an_edited_document_as_a_new_version(
     urls: dict[str, str],
     zac_zaak: Callable[..., JsonObject],
     registry: ResourceRegistry,
+    suffix: str,
+    app: str,
 ) -> None:
-    """Word opens the document through ZAC's WebDAV link and saves it as the document's next version.
+    """The Office application opens the document through ZAC's WebDAV link and saves it as the next version.
 
     The link's token alone gives access; ZAC keeps it in the memory of the pod that handed it out.
     """
     zaak = zac_zaak()
-    document = uploaded_document(zac, urls["zac"], zaak, registry, suffix="docx", status="in_bewerking")
+    document = uploaded_document(zac, urls["zac"], zaak, registry, suffix=suffix, status="in_bewerking")
     documents = document_url(urls["zac"], document)
     of_zaak = {"zaak": str(zaak["uuid"])}
     link = str(expect_status(zac.get(f"{documents}/edit", params=of_zaak), HTTPStatus.OK).json())
     scheme, _, url = link.partition(":")
-    assert scheme == "ms-word"
+    assert scheme == app
     assert url.startswith(f"{urls['zac']}/webdav/folder/")
     expect_status(http.put(url, data=b"versie 2"), HTTPStatus.CREATED, HTTPStatus.NO_CONTENT)
     current = expect_status(zac.get(documents, params=of_zaak), HTTPStatus.OK).json()
@@ -606,9 +611,9 @@ def test_sent_document_is_marked_verzonden(
     "podiumd-tests",
     "ZAC converts a Word document to PDF through its office converter (gotenberg); helm-charts #633 updates gotenberg.",
 )
-@pytest.mark.parametrize("suffix", ["word", "large-word"])
+@pytest.mark.parametrize("suffix", ["word", "large-word", "excel", "powerpoint"])
 @pytest.mark.scenario("""
-    Given a definitief Word document, small or large, on a zaak in ZAC
+    Given a definitief Word document, small or large, an Excel or a PowerPoint document, on a zaak in ZAC
     When the behandelaar converts the document to PDF
     Then the document's current version is a PDF/A-2b and PDF/UA with embedded fonts
 """)
@@ -619,7 +624,7 @@ def test_word_document_is_converted_to_pdf(
     registry: ResourceRegistry,
     suffix: str,
 ) -> None:
-    """A definitief Word document converted in ZAC becomes a PDF/A-2b, PDF/UA with embedded fonts, as ZAC requests."""
+    """A definitief Office document converted in ZAC becomes a PDF/A-2b, PDF/UA with embedded fonts, as ZAC requests."""
     zaak = zac_zaak()
     document = uploaded_document(zac, urls["zac"], zaak, registry, suffix=suffix)
     documents = document_url(urls["zac"], document)

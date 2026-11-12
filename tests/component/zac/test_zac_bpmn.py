@@ -7,8 +7,6 @@ The feature's SmartDocuments step is left out: no environment has SmartDocuments
 
 from __future__ import annotations
 
-from datetime import UTC
-from datetime import datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -22,7 +20,6 @@ from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.responses import expect_status
-from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import INDEX_TIMEOUT
@@ -35,6 +32,7 @@ from podiumd_tests.zac import notificatie
 from podiumd_tests.zac import open_task
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import wait_in_werkvoorraad
+from podiumd_tests.zac_documents import uploaded_document
 
 if TYPE_CHECKING:
     import requests
@@ -64,26 +62,8 @@ def intake(zac: requests.Session, zac_url: str, zaak: JsonObject, group: str) ->
 def signed_document(zac: requests.Session, zac_url: str, zaak: JsonObject, registry: ResourceRegistry) -> str:
     """Upload a PDF to the zaak, then select and sign it in the process's two document tasks; its uuid."""
     uuid = str(zaak["uuid"])
-    types = get_entries(zac, f"{zac_url}/rest/informatieobjecten/informatieobjecttypes/zaak/{uuid}")
-    name = f"{registry.tagged('bpmn-document')}.pdf"
-    form = {
-        "titel": name,
-        "bestandsnaam": name,
-        "formaat": "application/pdf",
-        "informatieobjectTypeUUID": str(types[0]["uuid"]),
-        "vertrouwelijkheidaanduiding": "OPENBAAR",
-        "status": "definitief",
-        "taal": "dut",
-        "creatiedatum": datetime.now(tz=UTC).strftime("%Y-%m-%dT%H:%M+00:00"),
-        "auteur": "podiumd-tests",
-    }
-    upload = zac.post(
-        f"{zac_url}/rest/informatieobjecten/informatieobject/{uuid}/{registry.tagged('upload')}",
-        params={"taakObject": "false"},
-        data=form,
-        files={"file": (name, b"%PDF-1.4\n%%EOF\n", "application/pdf")},
-    )
-    document = str(expect_status(upload, HTTPStatus.OK).json()["uuid"])
+    uploaded = uploaded_document(zac, zac_url, zaak, registry, suffix="pdf")
+    document, name = str(uploaded["uuid"]), str(uploaded["titel"])
     row = [{"selected": True, "titel": name, "uuid": document}]
     complete_task(zac, zac_url, open_task(zac, zac_url, uuid, SELECT), {"ZAAK_Documenten_Ondertekenen_Selectie": row})
     complete_task(zac, zac_url, open_task(zac, zac_url, uuid, SIGN), {"ZAAK_Documenten_Te_Ondertekenen": row})

@@ -20,17 +20,22 @@ from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import zaaktype_parts
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import GERELATEERD
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import NOTIFICATION_TIMEOUT
 from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
+from podiumd_tests.zac import is_document_listed
+from podiumd_tests.zac import koppel
 from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac_documents import FILES
 from podiumd_tests.zac_documents import INBOX_DOCUMENTEN
 from podiumd_tests.zac_documents import ONTKOPPELDE_DOCUMENTEN
+from podiumd_tests.zac_documents import delete_inbox_document
 from podiumd_tests.zac_documents import delete_ontkoppeld_document
 from podiumd_tests.zac_documents import document_url
-from podiumd_tests.zac_documents import inbox_documenten
+from podiumd_tests.zac_documents import documenttypen
+from podiumd_tests.zac_documents import inbox_document
 from podiumd_tests.zac_documents import koppelbare_zaken
 from podiumd_tests.zac_documents import max_file_size_mb
 from podiumd_tests.zac_documents import nieuwe_versie
@@ -79,6 +84,15 @@ def _toelichtingen(zac: requests.Session, zac_url: str, zaak: JsonObject, actie:
     """The toelichtingen of the zaak's historie lines of this actie."""
     return strings(
         [line.get("toelichting") for line in zaak_historie(zac, zac_url, zaak) if line.get("actie") == actie]
+    )
+
+
+def _in_inbox(zac: requests.Session, zac_url: str, document: JsonObject) -> JsonObject:
+    """Wait until ZAC's Inbox documenten list the Open Zaak document; its entry."""
+    return wait_until(
+        lambda: inbox_document(zac, zac_url, document),
+        timeout=NOTIFICATION_TIMEOUT,
+        description=f"{document['url']} in ZAC's Inbox documenten",
     )
 
 
@@ -151,6 +165,27 @@ def test_ontkoppeld_document_is_gekoppeld_to_another_zaak(
     assert _ontkoppeld(zac, urls["zac"], zaak, document) is None
 
 
+@pytest.mark.scenario("""
+    Given two zaken in ZAC linked as gerelateerd, the second with a document
+    When the behandelaar lists the documents of the first zaak with those of its linked zaken
+    Then the list has the second zaak's document, with the relation and the second zaak's zaaknummer
+    And the first zaak's own documents do not include it
+""")
+def test_zaak_shows_the_documents_of_its_gerelateerde_zaak(
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
+) -> None:
+    """informatieobjectenList with gekoppeldeZaakDocumenten adds the related zaak's documents with relatieType."""
+    zaak, ander = zac_zaak(), zac_zaak()
+    document = uploaded_document(zac, urls["zac"], ander, registry)
+    expect_status(koppel(zac, urls["zac"], zaak, ander, GERELATEERD), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    listed = zaak_documents(zac, urls["zac"], zaak, gekoppelde_zaken=True)
+    found = [
+        (item.get("relatieType"), item.get("zaakIdentificatie")) for item in listed if item["uuid"] == document["uuid"]
+    ]
+    assert found == [(GERELATEERD, ander["identificatie"])]
+    assert _uuids(zac, urls["zac"], zaak) == []
+
+
 @pytest.mark.requires("opennotificaties")
 @pytest.mark.scenario("""
     Given a document in Open Zaak on no zaak
@@ -169,23 +204,51 @@ def test_inbox_document_is_gekoppeld_to_a_zaak(
 ) -> None:
     """A document on no zaak is in ZAC's Inbox documenten; verplaatsen from there links it and removes the entry."""
     document = make_document(openzaak, registry, zaaktype_parts(openzaak, bpmn_zaaktype).informatieobjecttype)
-    titel = str(document["titel"])
-    listed = wait_until(
-        lambda: next(iter(inbox_documenten(zac, urls["zac"], titel)), None),
-        timeout=NOTIFICATION_TIMEOUT,
-        description=f"{titel} in ZAC's Inbox documenten",
-    )
+    listed = _in_inbox(zac, urls["zac"], document)
     # After the document, so cleanup deletes the zaak and its link before the document.
     zaak = create_zaak(zac, urls["zac"], bpmn_parameters, omschrijving=registry.tagged("inbox"))
     clean_up_zaak(zac, urls["zac"], openzaak, registry, zaak)
 
-    inbox_document = {"uuid": listed["enkelvoudiginformatieobjectUUID"]}
-    moved = verplaats_document(zac, urls["zac"], inbox_document, INBOX_DOCUMENTEN, zaak)
+    linked = {"uuid": listed["enkelvoudiginformatieobjectUUID"]}
+    moved = verplaats_document(zac, urls["zac"], linked, INBOX_DOCUMENTEN, zaak)
     expect_status(moved, HTTPStatus.NO_CONTENT, HTTPStatus.OK)
-    assert inbox_document["uuid"] in _uuids(zac, urls["zac"], zaak)
-    assert inbox_documenten(zac, urls["zac"], titel) == []
+    assert linked["uuid"] in _uuids(zac, urls["zac"], zaak)
+    assert inbox_document(zac, urls["zac"], document) is None
     assert f"Verplaatst: {INBOX_DOCUMENTEN} -> {zaak['identificatie']}" in _toelichtingen(
         zac, urls["zac"], zaak, "GEKOPPELD"
+    )
+
+
+@pytest.mark.requires("opennotificaties")
+@pytest.mark.scenario("""
+    Given two documents in Open Zaak on no zaak, which ZAC lists in its Inbox documenten
+    When the behandelaar deletes the first from the Inbox documenten
+    Then the Inbox documenten no longer list it and Open Zaak no longer has it
+    When the second is deleted through Open Zaak's Documenten API
+    Then the Inbox documenten no longer list it either
+""")
+def test_inbox_document_deleted_is_gone(
+    zac: requests.Session,
+    urls: dict[str, str],
+    openzaak: ApiClient,
+    bpmn_zaaktype: JsonObject,
+    registry: ResourceRegistry,
+) -> None:
+    """Deleting from ZAC's Inbox documenten deletes the document in Open Zaak; Open Zaak's delete notification
+    removes the entry.
+    """
+    informatieobjecttype = zaaktype_parts(openzaak, bpmn_zaaktype).informatieobjecttype
+    first, second = (make_document(openzaak, registry, informatieobjecttype) for _ in range(2))
+    first_entry, _ = (_in_inbox(zac, urls["zac"], document) for document in (first, second))
+    expect_status(delete_inbox_document(zac, urls["zac"], first_entry), HTTPStatus.OK)
+    assert inbox_document(zac, urls["zac"], first) is None
+    openzaak.request("GET", str(first["url"]), HTTPStatus.NOT_FOUND)
+
+    openzaak.delete(str(second["url"]))
+    wait_until(
+        lambda: inbox_document(zac, urls["zac"], second) is None,
+        timeout=NOTIFICATION_TIMEOUT,
+        description=f"{second['url']} gone from ZAC's Inbox documenten",
     )
 
 
@@ -220,7 +283,9 @@ def test_ontkoppelen_without_a_reden_keeps_the_document(
 
 
 @pytest.mark.scenario("""
-    Given a document ontkoppeld from a zaak in ZAC
+    Given a document on a zaak in ZAC, which ZAC's search finds
+    When the behandelaar ontkoppelt it
+    Then ZAC's search no longer finds it
     When the recordmanager deletes it from the ontkoppelde documenten
     Then the ontkoppelde documenten no longer list it
     And Open Zaak no longer has the document
@@ -232,10 +297,22 @@ def test_ontkoppeld_document_deleted_is_gone_from_open_zaak(
     openzaak_productaanvraag: ApiClient,
     registry: ResourceRegistry,
 ) -> None:
-    """Deleting from ontkoppelde documenten deletes the document in Open Zaak's Documenten API."""
+    """Ontkoppelen takes the document out of ZAC's search; deleting it from ontkoppelde documenten deletes it in
+    Open Zaak's Documenten API.
+    """
     zaak = zac_zaak()
     document = uploaded_document(zac, urls["zac"], zaak, registry)
+    wait_until(
+        lambda: is_document_listed(zac, urls["zac"], document),
+        timeout=INDEX_TIMEOUT,
+        description=f"{document['titel']} in ZAC's search",
+    )
     expect_status(ontkoppel_document(zac, urls["zac"], zaak, document, REDEN, registry), HTTPStatus.NO_CONTENT)
+    wait_until(
+        lambda: not is_document_listed(zac, urls["zac"], document),
+        timeout=INDEX_TIMEOUT,
+        description=f"{document['titel']} gone from ZAC's search",
+    )
     listed = _ontkoppeld(zac, urls["zac"], zaak, document)
     assert listed, f"{document['uuid']} not in the ontkoppelde documenten of {zaak['identificatie']}"
     in_openzaak = f"{urls['openzaak']}/{DOCUMENTEN}/enkelvoudiginformatieobjecten/{document['uuid']}"
@@ -244,6 +321,35 @@ def test_ontkoppeld_document_deleted_is_gone_from_open_zaak(
     expect_status(delete_ontkoppeld_document(zac, urls["zac"], listed), HTTPStatus.NO_CONTENT)
     assert _ontkoppeld(zac, urls["zac"], zaak, document) is None
     openzaak_productaanvraag.request("GET", in_openzaak, HTTPStatus.NOT_FOUND)
+
+
+@pytest.mark.scenario("""
+    Given a vergrendeld document on a zaak in ZAC
+    When the behandelaar ontkoppelt it
+    Then the ontkoppelde documenten list it as vergrendeld
+    And deleting it from there is refused
+    When the behandelaar ontgrendelt it
+    Then it can be deleted from the ontkoppelde documenten
+""")
+def test_locked_ontkoppeld_document_cannot_be_deleted_until_unlocked(
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
+) -> None:
+    """Open Zaak refuses to delete a locked document (400), also from ZAC's ontkoppelde documenten."""
+    zaak = zac_zaak()
+    document = uploaded_document(zac, urls["zac"], zaak, registry, status="in_bewerking")
+    url = document_url(urls["zac"], document)
+    expect_status(zac.post(f"{url}/lock", params={"zaak": str(zaak["uuid"])}), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    expect_status(ontkoppel_document(zac, urls["zac"], zaak, document, REDEN, registry), HTTPStatus.NO_CONTENT)
+    # Unlocked before the cleanup of ontkoppel_document deletes it.
+    registry.add(f"lock of document {document['uuid']}", lambda: zac.post(f"{url}/unlock"))
+    listed = _ontkoppeld(zac, urls["zac"], zaak, document)
+    assert listed, f"{document['uuid']} not in the ontkoppelde documenten of {zaak['identificatie']}"
+    assert listed.get("vergrendeld") is True
+    expect_status(delete_ontkoppeld_document(zac, urls["zac"], listed), HTTPStatus.BAD_REQUEST)
+
+    expect_status(zac.post(f"{url}/unlock"), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    expect_status(delete_ontkoppeld_document(zac, urls["zac"], listed), HTTPStatus.NO_CONTENT)
+    assert _ontkoppeld(zac, urls["zac"], zaak, document) is None
 
 
 @pytest.mark.scenario("""
@@ -276,7 +382,8 @@ def test_locked_document_cannot_be_deleted_until_unlocked(
 
 @pytest.mark.scenario("""
     Given a document in bewerking on a zaak in ZAC
-    When the behandelaar adds a new version with a new file, titel, beschrijving, taal and vertrouwelijkheid
+    When the behandelaar adds a new version with a new file, titel, beschrijving, taal, vertrouwelijkheid,
+    And documenttype and status ter vaststelling
     Then the document is one version further with the new file and metadata
     When the behandelaar adds a new version with only a new beschrijving
     Then the document is one more version further and keeps the file
@@ -287,11 +394,15 @@ def test_nieuwe_versie_changes_the_file_and_the_metadata(
     """Nieuwe versie (PUT informatieobject) with and without a file raises versie by one and keeps the given fields."""
     zaak = zac_zaak()
     document = uploaded_document(zac, urls["zac"], zaak, registry, status="in_bewerking")
+    types = [item["uuid"] for item in documenttypen(zac, urls["zac"], zaak)]
+    documenttype = next((uuid for uuid in types if uuid != document["informatieobjectTypeUUID"]), types[0])
     fields: JsonObject = {
         "titel": registry.tagged("versie-2"),
         "beschrijving": "tweede versie",
         "taal": taal(zac, urls["zac"], "eng"),
         "vertrouwelijkheidaanduiding": "VERTROUWELIJK",
+        "informatieobjectTypeUUID": documenttype,
+        "status": "ter_vaststelling",
         "toelichting": "podiumd-tests nieuwe versie",
     }
     file = (f"{registry.tagged('versie-2')}.txt", "text/plain", b"versie 2")
@@ -304,7 +415,11 @@ def test_nieuwe_versie_changes_the_file_and_the_metadata(
         "Engels",
         "VERTROUWELIJK",
     )
-    assert version["bestandsnaam"] == file[0]
+    assert (version["bestandsnaam"], version["informatieobjectTypeUUID"], version["status"]) == (
+        file[0],
+        documenttype,
+        "ter_vaststelling",
+    )
 
     metadata = nieuwe_versie(zac, urls["zac"], zaak, document, {"beschrijving": "derde versie"})
     third = expect_status(metadata, HTTPStatus.OK).json()
