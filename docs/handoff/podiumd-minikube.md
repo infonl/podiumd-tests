@@ -40,8 +40,15 @@ A POST of a 500 MB + 1 byte document to `zac.local` (ZAC's upload limit is 500 M
 request body is buffered to a temporary file" for that POST. Until it restarted, every request through the edge got
 "Connection refused" on 10.96.0.200:443.
 
-Request: let the WAF stream or buffer large bodies to disk without holding them in memory (or raise its memory limit
-to cover ZAC's 500 MB uploads), so a maximum-size upload reaches ZAC.
+Cause: the ModSecurity-nginx connector passes a body nginx buffered to a temp file to libmodsecurity 3.0.17
+(`msc_request_body_from_file`), whose `Transaction::requestBodyFromFile` reads the whole file into memory before
+`SecRequestBodyLimit`/`ProcessPartial` cut it. `SecRequestBodyInMemoryLimit` does not exist in ModSecurity v3.
+`src/podiumd_minikube/waf.py`: memory limit 512Mi (`:101`), `client_max_body_size 0` (`:150`), 2 nginx workers
+(`:242`). podiumd-infra's WAF (kees00) has the same; podiumd-infra was told (2026-11-12).
+
+Request: follow podiumd-infra's fix in your port; options: a memory limit for 2 workers × 500 MB (e.g. 1536Mi), a
+WAF `client_max_body_size` of the largest supported upload (e.g. `520m`), or `modsecurity off;` for the upload
+locations only.
 
 Test: `tests/component/zac/test_zac_documenten.py::test_document_above_the_maximum_file_size_is_refused` (destructive,
 slow) fails on minikube until then.
