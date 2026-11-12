@@ -19,6 +19,7 @@ from podiumd_tests.bootstrap.bpmn import uuid_of
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
+from podiumd_tests.pdf import pdfa_problems
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.zac import list_page
@@ -357,6 +358,16 @@ def stored_mail(zac: requests.Session, zac_url: str, zaak: JsonObject, message: 
     subject = message.get("Subject")
     stored = next(item for item in zaak_documents(zac, zac_url, zaak) if item.get("titel") == subject)
     return stored, expect_status(zac.get(f"{document_url(zac_url, stored)}/download"), HTTPStatus.OK).content
+
+
+# A mail ZAC keeps without offering a vertrouwelijkheidaanduiding (PlanItemsRestService, ProductaanvraagEmailService).
+OPENBAAR_MAIL: tuple[object, ...] = ("definitief", "OPENBAAR", [])
+
+
+def kept_mail(zac: requests.Session, zac_url: str, zaak: JsonObject, message: JsonObject) -> tuple[object, ...]:
+    """Return status, vertrouwelijkheidaanduiding and PDF/A problems of the zaak's document of the mail."""
+    stored, pdf = stored_mail(zac, zac_url, zaak, message)
+    return stored.get("status"), stored.get("vertrouwelijkheidaanduiding"), pdfa_problems(pdf)
 
 
 def document_historie(zac: requests.Session, zac_url: str, document: JsonObject) -> list[JsonObject]:

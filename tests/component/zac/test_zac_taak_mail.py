@@ -13,10 +13,10 @@ from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import section
 from podiumd_tests.mailpit import own_address
 from podiumd_tests.mailpit import received_message
-from podiumd_tests.pdf import pdfa_problems
 from podiumd_tests.responses import get_entries
 from podiumd_tests.zac import zaak_status
-from podiumd_tests.zac_documents import stored_mail
+from podiumd_tests.zac_documents import OPENBAAR_MAIL
+from podiumd_tests.zac_documents import kept_mail
 from podiumd_tests.zac_documents import zaak_documents
 from podiumd_tests.zac_taken import AANVULLENDE_INFORMATIE
 from podiumd_tests.zac_taken import ADVIES_EXTERN
@@ -46,16 +46,6 @@ WAITING = "Wacht op aanvullende informatie"
 INTAKE = "Intake"
 VRAAG = "podiumd-tests vraag"
 MAIL_TIMEOUT = 60
-
-
-# A taak mail on its zaak: ZAC offers no vertrouwelijkheidaanduiding for it (PlanItemsRestService).
-STORED_MAIL = ("definitief", "OPENBAAR", [])
-
-
-def _stored(zac: requests.Session, zac_url: str, zaak: JsonObject, message: JsonObject) -> tuple[object, ...]:
-    """Status, vertrouwelijkheidaanduiding and PDF/A problems of the zaak's document of the mail."""
-    stored, pdf = stored_mail(zac, zac_url, zaak, message)
-    return stored.get("status"), stored.get("vertrouwelijkheidaanduiding"), pdfa_problems(pdf)
 
 
 @ZAC_TEAM
@@ -94,7 +84,7 @@ def test_advies_extern_mails_the_adviseur(
     )
     message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=adres)
     assert f"Advies over zaak {behandeling['identificatie']}" in str(message.get("HTML"))
-    assert _stored(zac, zac_url, behandeling, message) == STORED_MAIL
+    assert kept_mail(zac, zac_url, behandeling, message) == OPENBAAR_MAIL
 
     afgerond = complete_task(zac, zac_url, taak, {"externAdvies": VRAAG})
     assert (afgerond.get("status"), section(afgerond, "taakdata").get("externAdvies")) == ("AFGEROND", VRAAG)
@@ -157,7 +147,7 @@ def test_aanvullende_informatie_mails_and_returns_the_zaak_to_intake(
 
     taak, message = mailed()
     assert pdfs(message) == 1
-    assert _stored(zac, zac_url, zaak, message) == STORED_MAIL
+    assert kept_mail(zac, zac_url, zaak, message) == OPENBAAR_MAIL
     assert zaak_status(zac, zac_url, zaak) == WAITING
 
     afgerond = complete_task(zac, zac_url, taak, {"aanvullendeInformatie": uitkomst})

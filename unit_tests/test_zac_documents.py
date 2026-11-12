@@ -271,6 +271,19 @@ def test_stored_mail_is_the_document_titled_with_the_subject(fake_http):
     assert (stored["uuid"], content) == ("d1", b'"%PDF"')
 
 
+def test_kept_mail_is_the_status_vertrouwelijkheid_and_pdfa_problems_of_the_stored_mail(fake_http, monkeypatch):
+    listed = [{"uuid": "d1", "titel": "Zaak 1", "status": "definitief", "vertrouwelijkheidaanduiding": "OPENBAAR"}]
+    fake_http(
+        {
+            "PUT /rest/informatieobjecten/informatieobjectenList": (200, listed),
+            "GET /rest/informatieobjecten/informatieobject/d1/download": (200, "%PDF"),
+        }
+    )
+    monkeypatch.setattr(zac_documents, "pdfa_problems", lambda content: [content.decode()])
+    kept = zac_documents.kept_mail(requests.Session(), ZAC, {"uuid": "z1"}, {"Subject": "Zaak 1"})
+    assert kept == ("definitief", "OPENBAAR", ['"%PDF"'])
+
+
 def test_convert_to_pdf_names_the_zaak(fake_http):
     url = "/rest/informatieobjecten/informatieobject/d1/convert"
     sent = fake_http({f"POST {url}": (204, None)})

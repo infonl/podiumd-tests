@@ -88,3 +88,9 @@ def test_link_mailtemplate_replaces_the_links_and_cleanup_restores_them(fake_htt
     assert json.loads(sent[-1].body)["mailtemplateKoppelingen"] == [{"mailtemplate": {"id": 3}}]
     registry.cleanup()
     assert json.loads(sent[-1].body) == before
+
+
+def test_mailtemplate_named_is_the_one_with_that_name(fake_http):
+    found = [{"id": 1, "mailTemplateNaam": "Algemene e-mail"}, {"id": 2, "mailTemplateNaam": "Ontvangstbevestiging"}]
+    fake_http({"GET /rest/beheer/mailtemplates": (200, found)})
+    assert zac_beheer.mailtemplate_named(requests.Session(), ZAC, "Ontvangstbevestiging") == found[1]

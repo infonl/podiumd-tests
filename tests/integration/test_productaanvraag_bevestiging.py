@@ -5,6 +5,8 @@ The productaanvraagtype and zaaktype are those of profile settings productaanvra
 
 from __future__ import annotations
 
+import re
+
 from typing import TYPE_CHECKING
 
 import pytest
@@ -22,7 +24,9 @@ from podiumd_tests.zac import mail_address
 from podiumd_tests.zac import productaanvraag_zaak
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import read_zaakafhandelparameters
-from podiumd_tests.zac_documents import zaak_documents
+from podiumd_tests.zac_beheer import mailtemplate_named
+from podiumd_tests.zac_documents import OPENBAAR_MAIL
+from podiumd_tests.zac_documents import kept_mail
 
 if TYPE_CHECKING:
     import requests
@@ -46,10 +50,12 @@ pytestmark = [
     "A form leads to a zaak in ZAC, which automatically sends a receipt confirmation with the zaaknummer.",
 )
 @pytest.mark.scenario("""
-    Given a form's submitter left an e-mail address in Open Klant
+    Given an anonymous form's submitter left an e-mail address in Open Klant
     When the form's productaanvraag makes ZAC start a zaak
     Then the submitter receives a mail with the zaaknummer, from and with reply-to the zaaktype's afzenders
-    And the zaak keeps the mail as a document and no longer has the indicatie that no bevestiging was sent
+    And its salutation names no one
+    And the zaak keeps the mail as a definitief, openbaar PDF/A
+    And the zaak no longer has the indicatie that no bevestiging was sent
 """)
 def test_zac_mails_the_initiator_an_ontvangstbevestiging(
     podiumd_env: Environment,
@@ -62,7 +68,10 @@ def test_zac_mails_the_initiator_an_ontvangstbevestiging(
     productaanvraagtype: str,
     productaanvraag_objecttype: str,
 ) -> None:
-    """ZAC mails the zaaknummer to the address the submitter left, per the ZAPs' automaticEmailConfirmation."""
+    """ZAC mails the zaaknummer to the address the submitter left, per the ZAPs' automaticEmailConfirmation.
+
+    The productaanvraag has no betrokkenen, as Open Formulieren sends it for a form without login.
+    """
     kenmerk = registry.tagged("bevestigd")
     adres = f"{kenmerk}@example.invalid"
     make_submission_contact(openklant, registry, kenmerk, adres)
@@ -79,7 +88,10 @@ def test_zac_mails_the_initiator_an_ontvangstbevestiging(
     # ZAC leaves out a reply-to that equals the afzender.
     antwoord = mail_address(podiumd_env, str(bevestiging["emailReply"]))
     assert reply_to == [adres for adres in (antwoord,) if adres != afzender]
-    titels = {str(document.get("titel")) for document in zaak_documents(zac, zac_url, zaak)}
-    assert message["Subject"] in titels
+    # ZAC leaves {ZAAK_INITIATOR} empty for a zaak without initiator.
+    template = mailtemplate_named(zac, zac_url, str(bevestiging["templateName"]))
+    aanhef = next(regel for regel in re.findall(r"<p>.*?</p>", str(template["body"])) if "{ZAAK_INITIATOR}" in regel)
+    assert aanhef.replace("{ZAAK_INITIATOR}", "") in str(message.get("HTML"))
+    assert kept_mail(zac, zac_url, zaak, message) == OPENBAAR_MAIL
     shown = read_zaak(zac, zac_url, str(zaak["uuid"]))
     assert BEVESTIGING_NIET_VERSTUURD not in strings(shown.get("indicaties"))

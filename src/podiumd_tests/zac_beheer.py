@@ -10,6 +10,7 @@ from typing import cast
 
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
+from podiumd_tests.responses import get_entries
 from podiumd_tests.zac import read_zaakafhandelparameters
 from podiumd_tests.zac import save_zaakafhandelparameters
 
@@ -137,6 +138,11 @@ def link_mailtemplate(
 
     registry.add(f"mailtemplates of zaaktype {zaaktype_uuid}", restore)
     save_zaakafhandelparameters(http, zac_url, {**parameters, KOPPELINGEN: [{"mailtemplate": template}]})
+
+
+def mailtemplate_named(http: requests.Session, zac_url: str, naam: str) -> JsonObject:
+    """Return ZAC's mailtemplate with this mailTemplateNaam."""
+    return next(found for found in get_entries(http, zac_url + MAILTEMPLATES) if found.get("mailTemplateNaam") == naam)
 
 
 def mailtemplate(http: requests.Session, zac_url: str, template: JsonObject) -> requests.Response:
