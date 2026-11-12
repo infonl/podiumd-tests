@@ -57,6 +57,8 @@ POLLER = "-nieuw-cv-notify"
 MAIL_TIMEOUT = 60
 # The voornaam make_betrokkene gives the klant.
 KLANTNAAM = "PodiumD"
+# The sentence every reminder asks the recipient to act with.
+INSTRUCTIE = "Neem contact op en handel deze contactverzoeken af."
 # The werkvoorraad a reminder links to: an afdeling's; a medewerker's is "/".
 AFDELING = "/afdelings-contacten"
 
@@ -102,9 +104,10 @@ def _medewerker_with_afdeling(
 def _assert_reminder(  # the mail and what it must and must not show
     mailpit: ApiClient, registry: ResourceRegistry, address: str, subject: str, link: str, hidden: list[str]
 ) -> None:
-    """The address gets the reminder with the subject, linking to the path, without any of hidden in its body."""
+    """The address gets the reminder with the subject and instruction, linking to the path, without any of hidden."""
     body = received(mailpit, registry, timeout=MAIL_TIMEOUT, to=address, subject=subject)
     assert re.search(rf'href="https?://[^"/]+{link}"', body), f"the reminder to {address} links not to {link}"
+    assert INSTRUCTIE in body, f"the reminder to {address} lacks the instruction"
     assert [text for text in hidden if text in body] == [], f"the reminder to {address} shows personal data"
 
 
@@ -126,7 +129,7 @@ def _assert_reminder(  # the mail and what it must and must not show
     And an overdue contactverzoek of a klant, assigned to a medewerker and a third afdeling
     When ITA's daily reminder runs
     Then the first afdeling gets one mail "2 contactverzoeken wachten op jou" with a link to its contacten
-    And the mail shows no onderwerp of a contactverzoek
+    And the mail asks to contact the klanten and handle the contactverzoeken, without the onderwerp of any
     And the second afdeling gets no mail
     And the medewerker and the third afdeling each get "1 contactverzoek wacht op jou", the medewerker's linking to their werkvoorraad
     And neither mail shows the klant's name
