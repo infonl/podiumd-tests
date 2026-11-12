@@ -92,7 +92,7 @@ def make_publishable_zaaktype(
     The types and a resultaattype "Afgehandeld" of the template's selectielijst; children are not registered: they go
     with the zaaktype, and the API refuses to delete those of a published one.
     """
-    resultaattype = openzaak.list(f"{CATALOGI}/resultaattypen", {"zaaktype": str(template["url"])})[0]
+    resultaattype = template_resultaattype(openzaak, template)
     zaaktype = make_concept_zaaktype(
         openzaak,
         registry,
@@ -119,14 +119,26 @@ def make_publishable_zaaktype(
     for naam in types.eigenschappen:
         eigenschap: dict[str, object] = {"zaaktype": url, "naam": naam, "definitie": naam, "specificatie": specificatie}
         openzaak.post(f"{CATALOGI}/eigenschappen", eigenschap)
-    copied = ("resultaattypeomschrijving", "selectielijstklasse", "archiefnominatie", "archiefactietermijn")
-    body = {key: resultaattype[key] for key in copied}
-    procedure = {"afleidingswijze": "afgehandeld", "procestermijn": None}
-    openzaak.post(
-        f"{CATALOGI}/resultaattypen",
-        {**body, "zaaktype": url, "omschrijving": "Afgehandeld", "brondatumArchiefprocedure": procedure},
-    )
+    archief = {key: resultaattype[key] for key in ("archiefnominatie", "archiefactietermijn")}
+    openzaak.post(f"{CATALOGI}/resultaattypen", resultaattype_body(str(url), resultaattype, **archief))
     return openzaak.get(str(url))
+
+
+def template_resultaattype(openzaak: ApiClient, template: JsonObject) -> JsonObject:
+    """Return the first resultaattype of a published zaaktype, whose Selectielijst URLs are valid."""
+    return openzaak.list(f"{CATALOGI}/resultaattypen", {"zaaktype": str(template["url"])})[0]
+
+
+def resultaattype_body(zaaktype: str, selectielijst: JsonObject, **fields: object) -> dict[str, object]:
+    """Build a resultaattype "Afgehandeld" with the selectielijstklasse and resultaattypeomschrijving of another."""
+    return {
+        "zaaktype": zaaktype,
+        "omschrijving": "Afgehandeld",
+        "resultaattypeomschrijving": selectielijst["resultaattypeomschrijving"],
+        "selectielijstklasse": selectielijst["selectielijstklasse"],
+        "brondatumArchiefprocedure": {"afleidingswijze": "afgehandeld", "procestermijn": None},
+        **fields,
+    }
 
 
 def make_concept_iot(env: Environment, openzaak: ApiClient, registry: ResourceRegistry, catalogus: str) -> JsonObject:

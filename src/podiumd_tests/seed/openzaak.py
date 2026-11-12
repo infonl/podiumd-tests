@@ -307,11 +307,9 @@ def delete_besluit(openzaak: ApiClient, url: str) -> None:
     openzaak.delete(url)
 
 
-def make_concept_zaaktype(
-    openzaak: ApiClient, registry: ResourceRegistry, catalogus: str, **fields: object
-) -> JsonObject:
-    """Create a concept zaaktype in a catalogus; concepts can be deleted, published zaaktypen cannot."""
-    body: dict[str, object] = {
+def zaaktype_body(registry: ResourceRegistry, catalogus: str, **fields: object) -> dict[str, object]:
+    """Build a zaaktype of a catalogus whose identificatie carries the run tag; fields override defaults."""
+    return {
         "identificatie": registry.tagged(f"zaaktype-{secrets.token_hex(3)}"),
         "omschrijving": "podiumd-tests concept",
         "vertrouwelijkheidaanduiding": "openbaar",
@@ -336,4 +334,10 @@ def make_concept_zaaktype(
         "gerelateerdeZaaktypen": [],
         **fields,
     }
-    return _create(openzaak, registry, f"{CATALOGI}/zaaktypen", body)
+
+
+def make_concept_zaaktype(
+    openzaak: ApiClient, registry: ResourceRegistry, catalogus: str, **fields: object
+) -> JsonObject:
+    """Create a concept zaaktype in a catalogus; concepts can be deleted, published zaaktypen cannot."""
+    return _create(openzaak, registry, f"{CATALOGI}/zaaktypen", zaaktype_body(registry, catalogus, **fields))
