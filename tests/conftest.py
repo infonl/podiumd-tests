@@ -10,11 +10,19 @@ import pytest
 from podiumd_tests.browser import context_args
 from podiumd_tests.browser import guard_navigation
 from podiumd_tests.browser import launch_args
+from podiumd_tests.mailpit import own_address
+from podiumd_tests.zac import afzenders
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    import requests
+
     from playwright.sync_api import Page
 
     from podiumd_tests.environment import Environment
+    from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.registry import ResourceRegistry
 
 pytest_plugins = ["podiumd_tests.pytest_plugin", "podiumd_tests.ita"]
 
@@ -39,3 +47,23 @@ def browser_context_args(browser_context_args: dict[str, object], podiumd_env: E
 def page(page: Page) -> Page:
     """pytest-playwright's page; a host network change does not abort its goto or reload."""
     return guard_navigation(page)
+
+
+@pytest.fixture(name="zac_mail")
+def fixture_zac_mail(
+    zac: requests.Session, urls: dict[str, str], registry: ResourceRegistry
+) -> Callable[..., JsonObject]:
+    """Return a mail from the zaak to a run-tagged address, from ZAC's first afzender; fields override."""
+
+    def build(zaak: JsonObject, **fields: object) -> JsonObject:
+        return {
+            "verzender": afzenders(zac, urls["zac"], zaak)[0]["mail"],
+            "ontvanger": own_address(registry),
+            "onderwerp": "Zaak {ZAAK_NUMMER}",
+            "body": "<p>Over zaak {ZAAK_NUMMER}: {ZAAK_OMSCHRIJVING}</p>",
+            "createDocumentFromMail": False,
+            "vertrouwelijkheidaanduiding": "OPENBAAR",
+            **fields,
+        }
+
+    return build

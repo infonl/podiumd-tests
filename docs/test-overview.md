@@ -74,7 +74,7 @@ Unit tests (`unit_tests/`, functions): 784. Perf endpoints (`perf/runs.py`): 22.
 | integration | omc | 5 | 5 |
 | integration | portaal_openklant | 7 | 7 |
 | integration | portaal_samenwerken | 2 | 1 |
-| integration | portaal_zaken | 14 | 10 |
+| integration | portaal_zaken | 15 | 11 |
 | integration | productaanvraag | 8 | 8 |
 | integration | productaanvraag_bevestiging | 2 | 2 |
 | integration | productaanvraag_inbox | 3 | 3 |

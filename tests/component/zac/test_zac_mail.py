@@ -14,7 +14,6 @@ import pytest
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
-from podiumd_tests.mailpit import own_address
 from podiumd_tests.mailpit import received_message
 from podiumd_tests.pdf import pdfa_problems
 from podiumd_tests.responses import REFUSED
@@ -23,7 +22,6 @@ from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.zac import BEVESTIGING_NIET_VERSTUURD
 from podiumd_tests.zac import afhandelen
 from podiumd_tests.zac import afronden_intake
-from podiumd_tests.zac import afzenders
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_mail
 from podiumd_tests.zac import user_event
@@ -57,24 +55,6 @@ MAIL_TIMEOUT = 60
 REPLY_TO = "antwoord@example.invalid"
 
 
-@pytest.fixture(name="mail")
-def fixture_mail(zac: requests.Session, urls: dict[str, str], registry: ResourceRegistry) -> Callable[..., JsonObject]:
-    """Return a mail from the zaak to a run-tagged address, from ZAC's first afzender; fields override."""
-
-    def build(zaak: JsonObject, **fields: object) -> JsonObject:
-        return {
-            "verzender": afzenders(zac, urls["zac"], zaak)[0]["mail"],
-            "ontvanger": own_address(registry),
-            "onderwerp": "Zaak {ZAAK_NUMMER}",
-            "body": "<p>Over zaak {ZAAK_NUMMER}: {ZAAK_OMSCHRIJVING}</p>",
-            "createDocumentFromMail": False,
-            "vertrouwelijkheidaanduiding": "OPENBAAR",
-            **fields,
-        }
-
-    return build
-
-
 def _titles(zac: requests.Session, zac_url: str, zaak: JsonObject) -> dict[str, object]:
     """The zaak's documents in ZAC: titel -> vertrouwelijkheidaanduiding."""
     return {
@@ -106,14 +86,14 @@ def test_email_with_an_attachment_arrives_and_is_kept_on_the_zaak(
     zac: requests.Session,
     urls: dict[str, str],
     zac_zaak: Callable[..., JsonObject],
-    mail: Callable[..., JsonObject],
+    zac_mail: Callable[..., JsonObject],
     mailpit: ApiClient,
     registry: ResourceRegistry,
 ) -> None:
     """E-mail versturen with bijlagen, replyTo and createDocumentFromMail; variables resolved; PDF/A stored."""
     zaak = zac_zaak()
     document = uploaded_document(zac, urls["zac"], zaak, registry)
-    body = mail(
+    body = zac_mail(
         zaak,
         replyTo=REPLY_TO,
         bijlagen=document["uuid"],
@@ -140,14 +120,14 @@ def test_email_without_keeping_it_adds_no_document(
     zac: requests.Session,
     urls: dict[str, str],
     zac_zaak: Callable[..., JsonObject],
-    mail: Callable[..., JsonObject],
+    zac_mail: Callable[..., JsonObject],
     mailpit: ApiClient,
     registry: ResourceRegistry,
 ) -> None:
     """E-mail versturen without createDocumentFromMail leaves the zaak's documents as they were."""
     zaak = zac_zaak()
     before = _titles(zac, urls["zac"], zaak)
-    body = mail(zaak)
+    body = zac_mail(zaak)
     expect_status(send_mail(zac, urls["zac"], zaak, body), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=str(body["ontvanger"]))
     assert _titles(zac, urls["zac"], zaak) == before
@@ -164,7 +144,7 @@ def test_ontvangstbevestiging_is_sent_once_and_clears_the_indicatie(
     zac: requests.Session,
     urls: dict[str, str],
     zac_zaak: Callable[..., JsonObject],
-    mail: Callable[..., JsonObject],
+    zac_mail: Callable[..., JsonObject],
     mailpit: ApiClient,
     registry: ResourceRegistry,
 ) -> None:
@@ -175,7 +155,7 @@ def test_ontvangstbevestiging_is_sent_once_and_clears_the_indicatie(
     zaak = zac_zaak()
     assert BEVESTIGING_NIET_VERSTUURD in strings(read_zaak(zac, urls["zac"], str(zaak["uuid"])).get("indicaties"))
     document = uploaded_document(zac, urls["zac"], zaak, registry)
-    body = mail(
+    body = zac_mail(
         zaak, onderwerp="Ontvangstbevestiging {ZAAK_NUMMER}", bijlagen=document["uuid"], createDocumentFromMail=True
     )
     expect_status(send_mail(zac, urls["zac"], zaak, body, acknowledge=True), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
@@ -200,7 +180,7 @@ def test_afhandelmail_arrives_and_is_kept_on_the_zaak(
     zac: requests.Session,
     urls: dict[str, str],
     zac_zaak: Callable[..., JsonObject],
-    mail: Callable[..., JsonObject],
+    zac_mail: Callable[..., JsonObject],
     mailpit: ApiClient,
     registry: ResourceRegistry,
 ) -> None:
@@ -210,7 +190,7 @@ def test_afhandelmail_arrives_and_is_kept_on_the_zaak(
     if template is None:
         pytest.skip("ZAC has no mailtemplate ZAAK_AFGEHANDELD: add one in ZAC's beheer of mailtemplates")
     afronden_intake(zac, urls["zac"], zaak)
-    body = mail(zaak, onderwerp=template["onderwerp"], body=template["body"], createDocumentFromMail=True)
+    body = zac_mail(zaak, onderwerp=template["onderwerp"], body=template["body"], createDocumentFromMail=True)
     expect_status(afhandelen(zac, urls["zac"], zaak, restMailGegevens=body), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     assert read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpen"] is False
     message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=str(body["ontvanger"]))
@@ -222,7 +202,7 @@ def _intake_mail(  # the zaak, its mail and Mailpit
     zac: requests.Session,
     zac_url: str,
     zaak: JsonObject,
-    mail: Callable[..., JsonObject],
+    zac_mail: Callable[..., JsonObject],
     mailpit: ApiClient,
     registry: ResourceRegistry,
     mailtemplate: str,
@@ -233,7 +213,7 @@ def _intake_mail(  # the zaak, its mail and Mailpit
     template = zaak_mailtemplate(zac, zac_url, zaak, mailtemplate)
     if template is None:
         pytest.skip(f"ZAC has no mailtemplate {mailtemplate}: add one in ZAC's beheer of mailtemplates")
-    body = mail(zaak, onderwerp=template["onderwerp"], body=template["body"], createDocumentFromMail=True)
+    body = zac_mail(zaak, onderwerp=template["onderwerp"], body=template["body"], createDocumentFromMail=True)
     fields = {"zaakOntvankelijk": ontvankelijk, "resultaatToelichting": "podiumd-tests", "restMailGegevens": body}
     response = user_event(zac, zac_url, str(zaak["uuid"]), "INTAKE_AFRONDEN", **fields)
     expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
@@ -256,7 +236,7 @@ def test_intake_mail_arrives_and_is_kept_as_a_definitief_pdf(  # the zaak, its m
     zac: requests.Session,
     urls: dict[str, str],
     zac_zaak: Callable[..., JsonObject],
-    mail: Callable[..., JsonObject],
+    zac_mail: Callable[..., JsonObject],
     mailpit: ApiClient,
     registry: ResourceRegistry,
     ontvankelijk: bool,  # noqa: FBT001  # a parameter of the test
@@ -264,7 +244,7 @@ def test_intake_mail_arrives_and_is_kept_as_a_definitief_pdf(  # the zaak, its m
 ) -> None:
     """INTAKE_AFRONDEN with restMailGegevens of the mailtemplate, as ZAC's intake afronden dialog sends it."""
     zaak = zac_zaak()
-    message = _intake_mail(zac, urls["zac"], zaak, mail, mailpit, registry, mailtemplate, ontvankelijk=ontvankelijk)
+    message = _intake_mail(zac, urls["zac"], zaak, zac_mail, mailpit, registry, mailtemplate, ontvankelijk=ontvankelijk)
     stored = _stored_mail(zac, urls["zac"], zaak, message)
     assert (stored["status"], stored["vertrouwelijkheidaanduiding"]) == ("definitief", "OPENBAAR")
     assert read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpen"] is ontvankelijk
@@ -285,13 +265,13 @@ def test_ontvankelijk_mail_fills_in_its_variables(
     zac: requests.Session,
     urls: dict[str, str],
     zac_zaak: Callable[..., JsonObject],
-    mail: Callable[..., JsonObject],
+    zac_mail: Callable[..., JsonObject],
     mailpit: ApiClient,
     registry: ResourceRegistry,
 ) -> None:
     """The ontvankelijk mail's subject and body contain no {variable}."""
     zaak = zac_zaak()
-    message = _intake_mail(zac, urls["zac"], zaak, mail, mailpit, registry, "ZAAK_ONTVANKELIJK", ontvankelijk=True)
+    message = _intake_mail(zac, urls["zac"], zaak, zac_mail, mailpit, registry, "ZAAK_ONTVANKELIJK", ontvankelijk=True)
     assert "{" not in f"{message.get('Subject')}{message.get('HTML')}"
 
 
@@ -301,11 +281,14 @@ def test_ontvankelijk_mail_fills_in_its_variables(
     Then ZAC refuses it
 """)
 def test_email_needs_a_vertrouwelijkheidaanduiding(
-    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], mail: Callable[..., JsonObject]
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    zac_mail: Callable[..., JsonObject],
 ) -> None:
     """E-mail versturen without vertrouwelijkheidaanduiding answers 400."""
     zaak = zac_zaak()
-    body = mail(zaak, vertrouwelijkheidaanduiding=None)
+    body = zac_mail(zaak, vertrouwelijkheidaanduiding=None)
     expect_status(send_mail(zac, urls["zac"], zaak, body), HTTPStatus.BAD_REQUEST)
 
 
@@ -320,7 +303,7 @@ def test_mail_fills_in_the_zaak_variables(
     zac: requests.Session,
     urls: dict[str, str],
     zac_zaak: Callable[..., JsonObject],
-    mail: Callable[..., JsonObject],
+    zac_mail: Callable[..., JsonObject],
     openzaak: ApiClient,
     mailpit: ApiClient,
     registry: ResourceRegistry,
@@ -330,7 +313,7 @@ def test_mail_fills_in_the_zaak_variables(
     variables = (
         "{ZAAKTYPE_OMSCHRIJVING}|{ZAAK_REGISTRATIEDATUM}|{ZAAKTYPE_OMSCHRIJVING_GENERIEK}|{ZAAKDATA:zaaktypeUUID}"
     )
-    body = mail(zaak, body=f"<p>Beste {{ZAAK_INITIATOR}},</p><p>{variables}</p>")
+    body = zac_mail(zaak, body=f"<p>Beste {{ZAAK_INITIATOR}},</p><p>{variables}</p>")
     expect_status(send_mail(zac, urls["zac"], zaak, body), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=str(body["ontvanger"]))
     zaaktype = section(zaak, "zaaktype")
@@ -360,7 +343,7 @@ def test_zaakafhandelparameters_choose_the_mailtemplate(
     zac_eigen_zaaktype: JsonObject,
     zac_eigen_zaak: Callable[[], JsonObject],
     zac_zaak: Callable[..., JsonObject],
-    mail: Callable[..., JsonObject],
+    zac_mail: Callable[..., JsonObject],
     mailpit: ApiClient,
     registry: ResourceRegistry,
 ) -> None:
@@ -374,7 +357,7 @@ def test_zaakafhandelparameters_choose_the_mailtemplate(
     elsewhere = zaak_mailtemplate(zac, zac_url, zac_zaak(), "ZAAK_ALGEMEEN")
     assert (elsewhere or {}).get("id") != template["id"]
 
-    body = mail(zaak, onderwerp=template["onderwerp"], body=template["body"])
+    body = zac_mail(zaak, onderwerp=template["onderwerp"], body=template["body"])
     expect_status(send_mail(zac, zac_url, zaak, body), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=str(body["ontvanger"]))
     assert message.get("Subject") == f"podiumd-tests {zaak['identificatie']}"

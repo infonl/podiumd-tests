@@ -7,6 +7,7 @@ upload and questions need the zaaktype configuration (bootstrap openinwoner-zaak
 
 from __future__ import annotations
 
+import functools
 import re
 
 from http import HTTPStatus
@@ -17,9 +18,12 @@ import pytest
 from playwright.sync_api import expect
 
 from podiumd_tests.basisregistraties import EREBOS
+from podiumd_tests.bootstrap.bpmn import complete_intake
+from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.browser import browser_session
 from podiumd_tests.json_data import section
+from podiumd_tests.mailpit import received_message
 from podiumd_tests.openinwoner import LOGINS
 from podiumd_tests.openinwoner import choose_document
 from podiumd_tests.openinwoner import is_virus_scan_enabled
@@ -36,7 +40,10 @@ from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import send_mail
 from podiumd_tests.zac import send_with_person
+from podiumd_tests.zac_betrokkenen import wijzig_initiator
+from podiumd_tests.zac_documents import zaak_documents
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -61,6 +68,7 @@ INWONER, _, BEDRIJF = IDENTITIES
 # The EICAR anti-virus test file: every virus scanner reports it, it is no malware.
 EICAR = rb"X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
 LIST_TIMEOUT_MS = 30_000
+MAIL_TIMEOUT = 60
 WIRING = ("openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-zgw-group")
 
 
@@ -487,11 +495,63 @@ def test_zaak_started_in_zac_shows_in_mijn_zaken(
         )
     need_bootstrap(INWONER.name, *WIRING)
     zaak = zac_zaak()
-
-    def make_initiator(identificatie: JsonObject) -> requests.Response:
-        body = {"zaakUUID": zaak["uuid"], "betrokkeneIdentificatie": identificatie}
-        return zac.patch(f"{urls['zac']}/rest/zaken/initiator", json=body)
-
-    expect_status(send_with_person(zac, urls["zac"], EREBOS, make_initiator), HTTPStatus.OK)
+    _make_initiator(zac, urls["zac"], zaak)
     log_in(page, podiumd_env)
     expect_listed(page, zaak)
+
+
+def _make_initiator(zac: requests.Session, zac_url: str, zaak: JsonObject) -> None:
+    """Make the inwoner the initiator of the zaak in ZAC."""
+    initiator = functools.partial(wijzig_initiator, zac, zac_url, zaak, toelichting=None)
+    expect_status(send_with_person(zac, zac_url, EREBOS, initiator), HTTPStatus.OK)
+
+
+@pytest.mark.requires("zac", "pabc", "mailpit")
+@pytest.mark.source(
+    "podiumd-tests",
+    "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, documenten-mail):"
+    " the stored mail PDF of E-mail versturen has the chosen vertrouwelijkheidaanduiding, openbaar ones show in"
+    " the portal.",
+)
+@pytest.mark.scenario("""
+    Given a zaak in ZAC of an extern zaaktype with the inwoner as initiator
+    When the behandelaar sends two mails from the zaak and keeps them, one openbaar and one vertrouwelijk
+    And the inwoner opens the zaak in Mijn zaken
+    Then the zaak shows the openbaar mail
+    And not the vertrouwelijk mail
+""")
+def test_only_openbaar_zac_mail_shows_in_the_portal(  # the zaak, its mails and the portal
+    page: Page,
+    podiumd_env: Environment,
+    zac: requests.Session,
+    urls: dict[str, str],
+    bpmn_zaak: JsonObject,
+    zac_group: str,
+    zac_mail: Callable[..., JsonObject],
+    mailpit: ApiClient,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """Open Inwoner shows a zaak's documents up to its document_max_confidentiality, openbaar by default.
+
+    The intake gives the BPMN zaak the status that Open Inwoner needs to list it.
+    """
+    need_bootstrap(INWONER.name, *WIRING)
+    complete_intake(zac, urls["zac"], bpmn_zaak, (zac_group, ADMIN.username))
+    _make_initiator(zac, urls["zac"], bpmn_zaak)
+    subjects = {}
+    for vertrouwelijkheid in ("OPENBAAR", "VERTROUWELIJK"):
+        body = zac_mail(
+            bpmn_zaak,
+            onderwerp=f"{vertrouwelijkheid} {{ZAAK_NUMMER}}",
+            createDocumentFromMail=True,
+            vertrouwelijkheidaanduiding=vertrouwelijkheid,
+        )
+        expect_status(send_mail(zac, urls["zac"], bpmn_zaak, body), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+        message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=str(body["ontvanger"]))
+        subjects[vertrouwelijkheid] = str(message.get("Subject"))
+    kept = {document.get("titel") for document in zaak_documents(zac, urls["zac"], bpmn_zaak)}
+    assert set(subjects.values()) <= kept, kept
+    open_zaak_status(page, podiumd_env, bpmn_zaak)
+    expect(page.get_by_text(subjects["OPENBAAR"]).first).to_be_visible(timeout=LIST_TIMEOUT_MS)
+    expect(page.get_by_text(subjects["VERTROUWELIJK"])).to_have_count(0)
