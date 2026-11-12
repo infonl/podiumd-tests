@@ -49,8 +49,8 @@ from podiumd_tests.workloads import scaled
 from podiumd_tests.zac import PRODUCTAANVRAAG_TIMEOUT
 from podiumd_tests.zac import productaanvraag_zaak
 from podiumd_tests.zac import read_zaak
-from podiumd_tests.zac import send_with_person
 from podiumd_tests.zac import zaak_body
+from podiumd_tests.zac_betrokkenen import make_person_initiator
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -356,11 +356,7 @@ def test_without_open_klant_a_zaak_with_a_person_cannot_be_opened(
     zaak = zac_zaak()
     zac_url = podiumd_env.profile.urls["zac"]
 
-    def make_initiator(identificatie: JsonObject) -> requests.Response:
-        body = {"zaakUUID": zaak["uuid"], "betrokkeneIdentificatie": identificatie}
-        return zac.patch(f"{zac_url}/rest/zaken/initiator", json=body)
-
-    expect_status(send_with_person(zac, zac_url, EREBOS, make_initiator), HTTPStatus.OK)
+    make_person_initiator(zac, zac_url, zaak, EREBOS)
     with component_down(podiumd_env, http, "openklant"):
         opened = zac.get(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}", timeout=DOWN_COMPONENT_TIMEOUT)
         assert opened.status_code in {HTTPStatus.INTERNAL_SERVER_ERROR, HTTPStatus.GATEWAY_TIMEOUT}, describe(opened)

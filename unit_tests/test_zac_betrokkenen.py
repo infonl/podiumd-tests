@@ -44,3 +44,17 @@ def test_initiator_is_changed_with_an_optional_toelichting_and_ontkoppeld_with_a
     assert json.loads(sent[-1].body)["toelichting"] == "anders"
     zac_betrokkenen.ontkoppel_initiator(http, ZAC, ZAAK, "weg")
     assert json.loads(sent[-1].body) == {"reden": "weg"}
+
+
+def test_person_initiator_is_set_by_the_persons_temporary_id(fake_http):
+    sent = fake_http(
+        {
+            "PUT /rest/klanten/personen": (200, {"resultaten": [{"temporaryPersonId": "p1"}]}),
+            "PATCH /rest/zaken/initiator": (200, {}),
+        }
+    )
+    zac_betrokkenen.make_person_initiator(requests.Session(), ZAC, ZAAK, "999990019")
+    assert json.loads(sent[-1].body) == {
+        "zaakUUID": "z1",
+        "betrokkeneIdentificatie": {"type": "BSN", "temporaryPersonId": "p1"},
+    }

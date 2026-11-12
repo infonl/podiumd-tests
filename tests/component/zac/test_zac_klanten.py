@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import secrets
 
-from functools import partial
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -42,6 +41,7 @@ from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac_betrokkenen import add_betrokkene
 from podiumd_tests.zac_betrokkenen import betrokkene_roltype
 from podiumd_tests.zac_betrokkenen import betrokkenen
+from podiumd_tests.zac_betrokkenen import make_person_initiator
 from podiumd_tests.zac_betrokkenen import ontkoppel_betrokkene
 from podiumd_tests.zac_betrokkenen import ontkoppel_initiator
 from podiumd_tests.zac_betrokkenen import wijzig_initiator
@@ -319,8 +319,7 @@ def test_ontkoppelen_of_the_initiator_needs_a_reden(
     """DELETE /rest/zaken/{uuid}/initiator without reden answers 400 and keeps the rol."""
     zaak = zac_zaak()
     zac_url = urls["zac"]
-    initiator = partial(wijzig_initiator, zac, zac_url, zaak, toelichting=None)
-    expect_status(send_with_person(zac, zac_url, EREBOS, initiator), HTTPStatus.OK)
+    make_person_initiator(zac, zac_url, zaak, EREBOS)
     response = ontkoppel_initiator(zac, zac_url, zaak, None)
     shown = read_zaak(zac, zac_url, str(zaak["uuid"]))
     assert section(shown, "initiatorIdentificatie").get("bsn") == EREBOS, f"ZAC answered {response.status_code}"
@@ -385,8 +384,7 @@ def test_person_and_bedrijf_list_their_zaken_with_the_betrokkenheid(
     """ZAC's search on zaak_betrokkenen (P-bsn, V-kvk-vestiging) finds the zaak; zaak_betrokkene_<roltype> narrows it."""
     zaak = zac_zaak()
     zac_url = urls["zac"]
-    initiator = partial(wijzig_initiator, zac, zac_url, zaak, toelichting=None)
-    expect_status(send_with_person(zac, zac_url, EREBOS, initiator), HTTPStatus.OK)
+    make_person_initiator(zac, zac_url, zaak, EREBOS)
     roltype = betrokkene_roltype(zac, zac_url, zaak, "belanghebbende")
     expect_status(add_betrokkene(zac, zac_url, zaak, roltype, BEDRIJF), HTTPStatus.OK)
     person, bedrijf = f"P-{EREBOS}", f"V-{KVK_TEST_NUMMER}-{KVK_TEST_VESTIGING}"

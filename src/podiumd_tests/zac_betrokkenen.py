@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 from podiumd_tests.json_data import section
+from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
+from podiumd_tests.zac import send_with_person
 
 if TYPE_CHECKING:
     import requests
@@ -61,6 +64,16 @@ def wijzig_initiator(
     if toelichting is not None:
         body["toelichting"] = toelichting
     return http.patch(f"{zac_url}/rest/zaken/initiator", json=body)
+
+
+def make_person_initiator(
+    http: requests.Session, zac_url: str, zaak: JsonObject, bsn: str, toelichting: str | None = None
+) -> None:
+    """Make the person with this BSN the zaak's initiator; replacing one needs a toelichting."""
+    expect_status(
+        send_with_person(http, zac_url, bsn, lambda person: wijzig_initiator(http, zac_url, zaak, person, toelichting)),
+        HTTPStatus.OK,
+    )
 
 
 def ontkoppel_initiator(http: requests.Session, zac_url: str, zaak: JsonObject, reden: str | None) -> requests.Response:

@@ -7,7 +7,6 @@ upload and questions need the zaaktype configuration (bootstrap openinwoner-zaak
 
 from __future__ import annotations
 
-import functools
 import re
 
 from http import HTTPStatus
@@ -41,8 +40,7 @@ from podiumd_tests.seed.openzaak import make_status
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import send_mail
-from podiumd_tests.zac import send_with_person
-from podiumd_tests.zac_betrokkenen import wijzig_initiator
+from podiumd_tests.zac_betrokkenen import make_person_initiator
 from podiumd_tests.zac_documents import zaak_documents
 
 if TYPE_CHECKING:
@@ -495,15 +493,9 @@ def test_zaak_started_in_zac_shows_in_mijn_zaken(
         )
     need_bootstrap(INWONER.name, *WIRING)
     zaak = zac_zaak()
-    _make_initiator(zac, urls["zac"], zaak)
+    make_person_initiator(zac, urls["zac"], zaak, EREBOS)
     log_in(page, podiumd_env)
     expect_listed(page, zaak)
-
-
-def _make_initiator(zac: requests.Session, zac_url: str, zaak: JsonObject) -> None:
-    """Make the inwoner the initiator of the zaak in ZAC."""
-    initiator = functools.partial(wijzig_initiator, zac, zac_url, zaak, toelichting=None)
-    expect_status(send_with_person(zac, zac_url, EREBOS, initiator), HTTPStatus.OK)
 
 
 @pytest.mark.requires("zac", "pabc", "mailpit")
@@ -538,7 +530,7 @@ def test_only_openbaar_zac_mail_shows_in_the_portal(  # the zaak, its mails and 
     """
     need_bootstrap(INWONER.name, *WIRING)
     complete_intake(zac, urls["zac"], bpmn_zaak, (zac_group, ADMIN.username))
-    _make_initiator(zac, urls["zac"], bpmn_zaak)
+    make_person_initiator(zac, urls["zac"], bpmn_zaak, EREBOS)
     subjects = {}
     for vertrouwelijkheid in ("OPENBAAR", "VERTROUWELIJK"):
         body = zac_mail(

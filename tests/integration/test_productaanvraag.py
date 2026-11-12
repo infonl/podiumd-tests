@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 
-from functools import partial
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -46,10 +45,9 @@ from podiumd_tests.zac import end_process_at_cleanup
 from podiumd_tests.zac import productaanvraag_zaak
 from podiumd_tests.zac import productaanvraag_zaken
 from podiumd_tests.zac import read_zaak
-from podiumd_tests.zac import send_with_person
 from podiumd_tests.zac import wait_in_werkvoorraad
 from podiumd_tests.zac import zaak_historie
-from podiumd_tests.zac_betrokkenen import wijzig_initiator
+from podiumd_tests.zac_betrokkenen import make_person_initiator
 from podiumd_tests.zac_documents import inbox_documenten
 from podiumd_tests.zac_taken import open_task
 
@@ -420,8 +418,7 @@ def test_zaakspecifiek_e_mail_address_stays_when_the_initiator_changes(
     zaak_with_contactgegevens(zac, urls["zac"], uuid)
     # ZAC needs a toelichting to replace an initiator.
     for bsn, toelichting in ((EREBOS, None), (KIERKEGAARD, "podiumd-tests andere initiator")):
-        initiator = partial(wijzig_initiator, zac, urls["zac"], zaak, toelichting=toelichting)
-        expect_status(send_with_person(zac, urls["zac"], bsn, initiator), HTTPStatus.OK)
+        make_person_initiator(zac, urls["zac"], zaak, bsn, toelichting)
         shown = read_zaak(zac, urls["zac"], uuid)
         assert section(shown, "initiatorIdentificatie").get("bsn") == bsn
         assert section(shown, "zaakSpecificContactDetails").get("emailAddress") == adres
