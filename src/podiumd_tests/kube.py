@@ -8,6 +8,7 @@ failing call can be pasted into a terminal and rerun.
 from __future__ import annotations
 
 import base64
+import fcntl
 import json
 import queue
 import re
@@ -15,6 +16,7 @@ import threading
 import time
 
 from contextlib import contextmanager
+from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import cast
 from urllib.parse import urlsplit
@@ -296,15 +298,22 @@ def metadata_namespace(item: Mapping[str, object]) -> str:
     return str(section(item, "metadata").get("namespace", ""))
 
 
+# Serialises refresh_context across processes: two overlapping refreshes would restore each other's switch.
+REFRESH_LOCK = Path.home() / ".kube" / "podiumd-tests-refresh.lock"
+
+
 def refresh_context(command: Sequence[str], runner: Runner = run_process) -> None:
     """Run a command that rewrites a context in the kubeconfig; the current context stays."""
-    try:
-        current = run_checked(runner, ["kubectl", "config", "current-context"], DEFAULT_TIMEOUT, KubeError).strip()
-    except KubeError:  # a kubeconfig without current context
-        current = ""
-    run_checked(runner, list(command), 120, KubeError)
-    if current:
-        run_checked(runner, ["kubectl", "config", "use-context", current], DEFAULT_TIMEOUT, KubeError)
+    REFRESH_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with REFRESH_LOCK.open("w", encoding="utf-8") as guard:
+        fcntl.flock(guard, fcntl.LOCK_EX)
+        try:
+            current = run_checked(runner, ["kubectl", "config", "current-context"], DEFAULT_TIMEOUT, KubeError).strip()
+        except KubeError:  # a kubeconfig without current context
+            current = ""
+        run_checked(runner, list(command), 120, KubeError)
+        if current:
+            run_checked(runner, ["kubectl", "config", "use-context", current], DEFAULT_TIMEOUT, KubeError)
 
 
 def context_names(runner: Runner = run_process) -> list[str]:

@@ -253,3 +253,11 @@ def test_deploy_applies_restarts_and_waits_and_delete_all_goes_last_first(fake_r
     fake_runner.calls.clear()
     kube.delete_all(manifests)
     assert [call[-2] for call in fake_runner.calls] == ["d", "c"]
+
+
+def test_refresh_context_restores_the_current_context_under_its_lock(fake_runner, tmp_path, monkeypatch):
+    monkeypatch.setattr(kube_module, "REFRESH_LOCK", tmp_path / "refresh.lock")
+    fake_runner.answers = {"current-context": (0, "minikube\n"), "": (0, "")}
+    kube_module.refresh_context(["az", "aks", "get-credentials"], fake_runner)
+    assert fake_runner.calls[1:] == [["az", "aks", "get-credentials"], ["kubectl", "config", "use-context", "minikube"]]
+    assert (tmp_path / "refresh.lock").exists()
