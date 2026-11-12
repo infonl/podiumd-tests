@@ -52,9 +52,14 @@ def test_dashboard_list_gives_the_zaken_as_zac_shows_them(fake_http):
 
 
 def test_signalering_mail_searches_the_users_address_and_the_text(fake_http):
-    sent = fake_http({"GET /api/v1/search": (200, {"messages": [{"ID": "a"}]})})
+    sent = fake_http(
+        {
+            "GET /api/v1/search": (200, {"messages": [{"ID": "a"}]}),
+            "GET /api/v1/message/a": (200, {"ID": "a", "HTML": "h"}),
+        }
+    )
     mailpit = ApiClient(requests.Session(), "https://mailpit.example.test/api/v1", {})
     mail = zac_signaleringen.signalering_mail(mailpit, ResourceRegistry("run"), "user", "ZAAK-1", timeout=0)
-    assert mail == {"ID": "a"}
+    assert mail == {"ID": "a", "HTML": "h"}
     assert "user%40example.invalid" in sent[0].url
     assert "ZAAK-1" in sent[0].url

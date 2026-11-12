@@ -63,11 +63,12 @@ def fixture_signaleren(podiumd_env: Environment, registry: ResourceRegistry) -> 
     return lambda: run_cronjob(podiumd_env.kube, cronjob, registry.tagged(f"signaleren-{secrets.token_hex(3)}"))
 
 
+@pytest.mark.parametrize("days", [-1, 0], ids=["overdue", "due-today"])
 @pytest.mark.scenario("""
     Given the test admin wants a mail for their taken that are overdue
-    And the intake taak of a zaak is on the admin's name with a fatale datum of yesterday
+    And the intake taak of a zaak is on the admin's name with a fatale datum of yesterday or today
     When ZAC's signaleringen job runs
-    Then the admin gets a mail naming the zaaknummer
+    Then the admin gets a mail naming the zaaknummer and the zaak's omschrijving
 """)
 def test_overdue_taak_gives_a_mail(
     zac: requests.Session,
@@ -78,13 +79,15 @@ def test_overdue_taak_gives_a_mail(
     signaleren: Callable[[], None],
     mailpit: ApiClient,
     registry: ResourceRegistry,
+    days: int,
 ) -> None:
-    """TAAK_VERLOPEN mails the assignee of an open taak due before tomorrow."""
+    """TAAK_VERLOPEN mails the assignee of an open taak due before tomorrow, with ZAAK_OMSCHRIJVING filled in."""
     signaleringen(mail=True, TAAK_VERLOPEN=False)
     taak = open_task(zac, urls["zac"], str(bpmn_zaak["uuid"]), INTAKE)
     toekennen_taak(zac, urls["zac"], taak, zac_group, ADMIN.username)
     wijzig_taak(
-        zac, urls["zac"], str(taak["id"]), fataledatum=(date.fromisoformat(today()) - timedelta(days=1)).isoformat()
+        zac, urls["zac"], str(taak["id"]), fataledatum=(date.fromisoformat(today()) + timedelta(days=days)).isoformat()
     )
     signaleren()
-    signalering_mail(mailpit, registry, ADMIN.username, str(bpmn_zaak["identificatie"]), timeout=MAIL_TIMEOUT)
+    mail = signalering_mail(mailpit, registry, ADMIN.username, str(bpmn_zaak["identificatie"]), timeout=MAIL_TIMEOUT)
+    assert str(bpmn_zaak["omschrijving"]) in str(mail.get("HTML"))

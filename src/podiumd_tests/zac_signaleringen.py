@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.json_data import entries
+from podiumd_tests.mailpit import full_message
 from podiumd_tests.mailpit import quoted
 from podiumd_tests.mailpit import received_mails
 from podiumd_tests.responses import expect_status
@@ -70,6 +71,6 @@ def signalering_taken(http: requests.Session, zac_url: str) -> list[str]:
 def signalering_mail(
     mailpit: ApiClient, registry: ResourceRegistry, username: str, text: str, *, timeout: float
 ) -> JsonObject:
-    """Wait for a mail to the user's Keycloak address holding the text (a zaaknummer, a taak id); return it."""
+    """Wait for a mail to the user's Keycloak address holding the text (a zaaknummer, a taak link); the full message."""
     query = f"to:{quoted(user_email(username))} {quoted(text)}"
-    return received_mails(mailpit, registry, query, timeout=timeout)[0]
+    return full_message(mailpit, received_mails(mailpit, registry, query, timeout=timeout)[0])

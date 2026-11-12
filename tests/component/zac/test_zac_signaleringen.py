@@ -159,7 +159,7 @@ def test_signalering_setting_off_gives_no_dashboard_signal(
 @pytest.mark.scenario("""
     Given the test admin wants a mail, and no dashboard signal, for zaken put on their name
     When a behandelaar assigns a zaak to the admin
-    Then the admin gets a mail with the zaak's omschrijving and zaaknummer
+    Then the admin gets a mail with the zaak's omschrijving and zaaknummer, and a link that opens the zaak
     And the admin's dashboard does not list the zaak among the zaken on their name
 """)
 def test_zaak_on_my_name_gives_a_signalering_mail(
@@ -177,7 +177,57 @@ def test_zaak_on_my_name_gives_a_signalering_mail(
     _assign_to_admin(behandelaar, urls["zac"], bpmn_zaak, zac_group)
     mail = signalering_mail(mailpit, registry, ADMIN.username, str(bpmn_zaak["identificatie"]), timeout=MAIL_TIMEOUT)
     assert str(bpmn_zaak["omschrijving"]) in str(mail.get("Subject")), mail.get("Subject")
+    assert f'href="{urls["zac"]}/zaken/{bpmn_zaak["identificatie"]}"' in str(mail.get("HTML"))
     assert bpmn_zaak["identificatie"] not in signalering_zaken(zac, urls["zac"], ZAAK_OP_NAAM)
+
+
+@pytest.mark.requires("mailpit")
+@pytest.mark.scenario("""
+    Given the test admin wants a mail, and no dashboard signal, for taken put on their name
+    When a behandelaar assigns the intake taak of a zaak to the admin
+    Then the admin gets a mail with the zaaknummer and a link that opens the taak
+""")
+def test_taak_on_my_name_gives_a_signalering_mail(
+    urls: dict[str, str],
+    bpmn_zaak: JsonObject,
+    zac_group: str,
+    behandelaar: requests.Session,
+    signaleringen: Callable[..., None],
+    mailpit: ApiClient,
+    registry: ResourceRegistry,
+) -> None:
+    """TAAK_OP_NAAM with mail on mails the admin's Keycloak address the taak's link, its TAAK_LINK."""
+    signaleringen(mail=True, TAAK_OP_NAAM=False)
+    taak = open_task(behandelaar, urls["zac"], str(bpmn_zaak["uuid"]), INTAKE)
+    toekennen_taak(behandelaar, urls["zac"], taak, zac_group, ADMIN.username)
+    mail = signalering_mail(mailpit, registry, ADMIN.username, f"/taken/{taak['id']}", timeout=MAIL_TIMEOUT)
+    assert f'href="{urls["zac"]}/taken/{taak["id"]}"' in str(mail.get("HTML"))
+
+
+@pytest.mark.requires("mailpit")
+@pytest.mark.scenario("""
+    Given the test admin wants a mail, and no dashboard signal, for documents added to their zaken
+    And a zaak on the admin's name
+    When a behandelaar adds a document to the zaak
+    Then the admin gets a mail with the zaaknummer and a link that opens the document
+""")
+def test_new_document_gives_a_signalering_mail(
+    urls: dict[str, str],
+    bpmn_zaak: JsonObject,
+    zac_group: str,
+    behandelaar: requests.Session,
+    signaleringen: Callable[..., None],
+    mailpit: ApiClient,
+    registry: ResourceRegistry,
+) -> None:
+    """ZAAK_DOCUMENT_TOEGEVOEGD with mail on mails the behandelaar of the zaak the document's DOCUMENT_LINK."""
+    signaleringen(ZAAK_OP_NAAM=False)
+    signaleringen(mail=True, ZAAK_DOCUMENT_TOEGEVOEGD=False)
+    _assign_to_admin(behandelaar, urls["zac"], bpmn_zaak, zac_group)
+    document = uploaded_document(behandelaar, urls["zac"], bpmn_zaak, registry, suffix="pdf")
+    link = f"{urls['zac']}/informatie-objecten/{document['uuid']}"
+    mail = signalering_mail(mailpit, registry, ADMIN.username, str(bpmn_zaak["identificatie"]), timeout=MAIL_TIMEOUT)
+    assert f'href="{link}"' in str(mail.get("HTML"))  # noqa: B907  # an HTML attribute
 
 
 @pytest.mark.scenario("""
@@ -206,53 +256,6 @@ def test_taak_on_my_name_shows_on_the_dashboard_until_opened(
     )
     expect_status(zac.get(f"{urls['zac']}/rest/taken/{taak['id']}"), HTTPStatus.OK)
     assert taak["id"] not in signalering_taken(zac, urls["zac"])
-
-
-@pytest.mark.requires("mailpit")
-@pytest.mark.scenario("""
-    Given the test admin wants a mail, and no dashboard signal, for taken put on their name
-    When a behandelaar assigns the intake taak of a zaak to the admin
-    Then the admin gets a mail linking to the taak
-""")
-def test_taak_on_my_name_gives_a_signalering_mail(
-    urls: dict[str, str],
-    bpmn_zaak: JsonObject,
-    zac_group: str,
-    behandelaar: requests.Session,
-    signaleringen: Callable[..., None],
-    mailpit: ApiClient,
-    registry: ResourceRegistry,
-) -> None:
-    """TAAK_OP_NAAM with mail on mails the admin; the mail names no zaaknummer, its link holds the taak id."""
-    signaleringen(mail=True, TAAK_OP_NAAM=False)
-    taak = open_task(behandelaar, urls["zac"], str(bpmn_zaak["uuid"]), INTAKE)
-    toekennen_taak(behandelaar, urls["zac"], taak, zac_group, ADMIN.username)
-    signalering_mail(mailpit, registry, ADMIN.username, f"/taken/{taak['id']}", timeout=MAIL_TIMEOUT)
-
-
-@pytest.mark.requires("mailpit")
-@pytest.mark.scenario("""
-    Given the test admin wants a mail, and no dashboard signal, for documents added to their zaken
-    And a zaak on the admin's name
-    When a behandelaar adds a document to the zaak
-    Then the admin gets a mail about the new document naming the zaaknummer
-""")
-def test_new_document_gives_a_signalering_mail(
-    urls: dict[str, str],
-    bpmn_zaak: JsonObject,
-    zac_group: str,
-    behandelaar: requests.Session,
-    signaleringen: Callable[..., None],
-    mailpit: ApiClient,
-    registry: ResourceRegistry,
-) -> None:
-    """ZAAK_DOCUMENT_TOEGEVOEGD with mail on mails the zaak's behandelaar; ZAAK_OP_NAAM is off, so no mail of that."""
-    signaleringen(ZAAK_OP_NAAM=False)
-    signaleringen(mail=True, ZAAK_DOCUMENT_TOEGEVOEGD=False)
-    _assign_to_admin(behandelaar, urls["zac"], bpmn_zaak, zac_group)
-    uploaded_document(behandelaar, urls["zac"], bpmn_zaak, registry, suffix="pdf")
-    mail = signalering_mail(mailpit, registry, ADMIN.username, str(bpmn_zaak["identificatie"]), timeout=MAIL_TIMEOUT)
-    assert "document" in str(mail.get("Subject")), mail.get("Subject")
 
 
 @pytest.mark.requires("pabc")

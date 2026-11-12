@@ -65,6 +65,11 @@ def received_message(
     """
     message = wait_for_mail(mailpit, timeout=timeout, to=to, subject=subject)
     registry.add(f"mail to {to}", lambda: delete_mails(mailpit, f"to:{quoted(to)}"))
+    return full_message(mailpit, message)
+
+
+def full_message(mailpit: ApiClient, message: JsonObject) -> JsonObject:
+    """Return a message a search found with its headers, HTML and attachments."""
     return mailpit.get(f"message/{message['ID']}")
 
 
