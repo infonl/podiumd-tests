@@ -222,6 +222,25 @@ def test_document_above_the_maximum_file_size_is_refused(
     assert zaak_documents(zac, urls["zac"], zaak) == []
 
 
+# Sends MAX_FILE_SIZE_MB through the edge: a proxy that holds the body in memory can run out of it.
+@pytest.mark.destructive
+@pytest.mark.slow
+@pytest.mark.scenario("""
+    Given a zaak in ZAC
+    When the behandelaar adds a document of exactly ZAC's maximum file size
+    Then the zaak has the document with that size
+""")
+def test_document_of_the_maximum_file_size_is_added(
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
+) -> None:
+    """An upload of MAX_FILE_SIZE_MB answers 200 and Open Zaak keeps its bestandsomvang."""
+    zaak = zac_zaak()
+    size = max_file_size_mb(zac, urls["zac"]) * 1024 * 1024
+    added = expect_status(upload_of_size(zac, urls["zac"], zaak, registry, size), HTTPStatus.OK).json()
+    assert added["bestandsomvang"] == size
+    assert [document["uuid"] for document in zaak_documents(zac, urls["zac"], zaak)] == [added["uuid"]]
+
+
 @pytest.mark.scenario("""
     Given a zaak in ZAC
     When the behandelaar adds a received document, with an ontvangstdatum, in bewerking or ter vaststelling
