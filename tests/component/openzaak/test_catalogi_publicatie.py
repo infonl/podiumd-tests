@@ -41,20 +41,12 @@ pytestmark = [
 REFUSED_CHANGE = (HTTPStatus.BAD_REQUEST, HTTPStatus.FORBIDDEN, HTTPStatus.METHOD_NOT_ALLOWED)
 
 
-@pytest.fixture(name="template")
-def fixture_template(test_zaaktype: JsonObject) -> JsonObject:
-    """Return the test zaaktype, when it has the selectielijst procestype publishing needs."""
-    if not test_zaaktype.get("selectielijstProcestype"):
-        pytest.skip("test zaaktype has no selectielijstProcestype (Selectielijst API was unreachable at bootstrap)")
-    return test_zaaktype
-
-
 @pytest.fixture(name="published")
 def fixture_published(
-    podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, template: JsonObject
+    podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, selectielijst_zaaktype: JsonObject
 ) -> JsonObject:
     """Return a throwaway published zaaktype."""
-    return publish(openzaak, make_publishable_zaaktype(podiumd_env, openzaak, registry, template))
+    return publish(openzaak, make_publishable_zaaktype(podiumd_env, openzaak, registry, selectielijst_zaaktype))
 
 
 def _refused(openzaak: ApiClient, method: str, url: str, body: JsonObject | None = None) -> None:
@@ -69,12 +61,16 @@ def _refused(openzaak: ApiClient, method: str, url: str, body: JsonObject | None
     And only its end of validity may still be set
 """)
 def test_published_type_changes_only_its_einde_geldigheid(
-    podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, template: JsonObject, kind: str
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    selectielijst_zaaktype: JsonObject,
+    kind: str,
 ) -> None:
     """PUT, PATCH and DELETE of a published type are refused; PATCH of eindeGeldigheid alone is accepted."""
-    catalogus = str(template["catalogus"])
+    catalogus = str(selectielijst_zaaktype["catalogus"])
     concept = {
-        "zaaktype": lambda: make_publishable_zaaktype(podiumd_env, openzaak, registry, template),
+        "zaaktype": lambda: make_publishable_zaaktype(podiumd_env, openzaak, registry, selectielijst_zaaktype),
         "besluittype": lambda: make_concept_besluittype(podiumd_env, openzaak, registry, catalogus),
         "informatieobjecttype": lambda: make_concept_iot(podiumd_env, openzaak, registry, catalogus),
     }[kind]()
@@ -130,17 +126,21 @@ def test_published_zaaktype_keeps_its_types(
     Then Open Zaak refuses it
 """)
 def test_zaaktype_with_a_concept_type_does_not_publish(
-    podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, template: JsonObject, related: str
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    selectielijst_zaaktype: JsonObject,
+    related: str,
 ) -> None:
     """POST publish of a zaaktype related to a concept type answers 400."""
-    catalogus = str(template["catalogus"])
+    catalogus = str(selectielijst_zaaktype["catalogus"])
     if related == "besluittype":
         besluittype = make_concept_besluittype(podiumd_env, openzaak, registry, catalogus)
         zaaktype = make_publishable_zaaktype(
-            podiumd_env, openzaak, registry, template, besluittypen=[besluittype["url"]]
+            podiumd_env, openzaak, registry, selectielijst_zaaktype, besluittypen=[besluittype["url"]]
         )
     else:
-        zaaktype = make_publishable_zaaktype(podiumd_env, openzaak, registry, template)
+        zaaktype = make_publishable_zaaktype(podiumd_env, openzaak, registry, selectielijst_zaaktype)
         iot = make_concept_iot(podiumd_env, openzaak, registry, catalogus)
         ziot = {
             "zaaktype": zaaktype["url"],
@@ -166,11 +166,11 @@ def test_overlapping_published_versions_are_refused(
     podiumd_env: Environment,
     openzaak: ApiClient,
     registry: ResourceRegistry,
-    template: JsonObject,
+    selectielijst_zaaktype: JsonObject,
     published: JsonObject,
 ) -> None:
     """Publishing a second version whose validity overlaps a published one answers 400."""
     second = make_publishable_zaaktype(
-        podiumd_env, openzaak, registry, template, identificatie=published["identificatie"]
+        podiumd_env, openzaak, registry, selectielijst_zaaktype, identificatie=published["identificatie"]
     )
     openzaak.request("POST", f"{second['url']}/publish", HTTPStatus.BAD_REQUEST, json={})

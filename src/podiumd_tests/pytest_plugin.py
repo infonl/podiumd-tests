@@ -346,6 +346,14 @@ def fixture_test_zaaktype(openzaak: ApiClient, need_bootstrap: Callable[..., Non
     return published_zaaktype(openzaak, names.TEST_ZAAKTYPE, "openzaak-zaaktype")
 
 
+@pytest.fixture(scope="session", name="selectielijst_zaaktype")
+def fixture_selectielijst_zaaktype(test_zaaktype: JsonObject) -> JsonObject:
+    """Return the test zaaktype, when it has the selectielijstProcestype that publishing and resultaattypen need."""
+    if not test_zaaktype.get("selectielijstProcestype"):
+        pytest.skip("test zaaktype has no selectielijstProcestype (Selectielijst API was unreachable at bootstrap)")
+    return test_zaaktype
+
+
 @pytest.fixture(scope="session", name="archief_parts")
 def fixture_archief_parts(openzaak: ApiClient, need_bootstrap: Callable[..., None]) -> ZaaktypeParts:
     """Return the types of the archief zaaktype, a second zaaktype in the test catalogus."""

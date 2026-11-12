@@ -80,16 +80,14 @@ def test_new_zaaktype_version_is_used_at_once(  # one chain
     podiumd_env: Environment,
     openzaak: ApiClient,
     registry: ResourceRegistry,
-    test_zaaktype: JsonObject,
+    selectielijst_zaaktype: JsonObject,
     parts: ZaaktypeParts,
     need_bootstrap: Callable[..., None],
 ) -> None:
     """The second submission's zaak is of the version published after the first submission."""
     need_bootstrap("openformulieren-zgw-group", "openzaak-of-autorisatie")
-    if not test_zaaktype.get("selectielijstProcestype"):
-        pytest.skip("test zaaktype has no selectielijstProcestype (Selectielijst API was unreachable at bootstrap)")
     today = datetime.now(tz=UTC).date()
-    oud = _version(podiumd_env, openzaak, registry, test_zaaktype, parts, beginGeldigheid="2026-01-01")
+    oud = _version(podiumd_env, openzaak, registry, selectielijst_zaaktype, parts, beginGeldigheid="2026-01-01")
     slug = registry.tagged("versie")
     options = {
         **cast("dict[str, object]", ZGW_REGISTRATION["options"]),
@@ -106,7 +104,7 @@ def test_new_zaaktype_version_is_used_at_once(  # one chain
         podiumd_env,
         openzaak,
         registry,
-        test_zaaktype,
+        selectielijst_zaaktype,
         parts,
         identificatie=oud["identificatie"],
         beginGeldigheid=today.isoformat(),
