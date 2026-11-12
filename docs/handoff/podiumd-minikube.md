@@ -30,5 +30,5 @@ zaakobject and cannot resolve the host, so ZAC answers 400 to a new zaak with `b
 
 Request: serve the self links on a URL Open Zaak can reach, e.g. the `bag-mock` Service.
 
-Test: `tests/component/zac/test_zac_zaak.py::test_new_zaak_links_the_chosen_bag_adres` fails on minikube until then
+Test: `tests/component/zac/test_zac_bag.py::test_new_zaak_links_the_chosen_bag_adres` fails on minikube until then
 (run 20261112-141919_minikube_full_26111214197e4a: 104 passed, this one failed).
