@@ -79,6 +79,14 @@ def signalering_overzichten(http: requests.Session, zac_url: str, soort: str) ->
     return entries(found.json().get("resultaten"))
 
 
+def zaak_waarschuwingen(http: requests.Session, zac_url: str) -> list[str]:
+    """Return the identificaties of the user's zaken on the dashboard list of zaken nearing a streef- or fatale datum.
+
+    ZAC computes the list per call from the zaakafhandelparameters' waarschuwingsvensters; it stores no signalering.
+    """
+    return [str(zaak.get("identificatie")) for zaak in get_entries(http, f"{zac_url}/rest/zaken/waarschuwing")]
+
+
 def signalering_taken(http: requests.Session, zac_url: str) -> list[str]:
     """Return the ids of the taken on the user's dashboard list Taak op naam."""
     return [str(taak.get("id")) for taak in get_entries(http, f"{zac_url}/rest/signaleringen/taken/TAAK_OP_NAAM")]

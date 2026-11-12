@@ -54,6 +54,11 @@ def test_dashboard_lists_give_zaak_identificaties_and_taak_ids(fake_http):
     assert zac_signaleringen.signalering_taken(http, ZAC) == ["7"]
 
 
+def test_warning_list_gives_zaak_identificaties(fake_http):
+    fake_http({"GET /rest/zaken/waarschuwing": (200, [{"identificatie": "ZAAK-2"}])})
+    assert zac_signaleringen.zaak_waarschuwingen(requests.Session(), ZAC) == ["ZAAK-2"]
+
+
 def test_dashboard_list_gives_the_zaken_as_zac_shows_them(fake_http):
     shown = {"identificatie": "ZAAK-1", "omschrijving": None}
     fake_http({"PUT /rest/signaleringen/zaken/ZAAK_OP_NAAM": (200, {"resultaten": [shown], "totaal": 1})})
