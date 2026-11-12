@@ -250,3 +250,10 @@ def test_lock_document_is_unlocked_at_cleanup(fake_http):
     assert sent[-1].url == f"{ZAC}{url}/lock?zaak=z1"
     assert registry.cleanup() == []
     assert sent[-1].url == f"{ZAC}{url}/unlock?zaak=z1"
+
+
+def test_convert_to_pdf_names_the_zaak(fake_http):
+    url = "/rest/informatieobjecten/informatieobject/d1/convert"
+    sent = fake_http({f"POST {url}": (204, None)})
+    response = zac_documents.convert_to_pdf(requests.Session(), ZAC, {"uuid": "z1"}, {"uuid": "d1"})
+    assert (response.status_code, sent[-1].url) == (204, f"{ZAC}{url}?zaak=z1")

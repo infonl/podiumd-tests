@@ -40,6 +40,7 @@ from podiumd_tests.zac import verdelen
 from podiumd_tests.zac import vrijgeven
 from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zac_session
+from podiumd_tests.zac_documents import convert_to_pdf
 from podiumd_tests.zac_documents import delete_document
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import lock_document
@@ -342,6 +343,36 @@ def test_document_rights_follow_the_role_and_the_state(
     refused = call(zac_as("behandelaar"), zac_url, bpmn_zaak, document)
     assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
     expect_status(call(zac_as("recordmanager"), zac_url, bpmn_zaak, document), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+
+
+@pytest.mark.requires("pabc")
+@pytest.mark.source(
+    POLICIES, "A behandelaar or coordinator may convert a definitief document to PDF; a raadpleger not."
+)
+@pytest.mark.parametrize("role", ["behandelaar", "coordinator"])
+@pytest.mark.scenario("""
+    Given a definitief Word document on a zaak of the BPMN test zaaktype
+    When a raadpleger converts it to PDF
+    Then ZAC refuses it
+    When a behandelaar or a coordinator converts it to PDF
+    Then the document's current version is a PDF
+""")
+def test_behandelaar_and_coordinator_convert_a_word_document_to_pdf(
+    zac: requests.Session,
+    zac_as: Callable[[str], requests.Session],
+    urls: dict[str, str],
+    bpmn_zaak: JsonObject,
+    registry: ResourceRegistry,
+    role: str,
+) -> None:
+    """Converteren is 403 for the raadpleger; the role's conversion gives the document a PDF version."""
+    zac_url, of_zaak = urls["zac"], {"zaak": str(bpmn_zaak["uuid"])}
+    document = uploaded_document(zac, zac_url, bpmn_zaak, registry, suffix="word")
+    refused = convert_to_pdf(zac_as("raadpleger"), zac_url, bpmn_zaak, document)
+    assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
+    expect_status(convert_to_pdf(zac_as(role), zac_url, bpmn_zaak, document), HTTPStatus.NO_CONTENT, HTTPStatus.OK)
+    current = expect_status(zac.get(document_url(zac_url, document), params=of_zaak), HTTPStatus.OK).json()
+    assert current["formaat"] == "application/pdf", current.get("formaat")
 
 
 @pytest.mark.requires("pabc")

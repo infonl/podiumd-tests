@@ -168,6 +168,16 @@ def unlock_document(http: requests.Session, zac_url: str, zaak: JsonObject, docu
     return http.post(f"{document_url(zac_url, document)}/unlock", params={"zaak": str(zaak["uuid"])})
 
 
+# A conversion of a large document through ZAC's office converter (gotenberg).
+CONVERT_TIMEOUT = 60
+
+
+def convert_to_pdf(http: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject) -> requests.Response:
+    """Convert the zaak's document to a PDF version; ZAC's answer."""
+    url = f"{document_url(zac_url, document)}/convert"
+    return http.post(url, params={"zaak": str(zaak["uuid"])}, timeout=CONVERT_TIMEOUT)
+
+
 def lock_document(
     http: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject, registry: ResourceRegistry
 ) -> None:

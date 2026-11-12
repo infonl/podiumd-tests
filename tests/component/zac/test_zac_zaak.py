@@ -45,6 +45,7 @@ from podiumd_tests.zac_betrokkenen import add_betrokkene
 from podiumd_tests.zac_betrokkenen import betrokkene_roltype
 from podiumd_tests.zac_betrokkenen import betrokkenen
 from podiumd_tests.zac_betrokkenen import wijzig_initiator
+from podiumd_tests.zac_documents import convert_to_pdf
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
 from podiumd_tests.zac_documents import zaak_documents
@@ -599,8 +600,7 @@ def test_word_document_is_converted_to_pdf(
     zaak = zac_zaak()
     document = uploaded_document(zac, urls["zac"], zaak, registry, suffix=suffix)
     documents = document_url(urls["zac"], document)
-    converted = zac.post(f"{documents}/convert", params={"zaak": str(zaak["uuid"])}, timeout=60)
-    expect_status(converted, HTTPStatus.NO_CONTENT, HTTPStatus.OK)
+    expect_status(convert_to_pdf(zac, urls["zac"], zaak, document), HTTPStatus.NO_CONTENT, HTTPStatus.OK)
     current = expect_status(zac.get(documents, params={"zaak": str(zaak["uuid"])}), HTTPStatus.OK).json()
     assert current["formaat"] == "application/pdf", current.get("formaat")
     content = expect_status(zac.get(f"{documents}/download"), HTTPStatus.OK).content
