@@ -1019,10 +1019,18 @@ def moved_dates(zaak: JsonObject, days: int) -> dict[str, str]:
 
 
 def verlengen(
-    http: requests.Session, zac_url: str, zaak: JsonObject, days: int, reden: str | None = "podiumd-tests"
+    http: requests.Session,
+    zac_url: str,
+    zaak: JsonObject,
+    days: int,
+    reden: str | None = "podiumd-tests",
+    **fields: object,
 ) -> requests.Response:
-    """Extend the zaak by the days from its dates as ZAC shows them, with the reden (None: none); ZAC's answer."""
-    body = {"redenVerlenging": reden, "duurDagen": days, "takenVerlengen": False, **moved_dates(zaak, days)}
+    """Extend the zaak by the days from its dates as ZAC shows them, with the reden (None: none); ZAC's answer.
+
+    fields: more of RestZaakVerlengGegevens, such as takenVerlengen to move the fatale datum of its open taken too.
+    """
+    body = {"redenVerlenging": reden, "duurDagen": days, "takenVerlengen": False, **moved_dates(zaak, days), **fields}
     return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/verlenging", json=body)
 
 

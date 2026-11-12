@@ -46,6 +46,7 @@ from podiumd_tests.zac import start_human_task
 from podiumd_tests.zac import started_taak
 from podiumd_tests.zac import user_events_offered
 from podiumd_tests.zac import verdelen_taken
+from podiumd_tests.zac import verlengen
 from podiumd_tests.zac import vrijgeven_taken
 from podiumd_tests.zac_beheer import referentietabel
 from podiumd_tests.zac_beheer import referentietabel_values
@@ -72,6 +73,10 @@ ZAC_TEAM = pytest.mark.source(
     "podiumd-tests",
     "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, taken-cmmn).",
 )
+ZAAK_LIFECYCLE = pytest.mark.source(
+    "podiumd-tests",
+    "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, zaak-lifecycle).",
+)
 # Fixture zac_taken_zaaktype: a throwaway zaaktype made known to PABC and deleted with a Django snippet, one per run.
 THROWAWAY = pytest.mark.requires("pabc", "cluster")
 TAKEN_ZAAKTYPE = pytest.mark.xdist_group("zac-taken-zaaktype")
@@ -80,6 +85,7 @@ TOELICHTING = "podiumd-tests toelichting"
 ADVIES = "Positief"
 VRAAG = "podiumd-tests vraag"
 SUSPENSION_DAYS = 7
+VERLENGING_DAYS = 10
 
 MAIL_TIMEOUT = 60
 OPSCHORTEN = {"zaakOpschorten": "true"}
@@ -170,10 +176,7 @@ def test_taken_from_the_list_are_released_and_assigned(
     )
 
 
-@pytest.mark.source(
-    "podiumd-tests",
-    "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, zaak-lifecycle).",
-)
+@ZAAK_LIFECYCLE
 @pytest.mark.scenario("""
     Given a zaak in ZAC, gerelateerd to another zaak
     When the behandelaar starts the taak Aanvullende informatie with opschorten until its fatale datum
@@ -208,6 +211,58 @@ def test_aanvullende_informatie_with_opschorten_suspends_once_until_hervatten(
     )
     expect_status(again, HTTPStatus.FORBIDDEN)
     assert read_zaak(zac, zac_url, str(zaak["uuid"]))["isOpgeschort"] is False
+
+
+@ZAAK_LIFECYCLE
+@pytest.mark.scenario("""
+    Given a zaak in its intake in ZAC, opgeschort by the taak Aanvullende informatie
+    When the behandelaar completes the taak without hervatten
+    Then the zaak stays opgeschort, with its moved streefdatum and fatale datum
+    And the behandelaar can still finish the intake as ontvankelijk
+""")
+def test_aanvullende_informatie_without_hervatten_keeps_the_zaak_opgeschort(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    start_taak: Callable[..., JsonObject],
+) -> None:
+    """zaakHervatten false leaves the opschorting; INTAKE_AFRONDEN then gives status In behandeling."""
+    zac_url = urls["zac"]
+    zaak = zac_zaak()
+    fataledatum = (date.today() + timedelta(days=SUSPENSION_DAYS)).isoformat()  # noqa: DTZ011  # ZAC's local date
+    taak = start_taak(zaak, fataledatum=fataledatum, taakdata=OPSCHORTEN)
+    complete_task(zac, zac_url, taak, {"zaakHervatten": "false"})
+    opgeschort = read_zaak(zac, zac_url, str(zaak["uuid"]))
+    assert (opgeschort["isOpgeschort"], _dates(opgeschort)) == (True, moved_dates(zaak, SUSPENSION_DAYS))
+    afronden_intake(zac, zac_url, zaak)
+    assert section(read_zaak(zac, zac_url, str(zaak["uuid"])), "status").get("naam") == "In behandeling"
+
+
+@ZAAK_LIFECYCLE
+@pytest.mark.parametrize("taak_dagen", [VERLENGING_DAYS, 0], ids=["met-taken", "zonder-taken"])
+@pytest.mark.scenario("""
+    Given a zaak in ZAC with an open taak Aanvullende informatie with a fatale datum
+    When the behandelaar verlengt the zaak, with or without the fatale datum of its open taken
+    Then the zaak's streefdatum and fatale datum move by the verlenging
+    And the taak's fatale datum moves by the verlenging only when the open taken are verlengd too
+""")
+def test_verlengen_moves_the_fatale_datum_of_open_taken_when_asked(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    start_taak: Callable[..., JsonObject],
+    taak_dagen: int,
+) -> None:
+    """takenVerlengen moves the open taak's fataledatum by duurDagen; without it the taak keeps its date."""
+    zac_url = urls["zac"]
+    zaak = zac_zaak()
+    fataledatum = date.today() + timedelta(days=SUSPENSION_DAYS)  # noqa: DTZ011  # ZAC's local date
+    taak = start_taak(zaak, fataledatum=fataledatum.isoformat())
+    verlengd = verlengen(zac, zac_url, zaak, VERLENGING_DAYS, takenVerlengen=taak_dagen > 0)
+    expect_status(verlengd, HTTPStatus.OK)
+    assert _dates(read_zaak(zac, zac_url, str(zaak["uuid"]))) == moved_dates(zaak, VERLENGING_DAYS)
+    moved = fataledatum + timedelta(days=taak_dagen)
+    assert read_taak(zac, zac_url, str(taak["id"]))["fataledatum"] == moved.isoformat()
 
 
 @ZAC_TEAM
