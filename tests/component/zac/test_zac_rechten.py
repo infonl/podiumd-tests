@@ -29,6 +29,7 @@ from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import POLICIES
 from podiumd_tests.zac import afsluiten
 from podiumd_tests.zac import assignment
+from podiumd_tests.zac import can_open_zaak
 from podiumd_tests.zac import heropenen
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import rights_of
@@ -99,12 +100,10 @@ def test_user_without_zac_roles_cannot_read_a_zaak(
 ) -> None:
     """The admin reads the zaak; the KCC user, logged in to ZAC as well, gets 403 for the same zaak."""
     zaak = zac_zaak()
-    url = f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}"
-    expect_status(zac.get(url), HTTPStatus.OK)
+    assert can_open_zaak(zac, urls["zac"], zaak)
     need_bootstrap(KCC.name)
     kcc = zac_session(podiumd_env, KCC.username, podiumd_env.credentials.get(KCC.store_key))
-    refused = kcc.get(url, allow_redirects=False)
-    assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
+    assert not can_open_zaak(kcc, urls["zac"], zaak)
 
 
 @pytest.fixture(name="closed_bpmn_zaak")

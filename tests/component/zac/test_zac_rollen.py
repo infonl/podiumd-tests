@@ -24,6 +24,7 @@ from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.results import TAG_PREFIX
 from podiumd_tests.zac import POLICIES
+from podiumd_tests.zac import can_open_zaak
 from podiumd_tests.zac import is_zaak_listed
 from podiumd_tests.zac import rights_of
 from podiumd_tests.zac import wait_in_werkvoorraad
@@ -175,8 +176,7 @@ def test_role_gives_no_access_to_zaken_of_other_zaaktypen(
 ) -> None:
     """The behandelaar of the BPMN test zaaktype gets 403 for a zaak of the estate's zaaktype."""
     zaak = zac_zaak()
-    refused = zac_as("behandelaar").get(f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}")
-    assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
+    assert not can_open_zaak(zac_as("behandelaar"), urls["zac"], zaak)
 
 
 @pytest.mark.source(POLICIES, "ZAC's search lists only zaken of zaaktypen the user holds a base role for (PR #7221).")

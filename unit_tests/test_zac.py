@@ -9,6 +9,7 @@ import requests
 from podiumd_tests import zac
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.oidc import LOGIN_PATHS
+from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.wait import Clock
 from podiumd_tests.wait import wait_until
@@ -80,6 +81,18 @@ def test_create_zaak_returns_the_answer_when_it_has_a_uuid(fake_http):
 def test_read_zaak(fake_http):
     fake_http({"GET /rest/zaken/zaak/u-1": (200, {"uuid": "u-1"})})
     assert zac.read_zaak(requests.Session(), ZAC, "u-1") == {"uuid": "u-1"}
+
+
+@pytest.mark.parametrize(("status", "expected"), [(200, True), (403, False), (401, False)])
+def test_can_open_zaak_is_true_only_for_200(fake_http, status, expected):
+    fake_http({"GET /rest/zaken/zaak/u-1": (status, {})})
+    assert zac.can_open_zaak(requests.Session(), ZAC, {"uuid": "u-1"}) is expected
+
+
+def test_can_open_zaak_raises_on_another_status(fake_http):
+    fake_http({"GET /rest/zaken/zaak/u-1": (500, {})})
+    with pytest.raises(UnexpectedStatusError):
+        zac.can_open_zaak(requests.Session(), ZAC, {"uuid": "u-1"})
 
 
 def parameters(identificatie, *, enabled=True, id_: int | None = 1):

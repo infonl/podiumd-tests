@@ -18,6 +18,7 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.oidc import LOGIN_PATHS
+from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import ZAKEN
@@ -240,6 +241,12 @@ def start_zaak(http: requests.Session, zac_url: str, body: JsonObject) -> JsonOb
 def read_zaak(http: requests.Session, zac_url: str, uuid: str) -> JsonObject:
     """ZAC's view of a zaak."""
     return cast("JsonObject", expect_status(http.get(f"{zac_url}/rest/zaken/zaak/{uuid}"), HTTPStatus.OK).json())
+
+
+def can_open_zaak(http: requests.Session, zac_url: str, zaak: JsonObject) -> bool:
+    """Return whether the session's user may open the zaak in ZAC; raise on an answer other than 200, 401 or 403."""
+    response = http.get(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}", allow_redirects=False)
+    return expect_status(response, HTTPStatus.OK, *REFUSED).status_code == HTTPStatus.OK
 
 
 def zaak_historie(http: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:
