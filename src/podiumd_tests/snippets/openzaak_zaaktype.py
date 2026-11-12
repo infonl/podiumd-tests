@@ -10,7 +10,8 @@ Params: action, domein, rsin, identificatie, iot_omschrijving, besluittype; opti
 STATUSTYPEN, the last is the eindstatus); optional versions, a list of
 [begin, end] dates (ISO, end may be null): one published version each, whose statustypen end in " v<n>";
 optional archief: one resultaattype per afleidingswijze of ARCHIEF, named after it, eigenschap "peildatum"
-and the zaaktype as its own deelzaaktype, for the archiefactiedatum tests.
+and the zaaktype as its own deelzaaktype, for the archiefactiedatum tests; optional extra_iots, omschrijvingen of
+published informatieobjecttypen of the catalogus that each version also links (apply links them in place).
 """
 
 STATUSTYPEN = ("Ingediend", "In behandeling", "Afgehandeld")
@@ -51,8 +52,8 @@ def run(params):
     statustypen = _statustypen_per_version(params, zaaktypen, versions)
     complete = catalogus and statustypen is not None and iots.exists() and besluittypen.exists()
     if params["action"] == "status":
-        return {"present": bool(complete and all(has == wanted for _, has, wanted in statustypen))}
-    if params["action"] == "apply" and complete and _added_in_place(statustypen):
+        return {"present": bool(complete and _as_wanted(params, statustypen))}
+    if params["action"] == "apply" and complete and _added_in_place(params, statustypen):
         return {"present": True}
     # zaaktype is a "foreign key or URL" field; _zaaktype is its local foreign key.
     Zaak.objects.filter(_zaaktype__in=zaaktypen).delete()
@@ -146,7 +147,28 @@ def _version(params, catalogus, iot, begin, end, suffix):  # noqa: PLR0913, PLR0
     Eigenschap.objects.create(
         zaaktype=zaaktype, eigenschapnaam="kenteken", definitie="Kenteken", specificatie_van_eigenschap=specificatie
     )
+    _link_extra_iots(params, zaaktype, add=True)
     return zaaktype
+
+
+def _link_extra_iots(params, zaaktype, *, add):
+    """Return whether the zaaktype links each published informatieobjecttype of extra_iots; add links the missing."""
+    from django.db.models import Max
+    from openzaak.components.catalogi.models import InformatieObjectType
+    from openzaak.components.catalogi.models import ZaakTypeInformatieObjectType
+
+    wanted = params.get("extra_iots") or []
+    found = InformatieObjectType.objects.filter(catalogus=zaaktype.catalogus, omschrijving__in=wanted, concept=False)
+    links = ZaakTypeInformatieObjectType.objects.filter(zaaktype=zaaktype)
+    missing = [iot for iot in found if not links.filter(informatieobjecttype=iot).exists()]
+    if add:
+        for iot in missing:
+            volgnummer = (links.aggregate(Max("volgnummer"))["volgnummer__max"] or 0) + 1
+            ZaakTypeInformatieObjectType.objects.create(
+                zaaktype=zaaktype, informatieobjecttype=iot, volgnummer=volgnummer, richting="uitgaand"
+            )
+        return len(found) == len(set(wanted))
+    return not missing and len(found) == len(set(wanted))
 
 
 def _statustypen_per_version(params, zaaktypen, versions):
@@ -161,8 +183,18 @@ def _statustypen_per_version(params, zaaktypen, versions):
     ]
 
 
-def _added_in_place(statustypen):
-    """Add the missing statustypen to each version; False, changing nothing, when one has a statustype not wanted."""
+def _as_wanted(params, statustypen):
+    """Return whether each version has the wanted statustypen and links the extra_iots."""
+    for zaaktype, has, wanted in statustypen:
+        if has != wanted or not _link_extra_iots(params, zaaktype, add=False):
+            return False
+    return True
+
+
+def _added_in_place(params, statustypen):
+    """Add the missing statustypen and extra_iots links to each version; False, changing nothing, when one has a
+    statustype not wanted.
+    """
     from django.db import transaction
 
     if not all(set(has) <= set(wanted) for _, has, wanted in statustypen):
@@ -170,6 +202,7 @@ def _added_in_place(statustypen):
     with transaction.atomic():
         for zaaktype, _, wanted in statustypen:
             _number_statustypen(zaaktype, wanted)
+            _link_extra_iots(params, zaaktype, add=True)
     return True
 
 

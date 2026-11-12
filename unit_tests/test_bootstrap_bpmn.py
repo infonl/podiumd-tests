@@ -1,6 +1,8 @@
 """Unit tests for the BPMN process bootstrap step."""
 
+import io
 import json
+import zipfile
 
 from types import SimpleNamespace
 
@@ -105,7 +107,14 @@ def mapped(short=0, *, brp_zoeken=True):
         ),
     ],
 )
-def test_present_needs_the_process_a_link_and_the_pabc_roles(monkeypatch, keys, links, mappings, known, present):
+@pytest.mark.parametrize(
+    ("deployed", "as_deployed"),
+    [(bpmn.process_files, True), (lambda: None, True), (lambda: {"other.bpmn": ""}, False)],
+    ids=["same-files", "no-download", "changed-files"],
+)
+def test_present_needs_the_process_a_link_and_the_pabc_roles(
+    monkeypatch, keys, links, mappings, known, present, deployed, as_deployed
+):
     answers = {bpmn.DEFINITIONS: [{"key": k} for k in keys], bpmn.CONFIGURATION: links}
     http = SimpleNamespace(get=lambda url: FakeResponse(status_code=200, body=answers[url.removeprefix("https://zac")]))
     step = ZacBpmnProcess(ADMIN)
@@ -114,7 +123,8 @@ def test_present_needs_the_process_a_link_and_the_pabc_roles(monkeypatch, keys, 
     monkeypatch.setattr(ZacBpmnProcess, "_pabc", lambda _self, _ctx: (None, "https://pabc"))
     monkeypatch.setattr(bpmn, "application_roles", lambda _pabc, _url, _app: [{"name": n} for n in known])
     monkeypatch.setattr(bpmn, "domain_mappings", mappings)
-    assert step.is_present(None) is present  # pyright: ignore[reportArgumentType]
+    monkeypatch.setattr(bpmn, "deployed_files", lambda _http, _zac, _key: deployed())
+    assert step.is_present(None) is (present and as_deployed)  # pyright: ignore[reportArgumentType]
 
 
 def test_present_is_false_without_the_zaaktype(monkeypatch):
@@ -260,3 +270,39 @@ def test_bpmn_zaaktype_has_heropend_before_its_eindstatus_and_clears_zacs_cache(
     assert isinstance(step, ZacCatalogusStep)
     statustypen = step.params["statustypen"]
     assert HEROPEND in statustypen[:-1]  # pyright: ignore[reportIndexIssue]
+
+
+def test_process_files_are_the_process_and_its_forms_by_file_name():
+    files = bpmn.process_files()
+    assert f"{PROCESS_KEY}.bpmn" in files
+    assert len([name for name in files if name.endswith(".json")]) == FORM_COUNT
+
+
+def test_deploy_process_posts_the_model_before_its_forms(fake_http):
+    sent = fake_http({f"POST {bpmn.DEFINITIONS}": (201, {}), f"POST {bpmn.DEFINITIONS}/k/forms": (201, {})})
+    bpmn.deploy_process(requests.Session(), "https://zac", "k", {"f.json": "{}", "k.bpmn": "<x/>"})
+    assert [json.loads(s.body)["filename"] for s in sent] == ["k.bpmn", "f.json"]
+
+
+def test_deployed_files_reads_the_download_and_is_none_without_one(fake_http, monkeypatch):
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as zipped:
+        zipped.writestr("k.bpmn", "<x/>")
+    fake_http({f"GET {bpmn.DEFINITIONS}/k/download": (200, {})})
+    monkeypatch.setattr(requests.Response, "content", property(lambda _self: archive.getvalue()))
+    assert bpmn.deployed_files(requests.Session(), "https://zac", "k") == {"k.bpmn": "<x/>"}
+    fake_http({})
+    assert bpmn.deployed_files(requests.Session(), "https://zac", "k") is None
+
+
+def test_complete_intake_assigns_and_chooses_the_eindstatus(fake_http):
+    intake = {"id": "t1", "naam": bpmn.INTAKE, "status": "TOEGEKEND", "taakdata": {}}
+    sent = fake_http({"GET /rest/taken/zaak/z1": (200, [intake]), "PATCH /rest/taken/complete": (200, intake)})
+    bpmn.complete_intake(requests.Session(), "https://zac", {"uuid": "z1"}, ("g1", "bob"), extra="x")
+    assert json.loads(sent[-1].body)["taakdata"] == {
+        "AM_TeamBehandelaar_Groep": "g1",
+        "AM_TeamBehandelaar_Medewerker": "bob",
+        "ZK_Status": bpmn.EINDSTATUS,
+        "ZK_Result": bpmn.EINDSTATUS,
+        "extra": "x",
+    }

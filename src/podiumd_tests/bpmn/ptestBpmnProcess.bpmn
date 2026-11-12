@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- podiumd-tests' BPMN process for ZAC: intake (assign), select and sign documents, summary, close the zaak.
+<!-- podiumd-tests' BPMN process for ZAC: intake (assign, status In behandeling, a mail when the intake names
+     MAIL_To), select and sign documents, summary, close the zaak.
      Modelled on ZAC's own test processes (src/itest/resources/bpmn, ZAC 5.9.1). -->
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:flowable="http://flowable.org/bpmn"
-             targetNamespace="http://podiumd-tests">
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" targetNamespace="http://podiumd-tests">
   <process id="ptestBpmnProcess" name="podiumd-tests BPMN process" isExecutable="true">
     <startEvent id="start" flowable:initiator="initiator"/>
     <userTask id="intake" name="Intake" flowable:assignee="${var:get(zaakBehandelaar)}"
@@ -12,6 +13,20 @@
         <flowable:field name="groepId"><flowable:expression><![CDATA[${AM_TeamBehandelaar_Groep}]]></flowable:expression></flowable:field>
         <flowable:field name="behandelaarGebruikersnaam"><flowable:expression><![CDATA[${AM_TeamBehandelaar_Medewerker}]]></flowable:expression></flowable:field>
         <flowable:field name="reden"><flowable:expression><![CDATA[podiumd-tests ${zaakIdentificatie}]]></flowable:expression></flowable:field>
+      </extensionElements>
+    </serviceTask>
+    <serviceTask id="inBehandeling" name="Status In behandeling" flowable:class="net.atos.zac.flowable.delegate.UpdateZaakJavaDelegate">
+      <extensionElements>
+        <flowable:field name="statustypeOmschrijving"><flowable:string><![CDATA[In behandeling]]></flowable:string></flowable:field>
+      </extensionElements>
+    </serviceTask>
+    <exclusiveGateway id="mailChoice" name="Mail?" default="noMail"/>
+    <serviceTask id="sendMail" name="Send mail" flowable:class="net.atos.zac.flowable.delegate.SendEmailDelegate">
+      <extensionElements>
+        <flowable:field name="from"><flowable:string><![CDATA[podiumd-tests@example.invalid]]></flowable:string></flowable:field>
+        <flowable:field name="to"><flowable:expression><![CDATA[${MAIL_To}]]></flowable:expression></flowable:field>
+        <flowable:field name="template"><flowable:string><![CDATA[Algemene e-mail]]></flowable:string></flowable:field>
+        <flowable:field name="vertrouwelijkheidaanduiding"><flowable:expression><![CDATA[${var:getOrDefault(MAIL_Vertrouwelijkheidaanduiding, '')}]]></flowable:expression></flowable:field>
       </extensionElements>
     </serviceTask>
     <userTask id="selectDocuments" name="Select documents to sign" flowable:assignee="${var:get(zaakBehandelaar)}"
@@ -30,7 +45,13 @@
     <endEvent id="end"/>
     <sequenceFlow id="f1" sourceRef="start" targetRef="intake"/>
     <sequenceFlow id="f2" sourceRef="intake" targetRef="assign"/>
-    <sequenceFlow id="f3" sourceRef="assign" targetRef="selectDocuments"/>
+    <sequenceFlow id="f3" sourceRef="assign" targetRef="inBehandeling"/>
+    <sequenceFlow id="f3a" sourceRef="inBehandeling" targetRef="mailChoice"/>
+    <sequenceFlow id="withMail" sourceRef="mailChoice" targetRef="sendMail">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${var:isNotEmpty(MAIL_To)}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="noMail" sourceRef="mailChoice" targetRef="selectDocuments"/>
+    <sequenceFlow id="f3b" sourceRef="sendMail" targetRef="selectDocuments"/>
     <sequenceFlow id="f4" sourceRef="selectDocuments" targetRef="signDocuments"/>
     <sequenceFlow id="f5" sourceRef="signDocuments" targetRef="sign"/>
     <sequenceFlow id="f6" sourceRef="sign" targetRef="summary"/>

@@ -6,6 +6,27 @@
   "type": "form",
   "components": [
     {
+      "type": "textfield",
+      "key": "ptestZaakFataleDatum",
+      "label": "Fatale datum of the zaak",
+      "defaultValue": "ZAAK:FATALE_DATUM",
+      "input": true
+    },
+    {
+      "type": "textfield",
+      "key": "ptestZaakBehandelaar",
+      "label": "Behandelaar of the zaak",
+      "defaultValue": "ZAAK:BEHANDELAAR",
+      "input": true
+    },
+    {
+      "type": "textfield",
+      "key": "ptestCommunicatiekanaal",
+      "label": "Communicatiekanaal of the zaak",
+      "defaultValue": ":zaakCommunicatiekanaal",
+      "input": true
+    },
+    {
       "type": "datagrid",
       "key": "ZAAK_Documenten_Ondertekenen_Selectie",
       "label": "Documents to sign",

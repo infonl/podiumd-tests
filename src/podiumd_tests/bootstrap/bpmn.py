@@ -9,6 +9,9 @@ only this zaaktype, so the rights do not depend on the estate's PABC dataset.
 
 from __future__ import annotations
 
+import io
+import zipfile
+
 from dataclasses import dataclass
 from http import HTTPStatus
 from pathlib import Path
@@ -34,10 +37,14 @@ from podiumd_tests.pabc import ensure_functional_role
 from podiumd_tests.pabc import zaaktype_entity_type
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import published_zaaktype
+from podiumd_tests.zac import complete_task
+from podiumd_tests.zac import open_task
 from podiumd_tests.zac import user_groups
 from podiumd_tests.zac import zac_session
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     import requests
 
     from podiumd_tests.bootstrap.keycloak import KeycloakUser
@@ -53,6 +60,57 @@ ZAC_APPLICATION = "zaakafhandelcomponent"
 FILES = Path(__file__).parent.parent / "bpmn"
 DEFINITIONS = "/rest/bpmn-process-definitions"
 CONFIGURATION = "/rest/zaaktype-bpmn-configuration"
+# The BPMN test zaaktype's last statustype, and its resultaattype.
+EINDSTATUS = "Afgehandeld"
+# The statustype the process sets after the intake.
+IN_BEHANDELING = "In behandeling"
+# Intake form fields: the process mails MAIL_To with this vertrouwelijkheidaanduiding when MAIL_To is not empty.
+MAIL_TO, MAIL_VERTROUWELIJKHEID = "MAIL_To", "MAIL_Vertrouwelijkheidaanduiding"
+
+
+def complete_intake(
+    http: requests.Session, zac_url: str, zaak: JsonObject, to: tuple[str, str], **fields: object
+) -> None:
+    """Complete the process's intake: assign the zaak to (group, behandelaar), with EINDSTATUS as status and resultaat.
+
+    fields: more form data, which ZAC keeps as zaakdata.
+    """
+    groep, behandelaar = to
+    data = {
+        "AM_TeamBehandelaar_Groep": groep,
+        "AM_TeamBehandelaar_Medewerker": behandelaar,
+        "ZK_Status": EINDSTATUS,
+        "ZK_Result": EINDSTATUS,
+        **fields,
+    }
+    complete_task(http, zac_url, open_task(http, zac_url, str(zaak["uuid"]), INTAKE), data)
+
+
+def process_files() -> dict[str, str]:
+    """Return podiumd-tests' process and its forms by file name, as ZAC's download names them."""
+    paths = [FILES / f"{PROCESS_KEY}.bpmn", *sorted(FILES.glob("*.json"))]
+    return {path.name: path.read_text(encoding="utf-8") for path in paths}
+
+
+def deploy_process(http: requests.Session, zac: str, key: str, files: Mapping[str, str]) -> None:
+    """Deploy the .bpmn of files as the process's next version, then its .json forms for that version."""
+    for name, content in files.items():
+        if name.endswith(".bpmn"):
+            body = {"filename": name, "content": content}
+            expect_status(http.post(zac + DEFINITIONS, json=body), HTTPStatus.CREATED)
+    for name, content in files.items():
+        if name.endswith(".json"):
+            body = {"filename": name, "content": content}
+            expect_status(http.post(f"{zac}{DEFINITIONS}/{key}/forms", json=body), HTTPStatus.CREATED)
+
+
+def deployed_files(http: requests.Session, zac: str, key: str) -> dict[str, str] | None:
+    """Return the files of the process's latest version by path, from ZAC's ZIP download; None before ZAC 5.9."""
+    response = http.get(f"{zac}{DEFINITIONS}/{key}/download")
+    if response.status_code == HTTPStatus.NOT_FOUND:
+        return None
+    with zipfile.ZipFile(io.BytesIO(expect_status(response, HTTPStatus.OK).content)) as archive:
+        return {name: archive.read(name).decode() for name in archive.namelist()}
 
 
 def mappable_roles(pabc: requests.Session, pabc_url: str) -> dict[str, tuple[str, ...]]:
@@ -88,7 +146,10 @@ class ZacBpmnProcess:
     wiring: bool = False
 
     def is_present(self, ctx: Context, /) -> bool:
-        """Return whether the process is deployed, linked to the BPMN test zaaktype, and PABC maps the roles."""
+        """Return whether the process is deployed as in FILES, linked to the BPMN zaaktype, and PABC maps the roles.
+
+        A changed process or form makes apply deploy a new version; zaken started before keep the old one.
+        """
         try:
             zaaktype = uuid_of(published_zaaktype(_openzaak(ctx), BPMN_ZAAKTYPE, "openzaak-zaaktype-bpmn")["url"])
         except LookupError:
@@ -99,6 +160,9 @@ class ZacBpmnProcess:
         link = bpmn_link(http, zac, zaaktype)
         if PROCESS_KEY not in keys or link is None or link.get("zaakNietOntvankelijkResultaattype"):
             return False
+        deployed = deployed_files(http, zac, PROCESS_KEY)
+        if deployed is not None and deployed != process_files():
+            return False
         pabc, pabc_url = self._pabc(ctx)
         wanted = mappable_roles(pabc, pabc_url).items()
         return all(domain_mappings(pabc, pabc_url, name) >= len(roles) for name, roles in wanted)
@@ -108,12 +172,7 @@ class ZacBpmnProcess:
         zaaktype = published_zaaktype(_openzaak(ctx), BPMN_ZAAKTYPE, "openzaak-zaaktype-bpmn")
         self._map_roles(ctx, str(zaaktype["omschrijving"]))
         http, zac = self._zac(ctx)
-        process = FILES / f"{PROCESS_KEY}.bpmn"
-        body = {"filename": process.name, "content": process.read_text(encoding="utf-8")}
-        expect_status(http.post(zac + DEFINITIONS, json=body), HTTPStatus.CREATED)
-        for form in sorted(FILES.glob("*.json")):
-            body = {"filename": form.name, "content": form.read_text(encoding="utf-8")}
-            expect_status(http.post(f"{zac}{DEFINITIONS}/{PROCESS_KEY}/forms", json=body), HTTPStatus.CREATED)
+        deploy_process(http, zac, PROCESS_KEY, process_files())
         expect_status(http.post(zac + CONFIGURATION, json=self.configuration(http, zac, zaaktype)), HTTPStatus.OK)
         return {}
 

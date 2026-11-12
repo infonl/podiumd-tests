@@ -30,6 +30,21 @@
       "input": true
     },
     {
+      "type": "email",
+      "key": "MAIL_To",
+      "label": "Mail to",
+      "input": true
+    },
+    {
+      "type": "select",
+      "key": "MAIL_Vertrouwelijkheidaanduiding",
+      "label": "Vertrouwelijkheid of the mail",
+      "input": true,
+      "attributes": {
+        "ZAC_TYPE": "ZAC_vertrouwelijkheidaanduiding"
+      }
+    },
+    {
       "type": "button",
       "key": "submit",
       "label": "Submit",

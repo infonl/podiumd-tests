@@ -643,7 +643,15 @@ STEPS: tuple[Step, ...] = (
             "besluittype": names.ZAAKBRUG_BESLUITTYPE,
         },
     ),
-    # The zaaktype of podiumd-tests' BPMN process in ZAC (step zac-bpmn-process).
+    # The informatieobjecttype ZAC stores mails as; the BPMN zaaktype and throwaway ZAC zaaktypen of the tests link it.
+    SnippetStep(
+        "openzaak-iot-email",
+        ("openzaak",),
+        "openzaak_iot",
+        None,
+        {"domein": names.TEST_CATALOGUS_DOMEIN, "rsin": names.TEST_CATALOGUS_RSIN, "omschrijving": names.EMAIL_IOT},
+    ),
+    # The zaaktype of podiumd-tests' BPMN process in ZAC (step zac-bpmn-process); its process mails.
     ZacCatalogusStep(
         "openzaak-zaaktype-bpmn",
         ("openzaak", "zac", "keycloak"),
@@ -656,16 +664,9 @@ STEPS: tuple[Step, ...] = (
             "iot_omschrijving": names.BPMN_IOT,
             "besluittype": names.BPMN_BESLUITTYPE,
             "statustypen": ["Ingediend", "In behandeling", HEROPEND, "Afgehandeld"],
+            "extra_iots": [names.EMAIL_IOT],
         },
         admin=ADMIN,
-    ),
-    # The informatieobjecttype ZAC stores mails as; throwaway ZAC zaaktypen of the tests link it.
-    SnippetStep(
-        "openzaak-iot-email",
-        ("openzaak",),
-        "openzaak_iot",
-        None,
-        {"domein": names.TEST_CATALOGUS_DOMEIN, "rsin": names.TEST_CATALOGUS_RSIN, "omschrijving": names.EMAIL_IOT},
     ),
     # ZaakBrug's statuses on a zaak of an expired zaaktype version: version 1 valid in 2020, version 2 from 2021.
     SnippetStep(
