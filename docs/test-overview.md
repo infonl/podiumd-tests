@@ -15,7 +15,7 @@ versions is not counted.
 | perf | 54 | 3 | 0 |
 | **full tier** | **1004** | **517** |  |
 
-Unit tests (`unit_tests/`, functions): 706. Perf endpoints (`perf/runs.py`): 22.
+Unit tests (`unit_tests/`, functions): 708. Perf endpoints (`perf/runs.py`): 22.
 
 ## Per area
 

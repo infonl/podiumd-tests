@@ -15,11 +15,13 @@ from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.mailpit import own_address
 from podiumd_tests.mailpit import received_message
+from podiumd_tests.pdf import pdfa_problems
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.zac import afzenders
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_mail
+from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
 from podiumd_tests.zac_documents import zaak_documents
 
@@ -77,7 +79,7 @@ def _titles(zac: requests.Session, zac_url: str, zaak: JsonObject) -> dict[str, 
     And keeps the mail as a vertrouwelijk document
     Then the mail arrives from ZAC's afzender with the reply-to address and the attachment
     And the zaaknummer and omschrijving in its subject and text are filled in
-    And the zaak has the mail as a PDF, vertrouwelijk
+    And the zaak has the mail as a vertrouwelijk PDF/A-2b and PDF/UA with embedded fonts
 """)
 def test_email_with_an_attachment_arrives_and_is_kept_on_the_zaak(
     zac: requests.Session,
@@ -87,7 +89,7 @@ def test_email_with_an_attachment_arrives_and_is_kept_on_the_zaak(
     mailpit: ApiClient,
     registry: ResourceRegistry,
 ) -> None:
-    """E-mail versturen with bijlagen, replyTo and createDocumentFromMail; variables resolved; PDF stored."""
+    """E-mail versturen with bijlagen, replyTo and createDocumentFromMail; variables resolved; PDF/A stored."""
     zaak = zac_zaak()
     document = uploaded_document(zac, urls["zac"], zaak, registry)
     body = mail(
@@ -106,6 +108,9 @@ def test_email_with_an_attachment_arrives_and_is_kept_on_the_zaak(
     assert [item.get("Address") for item in entries(message.get("ReplyTo"))] == [REPLY_TO]
     assert [item.get("FileName") for item in entries(message.get("Attachments"))] == [document["bestandsnaam"]]
     assert _titles(zac, urls["zac"], zaak).get(subject) == "VERTROUWELIJK"
+    stored = next(item for item in zaak_documents(zac, urls["zac"], zaak) if item.get("titel") == subject)
+    pdf = expect_status(zac.get(f"{document_url(urls['zac'], stored)}/download"), HTTPStatus.OK).content
+    assert pdfa_problems(pdf) == []
 
 
 @pytest.mark.scenario("""

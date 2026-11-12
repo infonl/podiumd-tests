@@ -21,6 +21,7 @@ dependencies = [
     "axe-playwright-python", # ships axe-core for the WCAG scans (TA 172)
     "playwright",        # imported directly; pytest-playwright brings it too
     "gevent",            # imported by the gateway locustfile; locust brings it too
+    "pikepdf",           # PDF/A claims and embedded fonts of generated PDFs
 ]
 
 [project.optional-dependencies]

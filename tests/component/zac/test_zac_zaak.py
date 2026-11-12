@@ -20,6 +20,7 @@ from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
+from podiumd_tests.pdf import pdfa_problems
 from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
@@ -446,7 +447,7 @@ def test_sent_document_is_marked_verzonden(
 @pytest.mark.scenario("""
     Given a definitief Word document, small or large, on a zaak in ZAC
     When the behandelaar converts the document to PDF
-    Then the document's current version is a PDF
+    Then the document's current version is a PDF/A-2b and PDF/UA with embedded fonts
 """)
 def test_word_document_is_converted_to_pdf(
     zac: requests.Session,
@@ -455,7 +456,7 @@ def test_word_document_is_converted_to_pdf(
     registry: ResourceRegistry,
     suffix: str,
 ) -> None:
-    """A definitief Word document converted in ZAC becomes a PDF: its current version has the PDF format and content."""
+    """A definitief Word document converted in ZAC becomes a PDF/A-2b, PDF/UA with embedded fonts, as ZAC requests."""
     zaak = zac_zaak()
     document = uploaded_document(zac, urls["zac"], zaak, registry, suffix=suffix)
     documents = document_url(urls["zac"], document)
@@ -463,4 +464,6 @@ def test_word_document_is_converted_to_pdf(
     expect_status(converted, HTTPStatus.NO_CONTENT, HTTPStatus.OK)
     current = expect_status(zac.get(documents, params={"zaak": str(zaak["uuid"])}), HTTPStatus.OK).json()
     assert current["formaat"] == "application/pdf", current.get("formaat")
-    assert expect_status(zac.get(f"{documents}/download"), HTTPStatus.OK).content.startswith(b"%PDF")
+    content = expect_status(zac.get(f"{documents}/download"), HTTPStatus.OK).content
+    assert content.startswith(b"%PDF")
+    assert pdfa_problems(content) == []
