@@ -117,7 +117,8 @@ def test_zaak_is_linked_and_replaced_by_zaaknummer(  # fixtures
     Given the KCC medewerker is logged in to ITA
     And a contactverzoek and two zaken
     When the medewerker assigns it to themselves, links a zaak, replaces it, and closes it with a contactmoment
-    Then ITA's logboek of the contactverzoek lists each of those actions
+    Then ITA's logboek of the contactverzoek lists each of those actions, newest first
+    And it names both zaaknummers, and the contactmoment's result, kanaal and informatie
 """)
 def test_logboek_lists_each_action(  # fixtures
     ita: requests.Session,
@@ -127,14 +128,25 @@ def test_logboek_lists_each_action(  # fixtures
     parts: ZaaktypeParts,
     internetaak: JsonObject,
 ) -> None:
-    """The activiteit types of /logboek after toewijzen, koppelen, wijzigen and close-with-klantcontact."""
+    """/logboek after toewijzen, koppelen, wijzigen and close-with-klantcontact: types, zaaknummers, contactmoment."""
     assign_to_me(ita, urls["ita"], internetaak)
+    zaaknummers: list[str] = []
     for _ in range(2):
-        zaak = make_zaak(openzaak, registry, parts.zaaktype)
-        expect_status(koppel_zaak(ita, urls["ita"], internetaak, str(zaak["identificatie"])), HTTPStatus.OK)
-    close_with_klantcontact(ita, urls["ita"], answer_body(internetaak, klantcontact_body(registry)))
-    types = [str(activiteit.get("type")) for activiteit in logboek(ita, urls["ita"], internetaak)]
+        zaaknummers.append(str(make_zaak(openzaak, registry, parts.zaaktype)["identificatie"]))
+        expect_status(koppel_zaak(ita, urls["ita"], internetaak, zaaknummers[-1]), HTTPStatus.OK)
+    contactmoment = klantcontact_body(registry, inhoud=registry.tagged("informatie"))
+    close_with_klantcontact(ita, urls["ita"], answer_body(internetaak, contactmoment))
+    activiteiten = logboek(ita, urls["ita"], internetaak)
+    types = [str(activiteit.get("type")) for activiteit in activiteiten]
     assert types == ["verwerkt", "klantcontact", "zaakkoppeling-gewijzigd", "zaak-gekoppeld", "toegewezen"]
+    gewijzigd, gekoppeld = (str(activiteit.get("tekst")) for activiteit in activiteiten[2:4])
+    assert (zaaknummers[1] in gewijzigd, zaaknummers[0] in gekoppeld) == (True, True), (gewijzigd, gekoppeld)
+    contact = activiteiten[1]
+    assert [contact.get(key) for key in ("titel", "kanaal", "tekst")] == [
+        "Contact gelukt",
+        contactmoment["kanaal"],
+        contactmoment["inhoud"],
+    ]
 
 
 @pytest.mark.xfail(

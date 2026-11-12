@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import secrets
 
+from datetime import UTC
+from datetime import datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -14,10 +16,12 @@ import pytest
 
 from podiumd_tests.bootstrap.steps import ITA_BEHEERDER
 from podiumd_tests.bootstrap.steps import KCC
+from podiumd_tests.ita import logboek
 from podiumd_tests.ita import make_eenheid
 from podiumd_tests.ita import overview
-from podiumd_tests.ita import uuids
+from podiumd_tests.kcc import ita_afhandeltermijn_hours
 from podiumd_tests.kcc import kcc_login
+from podiumd_tests.kcc import weekday_hours_before
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
@@ -86,29 +90,38 @@ def test_only_the_beheerder_lists_all_contactverzoeken(
     f"{E2E}/Contactverzoek/ContactverzoekScenarios.cs",
     "Alle contactverzoeken lists an open contactverzoek; a closed one is no longer on it.",
 )
+@pytest.mark.source(
+    f"{E2E}/Werklijst/WerklijstUrgentieScenarios.cs",
+    "The urgency label also shows on Alle contactverzoeken.",
+)
 @pytest.mark.scenario("""
-    Given an open and a closed contactverzoek in Open Klant
+    Given an open contactverzoek whose afhandeltermijn ended a day ago, and a closed one, in Open Klant
     When the functioneel beheerder opens Alle contactverzoeken in ITA
-    Then ITA lists the open contactverzoek
+    Then ITA lists the open contactverzoek, marked overdue for 24 hours
     And not the closed one
 """)
-def test_alle_contactverzoeken_lists_only_open_ones(
+def test_alle_contactverzoeken_lists_only_open_ones(  # fixtures
     ita_as: Callable[[KeycloakUser], requests.Session],
     urls: dict[str, str],
+    podiumd_env: Environment,
     openklant: ApiClient,
     registry: ResourceRegistry,
     closed_taak: JsonObject,
 ) -> None:
-    """ITA's list of all internetaken has the te_verwerken ones, not the verwerkt ones."""
-    open_taak = make_internetaak(openklant, registry, make_klantcontact(openklant, registry), [])
-    listed = set(uuids(overview(ita_as(ITA_BEHEERDER), f"{urls['ita']}/api/internetaken")))
+    """ITA's list of all internetaken has the te_verwerken ones with their urgentie, not the verwerkt ones."""
+    overdue = weekday_hours_before(datetime.now(tz=UTC), ita_afhandeltermijn_hours(podiumd_env) + 23.5)
+    klantcontact = make_klantcontact(openklant, registry, plaatsgevondenOp=overdue.isoformat())
+    open_taak = make_internetaak(openklant, registry, klantcontact, [])
+    listed = {str(t.get("uuid")): t for t in overview(ita_as(ITA_BEHEERDER), f"{urls['ita']}/api/internetaken")}
     assert (open_taak["uuid"] in listed, closed_taak["uuid"] in listed) == (True, False)
+    assert listed[str(open_taak["uuid"])].get("urgentie") == {"status": "error", "label": "24u verlopen"}
 
 
 @pytest.mark.source(
     f"{E2E}/Contactverzoek/HeropenContactverzoekScenarios.cs",
     "A beheerder reopens a closed contactverzoek with a reason; confirming without a reason is not possible.",
 )
+@pytest.mark.source(f"{E2E}/Contactverzoek/HeropenContactverzoekScenarios.cs", "The logboek shows the reopen.")
 @pytest.mark.scenario("""
     Given a closed contactverzoek in Open Klant
     When the functioneel beheerder reopens it in ITA without a reason
@@ -116,20 +129,26 @@ def test_alle_contactverzoeken_lists_only_open_ones(
     And ITA refuses the KCC medewerker to reopen it
     When the functioneel beheerder reopens it with a reason
     Then the contactverzoek is te_verwerken again in Open Klant
+    And ITA's logboek shows the reopen on top, with the beheerder and the reason
 """)
 def test_beheerder_reopens_a_closed_contactverzoek(
     ita_as: Callable[[KeycloakUser], requests.Session],
     urls: dict[str, str],
     openklant: ApiClient,
+    registry: ResourceRegistry,
     closed_taak: JsonObject,
 ) -> None:
-    """Without a reason the reopen is refused; with one the internetaak is open again and the KCC may not reopen."""
+    """Without a reason the reopen is refused; with one the internetaak is open again, logged; the KCC may not."""
     heropen = f"{urls['ita']}/api/internetaken/{closed_taak['uuid']}/heropen"
     beheerder = ita_as(ITA_BEHEERDER)
     expect_status(beheerder.post(heropen, json={"reden": ""}), HTTPStatus.BAD_REQUEST)
     expect_status(ita_as(KCC).post(heropen, json={"reden": "podiumd-tests"}), *REFUSED)
-    expect_status(beheerder.post(heropen, json={"reden": "podiumd-tests"}), HTTPStatus.OK)
+    reden = registry.tagged("heropen")
+    expect_status(beheerder.post(heropen, json={"reden": reden}), HTTPStatus.OK)
     assert openklant.get(f"internetaken/{closed_taak['uuid']}")["status"] == "te_verwerken"
+    laatste = logboek(beheerder, urls["ita"], closed_taak)[0]
+    assert (laatste.get("type"), laatste.get("notitie")) == ("heropend", reden), laatste
+    assert ITA_BEHEERDER.attributes["samaccountname"][0] in str(laatste.get("uitgevoerdDoor")), laatste
 
 
 @pytest.mark.source(

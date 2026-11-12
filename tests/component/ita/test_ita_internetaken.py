@@ -8,6 +8,8 @@ KISS reads that logboek with its own Objecten token.
 
 from __future__ import annotations
 
+import math
+
 from datetime import UTC
 from datetime import datetime
 from http import HTTPStatus
@@ -118,7 +120,7 @@ def test_claimed_internetaak_is_on_my_list(
     Given the KCC medewerker is logged in to ITA
     And an unassigned contactverzoek in Open Klant
     When the medewerker registers a contact in ITA that did or did not succeed, without closing
-    Then that klantcontact is in Open Klant, marked gelukt or not gelukt
+    Then that klantcontact is in Open Klant with its kanaal, marked gelukt or not gelukt
     And the contactverzoek stays te_verwerken
 """)
 def test_answering_an_internetaak_registers_a_klantcontact(
@@ -134,7 +136,8 @@ def test_answering_an_internetaak_registers_a_klantcontact(
     clean_up_klantcontacten(openklant, registry, onderwerp)
     antwoord = klantcontact_body(registry, onderwerp=onderwerp, indicatieContactGelukt=gelukt)
     add_klantcontact(ita, urls["ita"], answer_body(internetaak, antwoord))
-    assert [k["indicatieContactGelukt"] for k in klantcontacten_about(openklant, onderwerp)] == [gelukt]
+    registered = [(k["indicatieContactGelukt"], k["kanaal"]) for k in klantcontacten_about(openklant, onderwerp)]
+    assert registered == [(gelukt, antwoord["kanaal"])]
     assert openklant.get(f"internetaken/{internetaak['uuid']}")["status"] == "te_verwerken"
 
 
@@ -294,11 +297,16 @@ def test_a_verwerkt_contactverzoek_is_read_only(
     f"{ITA_E2E}/Werklijst/WerklijstUrgentieScenarios.cs",
     "The werklijst marks each contactverzoek in time, almost overdue or overdue, counting weekday hours only.",
 )
+@pytest.mark.source(
+    f"{ITA_E2E}/Werklijst/WerklijstUrgentieScenarios.cs",
+    "The urgency label rounds the remaining hours up, so half an hour left reads 'nog 1u', never 'nog 0u'.",
+)
 @pytest.mark.scenario("""
-    Given the KCC medewerker has claimed three contactverzoeken in ITA
-    And their klantcontacten took place now, just inside the afhandeltermijn and long before it
+    Given the KCC medewerker has claimed four contactverzoeken in ITA
+    And their afhandeltermijn ends in some hours, in a few hours, in half an hour, and ended a day ago
     When the medewerker opens the contactverzoeken assigned to them
-    Then ITA marks them in time, almost overdue and overdue
+    Then ITA marks them in time, almost overdue, almost overdue and overdue
+    And labels them with the hours left or overdue, rounded up: half an hour left reads "nog 1u"
     And weekends do not count towards the afhandeltermijn
 """)
 def test_werklijst_shows_the_urgency_of_each_contactverzoek(
@@ -310,19 +318,24 @@ def test_werklijst_shows_the_urgency_of_each_contactverzoek(
     registry: ResourceRegistry,
     logboek_type: str,
 ) -> None:
-    """ITA's urgentie status per contactverzoek in Aan mij toegewezen: success, warning or error (weekday hours)."""
+    """ITA's urgentie status and label per contactverzoek in Aan mij toegewezen (weekday hours, rounded up)."""
     termijn, bijna = ita_afhandeltermijn_hours(podiumd_env), ita_bijna_verlopen_hours(podiumd_env)
     now = datetime.now(tz=UTC)
-    ages = {"success": 0, "warning": termijn - bijna / 2, "error": termijn + 24}
-    expected: dict[str, str] = {}
-    for status, hours in ages.items():
-        plaatsgevonden = weekday_hours_before(now, hours).isoformat()
+    # Weekday hours left of the afhandeltermijn, and the urgentie ITA gives it.
+    left = (
+        (bijna + 1.5, {"status": "success", "label": f"nog {bijna + 2}u"}),
+        (bijna / 2, {"status": "warning", "label": f"nog {math.ceil(bijna / 2)}u"}),
+        (0.5, {"status": "warning", "label": "nog 1u"}),
+        (-23.5, {"status": "error", "label": "24u verlopen"}),
+    )
+    expected: dict[str, dict[str, str]] = {}
+    for hours, urgentie in left:
+        plaatsgevonden = weekday_hours_before(now, termijn - hours).isoformat()
         taak = make_internetaak(
             openklant, registry, make_klantcontact(openklant, registry, plaatsgevondenOp=plaatsgevonden), []
         )
         clean_up_logboek(objecten, registry, logboek_type, str(taak["uuid"]))
         assign_to_me(ita, urls["ita"], taak)
-        expected[str(taak["uuid"])] = status
+        expected[str(taak["uuid"])] = urgentie
     mine = {str(t.get("uuid")): t for t in get_entries(ita, f"{urls['ita']}/api/internetaken/aan-mij-toegewezen")}
-    found = {uuid: section(mine.get(uuid, {}), "urgentie").get("status") for uuid in expected}
-    assert found == expected, {uuid: mine.get(uuid, {}).get("urgentie") for uuid in expected}
+    assert {uuid: section(mine.get(uuid, {}), "urgentie") for uuid in expected} == expected
