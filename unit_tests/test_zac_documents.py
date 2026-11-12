@@ -252,6 +252,18 @@ def test_lock_document_is_unlocked_at_cleanup(fake_http):
     assert sent[-1].url == f"{ZAC}{url}/unlock?zaak=z1"
 
 
+def test_stored_mail_is_the_document_titled_with_the_subject(fake_http):
+    listed = [{"uuid": "d0", "titel": "ander"}, {"uuid": "d1", "titel": "Zaak 1"}]
+    fake_http(
+        {
+            "PUT /rest/informatieobjecten/informatieobjectenList": (200, listed),
+            "GET /rest/informatieobjecten/informatieobject/d1/download": (200, "%PDF"),
+        }
+    )
+    stored, content = zac_documents.stored_mail(requests.Session(), ZAC, {"uuid": "z1"}, {"Subject": "Zaak 1"})
+    assert (stored["uuid"], content) == ("d1", b'"%PDF"')
+
+
 def test_convert_to_pdf_names_the_zaak(fake_http):
     url = "/rest/informatieobjecten/informatieobject/d1/convert"
     sent = fake_http({f"POST {url}": (204, None)})

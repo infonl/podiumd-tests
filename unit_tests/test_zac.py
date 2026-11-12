@@ -84,6 +84,11 @@ def test_read_zaak(fake_http):
     assert zac.read_zaak(requests.Session(), ZAC, "u-1") == {"uuid": "u-1"}
 
 
+def test_zaak_status_is_the_omschrijving_zac_shows(fake_http):
+    fake_http({"GET /rest/zaken/zaak/u-1": (200, {"uuid": "u-1", "status": {"naam": "Intake"}})})
+    assert zac.zaak_status(requests.Session(), ZAC, {"uuid": "u-1"}) == "Intake"
+
+
 @pytest.mark.parametrize(("status", "expected"), [(200, True), (403, False), (401, False)])
 def test_can_open_zaak_is_true_only_for_200(fake_http, status, expected):
     fake_http({"GET /rest/zaken/zaak/u-1": (status, {})})

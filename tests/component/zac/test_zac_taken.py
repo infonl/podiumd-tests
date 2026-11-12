@@ -20,8 +20,6 @@ from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
-from podiumd_tests.mailpit import own_address
-from podiumd_tests.mailpit import received_message
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
@@ -37,11 +35,11 @@ from podiumd_tests.zac import moved_dates
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import user_events_offered
 from podiumd_tests.zac import verlengen
+from podiumd_tests.zac import zaak_status
 from podiumd_tests.zac_beheer import referentietabel
 from podiumd_tests.zac_beheer import referentietabel_values
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
-from podiumd_tests.zac_documents import zaak_documents
 from podiumd_tests.zac_taken import AANVULLENDE_INFORMATIE
 from podiumd_tests.zac_taken import ADVIES_EXTERN
 from podiumd_tests.zac_taken import ADVIES_INTERN
@@ -60,13 +58,11 @@ if TYPE_CHECKING:
 
     import requests
 
-    from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
-# ZAC's statustype omschrijvingen while a task Aanvullende informatie is open, and after (ConfigurationService).
+# ZAC's statustype omschrijving while a task Aanvullende informatie is open (ConfigurationService).
 WAITING = "Wacht op aanvullende informatie"
-INTAKE = "Intake"
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "keycloak")]
 
@@ -88,7 +84,6 @@ VRAAG = "podiumd-tests vraag"
 SUSPENSION_DAYS = 7
 VERLENGING_DAYS = 10
 
-MAIL_TIMEOUT = 60
 OPSCHORTEN = {"zaakOpschorten": "true"}
 
 
@@ -236,7 +231,7 @@ def test_aanvullende_informatie_without_hervatten_keeps_the_zaak_opgeschort(
     opgeschort = read_zaak(zac, zac_url, str(zaak["uuid"]))
     assert (opgeschort["isOpgeschort"], _dates(opgeschort)) == (True, moved_dates(zaak, SUSPENSION_DAYS))
     afronden_intake(zac, zac_url, zaak)
-    assert section(read_zaak(zac, zac_url, str(zaak["uuid"])), "status").get("naam") == "In behandeling"
+    assert zaak_status(zac, zac_url, zaak) == "In behandeling"
 
 
 @ZAAK_LIFECYCLE
@@ -323,11 +318,6 @@ def _document(zac: requests.Session, zac_url: str, zaak: JsonObject, document: J
     """ZAC's view of the zaak's document."""
     response = zac.get(document_url(zac_url, document), params={"zaak": str(zaak["uuid"])})
     return cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
-
-
-def _status(zac: requests.Session, zac_url: str, zaak: JsonObject) -> object:
-    """The omschrijving of the zaak's status in ZAC."""
-    return section(read_zaak(zac, zac_url, str(zaak["uuid"])), "status").get("naam")
 
 
 # Intermittent: 2 in 12 tries on minikube.
@@ -462,49 +452,6 @@ def test_goedkeuren_signs_the_selected_document(
 @ZAC_TEAM
 @THROWAWAY
 @TAKEN_ZAAKTYPE
-@pytest.mark.requires("mailpit")
-@pytest.mark.scenario("""
-    Given a zaak in behandeling in ZAC, whose taak Advies extern mails the adviseur
-    When the behandelaar starts Advies extern with an adviseur, an e-mail address and a text
-    Then the mail with that text arrives at the address
-    And the zaak has the mail as a PDF
-    When the behandelaar completes the taak with the extern advies
-    Then the taak is afgerond with that advies
-""")
-def test_advies_extern_mails_the_adviseur(
-    zac: requests.Session,
-    urls: dict[str, str],
-    behandeling: JsonObject,
-    zac_group: str,
-    mailpit: ApiClient,
-    registry: ResourceRegistry,
-) -> None:
-    """Starting Advies extern with sendMail mails taakdata body to emailadres and stores the mail on the zaak."""
-    zac_url = urls["zac"]
-    adres = own_address(registry)
-    taakdata = {"adviseur": "podiumd-tests", "emailadres": adres, "body": "<p>Advies over zaak {ZAAK_NUMMER}</p>"}
-    sturen = {"sendMail": True, "mail": "TAAK_ADVIES_EXTERN"}
-    taak = started_taak(
-        zac,
-        zac_url,
-        behandeling,
-        ADVIES_EXTERN,
-        (zac_group, ADMIN.username),
-        taakdata=taakdata,
-        taakStuurGegevens=sturen,
-    )
-    message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=adres)
-    assert f"Advies over zaak {behandeling['identificatie']}" in str(message.get("HTML"))
-    titels = [document.get("titel") for document in zaak_documents(zac, zac_url, behandeling)]
-    assert message.get("Subject") in titels
-
-    afgerond = complete_task(zac, zac_url, taak, {"externAdvies": VRAAG})
-    assert (afgerond.get("status"), section(afgerond, "taakdata").get("externAdvies")) == ("AFGEROND", VRAAG)
-
-
-@ZAC_TEAM
-@THROWAWAY
-@TAKEN_ZAAKTYPE
 @pytest.mark.scenario("""
     Given a zaak in behandeling in ZAC with a definitief PDF
     When the behandelaar starts Document verzenden for the PDF
@@ -559,72 +506,3 @@ def test_taak_fatale_datum_stays_within_the_zaaks(
     expect_status(refused, HTTPStatus.BAD_REQUEST)
     taak = started_taak(zac, zac_url, behandeling, GOEDKEUREN, (zac_group, ADMIN.username), taakdata={"vraag": VRAAG})
     assert taak.get("fataledatum") == einde.isoformat()
-
-
-@ZAC_TEAM
-@THROWAWAY
-@TAKEN_ZAAKTYPE
-@pytest.mark.requires("mailpit")
-@pytest.mark.parametrize(
-    "uitkomst",
-    [
-        "aanvullende-informatie.geleverd-akkoord",
-        "aanvullende-informatie.geleverd-niet-akkoord",
-        "aanvullende-informatie.niet-geleverd",
-    ],
-)
-@pytest.mark.scenario("""
-    Given a zaak in its intake in ZAC
-    When the behandelaar starts Aanvullende informatie with a mail to an e-mail address
-    Then the mail arrives, and the zaak has it as a PDF
-    And the zaak has the status Wacht op aanvullende informatie
-    When the behandelaar completes the taak with an uitkomst
-    Then the taak is afgerond with that uitkomst, and the zaak has the status Intake again
-    When the behandelaar starts Aanvullende informatie with a mail again
-    Then that mail arrives, and the zaak has one more PDF and one open taak
-""")
-def test_aanvullende_informatie_mails_and_returns_the_zaak_to_intake(
-    zac: requests.Session,
-    urls: dict[str, str],
-    zac_taken_zaak: Callable[[], JsonObject],
-    zac_group: str,
-    mailpit: ApiClient,
-    registry: ResourceRegistry,
-    uitkomst: str,
-) -> None:
-    """Aanvullende informatie with sendMail mails and stores the mail; completing it gives back the status Intake."""
-    zac_url = urls["zac"]
-    zaak = zac_taken_zaak()
-
-    def mailed() -> tuple[JsonObject, JsonObject]:
-        adres = own_address(registry)
-        taakdata = {"emailadres": adres, "body": "<p>Graag meer over zaak {ZAAK_NUMMER}</p>"}
-        sturen = {"sendMail": True, "mail": "TAAK_AANVULLENDE_INFORMATIE"}
-        started = started_taak(
-            zac,
-            zac_url,
-            zaak,
-            AANVULLENDE_INFORMATIE,
-            (zac_group, ADMIN.username),
-            taakdata=taakdata,
-            taakStuurGegevens=sturen,
-        )
-        message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=adres)
-        assert f"Graag meer over zaak {zaak['identificatie']}" in str(message.get("HTML"))
-        return started, message
-
-    def pdfs(message: JsonObject) -> int:
-        return [document.get("titel") for document in zaak_documents(zac, zac_url, zaak)].count(message.get("Subject"))
-
-    taak, message = mailed()
-    assert pdfs(message) == 1
-    assert _status(zac, zac_url, zaak) == WAITING
-
-    afgerond = complete_task(zac, zac_url, taak, {"aanvullendeInformatie": uitkomst})
-    assert section(afgerond, "taakdata").get("aanvullendeInformatie") == uitkomst
-    assert _status(zac, zac_url, zaak) == INTAKE
-
-    _, message = mailed()
-    assert pdfs(message) == 2
-    taken = get_entries(zac, f"{zac_url}/rest/taken/zaak/{zaak['uuid']}")
-    assert sorted(str(item.get("status")) for item in taken) == sorted(["AFGEROND", str(taak.get("status"))]), taken

@@ -296,6 +296,11 @@ def read_zaak(http: requests.Session, zac_url: str, uuid: str) -> JsonObject:
     return cast("JsonObject", expect_status(http.get(f"{zac_url}/rest/zaken/zaak/{uuid}"), HTTPStatus.OK).json())
 
 
+def zaak_status(http: requests.Session, zac_url: str, zaak: JsonObject) -> str:
+    """Return the omschrijving of the zaak's status, as ZAC shows it."""
+    return str(section(read_zaak(http, zac_url, str(zaak["uuid"])), "status").get("naam"))
+
+
 def can_open_zaak(http: requests.Session, zac_url: str, zaak: JsonObject) -> bool:
     """Return whether the session's user may open the zaak in ZAC; raise on an answer other than 200, 401 or 403."""
     response = http.get(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}", allow_redirects=False)

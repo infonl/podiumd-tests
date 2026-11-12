@@ -38,6 +38,7 @@ from podiumd_tests.zac import user_event
 from podiumd_tests.zac import verdelen
 from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zaak_historie
+from podiumd_tests.zac import zaak_status
 from podiumd_tests.zac import zoned_brondatum
 from podiumd_tests.zac_documents import lock_document
 from podiumd_tests.zac_documents import unlock_document
@@ -60,10 +61,6 @@ pytestmark = [
         "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, zaak-lifecycle).",
     ),
 ]
-
-
-def _status(zac: requests.Session, zac_url: str, zaak: JsonObject) -> str:
-    return str(section(read_zaak(zac, zac_url, str(zaak["uuid"])), "status").get("naam"))
 
 
 def _afhandelen(zac: requests.Session, zac_url: str, zaak: JsonObject) -> JsonObject:
@@ -110,9 +107,9 @@ def test_ontvankelijk_intake_puts_the_zaak_in_behandeling(
 ) -> None:
     """INTAKE_AFRONDEN with zaakOntvankelijk gives status In behandeling and the user event ZAAK_AFHANDELEN."""
     zaak = zac_zaak()
-    assert _status(zac, urls["zac"], zaak) == "Intake"
+    assert zaak_status(zac, urls["zac"], zaak) == "Intake"
     afronden_intake(zac, urls["zac"], zaak)
-    assert _status(zac, urls["zac"], zaak) == "In behandeling"
+    assert zaak_status(zac, urls["zac"], zaak) == "In behandeling"
     listeners = zac.get(f"{urls['zac']}/rest/planitems/zaak/{zaak['uuid']}/userEventListenerPlanItems").json()
     assert [item.get("userEventListenerActie") for item in listeners] == ["ZAAK_AFHANDELEN"]
 

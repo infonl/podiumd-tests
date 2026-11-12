@@ -352,6 +352,13 @@ def zaak_documents(
     return entries(expect_status(listed, HTTPStatus.OK).json())
 
 
+def stored_mail(zac: requests.Session, zac_url: str, zaak: JsonObject, message: JsonObject) -> tuple[JsonObject, bytes]:
+    """Return the zaak's document of the mail, which ZAC titles with the mail's subject, and its content."""
+    subject = message.get("Subject")
+    stored = next(item for item in zaak_documents(zac, zac_url, zaak) if item.get("titel") == subject)
+    return stored, expect_status(zac.get(f"{document_url(zac_url, stored)}/download"), HTTPStatus.OK).content
+
+
 def document_historie(zac: requests.Session, zac_url: str, document: JsonObject) -> list[JsonObject]:
     """Return the document's historie lines as ZAC shows them, from Open Zaak's audittrail."""
     return get_entries(zac, f"{document_url(zac_url, document)}/historie")

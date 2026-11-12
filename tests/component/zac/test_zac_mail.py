@@ -31,7 +31,7 @@ from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac import zaak_mailtemplate
 from podiumd_tests.zac_beheer import create_mailtemplate
 from podiumd_tests.zac_beheer import link_mailtemplate
-from podiumd_tests.zac_documents import document_url
+from podiumd_tests.zac_documents import stored_mail
 from podiumd_tests.zac_documents import uploaded_document
 from podiumd_tests.zac_documents import zaak_documents
 
@@ -83,11 +83,9 @@ def _titles(zac: requests.Session, zac_url: str, zaak: JsonObject) -> dict[str, 
 
 
 def _stored_mail(zac: requests.Session, zac_url: str, zaak: JsonObject, message: JsonObject) -> JsonObject:
-    """The zaak's document of the mail, which ZAC titles with the mail's subject; checks it is a PDF/A."""
-    subject = message.get("Subject")
-    stored = next(item for item in zaak_documents(zac, zac_url, zaak) if item.get("titel") == subject)
-    pdf = expect_status(zac.get(f"{document_url(zac_url, stored)}/download"), HTTPStatus.OK).content
-    assert pdfa_problems(pdf) == [], subject
+    """The zaak's document of the mail (stored_mail); checks it is a PDF/A."""
+    stored, pdf = stored_mail(zac, zac_url, zaak, message)
+    assert pdfa_problems(pdf) == [], message.get("Subject")
     return stored
 
 
