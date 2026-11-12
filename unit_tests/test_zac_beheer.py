@@ -68,3 +68,14 @@ def test_create_mailtemplate_is_never_a_default_and_cleanup_deletes_it(fake_http
     assert body["mailTemplateNaam"].startswith(f"{RUN}-zac-")
     registry.cleanup()
     assert sent[-1].url == f"{ZAC}{templates}/3"
+
+
+def test_link_mailtemplate_replaces_the_links_and_cleanup_restores_them(fake_http):
+    path = "/rest/zaakafhandelparameters"
+    before = {"id": 1, "mailtemplateKoppelingen": [{"mailtemplate": {"id": 1}}]}
+    sent = fake_http({f"GET {path}/zt1": (200, before), f"PUT {path}": (200, {})})
+    registry = ResourceRegistry(RUN)
+    zac_beheer.link_mailtemplate(requests.Session(), ZAC, "zt1", {"id": 3}, registry)
+    assert json.loads(sent[-1].body)["mailtemplateKoppelingen"] == [{"mailtemplate": {"id": 3}}]
+    registry.cleanup()
+    assert json.loads(sent[-1].body) == before

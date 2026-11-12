@@ -10,6 +10,8 @@ from typing import cast
 
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
+from podiumd_tests.zac import read_zaakafhandelparameters
+from podiumd_tests.zac import save_zaakafhandelparameters
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -96,6 +98,10 @@ def guard_referentietabel(http: requests.Session, zac_url: str, registry: Resour
     registry.add(f"ZAC referentietabel {tabel['code']} as before", restore)
 
 
+# The field of zaakafhandelparameters with their own mailtemplates, one per mail.
+KOPPELINGEN = "mailtemplateKoppelingen"
+
+
 def create_mailtemplate(http: requests.Session, zac_url: str, registry: ResourceRegistry) -> JsonObject:
     """Create a mailtemplate for mail from a zaak with a run-tagged name, not ZAC's default; cleanup deletes it.
 
@@ -114,6 +120,20 @@ def create_mailtemplate(http: requests.Session, zac_url: str, registry: Resource
     # ZAC answers 204 also when a test deleted it.
     registry.add(f"ZAC mailtemplate {naam}", lambda: delete_mailtemplate(http, zac_url, created))
     return created
+
+
+def link_mailtemplate(
+    http: requests.Session, zac_url: str, zaaktype_uuid: str, template: JsonObject, registry: ResourceRegistry
+) -> None:
+    """Link the mailtemplate in the zaaktype's zaakafhandelparameters, replacing their links; cleanup restores them."""
+    parameters = read_zaakafhandelparameters(http, zac_url, zaaktype_uuid)
+
+    def restore() -> None:
+        current = read_zaakafhandelparameters(http, zac_url, zaaktype_uuid)
+        save_zaakafhandelparameters(http, zac_url, {**current, KOPPELINGEN: parameters[KOPPELINGEN]})
+
+    registry.add(f"mailtemplates of zaaktype {zaaktype_uuid}", restore)
+    save_zaakafhandelparameters(http, zac_url, {**parameters, KOPPELINGEN: [{"mailtemplate": template}]})
 
 
 def mailtemplate(http: requests.Session, zac_url: str, template: JsonObject) -> requests.Response:
