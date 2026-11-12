@@ -148,3 +148,29 @@ def test_inbox_productaanvragen_are_paged_with_their_ontvangstdatum(
     assert [(page.get("totaal"), len(found)) for page, found in zip(pages, shown, strict=True)] == [(2, 1), (2, 1)]
     assert {found[0].get("productaanvraagObjectUUID") for found in shown} == {aanvraag["uuid"] for aanvraag in made}
     assert all(found[0].get("ontvangstdatum") for found in shown), shown
+
+
+@pytest.mark.source(PRODUCTAANVRAAG_SOURCE, "ZAC keeps a productaanvraag of a type it does not handle in its inbox.")
+@pytest.mark.scenario("""
+    Given a productaanvraag of a type no zaaktype in ZAC handles
+    And its only betrokkene is a belanghebbende, no initiator
+    Then ZAC lists it in its Inbox productaanvragen without initiator
+""")
+def test_unhandled_productaanvraag_without_initiator_reaches_the_inbox(
+    zac: requests.Session,
+    urls: dict[str, str],
+    objecten: ApiClient,
+    registry: ResourceRegistry,
+    productaanvraag_objecttype: str,
+) -> None:
+    """A productaanvraag whose betrokkenen hold no initiator gets an Inbox productaanvragen entry."""
+    soort = registry.tagged("inbox-zonder-initiator")
+    clean_up_inbox_entries(zac, urls["zac"], registry, soort)
+    betrokkenen = [{"inpBsn": EREBOS, "rolOmschrijvingGeneriek": "belanghebbende"}]
+    make_productaanvraag(objecten, registry, productaanvraag_objecttype, soort, soort, betrokkenen=betrokkenen)
+    entry = wait_until(
+        lambda: next(iter(inbox_productaanvragen(zac, urls["zac"], soort)), None),
+        timeout=PRODUCTAANVRAAG_TIMEOUT,
+        description=f"productaanvraag {soort} in the Inbox productaanvragen",
+    )
+    assert entry.get("initiatorID") is None
