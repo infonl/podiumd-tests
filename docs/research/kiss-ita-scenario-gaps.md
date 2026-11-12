@@ -25,12 +25,13 @@ UI state whose API path is covered are listed per class under "Not to port", wit
 
 ## Summary
 
-| Suite | Scenarios | Covered | Partial | Gap | Not to port |
-| --- | --- | --- | --- | --- | --- |
-| KISS 3.2.0 | 119 | 23 | 31 | 26 | 39 |
-| ITA 3.3.4 | 129 | 29 | 14 | 42 | 44 |
+| Suite | Rows | Covered | Partial | Gap |
+| --- | --- | --- | --- | --- |
+| KISS 3.2.0 | 33 | 32 | 1 | 0 |
+| ITA 3.3.4 | 35 | 35 | 0 | 0 |
 
-Open work (gap or partial, to port) by priority: KISS high 15, medium 41; ITA high 12, medium 38.
+A row can group several upstream scenarios (their number in parentheses). Scenarios not to port are listed under each
+section. UI-only remainders are noted in a row's "Not asserted" column.
 
 ## KISS
 
@@ -38,8 +39,8 @@ Open work (gap or partial, to port) by priority: KISS high 15, medium 41; ITA hi
 
 | Priority | Scenario | Status | Not asserted | Our tests | Via | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
-| high | An anonymous contactmoment with kanaal, gespreksresultaat and afdeling is saved | partial | saved through `/api/postklantcontacten`; medewerker actor; gespreksresultaat and afdeling (contactmomentdetails) | `test_klantcontact_through_kiss`, `test_klantcontact_keeps_the_kanaal_chosen_in_kiss` | bff-api | Open Klant |
-| medium | The afdeling is filled from the kennisartikel (4 variants: `afdelingnaam`, `afdelingNaam`, two articles) | partial | the search hit's `afdelingen[]` | `test_object_is_found_in_kiss_search[kennisartikel]` | bff-api | Objecten, Elasticsearch sync |
+| high | An anonymous contactmoment with kanaal, gespreksresultaat and afdeling is saved | covered |  | `test_klantcontact_through_kiss`, `test_klantcontact_keeps_the_kanaal_chosen_in_kiss`, `test_contactmoment_saved_in_kiss_names_the_medewerker`, `test_kiss_keeps_the_contactmoment_details` | bff-api | Open Klant |
+| medium | The afdeling is filled from the kennisartikel (4 variants: `afdelingnaam`, `afdelingNaam`, two articles) | partial | VAC with `afdelingnaam` and kennisartikel with `afdelingNaam`: the estate's objecttypes refuse those keys, so they cannot be seeded; KISS reads both spellings | `test_object_is_found_in_kiss_search[kennisartikel]`, `test_kennisartikel_hit_names_its_afdeling` | bff-api | Objecten, Elasticsearch sync |
 
 Not to port: the notitie carried into the afhandeling, the 8 Annuleren variants (client state only); the required
 fields (HTML5 validation in KISS's bundle).
@@ -48,11 +49,11 @@ fields (HTML5 validation in KISS's bundle).
 
 | Priority | Scenario | Status | Not asserted | Our tests | Via | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
-| medium | A search in Smoelenboek finds medewerkers | gap | | | bff-api | Objecten Medewerker, smoelenboek sync |
-| medium | A search filtered on VAC gives only VACs | partial | the source filter | `test_object_is_found_in_kiss_search[vac]` | bff-api | Objecten, Elasticsearch |
-| medium | A search filtered on Kennisbank gives only kennisartikelen | partial | the source filter | `test_object_is_found_in_kiss_search[kennisartikel]` | bff-api | Objecten, Elasticsearch |
+| medium | A search in Smoelenboek finds medewerkers | covered |  | bff-api, `test_object_is_found_in_kiss_search` | Objecten Medewerker, smoelenboek sync |
+| medium | A search filtered on VAC gives only VACs | covered |  | `test_object_is_found_in_kiss_search[vac]`, `test_source_filter_gives_only_that_source` | bff-api | Objecten, Elasticsearch |
+| medium | A search filtered on Kennisbank gives only kennisartikelen | covered |  | `test_object_is_found_in_kiss_search[kennisartikel]`, `test_source_filter_gives_only_that_source` | bff-api | Objecten, Elasticsearch |
 | medium | A search filtered on a website finds its pages | covered | | `test_crawled_website_is_found_in_kiss_search` | bff-api | crawler |
-| medium | Reading a kennisartikel section fills vraag and afdeling | partial | the afdeling in the hit | `test_object_is_found_in_kiss_search[kennisartikel]` | bff-api | Objecten, Elasticsearch |
+| medium | Reading a kennisartikel section fills vraag and afdeling | covered | Filling the vraag field is UI only (not planned) | `test_object_is_found_in_kiss_search[kennisartikel]`, `test_kennisartikel_hit_names_its_afdeling` | bff-api | Objecten, Elasticsearch |
 
 Not to port: 10 hits labelled per source (page size and labels are UI; hits per source are covered).
 
@@ -60,9 +61,9 @@ Not to port: 10 hits labelled per source (page size and labels are UI; hits per 
 
 | Priority | Scenario | Status | Not asserted | Our tests | Via | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
-| high | The KCC finds a zaak by its identificatie | gap | | | bff-api `/api/zaken/zaken` | Open Zaak |
-| high | A contactmoment is registered on the zaak | partial | through KISS (ours creates the onderwerpobject in Open Klant) | `test_klantcontact_about_a_zaak_is_found_by_the_zaak` | bff-api | Open Klant, Open Zaak |
-| high | The zaak's Contactmomenten tab shows it | partial | read through KISS's proxy | same | bff-api | Open Klant, Open Zaak |
+| high | The KCC finds a zaak by its identificatie | covered |  | bff-api `/api/zaken/zaken`, `test_kcc_finds_a_zaak_in_kiss_by_its_zaaknummer` | Open Zaak |
+| high | A contactmoment is registered on the zaak | covered |  | `test_klantcontact_about_a_zaak_is_found_by_the_zaak`, `test_contactmoment_on_a_zaak_in_kiss_is_listed_for_the_zaak` | bff-api | Open Klant, Open Zaak |
+| high | The zaak's Contactmomenten tab shows it | covered |  | same, `test_contactmoment_on_a_zaak_in_kiss_is_listed_for_the_zaak` | bff-api | Open Klant, Open Zaak |
 
 Not to port: the zaak shown checked as gerelateerde zaak (UI; the API path is the row above).
 
@@ -70,8 +71,8 @@ Not to port: the zaak shown checked as gerelateerde zaak (UI; the API path is th
 
 | Priority | Scenario | Status | Not asserted | Our tests | Via | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
-| high | A contactverzoek for a person (BSN) shows on the person's Contactverzoeken tab | gap | | | bff-api | Open Klant, BRP, Objecten afdeling |
-| high | A contactverzoek for a vestiging shows on the company's Contactverzoeken tab | gap | | | bff-api | Open Klant, KvK, Objecten afdeling |
+| high | A contactverzoek for a person (BSN) shows on the person's Contactverzoeken tab | covered |  | bff-api, `test_contactverzoek_for_a_klant_is_listed_for_that_klant` | Open Klant, BRP, Objecten afdeling |
+| high | A contactverzoek for a vestiging shows on the company's Contactverzoeken tab | covered |  | bff-api, `test_contactverzoek_for_a_klant_is_listed_for_that_klant` | Open Klant, KvK, Objecten afdeling |
 
 Not to port: the form prefill for a person and a vestiging (UI; the BRP, KvK and partij reads are covered), the two
 cancel variants.
@@ -80,10 +81,10 @@ cancel variants.
 
 | Priority | Scenario | Status | Not asserted | Our tests | Via | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
-| high | A contactverzoek to an afdeling, by phone, found by that phone number | partial | registration through `postklantcontacten` and `postinternetaak`; digitale adressen; search by phone | `test_contactverzoek_from_kiss_shows_in_full_in_ita` | bff-api | Open Klant, Objecten Afdeling, ITA |
-| high | The same, by e-mail | partial | same; search by e-mail | same | bff-api | same |
-| high | A contactverzoek to a groep, by phone and by e-mail | partial | same, assigned to a groep | same, `test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep` | bff-api | Objecten Groep, ITA |
-| high | A contactverzoek to a medewerker from the smoelenboek, within an afdeling or groep | gap | | | bff-api `/api/search/medewerkers` + `postinternetaak` | Objecten Medewerker, smoelenboek |
+| high | A contactverzoek to an afdeling, by phone, found by that phone number | covered |  | `test_contactverzoek_from_kiss_shows_in_full_in_ita`, `test_contactverzoek_from_kiss_is_found_by_the_klants_adres` | bff-api | Open Klant, Objecten Afdeling, ITA |
+| high | The same, by e-mail | covered |  | same, `test_contactverzoek_from_kiss_is_found_by_the_klants_adres` | bff-api | same |
+| high | A contactverzoek to a groep, by phone and by e-mail | covered |  | same, `test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep`, `test_contactverzoek_from_kiss_is_found_by_the_klants_adres`, `test_contactverzoek_from_kiss_shows_in_full_in_ita` | bff-api | Objecten Groep, ITA |
+| high | A contactverzoek to a medewerker from the smoelenboek, within an afdeling or groep | covered |  | bff-api `/api/search/medewerkers` + `postinternetaak`, `test_contactverzoek_to_a_medewerker_from_the_smoelenboek` | Objecten Medewerker, smoelenboek |
 
 Not to port: no phone or e-mail, an invalid phone or e-mail (HTML5 validation).
 
@@ -99,8 +100,8 @@ Not to port: the 3 navigation scenarios.
 
 | Priority | Scenario | Status | Not asserted | Our tests | Via | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
-| high | A contactmoment for a person (BSN) is saved and shows on the person's Contactmomenten tab | partial | `postklantcontacten`; the person's partij as betrokkene; read back for the person | `test_klantcontact_through_kiss` | bff-api | Open Klant, BRP |
-| high | A contactmoment for a vestiging is saved and shows on the company's tab | partial | the same for the vestiging | `test_klantcontact_through_kiss` | bff-api | Open Klant, KvK |
+| high | A contactmoment for a person (BSN) is saved and shows on the person's Contactmomenten tab | covered |  | `test_klantcontact_through_kiss`, `test_contactmoment_for_a_klant_is_listed_for_that_klant` | bff-api | Open Klant, BRP |
+| high | A contactmoment for a vestiging is saved and shows on the company's tab | covered |  | `test_klantcontact_through_kiss`, `test_contactmoment_for_a_klant_is_listed_for_that_klant` | bff-api | Open Klant, KvK |
 
 Not to port: the two cancel variants and the two parallel-session scenarios (client state).
 
@@ -148,15 +149,15 @@ for a vestiging (same path), the vraag field taking the last section read, a not
 | Priority | Scenario | Status | Not asserted | Our tests | Via | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
 | high | Aggregated mail; afdeling reminder; none for verwerkt; none without overdue; afdeling without e-mail skipped (5) | covered | | `test_afdeling_gets_one_reminder_for_its_overdue_contactverzoeken` | api | CronJob, Mailpit |
-| high | A medewerker gets a reminder with a link to the werkvoorraad | gap | | | api | CronJob, Mailpit, Objecten medewerker |
-| high | Assigned to a medewerker and an afdeling: both get one | gap | | | api | same |
-| high | The body has no personal data | partial | the klantnaam (no betrokkene seeded), the instruction sentence | same | api | Open Klant betrokkene |
+| high | A medewerker gets a reminder with a link to the werkvoorraad | covered |  | api, `test_afdeling_gets_one_reminder_for_its_overdue_contactverzoeken` | CronJob, Mailpit, Objecten medewerker |
+| high | Assigned to a medewerker and an afdeling: both get one | covered |  | api, `test_afdeling_gets_one_reminder_for_its_overdue_contactverzoeken` | same |
+| high | The body has no personal data | covered |  | same, `test_afdeling_gets_one_reminder_for_its_overdue_contactverzoeken` | api | Open Klant betrokkene |
 
 ### KanalenScenarios
 
 | Priority | Scenario | Status | Not asserted | Our tests | Via | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
-| medium | Beheerder adds, edits and deletes a kanaal; a duplicate name is refused (4) | gap | | (`test_kanalen_answer_the_kcc_user` only lists) | api `/api/kanaal` | ITA_BEHEERDER |
+| medium | Beheerder adds, edits and deletes a kanaal; a duplicate name is refused (4) | covered |  | api `/api/kanaal`, `test_beheerder_manages_kanalen` | ITA_BEHEERDER |
 
 ### Access, authentication and routing
 
@@ -172,14 +173,14 @@ Not to port: row links by contactmoment nummer, the menu entry, the old route `/
 | Priority | Scenario | Status | Not asserted | Our tests | Via | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
 | high | Forward to a groep; to an afdeling with a mailbox; afdeling without mailbox and medewerker refused (3) | covered | | `test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep`, `test_forward_to_an_afdeling_without_mailbox_is_refused` | api | Mailpit |
-| high | Forward to a medewerker; to a medewerker with their afdeling (2) | gap | | | api forward | Objecten Medewerker, Mailpit |
-| high | Medewerker and afdeling with a mailbox: both mailed; without a mailbox: only the medewerker, with the warning (2) | gap | | | api | Objecten, Mailpit |
-| high | An afdeling without a mailbox but with a medewerker is allowed | gap | | | api | Objecten Medewerker |
-| high | A groep without a mailbox and without a medewerker is refused | partial | the groep case | `test_forward_to_an_afdeling_without_mailbox_is_refused` | api | Objecten Groep |
-| medium | Search medewerkers by name, by afdeling, by groep, without hits (4) | gap | | | api `/api/medewerkers` | Objecten Medewerker |
-| medium | Mode medewerker without afdeling or groep refused; a medewerker without e-mail gets a warning (2) | gap | | | api | an extra medewerker without e-mail |
-| medium | `heeftGroepsmailbox` of afdelingen and groepen, with and without (4) | partial | the flag | `test_afdelingen_and_groepen_are_seeded_together` | api | Objecten |
-| medium | The success message of a forward | partial | `notificationResult` | `test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep` | api | |
+| high | Forward to a medewerker; to a medewerker with their afdeling (2) | covered |  | api forward, `test_forward_to_a_medewerker_mails_one_party`, `test_forward_needs_exactly_one_afdeling_or_groep` | Objecten Medewerker, Mailpit |
+| high | Medewerker and afdeling with a mailbox: both mailed; without a mailbox: only the medewerker, with the warning (2) | covered | ITA 3.3.4 mails one party: the medewerker, otherwise the groepsmailbox (the scenario's both is outdated) | api, `test_forward_to_a_medewerker_mails_one_party` | Objecten, Mailpit |
+| high | An afdeling without a mailbox but with a medewerker is allowed | covered |  | api, `test_forward_to_a_medewerker_mails_one_party` | Objecten Medewerker |
+| high | A groep without a mailbox and without a medewerker is refused | covered |  | `test_forward_to_an_afdeling_without_mailbox_is_refused`, `test_forward_without_any_mailbox_is_refused` | api | Objecten Groep |
+| medium | Search medewerkers by name, by afdeling, by groep, without hits (4) | covered |  | api `/api/medewerkers`, `test_medewerkers_are_found_by_name_afdeling_and_groep` | Objecten Medewerker |
+| medium | Mode medewerker without afdeling or groep refused; a medewerker without e-mail gets a warning (2) | covered | ITA falls back to the groepsmailbox instead of warning | api, `test_forward_needs_exactly_one_afdeling_or_groep` | an extra medewerker without e-mail |
+| medium | `heeftGroepsmailbox` of afdelingen and groepen, with and without (4) | covered |  | `test_afdelingen_and_groepen_are_seeded_together`, `test_afdelingen_and_groepen_tell_their_groepsmailbox` | api | Objecten |
+| medium | The success message of a forward | covered |  | `test_forwarded_internetaak_is_assigned_to_the_afdeling_or_groep`, `test_forward_to_a_medewerker_mails_one_party` | api | |
 
 Not to port: form defaults, mode order, field layout and live required/optional switching (10).
 
@@ -188,17 +189,17 @@ Not to port: form defaults, mode order, field layout and live required/optional 
 | Priority | Scenario | Status | Not asserted | Our tests | Via | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
 | high | Contact niet gelukt; assign to self; read-only when verwerkt (5 actions); changes allowed on te_verwerken | covered | | `test_answering_an_internetaak_registers_a_klantcontact`, `test_claimed_internetaak_is_on_my_list`, `test_a_verwerkt_contactverzoek_is_read_only` | api | Open Klant |
-| high | Contact gelukt | partial | gelukt, kanaal, status stays te_verwerken | `test_answering_an_internetaak_registers_a_klantcontact` | api | Open Klant |
-| high | Opslaan en afsluiten sets verwerkt and afgehandeldOp | gap | | | api `close-with-klantcontact` | Open Klant |
-| high | Unassigned, assign to self, close, in historie | gap | | | api chain | Open Klant, KCC |
+| high | Contact gelukt | covered |  | `test_answering_an_internetaak_registers_a_klantcontact` | api | Open Klant |
+| high | Opslaan en afsluiten sets verwerkt and afgehandeldOp | covered |  | api `close-with-klantcontact`, `test_closing_a_contactverzoek_moves_it_to_mijn_historie` | Open Klant |
+| high | Unassigned, assign to self, close, in historie | covered |  | api chain, `test_closing_a_contactverzoek_moves_it_to_mijn_historie` | Open Klant, KCC |
 | medium | Detail page data | covered | | `test_contactverzoek_from_kiss_shows_in_full_in_ita` | api | Open Klant |
-| medium | Klantnaam from a BSN partij | partial | the betrokkene's partij | same | api | Open Klant partij |
-| medium | Mijn historie, its order; Afdelings- and Groephistorie; the user's afdelingen and groepen (5) | gap | | | api historie routes | KCC, ITA_GROEP |
-| medium | Link a zaak; unknown zaaknummer; a second zaak replaces it; the zaak on the detail (4) | gap | | | api `koppel-zaak` | Open Zaak |
-| medium | Logboek lines for assign, zaak, replaced zaak, contact gelukt, close (5) | partial, gap | the content of `/logboek` | `test_kiss_reads_itas_logboek` | api `/logboek` | Objecten |
-| medium | Regression #425: assigned through the medewerker's object-register id counts as the user's | gap | | | api | Objecten Medewerker = KCC |
-| medium | Alle contactverzoeken lists an open one and drops a closed one (2) | partial, gap | the contactverzoek in the list | `test_only_the_beheerder_lists_all_contactverzoeken` | api | ITA_BEHEERDER |
-| medium | Informatie required when closing | gap | | | api or browser (check whether ITA refuses an empty one) | |
+| medium | Klantnaam from a BSN partij | covered |  | same, `test_detail_names_the_klant_of_a_bsn_partij` | api | Open Klant partij |
+| medium | Mijn historie, its order; Afdelings- and Groephistorie; the user's afdelingen and groepen (5) | covered |  | api historie routes, `test_mijn_historie_lists_the_latest_first`, `test_afdelings_and_groepshistorie_list_the_closed_contactverzoeken`, `test_afdelingshistorie_offers_the_medewerkers_groepen` | KCC, ITA_GROEP |
+| medium | Link a zaak; unknown zaaknummer; a second zaak replaces it; the zaak on the detail (4) | covered |  | api `koppel-zaak`, `test_zaak_is_linked_and_replaced_by_zaaknummer` | Open Zaak |
+| medium | Logboek lines for assign, zaak, replaced zaak, contact gelukt, close (5) | covered |  | `test_kiss_reads_itas_logboek`, `test_logboek_lists_each_action` | api `/logboek` | Objecten |
+| medium | Regression #425: assigned through the medewerker's object-register id counts as the user's | covered |  | api, `test_contactverzoek_assigned_by_objectregister_id_is_mine` | Objecten Medewerker = KCC |
+| medium | Alle contactverzoeken lists an open one and drops a closed one (2) | covered |  | `test_only_the_beheerder_lists_all_contactverzoeken`, `test_alle_contactverzoeken_lists_only_open_ones` | api | ITA_BEHEERDER |
+| medium | Informatie required when closing | covered | UI only (not planned): ITA's API accepts an empty informatie (finding, not yet filed) | api or browser (check whether ITA refuses an empty one) | |
 
 Not to port: dialogs, button visibility (5), headings, router links, a dash for a blank e-mail.
 
@@ -206,11 +207,11 @@ Not to port: dialogs, button visibility (5), headings, router links, a dash for 
 
 | Priority | Scenario | Status | Not asserted | Our tests | Via | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
-| medium | The partij's addresses when the betrokkene has none; the betrokkene's own win; empty without a partij or addresses (4) | gap | | | api detail | Open Klant partij |
+| medium | The partij's addresses when the betrokkene has none; the betrokkene's own win; empty without a partij or addresses (4) | covered |  | api detail, `test_detail_falls_back_to_the_partijs_adressen` | Open Klant partij |
 | high | Beheerder reopens a closed contactverzoek; no reason refused (2) | covered | | `test_beheerder_reopens_a_closed_contactverzoek` | api | ITA_BEHEERDER |
-| medium | The logboek shows the reopen | partial | the logboek | same | api | Objecten |
+| medium | The logboek shows the reopen | covered |  | same, `test_beheerder_reopens_a_closed_contactverzoek` | api | Objecten |
 | medium | Find by klantcontactnummer; unknown; outside the user's rights (3) | covered | | `test_contactverzoek_is_found_by_its_klantcontactnummer` | api | ITA_GROEP |
-| medium | A nummer with several contactverzoeken gives the generic error | gap | | | api (409) | two internetaken on one klantcontact |
+| medium | A nummer with several contactverzoeken gives the generic error | covered |  | api (409), `test_klantcontactnummer_of_two_contactverzoeken_is_refused` | two internetaken on one klantcontact |
 
 Not to port: the reopen button, Annuleren, the inactive-behandelaar toast (ignored upstream), the search icon.
 
@@ -219,6 +220,6 @@ Not to port: the reopen button, Annuleren, the inactive-behandelaar toast (ignor
 | Priority | Scenario | Status | Not asserted | Our tests | Via | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
 | medium | Green, orange and red labels; weekends do not count (4) | covered | | `test_werklijst_shows_the_urgency_of_each_contactverzoek` | api | |
-| low | Rounding up ("nog 1u"); the label on the afdeling and Alle lists (2) | partial | the label text; the other lists | same | api | ITA_BEHEERDER |
+| low | Rounding up ("nog 1u"); the label on the afdeling and Alle lists (2) | covered | The afdelingen-groepen overview has no urgentie in ITA 3.3.4 | same, `test_werklijst_shows_the_urgency_of_each_contactverzoek`, `test_alle_contactverzoeken_lists_only_open_ones` | api | ITA_BEHEERDER |
 
 Not to port: columns, row click, hover and the arrow link (6).
