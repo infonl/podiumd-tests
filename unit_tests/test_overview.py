@@ -30,7 +30,7 @@ def test_known_issues_sort_by_their_number():
     ]
 
 
-def test_render_counts_cases_functions_and_expected_failures():
+def test_render_counts_cases_scenarios_and_expected_failures():
     cases = [
         _case(),
         _case(function="test_zac.py::test_b", known_issues=("zac-10",)),
