@@ -1,5 +1,7 @@
 """Unit tests for the throwaway catalogus types and their removal."""
 
+import json
+
 from types import SimpleNamespace
 
 import pytest
@@ -105,3 +107,45 @@ def test_concept_iot_and_besluittype_are_tagged_and_forgotten(snippets, fake_htt
         "ptest-2611111200abcd-iot",
     ]
     assert len({name.rsplit("-", 1)[1] for name in names}) == 2  # each its own suffix
+
+
+@pytest.mark.usefixtures("snippets")
+def test_publishable_zaaktype_has_a_resultaattype_per_afleidingswijze_and_its_besluittypen_published(fake_http):
+    zaaktypen = "catalogi/api/v1/zaaktypen"
+    besluittype = f"{API}/catalogi/api/v1/besluittypen/b1"
+    resultaattype = {
+        "resultaattypeomschrijving": "rto",
+        "selectielijstklasse": "slk",
+        "archiefnominatie": "vernietigen",
+        "archiefactietermijn": "P10Y",
+    }
+    klassen = [{"url": "nihil", "procestermijn": "nihil"}, {"url": "zonder", "procestermijn": ""}]
+    new = {"url": f"{API}/{zaaktypen}/new", "identificatie": TAGGED}
+    sent = fake_http(
+        {
+            "GET /v1/catalogi/api/v1/resultaattypen": (200, {"results": [resultaattype], "next": None}),
+            "GET /api/v1/resultaten": (200, {"results": klassen}),
+            f"POST /v1/{zaaktypen}": (201, new),
+            "POST /v1/catalogi/api/v1/statustypen": (201, {"url": "st"}),
+            "POST /v1/catalogi/api/v1/roltypen": (201, {"url": "rt"}),
+            "POST /v1/catalogi/api/v1/eigenschappen": (201, {"url": "e"}),
+            "POST /v1/catalogi/api/v1/resultaattypen": (201, {"url": "rst"}),
+            f"GET /v1/{zaaktypen}/new": (200, new),
+        }
+    )
+    client = ApiClient(requests.Session(), API, {})
+    template = {"url": "tpl", "catalogus": "cat", "selectielijstProcestype": "https://sl.test/api/v1/procestypen/p1"}
+    types = catalogi.ZaaktypeTypes(
+        eigenschappen=("peildatum",), afleidingswijzen=("eigenschap", "termijn"), besluittypen=(besluittype,)
+    )
+    catalogi.make_publishable_zaaktype(env(), client, ResourceRegistry("run1"), template, types)  # pyright: ignore[reportArgumentType]
+    created = [json.loads(s.body) for s in sent if s.method == "POST" and s.url.endswith("/resultaattypen")]
+    assert [(r["omschrijving"], r["selectielijstklasse"]) for r in created] == [
+        ("Afgehandeld", "slk"),
+        ("eigenschap", "zonder"),
+        ("termijn", "zonder"),
+    ]
+    procedures = [r["brondatumArchiefprocedure"] for r in created[1:]]
+    assert [(p["datumkenmerk"], p["procestermijn"]) for p in procedures] == [("peildatum", None), ("", "P1Y")]
+    concept = next(json.loads(s.body) for s in sent if s.method == "POST" and s.url.endswith(f"/{zaaktypen}"))
+    assert concept["besluittypen"] == [besluittype]

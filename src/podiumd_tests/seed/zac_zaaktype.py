@@ -89,6 +89,9 @@ def publish_zac_zaaktype(  # noqa: PLR0913  # the zaaktype's parts
     for volgnummer, iot in enumerate(informatieobjecttypen, start=1):
         link = {"zaaktype": concept["url"], "informatieobjecttype": iot, "volgnummer": volgnummer, "richting": "intern"}
         openzaak.post(f"{CATALOGI}/zaaktype-informatieobjecttypen", link)
+    # Open Zaak refuses changes to a concept zaaktype linked to a published besluittype.
+    for besluittype in types.besluittypen:
+        publish(openzaak, {"url": besluittype})
     return publish(openzaak, concept)
 
 

@@ -15,19 +15,19 @@ from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
-from podiumd_tests.zac import complete_task
 from podiumd_tests.zac import group_members
 from podiumd_tests.zac import hervatten
 from podiumd_tests.zac import moved_dates
-from podiumd_tests.zac import open_task
 from podiumd_tests.zac import opschorten
-from podiumd_tests.zac import read_taak
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import toekennen
 from podiumd_tests.zac import verlengen
 from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac_beheer import communicatiekanalen
+from podiumd_tests.zac_taken import complete_task
+from podiumd_tests.zac_taken import open_task
+from podiumd_tests.zac_taken import read_taak
 
 if TYPE_CHECKING:
     import requests

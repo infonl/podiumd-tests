@@ -22,10 +22,10 @@ from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.workloads import cronjob_ending
 from podiumd_tests.workloads import run_cronjob
-from podiumd_tests.zac import open_task
-from podiumd_tests.zac import toekennen_taak
-from podiumd_tests.zac import wijzig_taak
 from podiumd_tests.zac_signaleringen import signalering_mail
+from podiumd_tests.zac_taken import open_task
+from podiumd_tests.zac_taken import toekennen_taak
+from podiumd_tests.zac_taken import wijzig_taak
 
 if TYPE_CHECKING:
     from collections.abc import Callable

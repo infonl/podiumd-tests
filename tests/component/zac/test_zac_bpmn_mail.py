@@ -14,9 +14,9 @@ from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.mailpit import own_address
 from podiumd_tests.mailpit import received_message
 from podiumd_tests.responses import UnexpectedStatusError
-from podiumd_tests.zac import is_task_open
-from podiumd_tests.zac import open_task
 from podiumd_tests.zac_documents import zaak_documents
+from podiumd_tests.zac_taken import is_task_open
+from podiumd_tests.zac_taken import open_task
 
 if TYPE_CHECKING:
     import requests

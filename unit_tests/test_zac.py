@@ -7,6 +7,7 @@ import pytest
 import requests
 
 from podiumd_tests import zac
+from podiumd_tests import zac_taken
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.oidc import LOGIN_PATHS
 from podiumd_tests.responses import UnexpectedStatusError
@@ -221,9 +222,9 @@ def test_open_task_skips_completed_tasks_and_complete_task_sends_the_form_data(f
         {"GET /rest/taken/zaak/z-1": (200, tasks), "PATCH /rest/taken/complete": (200, {"status": "AFGEROND"})}
     )
     http = requests.Session()
-    task = zac.open_task(http, "https://zac.example.test", "z-1", "Intake")
+    task = zac_taken.open_task(http, "https://zac.example.test", "z-1", "Intake")
     assert task["id"] == "t-2"
-    assert zac.complete_task(http, "https://zac.example.test", task, {"veld": "y"}) == {"status": "AFGEROND"}
+    assert zac_taken.complete_task(http, "https://zac.example.test", task, {"veld": "y"}) == {"status": "AFGEROND"}
     assert json.loads(sent[-1].body)["taakdata"] == {"bestaand": "x", "veld": "y"}
 
 
@@ -261,7 +262,7 @@ def test_activate_human_tasks_switches_every_one_on_with_its_fields(fake_http):
             "PUT /rest/zaakafhandelparameters": (200, {"id": 7}),
         }
     )
-    assert zac.activate_human_tasks(requests.Session(), ZAC, "zt1", GOEDKEUREN={"doorlooptijd": 10}) == {"id": 7}
+    assert zac_taken.activate_human_tasks(requests.Session(), ZAC, "zt1", GOEDKEUREN={"doorlooptijd": 10}) == {"id": 7}
     saved = json.loads(sent[-1].body)
     assert saved["id"] == 7
     assert saved["humanTaskParameters"] == [
@@ -272,11 +273,11 @@ def test_activate_human_tasks_switches_every_one_on_with_its_fields(fake_http):
 
 def test_start_human_task_waits_until_zac_offers_it_and_starts_it_without_a_mail(fake_http, monkeypatch):
     offers = iter([[], [{"id": "p9", "naam": "Goedkeuren"}]])
-    monkeypatch.setattr(zac, "human_tasks_offered", lambda *_args: next(offers))
-    monkeypatch.setattr(zac, "wait_until", functools.partial(wait_until, clock=Clock(sleep=lambda _s: None)))
+    monkeypatch.setattr(zac_taken, "human_tasks_offered", lambda *_args: next(offers))
+    monkeypatch.setattr(zac_taken, "wait_until", functools.partial(wait_until, clock=Clock(sleep=lambda _s: None)))
     sent = fake_http({"POST /rest/planitems/doHumanTaskPlanItem": (204, None)})
     zaak = {"uuid": "z1", "identificatie": "ZAAK-1"}
-    response = zac.start_human_task(requests.Session(), ZAC, zaak, "Goedkeuren", "g1", fataledatum="2026-12-01")
+    response = zac_taken.start_human_task(requests.Session(), ZAC, zaak, "Goedkeuren", "g1", fataledatum="2026-12-01")
     assert response.status_code == 204
     assert json.loads(sent[-1].body) == {
         "planItemInstanceId": "p9",
@@ -285,13 +286,13 @@ def test_start_human_task_waits_until_zac_offers_it_and_starts_it_without_a_mail
         "taakStuurGegevens": {"sendMail": False},
         "fataledatum": "2026-12-01",
     }
-    monkeypatch.setattr(zac, "human_tasks_offered", lambda *_args: [{"id": "p9", "naam": "Goedkeuren"}])
-    zac.start_human_task(requests.Session(), ZAC, zaak, "Goedkeuren", None)
+    monkeypatch.setattr(zac_taken, "human_tasks_offered", lambda *_args: [{"id": "p9", "naam": "Goedkeuren"}])
+    zac_taken.start_human_task(requests.Session(), ZAC, zaak, "Goedkeuren", None)
     assert json.loads(sent[-1].body)["groep"] is None
 
 
 def test_started_taak_starts_it_for_the_behandelaar_and_returns_the_open_task(fake_http, monkeypatch):
-    monkeypatch.setattr(zac, "human_tasks_offered", lambda *_args: [{"id": "p9", "naam": "Goedkeuren"}])
+    monkeypatch.setattr(zac_taken, "human_tasks_offered", lambda *_args: [{"id": "p9", "naam": "Goedkeuren"}])
     sent = fake_http(
         {
             "POST /rest/planitems/doHumanTaskPlanItem": (204, None),
@@ -299,7 +300,7 @@ def test_started_taak_starts_it_for_the_behandelaar_and_returns_the_open_task(fa
         }
     )
     zaak = {"uuid": "z1", "identificatie": "ZAAK-1"}
-    taak = zac.started_taak(requests.Session(), ZAC, zaak, "Goedkeuren", ("g1", "bob"), toelichting="t")
+    taak = zac_taken.started_taak(requests.Session(), ZAC, zaak, "Goedkeuren", ("g1", "bob"), toelichting="t")
     assert taak["id"] == "t1"
     started = json.loads(sent[0].body)
     assert (started["medewerker"], started["toelichting"]) == ({"id": "bob", "naam": "bob"}, "t")
@@ -307,7 +308,7 @@ def test_started_taak_starts_it_for_the_behandelaar_and_returns_the_open_task(fa
 
 def test_taak_historie_lists_zacs_answer(fake_http):
     fake_http({"GET /rest/taken/t1/historie": (200, [{"attribuutLabel": "taak.status"}])})
-    assert zac.taak_historie(requests.Session(), ZAC, {"id": "t1"}) == [{"attribuutLabel": "taak.status"}]
+    assert zac_taken.taak_historie(requests.Session(), ZAC, {"id": "t1"}) == [{"attribuutLabel": "taak.status"}]
 
 
 def test_human_tasks_and_user_events_offered_are_zacs_plan_items(fake_http):
@@ -318,7 +319,7 @@ def test_human_tasks_and_user_events_offered_are_zacs_plan_items(fake_http):
         }
     )
     http = requests.Session()
-    assert zac.human_tasks_offered(http, ZAC, {"uuid": "z1"}) == [{"naam": "Goedkeuren"}]
+    assert zac_taken.human_tasks_offered(http, ZAC, {"uuid": "z1"}) == [{"naam": "Goedkeuren"}]
     assert zac.user_events_offered(http, ZAC, "z1") == [{"userEventListenerActie": "X"}]
 
 
@@ -472,6 +473,28 @@ def test_afhandelen_and_afsluiten_use_a_resultaattype_without_besluit(fake_http)
     zac.afhandelen(http, ZAC, zaak, "r1", restMailGegevens={"onderwerp": "x"})
     assert json.loads(sent[-1].body)["resultaattypeUuid"] == "r1"
     assert json.loads(sent[-1].body)["restMailGegevens"] == {"onderwerp": "x"}
+    zac.afsluiten(http, ZAC, zaak, "r1")
+    assert json.loads(sent[-1].body)["resultaattypeUuid"] == "r1"
+
+
+def test_afbreken_takes_a_zaakbeeindigreden_and_brondatum_zetten_a_zoned_date(fake_http):
+    sent = fake_http(
+        {
+            "PATCH /rest/zaken/zaak/z1/afbreken": (200, {}),
+            "POST /rest/planitems/doUserEventListenerPlanItem": (204, None),
+        }
+    )
+    http, zaak = requests.Session(), {"uuid": "z1"}
+    zac.afbreken(http, ZAC, zaak)
+    assert json.loads(sent[-1].body) == {"zaakbeeindigRedenId": zac.NIET_ONTVANKELIJK}
+    zac.afbreken(http, ZAC, zaak, "7")
+    assert json.loads(sent[-1].body) == {"zaakbeeindigRedenId": "7"}
+    zac.brondatum_zetten(http, ZAC, zaak, "2026-11-20")
+    assert json.loads(sent[-1].body) == {
+        "zaakUuid": "z1",
+        "actie": "BRONDATUM_ZETTEN",
+        "brondatum": "2026-11-20T00:00:00Z",
+    }
 
 
 @pytest.mark.parametrize(("status", "found"), [(200, {"onderwerp": "Afgehandeld"}), (204, None)])
@@ -504,7 +527,7 @@ def test_end_process_aborts_only_a_zaak_with_a_process_that_zac_lets_abort(fake_
 )
 def test_is_task_open_is_a_read_task_not_afgerond(fake_http, answer, is_open):
     fake_http({"GET /rest/taken/t1": answer})
-    assert zac.is_task_open(requests.Session(), ZAC, "t1") is is_open
+    assert zac_taken.is_task_open(requests.Session(), ZAC, "t1") is is_open
 
 
 def test_clean_up_zaak_ends_the_process_before_it_deletes_the_zaak(fake_http):
@@ -559,14 +582,14 @@ def test_taken_verdelen_and_vrijgeven_send_the_selected_taken(fake_http):
     http = requests.Session()
     taak = {"id": "t1", "zaakUuid": "z1", "naam": "Intake"}
     selected = [{"taakId": "t1", "zaakUuid": "z1"}]
-    zac.verdelen_taken(http, ZAC, [taak], "g1", None)
+    zac_taken.verdelen_taken(http, ZAC, [taak], "g1", None)
     assert json.loads(sent[-1].body) == {
         "taken": selected,
         "groepId": "g1",
         "behandelaarGebruikersnaam": None,
         "reden": "podiumd-tests",
     }
-    zac.vrijgeven_taken(http, ZAC, [taak])
+    zac_taken.vrijgeven_taken(http, ZAC, [taak])
     assert json.loads(sent[-1].body) == {"taken": selected, "reden": "podiumd-tests"}
 
 
@@ -741,7 +764,7 @@ def test_toekennen_and_toekennen_taak_send_group_and_behandelaar(fake_http):
         "behandelaarGebruikersnaam": "u1",
         "reden": "podiumd-tests",
     }
-    zac.toekennen_taak(http, ZAC, {"id": "t1", "zaakUuid": "z1"}, "g1", "u1")
+    zac_taken.toekennen_taak(http, ZAC, {"id": "t1", "zaakUuid": "z1"}, "g1", "u1")
     assert json.loads(sent[-1].body) == {
         "taakId": "t1",
         "zaakUuid": "z1",
@@ -755,7 +778,7 @@ def test_wijzig_taak_saves_the_read_taak_with_the_fields(fake_http):
     sent = fake_http(
         {"GET /rest/taken/t1": (200, {"id": "t1", "toelichting": "x"}), "PUT /rest/taken/taakdata": (200, {})}
     )
-    zac.wijzig_taak(requests.Session(), ZAC, "t1", fataledatum="2026-11-10")
+    zac_taken.wijzig_taak(requests.Session(), ZAC, "t1", fataledatum="2026-11-10")
     assert json.loads(sent[-1].body) == {"id": "t1", "toelichting": "x", "fataledatum": "2026-11-10"}
 
 
@@ -805,7 +828,7 @@ def test_groups_members_and_taak_are_read_from_zac(fake_http):
     http = requests.Session()
     assert zac.active_groups(http, ZAC) == {"g1"}
     assert zac.group_members(http, ZAC, "g1") == {"u1"}
-    assert zac.read_taak(http, ZAC, "t1") == {"id": "t1"}
+    assert zac_taken.read_taak(http, ZAC, "t1") == {"id": "t1"}
 
 
 def test_csv_export_reads_the_rows_by_column_and_skips_repeated_header_names(monkeypatch, response_factory):

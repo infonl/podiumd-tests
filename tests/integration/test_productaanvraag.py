@@ -43,7 +43,6 @@ from podiumd_tests.zac import PRODUCTAANVRAAG_TIMEOUT
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import deliver_notificatie
 from podiumd_tests.zac import end_process_at_cleanup
-from podiumd_tests.zac import open_task
 from podiumd_tests.zac import productaanvraag_zaak
 from podiumd_tests.zac import productaanvraag_zaken
 from podiumd_tests.zac import read_zaak
@@ -52,6 +51,7 @@ from podiumd_tests.zac import wait_in_werkvoorraad
 from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac_betrokkenen import wijzig_initiator
 from podiumd_tests.zac_documents import inbox_documenten
+from podiumd_tests.zac_taken import open_task
 
 if TYPE_CHECKING:
     from collections.abc import Callable

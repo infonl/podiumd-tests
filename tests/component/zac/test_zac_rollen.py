@@ -39,8 +39,6 @@ from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import is_zaak_listed
 from podiumd_tests.zac import koppel_zoekresultaat
-from podiumd_tests.zac import open_task
-from podiumd_tests.zac import read_taak
 from podiumd_tests.zac import recorded_besluit
 from podiumd_tests.zac import rights_of
 from podiumd_tests.zac import vastleggen_besluit
@@ -48,6 +46,8 @@ from podiumd_tests.zac import wait_in_werkvoorraad
 from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zaak_body
 from podiumd_tests.zac import zac_session
+from podiumd_tests.zac_taken import open_task
+from podiumd_tests.zac_taken import read_taak
 
 if TYPE_CHECKING:
     from collections.abc import Callable

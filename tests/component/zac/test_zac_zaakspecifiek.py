@@ -20,21 +20,21 @@ from podiumd_tests.seed.zac_zaaktype import make_group_member
 from podiumd_tests.seed.zac_zaaktype import make_role_group
 from podiumd_tests.seed.zac_zaaktype import make_zac_zaaktype
 from podiumd_tests.wait import wait_until
-from podiumd_tests.zac import AANVULLENDE_INFORMATIE
 from podiumd_tests.zac import LIST_TIMEOUT
-from podiumd_tests.zac import activate_human_tasks
 from podiumd_tests.zac import can_open_zaak
 from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import is_taak_listed
 from podiumd_tests.zac import is_zaak_listed
-from podiumd_tests.zac import open_task
-from podiumd_tests.zac import start_human_task
 from podiumd_tests.zac import toekennen
 from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zac_session
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
+from podiumd_tests.zac_taken import AANVULLENDE_INFORMATIE
+from podiumd_tests.zac_taken import activate_human_tasks
+from podiumd_tests.zac_taken import open_task
+from podiumd_tests.zac_taken import start_human_task
 
 if TYPE_CHECKING:
     from collections.abc import Callable

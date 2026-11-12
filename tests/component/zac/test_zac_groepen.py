@@ -17,16 +17,16 @@ from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.zac_zaaktype import make_group_member
 from podiumd_tests.seed.zac_zaaktype import make_role_group
-from podiumd_tests.zac import AANVULLENDE_INFORMATIE
 from podiumd_tests.zac import active_groups
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import group_members
-from podiumd_tests.zac import open_task
-from podiumd_tests.zac import read_taak
 from podiumd_tests.zac import read_zaak
-from podiumd_tests.zac import start_human_task
 from podiumd_tests.zac import toekennen
-from podiumd_tests.zac import toekennen_taak
+from podiumd_tests.zac_taken import AANVULLENDE_INFORMATIE
+from podiumd_tests.zac_taken import open_task
+from podiumd_tests.zac_taken import read_taak
+from podiumd_tests.zac_taken import start_human_task
+from podiumd_tests.zac_taken import toekennen_taak
 
 if TYPE_CHECKING:
     from collections.abc import Callable

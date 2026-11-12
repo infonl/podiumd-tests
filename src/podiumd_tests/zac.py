@@ -401,9 +401,17 @@ def zoned_brondatum(day: str) -> str:
     return f"{day}T00:00:00Z"
 
 
-def afbreken(http: requests.Session, zac_url: str, zaak: JsonObject) -> requests.Response:
-    """Abort the zaak as niet ontvankelijk; ZAC's answer."""
-    body = {"zaakbeeindigRedenId": NIET_ONTVANKELIJK}
+def brondatum_zetten(http: requests.Session, zac_url: str, zaak: JsonObject, day: str) -> requests.Response:
+    """Set the brondatum of the closed zaak, whose resultaat derives it from an eigenschap, to the day; ZAC's answer."""
+    body = {"zaakUuid": zaak["uuid"], "actie": "BRONDATUM_ZETTEN", "brondatum": zoned_brondatum(day)}
+    return http.post(f"{zac_url}/rest/planitems/doUserEventListenerPlanItem", json=body)
+
+
+def afbreken(
+    http: requests.Session, zac_url: str, zaak: JsonObject, reden: str = NIET_ONTVANKELIJK
+) -> requests.Response:
+    """Abort the zaak for the zaakbeeindigreden of this id, by default niet ontvankelijk; ZAC's answer."""
+    body = {"zaakbeeindigRedenId": reden}
     return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/afbreken", json=body)
 
 
@@ -443,13 +451,16 @@ def clean_up_zaak(  # noqa: PLR0913  # the zaak, its two APIs and the cleanup
     end_process_at_cleanup(http, zac_url, registry, zaak)
 
 
-def afsluiten(http: requests.Session, zac_url: str, zaak: JsonObject) -> requests.Response:
-    """Close the zaak with a resultaattype that needs no besluit, as for a BPMN zaak; ZAC's answer.
+def afsluiten(
+    http: requests.Session, zac_url: str, zaak: JsonObject, resultaattype: str | None = None
+) -> requests.Response:
+    """Close the zaak with the resultaattype, by default one that needs no besluit, as for a BPMN zaak; ZAC's answer.
 
     Ends a BPMN zaak's process first (end_process): ZAC keeps it on the closed zaak, where afbreken is refused.
     """
     end_process(http, zac_url, str(zaak["uuid"]))
-    body = {"reden": "podiumd-tests", "resultaattypeUuid": _resultaattype_without_besluit(http, zac_url, zaak)}
+    chosen = resultaattype or _resultaattype_without_besluit(http, zac_url, zaak)
+    body = {"reden": "podiumd-tests", "resultaattypeUuid": chosen}
     return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/afsluiten", json=body)
 
 
@@ -491,29 +502,6 @@ def toekennen_mij(http: requests.Session, zac_url: str, zaak: JsonObject, groep:
     """Assign the zaak to the group and the session's user from the werkvoorraad; ZAC's answer."""
     body = {"zaakUUID": zaak["uuid"], "groepId": groep, "reden": "podiumd-tests"}
     return http.put(f"{zac_url}/rest/zaken/lijst/toekennen/mij", json=body)
-
-
-def _taak_refs(taken: list[JsonObject]) -> list[JsonObject]:
-    return [{"taakId": taak["id"], "zaakUuid": taak["zaakUuid"]} for taak in taken]
-
-
-def verdelen_taken(
-    http: requests.Session, zac_url: str, taken: list[JsonObject], groep: str, behandelaar: str | None
-) -> requests.Response:
-    """Assign the taken from the werkvoorraad to the group and behandelaar; ZAC's answer, before its background job."""
-    body = {
-        "taken": _taak_refs(taken),
-        "groepId": groep,
-        "behandelaarGebruikersnaam": behandelaar,
-        "reden": "podiumd-tests",
-    }
-    return http.put(f"{zac_url}/rest/taken/lijst/verdelen", json=body)
-
-
-def vrijgeven_taken(http: requests.Session, zac_url: str, taken: list[JsonObject]) -> requests.Response:
-    """Release the taken from the werkvoorraad; ZAC's answer, before its background job."""
-    body = {"taken": _taak_refs(taken), "reden": "podiumd-tests"}
-    return http.put(f"{zac_url}/rest/taken/lijst/vrijgeven", json=body)
 
 
 def taak_toekennen_mij(http: requests.Session, zac_url: str, taak: JsonObject) -> requests.Response:
@@ -838,101 +826,6 @@ def is_document_listed(http: requests.Session, zac_url: str, document: JsonObjec
     return any(item.get("id") == document["uuid"] for item in entries(found["resultaten"]))
 
 
-def open_task(http: requests.Session, zac_url: str, zaak_uuid: str, name: str) -> JsonObject:
-    """Wait until the zaak has an open task of this name, as ZAC lists it (with its formioFormulier)."""
-
-    def found() -> JsonObject | None:
-        tasks = get_entries(http, f"{zac_url}/rest/taken/zaak/{zaak_uuid}")
-        open_tasks = (task for task in tasks if task.get("status") != AFGEROND)
-        return next((task for task in open_tasks if task.get("naam") == name), None)
-
-    return wait_until(found, timeout=TASK_TIMEOUT, description=f"open task {name!r} on zaak {zaak_uuid}")
-
-
-def read_taak(http: requests.Session, zac_url: str, taak_id: str) -> JsonObject:
-    """ZAC's view of a taak."""
-    return cast("JsonObject", expect_status(http.get(f"{zac_url}/rest/taken/{taak_id}"), HTTPStatus.OK).json())
-
-
-def taak_historie(http: requests.Session, zac_url: str, taak: JsonObject) -> list[JsonObject]:
-    """Return ZAC's historie of the taak."""
-    return get_entries(http, f"{zac_url}/rest/taken/{taak['id']}/historie")
-
-
-def is_task_open(http: requests.Session, zac_url: str, task_id: str) -> bool:
-    """ZAC reads the task, and not as AFGEROND."""
-    response = http.get(f"{zac_url}/rest/taken/{task_id}")
-    return response.status_code == HTTPStatus.OK and response.json().get("status") != AFGEROND
-
-
-def complete_task(http: requests.Session, zac_url: str, task: JsonObject, data: JsonObject) -> JsonObject:
-    """Complete a form task with its form's data, as ZAC's UI submits it; the completed task."""
-    body = {**task, "taakdata": {**section(task, "taakdata"), **data}}
-    return cast(
-        "JsonObject", expect_status(http.patch(f"{zac_url}/rest/taken/complete", json=body), HTTPStatus.OK).json()
-    )
-
-
-def activate_human_tasks(
-    http: requests.Session, zac_url: str, zaaktype_uuid: str, **plan_items: JsonObject
-) -> JsonObject:
-    """Switch every human task of the zaaktype version on, with these fields per plan item id; the saved parameters."""
-    parameters = read_zaakafhandelparameters(http, zac_url, zaaktype_uuid)
-    tasks = [
-        {**task, "actief": True, **plan_items.get(str(section(task, "planItemDefinition").get("id")), {})}
-        for task in entries(parameters.get("humanTaskParameters"))
-    ]
-    return save_zaakafhandelparameters(http, zac_url, {**parameters, "humanTaskParameters": tasks})
-
-
-# The names of ZAC's CMMN human tasks (Generiek_zaakafhandelmodel.cmmn.xml); a zaakafhandelparameters switch turns
-# each on.
-AANVULLENDE_INFORMATIE = "Aanvullende informatie"
-GOEDKEUREN = "Goedkeuren"
-ADVIES_INTERN = "Advies intern"
-ADVIES_EXTERN = "Advies extern"
-DOCUMENT_VERZENDEN = "Document verzenden"
-
-
-def human_tasks_offered(http: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:
-    """Return the plan items of the human tasks ZAC offers to start on the zaak now."""
-    return get_entries(http, f"{zac_url}/rest/planitems/zaak/{zaak['uuid']}/humanTaskPlanItems")
-
-
-def start_human_task(
-    http: requests.Session, zac_url: str, zaak: JsonObject, name: str, groep: str | None, **fields: object
-) -> requests.Response:
-    """Start the zaak's human task of this name for the group (None: without one), once ZAC offers it; ZAC's answer.
-
-    ZAC starts a zaak's case, and the stage after the intake, in the background. fields: more of ZAC's
-    RESTHumanTaskData (medewerker, fataledatum, toelichting, taakdata, taakStuurGegevens: no mail unless given).
-    """
-
-    def offered() -> JsonObject | None:
-        return next((item for item in human_tasks_offered(http, zac_url, zaak) if item.get("naam") == name), None)
-
-    plan_item = wait_until(offered, timeout=INDEX_TIMEOUT, description=f"{name!r} offered on {zaak['identificatie']}")
-    body = {
-        "planItemInstanceId": plan_item["id"],
-        "groep": {"id": groep, "naam": groep} if groep else None,
-        "taakdata": {},
-        "taakStuurGegevens": {"sendMail": False},
-        **fields,
-    }
-    return http.post(f"{zac_url}/rest/planitems/doHumanTaskPlanItem", json=body)
-
-
-def started_taak(
-    http: requests.Session, zac_url: str, zaak: JsonObject, name: str, to: tuple[str, str], **fields: object
-) -> JsonObject:
-    """Start the zaak's human task for (group, behandelaar) with start_human_task; the open task."""
-    groep, behandelaar = to
-    medewerker = {"id": behandelaar, "naam": behandelaar}
-    response = start_human_task(http, zac_url, zaak, name, groep, medewerker=medewerker, **fields)
-    expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    return open_task(http, zac_url, str(zaak["uuid"]), name)
-
-
 def wait_in_werkvoorraad(http: requests.Session, zac_url: str, zaak: JsonObject) -> None:
     """Wait until ZAC's werkvoorraad (its open zaken) lists the zaak."""
     wait_until(
@@ -970,24 +863,6 @@ def toekennen(
         "reden": "podiumd-tests",
     }
     return http.patch(f"{zac_url}/rest/zaken/toekennen", json=body)
-
-
-def toekennen_taak(http: requests.Session, zac_url: str, taak: JsonObject, groep: str, behandelaar: str) -> None:
-    """Assign the open taak to the group and behandelaar, as from the taak."""
-    body = {
-        "taakId": taak["id"],
-        "zaakUuid": taak["zaakUuid"],
-        "groepId": groep,
-        "behandelaarId": behandelaar,
-        "reden": "podiumd-tests",
-    }
-    expect_status(http.patch(f"{zac_url}/rest/taken/toekennen", json=body), HTTPStatus.NO_CONTENT, HTTPStatus.OK)
-
-
-def wijzig_taak(http: requests.Session, zac_url: str, taak_id: str, **fields: object) -> None:
-    """Change these fields (fataledatum, toelichting) of the open taak, as its form saves them."""
-    taak = expect_status(http.get(f"{zac_url}/rest/taken/{taak_id}"), HTTPStatus.OK).json()
-    expect_status(http.put(f"{zac_url}/rest/taken/taakdata", json={**taak, **fields}), HTTPStatus.OK)
 
 
 # A zaak's streefdatum and fatale datum, which opschorten and verlengen move.

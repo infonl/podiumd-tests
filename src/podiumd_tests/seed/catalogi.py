@@ -13,9 +13,13 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
+import requests
+
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_DOMEIN
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.django_snippets import run_snippet
+from podiumd_tests.json_data import entries
+from podiumd_tests.responses import expect_status
 from podiumd_tests.results import RUN_TAG
 from podiumd_tests.results import TAG_PREFIX
 from podiumd_tests.seed.openzaak import CATALOGI
@@ -67,12 +71,21 @@ def publish(openzaak: ApiClient, catalogus_type: JsonObject) -> JsonObject:
 class ZaaktypeTypes:
     """Statustypen (the last is the eindstatus), (omschrijving, omschrijvingGeneriek) roltypen and text eigenschappen.
 
-    The defaults are what publishing needs.
+    afleidingswijzen: a resultaattype per brondatum afleidingswijze, named after it; eigenschap takes the first
+    eigenschap as datumkenmerk, termijn the procestermijn ARCHIEF_PROCESTERMIJN. besluittypen: URLs of concept ones,
+    linked: Open Zaak links a concept zaaktype only to concept besluittypen; publish them before the zaaktype. The
+    defaults are what publishing needs.
     """
 
     statustypen: tuple[str, ...] = ("Ontvangen", "Afgehandeld")
     roltypen: tuple[tuple[str, str], ...] = (("Initiator", "initiator"),)
     eigenschappen: tuple[str, ...] = ()
+    afleidingswijzen: tuple[str, ...] = ()
+    besluittypen: tuple[str, ...] = ()
+
+
+# The procestermijn of a resultaattype with afleidingswijze termijn.
+ARCHIEF_PROCESTERMIJN = "P1Y"
 
 
 PUBLISHABLE = ZaaktypeTypes()
@@ -97,8 +110,11 @@ def make_publishable_zaaktype(
         openzaak,
         registry,
         str(template["catalogus"]),
-        selectielijstProcestype=template["selectielijstProcestype"],
-        **fields,
+        **{
+            "selectielijstProcestype": template["selectielijstProcestype"],
+            "besluittypen": list(types.besluittypen),
+            **fields,
+        },
     )
     forget_catalogus_type(env, registry, str(zaaktype["identificatie"]))
     url = zaaktype["url"]
@@ -121,7 +137,39 @@ def make_publishable_zaaktype(
         openzaak.post(f"{CATALOGI}/eigenschappen", eigenschap)
     archief = {key: resultaattype[key] for key in ("archiefnominatie", "archiefactietermijn")}
     openzaak.post(f"{CATALOGI}/resultaattypen", resultaattype_body(str(url), resultaattype, **archief))
+    if types.afleidingswijzen:
+        klasse = {**resultaattype, "selectielijstklasse": selectielijstklasse(str(template["selectielijstProcestype"]))}
+        for afleidingswijze in types.afleidingswijzen:
+            body = resultaattype_body(
+                str(url),
+                klasse,
+                omschrijving=afleidingswijze,
+                brondatumArchiefprocedure=_procedure(afleidingswijze, types),
+                **archief,
+            )
+            openzaak.post(f"{CATALOGI}/resultaattypen", body)
     return openzaak.get(str(url))
+
+
+def _procedure(afleidingswijze: str, types: ZaaktypeTypes) -> dict[str, object]:
+    """Return the brondatumArchiefprocedure of the afleidingswijze, as ZaaktypeTypes describes it."""
+    return {
+        "afleidingswijze": afleidingswijze,
+        "datumkenmerk": types.eigenschappen[0] if afleidingswijze == "eigenschap" else "",
+        "procestermijn": ARCHIEF_PROCESTERMIJN if afleidingswijze == "termijn" else None,
+    }
+
+
+def selectielijstklasse(procestype: str) -> str:
+    """Return the first Selectielijst resultaat of the procestype without procestermijn.
+
+    Open Zaak allows every brondatum afleidingswijze but afgehandeld only for such a klasse.
+    """
+    response = requests.get(
+        f"{procestype.partition('/procestypen/')[0]}/resultaten", params={"procesType": procestype}, timeout=30
+    )
+    found = entries(expect_status(response, HTTPStatus.OK).json().get("results"))
+    return next(str(item["url"]) for item in found if not item.get("procestermijn"))
 
 
 def template_resultaattype(openzaak: ApiClient, template: JsonObject) -> JsonObject:

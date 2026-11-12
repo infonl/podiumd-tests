@@ -13,6 +13,7 @@ import requests
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.environment import Environment
 from podiumd_tests.seed import zac_zaaktype
+from podiumd_tests.seed.catalogi import ZaaktypeTypes
 from podiumd_tests.seed.registry import ResourceRegistry
 
 API = "https://api.example.test"
@@ -58,6 +59,20 @@ def test_publish_zac_zaaktype_links_the_informatieobjecttypen_before_publishing(
         {"zaaktype": f"{API}{ZAAKTYPEN}/v1", "informatieobjecttype": "i1", "volgnummer": 1, "richting": "intern"},
         {"zaaktype": f"{API}{ZAAKTYPEN}/v1", "informatieobjecttype": "i2", "volgnummer": 2, "richting": "intern"},
     ]
+
+
+def test_publish_zac_zaaktype_publishes_its_besluittypen_before_itself(fake_http, monkeypatch):
+    monkeypatch.setattr(
+        zac_zaaktype, "make_publishable_zaaktype", lambda *_args, **_fields: {"url": f"{API}{ZAAKTYPEN}/v1"}
+    )
+    published = []
+    monkeypatch.setattr(zac_zaaktype, "publish", lambda _openzaak, item: published.append(item["url"]) or item)
+    fake_http({f"PATCH {ZAAKTYPEN}/v1": (200, {})})
+    types = ZaaktypeTypes(besluittypen=("b1",))
+    zac_zaaktype.publish_zac_zaaktype(
+        env(), ApiClient(requests.Session(), API, {}), ResourceRegistry(RUN), {}, types=types
+    )
+    assert published == ["b1", f"{API}{ZAAKTYPEN}/v1"]
 
 
 def test_publish_new_version_ends_the_old_one_yesterday_and_updates_the_new_one(fake_http, monkeypatch):

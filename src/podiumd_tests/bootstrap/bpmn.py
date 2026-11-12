@@ -37,10 +37,10 @@ from podiumd_tests.pabc import ensure_functional_role
 from podiumd_tests.pabc import zaaktype_entity_type
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import published_zaaktype
-from podiumd_tests.zac import complete_task
-from podiumd_tests.zac import open_task
 from podiumd_tests.zac import user_groups
 from podiumd_tests.zac import zac_session
+from podiumd_tests.zac_taken import complete_task
+from podiumd_tests.zac_taken import open_task
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

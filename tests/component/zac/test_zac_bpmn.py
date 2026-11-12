@@ -26,16 +26,16 @@ from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import INDEX_TIMEOUT
-from podiumd_tests.zac import complete_task
 from podiumd_tests.zac import deliver_notificatie
 from podiumd_tests.zac import end_process
 from podiumd_tests.zac import is_taak_listed
-from podiumd_tests.zac import is_task_open
 from podiumd_tests.zac import notificatie
-from podiumd_tests.zac import open_task
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import wait_in_werkvoorraad
 from podiumd_tests.zac_documents import uploaded_document
+from podiumd_tests.zac_taken import complete_task
+from podiumd_tests.zac_taken import is_task_open
+from podiumd_tests.zac_taken import open_task
 
 if TYPE_CHECKING:
     import requests

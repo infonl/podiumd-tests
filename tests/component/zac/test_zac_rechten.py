@@ -34,13 +34,10 @@ from podiumd_tests.zac import can_open_zaak
 from podiumd_tests.zac import heropenen
 from podiumd_tests.zac import koppel
 from podiumd_tests.zac import ontkoppel
-from podiumd_tests.zac import open_task
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import rights_of
 from podiumd_tests.zac import verdelen
-from podiumd_tests.zac import verdelen_taken
 from podiumd_tests.zac import vrijgeven
-from podiumd_tests.zac import vrijgeven_taken
 from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zac_session
 from podiumd_tests.zac_documents import delete_document
@@ -49,6 +46,9 @@ from podiumd_tests.zac_documents import lock_document
 from podiumd_tests.zac_documents import nieuwe_versie
 from podiumd_tests.zac_documents import unlock_document
 from podiumd_tests.zac_documents import uploaded_document
+from podiumd_tests.zac_taken import open_task
+from podiumd_tests.zac_taken import verdelen_taken
+from podiumd_tests.zac_taken import vrijgeven_taken
 
 if TYPE_CHECKING:
     from collections.abc import Callable

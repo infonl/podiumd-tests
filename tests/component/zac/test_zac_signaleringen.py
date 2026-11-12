@@ -22,10 +22,8 @@ from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import is_zaak_listed
-from podiumd_tests.zac import open_task
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import toekennen
-from podiumd_tests.zac import toekennen_taak
 from podiumd_tests.zac import zac_session
 from podiumd_tests.zac_documents import uploaded_document
 from podiumd_tests.zac_signaleringen import save_signalering_setting
@@ -33,6 +31,8 @@ from podiumd_tests.zac_signaleringen import signalering_mail
 from podiumd_tests.zac_signaleringen import signalering_overzichten
 from podiumd_tests.zac_signaleringen import signalering_taken
 from podiumd_tests.zac_signaleringen import signalering_zaken
+from podiumd_tests.zac_taken import open_task
+from podiumd_tests.zac_taken import toekennen_taak
 
 if TYPE_CHECKING:
     from collections.abc import Callable
