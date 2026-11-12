@@ -24,16 +24,19 @@ def test_create_referentietabel_sends_a_run_tagged_upper_case_code_and_cleanup_d
     assert sent[-1].method == "DELETE"
 
 
-def test_communicatiekanalen_are_those_zac_offers_without_e_formulier(fake_http):
-    sent = fake_http({f"GET {TABELLEN}/communicatiekanaal/false": (200, ["Balie", "E-mail"])})
+def test_communicatiekanalen_are_those_zac_offers_without_e_formulier_unless_asked(fake_http):
+    fake_http(
+        {
+            f"GET {TABELLEN}/communicatiekanaal/false": (200, ["Balie", "E-mail"]),
+            f"GET {TABELLEN}/communicatiekanaal/true": (200, ["Balie", "E-formulier", "E-mail"]),
+        }
+    )
     assert zac_beheer.communicatiekanalen(requests.Session(), ZAC) == ["Balie", "E-mail"]
-    assert sent[-1].url == f"{ZAC}{TABELLEN}/communicatiekanaal/false"
-
-
-def test_communicatiekanalen_of_an_inbox_productaanvraag_include_e_formulier(fake_http):
-    sent = fake_http({f"GET {TABELLEN}/communicatiekanaal/true": (200, ["E-formulier"])})
-    assert zac_beheer.communicatiekanalen(requests.Session(), ZAC, inbox=True) == ["E-formulier"]
-    assert sent[-1].url == f"{ZAC}{TABELLEN}/communicatiekanaal/true"
+    assert zac_beheer.communicatiekanalen(requests.Session(), ZAC, inbox=True) == [
+        "Balie",
+        "E-formulier",
+        "E-mail",
+    ]
 
 
 def test_update_referentietabel_sends_name_code_and_values(fake_http):

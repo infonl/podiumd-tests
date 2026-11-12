@@ -342,6 +342,29 @@ def test_koppel_and_ontkoppel_send_zacs_link_data(fake_http):
     }
 
 
+def test_attempt_zaak_finds_the_zaken_by_omschrijving_and_cleanup_deletes_them(fake_http):
+    zaken = [
+        {"uuid": "1", "identificatie": "ZAAK-1", "omschrijving": "ptest-x"},
+        {"uuid": "2", "identificatie": "ZAAK-2", "omschrijving": "ander"},
+    ]
+    sent = fake_http(
+        {
+            "POST /rest/zaken/zaak": (400, {"message": "refused"}),
+            "GET /zaken/api/v1/zaken": (200, zaken),
+            "GET /rest/zaken/zaak/1": (404, None),
+            "GET /zaken/api/v1/zaakinformatieobjecten": (200, []),
+            "DELETE /zaken/api/v1/zaken/1": (204, None),
+        }
+    )
+    registry = ResourceRegistry("ptest-abc")
+    openzaak = ApiClient(requests.Session(), "https://oz.test", {})
+    body = {"zaak": {"omschrijving": "ptest-x"}}
+    response, created = zac.attempt_zaak(requests.Session(), ZAC, openzaak, registry, body)
+    assert (response.status_code, created) == (400, ["ZAAK-1"])
+    assert registry.cleanup() == []
+    assert [request.method for request in sent][-1] == "DELETE"
+
+
 def test_zaak_historie_lists_zacs_answer(fake_http):
     fake_http({"GET /rest/zaken/zaak/z1/historie": (200, [{"actie": "AANGEMAAKT"}])})
     assert zac.zaak_historie(requests.Session(), ZAC, {"uuid": "z1"}) == [{"actie": "AANGEMAAKT"}]

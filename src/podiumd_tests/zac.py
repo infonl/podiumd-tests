@@ -268,6 +268,21 @@ def start_zaak(http: requests.Session, zac_url: str, body: JsonObject) -> JsonOb
     return cast("JsonObject", expect_status(found, HTTPStatus.OK).json())
 
 
+def attempt_zaak(
+    http: requests.Session, zac_url: str, openzaak: ApiClient, registry: ResourceRegistry, body: JsonObject
+) -> tuple[requests.Response, list[str]]:
+    """Ask ZAC to start the zaak of this request; its answer and the identificaties of the zaken Open Zaak got.
+
+    The zaken are found by the request's omschrijving; cleanup deletes them.
+    """
+    response = http.post(f"{zac_url}/rest/zaken/zaak", json=body)
+    omschrijving = section(body, "zaak").get("omschrijving")
+    found = [zaak for zaak in recent_zaken(openzaak) if zaak.get("omschrijving") == omschrijving]
+    for zaak in found:
+        clean_up_zaak(http, zac_url, openzaak, registry, zaak)
+    return response, [str(zaak["identificatie"]) for zaak in found]
+
+
 def read_zaak(http: requests.Session, zac_url: str, uuid: str) -> JsonObject:
     """ZAC's view of a zaak."""
     return cast("JsonObject", expect_status(http.get(f"{zac_url}/rest/zaken/zaak/{uuid}"), HTTPStatus.OK).json())
