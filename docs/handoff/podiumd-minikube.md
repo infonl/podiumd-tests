@@ -51,3 +51,27 @@ with a comment on libmodsecurity's requestBodyFromFile; inspection stays on for 
 
 Test: `tests/component/zac/test_zac_documenten.py::test_document_above_the_maximum_file_size_is_refused` (destructive,
 slow) fails on minikube until then.
+
+## Shared lock file: flock the hold, refuse to break a live one (podiumd-tests, 2026-11-12)
+
+podiumd-tests db3e058 changed how it holds `/home/kvv/development/werk/infonl-dimpact/infonl/.minikube-lock`; the
+line format is unchanged:
+
+- Its holder keeps an exclusive `fcntl.flock` on the lock file for the whole hold, so "is the holder still running"
+  is "can a non-blocking flock be taken", also for a holder in another PID namespace (a sandbox or container) where
+  a pid check sees nothing.
+- It takes over a stale podiumd-tests line only under a flock on `.minikube-lock.guard`, so two takers cannot both
+  win. It never treats a podiumd-minikube line as stale.
+
+Requests for `src/podiumd_minikube/lock.py`, so both sides behave the same:
+
+1. `take`: after the `O_EXCL` create, keep the descriptor open with `fcntl.flock(fd, LOCK_EX | LOCK_NB)` until
+   `release` (also for `cluster-lock run`). Then podiumd-tests, and your own `cluster-lock status`, can tell a live
+   holder from a leftover line.
+2. `break_lock`: refuse while the file is flock-ed (a live holder, of either repository), unless forced, e.g.
+   `cluster-lock break --force`; today it removes any hold, including a running podiumd-tests run's.
+3. `break_lock` and `release_held_by`: read, compare and unlink under a flock on `.minikube-lock.guard`, so a break
+   cannot remove a hold someone took just after it was read.
+
+Check: `fcntl.flock(open(".minikube-lock"), LOCK_SH | LOCK_NB)` raises `BlockingIOError` while either side holds the
+lock.
