@@ -27,6 +27,7 @@ from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import AANVULLENDE_INFORMATIE
 from podiumd_tests.zac import GERELATEERD
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import LIST_TIMEOUT
@@ -84,7 +85,6 @@ VRAAG = "podiumd-tests vraag"
 SUSPENSION_DAYS = 7
 
 # The names of ZAC's CMMN human tasks (Generiek_zaakafhandelmodel.cmmn.xml).
-AANVULLENDE_INFORMATIE = "Aanvullende informatie"
 GOEDKEUREN = "Goedkeuren"
 ADVIES_INTERN = "Advies intern"
 ADVIES_EXTERN = "Advies extern"

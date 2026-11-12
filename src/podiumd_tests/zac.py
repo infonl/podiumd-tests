@@ -156,10 +156,17 @@ def comparable(value: object) -> object:
     return {key: comparable(item) for key, item in found.items() if key not in VERSION_FIELDS}
 
 
-def behandelaar_groups(http: requests.Session, zac_url: str, omschrijving: str) -> set[str]:
-    """Return the ids of the groups ZAC offers as behandelaar of zaken of the zaaktype: those PABC authorises."""
-    url = f"{zac_url}/rest/identity/zaaktype/{omschrijving}/behandelaar-groups"
-    return {str(group["id"]) for group in get_entries(http, url)}
+def behandelaar_groups(http: requests.Session, zac_url: str, *omschrijvingen: str) -> set[str]:
+    """Return the ids of the groups PABC authorises as behandelaar of zaken of each zaaktype.
+
+    One zaaktype: ZAC's list for a zaak or taak; more: its list for verdelen a selection.
+    """
+    if len(omschrijvingen) == 1:
+        url = f"{zac_url}/rest/identity/zaaktype/{omschrijvingen[0]}/behandelaar-groups"
+        return {str(group["id"]) for group in get_entries(http, url)}
+    body = {"zaaktypeDescriptions": list(omschrijvingen)}
+    response = expect_status(http.post(f"{zac_url}/rest/identity/behandelaar-groups", json=body), HTTPStatus.OK)
+    return {str(group["id"]) for group in entries(response.json())}
 
 
 def active_groups(http: requests.Session, zac_url: str) -> set[str]:
@@ -706,6 +713,10 @@ def is_taak_listed(http: requests.Session, zac_url: str, taak: JsonObject, **fla
     """
     found = search(http, zac_url, type="TAAK", zoeken={"TAAK_ZAAK_ID": taak["zaakIdentificatie"]}, **flags)
     return any(item.get("id") == taak["id"] for item in entries(found["resultaten"]))
+
+
+# ZAC's CMMN human task that asks for more information; its zaakafhandelparameters must switch it on.
+AANVULLENDE_INFORMATIE = "Aanvullende informatie"
 
 
 def open_task(http: requests.Session, zac_url: str, zaak_uuid: str, name: str) -> JsonObject:

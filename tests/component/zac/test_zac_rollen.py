@@ -166,6 +166,22 @@ def test_rights_come_from_podiumd_tests_own_pabc_roles(
     assert [entity for entity in covered if not entity.startswith(TAG_PREFIX)] == [], "a zaaktype of the estate"
 
 
+@pytest.mark.source(POLICIES, "ZAC's page /gebruiker shows the user's application roles per zaaktype.")
+@pytest.mark.scenario("""
+    Given a test user with only one ZAC base role on the BPMN test zaaktype
+    When the user asks ZAC who is logged in
+    Then ZAC names that role for the BPMN test zaaktype, and the user's realm role
+""")
+@pytest.mark.parametrize("role", ZAC_BASE_ROLES)
+def test_logged_in_user_shows_the_role_per_zaaktype(
+    zac_as: Callable[[str], requests.Session], urls: dict[str, str], role: str
+) -> None:
+    """/rest/identity/loggedInUser gives applicationRoles per zaaktype and the functional (realm) roles."""
+    shown = expect_status(zac_as(role).get(f"{urls['zac']}/rest/identity/loggedInUser"), HTTPStatus.OK).json()
+    assert section(shown, "applicationRoles").get(BPMN_ZAAKTYPE) == [role]
+    assert ZAC_ROLE_USERS[role].realm_roles[0] in shown.get("functionalRoles", [])
+
+
 @pytest.mark.source(POLICIES, "Each base role has the rights of the roles below it and the rights of its own.")
 @pytest.mark.scenario("""
     Given a test user with only one ZAC base role on the BPMN test zaaktype

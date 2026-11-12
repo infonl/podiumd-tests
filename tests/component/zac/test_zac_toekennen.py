@@ -17,11 +17,14 @@ from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import make_zaak
+from podiumd_tests.seed.zac_zaaktype import make_other_domain_group
+from podiumd_tests.seed.zac_zaaktype import make_role_group
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import afhandelen
 from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import assignment
+from podiumd_tests.zac import behandelaar_groups
 from podiumd_tests.zac import listed_assignment
 from podiumd_tests.zac import open_task
 from podiumd_tests.zac import read_taak
@@ -43,6 +46,7 @@ if TYPE_CHECKING:
     import requests
 
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -292,3 +296,33 @@ def test_taak_verdeeld_by_a_coordinator_mails_the_behandelaar(
         description=f"taak {taak['id']} verdeeld",
     )
     signalering_mail(mailpit, registry, ADMIN.username, f"/taken/{taak['id']}", timeout=LIST_TIMEOUT)
+
+
+@ZAC_TEAM
+@pytest.mark.requires("pabc")
+@pytest.mark.scenario("""
+    Given a group with the behandelaar role on the BPMN test zaaktype
+    And a group with the behandelaar role on a zaaktype of another domain
+    When the coordinator verdeelt a selection of zaken of one of those zaaktypen
+    Then ZAC offers the group of that zaaktype
+    When the selection holds zaken of both zaaktypen
+    Then ZAC offers only the groups it offers for each zaaktype, so neither of those two
+""")
+def test_verdelen_offers_only_groups_authorised_for_every_selected_zaaktype(
+    zac: requests.Session,
+    podiumd_env: Environment,
+    urls: dict[str, str],
+    bpmn_zaaktype: JsonObject,
+    registry: ResourceRegistry,
+) -> None:
+    """ZAC's groups for verdelen are those PABC authorises as behandelaar for every selected zaaktype."""
+    bpmn = str(bpmn_zaaktype["omschrijving"])
+    eigen = make_role_group(podiumd_env, registry, "behandelaar")
+    # The other domain's zaaktype has the group's name.
+    ander = make_other_domain_group(podiumd_env, registry, "behandelaar")
+    # Two zaaktypen: ZAC's call for a selection; estate groups with rights on every zaaktype are in each set.
+    voor_bpmn = behandelaar_groups(zac, urls["zac"], bpmn, bpmn)
+    voor_ander = behandelaar_groups(zac, urls["zac"], ander, ander)
+    assert (eigen in voor_bpmn, ander in voor_ander) == (True, True)
+    voor_beide = behandelaar_groups(zac, urls["zac"], bpmn, ander)
+    assert (voor_beide, {eigen, ander} & voor_beide) == (voor_bpmn & voor_ander, set())

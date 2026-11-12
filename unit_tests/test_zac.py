@@ -592,6 +592,12 @@ def test_behandelaar_groups_are_zacs_groups_for_the_zaaktype(fake_http):
     assert zac.behandelaar_groups(requests.Session(), ZAC, "zt") == {"g1", "g2"}
 
 
+def test_behandelaar_groups_of_several_zaaktypen_are_zacs_common_groups(fake_http):
+    sent = fake_http({"POST /rest/identity/behandelaar-groups": (200, [{"id": "g1", "naam": "G1"}])})
+    assert zac.behandelaar_groups(requests.Session(), ZAC, "zt1", "zt2") == {"g1"}
+    assert json.loads(sent[-1].body) == {"zaaktypeDescriptions": ["zt1", "zt2"]}
+
+
 def test_afronden_intake_and_afbreken(fake_http, monkeypatch):
     events = []
     monkeypatch.setattr(zac, "user_event", lambda *args, **fields: events.append((args[3], fields)) or _ok())

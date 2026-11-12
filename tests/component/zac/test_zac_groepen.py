@@ -17,6 +17,7 @@ from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.zac_zaaktype import make_group_member
 from podiumd_tests.seed.zac_zaaktype import make_role_group
+from podiumd_tests.zac import AANVULLENDE_INFORMATIE
 from podiumd_tests.zac import active_groups
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import group_members
@@ -48,8 +49,6 @@ pytestmark = [
         " autorisatie-iam): Keycloak group changes.",
     ),
 ]
-
-AANVULLENDE_INFORMATIE = "Aanvullende informatie"
 
 
 def _keycloak(env: Environment) -> KeycloakAdmin:

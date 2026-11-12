@@ -12,6 +12,7 @@ from typing import NamedTuple
 
 import pytest
 
+from podiumd_tests.json_data import section
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.zac_zaaktype import ZAAKSPECIFIEK_TYPES
@@ -19,11 +20,16 @@ from podiumd_tests.seed.zac_zaaktype import make_group_member
 from podiumd_tests.seed.zac_zaaktype import make_role_group
 from podiumd_tests.seed.zac_zaaktype import make_zac_zaaktype
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import AANVULLENDE_INFORMATIE
 from podiumd_tests.zac import LIST_TIMEOUT
+from podiumd_tests.zac import activate_human_tasks
 from podiumd_tests.zac import can_open_zaak
 from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
+from podiumd_tests.zac import is_taak_listed
 from podiumd_tests.zac import is_zaak_listed
+from podiumd_tests.zac import open_task
+from podiumd_tests.zac import start_human_task
 from podiumd_tests.zac import toekennen
 from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zac_session
@@ -209,3 +215,37 @@ def test_handed_over_zaak_stays_open_to_the_former_behandelaar(
     assert can_open_zaak(collega, zac_url, team_zaak)
     assert can_open_zaak(behandelaar, zac_url, team_zaak)
     assert not can_open_zaak(zac_as("recordmanager"), zac_url, team_zaak)
+
+
+@pytest.mark.source("ZAC taak-rechten.rego", "A taak of a marked zaak is open only to the zaak's authorised users.")
+@pytest.mark.scenario("""
+    Given a zaak with a taak Aanvullende informatie, which its behandelaar marks as zaakspecifiek geautoriseerd
+    When the behandelaar, a colleague in the same group and a beheerder open the taak
+    Then only the behandelaar may read it
+    And the colleague does not find it in the takenlijst
+""")
+def test_taak_of_a_marked_zaak_is_read_only_by_its_behandelaar(  # the zaak, its taak and three users
+    zac: requests.Session,
+    urls: dict[str, str],
+    zaakspecifiek_zaaktype: JsonObject,
+    team: Team,
+    team_zaak: JsonObject,
+    zac_as: Callable[[str], requests.Session],
+) -> None:
+    """taak-rechten.rego's zaak_allowed: lezen of the taak only for the marked zaak's behandelaar."""
+    zac_url, uuid = urls["zac"], str(team_zaak["uuid"])
+    behandelaar, collega = team.sessions
+    activate_human_tasks(zac, zac_url, str(section(zaakspecifiek_zaaktype, "zaaktype")["uuid"]))
+    started = start_human_task(behandelaar, zac_url, team_zaak, AANVULLENDE_INFORMATIE, team.group)
+    expect_status(started, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    taak = open_task(behandelaar, zac_url, uuid, AANVULLENDE_INFORMATIE)
+    expect_status(_mark(behandelaar, zac_url, team_zaak), HTTPStatus.OK)
+
+    readers = {"behandelaar": behandelaar, "collega": collega, "beheerder": zac_as("beheerder")}
+    allowed = {name: http.get(f"{zac_url}/rest/taken/{taak['id']}").ok for name, http in readers.items()}
+    assert allowed == {"behandelaar": True, "collega": False, "beheerder": False}
+    wait_until(
+        lambda: is_taak_listed(behandelaar, zac_url, taak) and not is_taak_listed(collega, zac_url, taak),
+        timeout=LIST_TIMEOUT,
+        description="the behandelaar finds the taak of the marked zaak and the colleague does not",
+    )

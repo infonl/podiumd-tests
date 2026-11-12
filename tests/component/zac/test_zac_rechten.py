@@ -1,4 +1,4 @@
-"""ZAC's access rules (its OPA policies) on closed zaken, documents, beheer, verdelen and the BRP.
+"""ZAC's access rules (its OPA policies) on closed zaken, documents, beheer, verdelen and related zaken.
 
 Every ZAC REST call asks ZAC's OPA sidecar for the user's rights; a call that succeeds shows that OPA allows. The
 tests per role log in as bootstrap's test user with only that ZAC application role on the BPMN test zaaktype
@@ -14,17 +14,17 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.basisregistraties import EREBOS
-from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
 from podiumd_tests.bootstrap.bpmn import INTAKE
 from podiumd_tests.bootstrap.names import ZAC_BASE_ROLES
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import KCC
+from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import GERELATEERD
 from podiumd_tests.zac import HEROPEND
 from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import POLICIES
@@ -32,6 +32,8 @@ from podiumd_tests.zac import afsluiten
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import can_open_zaak
 from podiumd_tests.zac import heropenen
+from podiumd_tests.zac import koppel
+from podiumd_tests.zac import ontkoppel
 from podiumd_tests.zac import open_task
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import rights_of
@@ -41,7 +43,6 @@ from podiumd_tests.zac import vrijgeven
 from podiumd_tests.zac import vrijgeven_taken
 from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zac_session
-from podiumd_tests.zac_betrokkenen import wijzig_initiator
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import nieuwe_versie
 from podiumd_tests.zac_documents import uploaded_document
@@ -413,22 +414,33 @@ def test_only_a_coordinator_verdeelt_and_vrijgeeft_taken(
 
 
 @pytest.mark.requires("pabc")
-@pytest.mark.source(POLICIES, "Without the plus role brp_zoeken a user cannot search the BRP, but can add a bedrijf.")
+@pytest.mark.source(POLICIES, "Relating zaken needs the right to read the other zaak (ZaakLinkData.canBeRelatedTo).")
 @pytest.mark.scenario("""
-    Given a zaak of the BPMN test zaaktype
-    And a behandelaar without the plus role brp_zoeken
-    When the behandelaar searches a person in the BRP
-    Then ZAC refuses it
-    When the behandelaar makes a bedrijf from the KvK the zaak's initiator
-    Then the zaak has that bedrijf as initiator
+    Given a zaak of the BPMN test zaaktype, which the test admin related to a zaak of the estate's zaaktype
+    And a behandelaar with a role on the BPMN test zaaktype only
+    When the behandelaar opens the zaak
+    Then the related zaak shows only its zaaknummer, and cannot be unlinked
+    And ZAC refuses the behandelaar's unlinking of it, and relating another zaak of the estate's zaaktype
 """)
-def test_without_brp_zoeken_no_person_search_but_a_bedrijf_initiator(
-    zac_as: Callable[[str], requests.Session], urls: dict[str, str], bpmn_zaak: JsonObject
+def test_relating_zaken_needs_read_rights_on_the_other_zaak(
+    zac: requests.Session,
+    zac_as: Callable[[str], requests.Session],
+    urls: dict[str, str],
+    bpmn_zaak: JsonObject,
+    zac_zaak: Callable[..., JsonObject],
 ) -> None:
-    """The behandelaar's person search answers 403; its initiator of type RSIN with a kvkNummer is stored."""
+    """Without lezen on the other zaak: no zaaktype shown, ontkoppelen false, and koppel and ontkoppel get 403."""
+    zac_url = urls["zac"]
+    other, third = zac_zaak(), zac_zaak()
+    expect_status(koppel(zac, zac_url, bpmn_zaak, other, GERELATEERD), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     behandelaar = zac_as("behandelaar")
-    refused = behandelaar.put(f"{urls['zac']}/rest/klanten/personen", json={"bsn": EREBOS})
-    assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
-    bedrijf = {"type": "RSIN", "kvkNummer": KVK_TEST_NUMMER}
-    changed = expect_status(wijzig_initiator(behandelaar, urls["zac"], bpmn_zaak, bedrijf, None), HTTPStatus.OK)
-    assert section(changed.json(), "initiatorIdentificatie").get("kvkNummer") == KVK_TEST_NUMMER
+    shown = entries(read_zaak(behandelaar, zac_url, str(bpmn_zaak["uuid"])).get("gerelateerdeZaken"))
+    related = [item for item in shown if item.get("identificatie") == other["identificatie"]]
+    assert [(item.get("zaaktypeOmschrijving"), item.get("ontkoppelen")) for item in related] == [(None, False)], shown
+    answers = {
+        "ontkoppelen": ontkoppel(behandelaar, zac_url, bpmn_zaak, other, GERELATEERD, "podiumd-tests"),
+        "koppelen": koppel(behandelaar, zac_url, bpmn_zaak, third, GERELATEERD),
+    }
+    assert {call: answer.status_code for call, answer in answers.items()} == dict.fromkeys(
+        answers, HTTPStatus.FORBIDDEN
+    ), {call: describe(answer) for call, answer in answers.items()}
