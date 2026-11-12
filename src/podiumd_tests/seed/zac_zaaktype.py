@@ -47,6 +47,12 @@ ZAC_TYPES = ZaaktypeTypes(
     ("Intake", "Wacht op aanvullende informatie", "In behandeling", "Afgerond"),
     (("Initiator", "initiator"), ("Behandelaar", "behandelaar")),
 )
+# ZAC 5.9.1 offers zaakspecifieke autorisatie on a zaaktype with this eigenschap and this behandelaar roltype.
+ZAAKSPECIFIEK_TYPES = ZaaktypeTypes(
+    ZAC_TYPES.statustypen,
+    (*ZAC_TYPES.roltypen, ("Zaakspecifiek geautoriseerde medewerker", "behandelaar")),
+    ("ZAAK_GEAUTORISEERD",),
+)
 
 
 def zac_as_admin(env: Environment) -> requests.Session:
@@ -59,13 +65,14 @@ def pabc_as_admin(env: Environment) -> tuple[requests.Session, str]:
     return admin_session(env, ADMIN.username, env.credentials.get(ADMIN.store_key)), env.profile.urls["pabc"]
 
 
-def publish_zac_zaaktype(
+def publish_zac_zaaktype(  # noqa: PLR0913  # the zaaktype's parts
     env: Environment,
     openzaak: ApiClient,
     registry: ResourceRegistry,
     template: JsonObject,
     *,
     informatieobjecttypen: Sequence[str] = (),
+    types: ZaaktypeTypes = ZAC_TYPES,
     **fields: object,
 ) -> JsonObject:
     """Publish a throwaway zaaktype with run-tagged omschrijving that ZAC can handle and that is its own deelzaaktype.
@@ -74,7 +81,7 @@ def publish_zac_zaaktype(
     omschrijving of the one before in fields.
     """
     body: dict[str, object] = {"omschrijving": registry.tagged(f"zac-{secrets.token_hex(3)}"), **fields}
-    concept = make_publishable_zaaktype(env, openzaak, registry, template, ZAC_TYPES, **body)
+    concept = make_publishable_zaaktype(env, openzaak, registry, template, types, **body)
     openzaak.patch(str(concept["url"]), {"deelzaaktypen": [concept["url"]]})
     for volgnummer, iot in enumerate(informatieobjecttypen, start=1):
         link = {"zaaktype": concept["url"], "informatieobjecttype": iot, "volgnummer": volgnummer, "richting": "intern"}
@@ -135,27 +142,29 @@ def make_role_group(env: Environment, registry: ResourceRegistry, role: str) -> 
     return name
 
 
-def make_group_member(env: Environment, registry: ResourceRegistry, group: str) -> str:
-    """Create a run-tagged Keycloak user in the group; its username. Cleanup deletes it."""
+def make_group_member(env: Environment, registry: ResourceRegistry, group: str) -> tuple[str, str]:
+    """Create a run-tagged Keycloak user in the group; its username and password. Cleanup deletes it."""
     admin = for_environment(env)
     username = registry.tagged(f"zac-lid-{secrets.token_hex(3)}")
-    user_id = admin.create_user(username, admin.new_password(), {})
+    password = admin.new_password()
+    user_id = admin.create_user(username, password, {})
     registry.add(f"Keycloak user {username}", lambda: for_environment(env).delete_user_named(username))
     group_id = admin.group_id(group)
     if group_id is None:
         msg = f"Keycloak group {group} not found"
         raise LookupError(msg)
     admin.join_group(user_id, group_id)
-    return username
+    return username, password
 
 
-def make_zac_zaaktype(
+def make_zac_zaaktype(  # noqa: PLR0913  # the zaaktype's parts
     env: Environment,
     openzaak: ApiClient,
     registry: ResourceRegistry,
     template: JsonObject,
     *,
     informatieobjecttypen: Sequence[str] = (),
+    types: ZaaktypeTypes = ZAC_TYPES,
     **fields: object,
 ) -> JsonObject:
     """Publish a throwaway zaaktype, grant it and configure it in the admin's first group; its zaakafhandelparameters.
@@ -165,7 +174,7 @@ def make_zac_zaaktype(
     zac_url = env.profile.urls["zac"]
     registry.add("ZAC's ZTC cache", lambda: clear_ztc_cache(zac_as_admin(env), zac_url))
     zaaktype = publish_zac_zaaktype(
-        env, openzaak, registry, template, informatieobjecttypen=informatieobjecttypen, **fields
+        env, openzaak, registry, template, informatieobjecttypen=informatieobjecttypen, types=types, **fields
     )
     grant_zaaktype(env, registry, str(zaaktype["omschrijving"]))
     admin = zac_as_admin(env)

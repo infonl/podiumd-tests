@@ -42,7 +42,7 @@ share their setup. The user picks the batches to port.
 
 ## Batches
 
-### Z1: zaak lifecycle (2 days, 5 tests)
+### Z1: zaak lifecycle (done: 5 tests)
 
 - Gaps: intake afronden ontvankelijk (status In behandeling, optional statusmail) and niet ontvankelijk (zaak closed
   with the niet-ontvankelijk resultaat, the mail stored as a definitief PDF); afhandelen with resultaat and
@@ -138,6 +138,12 @@ share their setup. The user picks the batches to port.
   closed zaak (only the right `versturenEmail`).
 - ZAC's search matches a zaak by uuid: its index keeps deleted zaken (open-zaak-1) whose identificatie Open Zaak hands
   out again.
+- Zaakspecifieke autorisatie in `tests/component/zac/test_zac_zaakspecifiek.py`, on a throwaway zaaktype with
+  eigenschap ZAAK_GEAUTORISEERD and roltype "Zaakspecifiek geautoriseerde medewerker", in a new group of two new
+  behandelaars: the behandelaar marks the zaak; colleague, recordmanager, raadpleger and beheerder cannot open the
+  zaak or its document, the colleague does not find it; the marking cannot be lifted; refused for a zaaktype without
+  it, without behandelaar and for a colleague; a marked zaak cannot be released; after a handover the former
+  behandelaar keeps access.
 
 ### Z9: productaanvraag (done: 6 tests)
 
@@ -186,7 +192,6 @@ share their setup. The user picks the batches to port.
 - More than 120 zaaktypen in the werklijsten, the 500 MB upload, bulk verdelen of 100 zaken: they need volume
   seeding beyond what a shared environment should carry; revisit with the perf tier's volume data.
 - PDF/A conformance of generated PDFs: needs a validator (veraPDF) in the suite's image.
-- Keycloak group changes (rename, inactive, delete), referentietabellen and mail template CRUD, zaakspecifiek
-  autorisatie: they change shared configuration; possible with podiumd-tests' own groups and names once the user
-  wants them.
+- Holders of ZAC's application role zaakspecifiek_geautoriseerd: PodiumD's PABC dataset (chart 4.10.1, 4.11.0) has
+  no such role.
 - Low-priority gaps not named above; they follow the batch of their area when one is ported.

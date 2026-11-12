@@ -65,13 +65,14 @@ def publish(openzaak: ApiClient, catalogus_type: JsonObject) -> JsonObject:
 
 @dataclass(frozen=True)
 class ZaaktypeTypes:
-    """The statustypen (the last is the eindstatus) and (omschrijving, omschrijvingGeneriek) roltypen of a zaaktype.
+    """Statustypen (the last is the eindstatus), (omschrijving, omschrijvingGeneriek) roltypen and text eigenschappen.
 
     The defaults are what publishing needs.
     """
 
     statustypen: tuple[str, ...] = ("Ontvangen", "Afgehandeld")
     roltypen: tuple[tuple[str, str], ...] = (("Initiator", "initiator"),)
+    eigenschappen: tuple[str, ...] = ()
 
 
 PUBLISHABLE = ZaaktypeTypes()
@@ -109,6 +110,15 @@ def make_publishable_zaaktype(
         openzaak.post(
             f"{CATALOGI}/roltypen", {"zaaktype": url, "omschrijving": omschrijving, "omschrijvingGeneriek": generiek}
         )
+    specificatie: dict[str, object] = {
+        "formaat": "tekst",
+        "lengte": "20",
+        "kardinaliteit": "1",
+        "waardenverzameling": [],
+    }
+    for naam in types.eigenschappen:
+        eigenschap: dict[str, object] = {"zaaktype": url, "naam": naam, "definitie": naam, "specificatie": specificatie}
+        openzaak.post(f"{CATALOGI}/eigenschappen", eigenschap)
     copied = ("resultaattypeomschrijving", "selectielijstklasse", "archiefnominatie", "archiefactietermijn")
     body = {key: resultaattype[key] for key in copied}
     procedure = {"afleidingswijze": "afgehandeld", "procestermijn": None}

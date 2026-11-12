@@ -136,8 +136,9 @@ def test_group_member_is_a_run_tagged_user_in_the_group_that_cleanup_deletes(mon
     )
     monkeypatch.setattr(zac_zaaktype, "for_environment", lambda _env: admin)
     registry = ResourceRegistry(RUN)
-    lid = zac_zaaktype.make_group_member(env(), registry, "ptest-g")
+    lid, password = zac_zaaktype.make_group_member(env(), registry, "ptest-g")
     assert lid.startswith(f"{RUN}-zac-lid-")
+    assert password == admin.new_password()
     registry.cleanup()
     assert calls == [("create", lid), ("join", "u1", "g1"), ("delete", lid)]
     with pytest.raises(LookupError, match="Keycloak group ptest-x not found"):

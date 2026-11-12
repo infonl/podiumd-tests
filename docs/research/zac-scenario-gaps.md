@@ -20,12 +20,12 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | documenten-mail | 3 | 4 | 25 | 1 | 5 |
 | taken-cmmn | 1 | 3 | 11 | 0 | 1 |
 | bpmn | 4 | 3 | 6 | 0 | 2 |
-| autorisatie-iam | 1 | 8 | 15 | 2 | 2 |
+| autorisatie-iam | 1 | 10 | 13 | 2 | 2 |
 | zoeken-werklijsten-dashboard | 2 | 4 | 15 | 0 | 2 |
-| beheer-zaps | 1 | 6 | 9 | 2 | 3 |
+| beheer-zaps | 2 | 6 | 8 | 2 | 3 |
 | integraties-intake | 1 | 3 | 9 | 1 | 2 |
 | overig | 0 | 2 | 1 | 0 | 6 |
-| **total** | **17** | **48** | **119** | **9** | **28** |
+| **total** | **18** | **50** | **116** | **9** | **28** |
 
 ## zaak-lifecycle
 
@@ -156,8 +156,8 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | high | User with only a plusrol (brp_zoeken) and no ZAC basisrol is treated as a user without ZAC roles and cannot use ZAC | partial | The REST refusal is checked; the page with a message that a base role is needed, Uitloggen and no Home button is not | `test_plus_role_alone_gives_no_access` | zac-rest | OPA/PABC, Keycloak | 5.9.1 |
 | high | A user without rights on a zaaktype cannot open its zaken (direct URL gives no-rights error), even with ZAC roles on other zaaktypen | covered | Graylog login logging of rights is out of reach | `test_role_gives_no_access_to_zaken_of_other_zaaktypen` | zac-rest | OPA/PABC, Keycloak | 5.9.1 |
 | medium | Admin pages (/admin/*) and /rest/admin endpoints are refused for every role except functioneel beheerder/beheerder | gap | No test calls ZAC admin endpoints as behandelaar/raadpleger; the no-permission page layout (Home button, no Uitloggen) is UI-only |  | zac-rest | OPA/PABC, Keycloak | 5.9.1 |
-| medium | Zaakspecifiek autorisatie: who may set it (behandelaar of the zaak / zaakspecifiek role / beheerder), refused without behandelaar or for a zaaktype not configured for it, cannot be unset, behandelaar cannot be removed or changed to a non-authorised user | gap | No test sets zaakspecifiek autorisatie; needs a PABC functional role with zaakspecifiek_geautoriseerd and a second test user (feature not yet rolled out per regression-80) |  | zac-rest | OPA/PABC, Keycloak |  |
-| medium | Zaakspecifiek geautoriseerde zaak (ZAAK_GEAUTORISEERD): authorised behandelaar and beheerder can open zaak, taken and documenten; other behandelaars and recordmanager cannot open, find or see them | gap | Nothing checks access to a zaakspecifiek geautoriseerde zaak for authorised vs. unauthorised users |  | zac-rest | OPA/PABC, Keycloak, Solr, Open Zaak |  |
+| medium | Zaakspecifiek autorisatie: who may set it (behandelaar of the zaak / zaakspecifiek role / beheerder), refused without behandelaar or for a zaaktype not configured for it, cannot be unset, behandelaar cannot be removed or changed to a non-authorised user | partial | A holder of the application role zaakspecifiek_geautoriseerd setting it: PodiumD's PABC dataset has no such role | `test_marking_is_refused_without_its_conditions`, `test_handed_over_zaak_stays_open_to_the_former_behandelaar` | zac-rest | OPA/PABC, Keycloak |  |
+| medium | Zaakspecifiek geautoriseerde zaak (ZAAK_GEAUTORISEERD): authorised behandelaar and beheerder can open zaak, taken and documenten; other behandelaars and recordmanager cannot open, find or see them | partial | Taken of a marked zaak; the beheerder cannot open it in ZAC 5.9.1 (only its behandelaar, authorised medewerkers and role holders) | `test_marked_zaak_is_reached_only_by_its_behandelaar` | zac-rest | OPA/PABC, Keycloak, Solr, Open Zaak |  |
 | medium | Afgehandelde zaak: behandelaar and coordinator cannot edit details, dates, locatie, BAG object, initiator/betrokkene, mail or ontvangstbevestiging; recordmanager/beheerder can edit details (not dates), locatie, BAG, initiator, betrokkene, add documents, heropenen and assign to self | gap | Tests close a zaak but never try changes on it, neither as behandelaar (refused) nor as recordmanager/beheerder (allowed) | `test_aborted_zaak_is_closed_and_listed_among_the_closed_zaken` | zac-rest | BAG |  |
 | medium | Document rights by role and lock state: behandelaar edits only unlocked/own-locked non-definitief documents; recordmanager/beheerder may ontgrendelen, delete, new version of locked/definitief/closed-zaak documents; no new version of a signed document | gap | Document actions run only as admin on own unlocked documents; rights per role, lock by another user and the signed-document new-version refusal are not checked | `test_document_can_be_deleted`, `test_word_saves_an_edited_document_as_a_new_version`, `test_selected_document_is_signed` | zac-rest |  |  |
 | medium | Group dropdown for a zaak/taak offers only groups with behandelaar rights on the zaaktype in PABC | gap | The group list for a zaaktype (identity groups per zaaktype) is not checked against PABC; zac_group just takes the admin's first group |  | zac-rest | OPA/PABC, Keycloak |  |
@@ -217,7 +217,7 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | low | ZAPs statusmail intake/afronden fase setting decides the mail option at intake afronden and afhandelen | gap |  |  | zac-rest |  |  |
 | low | Referentietabellen create, edit, delete, value length limit, system values not editable; editing a communicatiekanaal leaves existing zaken unchanged | gap |  |  | zac-rest |  |  |
 | low | Mailtemplates create, edit, delete | gap |  |  | zac-rest |  |  |
-| low | Eigenschap ZAAK_GEAUTORISEERD makes the zaaktype Zaakspecifiek autoriseerbaar in ZAPs | gap |  |  | zac-rest | Open Zaak |  |
+| low | Eigenschap ZAAK_GEAUTORISEERD makes the zaaktype Zaakspecifiek autoriseerbaar in ZAPs | covered |  | `test_marking_is_refused_without_its_conditions` (a zaaktype without it is refused; podiumd-tests' zaaktype with it is accepted) | zac-rest | Open Zaak |  |
 
 ## integraties-intake
 

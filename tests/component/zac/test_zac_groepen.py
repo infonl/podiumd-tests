@@ -98,7 +98,7 @@ def test_new_group_and_its_members_show_in_zac(
     """ZAC's group list, a group's behandelaars and toekennen follow Keycloak's groups and memberships."""
     zac_url = urls["zac"]
     group = make_role_group(podiumd_env, registry, "behandelaar")
-    lid = make_group_member(podiumd_env, registry, group)
+    lid, _ = make_group_member(podiumd_env, registry, group)
     assert group in active_groups(zac, zac_url)
     assert lid in group_members(zac, zac_url, group)
     zaak = zac_taken_zaak()
