@@ -464,7 +464,6 @@ Updated 2026-11-12. The detail lives where it is kept up to date: blocked ports 
 
 | Tests | Waits for |
 |---|---|
-| TA 80, 81, 82, 115, 116, the OMC part of 154; MK `test_omc.py` (`/Events/Version` with a JWT) | an OMC that handles Open Notificaties' notifications (1.17.19 answers 206 to each); then turn it on in minikube |
 | TA smoke 155, regression 156 | a profile with an `esuite` URL and credentials (eSuite is outside PodiumD) |
 | TA `perf/fg-compare.js` | an environment with both a Frank!Gateway route and a direct route to Open Zaak |
 
