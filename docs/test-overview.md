@@ -12,7 +12,7 @@ versions is not counted.
 | --- | --- | --- | --- |
 | smoke | 210 | 37 | 9 |
 | component | 858 | 547 | 68 |
-| integration | 145 | 89 | 11 |
+| integration | 145 | 89 | 12 |
 | perf | 54 | 3 | 0 |
 | **full tier** | **1180** | **650** |  |
 
@@ -177,6 +177,7 @@ Ids of infonl/podiumd-known-issues.
 | zac-31 | 1 |
 | zac-32 | 1 |
 | zac-33 | 1 |
+| zac-34 | 1 |
 | zgw-office-addin-1 | 2 |
 
 Tests without a scenario: 0.

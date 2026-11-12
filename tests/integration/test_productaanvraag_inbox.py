@@ -150,6 +150,11 @@ def test_inbox_productaanvragen_are_paged_with_their_ontvangstdatum(
     assert all(found[0].get("ontvangstdatum") for found in shown), shown
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-34] ZAC 5.9.1 drops a productaanvraag of an unhandled type whose betrokkenen have no initiator "
+    "(NoSuchElementException in registreerInbox, logged as a warning); not yet reported upstream",
+)
 @pytest.mark.source(PRODUCTAANVRAAG_SOURCE, "ZAC keeps a productaanvraag of a type it does not handle in its inbox.")
 @pytest.mark.scenario("""
     Given a productaanvraag of a type no zaaktype in ZAC handles
