@@ -74,6 +74,8 @@ NO_BETROKKENE = {"initiator", "behandelaar"}
 # ZAC's search fields of a zaak's betrokkenen: all of them, and the prefix of those of one roltype.
 ZAAK_BETROKKENEN = "ZAAK_BETROKKENEN"
 BETROKKENE_VELD = "zaak_betrokkene_"
+# A person of the BRP test set with an address in België.
+IN_BELGIE = "999993483"
 
 
 @TA_REG_193
@@ -88,6 +90,45 @@ def test_person_lookup(zac: requests.Session, urls: dict[str, str]) -> None:
     personen = person_lookup(zac, urls["zac"], EREBOS)
     assert [p["bsn"] for p in personen] == [EREBOS]
     assert "Bultenaar" in str(personen[0]["naam"])
+
+
+@REGRESSIE
+# Persons of the BRP test set, each with one indication; ZAC adds OPSCHORTING_BIJHOUDING to each opschorting reden.
+@pytest.mark.parametrize(
+    ("bsn", "indicaties"),
+    [
+        pytest.param("999999655", {"OVERLEDEN", "OPSCHORTING_BIJHOUDING"}, id="overleden"),
+        pytest.param("999991024", {"EMIGRATIE", "OPSCHORTING_BIJHOUDING"}, id="emigratie"),
+        pytest.param("999993586", {"MINISTERIELE_REGELING", "OPSCHORTING_BIJHOUDING"}, id="ministeriele-regeling"),
+        pytest.param("999996277", {"NIET_INGEZETENE"}, id="niet-ingezetene"),
+        pytest.param("999990792", {"GEHEIMHOUDING_OP_PERSOONSGEGEVENS"}, id="geheimhouding"),
+        pytest.param("999993355", {"IN_ONDERZOEK"}, id="in-onderzoek"),
+        pytest.param("999990822", {"ONDER_CURATELE"}, id="curatele"),
+    ],
+)
+@pytest.mark.scenario("""
+    Given a person of the BRP test set with an indication, such as overleden or onder curatele
+    When the behandelaar opens the person's details in ZAC
+    Then ZAC shows exactly the indications the BRP gives for that person
+""")
+def test_person_shows_the_brp_indicaties(
+    zac: requests.Session, urls: dict[str, str], bsn: str, indicaties: set[str]
+) -> None:
+    """GET klanten/person gives the indicaties ZAC derives from the BRP persoon."""
+    shown = zac.get(f"{urls['zac']}/rest/klanten/person/{person_key(zac, urls['zac'], bsn)}")
+    assert set(strings(expect_status(shown, HTTPStatus.OK).json().get("indicaties"))) == indicaties
+
+
+@REGRESSIE
+@pytest.mark.scenario("""
+    Given a person of the BRP test set who lives in België
+    When the behandelaar opens the person's details in ZAC
+    Then ZAC shows the foreign address ending with the country
+""")
+def test_person_abroad_shows_the_country(zac: requests.Session, urls: dict[str, str]) -> None:
+    """The verblijfplaats of a VerblijfplaatsBuitenland ends with its land."""
+    shown = zac.get(f"{urls['zac']}/rest/klanten/person/{person_key(zac, urls['zac'], IN_BELGIE)}")
+    assert str(expect_status(shown, HTTPStatus.OK).json().get("verblijfplaats")).endswith("België")
 
 
 @TA_REG_193
