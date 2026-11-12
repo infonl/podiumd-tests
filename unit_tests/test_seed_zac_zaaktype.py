@@ -142,7 +142,45 @@ def test_group_member_is_a_run_tagged_user_in_the_group_that_cleanup_deletes(mon
     registry.cleanup()
     assert calls == [("create", lid), ("join", "u1", "g1"), ("delete", lid)]
     with pytest.raises(LookupError, match="Keycloak group ptest-x not found"):
-        zac_zaaktype.make_group_member(env(), registry, "ptest-x")
+        zac_zaaktype.make_group_member(env(), registry, "ptest-g", "ptest-x")
+
+
+def test_other_domain_group_maps_a_new_realm_role_in_a_domain_of_its_own(monkeypatch):
+    calls = []
+    admin = SimpleNamespace(
+        create_role=lambda name: calls.append(("role", name)),
+        delete_role=lambda name: calls.append(("delete role", name)),
+        create_group=lambda name, roles: calls.append(("group", name, roles)),
+        delete_group_named=lambda name: calls.append(("delete group", name)),
+    )
+    monkeypatch.setattr(zac_zaaktype, "for_environment", lambda _env: admin)
+    monkeypatch.setattr(zac_zaaktype, "pabc_as_admin", lambda _env: ("pabc", "https://pabc.test"))
+    monkeypatch.setattr(zac_zaaktype, "add_zaaktype_entity_type", lambda _pabc, _url, name: f"et-{name}")
+    monkeypatch.setattr(zac_zaaktype, "forget_zaaktype", lambda _env, name: calls.append(("forget", name)))
+    monkeypatch.setattr(zac_zaaktype, "ensure_domain", lambda _pabc, _url, name, types: f"d-{name}-{types[0]}")
+
+    def functional_role(_pabc, _url, name, application, roles, domain):
+        calls.append(("functional", name, application, roles, domain))
+
+    monkeypatch.setattr(zac_zaaktype, "ensure_functional_role", functional_role)
+    monkeypatch.setattr(
+        zac_zaaktype,
+        "delete_roles_and_domain",
+        lambda _pabc, _url, roles, domain: calls.append(("drop", roles, domain)),
+    )
+    registry = ResourceRegistry(RUN)
+    name = zac_zaaktype.make_other_domain_group(env(), registry, "raadpleger")
+    assert name.startswith(f"{RUN}-zac-domein-")
+    registry.cleanup()
+    assert calls == [
+        ("role", name),
+        ("functional", name, "zaakafhandelcomponent", ("raadpleger",), f"d-{name}-et-{name}"),
+        ("group", name, (name,)),
+        ("delete group", name),
+        ("drop", [name], name),
+        ("forget", name),
+        ("delete role", name),
+    ]
 
 
 def test_make_zac_zaaktype_configures_the_granted_zaaktype_in_the_admins_group(monkeypatch):
