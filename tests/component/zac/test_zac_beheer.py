@@ -1,6 +1,7 @@
 """ZAC's beheer of referentietabellen and mailtemplates, on run-tagged tables and templates of podiumd-tests.
 
-The estate's tables and templates are only read; a system table only gets a request ZAC refuses.
+The estate's tables and templates are only read; a system table gets a request ZAC refuses, or a run-tagged
+communicatiekanaal that cleanup removes.
 """
 
 from __future__ import annotations
@@ -13,9 +14,11 @@ import pytest
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
+from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac_beheer import MAILTEMPLATES
 from podiumd_tests.zac_beheer import REFERENTIETABELLEN
 from podiumd_tests.zac_beheer import VALUE_MAX_LENGTH
+from podiumd_tests.zac_beheer import communicatiekanalen
 from podiumd_tests.zac_beheer import create_mailtemplate
 from podiumd_tests.zac_beheer import create_referentietabel
 from podiumd_tests.zac_beheer import delete_mailtemplate
@@ -29,8 +32,11 @@ from podiumd_tests.zac_beheer import update_mailtemplate
 from podiumd_tests.zac_beheer import update_referentietabel
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import requests
 
+    from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [
@@ -41,6 +47,8 @@ pytestmark = [
         "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, beheer-zaps).",
     ),
 ]
+# Tests that read or change the estate's referentietabel Communicatiekanaal; one at a time.
+COMMUNICATIEKANAAL_TABLE = pytest.mark.xdist_group("zac-communicatiekanaal")
 
 
 @pytest.mark.scenario("""
@@ -110,6 +118,7 @@ def test_referentietabel_value_holds_at_most_1000_characters(
     assert referentietabel_values(referentietabel(zac, zac_url, str(tabel["code"]))) == [longest]
 
 
+@COMMUNICATIEKANAAL_TABLE
 @pytest.mark.scenario("""
     Given ZAC's system referentietabel Communicatiekanaal with its system value E-formulier
     When the beheerder saves the table without its system values
@@ -128,6 +137,33 @@ def test_system_value_of_a_referentietabel_cannot_be_removed(
     guard_referentietabel(zac, zac_url, registry, tabel)
     expect_status(update_referentietabel(zac, zac_url, tabel, gewoon), HTTPStatus.BAD_REQUEST)
     assert has_same_values(referentietabel(zac, zac_url, "COMMUNICATIEKANAAL"), tabel)
+
+
+@COMMUNICATIEKANAAL_TABLE
+@pytest.mark.requires("openzaak")
+@pytest.mark.scenario("""
+    Given a zaak started with a new communicatiekanaal of ZAC's referentietabel Communicatiekanaal
+    When the beheerder renames that communicatiekanaal
+    Then ZAC offers the new name for a new zaak
+    And the zaak keeps the communicatiekanaal it was started with
+""")
+def test_renamed_communicatiekanaal_leaves_existing_zaken_unchanged(
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
+) -> None:
+    """ZAC stores a zaak's communicatiekanaal by name; renaming the table's value does not touch the zaak."""
+    zac_url = urls["zac"]
+    tabel = referentietabel(zac, zac_url, "COMMUNICATIEKANAAL")
+    guard_referentietabel(zac, zac_url, registry, tabel)
+    kanaal = registry.tagged("kanaal")
+    expect_status(
+        update_referentietabel(zac, zac_url, tabel, [*entries(tabel["values"]), {"name": kanaal}]), HTTPStatus.OK
+    )
+    zaak = zac_zaak(communicatiekanaal=kanaal)
+    values = entries(referentietabel(zac, zac_url, "COMMUNICATIEKANAAL")["values"])
+    hernoemd = [{**value, "name": f"{kanaal}-hernoemd"} if value["name"] == kanaal else value for value in values]
+    expect_status(update_referentietabel(zac, zac_url, tabel, hernoemd), HTTPStatus.OK)
+    assert f"{kanaal}-hernoemd" in communicatiekanalen(zac, zac_url)
+    assert read_zaak(zac, zac_url, str(zaak["uuid"])).get("communicatiekanaal") == kanaal
 
 
 @pytest.mark.scenario("""
