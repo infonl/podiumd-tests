@@ -18,7 +18,8 @@ KVK_BASISPROFIELEN = "/api/v1/basisprofielen"
 KVK_VESTIGINGSPROFIELEN = "/api/v1/vestigingsprofielen"
 # Erebos Bultenaar, a person of the BRP test set; also the DigiD test inwoner's BSN.
 EREBOS = "999990019"
-# Kierkegaard, born 1931-07-06, another person of the BRP test set.
+# Kierkegaard, born 1931-07-06, another person of the BRP test set; only the ontvangstbevestiging test of an
+# initiator gives it an Open Klant partij.
 KIERKEGAARD = "999990020"
 # Lukas Klamer, a person of the BRP test set that only the ZAC e-mail test gives an Open Klant partij.
 KLAMER = "999991723"
