@@ -537,12 +537,16 @@ def send_with_person(
     return attempt() if response.status_code == HTTPStatus.GONE else response
 
 
-def productaanvraag_zaken(openzaak: ApiClient, kenmerk: str) -> list[JsonObject]:
-    """Return the zaken started since yesterday with the productaanvraag's kenmerk in the toelichting."""
+def recent_zaken(openzaak: ApiClient) -> list[JsonObject]:
+    """Return the zaken in Open Zaak started since yesterday."""
     # ZAC dates the zaak in Dutch time: around midnight a day after the UTC date.
     since = (date.fromisoformat(today()) - timedelta(days=1)).isoformat()
-    zaken = openzaak.list(f"{ZAKEN}/zaken", {"startdatum__gte": since})
-    return [zaak for zaak in zaken if kenmerk in str(zaak.get("toelichting") or "")]
+    return openzaak.list(f"{ZAKEN}/zaken", {"startdatum__gte": since})
+
+
+def productaanvraag_zaken(openzaak: ApiClient, kenmerk: str) -> list[JsonObject]:
+    """Return the zaken started since yesterday with the productaanvraag's kenmerk in the toelichting."""
+    return [zaak for zaak in recent_zaken(openzaak) if kenmerk in str(zaak.get("toelichting") or "")]
 
 
 def productaanvraag_zaak(
@@ -806,6 +810,13 @@ def opschorten(
     """Suspend the zaak for the days with the reden (None: none); ZAC's answer."""
     body = {"reason": reden, "numberOfDays": days}
     return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/suspend", json=body)
+
+
+def hervatten(
+    http: requests.Session, zac_url: str, zaak: JsonObject, reden: str | None = "podiumd-tests"
+) -> requests.Response:
+    """Resume the suspended zaak with the reden (None: none); ZAC's answer."""
+    return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/resume", json={"reason": reden})
 
 
 def moved_dates(zaak: JsonObject, days: int) -> dict[str, str]:

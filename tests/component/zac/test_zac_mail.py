@@ -211,6 +211,28 @@ def test_afhandelmail_arrives_and_is_kept_on_the_zaak(
     assert message.get("Subject") in _titles(zac, urls["zac"], zaak)
 
 
+def _intake_mail(  # the zaak, its mail and Mailpit
+    zac: requests.Session,
+    zac_url: str,
+    zaak: JsonObject,
+    mail: Callable[..., JsonObject],
+    mailpit: ApiClient,
+    registry: ResourceRegistry,
+    mailtemplate: str,
+    *,
+    ontvankelijk: bool,
+) -> JsonObject:
+    """Finish the intake with the mail of the mailtemplate, as ZAC's intake afronden dialog sends it; the mail."""
+    template = zaak_mailtemplate(zac, zac_url, zaak, mailtemplate)
+    if template is None:
+        pytest.skip(f"ZAC has no mailtemplate {mailtemplate}: add one in ZAC's beheer of mailtemplates")
+    body = mail(zaak, onderwerp=template["onderwerp"], body=template["body"], createDocumentFromMail=True)
+    fields = {"zaakOntvankelijk": ontvankelijk, "resultaatToelichting": "podiumd-tests", "restMailGegevens": body}
+    response = user_event(zac, zac_url, str(zaak["uuid"]), "INTAKE_AFRONDEN", **fields)
+    expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    return received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=str(body["ontvanger"]))
+
+
 @pytest.mark.parametrize(
     ("ontvankelijk", "mailtemplate"),
     [(True, "ZAAK_ONTVANKELIJK"), (False, "ZAAK_NIET_ONTVANKELIJK")],
@@ -223,7 +245,7 @@ def test_afhandelmail_arrives_and_is_kept_on_the_zaak(
     And the zaak has the mail as a definitief PDF
     And the zaak stays open only when ontvankelijk
 """)
-def test_intake_mail_arrives_and_is_kept_as_a_definitief_pdf(
+def test_intake_mail_arrives_and_is_kept_as_a_definitief_pdf(  # the zaak, its mail and Mailpit
     zac: requests.Session,
     urls: dict[str, str],
     zac_zaak: Callable[..., JsonObject],
@@ -235,17 +257,35 @@ def test_intake_mail_arrives_and_is_kept_as_a_definitief_pdf(
 ) -> None:
     """INTAKE_AFRONDEN with restMailGegevens of the mailtemplate, as ZAC's intake afronden dialog sends it."""
     zaak = zac_zaak()
-    template = zaak_mailtemplate(zac, urls["zac"], zaak, mailtemplate)
-    if template is None:
-        pytest.skip(f"ZAC has no mailtemplate {mailtemplate}: add one in ZAC's beheer of mailtemplates")
-    body = mail(zaak, onderwerp=template["onderwerp"], body=template["body"], createDocumentFromMail=True)
-    fields = {"zaakOntvankelijk": ontvankelijk, "resultaatToelichting": "podiumd-tests", "restMailGegevens": body}
-    response = user_event(zac, urls["zac"], str(zaak["uuid"]), "INTAKE_AFRONDEN", **fields)
-    expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=str(body["ontvanger"]))
+    message = _intake_mail(zac, urls["zac"], zaak, mail, mailpit, registry, mailtemplate, ontvankelijk=ontvankelijk)
     stored = [item for item in zaak_documents(zac, urls["zac"], zaak) if item.get("titel") == message.get("Subject")]
     assert [(item.get("status"), item.get("formaat")) for item in stored] == [("definitief", "application/pdf")]
     assert read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpen"] is ontvankelijk
+
+
+# Not strict: an estate that edited its ZAAK_ONTVANKELIJK mailtemplate hides the defect.
+@pytest.mark.xfail(
+    strict=False,
+    reason="[zac-18] ZAC 5.9.1's default ZAAK_ONTVANKELIJK mailtemplate uses {zaaknummer} and {zaaktypenaam}, which ZAC "
+    "does not fill in; not yet reported upstream",
+)
+@pytest.mark.scenario("""
+    Given a new zaak in ZAC, in the intake
+    When the behandelaar finishes the intake as ontvankelijk with the mail of its mailtemplate
+    Then the mail has the zaak's data filled in, no variable names
+""")
+def test_ontvankelijk_mail_fills_in_its_variables(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    mail: Callable[..., JsonObject],
+    mailpit: ApiClient,
+    registry: ResourceRegistry,
+) -> None:
+    """The ontvankelijk mail's subject and body contain no {variable}."""
+    zaak = zac_zaak()
+    message = _intake_mail(zac, urls["zac"], zaak, mail, mailpit, registry, "ZAAK_ONTVANKELIJK", ontvankelijk=True)
+    assert "{" not in f"{message.get('Subject')}{message.get('HTML')}"
 
 
 @pytest.mark.scenario("""

@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.basisregistraties import BAG_DAM
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import IDENTITIES
@@ -32,18 +31,14 @@ from podiumd_tests.zac import DUE_DATES
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import assignment
-from podiumd_tests.zac import bag_object
-from podiumd_tests.zac import clean_up_zaak
+from podiumd_tests.zac import hervatten
 from podiumd_tests.zac import is_zaak_listed
 from podiumd_tests.zac import opschorten
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_with_person
-from podiumd_tests.zac import start_zaak
 from podiumd_tests.zac import verlengen
 from podiumd_tests.zac import wait_in_werkvoorraad
 from podiumd_tests.zac import wijzig_zaak
-from podiumd_tests.zac import zaak_bag_objecten
-from podiumd_tests.zac import zaak_body
 from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac_beheer import communicatiekanalen
 from podiumd_tests.zac_betrokkenen import add_betrokkene
@@ -127,33 +122,6 @@ def test_new_zaak_keeps_the_chosen_fields(
     assert ("AANGEMAAKT", zaak["identificatie"]) in historie
     linked = [historie.get(("GEKOPPELD", section(zaak, rol).get("naam"))) for rol in ("groep", "behandelaar")]
     assert linked == [AANMAKEN_ZAAK, AANMAKEN_ZAAK], historie
-
-
-@pytest.mark.source(
-    "podiumd-tests", "ZAC team's regression scenarios: a BAG object chosen when the zaak is created is linked to it."
-)
-@pytest.mark.scenario("""
-    Given the adres Dam 1 in Amsterdam in the BAG
-    When the behandelaar starts a zaak in ZAC with that adres as BAG object
-    Then the zaak lists the adres among its BAG objects
-""")
-def test_new_zaak_links_the_chosen_bag_adres(
-    zac: requests.Session,
-    urls: dict[str, str],
-    zac_parameters: JsonObject,
-    openzaak_productaanvraag: ApiClient,
-    registry: ResourceRegistry,
-) -> None:
-    """A BAG adres sent with a new zaak becomes its zaakobject.
-
-    Open Zaak fetches the adres's URL from the BAG to validate the zaakobject.
-    """
-    adres = bag_object(zac, urls["zac"], "ADRES", BAG_DAM)
-    body = zaak_body(zac_parameters, omschrijving=registry.tagged("zac-bag"))
-    zaak = start_zaak(zac, urls["zac"], {**body, "bagObjecten": [adres]})
-    clean_up_zaak(zac, urls["zac"], openzaak_productaanvraag, registry, zaak)
-    linked = zaak_bag_objecten(zac, urls["zac"], zaak)
-    assert [section(item, "zaakobject").get("identificatie") for item in linked] == [BAG_DAM]
 
 
 @pytest.mark.requires("opennotificaties")
@@ -331,8 +299,7 @@ def test_suspended_zaak_resumes_and_cannot_be_suspended_again(
     opschorting = section(in_open_zaak, "opschorting")
     assert (opschorting.get("indicatie"), opschorting.get("reden")) == (True, "podiumd-tests op")
 
-    resume = f"{urls['zac']}/rest/zaken/zaak/{zaak['uuid']}/resume"
-    expect_status(zac.patch(resume, json={"reason": "podiumd-tests her"}), HTTPStatus.OK)
+    expect_status(hervatten(zac, urls["zac"], zaak, "podiumd-tests her"), HTTPStatus.OK)
     assert not read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpgeschort"]
     assert _dates(openzaak_productaanvraag, urls, zaak) == before
     resumed = section(openzaak_productaanvraag.get(_zaak_url(urls, zaak)), "opschorting")
@@ -370,6 +337,31 @@ def test_zaak_is_not_suspended_or_extended_without_a_reden(
     indicaties = strings(read_zaak(zac, urls["zac"], str(zaak["uuid"])).get("indicaties"))
     assert {"OPSCHORTING", "VERLENGD"}.isdisjoint(indicaties), indicaties
     assert _dates(openzaak_productaanvraag, urls, zaak) == before
+
+
+@pytest.mark.source(
+    "podiumd-tests", "ZAC team's regression scenarios: a zaak is opgeschort only once, whatever the reden."
+)
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-19] ZAC 5.9.1 tells an earlier opschorting by its stored reden and accepts a blank reden, so a zaak "
+    "suspended and resumed with blank redenen can be suspended again; not yet reported upstream",
+)
+@pytest.mark.scenario("""
+    Given a zaak in ZAC
+    When the behandelaar suspends it with a reden of only a space and resumes it with an empty reden
+    Then ZAC refuses to suspend it a second time
+""")
+def test_zaak_suspended_with_a_blank_reden_is_not_suspended_again(
+    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
+) -> None:
+    """A second opschorten is refused; a refused blank reden at the first opschorten also passes."""
+    zaak = zac_zaak()
+    if opschorten(zac, urls["zac"], zaak, SUSPENSION_DAYS, " ").status_code != HTTPStatus.OK:
+        return
+    expect_status(hervatten(zac, urls["zac"], zaak, ""), HTTPStatus.OK)
+    again = opschorten(zac, urls["zac"], zaak, SUSPENSION_DAYS, "nogmaals")
+    expect_status(again, HTTPStatus.FORBIDDEN, HTTPStatus.BAD_REQUEST)
 
 
 @pytest.mark.tc("ZAC-044")

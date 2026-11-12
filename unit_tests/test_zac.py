@@ -670,6 +670,7 @@ def test_opschorten_verlengen_and_heropenen_send_days_dates_and_reden(fake_http)
             "PATCH /rest/zaken/zaak/z1/suspend": (200, {}),
             "PATCH /rest/zaken/zaak/z1/verlenging": (200, {}),
             "PATCH /rest/zaken/zaak/z1/heropenen": (200, {}),
+            "PATCH /rest/zaken/zaak/z1/resume": (200, {}),
         }
     )
     http = requests.Session()
@@ -692,6 +693,8 @@ def test_opschorten_verlengen_and_heropenen_send_days_dates_and_reden(fake_http)
     assert json.loads(sent[-1].body) == {"reason": None, "numberOfDays": 3}
     zac.heropenen(http, ZAC, zaak)
     assert json.loads(sent[-1].body) == {"reden": "podiumd-tests"}
+    zac.hervatten(http, ZAC, zaak, "")
+    assert json.loads(sent[-1].body) == {"reason": ""}
 
 
 def test_groups_members_and_taak_are_read_from_zac(fake_http):
