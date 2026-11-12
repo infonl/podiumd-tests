@@ -75,3 +75,14 @@ Requests for `src/podiumd_minikube/lock.py`, so both sides behave the same:
 
 Check: `fcntl.flock(open(".minikube-lock"), LOCK_SH | LOCK_NB)` raises `BlockingIOError` while either side holds the
 lock.
+
+## KISS managementinformatie key too short (podiumd-tests, 2026-11-12)
+
+`MANAGEMENTINFORMATIE_API_KEY` in Secret `contact` is 27 characters on minikube (48 on kees00). KISS (.NET) needs at
+least 32 bytes for its HS256 key, so `GET https://contact.local/api/contactmomentendetails` with a correctly signed
+token answers 401 `Bearer error="invalid_token", error_description="The signature key was not found"`.
+
+Request: a key of 32 or more characters in your KISS values.
+
+Test: `tests/component/kiss/test_kcc_session.py::test_kiss_reports_the_bronnen_of_a_contactmoment` fails on minikube until
+then (passes on kees00, run 20261112-173410_kees00_full_2611121734ac5b).

@@ -109,11 +109,11 @@ Not to port: the two cancel variants and the two parallel-session scenarios (cli
 | Priority | Scenario | Status | Not asserted | Our tests | Via | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
 | high | Company by naam, KvK-nummer, vestigingsnummer, postcode and huisnummer; unknown KvK-nummer (5) | covered | | `test_company_search` | bff-api | KvK |
-| high | Unknown bedrijfsnaam, unknown postcode and huisnummer | gap | | | bff-api | KvK |
-| medium | Naam, KvK-nummer, postcode and huisnummer with several results (3) | partial | that there are several | `test_company_search` | bff-api | KvK test set |
+| high | Unknown bedrijfsnaam, unknown postcode and huisnummer | covered |  | bff-api, `test_company_search` | KvK |
+| medium | Naam, KvK-nummer, postcode and huisnummer with several results (3) | covered |  | `test_company_search` | bff-api | KvK test set |
 | high | Person by achternaam and geboortedatum, BSN, postcode and huisnummer, found and not found (5) | covered | | `test_person_search` | bff-api | BRP |
-| medium | Part of the achternaam with geboortedatum gives 2 persons | gap | | | bff-api | BRP test set (Melap*) |
-| medium | Postcode and huisnummer filtered on achternaam, on part of it, on huisletter (3) | gap | | | bff-api | BRP test set |
+| medium | Part of the achternaam with geboortedatum gives 2 persons | covered |  | bff-api, `test_person_search` | BRP test set (Melap*) |
+| medium | Postcode and huisnummer filtered on achternaam, on part of it, on huisletter (3) | covered |  | bff-api, `test_person_search` | BRP test set |
 
 Not to port: a BSN failing the elfproef and a 2-letter achternaam filter (client validation; the unknown BSN is
 covered).
@@ -123,11 +123,11 @@ covered).
 | Priority | Scenario | Status | Not asserted | Our tests | Via | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
 | medium | The count of important berichten; marking read hides the body; a past publicatiedatum is shown (3) | covered | | `test_published_bericht_reaches_the_kcc_and_is_marked_read` | bff-api | ADMIN, KCC |
-| medium | Marking unread; search over both types; belangrijk set by an update; a new nieuwsbericht in the beheer list and its detail; deleting a nieuwsbericht (6) | partial | unread, the werkinstructie, the update, the beheer list and detail, the delete | same | bff-api | ADMIN, KCC |
-| medium | Filters on one, several or no skills; type filter with search (5) | gap | | | bff-api `skillIds`, `type`, `search` | ADMIN, KCC |
-| medium | Beheer list, detail, changed titel and publicatiedatum, delete of a werkinstructie, new werkinstructie (7) | gap | | | bff-api `/api/Berichten` | ADMIN |
-| medium | Future publicatiedatum hidden; publicatie-einddatum past hidden, future shown (3) | gap | | | bff-api | ADMIN, KCC |
-| low | Skills shown as labels on a nieuwsbericht and a werkinstructie | partial, gap | the skills in the answer | same | bff-api | ADMIN, KCC |
+| medium | Marking unread; search over both types; belangrijk set by an update; a new nieuwsbericht in the beheer list and its detail; deleting a nieuwsbericht (6) | covered |  | same, `test_published_bericht_reaches_the_kcc_and_is_marked_read`, `test_bericht_is_changed_and_deleted_in_beheer`, `test_berichten_are_filtered_on_skill_and_type` | bff-api | ADMIN, KCC |
+| medium | Filters on one, several or no skills; type filter with search (5) | covered |  | bff-api `skillIds`, `type`, `search`, `test_berichten_are_filtered_on_skill_and_type` | ADMIN, KCC |
+| medium | Beheer list, detail, changed titel and publicatiedatum, delete of a werkinstructie, new werkinstructie (7) | covered |  | bff-api `/api/Berichten`, `test_bericht_is_changed_and_deleted_in_beheer` | ADMIN |
+| medium | Future publicatiedatum hidden; publicatie-einddatum past hidden, future shown (3) | covered |  | bff-api, `test_bericht_shows_within_its_publication_window` | ADMIN, KCC |
+| low | Skills shown as labels on a nieuwsbericht and a werkinstructie | covered |  | same, `test_berichten_are_filtered_on_skill_and_type`, `test_bericht_is_changed_and_deleted_in_beheer` | bff-api | ADMIN, KCC |
 
 Not to port: the home page rendering, paging (4), clearing the search, the table's columns.
 
@@ -135,8 +135,8 @@ Not to port: the home page rendering, paging (4), clearing the search, the table
 
 | Priority | Scenario | Status | Not asserted | Our tests | Via | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
-| medium | The VACs and kennisartikel looked at are saved as gerelateerde bronnen | gap | | | bff-api contactmomentdetails `bronnen` | KISS database |
-| medium | A long VAC title, a long specifieke vraag, or both, are cut to fit the onderwerp (3) | gap | | | browser (the frontend builds the onderwerp) | a long-title VAC |
+| medium | The VACs and kennisartikel looked at are saved as gerelateerde bronnen | covered | KISS 3.2.0 returns bronnen only on its managementinformatie route; fails on minikube until its KISS key is 32+ characters (handoff) | bff-api contactmomentdetails `bronnen`, `test_kiss_reports_the_bronnen_of_a_contactmoment` | KISS database |
+| medium | A long VAC title, a long specifieke vraag, or both, are cut to fit the onderwerp (3) | covered | The cutting happens in KISS's browser code (not planned); the 200-character onderwerp is kept whole | browser (the frontend builds the onderwerp), `test_onderwerp_of_maximum_length_is_kept_whole` | a long-title VAC |
 
 Not to port: two vragen in one contactmoment (two `postklantcontacten` calls; one is ported in batch K1), two vragen
 for a vestiging (same path), the vraag field taking the last section read, a notitieblok over 1000 characters.
