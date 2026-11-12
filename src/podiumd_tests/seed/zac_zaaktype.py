@@ -125,12 +125,13 @@ def grant_zaaktype(env: Environment, registry: ResourceRegistry, omschrijving: s
     ensure_domain(pabc, pabc_url, ZAC_DOMAIN, [entity_type])
 
 
-def forget_zaaktype(env: Environment, omschrijving: str) -> None:
-    """Delete the zaaktype's PABC entity type, where it exists, with a new login: cleanup can run hours later."""
+def forget_zaaktype(env: Environment, *omschrijvingen: str) -> None:
+    """Delete the zaaktypen's PABC entity types, where they exist, with a new login: cleanup can run hours later."""
     pabc, pabc_url = pabc_as_admin(env)
-    entity_type = zaaktype_entity_type(pabc, pabc_url, omschrijving)
-    if entity_type is not None:
-        delete_entity_type(pabc, pabc_url, entity_type)
+    for omschrijving in omschrijvingen:
+        entity_type = zaaktype_entity_type(pabc, pabc_url, omschrijving)
+        if entity_type is not None:
+            delete_entity_type(pabc, pabc_url, entity_type)
 
 
 def make_role_group(env: Environment, registry: ResourceRegistry, role: str) -> str:
@@ -145,19 +146,21 @@ def make_role_group(env: Environment, registry: ResourceRegistry, role: str) -> 
     return name
 
 
-def make_other_domain_group(env: Environment, registry: ResourceRegistry, role: str) -> str:
+def make_other_domain_group(env: Environment, registry: ResourceRegistry, role: str, *, zaaktypen: int = 1) -> str:
     """Create a run-tagged Keycloak group whose new realm role has a ZAC role in a PABC domain of its own; its name.
 
-    The domain holds one run-tagged zaaktype that does not exist: a member keeps a ZAC role without any zaak of it.
+    The domain holds that many run-tagged zaaktypen that do not exist, the first named as the group: a member keeps
+    a ZAC role without any zaak of them.
     """
     name = registry.tagged(f"zac-domein-{secrets.token_hex(3)}")
     keycloak = for_environment(env)
     keycloak.create_role(name)
     registry.add(f"Keycloak realm role {name}", lambda: for_environment(env).delete_role(name))
     pabc, pabc_url = pabc_as_admin(env)
-    entity_type = add_zaaktype_entity_type(pabc, pabc_url, name)
-    registry.add(f"PABC entity type {name}", lambda: forget_zaaktype(env, name))
-    domain = ensure_domain(pabc, pabc_url, name, [entity_type])
+    names = [name, *(f"{name}-{number:03}" for number in range(1, zaaktypen))]
+    registry.add(f"PABC entity types {name}", lambda: forget_zaaktype(env, *names))
+    entity_types = [add_zaaktype_entity_type(pabc, pabc_url, zaaktype) for zaaktype in names]
+    domain = ensure_domain(pabc, pabc_url, name, entity_types)
     registry.add(f"PABC domain {name}", lambda: delete_roles_and_domain(*pabc_as_admin(env), [name], name))
     ensure_functional_role(pabc, pabc_url, name, ZAC_APPLICATION, (role,), domain)
     keycloak.create_group(name, (name,))

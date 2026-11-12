@@ -154,3 +154,11 @@ def test_ontkoppel_document_without_reden_sends_none(fake_http):
     zaak = {"uuid": "z1", "identificatie": "ZAAK-1"}
     zac_documents.ontkoppel_document(requests.Session(), ZAC, zaak, {"uuid": "d1"}, None, ResourceRegistry("ptest-x"))
     assert json.loads(sent[-1].body) == {"zaakUUID": "z1", "documentUUID": "d1"}
+
+
+def test_ontkoppelde_documenten_page_sends_the_page_and_its_size(fake_http):
+    page = {"resultaten": [{"id": 1}], "totaal": 2.0}
+    sent = fake_http({"PUT /rest/ontkoppeldedocumenten": (200, page)})
+    zaak = {"identificatie": "ZAAK-1"}
+    assert zac_documents.ontkoppelde_documenten_page(requests.Session(), ZAC, zaak, 1, 1) == page
+    assert json.loads(sent[-1].body) == {"zaakID": "ZAAK-1", "page": 1, "maxResults": 1}

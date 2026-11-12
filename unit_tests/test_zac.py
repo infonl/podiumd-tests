@@ -747,3 +747,39 @@ def test_groups_members_and_taak_are_read_from_zac(fake_http):
     assert zac.active_groups(http, ZAC) == {"g1"}
     assert zac.group_members(http, ZAC, "g1") == {"u1"}
     assert zac.read_taak(http, ZAC, "t1") == {"id": "t1"}
+
+
+def test_csv_export_reads_the_rows_by_column_and_skips_repeated_header_names(monkeypatch, response_factory):
+    text = '"identificatie";"omschrijving";"identificatie"\n"ZAAK-1";"een"\n"ZAAK-2";"twee"\n'
+    sent = []
+
+    def post(_session, url, json=None, **_kwargs):
+        sent.append((url, json))
+        return response_factory(body=text.encode())
+
+    monkeypatch.setattr(requests.Session, "post", post)
+    rows = zac.csv_export(requests.Session(), ZAC, type="ZAAK", rows=2)
+    assert rows == [
+        {"identificatie": "ZAAK-1", "omschrijving": "een"},
+        {"identificatie": "ZAAK-2", "omschrijving": "twee"},
+    ]
+    assert sent == [(f"{ZAC}/rest/csv/export", {"page": 0, "rows": 2, "type": "ZAAK"})]
+
+
+def test_zoekopdracht_is_saved_listed_and_deleted_at_cleanup(fake_http):
+    saved = {"id": 7, "naam": "n", "lijstID": "WERKVOORRAAD_ZAKEN", "json": "{}"}
+    sent = fake_http(
+        {
+            "POST /rest/gebruikersvoorkeuren/zoekopdracht": (200, saved),
+            "GET /rest/gebruikersvoorkeuren/zoekopdracht/WERKVOORRAAD_ZAKEN": (200, [saved]),
+            "DELETE /rest/gebruikersvoorkeuren/zoekopdracht/7": (204, None),
+        }
+    )
+    http, registry = requests.Session(), ResourceRegistry("run")
+    assert zac.save_zoekopdracht(http, ZAC, registry, "WERKVOORRAAD_ZAKEN", {"filters": {}}) == saved
+    body = json.loads(sent[-1].body)
+    assert (body["lijstID"], body["json"]) == ("WERKVOORRAAD_ZAKEN", '{"filters": {}}')
+    assert body["naam"].startswith("run-zoekopdracht-")
+    assert zac.zoekopdrachten(http, ZAC, "WERKVOORRAAD_ZAKEN") == [saved]
+    assert registry.cleanup() == []
+    assert sent[-1].method == "DELETE"

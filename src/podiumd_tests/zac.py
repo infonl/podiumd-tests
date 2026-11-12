@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import json
+import secrets
 
 from datetime import UTC
 from datetime import date
@@ -690,6 +693,45 @@ def search_all(http: requests.Session, zac_url: str, rows: int, **query: object)
     for page in range(1, -(-int(str(found["totaal"])) // rows)):
         results.extend(entries(search(http, zac_url, page=page, rows=rows, **query)["resultaten"]))
     return results
+
+
+def csv_export(http: requests.Session, zac_url: str, **query: object) -> list[dict[str, str]]:
+    """Return the rows of ZAC's CSV export of page 1 of the search with these RestZoekParameters, by column.
+
+    ZAC 5.9.1's header repeats column names after the last column (CsvService.exportToCsv); those hold no values.
+    """
+    body = {"page": 0, "rows": 10, **query}
+    response = expect_status(http.post(f"{zac_url}/rest/csv/export", json=body), HTTPStatus.OK)
+    header, *rows = csv.reader(io.StringIO(response.text), delimiter=";")
+    return [dict(zip(header, row, strict=False)) for row in rows]
+
+
+ZOEKOPDRACHT = "/rest/gebruikersvoorkeuren/zoekopdracht"
+
+
+def zoekopdrachten(http: requests.Session, zac_url: str, werklijst: str) -> list[JsonObject]:
+    """Return the user's saved zoekopdrachten of the werklijst (WERKVOORRAAD_ZAKEN, ...)."""
+    return get_entries(http, f"{zac_url}{ZOEKOPDRACHT}/{werklijst}")
+
+
+def save_zoekopdracht(
+    http: requests.Session, zac_url: str, registry: ResourceRegistry, werklijst: str, query: JsonObject
+) -> JsonObject:
+    """Save the werklijst's search (query, as ZAC's UI stores it) under a run-tagged naam; cleanup deletes it."""
+    body = {
+        "lijstID": werklijst,
+        "naam": registry.tagged(f"zoekopdracht-{secrets.token_hex(3)}"),
+        "json": json.dumps(query),
+    }
+    response = expect_status(http.post(zac_url + ZOEKOPDRACHT, json=body), HTTPStatus.OK)
+    saved = cast("JsonObject", response.json())
+    registry.add(f"zoekopdracht {body['naam']}", lambda: delete_zoekopdracht(http, zac_url, saved))
+    return saved
+
+
+def delete_zoekopdracht(http: requests.Session, zac_url: str, zoekopdracht: JsonObject) -> None:
+    """Delete the saved zoekopdracht; ZAC answers 204 also when it is gone."""
+    expect_status(http.delete(f"{zac_url}{ZOEKOPDRACHT}/{zoekopdracht['id']}"), HTTPStatus.NO_CONTENT)
 
 
 def zaaktype_filter(zaaktype_omschrijving: str) -> JsonObject:

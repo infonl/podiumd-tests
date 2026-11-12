@@ -10,6 +10,7 @@ from datetime import UTC
 from datetime import datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING
+from typing import cast
 
 import pytest
 
@@ -230,9 +231,16 @@ def inbox_documenten(zac: requests.Session, zac_url: str, titel: str) -> list[Js
 
 def ontkoppelde_documenten(zac: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:
     """Return ZAC's ontkoppelde documenten detached from the zaak."""
-    body = {"zaakID": zaak["identificatie"], "page": 0, "maxResults": 100}
+    return entries(ontkoppelde_documenten_page(zac, zac_url, zaak, 0, 100).get("resultaten"))
+
+
+def ontkoppelde_documenten_page(
+    zac: requests.Session, zac_url: str, zaak: JsonObject, page: int, max_results: int
+) -> JsonObject:
+    """Return one page of ZAC's ontkoppelde documenten detached from the zaak, with its totaal."""
+    body = {"zaakID": zaak["identificatie"], "page": page, "maxResults": max_results}
     listed = zac.put(f"{zac_url}/rest/ontkoppeldedocumenten", json=body)
-    return entries(expect_status(listed, HTTPStatus.OK).json().get("resultaten"))
+    return cast("JsonObject", expect_status(listed, HTTPStatus.OK).json())
 
 
 def delete_ontkoppeld_document(zac: requests.Session, zac_url: str, ontkoppeld: JsonObject) -> requests.Response:
