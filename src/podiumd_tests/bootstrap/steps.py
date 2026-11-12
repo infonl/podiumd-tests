@@ -9,6 +9,8 @@ from typing import cast
 
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.basisregistraties import EREBOS
+from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
+from podiumd_tests.basisregistraties import KVK_TEST_VESTIGING
 from podiumd_tests.bootstrap import names
 from podiumd_tests.bootstrap.bpmn import ZacBpmnProcess
 from podiumd_tests.bootstrap.bpmn import ZacBpmnProductaanvraag
@@ -353,7 +355,7 @@ IDENTITIES = (
     KeycloakUser("inwoner", attributes={"bsn": [EREBOS]}),
     # Not TA's 999990038: it fails the eleven-test, and Open Klant refuses it.
     KeycloakUser("inwoner2", attributes={"bsn": ["999993653"]}),
-    KeycloakUser("bedrijf", attributes={"kvk": ["68750110"], "vestigingsnummer": ["000037178601"]}),
+    KeycloakUser("bedrijf", attributes={"kvk": [KVK_TEST_NUMMER], "vestigingsnummer": [KVK_TEST_VESTIGING]}),
 )
 # Open Inwoner's portal pages; the contact form is a plugin on a page with its template.
 OI_PAGES = [
