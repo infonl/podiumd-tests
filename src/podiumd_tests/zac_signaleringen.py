@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     import requests
 
     from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.registry import ResourceRegistry
 
 SETTINGS = "/rest/signaleringen/instellingen"
 
@@ -25,6 +26,21 @@ def signalering_settings(http: requests.Session, zac_url: str) -> list[JsonObjec
 def save_signalering_setting(http: requests.Session, zac_url: str, setting: JsonObject) -> None:
     """Save the user's setting of one signalering type (type, dashboard, mail)."""
     expect_status(http.put(zac_url + SETTINGS, json=setting), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+
+
+def turn_signaleringen(
+    http: requests.Session, zac_url: str, registry: ResourceRegistry, *, mail: bool = False, **types: bool
+) -> None:
+    """Turn the user's dashboard signal per type on or off, and mail for those types; cleanup restores them."""
+    before = [setting for setting in signalering_settings(http, zac_url) if setting.get("type") in types]
+    registry.add(f"ZAC signaleringen {sorted(types)}", lambda: _save_all(http, zac_url, before))
+    for soort, on in types.items():
+        save_signalering_setting(http, zac_url, {"type": soort, "dashboard": on, "mail": mail})
+
+
+def _save_all(http: requests.Session, zac_url: str, settings: list[JsonObject]) -> None:
+    for setting in settings:
+        save_signalering_setting(http, zac_url, setting)
 
 
 def signalering_zaken(http: requests.Session, zac_url: str, soort: str) -> list[str]:

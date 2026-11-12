@@ -5,6 +5,7 @@ import json
 import requests
 
 from podiumd_tests import zac_signaleringen
+from podiumd_tests.seed.registry import ResourceRegistry
 
 ZAC = "https://zac.example.test"
 SETTINGS = "/rest/signaleringen/instellingen"
@@ -17,6 +18,16 @@ def test_settings_are_read_and_saved(fake_http):
     assert zac_signaleringen.signalering_settings(http, ZAC) == [setting]
     zac_signaleringen.save_signalering_setting(http, ZAC, setting)
     assert json.loads(sent[-1].body) == setting
+
+
+def test_turn_signaleringen_saves_the_types_and_cleanup_restores_them(fake_http):
+    before = [{"type": "TAAK_OP_NAAM", "dashboard": False, "mail": False}, {"type": "ZAAK_OP_NAAM", "dashboard": True}]
+    sent = fake_http({f"GET {SETTINGS}": (200, before), f"PUT {SETTINGS}": (200, {})})
+    registry = ResourceRegistry("run")
+    zac_signaleringen.turn_signaleringen(requests.Session(), ZAC, registry, mail=True, TAAK_OP_NAAM=True)
+    assert registry.cleanup() == []
+    saved = [json.loads(request.body) for request in sent if request.method == "PUT"]
+    assert saved == [{"type": "TAAK_OP_NAAM", "dashboard": True, "mail": True}, before[0]]
 
 
 def test_dashboard_lists_give_zaak_identificaties_and_taak_ids(fake_http):

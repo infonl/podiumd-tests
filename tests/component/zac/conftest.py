@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import functools
+
 from typing import TYPE_CHECKING
 
 import pytest
@@ -15,8 +17,7 @@ from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.zac import activate_human_tasks
 from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
-from podiumd_tests.zac_signaleringen import save_signalering_setting
-from podiumd_tests.zac_signaleringen import signalering_settings
+from podiumd_tests.zac_signaleringen import turn_signaleringen
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -131,17 +132,11 @@ def fixture_zac_taken_zaak(
 
 
 @pytest.fixture(name="signaleringen")
-def fixture_signaleringen(zac: requests.Session, urls: dict[str, str]) -> Iterator[Callable[..., None]]:
-    """Turn the test admin's dashboard signal per type on or off, and mail for those types; restores them afterwards.
+def fixture_signaleringen(
+    zac: requests.Session, urls: dict[str, str], registry: ResourceRegistry
+) -> Callable[..., None]:
+    """Turn the test admin's signaleringen (turn_signaleringen); cleanup restores them.
 
     Tests using it share xdist group zac-signaleringen: the settings are the admin's.
     """
-    before = signalering_settings(zac, urls["zac"])
-
-    def turn(*, mail: bool = False, **types: bool) -> None:
-        for soort, on in types.items():
-            save_signalering_setting(zac, urls["zac"], {"type": soort, "dashboard": on, "mail": mail})
-
-    yield turn
-    for setting in before:
-        save_signalering_setting(zac, urls["zac"], setting)
+    return functools.partial(turn_signaleringen, zac, urls["zac"], registry)

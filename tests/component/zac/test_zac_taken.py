@@ -17,6 +17,7 @@ from typing import cast
 import pytest
 
 from podiumd_tests.bootstrap.steps import ADMIN
+from podiumd_tests.bootstrap.steps import ZAC_ROLE_USERS
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
@@ -27,6 +28,7 @@ from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import GERELATEERD
+from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import POLICIES
 from podiumd_tests.zac import afronden_intake
@@ -46,6 +48,8 @@ from podiumd_tests.zac_beheer import referentietabel_values
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
 from podiumd_tests.zac_documents import zaak_documents
+from podiumd_tests.zac_signaleringen import signalering_taken
+from podiumd_tests.zac_signaleringen import turn_signaleringen
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -369,6 +373,49 @@ def test_open_advies_intern_holds_off_afhandelen(
         description=f"task {taak['id']} gone",
     )
     assert "ZAAK_AFHANDELEN" in _acties(zac, zac_url, behandeling)
+
+
+@ZAC_TEAM
+@THROWAWAY
+@TAKEN_ZAAKTYPE
+@pytest.mark.scenario("""
+    Given a zaak in behandeling in ZAC, and a behandelaar who wants dashboard signals for taken on their name
+    When the test admin starts Advies intern for that behandelaar
+    Then the behandelaar's dashboard lists the taak among the taken on their name and in Mijn taken
+    When the behandelaar opens the taak
+    Then the dashboard no longer lists it among the taken on their name
+""")
+def test_taak_started_for_a_behandelaar_is_on_their_dashboard(
+    zac: requests.Session,
+    zac_as: Callable[[str], requests.Session],
+    urls: dict[str, str],
+    behandeling: JsonObject,
+    zac_group: str,
+    registry: ResourceRegistry,
+) -> None:
+    """Starting a CMMN taak for another user signals TAAK_OP_NAAM to that user; reading the taak deletes it."""
+    zac_url = urls["zac"]
+    behandelaar = zac_as("behandelaar")
+    turn_signaleringen(behandelaar, zac_url, registry, TAAK_OP_NAAM=True)
+    naam = ZAC_ROLE_USERS["behandelaar"].username
+    medewerker = {"id": naam, "naam": naam}
+    response = start_human_task(
+        zac, zac_url, behandeling, ADVIES_INTERN, zac_group, medewerker=medewerker, taakdata={"vraag": VRAAG}
+    )
+    expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    taak = open_task(zac, zac_url, str(behandeling["uuid"]), ADVIES_INTERN)
+    wait_until(
+        lambda: taak["id"] in signalering_taken(behandelaar, zac_url),
+        timeout=INDEX_TIMEOUT,
+        description=f"taak {taak['id']} on the dashboard of {naam}",
+    )
+    wait_until(
+        lambda: is_taak_listed(behandelaar, zac_url, taak, alleenMijnTaken=True),
+        timeout=LIST_TIMEOUT,
+        description=f"taak {taak['id']} in Mijn taken of {naam}",
+    )
+    read_taak(behandelaar, zac_url, str(taak["id"]))
+    assert taak["id"] not in signalering_taken(behandelaar, zac_url)
 
 
 @pytest.mark.source(POLICIES, "A raadpleger reads a zaak's taken but starts none.")
