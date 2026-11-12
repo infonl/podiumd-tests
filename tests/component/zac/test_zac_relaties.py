@@ -18,7 +18,9 @@ from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import DEELZAAK
 from podiumd_tests.zac import GERELATEERD
+from podiumd_tests.zac import HOOFDZAAK
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import afhandelen
@@ -55,8 +57,6 @@ pytestmark = [
 
 # The attribuut of Open Zaak's historie for a zaak's gerelateerde zaken.
 GERELATEERDE_ZAKEN = "gerelateerdeZaken"
-HOOFDZAAK = "HOOFDZAAK"
-DEELZAAK = "DEELZAAK"
 # The tests of fixture zac_eigen_zaaktype, a throwaway zaaktype made known to PABC and deleted with a Django snippet.
 EIGEN_ZAAKTYPE = pytest.mark.xdist_group("zac-eigen-zaaktype")
 THROWAWAY = pytest.mark.requires("pabc", "cluster")
@@ -178,7 +178,7 @@ def test_closed_zaak_can_be_gerelateerd_but_not_deelzaak(
     assert (nog_een["identificatie"], GERELATEERD) in _relaties(zac, urls["zac"], gesloten)
 
 
-@pytest.mark.parametrize("relatie", ["HOOFDZAAK", "DEELZAAK"])
+@pytest.mark.parametrize("relatie", [HOOFDZAAK, DEELZAAK])
 @pytest.mark.scenario("""
     Given two open zaken of a zaaktype that allows no deelzaken
     When the behandelaar searches for a hoofdzaak or a deelzaak
@@ -195,7 +195,7 @@ def test_zaaktype_without_deelzaaktypen_refuses_hoofd_and_deelzaak(
     """HOOFDZAAK and DEELZAAK give ZAAKTYPE_DOES_NOT_ALLOW_DEELZAAK and are refused."""
     zaak, ander = zac_zaak(), zac_zaak()
     zaaktype = section(read_zaak(zac, urls["zac"], str(zaak["uuid"])), "zaaktype")
-    if any(item.get("relatieType") == "DEELZAAK" for item in entries(zaaktype.get("zaaktypeRelaties"))):
+    if any(item.get("relatieType") == DEELZAAK for item in entries(zaaktype.get("zaaktypeRelaties"))):
         pytest.skip(f"zaaktype {zaaktype.get('identificatie')} allows deelzaken")
     assert _reden(zac, urls["zac"], zaak, ander, relatie) == "ZAAKTYPE_DOES_NOT_ALLOW_DEELZAAK"
     expect_status(koppel(zac, urls["zac"], zaak, ander, relatie), *REFUSED)

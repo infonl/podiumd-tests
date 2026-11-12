@@ -20,7 +20,9 @@ from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import zaaktype_parts
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import DEELZAAK
 from podiumd_tests.zac import GERELATEERD
+from podiumd_tests.zac import HOOFDZAAK
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import NOTIFICATION_TIMEOUT
 from podiumd_tests.zac import clean_up_zaak
@@ -186,6 +188,30 @@ def test_zaak_shows_the_documents_of_its_gerelateerde_zaak(
     ]
     assert found == [(GERELATEERD, ander["identificatie"])]
     assert _uuids(zac, urls["zac"], zaak) == []
+
+
+@pytest.mark.requires("pabc", "cluster")
+@pytest.mark.xdist_group("zac-taken-zaaktype")
+@pytest.mark.scenario("""
+    Given a hoofdzaak and its deelzaak in ZAC, each with a document
+    When the behandelaar lists the documents of the hoofdzaak with those of its linked zaken
+    Then the list has the deelzaak's document, with the relation deelzaak and the deelzaak's zaaknummer
+    When the behandelaar lists the documents of the deelzaak with those of its linked zaken
+    Then the list has the hoofdzaak's document, with the relation hoofdzaak and the hoofdzaak's zaaknummer
+""")
+def test_hoofd_and_deelzaak_show_each_others_documents(
+    zac: requests.Session, urls: dict[str, str], zac_taken_zaak: Callable[[], JsonObject], registry: ResourceRegistry
+) -> None:
+    """informatieobjectenList with gekoppeldeZaakDocumenten adds a deelzaak's and a hoofdzaak's documents."""
+    zac_url = urls["zac"]
+    hoofd, deel = zac_taken_zaak(), zac_taken_zaak()
+    documents = {str(zaak["uuid"]): uploaded_document(zac, zac_url, zaak, registry) for zaak in (hoofd, deel)}
+    expect_status(koppel(zac, zac_url, hoofd, deel, DEELZAAK), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    for zaak, ander, relatie in ((hoofd, deel, DEELZAAK), (deel, hoofd, HOOFDZAAK)):
+        listed = zaak_documents(zac, zac_url, zaak, gekoppelde_zaken=True)
+        theirs = documents[str(ander["uuid"])]["uuid"]
+        found = [(item.get("relatieType"), item.get("zaakIdentificatie")) for item in listed if item["uuid"] == theirs]
+        assert found == [(relatie, ander["identificatie"])], relatie
 
 
 @pytest.mark.requires("opennotificaties")
