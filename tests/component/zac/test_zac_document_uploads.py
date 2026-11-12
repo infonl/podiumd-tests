@@ -186,11 +186,11 @@ def test_document_historie_shows_versie_conversion_and_ondertekening(
 def test_document_above_the_maximum_file_size_is_refused(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
 ) -> None:
-    """An upload of MAX_FILE_SIZE_MB plus one byte answers 400, after ZAC has read the file to its limit."""
+    """An upload of MAX_FILE_SIZE_MB plus one byte answers 413 msg.error.file.size-exceeded; the zaak has no document."""
     zaak = zac_zaak()
     size = max_file_size_mb(zac, urls["zac"]) * 1024 * 1024 + 1
     refused = upload_of_size(zac, urls["zac"], zaak, registry, size)
-    expect_status(refused, HTTPStatus.BAD_REQUEST)
+    assert "msg.error.file.size-exceeded" in expect_status(refused, HTTPStatus.REQUEST_ENTITY_TOO_LARGE).text
     assert zaak_documents(zac, urls["zac"], zaak) == []
 
 
