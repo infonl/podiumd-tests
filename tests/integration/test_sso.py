@@ -18,6 +18,7 @@ from podiumd_tests.auth.keycloak import realm_url
 from podiumd_tests.auth.keycloak_admin import realm_of
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.browser import keycloak_login
+from podiumd_tests.browser import redirect_login
 from podiumd_tests.components import DJANGO_APPS
 from podiumd_tests.oab import expect_admin_logout_bug
 from podiumd_tests.oidc import LOGIN_PATHS
@@ -104,6 +105,36 @@ def test_one_login_opens_every_admin(
     assert not page.url.startswith(realm_url(keycloak, realm_of(podiumd_env))), "Keycloak asked for a new login"
     # A failing OIDC callback also ends on the app's host, on an error page.
     assert is_in_admin(page.url, admins[component]), f"the login did not reach {component}'s admin: {page.url}"
+
+
+@pytest.mark.requires("zac")
+@pytest.mark.source(
+    "podiumd-tests",
+    "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, autorisatie-iam):"
+    " SSO across PodiumD components.",
+)
+@pytest.mark.scenario("""
+    Given the test admin logged in to ZAC through Keycloak
+    When the admin opens the Django admin of an app that logs in through Keycloak
+    Then Keycloak asks for no new login
+    And the admin is in the app's Django admin
+""")
+def test_zac_login_opens_a_django_admin(
+    page: Page,
+    urls: dict[str, str],
+    podiumd_env: Environment,
+    need_bootstrap: Callable[..., None],
+    sso_admins: dict[str, str],
+) -> None:
+    """ZAC's Keycloak session serves the next app's login without a form."""
+    if not sso_admins:
+        pytest.skip("no app's admin logs in through Keycloak")
+    component, admin = next(iter(sso_admins.items()))
+    need_bootstrap(ADMIN.name)
+    redirect_login(page, podiumd_env, urls["zac"], ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
+    page.goto(admin + LOGIN_PATHS[component])
+    page.wait_for_url(lambda url: url_host(url) == url_host(admin))
+    assert is_in_admin(page.url, admin), f"the login did not reach {component}'s admin: {page.url}"
 
 
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
