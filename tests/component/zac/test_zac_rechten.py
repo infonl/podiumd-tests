@@ -43,6 +43,7 @@ from podiumd_tests.zac import vrijgeven
 from podiumd_tests.zac import vrijgeven_taken
 from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zac_session
+from podiumd_tests.zac_documents import delete_document
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import nieuwe_versie
 from podiumd_tests.zac_documents import uploaded_document
@@ -243,10 +244,6 @@ def _new_version(http: requests.Session, zac_url: str, zaak: JsonObject, documen
     return nieuwe_versie(http, zac_url, zaak, document, {"beschrijving": "podiumd-tests"})
 
 
-def _delete(http: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject) -> requests.Response:
-    return http.delete(document_url(zac_url, document), json={"zaakUuid": zaak["uuid"], "reden": "podiumd-tests"})
-
-
 # Per state of a document: how the test admin brings it there, the least base role with each right
 # (document-rechten.rego; None: no base role) and a call the recordmanager may make and the behandelaar may not.
 DOCUMENT_STATES = [
@@ -292,7 +289,7 @@ DOCUMENT_STATES = [
             "ondertekenen": None,
             "converteren": None,
         },
-        _delete,
+        delete_document,
         id="zaak-afgehandeld",
     ),
 ]

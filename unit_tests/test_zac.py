@@ -290,6 +290,26 @@ def test_start_human_task_waits_until_zac_offers_it_and_starts_it_without_a_mail
     assert json.loads(sent[-1].body)["groep"] is None
 
 
+def test_started_taak_starts_it_for_the_behandelaar_and_returns_the_open_task(fake_http, monkeypatch):
+    monkeypatch.setattr(zac, "human_tasks_offered", lambda *_args: [{"id": "p9", "naam": "Goedkeuren"}])
+    sent = fake_http(
+        {
+            "POST /rest/planitems/doHumanTaskPlanItem": (204, None),
+            "GET /rest/taken/zaak/z1": (200, [{"id": "t1", "naam": "Goedkeuren", "status": "TOEGEKEND"}]),
+        }
+    )
+    zaak = {"uuid": "z1", "identificatie": "ZAAK-1"}
+    taak = zac.started_taak(requests.Session(), ZAC, zaak, "Goedkeuren", ("g1", "bob"), toelichting="t")
+    assert taak["id"] == "t1"
+    started = json.loads(sent[0].body)
+    assert (started["medewerker"], started["toelichting"]) == ({"id": "bob", "naam": "bob"}, "t")
+
+
+def test_taak_historie_lists_zacs_answer(fake_http):
+    fake_http({"GET /rest/taken/t1/historie": (200, [{"attribuutLabel": "taak.status"}])})
+    assert zac.taak_historie(requests.Session(), ZAC, {"id": "t1"}) == [{"attribuutLabel": "taak.status"}]
+
+
 def test_human_tasks_and_user_events_offered_are_zacs_plan_items(fake_http):
     fake_http(
         {

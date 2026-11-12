@@ -1,4 +1,4 @@
-"""Fixtures for podiumd-tests' own zaaktypen in ZAC, and the test admin's signaleringen."""
+"""Fixtures for podiumd-tests' own zaaktypen in ZAC, their zaken and taken, and the test admin's signaleringen."""
 
 from __future__ import annotations
 
@@ -9,14 +9,18 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.bootstrap.names import EMAIL_IOT
+from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import section
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.seed.zac_zaaktype import make_zac_zaaktype
 from podiumd_tests.seed.zac_zaaktype import zac_as_admin
+from podiumd_tests.zac import AANVULLENDE_INFORMATIE
 from podiumd_tests.zac import activate_human_tasks
+from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
+from podiumd_tests.zac import started_taak
 from podiumd_tests.zac_signaleringen import turn_signaleringen
 
 if TYPE_CHECKING:
@@ -129,6 +133,41 @@ def fixture_zac_taken_zaak(
 ) -> Callable[[], JsonObject]:
     """Start a zaak of the taken zaaktype in ZAC; cleanup deletes it and its documents from Open Zaak."""
     return _zaak_starter(zac, urls, zac_taken_zaaktype, openzaak, registry)
+
+
+@pytest.fixture(name="behandeling")
+def fixture_behandeling(
+    zac: requests.Session, urls: dict[str, str], zac_taken_zaak: Callable[[], JsonObject]
+) -> JsonObject:
+    """A zaak of the taken zaaktype after an ontvankelijk intake: in behandeling."""
+    zaak = zac_taken_zaak()
+    afronden_intake(zac, urls["zac"], zaak)
+    return zaak
+
+
+@pytest.fixture(name="start_taak")
+def fixture_start_taak(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_group: str,
+    need_bootstrap: Callable[..., None],
+) -> Callable[..., JsonObject]:
+    """Start the task Aanvullende informatie on a zaak for the test admin in its group, without a mail.
+
+    fields: more of ZAC's RESTHumanTaskData, e.g. taakdata zaakOpschorten with a fataledatum.
+    """
+    need_bootstrap("zac-aanvullende-informatie")
+
+    def start(zaak: JsonObject, **fields: object) -> JsonObject:
+        return started_taak(zac, urls["zac"], zaak, AANVULLENDE_INFORMATIE, (zac_group, ADMIN.username), **fields)
+
+    return start
+
+
+@pytest.fixture(name="taak")
+def fixture_taak(zac_zaak: Callable[..., JsonObject], start_taak: Callable[..., JsonObject]) -> JsonObject:
+    """The task Aanvullende informatie, started on a new zaak."""
+    return start_taak(zac_zaak())
 
 
 @pytest.fixture(name="signaleringen")

@@ -79,7 +79,7 @@ def test_uploaded_document_keeps_its_metadata(
         "auteur": "Zoë Ångström",
         "taal": "eng",
     }
-    document = uploaded_document(zac, urls["zac"], zaak, registry, **fields)
+    document = uploaded_document(zac, urls["zac"], zaak, registry, taak=None, **fields)
     listed = next(item for item in zaak_documents(zac, urls["zac"], zaak) if item.get("uuid") == document["uuid"])
     stored = {name: listed.get(name) for name in fields}
     assert stored == {**fields, "taal": taal(zac, urls["zac"], "eng")["naam"]}

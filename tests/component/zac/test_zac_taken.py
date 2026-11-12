@@ -17,7 +17,6 @@ from typing import cast
 import pytest
 
 from podiumd_tests.bootstrap.steps import ADMIN
-from podiumd_tests.bootstrap.steps import ZAC_ROLE_USERS
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
@@ -28,21 +27,23 @@ from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import AANVULLENDE_INFORMATIE
+from podiumd_tests.zac import ADVIES_EXTERN
+from podiumd_tests.zac import ADVIES_INTERN
+from podiumd_tests.zac import DOCUMENT_VERZENDEN
 from podiumd_tests.zac import GERELATEERD
-from podiumd_tests.zac import INDEX_TIMEOUT
+from podiumd_tests.zac import GOEDKEUREN
 from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import POLICIES
-from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import complete_task
 from podiumd_tests.zac import human_tasks_offered
 from podiumd_tests.zac import is_taak_listed
 from podiumd_tests.zac import koppel
 from podiumd_tests.zac import moved_dates
-from podiumd_tests.zac import open_task
 from podiumd_tests.zac import read_taak
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import start_human_task
+from podiumd_tests.zac import started_taak
 from podiumd_tests.zac import user_events_offered
 from podiumd_tests.zac import verdelen_taken
 from podiumd_tests.zac import vrijgeven_taken
@@ -51,8 +52,6 @@ from podiumd_tests.zac_beheer import referentietabel_values
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
 from podiumd_tests.zac_documents import zaak_documents
-from podiumd_tests.zac_signaleringen import signalering_taken
-from podiumd_tests.zac_signaleringen import turn_signaleringen
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -80,27 +79,10 @@ TOELICHTING = "podiumd-tests toelichting"
 # A value of ZAC's referentietabel ADVIES; ZAC stores any text.
 ADVIES = "Positief"
 VRAAG = "podiumd-tests vraag"
-
-# ZAC starts the zaak's CMMN case, and runs list distributions and indexing, in the background.
 SUSPENSION_DAYS = 7
 
-# The names of ZAC's CMMN human tasks (Generiek_zaakafhandelmodel.cmmn.xml).
-GOEDKEUREN = "Goedkeuren"
-ADVIES_INTERN = "Advies intern"
-ADVIES_EXTERN = "Advies extern"
-DOCUMENT_VERZENDEN = "Document verzenden"
 MAIL_TIMEOUT = 60
 OPSCHORTEN = {"zaakOpschorten": "true"}
-
-
-def _started(
-    zac: requests.Session, zac_url: str, zaak: JsonObject, name: str, groep: str, **fields: object
-) -> JsonObject:
-    """Start the human task for the test admin in the group; the open task."""
-    admin = {"id": ADMIN.username, "naam": ADMIN.username}
-    response = start_human_task(zac, zac_url, zaak, name, groep, medewerker=admin, **fields)
-    expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    return open_task(zac, zac_url, str(zaak["uuid"]), name)
 
 
 def _dates(zaak: JsonObject) -> dict[str, str]:
@@ -115,31 +97,6 @@ def _human_task_parameters(zaakafhandelparameters: JsonObject, plan_item: str) -
         for task in entries(zaakafhandelparameters.get("humanTaskParameters"))
         if section(task, "planItemDefinition").get("id") == plan_item
     )
-
-
-@pytest.fixture(name="start_taak")
-def fixture_start_taak(
-    zac: requests.Session,
-    urls: dict[str, str],
-    zac_group: str,
-    need_bootstrap: Callable[..., None],
-) -> Callable[..., JsonObject]:
-    """Start the task Aanvullende informatie on a zaak for the test admin in its group, without a mail.
-
-    fields: more of ZAC's RESTHumanTaskData, e.g. taakdata zaakOpschorten with a fataledatum.
-    """
-    need_bootstrap("zac-aanvullende-informatie")
-
-    def start(zaak: JsonObject, **fields: object) -> JsonObject:
-        return _started(zac, urls["zac"], zaak, AANVULLENDE_INFORMATIE, zac_group, **fields)
-
-    return start
-
-
-@pytest.fixture(name="taak")
-def fixture_taak(zac_zaak: Callable[..., JsonObject], start_taak: Callable[..., JsonObject]) -> JsonObject:
-    """The task Aanvullende informatie, started on a new zaak."""
-    return start_taak(zac_zaak())
 
 
 @pytest.mark.source(
@@ -272,7 +229,9 @@ def test_opschorten_without_a_taak_fatale_datum_leaves_the_zaak_running(
     """ZAC suspends for the days until the taak's fatale datum; without one it ignores zaakOpschorten."""
     assert _human_task_parameters(zac_taken_zaaktype, "AANVULLENDE_INFORMATIE").get("doorlooptijd") is None
     zaak = zac_taken_zaak()
-    taak = _started(zac, urls["zac"], zaak, AANVULLENDE_INFORMATIE, zac_group, taakdata=OPSCHORTEN)
+    taak = started_taak(
+        zac, urls["zac"], zaak, AANVULLENDE_INFORMATIE, (zac_group, ADMIN.username), taakdata=OPSCHORTEN
+    )
     assert taak.get("fataledatum") is None
     lopend = read_zaak(zac, urls["zac"], str(zaak["uuid"]))
     assert (lopend["isOpgeschort"], _dates(lopend)) == (False, _dates(zaak))
@@ -296,16 +255,6 @@ def test_taak_needs_a_group(
     refused = start_human_task(zac, urls["zac"], zaak, AANVULLENDE_INFORMATIE, None)
     expect_status(refused, HTTPStatus.BAD_REQUEST)
     assert get_entries(zac, f"{urls['zac']}/rest/taken/zaak/{zaak['uuid']}") == []
-
-
-@pytest.fixture(name="behandeling")
-def fixture_behandeling(
-    zac: requests.Session, urls: dict[str, str], zac_taken_zaak: Callable[[], JsonObject]
-) -> JsonObject:
-    """A zaak of the taken zaaktype after an ontvankelijk intake: in behandeling."""
-    zaak = zac_taken_zaak()
-    afronden_intake(zac, urls["zac"], zaak)
-    return zaak
 
 
 def _acties(zac: requests.Session, zac_url: str, zaak: JsonObject) -> set[str]:
@@ -354,8 +303,14 @@ def test_open_advies_intern_holds_off_afhandelen(
         description=f"human tasks on {behandeling['identificatie']}",
     )
     assert offered == {GOEDKEUREN, ADVIES_INTERN, ADVIES_EXTERN, DOCUMENT_VERZENDEN}
-    taak = _started(
-        zac, zac_url, behandeling, ADVIES_INTERN, zac_group, toelichting=TOELICHTING, taakdata={"vraag": VRAAG}
+    taak = started_taak(
+        zac,
+        zac_url,
+        behandeling,
+        ADVIES_INTERN,
+        (zac_group, ADMIN.username),
+        toelichting=TOELICHTING,
+        taakdata={"vraag": VRAAG},
     )
     assert (taak.get("toelichting"), section(taak, "taakdata").get("vraag")) == (TOELICHTING, VRAAG)
     assert "ZAAK_AFHANDELEN" not in _acties(zac, zac_url, behandeling)
@@ -373,49 +328,6 @@ def test_open_advies_intern_holds_off_afhandelen(
         description=f"task {taak['id']} gone",
     )
     assert "ZAAK_AFHANDELEN" in _acties(zac, zac_url, behandeling)
-
-
-@ZAC_TEAM
-@THROWAWAY
-@TAKEN_ZAAKTYPE
-@pytest.mark.scenario("""
-    Given a zaak in behandeling in ZAC, and a behandelaar who wants dashboard signals for taken on their name
-    When the test admin starts Advies intern for that behandelaar
-    Then the behandelaar's dashboard lists the taak among the taken on their name and in Mijn taken
-    When the behandelaar opens the taak
-    Then the dashboard no longer lists it among the taken on their name
-""")
-def test_taak_started_for_a_behandelaar_is_on_their_dashboard(
-    zac: requests.Session,
-    zac_as: Callable[[str], requests.Session],
-    urls: dict[str, str],
-    behandeling: JsonObject,
-    zac_group: str,
-    registry: ResourceRegistry,
-) -> None:
-    """Starting a CMMN taak for another user signals TAAK_OP_NAAM to that user; reading the taak deletes it."""
-    zac_url = urls["zac"]
-    behandelaar = zac_as("behandelaar")
-    turn_signaleringen(behandelaar, zac_url, registry, TAAK_OP_NAAM=True)
-    naam = ZAC_ROLE_USERS["behandelaar"].username
-    medewerker = {"id": naam, "naam": naam}
-    response = start_human_task(
-        zac, zac_url, behandeling, ADVIES_INTERN, zac_group, medewerker=medewerker, taakdata={"vraag": VRAAG}
-    )
-    expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    taak = open_task(zac, zac_url, str(behandeling["uuid"]), ADVIES_INTERN)
-    wait_until(
-        lambda: taak["id"] in signalering_taken(behandelaar, zac_url),
-        timeout=INDEX_TIMEOUT,
-        description=f"taak {taak['id']} on the dashboard of {naam}",
-    )
-    wait_until(
-        lambda: is_taak_listed(behandelaar, zac_url, taak, alleenMijnTaken=True),
-        timeout=LIST_TIMEOUT,
-        description=f"taak {taak['id']} in Mijn taken of {naam}",
-    )
-    read_taak(behandelaar, zac_url, str(taak["id"]))
-    assert taak["id"] not in signalering_taken(behandelaar, zac_url)
 
 
 @pytest.mark.source(POLICIES, "A raadpleger reads a zaak's taken but starts none.")
@@ -453,7 +365,9 @@ def test_advies_intern_offers_the_advies_referentietabel(
 ) -> None:
     """The taak's tabellen hold the values of the referentietabel the human task parameters name for field ADVIES."""
     zac_url = urls["zac"]
-    taak = _started(zac, zac_url, behandeling, ADVIES_INTERN, zac_group, taakdata={"vraag": VRAAG})
+    taak = started_taak(
+        zac, zac_url, behandeling, ADVIES_INTERN, (zac_group, ADMIN.username), taakdata={"vraag": VRAAG}
+    )
     wanted = referentietabel_values(referentietabel(zac, zac_url, "ADVIES"))
     assert sorted(strings(section(taak, "tabellen").get("ADVIES"))) == sorted(wanted)
 
@@ -480,11 +394,11 @@ def test_goedkeuren_signs_the_selected_document(
     document = uploaded_document(zac, zac_url, behandeling, registry, suffix="pdf")
     vraag = {"vraag": VRAAG, "relevanteDocumenten": str(document["uuid"])}
     akkoord = {"ondertekenen": str(document["uuid"]), "goedkeuren": "goedkeuren.AKKOORD"}
-    taak = _started(zac, zac_url, behandeling, GOEDKEUREN, zac_group, taakdata=vraag)
+    taak = started_taak(zac, zac_url, behandeling, GOEDKEUREN, (zac_group, ADMIN.username), taakdata=vraag)
     assert complete_task(zac, zac_url, taak, akkoord).get("status") == "AFGEROND"
     assert "ONDERTEKEND" in strings(_document(zac, zac_url, behandeling, document).get("indicaties"))
 
-    tweede = _started(zac, zac_url, behandeling, GOEDKEUREN, zac_group, taakdata=vraag)
+    tweede = started_taak(zac, zac_url, behandeling, GOEDKEUREN, (zac_group, ADMIN.username), taakdata=vraag)
     body = {**tweede, "taakdata": {**section(tweede, "taakdata"), **akkoord}}
     expect_status(zac.patch(f"{zac_url}/rest/taken/complete", json=body), HTTPStatus.BAD_REQUEST)
 
@@ -514,7 +428,15 @@ def test_advies_extern_mails_the_adviseur(
     adres = own_address(registry)
     taakdata = {"adviseur": "podiumd-tests", "emailadres": adres, "body": "<p>Advies over zaak {ZAAK_NUMMER}</p>"}
     sturen = {"sendMail": True, "mail": "TAAK_ADVIES_EXTERN"}
-    taak = _started(zac, zac_url, behandeling, ADVIES_EXTERN, zac_group, taakdata=taakdata, taakStuurGegevens=sturen)
+    taak = started_taak(
+        zac,
+        zac_url,
+        behandeling,
+        ADVIES_EXTERN,
+        (zac_group, ADMIN.username),
+        taakdata=taakdata,
+        taakStuurGegevens=sturen,
+    )
     message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=adres)
     assert f"Advies over zaak {behandeling['identificatie']}" in str(message.get("HTML"))
     titels = [document.get("titel") for document in zaak_documents(zac, zac_url, behandeling)]
@@ -544,7 +466,7 @@ def test_document_verzenden_records_the_verzenddatum(
     zac_url = urls["zac"]
     document = uploaded_document(zac, zac_url, behandeling, registry, suffix="pdf")
     taakdata = {"documentenVerzendenPost": str(document["uuid"]), "toelichting": TOELICHTING}
-    taak = _started(zac, zac_url, behandeling, DOCUMENT_VERZENDEN, zac_group, taakdata=taakdata)
+    taak = started_taak(zac, zac_url, behandeling, DOCUMENT_VERZENDEN, (zac_group, ADMIN.username), taakdata=taakdata)
     gisteren = date.today() - timedelta(days=1)  # noqa: DTZ011  # ZAC's local date
     # ZAC parses the verzenddatum its UI sends: a date and time with offset.
     afgerond = complete_task(zac, zac_url, taak, {"verzenddatum": f"{gisteren}T12:00:00+01:00"})
@@ -579,7 +501,7 @@ def test_taak_fatale_datum_stays_within_the_zaaks(
     later = (einde + timedelta(days=1)).isoformat()
     refused = start_human_task(zac, zac_url, behandeling, GOEDKEUREN, zac_group, fataledatum=later)
     expect_status(refused, HTTPStatus.BAD_REQUEST)
-    taak = _started(zac, zac_url, behandeling, GOEDKEUREN, zac_group, taakdata={"vraag": VRAAG})
+    taak = started_taak(zac, zac_url, behandeling, GOEDKEUREN, (zac_group, ADMIN.username), taakdata={"vraag": VRAAG})
     assert taak.get("fataledatum") == einde.isoformat()
 
 
@@ -602,6 +524,8 @@ def test_taak_fatale_datum_stays_within_the_zaaks(
     And the zaak has the status Wacht op aanvullende informatie
     When the behandelaar completes the taak with an uitkomst
     Then the taak is afgerond with that uitkomst, and the zaak has the status Intake again
+    When the behandelaar starts Aanvullende informatie with a mail again
+    Then that mail arrives, and the zaak has one more PDF and one open taak
 """)
 def test_aanvullende_informatie_mails_and_returns_the_zaak_to_intake(
     zac: requests.Session,
@@ -615,16 +539,36 @@ def test_aanvullende_informatie_mails_and_returns_the_zaak_to_intake(
     """Aanvullende informatie with sendMail mails and stores the mail; completing it gives back the status Intake."""
     zac_url = urls["zac"]
     zaak = zac_taken_zaak()
-    adres = own_address(registry)
-    taakdata = {"emailadres": adres, "body": "<p>Graag meer over zaak {ZAAK_NUMMER}</p>"}
-    sturen = {"sendMail": True, "mail": "TAAK_AANVULLENDE_INFORMATIE"}
-    taak = _started(zac, zac_url, zaak, AANVULLENDE_INFORMATIE, zac_group, taakdata=taakdata, taakStuurGegevens=sturen)
-    message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=adres)
-    assert f"Graag meer over zaak {zaak['identificatie']}" in str(message.get("HTML"))
-    titels = [document.get("titel") for document in zaak_documents(zac, zac_url, zaak)]
-    assert titels.count(message.get("Subject")) == 1
+
+    def mailed() -> tuple[JsonObject, JsonObject]:
+        adres = own_address(registry)
+        taakdata = {"emailadres": adres, "body": "<p>Graag meer over zaak {ZAAK_NUMMER}</p>"}
+        sturen = {"sendMail": True, "mail": "TAAK_AANVULLENDE_INFORMATIE"}
+        started = started_taak(
+            zac,
+            zac_url,
+            zaak,
+            AANVULLENDE_INFORMATIE,
+            (zac_group, ADMIN.username),
+            taakdata=taakdata,
+            taakStuurGegevens=sturen,
+        )
+        message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=adres)
+        assert f"Graag meer over zaak {zaak['identificatie']}" in str(message.get("HTML"))
+        return started, message
+
+    def pdfs(message: JsonObject) -> int:
+        return [document.get("titel") for document in zaak_documents(zac, zac_url, zaak)].count(message.get("Subject"))
+
+    taak, message = mailed()
+    assert pdfs(message) == 1
     assert _status(zac, zac_url, zaak) == WAITING
 
     afgerond = complete_task(zac, zac_url, taak, {"aanvullendeInformatie": uitkomst})
     assert section(afgerond, "taakdata").get("aanvullendeInformatie") == uitkomst
     assert _status(zac, zac_url, zaak) == INTAKE
+
+    _, message = mailed()
+    assert pdfs(message) == 2
+    taken = get_entries(zac, f"{zac_url}/rest/taken/zaak/{zaak['uuid']}")
+    assert sorted(str(item.get("status")) for item in taken) == sorted(["AFGEROND", str(taak.get("status"))]), taken

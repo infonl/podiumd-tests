@@ -776,10 +776,6 @@ def is_taak_listed(http: requests.Session, zac_url: str, taak: JsonObject, **fla
     return any(item.get("id") == taak["id"] for item in entries(found["resultaten"]))
 
 
-# ZAC's CMMN human task that asks for more information; its zaakafhandelparameters must switch it on.
-AANVULLENDE_INFORMATIE = "Aanvullende informatie"
-
-
 def is_document_listed(http: requests.Session, zac_url: str, document: JsonObject) -> bool:
     """ZAC's search for documents lists the document, found by its titel."""
     found = search(http, zac_url, type="DOCUMENT", zoeken={"DOCUMENT_TITEL": document["titel"]})
@@ -800,6 +796,11 @@ def open_task(http: requests.Session, zac_url: str, zaak_uuid: str, name: str) -
 def read_taak(http: requests.Session, zac_url: str, taak_id: str) -> JsonObject:
     """ZAC's view of a taak."""
     return cast("JsonObject", expect_status(http.get(f"{zac_url}/rest/taken/{taak_id}"), HTTPStatus.OK).json())
+
+
+def taak_historie(http: requests.Session, zac_url: str, taak: JsonObject) -> list[JsonObject]:
+    """Return ZAC's historie of the taak."""
+    return get_entries(http, f"{zac_url}/rest/taken/{taak['id']}/historie")
 
 
 def is_task_open(http: requests.Session, zac_url: str, task_id: str) -> bool:
@@ -828,6 +829,15 @@ def activate_human_tasks(
     return save_zaakafhandelparameters(http, zac_url, {**parameters, "humanTaskParameters": tasks})
 
 
+# The names of ZAC's CMMN human tasks (Generiek_zaakafhandelmodel.cmmn.xml); a zaakafhandelparameters switch turns
+# each on.
+AANVULLENDE_INFORMATIE = "Aanvullende informatie"
+GOEDKEUREN = "Goedkeuren"
+ADVIES_INTERN = "Advies intern"
+ADVIES_EXTERN = "Advies extern"
+DOCUMENT_VERZENDEN = "Document verzenden"
+
+
 def human_tasks_offered(http: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:
     """Return the plan items of the human tasks ZAC offers to start on the zaak now."""
     return get_entries(http, f"{zac_url}/rest/planitems/zaak/{zaak['uuid']}/humanTaskPlanItems")
@@ -854,6 +864,17 @@ def start_human_task(
         **fields,
     }
     return http.post(f"{zac_url}/rest/planitems/doHumanTaskPlanItem", json=body)
+
+
+def started_taak(
+    http: requests.Session, zac_url: str, zaak: JsonObject, name: str, to: tuple[str, str], **fields: object
+) -> JsonObject:
+    """Start the zaak's human task for (group, behandelaar) with start_human_task; the open task."""
+    groep, behandelaar = to
+    medewerker = {"id": behandelaar, "naam": behandelaar}
+    response = start_human_task(http, zac_url, zaak, name, groep, medewerker=medewerker, **fields)
+    expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    return open_task(http, zac_url, str(zaak["uuid"]), name)
 
 
 def wait_in_werkvoorraad(http: requests.Session, zac_url: str, zaak: JsonObject) -> None:

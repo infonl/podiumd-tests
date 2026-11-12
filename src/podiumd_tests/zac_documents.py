@@ -19,6 +19,7 @@ import pytest
 from podiumd_tests.bootstrap.bpmn import uuid_of
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.json_data import strings
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 
@@ -157,6 +158,11 @@ def document_url(zac_url: str, document: JsonObject) -> str:
     return f"{zac_url}/rest/informatieobjecten/informatieobject/{document['uuid']}"
 
 
+def delete_document(http: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject) -> requests.Response:
+    """Delete the zaak's document with a reden; ZAC's answer."""
+    return http.delete(document_url(zac_url, document), json={"zaakUuid": zaak["uuid"], "reden": "podiumd-tests"})
+
+
 def _form_field(value: object) -> str:
     """Return a field of ZAC's document form as its UI sends it: an object (taal) as JSON."""
     return json.dumps(value) if isinstance(value, dict) else str(value)
@@ -175,10 +181,19 @@ def documenttypen(zac: requests.Session, zac_url: str, zaak: JsonObject) -> list
     return get_entries(zac, f"{zac_url}/rest/informatieobjecten/informatieobjecttypes/zaak/{zaak['uuid']}")
 
 
-def _upload_form(  # noqa: PLR0913, PLR0917  # the zaak, the cleanup and the file
-    zac: requests.Session, zac_url: str, zaak: JsonObject, registry: ResourceRegistry, name: str, formaat: str
+def _upload_form(  # noqa: PLR0913, PLR0917  # the zaak, the cleanup, the file and the taak
+    zac: requests.Session,
+    zac_url: str,
+    zaak: JsonObject,
+    registry: ResourceRegistry,
+    name: str,
+    formaat: str,
+    taak: JsonObject | None = None,
 ) -> tuple[str, dict[str, str]]:
-    """Return the URL and the fields of ZAC's upload of a definitief file to the zaak. Skips without a documenttype."""
+    """Return the URL and the fields of ZAC's upload of a definitief file to the zaak or its taak.
+
+    Skips without a documenttype.
+    """
     documents = f"{zac_url}/rest/informatieobjecten"
     types = documenttypen(zac, zac_url, zaak)
     if not types:
@@ -195,7 +210,8 @@ def _upload_form(  # noqa: PLR0913, PLR0917  # the zaak, the cleanup and the fil
         "creatiedatum": form_date(datetime.now(tz=UTC).date()),
         "auteur": "podiumd-tests",
     }
-    return f"{documents}/informatieobject/{zaak['uuid']}/{registry.tagged('upload')}?taakObject=false", form
+    reference = str(taak["id"]) if taak else registry.tagged("upload")
+    return f"{documents}/informatieobject/{zaak['uuid']}/{reference}?taakObject={str(taak is not None).lower()}", form
 
 
 def form_date(day: date) -> str:
@@ -211,15 +227,17 @@ def upload(  # noqa: PLR0913  # the upload form's choices
     *,
     extension: str,
     file: tuple[str, bytes],
+    taak: JsonObject | None = None,
     **fields: str,
 ) -> requests.Response:
     """Upload a file (formaat, content) to the zaak as the user does in ZAC, fields replacing the form's; ZAC's answer.
 
-    Skips without a documenttype. The zaak's cleanup deletes the document (delete_zaak with_documents).
+    With a taak, as from that open taak: ZAC adds the document to its taakdocumenten. Skips without a documenttype.
+    The zaak's cleanup deletes the document (delete_zaak with_documents).
     """
     formaat, content = file
     name = f"{registry.tagged('document')}.{extension}"
-    url, form = _upload_form(zac, zac_url, zaak, registry, name, formaat)
+    url, form = _upload_form(zac, zac_url, zaak, registry, name, formaat, taak)
     return zac.post(url, data=form | fields, files={"file": _file_part(name, formaat, content)})
 
 
@@ -253,18 +271,19 @@ def upload_of_size(
     return zac.post(url, data=body(), headers=headers, timeout=UPLOAD_TIMEOUT)
 
 
-def uploaded_document(
+def uploaded_document(  # noqa: PLR0913  # the zaak, its taak and the form fields
     zac: requests.Session,
     zac_url: str,
     zaak: JsonObject,
     registry: ResourceRegistry,
     *,
     suffix: str = "txt",
+    taak: JsonObject | None = None,
     **fields: str,
 ) -> JsonObject:
-    """Upload a document (suffix: a key of FILES) to the zaak with upload and these form fields; the document."""
+    """Upload a document (suffix: a key of FILES) to the zaak, or its open taak, with these form fields."""
     extension = EXTENSIONS.get(suffix, suffix)
-    response = upload(zac, zac_url, zaak, registry, extension=extension, file=FILES[suffix], **fields)
+    response = upload(zac, zac_url, zaak, registry, extension=extension, file=FILES[suffix], taak=taak, **fields)
     return expect_status(response, HTTPStatus.OK).json()
 
 
@@ -309,6 +328,13 @@ def zaak_documents(
 def document_historie(zac: requests.Session, zac_url: str, document: JsonObject) -> list[JsonObject]:
     """Return the document's historie lines as ZAC shows them, from Open Zaak's audittrail."""
     return get_entries(zac, f"{document_url(zac_url, document)}/historie")
+
+
+def taak_documents(zac: requests.Session, zac_url: str, taak: JsonObject) -> list[JsonObject]:
+    """Return the documents ZAC lists with the taak, as the taak's form reads its taakdocumenten."""
+    query = {"zaakUUID": taak["zaakUuid"], "informatieobjectUUIDs": strings(taak.get("taakdocumenten"))}
+    listed = zac.put(f"{zac_url}/rest/informatieobjecten/informatieobjectenList", json=query)
+    return entries(expect_status(listed, HTTPStatus.OK).json())
 
 
 # The bron of a document that ZAC moves from its ontkoppelde documenten or its Inbox documenten.

@@ -32,6 +32,25 @@ def test_uploaded_document_uses_the_first_documenttype(fake_http):
     assert b'name="informatieobjectTypeUUID"\r\n\r\niot1' in sent[-1].body
 
 
+def test_uploaded_document_of_a_taak_names_the_taak(fake_http):
+    sent = fake_http(
+        {
+            "GET /rest/informatieobjecten/informatieobjecttypes/zaak/z1": (200, [{"uuid": "iot1"}]),
+            "POST /rest/informatieobjecten/informatieobject/z1/t1": (200, {"uuid": "d1"}),
+        }
+    )
+    zaak, taak = {"uuid": "z1"}, {"id": "t1"}
+    zac_documents.uploaded_document(requests.Session(), ZAC, zaak, ResourceRegistry("ptest-x"), taak=taak)
+    assert sent[-1].url.endswith("/z1/t1?taakObject=true")
+
+
+def test_delete_document_sends_the_zaak_and_a_reden(fake_http):
+    sent = fake_http({"DELETE /rest/informatieobjecten/informatieobject/d1": (204, None)})
+    response = zac_documents.delete_document(requests.Session(), ZAC, {"uuid": "z1"}, {"uuid": "d1"})
+    assert response.status_code == 204
+    assert json.loads(sent[-1].body) == {"zaakUuid": "z1", "reden": "podiumd-tests"}
+
+
 def test_uploaded_document_skips_without_a_documenttype(fake_http):
     fake_http({"GET /rest/informatieobjecten/informatieobjecttypes/zaak/z1": (200, [])})
     with pytest.raises(pytest.skip.Exception, match="no informatieobjecttypen"):
@@ -43,6 +62,13 @@ def test_uploaded_document_skips_without_a_documenttype(fake_http):
 def test_zaak_documents_lists_zacs_answer(fake_http):
     fake_http({"PUT /rest/informatieobjecten/informatieobjectenList": (200, [{"uuid": "d1"}])})
     assert zac_documents.zaak_documents(requests.Session(), ZAC, {"uuid": "z1"}) == [{"uuid": "d1"}]
+
+
+def test_taak_documents_lists_the_taakdocumenten_of_its_zaak(fake_http):
+    sent = fake_http({"PUT /rest/informatieobjecten/informatieobjectenList": (200, [{"uuid": "d1"}])})
+    taak = {"zaakUuid": "z1", "taakdocumenten": ["d1"]}
+    assert zac_documents.taak_documents(requests.Session(), ZAC, taak) == [{"uuid": "d1"}]
+    assert json.loads(sent[-1].body) == {"zaakUUID": "z1", "informatieobjectUUIDs": ["d1"]}
 
 
 UPLOAD = {
