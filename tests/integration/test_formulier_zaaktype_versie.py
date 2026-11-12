@@ -62,8 +62,10 @@ def _version(  # one zaaktype version
     "podiumd-tests",
     "Open Formulieren caches the zaaktype it registers on; a new zaaktype version must still be used at once.",
 )
+# Not strict: every make_form deletes Open Formulieren's catalogi lookup keys, so a form made by a parallel test
+# between the two submissions hides the defect (XPASS on kees00 in full tier 20261112-083124).
 @pytest.mark.xfail(
-    strict=True,
+    strict=False,
     reason="[open-formulieren-7] Open Formulieren 4.0.7 caches the zaaktype lookup for an hour and registers zaken "
     "on the old version after a new one is published; not yet reported upstream",
 )
