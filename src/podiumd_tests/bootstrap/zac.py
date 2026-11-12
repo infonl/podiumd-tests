@@ -18,7 +18,6 @@ from typing import override
 
 from podiumd_tests.bootstrap.names import PREFIX
 from podiumd_tests.bootstrap.snippet_step import SnippetStep
-from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 from podiumd_tests.zac import clear_ztc_cache
@@ -40,7 +39,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class ZacPart:
-    """A field of the zaakafhandelparameters, or the humanTaskParameters item of one plan item.
+    """A field of the zaakafhandelparameters.
 
     wanted: the values apply sets; is_on: whether a value counts as on, so apply leaves it.
     """
@@ -48,23 +47,14 @@ class ZacPart:
     key: str
     wanted: JsonObject
     is_on: Callable[[JsonObject], bool]
-    plan_item: str | None = None
 
     def read(self, parameters: JsonObject) -> JsonObject:
         """Return the part's current value."""
-        if self.plan_item is None:
-            return section(parameters, self.key)
-        items = entries(parameters.get(self.key))
-        empty: JsonObject = {}
-        return next((item for item in items if section(item, "planItemDefinition").get("id") == self.plan_item), empty)
+        return section(parameters, self.key)
 
     def write(self, parameters: JsonObject, value: JsonObject) -> JsonObject:
         """Return the parameters with the part set to value."""
-        if self.plan_item is None:
-            return {**parameters, self.key: value}
-        items = entries(parameters.get(self.key))
-        mine = [value if section(item, "planItemDefinition").get("id") == self.plan_item else item for item in items]
-        return {**parameters, self.key: mine}
+        return {**parameters, self.key: value}
 
     def is_mine(self, value: JsonObject) -> bool:
         """Return whether the value still has what apply set."""
@@ -76,10 +66,6 @@ EMAIL_CONFIRMATION = ZacPart(
     "automaticEmailConfirmation",
     {"enabled": True, "templateName": "Ontvangstbevestiging", "emailSender": "GEMEENTE", "emailReply": "GEMEENTE"},
     is_confirmation_sent,
-)
-# ZAC's default leaves every human task inactive, so no task can be started on a zaak.
-AANVULLENDE_INFORMATIE = ZacPart(
-    "humanTaskParameters", {"actief": True}, lambda item: bool(item.get("actief")), "AANVULLENDE_INFORMATIE"
 )
 
 

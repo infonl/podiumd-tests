@@ -22,7 +22,6 @@ from podiumd_tests.bootstrap.oidc_mock import KeycloakOidcMock
 from podiumd_tests.bootstrap.oidc_mock import oidc_params
 from podiumd_tests.bootstrap.omc import OmcAbonnement
 from podiumd_tests.bootstrap.snippet_step import SnippetStep
-from podiumd_tests.bootstrap.zac import AANVULLENDE_INFORMATIE
 from podiumd_tests.bootstrap.zac import EMAIL_CONFIRMATION
 from podiumd_tests.bootstrap.zac import ZacCatalogusStep
 from podiumd_tests.bootstrap.zac import ZacParameters
@@ -910,8 +909,6 @@ STEPS: tuple[Step, ...] = (
     OpenInwonerPartijen(),
     # ZAC's ontvangstbevestiging of productaanvragen, where the profile allows it (draaiboek OF-002).
     ZacParameters(ADMIN, "zac-email-confirmation", "zac_email_confirmation", EMAIL_CONFIRMATION),
-    # ZAC's human task Aanvullende informatie for that zaaktype, where the profile allows it: the taken tests start it.
-    ZacParameters(ADMIN, "zac-aanvullende-informatie", "zac_aanvullende_informatie", AANVULLENDE_INFORMATIE),
     # podiumd-tests' BPMN process in ZAC, for zaaktype ptest-bootstrap-bpmn (needs PABC to know that zaaktype).
     ZacBpmnProcess(ADMIN),
     # Productaanvragen of type ptest-bootstrap-bpmn-productaanvraag become zaken of that zaaktype.

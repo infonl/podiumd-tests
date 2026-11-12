@@ -9,12 +9,10 @@ import requests
 from podiumd_tests.bootstrap import zac as zac_step
 from podiumd_tests.bootstrap.runner import Context
 from podiumd_tests.bootstrap.steps import ADMIN
-from podiumd_tests.bootstrap.zac import AANVULLENDE_INFORMATIE
 from podiumd_tests.bootstrap.zac import EMAIL_CONFIRMATION
 from podiumd_tests.bootstrap.zac import ZacParameters
 from podiumd_tests.credential_store import CredentialStore
 from podiumd_tests.credentials import env_var_name
-from podiumd_tests.json_data import entries
 
 ZAC = "https://zac.example.test"
 UUID = "zt-uuid"
@@ -136,20 +134,6 @@ def test_remove_skips_a_zaaktype_zac_no_longer_has(ctx, fake_http):
 
 def test_store_key_keeps_the_name_of_the_email_confirmation_record():
     assert STORE_KEY == "ptest_bootstrap_zac_email_confirmation_record"
-
-
-def test_human_task_part_switches_on_only_its_plan_item():
-    items = [
-        {"id": 1, "actief": False, "planItemDefinition": {"id": "GOEDKEUREN"}},
-        {"id": 2, "actief": False, "planItemDefinition": {"id": "AANVULLENDE_INFORMATIE"}},
-    ]
-    parameters = {"humanTaskParameters": items}
-    old = AANVULLENDE_INFORMATIE.read(parameters)
-    assert old == items[1]
-    assert not AANVULLENDE_INFORMATIE.is_on(old)
-    changed = AANVULLENDE_INFORMATIE.write(parameters, {**old, **AANVULLENDE_INFORMATIE.wanted})
-    assert [i["actief"] for i in entries(changed["humanTaskParameters"])] == [False, True]
-    assert AANVULLENDE_INFORMATIE.is_mine(AANVULLENDE_INFORMATIE.read(changed))
 
 
 def test_zac_catalogus_step_clears_zacs_cache_after_apply_and_remove(ctx, fake_runner, fake_http, monkeypatch):
