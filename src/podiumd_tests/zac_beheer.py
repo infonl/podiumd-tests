@@ -37,6 +37,12 @@ def referentietabel_values(tabel: JsonObject) -> list[str]:
     return [str(value["name"]) for value in entries(tabel.get("values"))]
 
 
+def communicatiekanalen(http: requests.Session, zac_url: str) -> list[str]:
+    """Return the communicatiekanalen ZAC offers when a zaak is edited: those of its referentietabel but E-formulier."""
+    response = http.get(f"{zac_url}{REFERENTIETABELLEN}/communicatiekanaal/false")
+    return [str(kanaal) for kanaal in expect_status(response, HTTPStatus.OK).json()]
+
+
 def has_same_values(tabel: JsonObject, other: JsonObject) -> bool:
     """Whether the referentietabellen hold the same values; ZAC 5.9.1 reads them in no fixed order."""
     return sorted(referentietabel_values(tabel)) == sorted(referentietabel_values(other))

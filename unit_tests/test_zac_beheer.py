@@ -24,6 +24,12 @@ def test_create_referentietabel_sends_a_run_tagged_upper_case_code_and_cleanup_d
     assert sent[-1].method == "DELETE"
 
 
+def test_communicatiekanalen_are_those_zac_offers_without_e_formulier(fake_http):
+    sent = fake_http({f"GET {TABELLEN}/communicatiekanaal/false": (200, ["Balie", "E-mail"])})
+    assert zac_beheer.communicatiekanalen(requests.Session(), ZAC) == ["Balie", "E-mail"]
+    assert sent[-1].url == f"{ZAC}{TABELLEN}/communicatiekanaal/false"
+
+
 def test_update_referentietabel_sends_name_code_and_values(fake_http):
     sent = fake_http({f"PUT {TABELLEN}/7": (200, {})})
     tabel = {"id": 7, "code": "C", "name": "N", "values": [], "systemTable": False}

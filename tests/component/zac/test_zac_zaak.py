@@ -41,9 +41,11 @@ from podiumd_tests.zac import send_with_person
 from podiumd_tests.zac import start_zaak
 from podiumd_tests.zac import verlengen
 from podiumd_tests.zac import wait_in_werkvoorraad
+from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zaak_bag_objecten
 from podiumd_tests.zac import zaak_body
 from podiumd_tests.zac import zaak_historie
+from podiumd_tests.zac_beheer import communicatiekanalen
 from podiumd_tests.zac_betrokkenen import add_betrokkene
 from podiumd_tests.zac_betrokkenen import betrokkene_roltype
 from podiumd_tests.zac_betrokkenen import betrokkenen
@@ -152,6 +154,56 @@ def test_new_zaak_links_the_chosen_bag_adres(
     clean_up_zaak(zac, urls["zac"], openzaak_productaanvraag, registry, zaak)
     linked = zaak_bag_objecten(zac, urls["zac"], zaak)
     assert [section(item, "zaakobject").get("identificatie") for item in linked] == [BAG_DAM]
+
+
+@pytest.mark.requires("opennotificaties")
+@pytest.mark.source(
+    "podiumd-tests",
+    "ZAC team's regression scenarios: zaakgegevens change with one save, dates only when changed, and the new"
+    " behandelaar finds the zaak in Mijn zaken.",
+)
+@pytest.mark.scenario("""
+    Given a zaak in ZAC with a group and no behandelaar
+    When the behandelaar changes its group, behandelaar, communicatiekanaal, vertrouwelijkheidaanduiding and toelichting in one save
+    Then the zaak has the new values and keeps its startdatum, streefdatum and fatale datum
+    And the zaak appears in the new behandelaar's Mijn zaken
+    When the behandelaar moves the startdatum, streefdatum and fatale datum a week later
+    Then the zaak has those dates
+""")
+def test_zaakgegevens_change_with_one_save(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    zac_group: str,
+    registry: ResourceRegistry,
+) -> None:
+    """One edit changes the assignment and the zaakgegevens and keeps the dates, as ZAC's form sends them; a second moves the dates.
+
+    ZAC lists Mijn zaken from its search index, which follows Open Notificaties' zaken kanaal.
+    """
+    zac_url = urls["zac"]
+    zaak = zac_zaak()
+    dates = {field: zaak[field] for field in ("startdatum", "einddatumGepland", "uiterlijkeEinddatumAfdoening")}
+    kanaal = next(kanaal for kanaal in communicatiekanalen(zac, zac_url) if kanaal != zaak["communicatiekanaal"])
+    changed = {
+        "communicatiekanaal": kanaal,
+        "vertrouwelijkheidaanduiding": "VERTROUWELIJK",
+        "toelichting": registry.tagged("gewijzigd"),
+    }
+    assigned = {"groep": {"id": zac_group, "naam": zac_group}, "behandelaar": {"id": ADMIN.username}}
+    expect_status(wijzig_zaak(zac, zac_url, zaak, **dates, **changed, **assigned), HTTPStatus.OK)
+    edited = read_zaak(zac, zac_url, str(zaak["uuid"]))
+    assert {field: edited.get(field) for field in (*changed, *dates)} == {**changed, **dates}
+    assert assignment(edited) == (zac_group, ADMIN.username)
+    wait_until(
+        lambda: is_zaak_listed(zac, zac_url, zaak, alleenMijnZaken=True),
+        timeout=INDEX_TIMEOUT,
+        description=f"zaak {zaak['identificatie']} in Mijn zaken",
+    )
+    later = {field: (date.fromisoformat(str(day)) + timedelta(days=7)).isoformat() for field, day in dates.items()}
+    expect_status(wijzig_zaak(zac, zac_url, zaak, **later), HTTPStatus.OK)
+    moved = read_zaak(zac, zac_url, str(zaak["uuid"]))
+    assert {field: moved.get(field) for field in later} == later
 
 
 @pytest.mark.xfail(
