@@ -11,12 +11,12 @@ versions is not counted.
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 210 | 37 | 9 |
-| component | 855 | 544 | 67 |
-| integration | 143 | 87 | 11 |
+| component | 856 | 545 | 67 |
+| integration | 144 | 88 | 11 |
 | perf | 54 | 3 | 0 |
-| **full tier** | **1177** | **647** |  |
+| **full tier** | **1179** | **649** |  |
 
-Unit tests (`unit_tests/`, functions): 778. Perf endpoints (`perf/runs.py`): 22.
+Unit tests (`unit_tests/`, functions): 780. Perf endpoints (`perf/runs.py`): 22.
 
 ## Per area
 
@@ -51,7 +51,7 @@ Unit tests (`unit_tests/`, functions): 778. Perf endpoints (`perf/runs.py`): 22.
 | component | platform | 69 | 18 |
 | component | referentielijsten | 2 | 2 |
 | component | zaakbrug | 12 | 11 |
-| component | zac | 320 | 243 |
+| component | zac | 321 | 244 |
 | component | zgw_office_addin | 4 | 3 |
 | integration | continuiteit | 19 | 10 |
 | integration | formulier_betaling | 19 | 6 |
@@ -77,7 +77,7 @@ Unit tests (`unit_tests/`, functions): 778. Perf endpoints (`perf/runs.py`): 22.
 | integration | portaal_zaken | 14 | 10 |
 | integration | productaanvraag | 8 | 8 |
 | integration | productaanvraag_bevestiging | 1 | 1 |
-| integration | productaanvraag_inbox | 1 | 1 |
+| integration | productaanvraag_inbox | 2 | 2 |
 | integration | sso | 17 | 3 |
 | perf | api_perf | 44 | 2 |
 | perf | gateway_perf | 10 | 1 |
@@ -95,7 +95,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | ZAC | 19 |
 | draaiboek | 88 |
 | external | 111 |
-| podiumd-tests | 487 |
+| podiumd-tests | 489 |
 | upstream | 170 |
 
 ## Expected failures per known issue

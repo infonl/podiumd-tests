@@ -11,15 +11,19 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.bpmn import uuid_of
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openzaak import make_document
+from podiumd_tests.seed.openzaak import zaaktype_parts
 from podiumd_tests.seed.zac_zaaktype import make_group_member
 from podiumd_tests.seed.zac_zaaktype import make_other_domain_group
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import GERELATEERD
 from podiumd_tests.zac import INDEX_TIMEOUT
+from podiumd_tests.zac import NOTIFICATION_TIMEOUT
 from podiumd_tests.zac import ZOEKOPDRACHT
 from podiumd_tests.zac import afhandelen
 from podiumd_tests.zac import afronden_intake
@@ -35,6 +39,7 @@ from podiumd_tests.zac import verlengen
 from podiumd_tests.zac import wait_for_indicatie
 from podiumd_tests.zac import zac_session
 from podiumd_tests.zac import zoekopdrachten
+from podiumd_tests.zac_documents import inbox_documenten_page
 from podiumd_tests.zac_documents import ontkoppel_document
 from podiumd_tests.zac_documents import ontkoppelde_documenten_page
 from podiumd_tests.zac_documents import uploaded_document
@@ -44,6 +49,7 @@ if TYPE_CHECKING:
 
     import requests
 
+    from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
@@ -315,3 +321,33 @@ def test_ontkoppelde_documenten_are_paged_with_their_creatiedatum(
     assert [(page.get("totaal"), len(found)) for page, found in zip(pages, shown, strict=True)] == [(2, 1), (2, 1)]
     assert shown[0][0].get("id") != shown[1][0].get("id")
     assert all(found[0].get("creatiedatum") for found in shown), shown
+
+
+@pytest.mark.requires("opennotificaties")
+@pytest.mark.scenario("""
+    Given two documents with the same titel in Open Zaak on no zaak
+    When the behandelaar pages through the Inbox documenten with that titel one per page
+    Then each page shows one document with its creatiedatum, and the total of two
+""")
+def test_inbox_documenten_are_paged_with_their_creatiedatum(
+    zac: requests.Session,
+    urls: dict[str, str],
+    openzaak: ApiClient,
+    bpmn_zaaktype: JsonObject,
+    registry: ResourceRegistry,
+) -> None:
+    """maxResults pages ZAC's Inbox documenten; totaal counts all of them; creatiedatum is Open Zaak's."""
+    zac_url = urls["zac"]
+    titel = registry.tagged("inbox-pagina")
+    informatieobjecttype = zaaktype_parts(openzaak, bpmn_zaaktype).informatieobjecttype
+    made = [make_document(openzaak, registry, informatieobjecttype, titel=titel) for _ in range(2)]
+    wait_until(
+        lambda: inbox_documenten_page(zac, zac_url, titel, 0, 2).get("totaal") == len(made),
+        timeout=NOTIFICATION_TIMEOUT,
+        description=f"the documents {titel} in ZAC's Inbox documenten",
+    )
+    pages = [inbox_documenten_page(zac, zac_url, titel, page, 1) for page in (0, 1)]
+    shown = [entries(page.get("resultaten")) for page in pages]
+    assert [(page.get("totaal"), len(found)) for page, found in zip(pages, shown, strict=True)] == [(2, 1), (2, 1)]
+    listed = {(found[0].get("enkelvoudiginformatieobjectUUID"), found[0].get("creatiedatum")) for found in shown}
+    assert listed == {(uuid_of(document["url"]), document["creatiedatum"]) for document in made}

@@ -195,6 +195,13 @@ def test_ontkoppelde_documenten_page_sends_the_page_and_its_size(fake_http):
     assert json.loads(sent[-1].body) == {"zaakID": "ZAAK-1", "page": 1, "maxResults": 1}
 
 
+def test_inbox_documenten_page_sends_the_titel_the_page_and_its_size(fake_http):
+    page = {"resultaten": [{"id": 1}], "totaal": 2.0}
+    sent = fake_http({"PUT /rest/inboxdocumenten": (200, page)})
+    assert zac_documents.inbox_documenten_page(requests.Session(), ZAC, "ptest-x", 1, 1) == page
+    assert json.loads(sent[-1].body) == {"titel": "ptest-x", "page": 1, "maxResults": 1}
+
+
 @pytest.mark.parametrize(
     ("build", "main"),
     [(zac_documents.minimal_xlsx, "xl/worksheets/sheet1.xml"), (zac_documents.minimal_pptx, "ppt/slides/slide1.xml")],

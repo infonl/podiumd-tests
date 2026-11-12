@@ -692,9 +692,20 @@ def productaanvraag_zaak(
 
 def inbox_productaanvragen(http: requests.Session, zac_url: str, productaanvraagtype: str) -> list[JsonObject]:
     """Return the entries of ZAC's Inbox productaanvragen of the productaanvraagtype."""
-    body = {"type": productaanvraagtype, "page": 0, "maxResults": 100}
-    response = http.put(f"{zac_url}/rest/inbox-productaanvragen", json=body)
-    return entries(cast("JsonObject", expect_status(response, HTTPStatus.OK).json()).get("resultaten"))
+    return entries(inbox_productaanvragen_page(http, zac_url, productaanvraagtype, 0, 100).get("resultaten"))
+
+
+def inbox_productaanvragen_page(
+    http: requests.Session, zac_url: str, productaanvraagtype: str, page: int, max_results: int
+) -> JsonObject:
+    """Return one page of ZAC's Inbox productaanvragen of the productaanvraagtype, with its totaal."""
+    return list_page(http, f"{zac_url}/rest/inbox-productaanvragen", {"type": productaanvraagtype}, page, max_results)
+
+
+def list_page(http: requests.Session, url: str, filters: JsonObject, page: int, max_results: int) -> JsonObject:
+    """Return one page of ZAC's paged list at url (the inbox and ontkoppelde documenten lists), with its totaal."""
+    response = http.put(url, json={**filters, "page": page, "maxResults": max_results})
+    return cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
 
 
 def clean_up_inbox_entries(

@@ -745,6 +745,13 @@ def test_inbox_productaanvragen_of_a_type_and_their_cleanup(fake_http):
     assert (sent[-1].method, sent[-1].url) == ("DELETE", f"{ZAC}/rest/inbox-productaanvragen/7")
 
 
+def test_inbox_productaanvragen_page_sends_the_type_the_page_and_its_size(fake_http):
+    page = {"resultaten": [{"id": 7}], "totaal": 2.0}
+    sent = fake_http({"PUT /rest/inbox-productaanvragen": (200, page)})
+    assert zac.inbox_productaanvragen_page(requests.Session(), ZAC, "t", 1, 1) == page
+    assert json.loads(sent[-1].body) == {"type": "t", "page": 1, "maxResults": 1}
+
+
 def test_deliver_notificatie_posts_it_in_the_zac_pod_this_many_times(env_factory, fake_runner):
     fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "zac"}}]}))
     fake_runner.answers["exec deploy/zac"] = (0, "204\n204\n")

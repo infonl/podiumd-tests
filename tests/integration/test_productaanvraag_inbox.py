@@ -11,6 +11,7 @@ import pytest
 
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.bootstrap.bpmn import uuid_of
+from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.seed.objecten import make_productaanvraag
 from podiumd_tests.seed.openzaak import make_document
@@ -23,6 +24,7 @@ from podiumd_tests.zac import PRODUCTAANVRAAG_TIMEOUT
 from podiumd_tests.zac import clean_up_inbox_entries
 from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import inbox_productaanvragen
+from podiumd_tests.zac import inbox_productaanvragen_page
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import start_zaak
 from podiumd_tests.zac import zaak_body
@@ -109,3 +111,40 @@ def test_unhandled_productaanvraag_becomes_a_zaak_from_the_inbox(
     shown = read_zaak(zac, urls["zac"], str(zaak["uuid"]))
     assert (shown["communicatiekanaal"], section(shown, "zaakdata").get("omschrijving")) == (E_FORMULIER, kenmerk)
     assert inbox_productaanvragen(zac, urls["zac"], kenmerk) == []
+
+
+@pytest.mark.source(
+    "podiumd-tests",
+    "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, "
+    "zoeken-werklijsten-dashboard).",
+)
+@pytest.mark.scenario("""
+    Given two productaanvragen of a type no zaaktype in ZAC handles
+    When the behandelaar pages through the Inbox productaanvragen of that type one per page
+    Then each page shows one productaanvraag with its ontvangstdatum, and the total of two
+""")
+def test_inbox_productaanvragen_are_paged_with_their_ontvangstdatum(
+    zac: requests.Session,
+    urls: dict[str, str],
+    objecten: ApiClient,
+    registry: ResourceRegistry,
+    productaanvraag_objecttype: str,
+) -> None:
+    """maxResults pages ZAC's Inbox productaanvragen; totaal counts all of them; each has an ontvangstdatum."""
+    zac_url = urls["zac"]
+    soort = registry.tagged("inbox-pagina")
+    clean_up_inbox_entries(zac, zac_url, registry, soort)
+    made = [
+        make_productaanvraag(objecten, registry, productaanvraag_objecttype, soort, f"{soort}-{number}")
+        for number in range(2)
+    ]
+    wait_until(
+        lambda: inbox_productaanvragen_page(zac, zac_url, soort, 0, 2).get("totaal") == len(made),
+        timeout=PRODUCTAANVRAAG_TIMEOUT,
+        description=f"the productaanvragen {soort} in the Inbox productaanvragen",
+    )
+    pages = [inbox_productaanvragen_page(zac, zac_url, soort, page, 1) for page in (0, 1)]
+    shown = [entries(page.get("resultaten")) for page in pages]
+    assert [(page.get("totaal"), len(found)) for page, found in zip(pages, shown, strict=True)] == [(2, 1), (2, 1)]
+    assert {found[0].get("productaanvraagObjectUUID") for found in shown} == {aanvraag["uuid"] for aanvraag in made}
+    assert all(found[0].get("ontvangstdatum") for found in shown), shown

@@ -12,7 +12,6 @@ from datetime import date
 from datetime import datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING
-from typing import cast
 
 import pytest
 
@@ -22,6 +21,7 @@ from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
+from podiumd_tests.zac import list_page
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -402,8 +402,12 @@ def koppelbare_zaken(
 
 def inbox_documenten(zac: requests.Session, zac_url: str, titel: str) -> list[JsonObject]:
     """Return the entries of ZAC's Inbox documenten whose titel contains titel."""
-    listed = zac.put(f"{zac_url}/rest/inboxdocumenten", json={"titel": titel, "page": 0, "maxResults": 100})
-    return entries(expect_status(listed, HTTPStatus.OK).json().get("resultaten"))
+    return entries(inbox_documenten_page(zac, zac_url, titel, 0, 100).get("resultaten"))
+
+
+def inbox_documenten_page(zac: requests.Session, zac_url: str, titel: str, page: int, max_results: int) -> JsonObject:
+    """Return one page of ZAC's Inbox documenten whose titel contains titel, with its totaal."""
+    return list_page(zac, f"{zac_url}/rest/inboxdocumenten", {"titel": titel}, page, max_results)
 
 
 def inbox_document(zac: requests.Session, zac_url: str, document: JsonObject) -> JsonObject | None:
@@ -430,9 +434,7 @@ def ontkoppelde_documenten_page(
     zac: requests.Session, zac_url: str, zaak: JsonObject, page: int, max_results: int
 ) -> JsonObject:
     """Return one page of ZAC's ontkoppelde documenten detached from the zaak, with its totaal."""
-    body = {"zaakID": zaak["identificatie"], "page": page, "maxResults": max_results}
-    listed = zac.put(f"{zac_url}/rest/ontkoppeldedocumenten", json=body)
-    return cast("JsonObject", expect_status(listed, HTTPStatus.OK).json())
+    return list_page(zac, f"{zac_url}/rest/ontkoppeldedocumenten", {"zaakID": zaak["identificatie"]}, page, max_results)
 
 
 def delete_ontkoppeld_document(zac: requests.Session, zac_url: str, ontkoppeld: JsonObject) -> requests.Response:
