@@ -671,9 +671,12 @@ def test_opschorten_verlengen_and_heropenen_send_days_dates_and_reden(fake_http)
         "einddatumGepland": "2026-01-12",
         "uiterlijkeEinddatumAfdoening": "2026-02-02",
     }
-    zac.verlengen(http, ZAC, {"uuid": "z1", "uiterlijkeEinddatumAfdoening": "2026-01-31"}, 2)
+    zac.verlengen(http, ZAC, {"uuid": "z1", "uiterlijkeEinddatumAfdoening": "2026-01-31"}, 2, None)
     assert "einddatumGepland" not in json.loads(sent[-1].body)
     assert zac.moved_dates(zaak, 0) == {"einddatumGepland": "2026-01-10", "uiterlijkeEinddatumAfdoening": "2026-01-31"}
+    assert json.loads(sent[-1].body)["redenVerlenging"] is None
+    zac.opschorten(http, ZAC, zaak, 3, None)
+    assert json.loads(sent[-1].body) == {"reason": None, "numberOfDays": 3}
     zac.heropenen(http, ZAC, zaak)
     assert json.loads(sent[-1].body) == {"reden": "podiumd-tests"}
 

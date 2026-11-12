@@ -27,6 +27,7 @@ from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import DUE_DATES
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import is_zaak_listed
@@ -35,6 +36,7 @@ from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_with_person
 from podiumd_tests.zac import verlengen
 from podiumd_tests.zac import wait_in_werkvoorraad
+from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac_betrokkenen import add_betrokkene
 from podiumd_tests.zac_betrokkenen import betrokkene_roltype
 from podiumd_tests.zac_betrokkenen import betrokkenen
@@ -62,12 +64,10 @@ def _zaak_url(urls: dict[str, str], zaak: JsonObject) -> str:
     return f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}"
 
 
-def _dates(openzaak: ApiClient, urls: dict[str, str], zaak: JsonObject) -> tuple[date, date]:
-    """The zaak's einddatumGepland and uiterlijkeEinddatumAfdoening in Open Zaak."""
+def _dates(openzaak: ApiClient, urls: dict[str, str], zaak: JsonObject) -> tuple[date, ...]:
+    """The zaak's DUE_DATES in Open Zaak."""
     found = openzaak.get(_zaak_url(urls, zaak))
-    return date.fromisoformat(str(found["einddatumGepland"])), date.fromisoformat(
-        str(found["uiterlijkeEinddatumAfdoening"])
-    )
+    return tuple(date.fromisoformat(str(found[field])) for field in DUE_DATES)
 
 
 def _days(duration: object) -> int | None:
@@ -202,6 +202,7 @@ def test_note_can_be_added_changed_and_deleted(
     Then its streefdatum and fatale datum are 5 days later, and Open Zaak records the opschorting and its reden
     When the behandelaar resumes the zaak the same day
     Then both dates move back by the 5 days not used, and Open Zaak keeps that it was opgeschort before
+    And the historie records each date change with the reden of the opschorting or the hervatting
     And ZAC refuses to suspend it a second time
 """)
 def test_suspended_zaak_resumes_and_cannot_be_suspended_again(
@@ -228,8 +229,39 @@ def test_suspended_zaak_resumes_and_cannot_be_suspended_again(
     assert _dates(openzaak_productaanvraag, urls, zaak) == before
     resumed = section(openzaak_productaanvraag.get(_zaak_url(urls, zaak)), "opschorting")
     assert (resumed.get("indicatie"), resumed.get("eerdereOpschorting")) == (False, True)
+    historie = {(line.get("attribuutLabel"), line.get("toelichting")) for line in zaak_historie(zac, urls["zac"], zaak)}
+    reasons = ("Opschorting: podiumd-tests op", "Hervatting: podiumd-tests her")
+    assert {(field, reason) for field in DUE_DATES for reason in reasons} <= historie, historie
     again = opschorten(zac, urls["zac"], zaak, SUSPENSION_DAYS, "nogmaals")
     expect_status(again, HTTPStatus.FORBIDDEN, HTTPStatus.BAD_REQUEST)
+
+
+@pytest.mark.source("podiumd-tests", "ZAC team's regression scenarios: opschorten and verlengen require a reden.")
+@pytest.mark.parametrize("actie", ["opschorten", "verlengen"])
+@pytest.mark.scenario("""
+    Given a zaak in ZAC
+    When the behandelaar suspends or extends the zaak without a reden
+    Then ZAC refuses it as a bad request
+    And the zaak is neither opgeschort nor verlengd, and keeps its streefdatum and fatale datum
+""")
+def test_zaak_is_not_suspended_or_extended_without_a_reden(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    openzaak_productaanvraag: ApiClient,
+    actie: str,
+) -> None:
+    """ZAC answers 400 to opschorten and verlengen without a reden, and changes nothing.
+
+    Open Zaak refuses the missing reden; ZAC accepts an empty one.
+    """
+    zaak = zac_zaak()
+    before = _dates(openzaak_productaanvraag, urls, zaak)
+    send = opschorten if actie == "opschorten" else verlengen
+    expect_status(send(zac, urls["zac"], zaak, SUSPENSION_DAYS, None), HTTPStatus.BAD_REQUEST)
+    indicaties = strings(read_zaak(zac, urls["zac"], str(zaak["uuid"])).get("indicaties"))
+    assert {"OPSCHORTING", "VERLENGD"}.isdisjoint(indicaties), indicaties
+    assert _dates(openzaak_productaanvraag, urls, zaak) == before
 
 
 @pytest.mark.tc("ZAC-044")

@@ -780,10 +780,14 @@ def wijzig_taak(http: requests.Session, zac_url: str, taak_id: str, **fields: ob
     expect_status(http.put(f"{zac_url}/rest/taken/taakdata", json={**taak, **fields}), HTTPStatus.OK)
 
 
+# A zaak's streefdatum and fatale datum, which opschorten and verlengen move.
+DUE_DATES = ("einddatumGepland", "uiterlijkeEinddatumAfdoening")
+
+
 def opschorten(
-    http: requests.Session, zac_url: str, zaak: JsonObject, days: int, reden: str = "podiumd-tests"
+    http: requests.Session, zac_url: str, zaak: JsonObject, days: int, reden: str | None = "podiumd-tests"
 ) -> requests.Response:
-    """Suspend the zaak for the days with the reden; ZAC's answer."""
+    """Suspend the zaak for the days with the reden (None: none); ZAC's answer."""
     body = {"reason": reden, "numberOfDays": days}
     return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/suspend", json=body)
 
@@ -792,14 +796,16 @@ def moved_dates(zaak: JsonObject, days: int) -> dict[str, str]:
     """Return those of the streefdatum and fatale datum the zaak has, as ZAC shows the zaak, moved by the days."""
     return {
         field: (date.fromisoformat(str(zaak[field])) + timedelta(days=days)).isoformat()
-        for field in ("einddatumGepland", "uiterlijkeEinddatumAfdoening")
+        for field in DUE_DATES
         if zaak.get(field)
     }
 
 
-def verlengen(http: requests.Session, zac_url: str, zaak: JsonObject, days: int) -> requests.Response:
-    """Extend the zaak by the days, with its streefdatum and fatale datum as ZAC shows the zaak; ZAC's answer."""
-    body = {"redenVerlenging": "podiumd-tests", "duurDagen": days, "takenVerlengen": False, **moved_dates(zaak, days)}
+def verlengen(
+    http: requests.Session, zac_url: str, zaak: JsonObject, days: int, reden: str | None = "podiumd-tests"
+) -> requests.Response:
+    """Extend the zaak by the days from its dates as ZAC shows them, with the reden (None: none); ZAC's answer."""
+    body = {"redenVerlenging": reden, "duurDagen": days, "takenVerlengen": False, **moved_dates(zaak, days)}
     return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/verlenging", json=body)
 
 
