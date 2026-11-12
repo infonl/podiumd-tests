@@ -276,6 +276,9 @@ def test_start_human_task_waits_until_zac_offers_it_and_starts_it_without_a_mail
         "taakStuurGegevens": {"sendMail": False},
         "fataledatum": "2026-12-01",
     }
+    monkeypatch.setattr(zac, "human_tasks_offered", lambda *_args: [{"id": "p9", "naam": "Goedkeuren"}])
+    zac.start_human_task(requests.Session(), ZAC, zaak, "Goedkeuren", None)
+    assert json.loads(sent[-1].body)["groep"] is None
 
 
 def test_human_tasks_and_user_events_offered_are_zacs_plan_items(fake_http):
@@ -670,6 +673,7 @@ def test_opschorten_verlengen_and_heropenen_send_days_dates_and_reden(fake_http)
     }
     zac.verlengen(http, ZAC, {"uuid": "z1", "uiterlijkeEinddatumAfdoening": "2026-01-31"}, 2)
     assert "einddatumGepland" not in json.loads(sent[-1].body)
+    assert zac.moved_dates(zaak, 0) == {"einddatumGepland": "2026-01-10", "uiterlijkeEinddatumAfdoening": "2026-01-31"}
     zac.heropenen(http, ZAC, zaak)
     assert json.loads(sent[-1].body) == {"reden": "podiumd-tests"}
 

@@ -24,7 +24,9 @@ from podiumd_tests.mailpit import own_address
 from podiumd_tests.mailpit import received_message
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
+from podiumd_tests.responses import get_entries
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import GERELATEERD
 from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import POLICIES
 from podiumd_tests.zac import afronden_intake
@@ -32,6 +34,8 @@ from podiumd_tests.zac import assignment
 from podiumd_tests.zac import complete_task
 from podiumd_tests.zac import human_tasks_offered
 from podiumd_tests.zac import is_taak_listed
+from podiumd_tests.zac import koppel
+from podiumd_tests.zac import moved_dates
 from podiumd_tests.zac import open_task
 from podiumd_tests.zac import read_taak
 from podiumd_tests.zac import read_zaak
@@ -80,6 +84,7 @@ ADVIES_INTERN = "Advies intern"
 ADVIES_EXTERN = "Advies extern"
 DOCUMENT_VERZENDEN = "Document verzenden"
 MAIL_TIMEOUT = 60
+OPSCHORTEN = {"zaakOpschorten": "true"}
 
 
 def _started(
@@ -90,6 +95,20 @@ def _started(
     response = start_human_task(zac, zac_url, zaak, name, groep, medewerker=admin, **fields)
     expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     return open_task(zac, zac_url, str(zaak["uuid"]), name)
+
+
+def _dates(zaak: JsonObject) -> dict[str, str]:
+    """The zaak's streefdatum and fatale datum, as ZAC shows the zaak."""
+    return moved_dates(zaak, 0)
+
+
+def _human_task_parameters(zaakafhandelparameters: JsonObject, plan_item: str) -> JsonObject:
+    """The zaakafhandelparameters' human task parameters of the plan item (GOEDKEUREN, ...)."""
+    return next(
+        task
+        for task in entries(zaakafhandelparameters.get("humanTaskParameters"))
+        if section(task, "planItemDefinition").get("id") == plan_item
+    )
 
 
 @pytest.fixture(name="start_taak")
@@ -195,32 +214,84 @@ def test_taken_from_the_list_are_released_and_assigned(
     "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, zaak-lifecycle).",
 )
 @pytest.mark.scenario("""
-    Given a zaak in ZAC
+    Given a zaak in ZAC, gerelateerd to another zaak
     When the behandelaar starts the taak Aanvullende informatie with opschorten until its fatale datum
-    Then the zaak is opgeschort, and its uiterlijke einddatum afdoening moved by those days
+    Then the zaak is opgeschort, its streefdatum and fatale datum moved by those days; the other zaak is not
     When the behandelaar completes the taak with hervatten
-    Then the zaak is no longer opgeschort, and its date moved back by the days not used
+    Then the zaak is no longer opgeschort, and its dates moved back by the days not used
+    And ZAC refuses a second Aanvullende informatie with opschorten: a zaak is opgeschort once
 """)
-def test_aanvullende_informatie_with_opschorten_suspends_until_hervatten(
+def test_aanvullende_informatie_with_opschorten_suspends_once_until_hervatten(
     zac: requests.Session,
     urls: dict[str, str],
     zac_zaak: Callable[..., JsonObject],
     start_taak: Callable[..., JsonObject],
+    zac_group: str,
 ) -> None:
-    """zaakOpschorten suspends the zaak until the task's fatale datum; zaakHervatten on completion resumes it."""
-    zaak = zac_zaak()
-    original = date.fromisoformat(str(zaak["uiterlijkeEinddatumAfdoening"]))
-    fataledatum = date.today() + timedelta(days=SUSPENSION_DAYS)  # noqa: DTZ011  # ZAC's local date
-    taak = start_taak(zaak, fataledatum=fataledatum.isoformat(), taakdata={"zaakOpschorten": "true"})
-    opgeschort = read_zaak(zac, urls["zac"], str(zaak["uuid"]))
-    assert opgeschort["isOpgeschort"] is True
-    moved = date.fromisoformat(str(opgeschort["uiterlijkeEinddatumAfdoening"]))
-    assert moved == original + timedelta(days=SUSPENSION_DAYS)
+    """zaakOpschorten suspends only the zaak until the task's fatale datum; zaakHervatten resumes it; never again."""
+    zac_url = urls["zac"]
+    zaak, ander = zac_zaak(), zac_zaak()
+    expect_status(koppel(zac, zac_url, zaak, ander, GERELATEERD), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    fataledatum = (date.today() + timedelta(days=SUSPENSION_DAYS)).isoformat()  # noqa: DTZ011  # ZAC's local date
+    taak = start_taak(zaak, fataledatum=fataledatum, taakdata=OPSCHORTEN)
+    opgeschort = read_zaak(zac, zac_url, str(zaak["uuid"]))
+    assert (opgeschort["isOpgeschort"], _dates(opgeschort)) == (True, moved_dates(zaak, SUSPENSION_DAYS))
+    ongemoeid = read_zaak(zac, zac_url, str(ander["uuid"]))
+    assert (ongemoeid["isOpgeschort"], _dates(ongemoeid)) == (False, _dates(ander))
 
-    complete_task(zac, urls["zac"], taak, {"zaakHervatten": "true"})
-    hervat = read_zaak(zac, urls["zac"], str(zaak["uuid"]))
-    assert hervat["isOpgeschort"] is False
-    assert hervat["uiterlijkeEinddatumAfdoening"] == original.isoformat()
+    complete_task(zac, zac_url, taak, {"zaakHervatten": "true"})
+    hervat = read_zaak(zac, zac_url, str(zaak["uuid"]))
+    assert (hervat["isOpgeschort"], _dates(hervat)) == (False, _dates(zaak))
+    again = start_human_task(
+        zac, zac_url, zaak, AANVULLENDE_INFORMATIE, zac_group, fataledatum=fataledatum, taakdata=OPSCHORTEN
+    )
+    expect_status(again, HTTPStatus.FORBIDDEN)
+    assert read_zaak(zac, zac_url, str(zaak["uuid"]))["isOpgeschort"] is False
+
+
+@ZAC_TEAM
+@THROWAWAY
+@TAKEN_ZAAKTYPE
+@pytest.mark.scenario("""
+    Given a zaak in its intake in ZAC, whose taak Aanvullende informatie has no doorlooptijd
+    When the behandelaar starts Aanvullende informatie with opschorten but without a fatale datum
+    Then the taak has no fatale datum
+    And the zaak is not opgeschort and keeps its streefdatum and fatale datum
+""")
+def test_opschorten_without_a_taak_fatale_datum_leaves_the_zaak_running(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_taken_zaak: Callable[[], JsonObject],
+    zac_taken_zaaktype: JsonObject,
+    zac_group: str,
+) -> None:
+    """ZAC suspends for the days until the taak's fatale datum; without one it ignores zaakOpschorten."""
+    assert _human_task_parameters(zac_taken_zaaktype, "AANVULLENDE_INFORMATIE").get("doorlooptijd") is None
+    zaak = zac_taken_zaak()
+    taak = _started(zac, urls["zac"], zaak, AANVULLENDE_INFORMATIE, zac_group, taakdata=OPSCHORTEN)
+    assert taak.get("fataledatum") is None
+    lopend = read_zaak(zac, urls["zac"], str(zaak["uuid"]))
+    assert (lopend["isOpgeschort"], _dates(lopend)) == (False, _dates(zaak))
+
+
+@ZAC_TEAM
+@pytest.mark.scenario("""
+    Given a zaak in ZAC
+    When the behandelaar starts the taak Aanvullende informatie without a group
+    Then ZAC refuses it, and the zaak has no taak
+""")
+def test_taak_needs_a_group(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """RESTHumanTaskData's groep is the one field ZAC's backend requires; the forms' other required fields are UI only."""
+    need_bootstrap("zac-aanvullende-informatie")
+    zaak = zac_zaak()
+    refused = start_human_task(zac, urls["zac"], zaak, AANVULLENDE_INFORMATIE, None)
+    expect_status(refused, HTTPStatus.BAD_REQUEST)
+    assert get_entries(zac, f"{urls['zac']}/rest/taken/zaak/{zaak['uuid']}") == []
 
 
 @pytest.fixture(name="behandeling")
@@ -456,11 +527,7 @@ def test_taak_fatale_datum_stays_within_the_zaaks(
     """A later fatale datum is refused; the doorlooptijd of the human task parameters is capped at the zaak's."""
     zac_url = urls["zac"]
     einde = date.fromisoformat(str(behandeling["uiterlijkeEinddatumAfdoening"]))
-    goedkeuren = next(
-        task
-        for task in entries(zac_taken_zaaktype.get("humanTaskParameters"))
-        if section(task, "planItemDefinition").get("id") == "GOEDKEUREN"
-    )
+    goedkeuren = _human_task_parameters(zac_taken_zaaktype, "GOEDKEUREN")
     assert date.today() + timedelta(days=int(str(goedkeuren["doorlooptijd"]))) > einde  # noqa: DTZ011  # a local date
     later = (einde + timedelta(days=1)).isoformat()
     refused = start_human_task(zac, zac_url, behandeling, GOEDKEUREN, zac_group, fataledatum=later)

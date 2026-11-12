@@ -701,9 +701,9 @@ def human_tasks_offered(http: requests.Session, zac_url: str, zaak: JsonObject) 
 
 
 def start_human_task(
-    http: requests.Session, zac_url: str, zaak: JsonObject, name: str, groep: str, **fields: object
+    http: requests.Session, zac_url: str, zaak: JsonObject, name: str, groep: str | None, **fields: object
 ) -> requests.Response:
-    """Start the zaak's human task of this name for the group, once ZAC offers it; ZAC's answer.
+    """Start the zaak's human task of this name for the group (None: without one), once ZAC offers it; ZAC's answer.
 
     ZAC starts a zaak's case, and the stage after the intake, in the background. fields: more of ZAC's
     RESTHumanTaskData (medewerker, fataledatum, toelichting, taakdata, taakStuurGegevens: no mail unless given).
@@ -715,7 +715,7 @@ def start_human_task(
     plan_item = wait_until(offered, timeout=INDEX_TIMEOUT, description=f"{name!r} offered on {zaak['identificatie']}")
     body = {
         "planItemInstanceId": plan_item["id"],
-        "groep": {"id": groep, "naam": groep},
+        "groep": {"id": groep, "naam": groep} if groep else None,
         "taakdata": {},
         "taakStuurGegevens": {"sendMail": False},
         **fields,
@@ -788,14 +788,18 @@ def opschorten(
     return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/suspend", json=body)
 
 
-def verlengen(http: requests.Session, zac_url: str, zaak: JsonObject, days: int) -> requests.Response:
-    """Extend the zaak by the days, with its streefdatum and fatale datum as ZAC shows the zaak; ZAC's answer."""
-    moved = {
+def moved_dates(zaak: JsonObject, days: int) -> dict[str, str]:
+    """Return those of the streefdatum and fatale datum the zaak has, as ZAC shows the zaak, moved by the days."""
+    return {
         field: (date.fromisoformat(str(zaak[field])) + timedelta(days=days)).isoformat()
         for field in ("einddatumGepland", "uiterlijkeEinddatumAfdoening")
         if zaak.get(field)
     }
-    body = {"redenVerlenging": "podiumd-tests", "duurDagen": days, "takenVerlengen": False, **moved}
+
+
+def verlengen(http: requests.Session, zac_url: str, zaak: JsonObject, days: int) -> requests.Response:
+    """Extend the zaak by the days, with its streefdatum and fatale datum as ZAC shows the zaak; ZAC's answer."""
+    body = {"redenVerlenging": "podiumd-tests", "duurDagen": days, "takenVerlengen": False, **moved_dates(zaak, days)}
     return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/verlenging", json=body)
 
 
