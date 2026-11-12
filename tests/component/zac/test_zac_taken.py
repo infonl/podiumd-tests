@@ -22,9 +22,11 @@ from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.mailpit import own_address
 from podiumd_tests.mailpit import received_message
+from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import LIST_TIMEOUT
+from podiumd_tests.zac import POLICIES
 from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import complete_task
@@ -296,6 +298,23 @@ def test_open_advies_intern_holds_off_afhandelen(
         description=f"task {taak['id']} gone",
     )
     assert "ZAAK_AFHANDELEN" in _acties(zac, zac_url, behandeling)
+
+
+@pytest.mark.source(POLICIES, "A raadpleger reads a zaak's taken but starts none.")
+@THROWAWAY
+@TAKEN_ZAAKTYPE
+@pytest.mark.scenario("""
+    Given a zaak in behandeling in ZAC, of a zaaktype with every human task on
+    And a test user with only ZAC base role raadpleger on that zaaktype
+    When the user starts the taak Advies intern
+    Then ZAC refuses it with 403
+""")
+def test_raadpleger_cannot_start_a_taak(
+    zac_as: Callable[[str], requests.Session], urls: dict[str, str], behandeling: JsonObject, zac_group: str
+) -> None:
+    """ZAC answers 403 when the raadpleger starts a human task it offers on the zaak."""
+    refused = start_human_task(zac_as("raadpleger"), urls["zac"], behandeling, ADVIES_INTERN, zac_group)
+    assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
 
 
 @pytest.mark.xfail(

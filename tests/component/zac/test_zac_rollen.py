@@ -7,11 +7,15 @@ OPA policies (src/main/resources/policies/*.rego); the ZAC tests skip below 5.9.
 
 from __future__ import annotations
 
+from datetime import date
+from datetime import timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.bpmn import INTAKE
+from podiumd_tests.bootstrap.names import BPMN_BESLUITTYPE
 from podiumd_tests.bootstrap.names import BPMN_ZAAKTYPE
 from podiumd_tests.bootstrap.names import ZAC_BASE_ROLES
 from podiumd_tests.bootstrap.names import ZAC_FUNCTIONAL_ROLES
@@ -24,17 +28,26 @@ from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.results import TAG_PREFIX
 from podiumd_tests.zac import POLICIES
+from podiumd_tests.zac import besluittypen
 from podiumd_tests.zac import can_open_zaak
 from podiumd_tests.zac import is_zaak_listed
+from podiumd_tests.zac import open_task
+from podiumd_tests.zac import read_taak
+from podiumd_tests.zac import recorded_besluit
 from podiumd_tests.zac import rights_of
+from podiumd_tests.zac import vastleggen_besluit
 from podiumd_tests.zac import wait_in_werkvoorraad
+from podiumd_tests.zac import wijzig_zaak
+from podiumd_tests.zac import zaak_body
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     import requests
 
+    from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "pabc", "keycloak")]
 
@@ -51,14 +64,42 @@ POLICY = {
     },
     "notitieRechten": {"lezen": "raadpleger", "wijzigen": "behandelaar"},
 }
-# The same for the rechten of an open zaak (zaak-rechten.rego); heropenen has no open check.
-ZAAK = {
+# The same for the rechten of an open zaak (zaak-rechten.rego); heropenen has no open check, brondatumZetten needs a
+# closed zaak.
+BEHANDELAAR_RECHTEN = (
+    "wijzigen",
+    "toekennen",
+    "behandelen",
+    "afbreken",
+    "wijzigenDoorlooptijd",
+    "toevoegenBagObject",
+    "toevoegenBetrokkeneBedrijf",
+    "toevoegenBetrokkenePersoon",
+    "toevoegenInitiatorBedrijf",
+    "toevoegenInitiatorPersoon",
+    "versturenOntvangstbevestiging",
+    "verwijderenBetrokkene",
+    "verwijderenInitiator",
+    "creerenDocument",
+    "versturenEmail",
+    "wijzigenLocatie",
+)
+ZAAK: dict[str, str | None] = {
     "lezen": "raadpleger",
-    "wijzigen": "behandelaar",
-    "behandelen": "behandelaar",
+    **dict.fromkeys(BEHANDELAAR_RECHTEN, "behandelaar"),
     "heropenen": "recordmanager",
     "bekijkenZaakdata": "beheerder",
+    "brondatumZetten": None,
 }
+# The same for the rechten of an open taak (taak-rechten.rego).
+TAAK = {
+    "lezen": "raadpleger",
+    "wijzigen": "behandelaar",
+    "toekennen": "behandelaar",
+    "toevoegenDocument": "behandelaar",
+}
+# vastleggen_besluit in zaak-rechten.rego; ZAC gives it in no read-out.
+BESLUIT = {"vastleggen": "behandelaar"}
 # Calls the least role with the right may make and the role below it may not; none creates anything.
 # No notitie or ontkoppeld document has this id; ZAC answers 204 for a missing one.
 NO_ID = 999999999999
@@ -138,6 +179,83 @@ def test_rights_follow_the_role(
     actual |= {f"zaak.{right}": section(zaak, "rechten").get(right) for right in ZAAK}
     expected |= {f"zaak.{right}": has for right, has in rights_of(role, ZAAK).items()}
     assert actual == expected
+
+
+@pytest.mark.source(
+    POLICIES, "A taak's rechten follow the base role: any base role reads it, a behandelaar changes it."
+)
+@pytest.mark.scenario("""
+    Given a test user with only one ZAC base role on the BPMN test zaaktype
+    And an open zaak of that zaaktype with its open taak Intake
+    When the user lists the zaak's taken and reads the taak
+    Then the user has each right on the taak ZAC gives this role or a lower role, and no other right
+""")
+@pytest.mark.parametrize("role", ZAC_BASE_ROLES)
+def test_taak_rights_follow_the_role(
+    zac_as: Callable[[str], requests.Session], urls: dict[str, str], bpmn_zaak: JsonObject, role: str
+) -> None:
+    """The user finds the Intake taak in the zaak's taken; its rechten match ZAC 5.9.1's least role per right."""
+    http = zac_as(role)
+    taak = open_task(http, urls["zac"], str(bpmn_zaak["uuid"]), INTAKE)
+    rechten = section(read_taak(http, urls["zac"], str(taak["id"])), "rechten")
+    assert {right: rechten.get(right) for right in TAAK} == rights_of(role, TAAK)
+
+
+@pytest.mark.source(POLICIES, "Only a behandelaar or a higher base role records a besluit on a zaak.")
+@pytest.mark.scenario("""
+    Given a test user with only one ZAC base role on the BPMN test zaaktype, which has a besluittype
+    And an open zaak of that zaaktype
+    When the user records a besluit on the zaak
+    Then ZAC records it for a behandelaar or a higher role
+    And refuses it for a raadpleger
+""")
+@pytest.mark.parametrize("role", ZAC_BASE_ROLES)
+def test_besluit_rights_follow_the_role(
+    zac: requests.Session,
+    zac_as: Callable[[str], requests.Session],
+    urls: dict[str, str],
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    bpmn_zaak: JsonObject,
+    role: str,
+) -> None:
+    """A besluit is recorded by a behandelaar and higher; a raadpleger gets 403."""
+    besluittype = next(item for item in besluittypen(zac, urls["zac"], bpmn_zaak) if item["naam"] == BPMN_BESLUITTYPE)
+    http = zac_as(role)
+    if rights_of(role, BESLUIT)["vastleggen"]:
+        recorded_besluit(http, urls["zac"], openzaak, registry, bpmn_zaak, besluittype)
+        return
+    refused = vastleggen_besluit(http, urls["zac"], bpmn_zaak, besluittype, toelichting="podiumd-tests")
+    assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
+
+
+@pytest.mark.source(POLICIES, "A raadpleger reads zaken but cannot create a zaak or change one.")
+@pytest.mark.scenario("""
+    Given a test user with only ZAC base role raadpleger on the BPMN test zaaktype
+    And an open zaak of that zaaktype
+    When the user creates a zaak of that zaaktype, or changes the zaak's streefdatum and fatale datum
+    Then ZAC refuses each with 403
+""")
+def test_raadpleger_cannot_create_or_change_a_zaak(
+    zac_as: Callable[[str], requests.Session],
+    urls: dict[str, str],
+    bpmn_parameters: JsonObject,
+    bpmn_zaak: JsonObject,
+    registry: ResourceRegistry,
+) -> None:
+    """ZAC answers 403 to the raadpleger's new zaak and to its date change."""
+    raadpleger = zac_as("raadpleger")
+    body = zaak_body(bpmn_parameters, omschrijving=registry.tagged("raadpleger"))
+    later = (date.today() + timedelta(days=30)).isoformat()  # noqa: DTZ011  # ZAC's local date
+    answers = {
+        "new zaak": raadpleger.post(f"{urls['zac']}/rest/zaken/zaak", json=body),
+        "dates": wijzig_zaak(
+            raadpleger, urls["zac"], bpmn_zaak, einddatumGepland=later, uiterlijkeEinddatumAfdoening=later
+        ),
+    }
+    assert {call: answer.status_code for call, answer in answers.items()} == dict.fromkeys(
+        answers, HTTPStatus.FORBIDDEN
+    ), {call: describe(answer) for call, answer in answers.items()}
 
 
 @pytest.mark.source(POLICIES, "ZAC's REST services refuse a call the user's role has no right to, with 403.")

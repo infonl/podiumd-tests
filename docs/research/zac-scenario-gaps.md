@@ -21,12 +21,12 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | documenten-mail | 6 | 12 | 11 | 1 | 5 |
 | taken-cmmn | 4 | 7 | 3 | 0 | 1 |
 | bpmn | 0 | 3 | 6 | 0 | 2 |
-| autorisatie-iam | 7 | 14 | 2 | 2 | 2 |
+| autorisatie-iam | 9 | 12 | 2 | 2 | 2 |
 | zoeken-werklijsten-dashboard | 2 | 8 | 9 | 0 | 2 |
 | beheer-zaps | 5 | 8 | 2 | 2 | 3 |
 | integraties-intake | 5 | 6 | 1 | 1 | 2 |
 | overig | 1 | 1 | 1 | 0 | 6 |
-| **total** | **34** | **84** | **49** | **9** | **28** |
+| **total** | **36** | **82** | **49** | **9** | **28** |
 
 ## zaak-lifecycle
 
@@ -152,8 +152,8 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 
 | Priority | Scenario | Status | Not asserted | Tests | Via | Depends on | Min ZAC |
 |---|---|---|---|---|---|---|---|
-| high | Role rights matrix per PABC application role (raadpleger, behandelaar, coordinator, recordmanager, beheerder) on zaak, taak, besluit, document and notitie after login | partial | taak and besluit rights per role | `test_rights_follow_the_role`, `test_zac_refuses_a_call_below_its_least_role`, `test_closed_zaak_rights_follow_the_role`, `test_document_rights_follow_the_role_and_the_state` | zac-rest | OPA/PABC, Keycloak | 5.9.1 |
-| high | Raadpleger is read-only: can search and read zaken, taken (also BPMN), documenten, notities and gerelateerde zaken, but cannot create a zaak, start a taak, edit dates, use inbox, create/edit/delete notities or ontkoppelen (backend refuses) | partial | reading taken; refused zaak creation, taak start and date edits | `test_rights_follow_the_role`, `test_zac_refuses_a_call_below_its_least_role`, `test_search_lists_only_zaken_of_zaaktypen_with_a_role`, `test_document_rights_follow_the_role_and_the_state` | zac-rest |  | 5.9.1 |
+| high | Role rights matrix per PABC application role (raadpleger, behandelaar, coordinator, recordmanager, beheerder) on zaak, taak, besluit, document and notitie after login | covered |  | `test_rights_follow_the_role`, `test_taak_rights_follow_the_role`, `test_besluit_rights_follow_the_role`, `test_zac_refuses_a_call_below_its_least_role`, `test_closed_zaak_rights_follow_the_role`, `test_document_rights_follow_the_role_and_the_state` | zac-rest | OPA/PABC, Keycloak | 5.9.1 |
+| high | Raadpleger is read-only: can search and read zaken, taken (also BPMN), documenten, notities and gerelateerde zaken, but cannot create a zaak, start a taak, edit dates, use inbox, create/edit/delete notities or ontkoppelen (backend refuses) | covered |  | `test_rights_follow_the_role`, `test_taak_rights_follow_the_role`, `test_raadpleger_cannot_create_or_change_a_zaak`, `test_raadpleger_cannot_start_a_taak`, `test_zac_refuses_a_call_below_its_least_role`, `test_search_lists_only_zaken_of_zaaktypen_with_a_role`, `test_document_rights_follow_the_role_and_the_state` | zac-rest |  | 5.9.1 |
 | high | User with only a plusrol (brp_zoeken) and no ZAC basisrol is treated as a user without ZAC roles and cannot use ZAC | partial | The REST refusal is checked; the page with a message that a base role is needed, Uitloggen and no Home button is not | `test_plus_role_alone_gives_no_access` | zac-rest | OPA/PABC, Keycloak | 5.9.1 |
 | high | A user without rights on a zaaktype cannot open its zaken (direct URL gives no-rights error), even with ZAC roles on other zaaktypen | covered | Graylog login logging of rights is out of reach | `test_role_gives_no_access_to_zaken_of_other_zaaktypen` | zac-rest | OPA/PABC, Keycloak | 5.9.1 |
 | medium | Admin pages (/admin/*) and /rest/admin endpoints are refused for every role except functioneel beheerder/beheerder | covered |  | `test_beheer_is_refused_to_every_role_but_beheerder`, `test_zac_refuses_a_call_below_its_least_role` | zac-rest | OPA/PABC, Keycloak | 5.9.1 |

@@ -22,6 +22,7 @@ from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import ZAKEN
+from podiumd_tests.seed.openzaak import delete_besluit
 from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.wait import wait_until
@@ -411,6 +412,23 @@ def vastleggen_besluit(
     """Record a besluit of the besluittype on the zaak, with these RestBesluitCreateData fields; ZAC's answer."""
     body = {"zaakUuid": zaak["uuid"], "besluittypeUuid": besluittype["id"], **fields}
     return http.post(f"{zac_url}/rest/zaken/besluit", json=body)
+
+
+def recorded_besluit(  # noqa: PLR0913, PLR0917  # the besluit, its zaak and its cleanup
+    http: requests.Session,
+    zac_url: str,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    zaak: JsonObject,
+    besluittype: JsonObject,
+    **fields: object,
+) -> JsonObject:
+    """Record a besluit on the zaak, valid from today; cleanup deletes it before the zaak, which Open Zaak keeps."""
+    body = {"ingangsdatum": date.today().isoformat(), "toelichting": "podiumd-tests", **fields}  # noqa: DTZ011  # ZAC's local date
+    created = expect_status(vastleggen_besluit(http, zac_url, zaak, besluittype, **body), HTTPStatus.OK).json()
+    url = str(created["url"])
+    registry.add(f"besluit {created['identificatie']}", lambda: delete_besluit(openzaak, url))
+    return cast("JsonObject", created)
 
 
 def afzenders(http: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:

@@ -18,7 +18,6 @@ from podiumd_tests.json_data import section
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import BESLUITEN
-from podiumd_tests.seed.openzaak import delete_besluit
 from podiumd_tests.zac import HEROPEND
 from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import afhandelen
@@ -26,6 +25,7 @@ from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import besluittypen
 from podiumd_tests.zac import heropenen
 from podiumd_tests.zac import read_zaak
+from podiumd_tests.zac import recorded_besluit
 from podiumd_tests.zac import vastleggen_besluit
 from podiumd_tests.zac_documents import uploaded_document
 
@@ -95,12 +95,7 @@ def fixture_besluit(
     """Record a besluit on a zaak in ZAC, valid from today; cleanup deletes it before the zaak."""
 
     def record(zaak: JsonObject, **fields: object) -> JsonObject:
-        body = {"ingangsdatum": date.today().isoformat(), "toelichting": "podiumd-tests", **fields}  # noqa: DTZ011  # ZAC's local date
-        response = vastleggen_besluit(zac, urls["zac"], zaak, besluittype(zaak), **body)
-        created = expect_status(response, HTTPStatus.OK).json()
-        url = str(created["url"])
-        registry.add(f"besluit {created['identificatie']}", lambda: delete_besluit(openzaak_productaanvraag, url))
-        return created
+        return recorded_besluit(zac, urls["zac"], openzaak_productaanvraag, registry, zaak, besluittype(zaak), **fields)
 
     return record
 
