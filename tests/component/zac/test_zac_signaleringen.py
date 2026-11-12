@@ -18,6 +18,8 @@ from podiumd_tests.mailpit import received_mails
 from podiumd_tests.responses import expect_status
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import INDEX_TIMEOUT
+from podiumd_tests.zac import clean_up_zaak
+from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import open_task
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import toekennen
@@ -97,6 +99,30 @@ def test_zaak_on_my_name_and_new_document_show_on_the_dashboard_until_opened(
     read_zaak(zac, urls["zac"], str(bpmn_zaak["uuid"]))
     for soort in (ZAAK_OP_NAAM, DOCUMENT):
         assert bpmn_zaak["identificatie"] not in signalering_zaken(zac, urls["zac"], soort), soort
+
+
+@pytest.mark.scenario("""
+    Given the test admin wants dashboard signals for zaken put on their name
+    When a behandelaar starts a zaak with the admin as its behandelaar
+    Then the admin's dashboard lists the zaak among the zaken on their name
+""")
+def test_zaak_started_on_my_name_shows_on_the_dashboard(
+    zac: requests.Session,
+    urls: dict[str, str],
+    bpmn_parameters: JsonObject,
+    openzaak: ApiClient,
+    behandelaar: requests.Session,
+    signaleringen: Callable[..., None],
+    registry: ResourceRegistry,
+) -> None:
+    """ZAAK_OP_NAAM signals the behandelaar another user assigns a new zaak to when creating it."""
+    signaleringen(ZAAK_OP_NAAM=True)
+    omschrijving = registry.tagged("bpmn")
+    zaak = create_zaak(
+        behandelaar, urls["zac"], bpmn_parameters, omschrijving=omschrijving, behandelaar={"id": ADMIN.username}
+    )
+    clean_up_zaak(zac, urls["zac"], openzaak, registry, zaak)
+    _on_dashboard(zac, urls["zac"], ZAAK_OP_NAAM, zaak)
 
 
 @pytest.mark.scenario("""

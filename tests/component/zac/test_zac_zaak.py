@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.basisregistraties import BAG_DAM
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import IDENTITIES
@@ -30,12 +31,18 @@ from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import DUE_DATES
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import afbreken
+from podiumd_tests.zac import assignment
+from podiumd_tests.zac import bag_object
+from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import is_zaak_listed
 from podiumd_tests.zac import opschorten
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_with_person
+from podiumd_tests.zac import start_zaak
 from podiumd_tests.zac import verlengen
 from podiumd_tests.zac import wait_in_werkvoorraad
+from podiumd_tests.zac import zaak_bag_objecten
+from podiumd_tests.zac import zaak_body
 from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac_betrokkenen import add_betrokkene
 from podiumd_tests.zac_betrokkenen import betrokkene_roltype
@@ -58,6 +65,8 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "ke
 
 _, _, BEDRIJF = IDENTITIES
 SUSPENSION_DAYS = 5
+# ZAC's reden for the group and behandelaar it links to a zaak it creates.
+AANMAKEN_ZAAK = "Aanmaken zaak"
 
 
 def _zaak_url(urls: dict[str, str], zaak: JsonObject) -> str:
@@ -81,21 +90,68 @@ def _days(duration: object) -> int | None:
     "draaiboek ZAC-006",
     "A new zaak: the zaaktype, startdatum, communicatiekanaal and toelichting can be chosen (ZAC-006, -010, -019, -022).",
 )
+@pytest.mark.source(
+    "podiumd-tests",
+    "ZAC team's regression scenarios: a new zaak with a group and behandelaar, and its historie.",
+)
 @pytest.mark.scenario("""
     Given a behandelaar is logged in to ZAC
     When the behandelaar starts a zaak with a zaaktype, an earlier startdatum, a communicatiekanaal and a toelichting
-    Then the zaak has the chosen zaaktype, startdatum, communicatiekanaal and toelichting
+    And assigns it to their group and to themselves
+    Then the zaak has the chosen zaaktype, startdatum, communicatiekanaal, toelichting, group and behandelaar
+    And its historie records that the zaak was created and linked to the group and the behandelaar
 """)
 def test_new_zaak_keeps_the_chosen_fields(
-    zac_zaak: Callable[..., JsonObject], zac_parameters: JsonObject, registry: ResourceRegistry
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    zac_parameters: JsonObject,
+    zac_group: str,
+    registry: ResourceRegistry,
 ) -> None:
-    """A zaak started with a zaaktype, an earlier startdatum, a communicatiekanaal and a toelichting has them."""
+    """A new zaak has its chosen fields and assignment; its historie has the zaak and both rollen linked at creation."""
     startdatum = (date.today() - timedelta(days=3)).isoformat()  # noqa: DTZ011  # ZAC's dates are local dates
     toelichting = registry.tagged("toelichting")
-    zaak = zac_zaak(startdatum=startdatum, communicatiekanaal="E-mail", toelichting=toelichting)
+    assigned = {"groep": {"id": zac_group, "naam": zac_group}, "behandelaar": {"id": ADMIN.username}}
+    zaak = zac_zaak(startdatum=startdatum, communicatiekanaal="E-mail", toelichting=toelichting, **assigned)
     chosen = {"startdatum": startdatum, "communicatiekanaal": "E-mail", "toelichting": toelichting}
     assert {k: zaak.get(k) for k in chosen} == chosen
     assert section(zaak, "zaaktype")["uuid"] == section(zac_parameters, "zaaktype")["uuid"]
+    assert assignment(zaak) == (zac_group, ADMIN.username)
+    historie = {
+        (line.get("actie"), line.get("nieuweWaarde")): line.get("toelichting")
+        for line in zaak_historie(zac, urls["zac"], zaak)
+    }
+    assert ("AANGEMAAKT", zaak["identificatie"]) in historie
+    linked = [historie.get(("GEKOPPELD", section(zaak, rol).get("naam"))) for rol in ("groep", "behandelaar")]
+    assert linked == [AANMAKEN_ZAAK, AANMAKEN_ZAAK], historie
+
+
+@pytest.mark.source(
+    "podiumd-tests", "ZAC team's regression scenarios: a BAG object chosen when the zaak is created is linked to it."
+)
+@pytest.mark.scenario("""
+    Given the adres Dam 1 in Amsterdam in the BAG
+    When the behandelaar starts a zaak in ZAC with that adres as BAG object
+    Then the zaak lists the adres among its BAG objects
+""")
+def test_new_zaak_links_the_chosen_bag_adres(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_parameters: JsonObject,
+    openzaak_productaanvraag: ApiClient,
+    registry: ResourceRegistry,
+) -> None:
+    """A BAG adres sent with a new zaak becomes its zaakobject.
+
+    Open Zaak fetches the adres's URL from the BAG to validate the zaakobject.
+    """
+    adres = bag_object(zac, urls["zac"], "ADRES", BAG_DAM)
+    body = zaak_body(zac_parameters, omschrijving=registry.tagged("zac-bag"))
+    zaak = start_zaak(zac, urls["zac"], {**body, "bagObjecten": [adres]})
+    clean_up_zaak(zac, urls["zac"], openzaak_productaanvraag, registry, zaak)
+    linked = zaak_bag_objecten(zac, urls["zac"], zaak)
+    assert [section(item, "zaakobject").get("identificatie") for item in linked] == [BAG_DAM]
 
 
 @pytest.mark.xfail(

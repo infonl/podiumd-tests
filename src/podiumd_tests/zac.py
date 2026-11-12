@@ -255,6 +255,17 @@ def zaak_historie(http: requests.Session, zac_url: str, zaak: JsonObject) -> lis
     return get_entries(http, f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/historie")
 
 
+def bag_object(http: requests.Session, zac_url: str, soort: str, identificatie: str) -> JsonObject:
+    """ZAC's view of the BAG object of this soort (ADRES, PAND, ...), as a new zaak takes it in bagObjecten."""
+    response = http.get(f"{zac_url}/rest/bag/{soort}/{identificatie}")
+    return cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
+
+
+def zaak_bag_objecten(http: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:
+    """Return the BAG objects linked to the zaak, each under zaakobject."""
+    return get_entries(http, f"{zac_url}/rest/bag/zaak/{zaak['uuid']}")
+
+
 def user_events_offered(http: requests.Session, zac_url: str, zaak_uuid: str) -> list[JsonObject]:
     """Return the plan items of the CMMN user events ZAC offers on the zaak now.
 

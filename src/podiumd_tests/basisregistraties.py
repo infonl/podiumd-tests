@@ -11,6 +11,8 @@ if TYPE_CHECKING:
 
 BRP_PERSONEN = "/haalcentraal/api/brp/personen"
 BAG_ADRESSEN = "/lvbag/individuelebevragingen/v2/adressen"
+# The nummeraanduiding of Dam 1, Amsterdam: in the BAG and in podiumd-minikube's BAG mock.
+BAG_DAM = "0363200003761447"
 KVK_ZOEKEN = "/api/v2/zoeken"
 KVK_BASISPROFIELEN = "/api/v1/basisprofielen"
 KVK_VESTIGINGSPROFIELEN = "/api/v1/vestigingsprofielen"

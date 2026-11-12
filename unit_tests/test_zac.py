@@ -318,6 +318,18 @@ def test_zaak_historie_lists_zacs_answer(fake_http):
     assert zac.zaak_historie(requests.Session(), ZAC, {"uuid": "z1"}) == [{"actie": "AANGEMAAKT"}]
 
 
+def test_bag_object_and_the_zaak_bag_objecten_are_read_from_zac(fake_http):
+    fake_http(
+        {
+            "GET /rest/bag/ADRES/a1": (200, {"identificatie": "a1", "bagObjectType": "ADRES"}),
+            "GET /rest/bag/zaak/z1": (200, [{"zaakobject": {"identificatie": "a1"}}]),
+        }
+    )
+    http = requests.Session()
+    assert zac.bag_object(http, ZAC, "ADRES", "a1") == {"identificatie": "a1", "bagObjectType": "ADRES"}
+    assert zac.zaak_bag_objecten(http, ZAC, {"uuid": "z1"}) == [{"zaakobject": {"identificatie": "a1"}}]
+
+
 def test_koppel_zoekresultaat_matches_the_uuid_not_the_identificatie(fake_http):
     deleted = {"id": "old", "identificatie": "ZAAK-2", "nietKoppelbaarReden": "AFGEHANDELD"}
     current = {"id": "z2", "identificatie": "ZAAK-2", "nietKoppelbaarReden": None}
