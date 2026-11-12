@@ -182,6 +182,32 @@ def test_recordmanager_heropent_a_closed_zaak(
     assert (in_open_zaak["einddatum"], statustype["omschrijving"]) == (None, HEROPEND)
 
 
+@pytest.mark.requires("pabc")
+@pytest.mark.source(
+    "podiumd-tests",
+    "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, zaak-lifecycle).",
+)
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-17] ZAC 5.9.1 heropent a closed zaak without a reden (RestZaakHeropenenGegevens.reden is optional); "
+    "not yet reported upstream",
+)
+@pytest.mark.scenario("""
+    Given an afgehandelde zaak of the BPMN test zaaktype
+    When a recordmanager heropent it without a reden
+    Then ZAC refuses it
+    And the zaak stays closed
+""")
+def test_heropenen_needs_a_reden(
+    zac: requests.Session, zac_as: Callable[[str], requests.Session], urls: dict[str, str], closed_bpmn_zaak: JsonObject
+) -> None:
+    """Heropenen with an empty body is refused with 400 and the zaak stays closed."""
+    zac_url = urls["zac"]
+    response = zac_as("recordmanager").patch(f"{zac_url}/rest/zaken/zaak/{closed_bpmn_zaak['uuid']}/heropenen", json={})
+    assert response.status_code == HTTPStatus.BAD_REQUEST, describe(response)
+    assert read_zaak(zac, zac_url, str(closed_bpmn_zaak["uuid"]))["isOpen"] is False
+
+
 def _locked(
     zac: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject, registry: ResourceRegistry
 ) -> None:

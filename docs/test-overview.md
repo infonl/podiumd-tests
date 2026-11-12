@@ -10,10 +10,10 @@ versions is not counted.
 | Tier | Tests | Functions | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 210 | 37 | 9 |
-| component | 701 | 424 | 41 |
+| component | 702 | 425 | 42 |
 | integration | 142 | 86 | 11 |
 | perf | 54 | 3 | 0 |
-| **full tier** | **1025** | **528** |  |
+| **full tier** | **1026** | **529** |  |
 
 Unit tests (`unit_tests/`, functions): 719. Perf endpoints (`perf/runs.py`): 22.
 
@@ -50,7 +50,7 @@ Unit tests (`unit_tests/`, functions): 719. Perf endpoints (`perf/runs.py`): 22.
 | component | platform | 69 | 18 |
 | component | referentielijsten | 2 | 2 |
 | component | zaakbrug | 12 | 11 |
-| component | zac | 171 | 128 |
+| component | zac | 172 | 129 |
 | component | zgw_office_addin | 4 | 3 |
 | integration | continuiteit | 19 | 10 |
 | integration | formulier_betaling | 19 | 6 |
@@ -92,7 +92,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | ZAC | 18 |
 | draaiboek | 87 |
 | external | 111 |
-| podiumd-tests | 348 |
+| podiumd-tests | 349 |
 | upstream | 156 |
 
 ## Expected failures per known issue
@@ -153,6 +153,7 @@ Ids of infonl/podiumd-known-issues.
 | zac-14 | 1 |
 | zac-15 | 1 |
 | zac-16 | 1 |
+| zac-17 | 1 |
 | zgw-office-addin-1 | 2 |
 
 Tests without a scenario: 0.

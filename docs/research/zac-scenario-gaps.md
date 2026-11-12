@@ -16,7 +16,7 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 
 | Area | covered | partial | gap | obsolete | out of scope |
 |---|---|---|---|---|---|
-| zaak-lifecycle | 5 | 14 | 9 | 3 | 3 |
+| zaak-lifecycle | 6 | 13 | 9 | 3 | 3 |
 | betrokkenen-klant | 3 | 7 | 5 | 0 | 2 |
 | documenten-mail | 8 | 10 | 11 | 1 | 5 |
 | taken-cmmn | 4 | 7 | 3 | 0 | 1 |
@@ -26,14 +26,14 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | beheer-zaps | 5 | 8 | 2 | 2 | 3 |
 | integraties-intake | 5 | 6 | 1 | 1 | 2 |
 | overig | 1 | 1 | 1 | 0 | 6 |
-| **total** | **44** | **74** | **49** | **9** | **28** |
+| **total** | **45** | **73** | **49** | **9** | **28** |
 
 ## zaak-lifecycle
 
 | Priority | Scenario | Status | Not asserted | Tests | Via | Depends on | Min ZAC |
 |---|---|---|---|---|---|---|---|
 | high | Archiefnominatie, vernietigdatum, eind- and brondatum per resultaat (afgebroken, verleend, geweigerd, blijvend bewaren, niet ontvankelijk; afgebroken deelzaak) | covered |  | `test_afhandelen_closes_the_zaak_with_its_resultaat` | zac-rest | Open Zaak |  |
-| high | Heropenen a closed zaak (recordmanager and higher): reden required, status Heropend, resultaat and archive dates cleared; it can be afgehandeld again | partial | Refusal without reden: ZAC 5.9.1 accepts heropenen without one (finding, not yet filed) | `test_heropend_zaak_loses_its_resultaat_and_can_be_closed_again`, `test_recordmanager_heropent_a_closed_zaak`, `test_closed_zaak_is_changed_only_by_a_recordmanager` | zac-rest |  |  |
+| high | Heropenen a closed zaak (recordmanager and higher): reden required, status Heropend, resultaat and archive dates cleared; it can be afgehandeld again | covered | Refusal without reden is zac-17 (strict xfail) | `test_heropend_zaak_loses_its_resultaat_and_can_be_closed_again`, `test_recordmanager_heropent_a_closed_zaak`, `test_closed_zaak_is_changed_only_by_a_recordmanager`, `test_heropenen_needs_a_reden` | zac-rest |  |  |
 | high | Intake afronden: ontvankelijk gives status In behandeling with optional mail (per ZAPs statusmail); niet ontvankelijk closes the zaak with resultaat and stores the mail as definitief PDF; also for a hoofdzaak | partial | statusmail at intake and its definitief PDF | `test_ontvankelijk_intake_puts_the_zaak_in_behandeling`, `test_niet_ontvankelijk_intake_closes_the_zaak`, `test_hoofdzaak_is_afgehandeld_once_its_open_deelzaak_is_ontkoppeld` | zac-rest | mail |  |
 | high | Hoofdzaak/deelzaak koppelen shows the relation on both zaken; the hoofdzaak cannot be afgehandeld/afgebroken while a deelzaak is open (no resultaat set), can after the deelzaak is closed or ontkoppeld; ontkoppelen works from both sides, also for a closed deelzaak | covered | ZAC 5.9.1 ontkoppelt a closed deelzaak only from a closed hoofdzaak | `test_hoofd_and_deelzaak_show_on_both_zaken`, `test_hoofdzaak_is_afgehandeld_once_its_open_deelzaak_is_ontkoppeld`, `test_closed_deelzaak_is_ontkoppeld_once_the_hoofdzaak_is_closed` | zac-rest |  |  |
 | high | Besluit vastleggen (only in In behandeling/Heropend), link besluit document, wijzigen with reden, intrekken with reden from list (read-only, reason shown); zaak with besluiten stays openable and can be afgerond and heropend | covered |  | `test_besluit_is_recorded_after_the_intake_only`, `test_besluit_links_a_document_of_the_zaak`, `test_besluit_wijzigen_needs_a_reden_and_is_in_the_historie`, `test_besluit_intrekken_needs_a_reden`, `test_zaak_with_a_besluit_is_afgehandeld_and_heropend` | zac-rest |  |  |
