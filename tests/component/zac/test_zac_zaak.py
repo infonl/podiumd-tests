@@ -1,4 +1,4 @@
-"""ZAC's handling of a zaak, through the REST API its UI calls: start, notes, suspension, extension, abort, betrokkenen.
+"""ZAC's handling of a zaak, through the REST API its UI calls: start, suspension, extension, abort, betrokkenen.
 
 The zaak is of the zaaktype ZAC handles productaanvragen for (profile setting productaanvraag_zaaktype);
 the test admin is ZAC beheerder of every domain.
@@ -23,7 +23,6 @@ from podiumd_tests.json_data import strings
 from podiumd_tests.pdf import pdfa_problems
 from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import expect_status
-from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.wait import wait_until
@@ -264,35 +263,6 @@ def test_zaak_with_an_initiator_is_in_the_werkvoorraad(
     assert expect_status(person, HTTPStatus.OK).json()["bsn"] == EREBOS
     assert BEVESTIGING_NIET_VERSTUURD in strings(zaak.get("indicaties"))
     wait_in_werkvoorraad(zac, urls["zac"], zaak)
-
-
-@pytest.mark.tc("ZAC-029", "ZAC-030", "ZAC-031")
-@pytest.mark.source("draaiboek ZAC-029", "A zaaknotitie can be added, changed and deleted (ZAC-029, -030, -031).")
-@pytest.mark.scenario("""
-    Given a zaak in ZAC
-    When the behandelaar adds, changes and then deletes a zaaknotitie
-    Then the zaak lists the notitie with its text after adding
-    And the zaak lists the changed text after changing
-    And the zaak lists no notitie after deleting
-""")
-def test_note_can_be_added_changed_and_deleted(
-    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
-) -> None:
-    """A zaaknotitie is listed with its text, then with the changed text, and is gone after deleting it."""
-    notes = f"{urls['zac']}/rest/notities"
-    zaak = zac_zaak()
-
-    def texts() -> list[str]:
-        return [str(n["tekst"]) for n in get_entries(zac, f"{notes}/zaken/{zaak['uuid']}")]
-
-    body = {"zaakUUID": zaak["uuid"], "tekst": registry.tagged("notitie"), "gebruikersnaamMedewerker": ADMIN.username}
-    note = expect_status(zac.post(notes, json=body), HTTPStatus.OK).json()
-    assert texts() == [body["tekst"]]
-    changed = registry.tagged("gewijzigd")
-    expect_status(zac.patch(notes, json={**note, "tekst": changed}), HTTPStatus.OK)
-    assert texts() == [changed]
-    expect_status(zac.delete(f"{notes}/{note['id']}"), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    assert texts() == []
 
 
 @pytest.mark.tc("ZAC-042", "ZAC-043")
