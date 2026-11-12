@@ -26,7 +26,7 @@ The batches that close the gaps of [`kiss-ita-scenario-gaps.md`](kiss-ita-scenar
 | K6 | Nieuws en werkinstructies | 23 medium | 4 (done) | none | 1.5 |
 | I1 | Forward to a medewerker, groepsmailbox rules | 7 high, 8 medium | 6 (done) | none | 2 |
 | I2 | Afsluiten and historie | 3 high, 8 medium | 5 (done) | none | 2 |
-| I3 | Reminder to a medewerker | 3 high | 1 (extended, done; not run live) | none | 0.5 |
+| I3 | Reminder to a medewerker | 3 high | 1 (extended, done) | none | 0.5 |
 | I4 | Zaak koppelen and the logboek | 10 medium | 3 (done) | none | 1.5 |
 | I5 | Beheer and forward-form data | 9 medium | 2 (done) | none | 1 |
 | I6 | Detail data: digitale adressen fallback, klantnaam, duplicate nummer | 6 medium | 3 (done) | none | 1 |
@@ -111,13 +111,14 @@ The batches that close the gaps of [`kiss-ita-scenario-gaps.md`](kiss-ita-scenar
 - `test_question_answered_in_ita_shows_as_answered` closes through ITA's `close-with-klantcontact`.
 - ITA's helpers and fixtures are in `src/podiumd_tests/ita.py`.
 
-### I3: reminder to a medewerker (done: 1 test extended; not run live)
+### I3: reminder to a medewerker (done: 1 test extended)
 
 - Covered in `test_afdeling_gets_one_reminder_for_its_overdue_contactverzoeken`: an overdue contactverzoek of a klant
   assigned to a medewerker and an afdeling reminds both ("1 contactverzoek wacht op jou"), the medewerker's mail
   linking to `/`, the afdeling's to `/afdelings-contacten`, neither with the klant's name.
-- Not run live: podiumd 4.10.1 turns the reminder CronJob off (DRT-726), and minikube, kees00 and ExternalsPodiumD
-  follow it, so the test skips until an environment turns it on.
+- The reminder CronJob is off in podiumd 4.10.1 (DRT-726); the test runs ITA's poller in reminder mode from the
+  `-nieuw-cv-notify` CronJob instead (destructive, tier chaos; passed on minikube 2026-11-12). Every reminder carries
+  ITA's instruction sentence.
 
 ### I4: zaak koppelen and the logboek (done: 3 tests)
 
@@ -126,7 +127,7 @@ The batches that close the gaps of [`kiss-ita-scenario-gaps.md`](kiss-ita-scenar
   zaak-gekoppeld, zaakkoppeling-gewijzigd, klantcontact and verwerkt.
 - Finding ita-3 (security): koppel-zaak works without a login (strict xfail `test_koppel_zaak_needs_a_login`).
 - ITA's ZGW secret must be at least 32 characters for HS256 (fixed on minikube; kees00 waits for podiumd-infra).
-- Not covered: the reopen in the logboek (beheerder).
+- The reopen in the logboek: `test_beheerder_reopens_a_closed_contactverzoek` (newest entry `heropend`, reden, beheerder).
 
 ### I5: beheer and forward-form data (done: 2 tests, 3 cases)
 
