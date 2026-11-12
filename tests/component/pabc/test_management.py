@@ -5,14 +5,24 @@ Ported from TA regression 67, 68a, 69 and 71.
 
 from __future__ import annotations
 
+import secrets
+
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.bpmn import ZAC_APPLICATION
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import entries
+from podiumd_tests.pabc import DOMAINS
+from podiumd_tests.pabc import ENTITY_TYPES
+from podiumd_tests.pabc import add_zaaktype_entity_type
 from podiumd_tests.pabc import decide
+from podiumd_tests.pabc import delete_entity_type
+from podiumd_tests.pabc import delete_roles_and_domain
+from podiumd_tests.pabc import ensure_domain
+from podiumd_tests.pabc import ensure_functional_role
 from podiumd_tests.pabc import login
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
@@ -27,6 +37,7 @@ if TYPE_CHECKING:
 
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [pytest.mark.component, pytest.mark.ui, pytest.mark.requires("pabc", "keycloak")]
 
@@ -125,6 +136,42 @@ def test_zac_is_a_registered_application(pabc: requests.Session, urls: dict[str,
     """ZAC, PABC's first consumer, is a registered application (TA reg-71)."""
     found = names(get_entries(pabc, f"{urls['pabc']}/api/v1/applications"))
     assert any("zac" in n or "zaakafhandel" in n for n in found), found
+
+
+@pytest.mark.source(
+    "podiumd-tests",
+    "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, autorisatie-iam):"
+    " create and delete a domein in PABC.",
+)
+@pytest.mark.scenario("""
+    Given a new domain in PABC with an entity type and a functional role mapped in it
+    When the admin deletes the domain
+    Then PABC refuses it, and the domain stays
+    When the admin deletes the functional role and then the domain
+    Then PABC no longer lists the domain
+    And the entity type stays
+""")
+def test_domain_is_deleted_once_no_functional_role_uses_it(
+    pabc: requests.Session, urls: dict[str, str], registry: ResourceRegistry
+) -> None:
+    """PABC answers 422 to deleting a domain with a mapping; without one it deletes the domain, not its entity types."""
+    pabc_url = urls["pabc"]
+    name = registry.tagged(f"pabc-{secrets.token_hex(3)}")
+    entity_type = add_zaaktype_entity_type(pabc, pabc_url, name)
+    registry.add(f"PABC entity type {name}", lambda: delete_entity_type(pabc, pabc_url, entity_type))
+    domain = ensure_domain(pabc, pabc_url, name, [entity_type])
+    registry.add(f"PABC domain {name}", lambda: delete_roles_and_domain(pabc, pabc_url, [name], name))
+    ensure_functional_role(pabc, pabc_url, name, ZAC_APPLICATION, ("behandelaar",), domain)
+
+    def domains() -> list[object]:
+        return [found.get("name") for found in get_entries(pabc, pabc_url + DOMAINS)]
+
+    refused = pabc.delete(f"{pabc_url}{DOMAINS}/{domain}")
+    assert refused.status_code == HTTPStatus.UNPROCESSABLE_ENTITY, describe(refused)
+    assert name in domains()
+    delete_roles_and_domain(pabc, pabc_url, [name], name)
+    assert name not in domains()
+    assert entity_type in [str(found["id"]) for found in get_entries(pabc, pabc_url + ENTITY_TYPES)]
 
 
 @pytest.mark.source(
