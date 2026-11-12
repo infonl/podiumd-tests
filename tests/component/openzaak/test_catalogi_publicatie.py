@@ -7,6 +7,8 @@ every other test's zaaktype would change.
 
 from __future__ import annotations
 
+import uuid
+
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
@@ -22,6 +24,7 @@ from podiumd_tests.seed.catalogi import make_concept_iot
 from podiumd_tests.seed.catalogi import make_publishable_zaaktype
 from podiumd_tests.seed.catalogi import publish
 from podiumd_tests.seed.openzaak import CATALOGI
+from podiumd_tests.seed.openzaak import today
 
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
@@ -174,3 +177,42 @@ def test_overlapping_published_versions_are_refused(
         podiumd_env, openzaak, registry, selectielijst_zaaktype, identificatie=published["identificatie"]
     )
     openzaak.request("POST", f"{second['url']}/publish", HTTPStatus.BAD_REQUEST, json={})
+
+
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW features, zaakobjecttype",
+    "Open Archiefbeheer reads zaakobjecttypen; they change with a concept zaaktype and stay with a published one.",
+)
+@pytest.mark.scenario("""
+    Given a concept zaaktype
+    When a zaakobjecttype is added to it, changed and deleted
+    Then the zaaktype has it, then the change, then no longer
+    When the zaaktype is published with a zaakobjecttype
+    Then that zaakobjecttype cannot be deleted
+""")
+def test_zaakobjecttype_changes_only_with_a_concept_zaaktype(
+    podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, selectielijst_zaaktype: JsonObject
+) -> None:
+    """Zaakobjecttype POST, PATCH and DELETE on a concept zaaktype; DELETE is refused after publishing."""
+    zaaktype = make_publishable_zaaktype(podiumd_env, openzaak, registry, selectielijst_zaaktype)
+    path = f"{CATALOGI}/zaakobjecttypen"
+    # Without status alles the list leaves out the types of a concept zaaktype.
+    query = {"zaaktype": str(zaaktype["url"]), "status": "alles"}
+    body = {
+        "zaaktype": zaaktype["url"],
+        # Open Zaak does not fetch the objecttype.
+        "objecttype": f"https://objecttypen.example.invalid/api/v2/objecttypes/{uuid.uuid4()}",
+        "anderObjecttype": False,
+        "relatieOmschrijving": "Betreft",
+        "beginGeldigheid": today(),
+    }
+    created = openzaak.post(path, body)
+    url = str(created["url"])
+    assert [z["url"] for z in openzaak.list(path, query)] == [url]
+    assert openzaak.patch(url, {"relatieOmschrijving": "Gewijzigd"})["relatieOmschrijving"] == "Gewijzigd"
+    openzaak.request("DELETE", url, HTTPStatus.NO_CONTENT)
+    assert openzaak.list(path, query) == []
+    kept = openzaak.post(path, body)
+    publish(openzaak, zaaktype)
+    _refused(openzaak, "DELETE", str(kept["url"]))
+    assert [z["url"] for z in openzaak.list(path, query)] == [kept["url"]]
