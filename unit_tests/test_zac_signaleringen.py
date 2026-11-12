@@ -54,6 +54,13 @@ def test_dashboard_lists_give_zaak_identificaties_and_taak_ids(fake_http):
     assert zac_signaleringen.signalering_taken(http, ZAC) == ["7"]
 
 
+def test_dashboard_page_asks_the_page_and_rows(fake_http):
+    found = {"resultaten": [{"identificatie": "ZAAK-1"}], "totaal": 26}
+    sent = fake_http({"PUT /rest/signaleringen/zaken/ZAAK_OP_NAAM": (200, found)})
+    assert zac_signaleringen.signalering_page(requests.Session(), ZAC, "ZAAK_OP_NAAM", 1, 25) == found
+    assert (json.loads(sent[0].body)["page"], json.loads(sent[0].body)["rows"]) == (1, 25)
+
+
 def test_warning_list_gives_zaak_identificaties(fake_http):
     fake_http({"GET /rest/zaken/waarschuwing": (200, [{"identificatie": "ZAAK-2"}])})
     assert zac_signaleringen.zaak_waarschuwingen(requests.Session(), ZAC) == ["ZAAK-2"]

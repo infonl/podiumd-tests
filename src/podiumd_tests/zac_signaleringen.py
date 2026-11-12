@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from typing import TYPE_CHECKING
+from typing import cast
 
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.json_data import entries
@@ -74,9 +75,14 @@ def signalering_zaken(http: requests.Session, zac_url: str, soort: str) -> list[
 
 def signalering_overzichten(http: requests.Session, zac_url: str, soort: str) -> list[JsonObject]:
     """Return the zaken on the user's dashboard list of the type, as ZAC shows them."""
-    page = {"page": 0, "rows": 100, "sortField": "SIGNALERING_TIJDSTIP", "sortOrder": "DESC"}
-    found = expect_status(http.put(f"{zac_url}/rest/signaleringen/zaken/{soort}", json=page), HTTPStatus.OK)
-    return entries(found.json().get("resultaten"))
+    return entries(signalering_page(http, zac_url, soort).get("resultaten"))
+
+
+def signalering_page(http: requests.Session, zac_url: str, soort: str, page: int = 0, rows: int = 100) -> JsonObject:
+    """Return a page of the user's dashboard list of zaken of the type, newest first: resultaten and totaal."""
+    body = {"page": page, "rows": rows, "sortField": "SIGNALERING_TIJDSTIP", "sortOrder": "DESC"}
+    found = expect_status(http.put(f"{zac_url}/rest/signaleringen/zaken/{soort}", json=body), HTTPStatus.OK)
+    return cast("JsonObject", found.json())
 
 
 def zaak_waarschuwingen(http: requests.Session, zac_url: str) -> list[str]:
