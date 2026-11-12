@@ -9,21 +9,27 @@ from __future__ import annotations
 
 from datetime import date
 from datetime import timedelta
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.basisregistraties import EREBOS
+from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
 from podiumd_tests.bootstrap.bpmn import uuid_of
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.zac import EMAIL_CONFIRMATION
 from podiumd_tests.json_data import differences
+from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.responses import describe
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.seed.zac_zaaktype import make_role_group
 from podiumd_tests.seed.zac_zaaktype import make_zac_zaaktype
 from podiumd_tests.seed.zac_zaaktype import publish_new_version
+from podiumd_tests.seed.zac_zaaktype import publish_zac_zaaktype
 from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import behandelaar_groups
@@ -33,9 +39,12 @@ from podiumd_tests.zac import comparable
 from podiumd_tests.zac import copied_zaakafhandelparameters
 from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import inrichtingscheck_problems
+from podiumd_tests.zac import put_zaakafhandelparameters
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import read_zaakafhandelparameters
 from podiumd_tests.zac import save_zaakafhandelparameters
+from podiumd_tests.zac import send_with_person
+from podiumd_tests.zac import zaak_body
 from podiumd_tests.zac import zaakafhandelparameters
 
 if TYPE_CHECKING:
@@ -236,3 +245,117 @@ def test_zac_offers_the_groups_pabc_authorises_as_behandelaar(
     assert (behandelaars in offered, raadplegers in offered) == (True, False)
     outside = behandelaar_groups(zac, urls["zac"], registry.tagged("buiten-domein"))
     assert not {behandelaars, raadplegers} & outside
+
+
+@ZAC_TEAM
+@THROWAWAY
+@EIGEN_ZAAKTYPE
+@pytest.mark.scenario("""
+    Given a zaaktype configured in ZAC, and the estate's zaaktype for productaanvragen with its productaanvraagtype
+    When the beheerder saves that productaanvraagtype, or an empty one, on the zaaktype
+    Then ZAC refuses both
+    When the beheerder saves a productaanvraagtype of its own, and then none
+    Then ZAC reads back that productaanvraagtype, and then none
+""")
+def test_productaanvraagtype_is_unique_and_can_be_cleared(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_eigen_zaaktype: JsonObject,
+    zac_parameters: JsonObject,
+    registry: ResourceRegistry,
+) -> None:
+    """ZAC refuses a productaanvraagtype another zaaktype has, and an empty one; None clears it."""
+    bezet = zac_parameters.get("productaanvraagtype")
+    if not bezet:
+        pytest.skip(f"zaaktype {section(zac_parameters, 'zaaktype').get('identificatie')} has no productaanvraagtype")
+    zac_url, uuid = urls["zac"], _uuid(zac_eigen_zaaktype)
+    parameters = read_zaakafhandelparameters(zac, zac_url, uuid)
+    answers = {
+        waarde: put_zaakafhandelparameters(zac, zac_url, {**parameters, "productaanvraagtype": waarde})
+        for waarde in (bezet, "")
+    }
+    assert {waarde: answer.status_code for waarde, answer in answers.items()} == dict.fromkeys(
+        answers, HTTPStatus.BAD_REQUEST
+    ), {waarde: describe(answer) for waarde, answer in answers.items()}
+    eigen = registry.tagged("aanvraag")
+    for waarde in (eigen, None):
+        # The saved parameters: ZAC refuses a save of the ones it replaced.
+        parameters = save_zaakafhandelparameters(zac, zac_url, {**parameters, "productaanvraagtype": waarde})
+        assert read_zaakafhandelparameters(zac, zac_url, uuid).get("productaanvraagtype") == waarde
+
+
+def _koppelingen(zac: requests.Session, zac_url: str, uuid: str, **koppelingen: object) -> JsonObject:
+    """Save these BRP and KvK koppelingen on the zaaktype's current zaakafhandelparameters; the saved ones."""
+    parameters = read_zaakafhandelparameters(zac, zac_url, uuid)
+    wanted = {**section(parameters, "betrokkeneKoppelingen"), **koppelingen}
+    return save_zaakafhandelparameters(zac, zac_url, {**parameters, "betrokkeneKoppelingen": wanted})
+
+
+@ZAC_TEAM
+@THROWAWAY
+@EIGEN_ZAAKTYPE
+@pytest.mark.scenario("""
+    Given a zaaktype configured in ZAC with the BRP and KvK koppelingen off
+    When the behandelaar starts a zaak of it with a bedrijf from the KvK, or a person from the BRP, as initiator
+    Then ZAC refuses both
+    When the beheerder turns the KvK koppeling on
+    Then a zaak of it starts with the bedrijf as initiator
+""")
+def test_koppelingen_decide_the_initiator_of_a_new_zaak(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_eigen_zaaktype: JsonObject,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+) -> None:
+    """ZAC refuses an initiator type whose koppeling is off (ZaakRestService.assertCanAddBetrokkene)."""
+    zac_url, uuid = urls["zac"], _uuid(zac_eigen_zaaktype)
+    before = section(read_zaakafhandelparameters(zac, zac_url, uuid), "betrokkeneKoppelingen")
+    registry.add(f"koppelingen of {uuid}", lambda: _koppelingen(zac, zac_url, uuid, **before))
+    uit = _koppelingen(zac, zac_url, uuid, brpKoppelen=False, kvkKoppelen=False)
+    bedrijf = {"type": "RSIN", "kvkNummer": KVK_TEST_NUMMER}
+    omschrijving = registry.tagged("koppeling")
+
+    def start(initiator: JsonObject) -> requests.Response:
+        body = zaak_body(uit, omschrijving=omschrijving, initiatorIdentificatie=initiator)
+        return zac.post(f"{zac_url}/rest/zaken/zaak", json=body)
+
+    answers = {"bedrijf": start(bedrijf), "persoon": send_with_person(zac, zac_url, EREBOS, start)}
+    assert {soort: answer.status_code for soort, answer in answers.items()} == dict.fromkeys(
+        answers, HTTPStatus.BAD_REQUEST
+    ), {soort: describe(answer) for soort, answer in answers.items()}
+
+    kvk = _koppelingen(zac, zac_url, uuid, kvkKoppelen=True)
+    zaak = create_zaak(zac, zac_url, kvk, omschrijving=omschrijving, initiatorIdentificatie=bedrijf)
+    clean_up_zaak(zac, zac_url, openzaak, registry, zaak, with_documents=False)
+    assert section(zaak, "initiatorIdentificatie").get("kvkNummer") == KVK_TEST_NUMMER
+
+
+@ZAC_TEAM
+@THROWAWAY
+@pytest.mark.scenario("""
+    Given a zaaktype just published in Open Zaak, not yet configured in ZAC
+    When the beheerder opens its zaakafhandelparameters
+    Then they are empty and not valide
+    And the afzenders gemeente and medewerker are offered
+""")
+def test_new_zaaktype_has_empty_zaakafhandelparameters(
+    podiumd_env: Environment,
+    zac: requests.Session,
+    urls: dict[str, str],
+    openzaak: ApiClient,
+    test_zaaktype: JsonObject,
+    registry: ResourceRegistry,
+) -> None:
+    """ZAC answers a zaaktype without zaakafhandelparameters with its defaults: no id, model or groep."""
+    zaaktype = publish_zac_zaaktype(podiumd_env, openzaak, registry, test_zaaktype)
+    found = read_zaakafhandelparameters(zac, urls["zac"], uuid_of(zaaktype["url"]))
+    fields = ("id", "valide", "caseDefinition", "defaultGroepId", "humanTaskParameters")
+    assert {field: found.get(field) for field in fields} == {
+        "id": None,
+        "valide": False,
+        "caseDefinition": None,
+        "defaultGroepId": None,
+        "humanTaskParameters": [],
+    }
+    assert {str(afzender.get("mail")) for afzender in entries(found.get("zaakAfzenders"))} == {"GEMEENTE", "MEDEWERKER"}

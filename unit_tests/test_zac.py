@@ -560,6 +560,11 @@ def test_configure_zaaktype_saves_the_cmmn_model_groep_resultaattype_and_user_ev
     }
 
 
+def test_put_zaakafhandelparameters_gives_zacs_answer(fake_http):
+    fake_http({"PUT /rest/zaakafhandelparameters": (400, {"message": "bezet"})})
+    assert zac.put_zaakafhandelparameters(requests.Session(), ZAC, {}).status_code == 400
+
+
 def test_copied_zaakafhandelparameters_waits_for_their_id(monkeypatch):
     monkeypatch.setattr(zac, "wait_until", functools.partial(wait_until, clock=Clock(sleep=lambda _seconds: None)))
     answers = iter([{"id": None}, {"id": 3}])

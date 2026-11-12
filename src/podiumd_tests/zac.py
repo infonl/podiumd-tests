@@ -91,8 +91,14 @@ def read_zaakafhandelparameters(http: requests.Session, zac_url: str, zaaktype_u
 
 def save_zaakafhandelparameters(http: requests.Session, zac_url: str, parameters: JsonObject) -> JsonObject:
     """Save zaakafhandelparameters as ZAC's beheerder; the saved ones."""
-    response = http.put(f"{zac_url}/rest/zaakafhandelparameters", json=parameters)
-    return cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
+    return cast(
+        "JsonObject", expect_status(put_zaakafhandelparameters(http, zac_url, parameters), HTTPStatus.OK).json()
+    )
+
+
+def put_zaakafhandelparameters(http: requests.Session, zac_url: str, parameters: JsonObject) -> requests.Response:
+    """Send zaakafhandelparameters to save; ZAC's answer."""
+    return http.put(f"{zac_url}/rest/zaakafhandelparameters", json=parameters)
 
 
 def copied_zaakafhandelparameters(http: requests.Session, zac_url: str, zaaktype_uuid: str) -> JsonObject:
