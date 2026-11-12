@@ -5,6 +5,7 @@ Ported from ITA's own Playwright suite (InterneTaakAfhandeling.EndToEndTest), as
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
@@ -18,6 +19,7 @@ from podiumd_tests.ita import make_contactverzoek
 from podiumd_tests.ita import my_afdelingen_and_groepen
 from podiumd_tests.ita import my_internetaken
 from podiumd_tests.ita import uuids
+from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openklant import clean_up_klantcontacten
 from podiumd_tests.seed.openklant import close_internetaak
 from podiumd_tests.seed.openklant import klantcontact_body
@@ -76,6 +78,37 @@ def test_closing_a_contactverzoek_moves_it_to_mijn_historie(
     assert [k["indicatieContactGelukt"] for k in klantcontacten_about(openklant, onderwerp)] == [True]
     assert internetaak["uuid"] not in uuids(my_internetaken(ita, urls["ita"]))
     assert internetaak["uuid"] in uuids(my_internetaken(ita, urls["ita"], afgerond=True))
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="[ita-5] ITA 3.3.4 closes a contactverzoek with an empty informatie (KlantcontactRequest.Inhoud is optional; "
+    "only the frontend requires it); not yet reported upstream",
+)
+@pytest.mark.source(SCENARIOS, "Informatie is mandatory when closing a contactverzoek, even for Contact niet gelukt.")
+@pytest.mark.scenario("""
+    Given the KCC medewerker has assigned a contactverzoek to themselves in ITA
+    When the medewerker closes it with a contactmoment without informatie
+    Then ITA refuses it as a bad request
+    And the contactverzoek stays open in Open Klant
+""")
+def test_closing_without_informatie_is_refused(
+    ita: requests.Session,
+    urls: dict[str, str],
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    internetaak: JsonObject,
+) -> None:
+    """close-with-klantcontact with an empty inhoud answers 400; the internetaak stays te_verwerken."""
+    assign_to_me(ita, urls["ita"], internetaak)
+    onderwerp = registry.tagged(f"zonder-informatie-{internetaak['nummer']}")
+    clean_up_klantcontacten(openklant, registry, onderwerp)
+    contactmoment = klantcontact_body(registry, onderwerp=onderwerp, inhoud="", indicatieContactGelukt=False)
+    response = ita.post(
+        f"{urls['ita']}/api/internetaken/close-with-klantcontact", json=answer_body(internetaak, contactmoment)
+    )
+    expect_status(response, HTTPStatus.BAD_REQUEST)
+    assert openklant.get(f"internetaken/{internetaak['uuid']}")["status"] == "te_verwerken"
 
 
 # Intermittent: 1 in 259 full runs; a parallel test's cleanup deletes its klantcontacten while ITA builds the list.

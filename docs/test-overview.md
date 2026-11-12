@@ -11,10 +11,10 @@ versions is not counted.
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 210 | 37 | 9 |
-| component | 841 | 536 | 63 |
+| component | 843 | 538 | 66 |
 | integration | 143 | 87 | 11 |
 | perf | 54 | 3 | 0 |
-| **full tier** | **1163** | **639** |  |
+| **full tier** | **1165** | **641** |  |
 
 Unit tests (`unit_tests/`, functions): 776. Perf endpoints (`perf/runs.py`): 22.
 
@@ -34,9 +34,9 @@ Unit tests (`unit_tests/`, functions): 776. Perf endpoints (`perf/runs.py`): 22.
 | smoke | zgw_auth | 4 | 2 |
 | component | basisregistraties | 23 | 16 |
 | component | frankgateway | 6 | 1 |
-| component | ita | 45 | 30 |
+| component | ita | 46 | 31 |
 | component | keycloak | 22 | 13 |
-| component | kiss | 52 | 23 |
+| component | kiss | 53 | 24 |
 | component | objecten | 15 | 5 |
 | component | omc | 3 | 2 |
 | component | openarchiefbeheer | 33 | 27 |
@@ -95,8 +95,8 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | ZAC | 19 |
 | draaiboek | 88 |
 | external | 111 |
-| podiumd-tests | 474 |
-| upstream | 169 |
+| podiumd-tests | 475 |
+| upstream | 170 |
 
 ## Expected failures per known issue
 
@@ -107,9 +107,11 @@ Ids of infonl/podiumd-known-issues.
 | ita-1 | 1 |
 | ita-2 | 1 |
 | ita-3 | 1 |
-| ita-4 | 1 |
+| ita-4 | 2 |
+| ita-5 | 1 |
 | kiss-2 | 1 |
 | kiss-4 | 1 |
+| kiss-5 | 1 |
 | omc-1 | 1 |
 | omc-3 | 1 |
 | open-archiefbeheer-1 | 1 |

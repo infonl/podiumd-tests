@@ -199,7 +199,7 @@ Not to port: form defaults, mode order, field layout and live required/optional 
 | medium | Logboek lines for assign, zaak, replaced zaak, contact gelukt, close (5) | covered |  | `test_kiss_reads_itas_logboek`, `test_logboek_lists_each_action` | api `/logboek` | Objecten |
 | medium | Regression #425: assigned through the medewerker's object-register id counts as the user's | covered |  | api, `test_contactverzoek_assigned_by_objectregister_id_is_mine` | Objecten Medewerker = KCC |
 | medium | Alle contactverzoeken lists an open one and drops a closed one (2) | covered |  | `test_only_the_beheerder_lists_all_contactverzoeken`, `test_alle_contactverzoeken_lists_only_open_ones` | api | ITA_BEHEERDER |
-| medium | Informatie required when closing | covered | UI only (not planned): ITA's API accepts an empty informatie (finding, not yet filed) | api or browser (check whether ITA refuses an empty one) | |
+| medium | Informatie required when closing | covered | the browser validation (UI only, not planned) | `test_closing_without_informatie_is_refused` (xfail ita-5: the API accepts an empty informatie) | api | |
 
 Not to port: dialogs, button visibility (5), headings, router links, a dash for a blank e-mail.
 

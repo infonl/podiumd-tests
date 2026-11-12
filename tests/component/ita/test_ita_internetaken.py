@@ -293,6 +293,12 @@ def test_a_verwerkt_contactverzoek_is_read_only(
     assert openklant.get(f"internetaken/{internetaak['uuid']}")["status"] == "verwerkt"
 
 
+# Intermittent: 1 in 36 full runs (13 on kees00); a parallel test's cleanup deletes a listed contactverzoek.
+@pytest.mark.xfail(
+    strict=False,
+    reason="[ita-4] ITA 3.3.4 answers 500 for Aan mij toegewezen when a listed contactverzoek is deleted before it "
+    "fetches its klantcontact; not yet reported upstream",
+)
 @pytest.mark.source(
     f"{ITA_E2E}/Werklijst/WerklijstUrgentieScenarios.cs",
     "The werklijst marks each contactverzoek in time, almost overdue or overdue, counting weekday hours only.",

@@ -33,9 +33,12 @@ from podiumd_tests.kcc import kiss_klant
 from podiumd_tests.kcc import kiss_klantcontact
 from podiumd_tests.kcc import kiss_partijen
 from podiumd_tests.kcc import kiss_rapportage
+from podiumd_tests.kcc import post_kiss_klantcontact
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
+from podiumd_tests.seed.openklant import clean_up_klantcontacten
 from podiumd_tests.seed.openklant import klantcontact_body
+from podiumd_tests.seed.openklant import klantcontacten_about
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -166,6 +169,32 @@ def test_onderwerp_of_maximum_length_is_kept_whole(
     )
     body = klantcontact_body(registry, onderwerp=onderwerp)
     assert kiss_klantcontact(kiss, urls["kiss"], openklant, registry, body)["onderwerp"] == onderwerp
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="[kiss-5] KISS 3.2.0 answers 500 when Open Klant refuses a klantcontact (postklantcontacten calls "
+    "EnsureSuccessStatusCode); not yet reported upstream",
+)
+@pytest.mark.source(
+    "podiumd-tests",
+    "KISS's frontend cuts the onderwerp to Open Klant's maximum; KISS's API must pass on Open Klant's refusal.",
+)
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to KISS
+    When the medewerker saves a contactmoment whose onderwerp is one character longer than Open Klant allows
+    Then KISS refuses it as a bad request
+    And Open Klant has no contactmoment with that onderwerp
+""")
+def test_onderwerp_above_the_maximum_length_is_refused(
+    kiss: requests.Session, urls: dict[str, str], openklant: ApiClient, registry: ResourceRegistry
+) -> None:
+    """postklantcontacten passes on Open Klant's 400 for an onderwerp of ONDERWERP_MAX + 1 characters."""
+    onderwerp = registry.tagged("te-lang").ljust(ONDERWERP_MAX + 1, "x")
+    clean_up_klantcontacten(openklant, registry, onderwerp)
+    response = post_kiss_klantcontact(kiss, urls["kiss"], klantcontact_body(registry, onderwerp=onderwerp))
+    expect_status(response, HTTPStatus.BAD_REQUEST)
+    assert klantcontacten_about(openklant, onderwerp) == []
 
 
 @pytest.mark.source(

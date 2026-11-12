@@ -87,6 +87,11 @@ def kiss_register(kiss: requests.Session, kiss_url: str) -> dict[str, str]:
     return {"systemIdentifier": str(openklant2[0]["identifier"])}
 
 
+def post_kiss_klantcontact(kiss: requests.Session, kiss_url: str, body: JsonObject) -> requests.Response:
+    """POST a klantcontact to KISS's postklantcontacten, as KISS's frontend does; KISS's answer."""
+    return kiss.post(kiss_url + KISS_POST_KLANTCONTACTEN, json=body, headers=kiss_register(kiss, kiss_url))
+
+
 def kiss_klantcontact(
     kiss: requests.Session, kiss_url: str, openklant: ApiClient, registry: ResourceRegistry, body: JsonObject
 ) -> JsonObject:
@@ -94,8 +99,7 @@ def kiss_klantcontact(
 
     KISS links the logged-in medewerker as actor. KISS does not delete klantcontacten; cleanup goes to Open Klant.
     """
-    response = kiss.post(kiss_url + KISS_POST_KLANTCONTACTEN, json=body, headers=kiss_register(kiss, kiss_url))
-    created = expect_status(response, HTTPStatus.OK).json()
+    created = expect_status(post_kiss_klantcontact(kiss, kiss_url, body), HTTPStatus.OK).json()
     url = str(created["url"])
     registry.add(f"klantcontact {url}", lambda: delete_klantcontact_tree(openklant, url))
     return openklant.get(f"klantcontacten/{created['uuid']}")
