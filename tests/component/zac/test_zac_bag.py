@@ -136,11 +136,12 @@ def test_locatie_is_set_kept_and_removed_with_a_reden(
     Then the zaak lists the adres once among its BAG objects
     When the behandelaar unlinks it with a reden
     Then the zaak lists no BAG object
+    And the historie records the adres linked once and unlinked with the reden
 """)
 def test_bag_adres_is_linked_once_and_unlinked(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
 ) -> None:
-    """POST /rest/bag twice gives one zaakobject; DELETE with redenWijzigen removes it.
+    """POST /rest/bag twice gives one zaakobject; DELETE with redenWijzigen removes it; the historie has both.
 
     Open Zaak fetches the adres's URL from the BAG to validate the zaakobject.
     """
@@ -153,3 +154,7 @@ def test_bag_adres_is_linked_once_and_unlinked(
     unlinked = ontkoppel_bag_object(zac, zac_url, zaak, linked[0], "podiumd-tests")
     expect_status(unlinked, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     assert zaak_bag_objecten(zac, zac_url, zaak) == []
+    assert attribuut_historie(zac, zac_url, zaak, "objecttype.ADRES") == [
+        (BAG_DAM, None, "podiumd-tests"),
+        (None, BAG_DAM, ""),
+    ]
