@@ -7,6 +7,7 @@ deleted before its zaak, which Open Zaak keeps otherwise.
 from __future__ import annotations
 
 from datetime import date
+from datetime import timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -16,6 +17,7 @@ from podiumd_tests.bootstrap import names
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import REFUSED
+from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import BESLUITEN
 from podiumd_tests.zac import HEROPEND
@@ -154,6 +156,51 @@ def test_besluit_without_ingangsdatum_is_refused(
     response = vastleggen_besluit(zac, urls["zac"], zaak, besluittype(zaak), toelichting="podiumd-tests")
     expect_status(response, HTTPStatus.BAD_REQUEST)
     assert _besluiten(zac, urls["zac"], zaak) == []
+
+
+@pytest.mark.scenario("""
+    Given a zaak in behandeling whose besluittype has no publicatie
+    When the behandelaar records a besluit with a publicatiedatum and an uiterlijke reactiedatum
+    Then ZAC refuses it
+""")
+def test_besluit_without_publicatie_refuses_publicatie_dates(
+    zac: requests.Session,
+    urls: dict[str, str],
+    in_behandeling: Callable[[], JsonObject],
+    besluittype: Callable[[JsonObject], JsonObject],
+) -> None:
+    """publicationDate and lastResponseDate answer 400 for a besluittype with publicatieIndicatie false."""
+    zaak = in_behandeling()
+    gekozen = besluittype(zaak)
+    if section(gekozen, "publication").get("enabled"):
+        pytest.skip(f"besluittype {BESLUITTYPE} has publicatie")
+    today = date.today().isoformat()  # noqa: DTZ011  # ZAC's local date
+    dates = {"ingangsdatum": today, "publicationDate": today, "lastResponseDate": today}
+    refused = vastleggen_besluit(zac, urls["zac"], zaak, gekozen, **dates)
+    assert refused.status_code == HTTPStatus.BAD_REQUEST, describe(refused)
+    assert _besluiten(zac, urls["zac"], zaak) == []
+
+
+@pytest.mark.scenario("""
+    Given a besluit with a vervaldatum on a zaak in behandeling
+    When the behandelaar changes it without the vervaldatum, with a reden
+    Then Open Zaak's besluit has no vervaldatum
+""")
+def test_cleared_vervaldatum_stays_cleared(
+    zac: requests.Session,
+    urls: dict[str, str],
+    in_behandeling: Callable[[], JsonObject],
+    besluit: Callable[..., JsonObject],
+    openzaak_productaanvraag: ApiClient,
+) -> None:
+    """PUT besluit without vervaldatum clears it in Open Zaak."""
+    zaak = in_behandeling()
+    later = (date.today() + timedelta(days=30)).isoformat()  # noqa: DTZ011  # ZAC's local date
+    created = besluit(zaak, vervaldatum=later)
+    change = {"besluitUuid": created["uuid"], "ingangsdatum": created["ingangsdatum"], "reden": "podiumd-tests"}
+    expect_status(zac.put(f"{urls['zac']}/rest/zaken/besluit", json=change), HTTPStatus.OK)
+    stored = openzaak_productaanvraag.get(f"{urls['openzaak']}/{BESLUITEN}/besluiten/{created['uuid']}")
+    assert stored["vervaldatum"] is None
 
 
 @pytest.mark.scenario("""
