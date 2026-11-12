@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 
+from functools import partial
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -28,6 +29,7 @@ from podiumd_tests.mailpit import received
 from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import submit
 from podiumd_tests.responses import UnexpectedStatusError
+from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import created_notificatie
 from podiumd_tests.seed.objecten import make_productaanvraag
 from podiumd_tests.seed.openklant import make_submission_contact
@@ -46,9 +48,11 @@ from podiumd_tests.zac import open_task
 from podiumd_tests.zac import productaanvraag_zaak
 from podiumd_tests.zac import productaanvraag_zaken
 from podiumd_tests.zac import read_zaak
+from podiumd_tests.zac import send_with_person
 from podiumd_tests.zac import start_zaak
 from podiumd_tests.zac import wait_in_werkvoorraad
 from podiumd_tests.zac import zaak_body
+from podiumd_tests.zac_betrokkenen import wijzig_initiator
 from podiumd_tests.zac_documents import zaak_documents
 
 if TYPE_CHECKING:
@@ -373,16 +377,62 @@ def test_aanvraagspecifieke_contactgegevens_are_on_the_zaak(
     make_submission_contact(openklant, registry, kenmerk, adres, telefoon)
     make_productaanvraag(objecten, registry, productaanvraag_objecttype, productaanvraagtype, kenmerk)
     uuid = str(productaanvraag_zaak(openzaak_productaanvraag, registry, kenmerk)["uuid"])
-
-    # ZAC links the contactgegevens after it assigned the zaak and added the betrokkenen.
-    def shown() -> JsonObject | None:
-        found = read_zaak(zac, urls["zac"], uuid)
-        return found if found.get("zaakSpecificContactDetails") else None
-
-    zaak = wait_until(shown, timeout=PRODUCTAANVRAAG_TIMEOUT, description=f"contactgegevens on zaak {uuid}")
+    zaak = zaak_with_contactgegevens(zac, urls["zac"], uuid)
     assert section(zaak, "zaakSpecificContactDetails") == {"emailAddress": adres, "telephoneNumber": telefoon}
     assert zaak.get("initiatorIdentificatie") is None
     assert assignment(zaak) == (zac_parameters["defaultGroepId"], zac_parameters.get("defaultBehandelaarId"))
+
+
+def zaak_with_contactgegevens(zac: requests.Session, zac_url: str, uuid: str) -> JsonObject:
+    """The zaak as ZAC shows it, once ZAC has linked the aanvraag's contactgegevens to it.
+
+    ZAC links them after it assigned the zaak and added the betrokkenen.
+    """
+
+    def shown() -> JsonObject | None:
+        found = read_zaak(zac, zac_url, uuid)
+        return found if found.get("zaakSpecificContactDetails") else None
+
+    return wait_until(shown, timeout=PRODUCTAANVRAAG_TIMEOUT, description=f"contactgegevens on zaak {uuid}")
+
+
+@pytest.mark.requires("openklant")
+@pytest.mark.source(
+    "upstream infonl/dimpact-zaakafhandelcomponent src/main/app/src/app/klanten/inject-contact-email.ts",
+    "The mail dialogs of a zaak offer its zaakspecifiek e-mail address ahead of the initiator's.",
+)
+@pytest.mark.scenario("""
+    Given a zaak from a productaanvraag whose submitter left an e-mail address for this aanvraag only
+    When the behandelaar adds a person as initiator
+    Then the zaak keeps the zaakspecifiek e-mail address, which its mails offer ahead of the initiator's
+    When the behandelaar makes another person the initiator
+    Then the zaak still keeps the zaakspecifiek e-mail address
+""")
+def test_zaakspecifiek_e_mail_address_stays_when_the_initiator_changes(
+    zac: requests.Session,
+    urls: dict[str, str],
+    objecten: ApiClient,
+    openzaak: ApiClient,
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    productaanvraag_objecttype: str,
+    bpmn_productaanvraagtype: str,
+) -> None:
+    """zaakSpecificContactDetails, which ZAC's mail dialogs prefer as ontvanger, survives a new initiator."""
+    kenmerk = registry.tagged("zaakspecifiek")
+    adres = f"{kenmerk}@example.invalid"
+    make_submission_contact(openklant, registry, kenmerk, adres)
+    make_productaanvraag(objecten, registry, productaanvraag_objecttype, bpmn_productaanvraagtype, kenmerk)
+    zaak = handled_zaak(zac, urls["zac"], openzaak, registry, kenmerk)
+    uuid = str(zaak["uuid"])
+    zaak_with_contactgegevens(zac, urls["zac"], uuid)
+    # ZAC needs a toelichting to replace an initiator.
+    for bsn, toelichting in ((EREBOS, None), (KIERKEGAARD, "podiumd-tests andere initiator")):
+        initiator = partial(wijzig_initiator, zac, urls["zac"], zaak, toelichting=toelichting)
+        expect_status(send_with_person(zac, urls["zac"], bsn, initiator), HTTPStatus.OK)
+        shown = read_zaak(zac, urls["zac"], uuid)
+        assert section(shown, "initiatorIdentificatie").get("bsn") == bsn
+        assert section(shown, "zaakSpecificContactDetails").get("emailAddress") == adres
 
 
 @pytest.mark.source(PRODUCTAANVRAAG_SOURCE, "ZAC keeps a productaanvraag of a type it does not handle in its inbox.")
