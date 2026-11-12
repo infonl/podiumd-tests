@@ -3,6 +3,8 @@
 import functools
 import json
 
+from datetime import date
+
 import pytest
 import requests
 
@@ -282,6 +284,10 @@ def test_activate_human_tasks_switches_every_one_on_with_its_fields(fake_http):
         {"actief": True, "planItemDefinition": {"id": "GOEDKEUREN"}, "doorlooptijd": 10},
         {"actief": True, "planItemDefinition": {"id": "ADVIES_INTERN"}, "referentieTabellen": [{"veld": "ADVIES"}]},
     ]
+
+
+def test_doorlooptijd_end_counts_days_from_today():
+    assert zac_taken.doorlooptijd_end(0) == date.today().isoformat()  # noqa: DTZ011  # ZAC's local date
 
 
 def test_start_human_task_waits_until_zac_offers_it_and_starts_it_without_a_mail(fake_http, monkeypatch):

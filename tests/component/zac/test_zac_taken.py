@@ -45,8 +45,11 @@ from podiumd_tests.zac_taken import ADVIES_EXTERN
 from podiumd_tests.zac_taken import ADVIES_INTERN
 from podiumd_tests.zac_taken import DOCUMENT_VERZENDEN
 from podiumd_tests.zac_taken import GOEDKEUREN
+from podiumd_tests.zac_taken import activate_human_tasks
 from podiumd_tests.zac_taken import complete_task
+from podiumd_tests.zac_taken import doorlooptijd_end
 from podiumd_tests.zac_taken import human_tasks_offered
+from podiumd_tests.zac_taken import open_task
 from podiumd_tests.zac_taken import read_taak
 from podiumd_tests.zac_taken import start_human_task
 from podiumd_tests.zac_taken import started_taak
@@ -83,6 +86,8 @@ ADVIES = "Positief"
 VRAAG = "podiumd-tests vraag"
 SUSPENSION_DAYS = 7
 VERLENGING_DAYS = 10
+# Days the zaaktype gives a taak Aanvullende informatie; fewer than a zaak of it has left.
+DOORLOOPTIJD = 5
 
 OPSCHORTEN = {"zaakOpschorten": "true"}
 
@@ -506,3 +511,46 @@ def test_taak_fatale_datum_stays_within_the_zaaks(
     expect_status(refused, HTTPStatus.BAD_REQUEST)
     taak = started_taak(zac, zac_url, behandeling, GOEDKEUREN, (zac_group, ADMIN.username), taakdata={"vraag": VRAAG})
     assert taak.get("fataledatum") == einde.isoformat()
+
+
+@ZAC_TEAM
+@THROWAWAY
+@TAKEN_ZAAKTYPE
+@pytest.mark.scenario("""
+    Given the zaaktype gives the taak Aanvullende informatie a groep and a doorlooptijd of five days
+    When the behandelaar opens the form to start Aanvullende informatie on a new zaak
+    Then the form offers that groep and a fatale datum five days from today
+    When the behandelaar starts it with that groep and no fatale datum
+    Then the taak has that groep and a fatale datum five days from today
+""")
+def test_zaaktype_gives_aanvullende_informatie_its_groep_and_doorlooptijd(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_taken_zaaktype: JsonObject,
+    zac_taken_zaak: Callable[[], JsonObject],
+    zac_group: str,
+    registry: ResourceRegistry,
+) -> None:
+    """humanTaskParameters defaultGroepId and doorlooptijd give the plan item's groepId and fataleDatum and the taak's."""
+    zac_url = urls["zac"]
+    uuid = str(section(zac_taken_zaaktype, "zaaktype")["uuid"])
+    before = _human_task_parameters(zac_taken_zaaktype, "AANVULLENDE_INFORMATIE")
+    restore = {field: before.get(field) for field in ("defaultGroepId", "doorlooptijd")}
+    registry.add(
+        f"taakgegevens of {uuid}", lambda: activate_human_tasks(zac, zac_url, uuid, AANVULLENDE_INFORMATIE=restore)
+    )
+    taakgegevens = {"defaultGroepId": zac_group, "doorlooptijd": DOORLOOPTIJD}
+    activate_human_tasks(zac, zac_url, uuid, AANVULLENDE_INFORMATIE=taakgegevens)
+    zaak = zac_taken_zaak()
+    fataal = doorlooptijd_end(DOORLOOPTIJD)
+
+    def offered() -> JsonObject | None:
+        items = human_tasks_offered(zac, zac_url, zaak)
+        return next((item for item in items if item.get("naam") == AANVULLENDE_INFORMATIE), None)
+
+    plan_item = wait_until(offered, timeout=LIST_TIMEOUT, description=f"plan items of {zaak['identificatie']}")
+    assert (plan_item.get("groepId"), plan_item.get("fataleDatum")) == (zac_group, fataal)
+    response = start_human_task(zac, zac_url, zaak, AANVULLENDE_INFORMATIE, str(plan_item["groepId"]))
+    expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    taak = open_task(zac, zac_url, str(zaak["uuid"]), AANVULLENDE_INFORMATIE)
+    assert (section(taak, "groep").get("id"), taak.get("fataledatum")) == (zac_group, fataal)

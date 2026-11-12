@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+from datetime import timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
@@ -91,6 +93,11 @@ def activate_human_tasks(
         for task in entries(parameters.get("humanTaskParameters"))
     ]
     return save_zaakafhandelparameters(http, zac_url, {**parameters, "humanTaskParameters": tasks})
+
+
+def doorlooptijd_end(days: int) -> str:
+    """Return the fatale datum ZAC gives a taak with this doorlooptijd, started today."""
+    return (date.today() + timedelta(days=days)).isoformat()  # noqa: DTZ011  # ZAC's local date
 
 
 # The names of ZAC's CMMN human tasks (Generiek_zaakafhandelmodel.cmmn.xml); a zaakafhandelparameters switch turns
