@@ -36,6 +36,7 @@ from podiumd_tests.zac import behandelaar_groups
 from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import clear_ztc_cache
 from podiumd_tests.zac import comparable
+from podiumd_tests.zac import configure_zaaktype
 from podiumd_tests.zac import copied_zaakafhandelparameters
 from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import inrichtingscheck_problems
@@ -44,6 +45,7 @@ from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import read_zaakafhandelparameters
 from podiumd_tests.zac import save_zaakafhandelparameters
 from podiumd_tests.zac import send_with_person
+from podiumd_tests.zac import user_groups
 from podiumd_tests.zac import zaak_body
 from podiumd_tests.zac import zaakafhandelparameters
 from podiumd_tests.zac_betrokkenen import wijzig_initiator
@@ -401,8 +403,10 @@ def test_outdated_zaakafhandelparameters_are_refused(
 @pytest.mark.scenario("""
     Given a zaaktype just published in Open Zaak, not yet configured in ZAC
     When the beheerder opens its zaakafhandelparameters
-    Then they are empty and not valide
+    Then they are empty and not valide, without creatiedatum
     And the afzenders gemeente and medewerker are offered
+    When the beheerder saves them
+    Then they have today as creatiedatum
 """)
 def test_new_zaaktype_has_empty_zaakafhandelparameters(
     podiumd_env: Environment,
@@ -412,15 +416,42 @@ def test_new_zaaktype_has_empty_zaakafhandelparameters(
     test_zaaktype: JsonObject,
     registry: ResourceRegistry,
 ) -> None:
-    """ZAC answers a zaaktype without zaakafhandelparameters with its defaults: no id, model or groep."""
+    """ZAC answers a zaaktype without zaakafhandelparameters with its defaults: no id, model, groep or creatiedatum."""
     zaaktype = publish_zac_zaaktype(podiumd_env, openzaak, registry, test_zaaktype)
-    found = read_zaakafhandelparameters(zac, urls["zac"], uuid_of(zaaktype["url"]))
-    fields = ("id", "valide", "caseDefinition", "defaultGroepId", "humanTaskParameters")
+    uuid = uuid_of(zaaktype["url"])
+    found = read_zaakafhandelparameters(zac, urls["zac"], uuid)
+    fields = ("id", "valide", "caseDefinition", "defaultGroepId", "humanTaskParameters", "creatiedatum")
     assert {field: found.get(field) for field in fields} == {
         "id": None,
         "valide": False,
         "caseDefinition": None,
         "defaultGroepId": None,
         "humanTaskParameters": [],
+        "creatiedatum": None,
     }
     assert {str(afzender.get("mail")) for afzender in entries(found.get("zaakAfzenders"))} == {"GEMEENTE", "MEDEWERKER"}
+    saved = configure_zaaktype(zac, urls["zac"], uuid, user_groups(zac, urls["zac"])[0])
+    assert str(saved.get("creatiedatum")).startswith(today())
+
+
+@ZAC_TEAM
+@pytest.mark.requires("cluster")
+@pytest.mark.scenario("""
+    Given the zaaktypen of ZAC's own catalogus in Open Zaak
+    When the beheerder opens the list of zaakafhandelparameters
+    Then ZAC lists each of those zaaktypen
+    And each configured one with its creatiedatum
+""")
+def test_zaakafhandelparameters_list_the_zaaktypen_of_zacs_catalogus(
+    podiumd_env: Environment, zac: requests.Session, urls: dict[str, str], openzaak: ApiClient
+) -> None:
+    """GET zaakafhandelparameters lists the zaaktypen of catalogus CATALOGUS_DOMEIN; creatiedatum is set iff id is."""
+    domein = podiumd_env.variable("zac", "CATALOGUS_DOMEIN")
+    catalogus = openzaak.list(f"{CATALOGI}/catalogussen", {"domein": domein})[0]
+    zaaktypen = openzaak.list(f"{CATALOGI}/zaaktypen", {"catalogus": str(catalogus["url"])})
+    listed = get_entries(zac, f"{urls['zac']}/rest/zaakafhandelparameters")
+    # ZAC lists only the first page of Open Zaak's answer: 100 zaaktypen.
+    assert {str(section(item, "zaaktype")["uuid"]) for item in listed} == {
+        uuid_of(zaaktype["url"]) for zaaktype in zaaktypen[:100]
+    }
+    assert [item for item in listed if (item.get("id") is None) != (item.get("creatiedatum") is None)] == []
