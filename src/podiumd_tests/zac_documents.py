@@ -22,6 +22,7 @@ from podiumd_tests.json_data import strings
 from podiumd_tests.pdf import pdfa_problems
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
+from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import list_page
 
 if TYPE_CHECKING:
@@ -354,9 +355,17 @@ def zaak_documents(
 
 
 def stored_mail(zac: requests.Session, zac_url: str, zaak: JsonObject, message: JsonObject) -> tuple[JsonObject, bytes]:
-    """Return the zaak's document of the mail, which ZAC titles with the mail's subject, and its content."""
+    """Return the zaak's document of the mail, which ZAC titles with the mail's subject, and its content.
+
+    ZAC stores the mail after sending it (MailService.sendMail): a mail ZAC sends on a notification, such as the
+    ontvangstbevestiging, reaches Mailpit before its document exists.
+    """
     subject = message.get("Subject")
-    stored = next(item for item in zaak_documents(zac, zac_url, zaak) if item.get("titel") == subject)
+
+    def document() -> JsonObject | None:
+        return next((item for item in zaak_documents(zac, zac_url, zaak) if item.get("titel") == subject), None)
+
+    stored = wait_until(document, timeout=CONVERT_TIMEOUT, description=f"document {subject!r} of zaak {zaak['uuid']}")
     return stored, expect_status(zac.get(f"{document_url(zac_url, stored)}/download"), HTTPStatus.OK).content
 
 

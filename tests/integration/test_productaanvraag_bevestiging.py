@@ -119,8 +119,8 @@ def test_zac_mails_the_initiator_an_ontvangstbevestiging(
     aanhef = next(regel for regel in re.findall(r"<p>.*?</p>", str(template["body"])) if "{ZAAK_INITIATOR}" in regel)
     assert aanhef.replace("{ZAAK_INITIATOR}", "") in str(message.get("HTML"))
     assert kept_mail(zac, zac_url, zaak, message) == OPENBAAR_MAIL
-    shown = read_zaak(zac, zac_url, str(zaak["uuid"]))
-    assert BEVESTIGING_NIET_VERSTUURD not in strings(shown.get("indicaties"))
+    # ZAC clears the indicatie after it stores the mail.
+    wait_for_bevestiging(zac, zac_url, zaak)
 
 
 def own_productaanvraagtype(
@@ -236,17 +236,22 @@ def is_left_unconfirmed(zac: requests.Session, zac_url: str, zaak: JsonObject) -
     """Whether the zaak keeps the indicatie that no bevestiging was sent, BEVESTIGING_WAIT seconds after ZAC linked
     the aanvraag's contactgegevens.
     """
-    uuid = str(zaak["uuid"])
-    zaak_with_contactgegevens(zac, zac_url, uuid)
+    zaak_with_contactgegevens(zac, zac_url, str(zaak["uuid"]))
     try:
-        wait_until(
-            lambda: BEVESTIGING_NIET_VERSTUURD not in strings(read_zaak(zac, zac_url, uuid).get("indicaties")),
-            timeout=BEVESTIGING_WAIT,
-            description=f"bevestiging of zaak {zaak['identificatie']}",
-        )
+        wait_for_bevestiging(zac, zac_url, zaak)
     except WaitTimeoutError:
         return True
     return False
+
+
+def wait_for_bevestiging(zac: requests.Session, zac_url: str, zaak: JsonObject) -> None:
+    """Wait BEVESTIGING_WAIT seconds at most until the zaak no longer has the indicatie that no bevestiging was sent."""
+    uuid = str(zaak["uuid"])
+    wait_until(
+        lambda: BEVESTIGING_NIET_VERSTUURD not in strings(read_zaak(zac, zac_url, uuid).get("indicaties")),
+        timeout=BEVESTIGING_WAIT,
+        description=f"bevestiging of zaak {zaak['identificatie']}",
+    )
 
 
 @pytest.mark.requires("openklant", "mailpit", "keycloak")

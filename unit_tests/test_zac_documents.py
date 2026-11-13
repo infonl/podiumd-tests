@@ -5,12 +5,18 @@ import json
 import zipfile
 
 from datetime import date
+from typing import TYPE_CHECKING
 
 import pytest
 import requests
 
+from podiumd_tests import wait
 from podiumd_tests import zac_documents
 from podiumd_tests.seed.registry import ResourceRegistry
+from podiumd_tests.wait import Clock
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 ZAC = "https://zac.example.test"
 
@@ -269,6 +275,28 @@ def test_stored_mail_is_the_document_titled_with_the_subject(fake_http):
     )
     stored, content = zac_documents.stored_mail(requests.Session(), ZAC, {"uuid": "z1"}, {"Subject": "Zaak 1"})
     assert (stored["uuid"], content) == ("d1", b'"%PDF"')
+
+
+class Listings:
+    """fake_http's answer table; the documents list answers the next of listings."""
+
+    def __init__(self, listings, table):
+        self.listings: Iterator[list[object]] = listings
+        self.table: dict[str, object] = table
+
+    def get(self, key, default=None):
+        if key == "PUT /rest/informatieobjecten/informatieobjectenList":
+            return 200, next(self.listings)
+        return self.table.get(key, default)
+
+
+def test_stored_mail_waits_until_zac_stored_the_mail(fake_http, monkeypatch):
+    monkeypatch.setattr(wait, "Clock", lambda: Clock(sleep=lambda _seconds: None))
+    listings = iter([[], [{"uuid": "d1", "titel": "Zaak 1"}]])
+    download = {"GET /rest/informatieobjecten/informatieobject/d1/download": (200, "%PDF")}
+    sent = fake_http(Listings(listings, download))
+    stored, _ = zac_documents.stored_mail(requests.Session(), ZAC, {"uuid": "z1"}, {"Subject": "Zaak 1"})
+    assert (stored["uuid"], [s.method for s in sent]) == ("d1", ["PUT", "PUT", "GET"])
 
 
 def test_kept_mail_is_the_status_vertrouwelijkheid_and_pdfa_problems_of_the_stored_mail(fake_http, monkeypatch):
