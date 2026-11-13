@@ -390,12 +390,21 @@ Checked 2026-11-13 against `upstream-tests.md` and `external-test-sources-plan.m
   2023-03-22. Its `e2e/SoapUI` suite is the one `upstream-tests.md` already uses. Nothing to port.
 - `BRP-API/Haal-Centraal-BRP-bevragen` `features/` (373 feature files): the rules of finding 10. The personen mock
   (`ghcr.io/brp-api/personen-mock` 2.7.0) applies their input validation and derived fields. Ported:
-  - the fout-cases (`fields` missing, empty, not a list or unknown; more than 20 BSNs; a search without
-    geboortedatum) with their `invalidParams` code: `test_brp.py::test_invalid_query_is_refused`;
-  - volledigeNaam, leeftijd and adressering of a test-set person: `test_brp.py::test_derived_name_age_and_adressering`.
+  - the fout-cases (`fields` missing, empty, not a list, unknown or a sub-field of gezag; more than 20 BSNs; a
+    search without geboortedatum) with their `invalidParams` code: `test_brp.py::test_invalid_query_is_refused`;
+  - volledigeNaam, leeftijd and adressering of a test-set person: `test_brp.py::test_derived_name_age_and_adressering`;
+  - aanhef, aanschrijfwijze and gebruikInLopendeTekst by aanduiding naamgebruik, with a partner, an adellijke titel
+    or predicaat and the hoffelijkheidstitel: `test_brp.py::test_adressering_with_partner_or_adellijke_titel`;
+  - gezag: each gezag type of a minderjarige, the relaties of a gezaghebbende, none for a child without a
+    gezaghebbende or for an adult: `test_brp_gezag.py`;
+  - `inOnderzoek` of persoon, naam, adressering and gemeente fields, and none when the asked fields do not depend on
+    the data in onderzoek: `test_brp_in_onderzoek.py`.
 
-  Port value left (medium, with finding 2's persons): gezag, `inOnderzoek`, and the adressering rules for partners
-  and adellijke titels.
+  Not ported: rules the test set has no person for (an ended onderzoek, a hoffelijkheidstitel with naamgebruik V or N),
+  and the partner rules of `adressering/in-onderzoek.feature`. personen-mock 2.7.0 does not follow those: with the
+  naam of the partner in onderzoek (999970148, 050200; 999991139, 050000) it leaves out `adressering.inOnderzoek`,
+  where the feature expects aanhef, aanschrijfwijze and gebruikInLopendeTekst in onderzoek with
+  `datumIngangOnderzoekPartner`.
 
 ## Looked, nothing useful
 
