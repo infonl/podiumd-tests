@@ -67,6 +67,19 @@ CASES = (
         forged=True,
         plain_http=True,
     ),
+    # client_certificate_required in passthrough mode; client_certificate_not_verified, 400 or a refused handshake where
+    # the edge checks for a certificate.
+    Case(
+        "no-certificate",
+        "no client certificate",
+        "",
+        (
+            (401, "client_certificate_required"),
+            (401, "client_certificate_not_verified"),
+            (400, "No required SSL certificate"),
+            (TLS_REFUSED, ""),
+        ),
+    ),
     # 401 in passthrough mode; 400 or a refused handshake where the edge checks the certificate against its client CA.
     Case(
         "untrusted-certificate",

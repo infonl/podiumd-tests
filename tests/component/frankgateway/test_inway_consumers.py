@@ -6,6 +6,7 @@ The cases run in this order on one worker (xdist group): worst first, because th
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit
 
 import pytest
 import requests
@@ -38,6 +39,9 @@ pytestmark = [
     ),
 ]
 
+# The ports an FSC inway must answer on (FSC test suite, Inway-Port-1).
+FSC_PORTS = (443, 8443)
+
 
 @pytest.fixture(name="identities")
 def fixture_identities(credentials: SecretResolver) -> None:
@@ -49,11 +53,16 @@ def fixture_identities(credentials: SecretResolver) -> None:
 
 @pytest.mark.usefixtures("identities")
 @pytest.mark.parametrize("case", [pytest.param(case, id=case.name) for case in CASES])
+@pytest.mark.source(
+    "external commonground/standards/fsc test-suite/inway.md Inway-Incoming-Request-4",
+    "The inway denies a request whose certificate its trust anchor did not sign.",
+)
 @pytest.mark.scenario("""
     Given consumers partner-a and partner-b in OpenBao, and an inway route that allows partner-a only
-    When a partner calls the route with its client certificate, a self-signed one, or hand-written certificate headers
+    When a caller calls the route without a certificate, with its own, a self-signed one, or hand-written headers
     Then partner-a gets the upstream's answer
     And partner-b is refused as not allowed, an unknown or self-signed certificate as unknown
+    And a request without a client certificate is refused
     And hand-written certificate headers never count as a verified certificate
 """)
 def test_inway_admits_only_the_allowed_consumer(
@@ -80,3 +89,18 @@ def test_inway_admits_only_the_allowed_consumer(
         status, body = response.status_code, response.text
     accepted = " or ".join(f"{expected} {part}".strip() for expected, part in case.answers)
     assert is_expected(case, status, body), f"{case.what}: {status} {body[:200]}, expected {accepted}"
+
+
+@pytest.mark.source(
+    "external commonground/standards/fsc test-suite/inway.md Inway-Port-1",
+    "An inway accepts requests on port 443 or 8443.",
+)
+@pytest.mark.scenario("""
+    Given the inway URL partners call
+    Then it is https on port 443 or 8443
+""")
+def test_inway_url_uses_an_fsc_port(urls: dict[str, str]) -> None:
+    """The inway's URL is https on port 443 or 8443."""
+    parts = urlsplit(urls["inway"])
+    assert parts.scheme == "https", f"inway URL {urls['inway']} is not https"
+    assert (parts.port or FSC_PORTS[0]) in FSC_PORTS, f"inway URL {urls['inway']} is not on port 443 or 8443"

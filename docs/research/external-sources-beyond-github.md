@@ -177,6 +177,14 @@ Port value:
 - `test_inway_consumers.py` covers the consumer certificate allow-list. Before porting, check whether Frank!Gateway
   implements FSC contracts and access tokens; if not, only the certificate and port cases apply.
 - The Manager cases (contracts, grants, signatures) need an FSC Manager, which PodiumD does not deploy.
+- Checked 2026-11-13: Frank!Gateway 1.2.1, which PodiumD deploys, ships an FSC Inway plugin (`fsc`, in
+  `wearefrank/frank-gateway` `src/apisix/plugins/fsc.lua`): it checks an `Fsc-Authorization` token bound to the
+  certificate's SHA-256 thumbprint and requires `Fsc-Transaction-Id`. The podiumd chart configures no route with
+  it and no FSC Manager or group; the inway admits consumers by client certificate in OpenBao
+  (`openbao-consumer-auth`). So the token, TransactionID, TransactionLog and Outway cases do not apply.
+- Ported: Inway-Incoming-Request-4 is the `untrusted-certificate` case; a request without a client certificate is
+  the `no-certificate` case of `test_inway_admits_only_the_allowed_consumer`; Inway-Port-1 is
+  `test_inway_url_uses_an_fsc_port`. Port the token and TransactionID cases once an estate routes through `fsc`.
 
 How to run: port selected cases to pytest (`tests/component/frankgateway/`, `inway.py`).
 
