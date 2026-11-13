@@ -5,6 +5,8 @@ Ported from TA interaction 32 and 76, and regression 152.
 
 from __future__ import annotations
 
+import re
+
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -18,6 +20,7 @@ from podiumd_tests.json_data import section
 from podiumd_tests.openformulieren import COMPLETE
 from podiumd_tests.openformulieren import complete_submission
 from podiumd_tests.openformulieren import download_report
+from podiumd_tests.openformulieren import file_value
 from podiumd_tests.openformulieren import forget_submission
 from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import registered_zaak
@@ -26,6 +29,7 @@ from podiumd_tests.openformulieren import start_submission
 from podiumd_tests.openformulieren import submission_action
 from podiumd_tests.openformulieren import submission_summary
 from podiumd_tests.openformulieren import submit
+from podiumd_tests.openformulieren import upload_file
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
 
@@ -164,3 +168,58 @@ def test_repeating_group_rows_are_added_edited_and_submitted(
     data = {**NAW_DATA, "kinderen": list(gewijzigd)}
     status = complete_submission(podiumd_env, http, submission, headers, data, timeout=REGISTRATION_TIMEOUT)
     assert registered_zaak(podiumd_env, openzaak, registry, status)["zaaktype"] == test_zaaktype["url"]
+
+
+BIJLAGE = {
+    "type": "file",
+    "key": "bijlage",
+    "label": "Bijlage",
+    "fileMaxSize": "20KB",
+    "storage": "url",
+    "url": "",
+    "multiple": False,
+    "file": {"type": []},
+}
+
+
+@pytest.mark.requires("cluster")
+@pytest.mark.source(
+    "external GemeenteNijmegen/open-forms-testautomatisering helpers/file-upload.ts",
+    "Uploads of 109 B, 13 kB, 555 kB and 1.5 MB: a form takes files up to its field's maximum size.",
+)
+@pytest.mark.parametrize(("size", "accepted"), [(109, True), (13_000, True), (555_000, False)])
+@pytest.mark.scenario("""
+    Given a form with a file field of at most 20 kB
+    When an inwoner attaches a file of 109 B, 13 kB or 555 kB
+    Then the step refuses the file above the maximum, naming the size
+    And a submission with a smaller file becomes a zaak with that file as a document
+""")
+def test_file_field_takes_files_up_to_its_maximum(  # parametrized size
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+    size: int,
+    accepted: bool,  # noqa: FBT001  # parameter
+) -> None:
+    """A file within fileMaxSize becomes a document of the zaak; above it Open Formulieren answers 413."""
+    need_bootstrap("openformulieren-zgw-group", "openzaak-of-autorisatie")
+    base = podiumd_env.profile.urls["openformulieren"]
+    slug = registry.tagged(f"upload-{size}")
+    make_form(podiumd_env, registry, slug, [*NAW, BIJLAGE], ZGW_REGISTRATION)
+    http = podiumd_env.session()
+    submission, headers = start_submission(http, base, slug)
+    forget_submission(podiumd_env, registry, str(submission["id"]))
+    upload = expect_status(upload_file(http, base, submission, headers, "bijlage.txt", b"x" * size), HTTPStatus.OK)
+    data = {**NAW_DATA, "bijlage": [file_value(base, upload.json())]}
+    if not accepted:
+        response = expect_status(save_step(http, submission, headers, data), HTTPStatus.REQUEST_ENTITY_TOO_LARGE)
+        assert re.search(r"maximale bestandsgrootte|maximum file size", response.text, re.IGNORECASE), response.text[
+            :300
+        ]
+        return
+    status = complete_submission(podiumd_env, http, submission, headers, data, timeout=REGISTRATION_TIMEOUT)
+    zaak = registered_zaak(podiumd_env, openzaak, registry, status)
+    links = openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": str(zaak["url"])})
+    documents = [openzaak.get(str(link["informatieobject"])) for link in links]
+    assert [d["bestandsomvang"] for d in documents if d["bestandsnaam"] == "bijlage.txt"] == [size]

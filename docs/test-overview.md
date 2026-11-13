@@ -11,8 +11,8 @@ versions is not counted.
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 256 | 41 | 10 |
-| component | 941 | 571 | 72 |
-| integration | 177 | 116 | 14 |
+| component | 938 | 570 | 72 |
+| integration | 180 | 117 | 14 |
 | perf | 54 | 3 | 0 |
 | **full tier** | **1337** | **701** |  |
 
@@ -41,7 +41,7 @@ Unit tests (`unit_tests/`, functions): 835. Perf endpoints (`perf/runs.py`): 22.
 | component | omc | 3 | 2 |
 | component | openarchiefbeheer | 36 | 30 |
 | component | openbeheer | 5 | 5 |
-| component | openformulieren | 15 | 10 |
+| component | openformulieren | 12 | 9 |
 | component | openinwoner | 34 | 24 |
 | component | openklant | 19 | 15 |
 | component | opennotificaties | 8 | 6 |
@@ -63,7 +63,7 @@ Unit tests (`unit_tests/`, functions): 835. Perf endpoints (`perf/runs.py`): 22.
 | integration | formulier_pauzeren | 2 | 2 |
 | integration | formulier_prefill | 5 | 2 |
 | integration | formulier_wijzigen | 1 | 1 |
-| integration | formulier_zaak | 2 | 2 |
+| integration | formulier_zaak | 5 | 3 |
 | integration | formulier_zaaktype_versie | 1 | 1 |
 | integration | kiss_contactverzoek | 8 | 4 |
 | integration | kiss_kennis | 7 | 3 |
