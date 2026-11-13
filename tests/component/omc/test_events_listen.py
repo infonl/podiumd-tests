@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.bootstrap.omc import VALIDITY
+from podiumd_tests.omc import OMC_LISTEN
 from podiumd_tests.omc import listen
 from podiumd_tests.omc import zaak_notificatie
 from podiumd_tests.responses import expect_status
@@ -33,6 +34,7 @@ pytestmark = [
     pytest.mark.component,
     pytest.mark.core,
     pytest.mark.requires("omc", "cluster"),
+    pytest.mark.xdist_group(OMC_LISTEN),
 ]
 
 

@@ -25,6 +25,7 @@ from podiumd_tests.json_data import section
 from podiumd_tests.mailpit import own_address
 from podiumd_tests.omc import EMAIL
 from podiumd_tests.omc import MAIL_TIMEOUT
+from podiumd_tests.omc import OMC_LISTEN
 from podiumd_tests.omc import SMS
 from podiumd_tests.omc import make_inwoner_zaak
 from podiumd_tests.omc import notify_request
@@ -48,6 +49,7 @@ if TYPE_CHECKING:
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.requires("omc", "openzaak", "openklant", "opennotificaties"),
+    pytest.mark.xdist_group(OMC_LISTEN),
     pytest.mark.source(
         "podiumd-tests",
         "TA's OMC specs check only OMC's API; these cover the chain from a zaak status through OMC and Notify back to Open Klant.",

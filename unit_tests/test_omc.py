@@ -26,6 +26,19 @@ def test_notify_request_matches_the_address_and_the_template_of_the_setting(env_
     assert found == wanted
 
 
+def test_notify_bodies_are_all_requests_with_the_template_of_the_setting(env_factory, fake_runner):
+    lines = [
+        {"path": NOTIFY_EMAIL, "body": {"email_address": "a@example.invalid", "template_id": "t-taak"}},
+        {"path": NOTIFY_EMAIL, "body": {"email_address": "b@example.invalid", "template_id": "t-create"}},
+        {"path": NOTIFY_EMAIL, "body": {"email_address": "a@example.invalid", "template_id": "t-taak"}},
+    ]
+    fake_runner.answers["printenv NOTIFY_TEMPLATEID_EMAIL_TASKASSIGNED"] = (0, "t-taak\n")
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "omc"}}]}))
+    fake_runner.answers[f"exec deploy/{NAME}"] = (0, "".join(f"{json.dumps(line)}\n" for line in lines))
+    found = omc.notify_bodies(env_factory(), EMAIL, "NOTIFY_TEMPLATEID_EMAIL_TASKASSIGNED")
+    assert found == [lines[0]["body"], lines[2]["body"]]
+
+
 def test_make_inwoner_zaak_gives_the_partij_and_the_initiator_one_bsn(monkeypatch):
     calls = []
 

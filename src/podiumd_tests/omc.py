@@ -41,6 +41,10 @@ EVERY = "*"
 
 # The first OMC that reads an Open VTB 0.2.0 bericht (mijnOverheidBerichtenbox moved to the berichttype).
 OMC_READS_NEW_OPENVTB = (2, 3, 2)
+# The first OMC that keeps each request's notification to that request (QueryBase scoped, not a singleton).
+OMC_REQUEST_SCOPED_QUERIES = (2, 4, 1)
+# xdist_group of the tests that make OMC process notifications: older OMCs mix up concurrent ones (omc-8).
+OMC_LISTEN = "omc-listen"
 
 
 def make_inwoner(openklant: ApiClient, registry: ResourceRegistry, adres: str) -> str:
@@ -74,6 +78,13 @@ def notify_request(env: Environment, channel: tuple[str, str], adres: str, templ
         return body.get(channel[1]) == adres and body.get("template_id") == template_id
 
     return Callback(env, channel[0]).wait_for(is_wanted, timeout=MAIL_TIMEOUT, description=f"OMC {template} to {adres}")
+
+
+def notify_bodies(env: Environment, channel: tuple[str, str], template: str) -> list[JsonObject]:
+    """Return the bodies of all OMC's Notify requests on the channel with the template of OMC setting `template`."""
+    template_id = env.variable("omc", template)
+    bodies = (section(entry, "body") for entry in Callback(env, channel[0]).received())
+    return [body for body in bodies if body.get("template_id") == template_id]
 
 
 def listen(http: requests.Session, env: Environment, body: object, issued: float | None = None) -> requests.Response:

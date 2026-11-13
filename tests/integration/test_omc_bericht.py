@@ -16,6 +16,7 @@ import pytest
 from podiumd_tests.bootstrap.omc import notify_mock_missing
 from podiumd_tests.mailpit import own_address
 from podiumd_tests.omc import EMAIL
+from podiumd_tests.omc import OMC_LISTEN
 from podiumd_tests.omc import OMC_READS_NEW_OPENVTB
 from podiumd_tests.omc import bericht_event
 from podiumd_tests.omc import expect_outcome
@@ -39,6 +40,7 @@ if TYPE_CHECKING:
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.requires("omc", "openvtb", "cluster"),
+    pytest.mark.xdist_group(OMC_LISTEN),
     pytest.mark.source(
         "upstream Worth-NL/NotifyNL-OMC omc-notify.gitbook.io",
         "Bericht ontvangen: OMC forwards a published Open VTB bericht to a citizen, by e-mail when not to MijnOverheid.",

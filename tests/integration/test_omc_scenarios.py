@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import uuid
 
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -23,10 +25,13 @@ from podiumd_tests.bootstrap.omc import notify_mock_missing
 from podiumd_tests.json_data import section
 from podiumd_tests.mailpit import own_address
 from podiumd_tests.omc import EMAIL
+from podiumd_tests.omc import OMC_LISTEN
+from podiumd_tests.omc import OMC_REQUEST_SCOPED_QUERIES
 from podiumd_tests.omc import besluit_notificatie
 from podiumd_tests.omc import expect_outcome
 from podiumd_tests.omc import listen
 from podiumd_tests.omc import make_inwoner_zaak
+from podiumd_tests.omc import notify_bodies
 from podiumd_tests.omc import notify_request
 from podiumd_tests.omc import setting_skip
 from podiumd_tests.omc import zaak_notificatie
@@ -44,6 +49,7 @@ from podiumd_tests.seed.openzaak import make_status
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.seed.openzaak import zaaktype_parts
+from podiumd_tests.workloads import expect_defect
 from podiumd_tests.zac import notificatie
 
 if TYPE_CHECKING:
@@ -60,6 +66,7 @@ if TYPE_CHECKING:
 pytestmark = [
     pytest.mark.integration,
     pytest.mark.requires("omc", "openzaak", "cluster"),
+    pytest.mark.xdist_group(OMC_LISTEN),
 ]
 
 DOCS = "upstream Worth-NL/NotifyNL-OMC omc-notify.gitbook.io"
@@ -69,6 +76,11 @@ NOT_WHITELISTED = f"case type with identification {TEST_ZAAKTYPE!r} is not inclu
 DECISION_IOTS = "ZGW_VARIABLE_OBJECTTYPE_DECISIONINFOOBJECTTYPE_UUIDS"
 TASK_OBJECTTYPE = "ZGW_VARIABLE_OBJECTTYPE_TASKOBJECTTYPE_UUID"
 MESSAGE_OBJECTTYPE = "ZGW_VARIABLE_OBJECTTYPE_MESSAGEOBJECTTYPE_UUID"
+TAAK_MAIL = "NOTIFY_TEMPLATEID_EMAIL_TASKASSIGNED"
+# The status of each taak, and how often OMC gets its notification, all at once (ROUNDS times each, on POSTERS threads).
+CONCURRENT_TAKEN = ("open",) * 8 + ("gesloten",) * 4
+ROUNDS = 10
+POSTERS = 24
 # A document OMC tells the inwoner about.
 OPENBAAR_DEFINITIEF = {"status": "definitief", "vertrouwelijkheidaanduiding": "openbaar"}
 
@@ -372,14 +384,72 @@ def test_taak_is_mailed_to_the_inwoner(
     taak_objecttype: str,
 ) -> None:
     """An open taak for the initiator makes OMC send the taak e-mail."""
-    reason = setting_skip(podiumd_env, "ZGW_WHITELIST_TASKASSIGNED_IDS", TEST_ZAAKTYPE, listed=True)
-    if not reason and not podiumd_env.variable("omc", "NOTIFY_TEMPLATEID_EMAIL_TASKASSIGNED"):
-        reason = "OMC's NOTIFY_TEMPLATEID_EMAIL_TASKASSIGNED is empty"
-    if reason:
-        pytest.skip(reason)
+    taak_mail_skip(podiumd_env)
     adres = own_address(registry)
     zaak, bsn = make_inwoner_zaak(openzaak, openklant, registry, parts, adres)
     make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
     notification = make_taak(objecten, registry, taak_objecttype, zaak, "open", bsn)
     expect_outcome(listen(http, podiumd_env, notification), HTTPStatus.ACCEPTED, SENT)
-    notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_TASKASSIGNED")
+    notify_request(podiumd_env, EMAIL, adres, TAAK_MAIL)
+
+
+def taak_mail_skip(env: Environment) -> None:
+    """Skip unless OMC mails a taak on the test zaaktype."""
+    reason = setting_skip(env, "ZGW_WHITELIST_TASKASSIGNED_IDS", TEST_ZAAKTYPE, listed=True)
+    if not reason and not env.variable("omc", TAAK_MAIL):
+        reason = f"OMC's {TAAK_MAIL} is empty"
+    if reason:
+        pytest.skip(reason)
+
+
+@pytest.mark.requires("objecten", "openklant")
+@pytest.mark.usefixtures("notify_mock")
+@pytest.mark.source("podiumd-tests", "OMC handles notifications that arrive together each with its own data.")
+@pytest.mark.scenario("""
+    Given inwoners with an e-mail address, each with a taak on their own zaak, some open and some closed
+    When OMC gets the notifications of all these taken at the same time
+    Then each inwoner with an open taak gets one taak e-mail, about their own zaak
+    And the inwoners with a closed taak get none
+""")
+def test_concurrent_taken_reach_their_own_inwoner(
+    request: pytest.FixtureRequest,
+    http: requests.Session,
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    openklant: ApiClient,
+    objecten: ApiClient,
+    registry: ResourceRegistry,
+    parts: ZaaktypeParts,
+    taak_objecttype: str,
+) -> None:
+    """Concurrent taak notifications: one mail per open taak, to its own inwoner about its own zaak; none if closed."""
+    taak_mail_skip(podiumd_env)
+    expect_defect(
+        request,
+        podiumd_env,
+        "omc",
+        lambda version: version < OMC_REQUEST_SCOPED_QUERIES,
+        raises=AssertionError,
+        reason="[omc-8] OMC before 2.4.1 keeps the notification in a singleton QueryBase, so concurrent requests are "
+        "processed with each other's object, zaak and inwoner (privacy); fixed in OMC v.2.4.1",
+    )
+    expected: dict[str, Counter[str]] = {}
+    notifications = []
+    for status in CONCURRENT_TAKEN:
+        adres = own_address(registry)
+        zaak, bsn = make_inwoner_zaak(openzaak, openklant, registry, parts, adres)
+        make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
+        notifications.append(make_taak(objecten, registry, taak_objecttype, zaak, status, bsn))
+        expected[adres] = Counter({str(zaak["identificatie"]): ROUNDS if status == "open" else 0})
+    with ThreadPoolExecutor(POSTERS) as pool:
+        list(pool.map(lambda notification: listen(http, podiumd_env, notification), notifications * ROUNDS))
+    mails = notify_bodies(podiumd_env, EMAIL, TAAK_MAIL)
+    found = {
+        adres: Counter(
+            str(section(mail, "personalisation").get("zaak.identificatie"))
+            for mail in mails
+            if mail.get("email_address") == adres
+        )
+        for adres in expected
+    }
+    assert found == expected
