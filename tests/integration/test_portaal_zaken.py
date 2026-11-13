@@ -30,7 +30,6 @@ from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.openinwoner import upload_document
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openklant import delete_klantcontact_tree
-from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import clean_up_new_documents
 from podiumd_tests.seed.openzaak import link_document
@@ -464,10 +463,11 @@ def test_question_about_a_zaak_reaches_open_klant(
 
 
 @pytest.mark.tc("ZAC-066")
-@pytest.mark.requires("zac")
+@pytest.mark.requires("zac", "pabc")
 @pytest.mark.source("draaiboek ZAC-066", "The portal shows zaken from ZAC correctly.")
 @pytest.mark.scenario("""
-    Given a behandelaar starts a zaak in ZAC
+    Given a behandelaar starts a zaak of an extern zaaktype in ZAC
+    And completes its intake
     And makes the inwoner its initiator
     When the inwoner logs in to Open Inwoner with DigiD
     Then Mijn zaken lists the zaak
@@ -477,25 +477,19 @@ def test_zaak_started_in_zac_shows_in_mijn_zaken(
     podiumd_env: Environment,
     zac: requests.Session,
     urls: dict[str, str],
-    openzaak: ApiClient,
-    zac_parameters: JsonObject,
-    zac_zaak: Callable[..., JsonObject],
+    bpmn_zaak: JsonObject,
+    zac_group: str,
     need_bootstrap: Callable[..., None],
 ) -> None:
     """A zaak started in ZAC with the inwoner as initiator is listed in the inwoner's Mijn zaken.
 
-    Open Inwoner lists only zaken of an extern zaaktype, so an intern zaaktype in ZAC skips.
+    The BPMN zaaktype is extern, which Open Inwoner requires; the intake gives the zaak a status.
     """
-    zaaktype = openzaak.get(f"{CATALOGI}/zaaktypen/{section(zac_parameters, 'zaaktype')['uuid']}")
-    if zaaktype.get("indicatieInternOfExtern") != "extern":
-        pytest.skip(
-            f"ZAC's zaaktype {zaaktype.get('identificatie')} is intern: Open Inwoner lists only extern zaaktypen"
-        )
     need_bootstrap(INWONER.name, *WIRING)
-    zaak = zac_zaak()
-    make_person_initiator(zac, urls["zac"], zaak, EREBOS)
+    complete_intake(zac, urls["zac"], bpmn_zaak, (zac_group, ADMIN.username))
+    make_person_initiator(zac, urls["zac"], bpmn_zaak, EREBOS)
     log_in(page, podiumd_env)
-    expect_listed(page, zaak)
+    expect_listed(page, bpmn_zaak)
 
 
 @pytest.mark.requires("zac", "pabc", "mailpit")
