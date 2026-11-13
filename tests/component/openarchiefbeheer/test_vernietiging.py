@@ -43,6 +43,9 @@ from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak
+from podiumd_tests.seed.openzaak import link_besluit_document
+from podiumd_tests.seed.openzaak import make_besluit
+from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.zac import heropenen
 from podiumd_tests.zac_documents import uploaded_document
@@ -235,6 +238,40 @@ def test_destruction_deletes_the_productaanvraag_of_the_zaak(
     objecten.request("GET", str(aanvraag["url"]), HTTPStatus.NOT_FOUND)
 
 
+def _is_in_open_zaak(openzaak: ApiClient, url: str) -> bool:
+    return openzaak.request("GET", url, HTTPStatus.OK, HTTPStatus.NOT_FOUND).status_code == HTTPStatus.OK
+
+
+@pytest.mark.destructive
+@pytest.mark.source(
+    "upstream maykinmedia/open-archiefbeheer backend/src/openarchiefbeheer/destruction/destruction_logic.py",
+    "Before the zaak, OAB deletes the zaak's besluiten, their besluitinformatieobjecten and the documents they link.",
+)
+@pytest.mark.scenario("""
+    Given a closed zaak with a besluit that has a document
+    And a vernietigingslijst of the zaak that the reviewer and the archivist accepted
+    When the destruction runs
+    Then the besluit, its link to the document and the document are gone from Open Zaak
+""")
+def test_destruction_deletes_the_besluit_and_its_document(
+    podiumd_env: Environment,
+    oab: Callable[[str], requests.Session],
+    api: str,
+    openzaak: ApiClient,
+    zaak: JsonObject,
+    parts: ZaaktypeParts,
+    registry: ResourceRegistry,
+) -> None:
+    """OAB deletes the zaak's besluit with its besluitinformatieobject and the document it links."""
+    besluit = make_besluit(openzaak, registry, parts.besluittype, zaak=zaak["url"])
+    document = make_document(openzaak, registry, parts.informatieobjecttype)
+    link = link_besluit_document(openzaak, registry, besluit, document)
+    # The list itself may fail on the zaak (open-archiefbeheer-4); the besluiten go first.
+    run_destruction(podiumd_env, oab, api, ready_to_delete(oab, api, zaak, registry))
+    left = [url for url in (besluit["url"], link["url"], document["url"]) if _is_in_open_zaak(openzaak, str(url))]
+    assert left == []
+
+
 @pytest.mark.destructive
 @pytest.mark.tc("ABC-038")
 @REG_171
@@ -394,10 +431,6 @@ def fixture_zac_zaak_on_list(
     cache_zaken(podiumd_env, [url], cached=True)
     lijst = ready_to_delete(oab, api, zaak, registry)
     return zaak, openzaak.url(f"{DOCUMENTEN}/enkelvoudiginformatieobjecten/{document['uuid']}"), lijst
-
-
-def _is_in_open_zaak(openzaak: ApiClient, url: str) -> bool:
-    return openzaak.request("GET", url, HTTPStatus.OK, HTTPStatus.NOT_FOUND).status_code == HTTPStatus.OK
 
 
 @pytest.mark.xfail(
