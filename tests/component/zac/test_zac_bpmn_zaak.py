@@ -8,13 +8,20 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.bpmn import HARDCODED
+from podiumd_tests.bootstrap.bpmn import HARDCODED_TO
+from podiumd_tests.bootstrap.bpmn import INHERITED
 from podiumd_tests.bootstrap.bpmn import SELECT
 from podiumd_tests.bootstrap.bpmn import SIGN
+from podiumd_tests.bootstrap.bpmn import SUMMARY
+from podiumd_tests.bootstrap.bpmn import TOEWIJZING
 from podiumd_tests.bootstrap.bpmn import complete_intake
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.zac_zaaktype import make_role_group
+from podiumd_tests.zac import assignment
 from podiumd_tests.zac import group_members
 from podiumd_tests.zac import hervatten
 from podiumd_tests.zac import moved_dates
@@ -32,6 +39,7 @@ from podiumd_tests.zac_taken import read_taak
 if TYPE_CHECKING:
     import requests
 
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -151,3 +159,35 @@ def test_next_bpmn_taak_follows_the_zaaks_new_behandelaar(
     complete_task(zac, zac_url, select, {"ZAAK_Documenten_Ondertekenen_Selectie": []})
     sign = open_task(zac, zac_url, str(bpmn_zaak["uuid"]), SIGN)
     assert (section(sign, "groep").get("id"), section(sign, "behandelaar").get("id")) == (zac_group, naam)
+
+
+@pytest.mark.scenario("""
+    Given a BPMN zaak in ZAC
+    When the behandelaar submits the intake for a new group without behandelaar, choosing the assignment variants
+    Then the zaak has that group and no behandelaar
+    And the next taak has the group and behandelaar the process names for it, not the zaak's
+    When the behandelaar completes that taak
+    Then the next taak takes the group and behandelaar of the taak before it
+    When the behandelaar assigns the zaak to their own group and themselves, and completes that taak
+    Then the summary taak has the zaak's new group and behandelaar
+""")
+def test_bpmn_taken_take_a_fixed_an_inherited_and_the_zaaks_new_assignment(
+    zac: requests.Session,
+    podiumd_env: Environment,
+    urls: dict[str, str],
+    bpmn_zaak: JsonObject,
+    zac_group: str,
+    registry: ResourceRegistry,
+) -> None:
+    """A user task's literal candidates, taken:groep/taken:behandelaar of the previous task, and zaakGroep after toekennen."""
+    zac_url, uuid = urls["zac"], str(bpmn_zaak["uuid"])
+    keuze = make_role_group(podiumd_env, registry, "behandelaar")
+    complete_intake(zac, zac_url, bpmn_zaak, (keuze, ""), **{TOEWIJZING: True})
+    assert assignment(read_zaak(zac, zac_url, uuid)) == (keuze, None)
+    hardcoded = open_task(zac, zac_url, uuid, HARDCODED)
+    assert assignment(hardcoded) == HARDCODED_TO
+    complete_task(zac, zac_url, hardcoded, {})
+    assert assignment(open_task(zac, zac_url, uuid, INHERITED)) == HARDCODED_TO
+    expect_status(toekennen(zac, zac_url, bpmn_zaak, zac_group, ADMIN.username), HTTPStatus.OK)
+    complete_task(zac, zac_url, open_task(zac, zac_url, uuid, INHERITED), {})
+    assert assignment(open_task(zac, zac_url, uuid, SUMMARY)) == (zac_group, ADMIN.username)

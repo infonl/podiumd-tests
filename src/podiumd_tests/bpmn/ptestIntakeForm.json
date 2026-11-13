@@ -45,6 +45,12 @@
       }
     },
     {
+      "type": "checkbox",
+      "key": "ptestToewijzing",
+      "label": "Assignment variants instead of documents",
+      "input": true
+    },
+    {
       "type": "button",
       "key": "submit",
       "label": "Submit",

@@ -1,0 +1,16 @@
+{
+  "display": "form",
+  "name": "ptestConfirmForm",
+  "title": "Confirm",
+  "path": "ptestconfirmform",
+  "type": "form",
+  "components": [
+    {
+      "type": "button",
+      "key": "submit",
+      "label": "Submit",
+      "action": "submit",
+      "input": true
+    }
+  ]
+}

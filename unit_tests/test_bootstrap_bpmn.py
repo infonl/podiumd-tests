@@ -313,3 +313,10 @@ def test_complete_intake_assigns_and_chooses_the_eindstatus(fake_http):
         "ZK_Result": bpmn.EINDSTATUS,
         "extra": "x",
     }
+
+
+def test_process_names_the_hardcoded_assignment():
+    model = bpmn.process_files()[f"{PROCESS_KEY}.bpmn"]
+    groep, behandelaar = bpmn.HARDCODED_TO
+    assert f"flowable:assignee={json.dumps(behandelaar)}" in model
+    assert f"flowable:candidateGroups={json.dumps(groep)}" in model

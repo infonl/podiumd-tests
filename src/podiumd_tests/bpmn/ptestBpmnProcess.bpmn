@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- podiumd-tests' BPMN process for ZAC: intake (assign, status In behandeling, a mail when the intake names
-     MAIL_To), select and sign documents, summary, close the zaak.
+     MAIL_To), select and sign documents, summary, close the zaak. An intake with ptestToewijzing true takes the
+     tasks Hardcoded (fixed group and behandelaar) and Inherited (those of Hardcoded) instead of the documents.
      Modelled on ZAC's own test processes (src/itest/resources/bpmn, ZAC 5.9.1). -->
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:flowable="http://flowable.org/bpmn"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" targetNamespace="http://podiumd-tests">
@@ -29,6 +30,11 @@
         <flowable:field name="vertrouwelijkheidaanduiding"><flowable:expression><![CDATA[${var:getOrDefault(MAIL_Vertrouwelijkheidaanduiding, '')}]]></flowable:expression></flowable:field>
       </extensionElements>
     </serviceTask>
+    <exclusiveGateway id="route" name="Assignment variants?" default="toDocuments"/>
+    <userTask id="hardcoded" name="Hardcoded" flowable:assignee="ptest-bootstrap-admin"
+              flowable:candidateGroups="beheerders" flowable:formKey="ptestConfirmForm" flowable:formFieldValidation="false"/>
+    <userTask id="inherited" name="Inherited" flowable:assignee="${taken:behandelaar('hardcoded')}"
+              flowable:candidateGroups="${taken:groep('hardcoded')}" flowable:formKey="ptestConfirmForm" flowable:formFieldValidation="false"/>
     <userTask id="selectDocuments" name="Select documents to sign" flowable:assignee="${var:get(zaakBehandelaar)}"
               flowable:candidateGroups="${zaakGroep}" flowable:formKey="ptestSelectDocumentsForm" flowable:formFieldValidation="false"/>
     <userTask id="signDocuments" name="Sign the selected documents" flowable:assignee="${var:get(zaakBehandelaar)}"
@@ -50,8 +56,14 @@
     <sequenceFlow id="withMail" sourceRef="mailChoice" targetRef="sendMail">
       <conditionExpression xsi:type="tFormalExpression"><![CDATA[${var:isNotEmpty(MAIL_To)}]]></conditionExpression>
     </sequenceFlow>
-    <sequenceFlow id="noMail" sourceRef="mailChoice" targetRef="selectDocuments"/>
-    <sequenceFlow id="f3b" sourceRef="sendMail" targetRef="selectDocuments"/>
+    <sequenceFlow id="noMail" sourceRef="mailChoice" targetRef="route"/>
+    <sequenceFlow id="f3b" sourceRef="sendMail" targetRef="route"/>
+    <sequenceFlow id="toDocuments" sourceRef="route" targetRef="selectDocuments"/>
+    <sequenceFlow id="toHardcoded" sourceRef="route" targetRef="hardcoded">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${var:getOrDefault(ptestToewijzing, false)}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="toInherited" sourceRef="hardcoded" targetRef="inherited"/>
+    <sequenceFlow id="fromInherited" sourceRef="inherited" targetRef="summary"/>
     <sequenceFlow id="f4" sourceRef="selectDocuments" targetRef="signDocuments"/>
     <sequenceFlow id="f5" sourceRef="signDocuments" targetRef="sign"/>
     <sequenceFlow id="f6" sourceRef="sign" targetRef="summary"/>

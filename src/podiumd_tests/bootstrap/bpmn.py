@@ -64,6 +64,11 @@ CONFIGURATION = "/rest/zaaktype-bpmn-configuration"
 EINDSTATUS = "Afgehandeld"
 # The statustype the process sets after the intake.
 IN_BEHANDELING = "In behandeling"
+# Intake form field: true takes the tasks HARDCODED and INHERITED instead of the document tasks.
+TOEWIJZING = "ptestToewijzing"
+HARDCODED, INHERITED = "Hardcoded", "Inherited"
+# The group and behandelaar the process names for task HARDCODED.
+HARDCODED_TO = ("beheerders", f"{PREFIX}-admin")
 # Intake form fields: the process mails MAIL_To with this vertrouwelijkheidaanduiding when MAIL_To is not empty.
 MAIL_TO, MAIL_VERTROUWELIJKHEID = "MAIL_To", "MAIL_Vertrouwelijkheidaanduiding"
 
