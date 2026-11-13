@@ -23,6 +23,7 @@ from podiumd_tests.zac import PRODUCTAANVRAAG_SOURCE
 from podiumd_tests.zac import PRODUCTAANVRAAG_TIMEOUT
 from podiumd_tests.zac import clean_up_inbox_entries
 from podiumd_tests.zac import clean_up_zaak
+from podiumd_tests.zac import inbox_productaanvraag
 from podiumd_tests.zac import inbox_productaanvragen
 from podiumd_tests.zac import inbox_productaanvragen_page
 from podiumd_tests.zac import read_zaak
@@ -90,11 +91,7 @@ def test_unhandled_productaanvraag_becomes_a_zaak_from_the_inbox(
         pdf=pdf["url"],
         bijlagen=[bijlage["url"]],
     )
-    entry = wait_until(
-        lambda: next(iter(inbox_productaanvragen(zac, urls["zac"], kenmerk)), None),
-        timeout=PRODUCTAANVRAAG_TIMEOUT,
-        description=f"productaanvraag {kenmerk} in the Inbox productaanvragen",
-    )
+    entry = inbox_productaanvraag(zac, urls["zac"], kenmerk)
     assert (entry["initiatorID"], entry["aanvraagdocumentUUID"], entry["aantalBijlagen"]) == (
         EREBOS,
         uuid_of(pdf["url"]),
@@ -173,9 +170,5 @@ def test_unhandled_productaanvraag_without_initiator_reaches_the_inbox(
     clean_up_inbox_entries(zac, urls["zac"], registry, soort)
     betrokkenen = [{"inpBsn": EREBOS, "rolOmschrijvingGeneriek": "belanghebbende"}]
     make_productaanvraag(objecten, registry, productaanvraag_objecttype, soort, soort, betrokkenen=betrokkenen)
-    entry = wait_until(
-        lambda: next(iter(inbox_productaanvragen(zac, urls["zac"], soort)), None),
-        timeout=PRODUCTAANVRAAG_TIMEOUT,
-        description=f"productaanvraag {soort} in the Inbox productaanvragen",
-    )
+    entry = inbox_productaanvraag(zac, urls["zac"], soort)
     assert entry.get("initiatorID") is None

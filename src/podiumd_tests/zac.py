@@ -695,6 +695,20 @@ def productaanvraag_zaak(
     return wait_until(started, timeout=timeout, interval=3, description=f"zaak for productaanvraag {kenmerk}")
 
 
+def zaak_with_contactgegevens(zac: requests.Session, zac_url: str, uuid: str) -> JsonObject:
+    """Return the zaak as ZAC shows it, once ZAC has linked the aanvraag's contactgegevens to it.
+
+    ZAC links them after it assigned the zaak and added the betrokkenen, right before it sends the
+    ontvangstbevestiging.
+    """
+
+    def shown() -> JsonObject | None:
+        found = read_zaak(zac, zac_url, uuid)
+        return found if found.get("zaakSpecificContactDetails") else None
+
+    return wait_until(shown, timeout=PRODUCTAANVRAAG_TIMEOUT, description=f"contactgegevens on zaak {uuid}")
+
+
 def inbox_productaanvragen(http: requests.Session, zac_url: str, productaanvraagtype: str) -> list[JsonObject]:
     """Return the entries of ZAC's Inbox productaanvragen of the productaanvraagtype."""
     return entries(inbox_productaanvragen_page(http, zac_url, productaanvraagtype, 0, 100).get("resultaten"))
@@ -705,6 +719,15 @@ def inbox_productaanvragen_page(
 ) -> JsonObject:
     """Return one page of ZAC's Inbox productaanvragen of the productaanvraagtype, with its totaal."""
     return list_page(http, f"{zac_url}/rest/inbox-productaanvragen", {"type": productaanvraagtype}, page, max_results)
+
+
+def inbox_productaanvraag(http: requests.Session, zac_url: str, productaanvraagtype: str) -> JsonObject:
+    """Return the first entry of ZAC's Inbox productaanvragen of the productaanvraagtype, once ZAC lists one."""
+    return wait_until(
+        lambda: next(iter(inbox_productaanvragen(http, zac_url, productaanvraagtype)), None),
+        timeout=PRODUCTAANVRAAG_TIMEOUT,
+        description=f"productaanvraag {productaanvraagtype} in the Inbox productaanvragen",
+    )
 
 
 def list_page(http: requests.Session, url: str, filters: JsonObject, page: int, max_results: int) -> JsonObject:

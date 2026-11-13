@@ -47,6 +47,7 @@ from podiumd_tests.zac import productaanvraag_zaken
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import wait_in_werkvoorraad
 from podiumd_tests.zac import zaak_historie
+from podiumd_tests.zac import zaak_with_contactgegevens
 from podiumd_tests.zac_betrokkenen import make_person_initiator
 from podiumd_tests.zac_documents import inbox_documenten
 from podiumd_tests.zac_taken import open_task
@@ -371,19 +372,6 @@ def test_aanvraagspecifieke_contactgegevens_are_on_the_zaak(
     assert section(zaak, "zaakSpecificContactDetails") == {"emailAddress": adres, "telephoneNumber": telefoon}
     assert zaak.get("initiatorIdentificatie") is None
     assert assignment(zaak) == (zac_parameters["defaultGroepId"], zac_parameters.get("defaultBehandelaarId"))
-
-
-def zaak_with_contactgegevens(zac: requests.Session, zac_url: str, uuid: str) -> JsonObject:
-    """The zaak as ZAC shows it, once ZAC has linked the aanvraag's contactgegevens to it.
-
-    ZAC links them after it assigned the zaak and added the betrokkenen.
-    """
-
-    def shown() -> JsonObject | None:
-        found = read_zaak(zac, zac_url, uuid)
-        return found if found.get("zaakSpecificContactDetails") else None
-
-    return wait_until(shown, timeout=PRODUCTAANVRAAG_TIMEOUT, description=f"contactgegevens on zaak {uuid}")
 
 
 @pytest.mark.requires("openklant")

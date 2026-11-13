@@ -745,6 +745,17 @@ def test_inbox_productaanvragen_of_a_type_and_their_cleanup(fake_http):
     assert (sent[-1].method, sent[-1].url) == ("DELETE", f"{ZAC}/rest/inbox-productaanvragen/7")
 
 
+def test_inbox_productaanvraag_is_the_first_entry_of_the_type(fake_http):
+    fake_http({"PUT /rest/inbox-productaanvragen": (200, {"resultaten": [{"id": 7}, {"id": 8}], "totaal": 2})})
+    assert zac.inbox_productaanvraag(requests.Session(), ZAC, "t") == {"id": 7}
+
+
+def test_zaak_with_contactgegevens_is_the_zaak_once_zac_shows_them(fake_http):
+    shown = {"uuid": "u-1", "zaakSpecificContactDetails": {"emailAddress": "a@example.invalid"}}
+    fake_http({"GET /rest/zaken/zaak/u-1": (200, shown)})
+    assert zac.zaak_with_contactgegevens(requests.Session(), ZAC, "u-1") == shown
+
+
 def test_inbox_productaanvragen_page_sends_the_type_the_page_and_its_size(fake_http):
     page = {"resultaten": [{"id": 7}], "totaal": 2.0}
     sent = fake_http({"PUT /rest/inbox-productaanvragen": (200, page)})
