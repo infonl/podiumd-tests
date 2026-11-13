@@ -23,10 +23,10 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | bpmn | 6 | 0 | 0 | 0 | 2 |
 | autorisatie-iam | 20 | 2 | 1 | 2 | 2 |
 | zoeken-werklijsten-dashboard | 15 | 4 | 0 | 0 | 2 |
-| beheer-zaps | 12 | 3 | 0 | 2 | 3 |
+| beheer-zaps | 14 | 1 | 0 | 2 | 3 |
 | integraties-intake | 8 | 1 | 0 | 1 | 2 |
 | overig | 3 | 0 | 0 | 0 | 6 |
-| **total** | **138** | **16** | **1** | **9** | **28** |
+| **total** | **140** | **14** | **1** | **9** | **28** |
 
 ## zaak-lifecycle
 
@@ -210,8 +210,8 @@ The batches that close these gaps: [`zac-port-plan.md`](zac-port-plan.md).
 | medium | ZAPs default groep and behandelaar are prefilled in a new zaak | covered | UI only (not planned): createZaak ignores the ZAPs defaults | `test_productaanvraag_zaak_takes_the_details_and_documents`, `test_aanvraagspecifieke_contactgegevens_are_on_the_zaak` | zac-rest |  |  |
 | medium | ZAPs productaanvraagtype can be cleared and must be unique across zaaktypen | covered |  | `test_productaanvraagtype_is_unique_and_can_be_cleared` | zac-rest |  |  |
 | medium | ZAPs koppelingen BRP/KvK toggles restrict initiator and betrokkene types on CMMN and BPMN zaken and are kept on new versions | partial | Not enforced when the initiator changes or a betrokkene is added (zac-24, strict xfail) | `test_saved_zaakafhandelparameters_are_read_back`, `test_new_zaaktype_version_keeps_the_zaakafhandelparameters`, `test_koppelingen_decide_the_initiator_of_a_new_zaak` | zac-rest | BRP, KvK |  |
-| medium | New (also without archieftermijn) zaaktype published in Open Zaak appears in ZAC with creatiedatum, empty parameters and default mailafzenders; a zaaktype without zaken can be deleted | partial | A new zaaktype in ZAC's own catalogus (the suite writes only in its PTEST catalogus) and one without archieftermijn; deleting a zaaktype is not ZAC behaviour (5.9.1 ignores zaaktype destroy notifications, not planned) | `test_bpmn_zaak_starts_with_its_intake_form`, `test_new_zaaktype_has_empty_zaakafhandelparameters`, `test_zaakafhandelparameters_list_the_zaaktypen_of_zacs_catalogus` | zac-rest | Open Zaak |  |
-| medium | Inrichtingscheck rejects a zaaktype without roltype Behandelaar/Initiator or status Wacht op aanvullende informatie, and accepts one without communicatiekanaal E-formulier | partial | ZAC 5.9.1 checks only published zaaktypen of the default catalogus; a rejection needs a broken zaaktype in the estate's own catalogus | `test_handled_zaaktypen_pass_zacs_inrichtingscheck` | zac-rest | Open Zaak |  |
+| medium | New (also without archieftermijn) zaaktype published in Open Zaak appears in ZAC with creatiedatum, empty parameters and default mailafzenders; a zaaktype without zaken can be deleted | covered | Deleting a zaaktype is not ZAC behaviour (5.9.1 ignores zaaktype destroy notifications, not planned); ALG writes where the profile allows (zac_catalogus_writes) | `test_bpmn_zaak_starts_with_its_intake_form`, `test_new_zaaktype_has_empty_zaakafhandelparameters`, `test_zaakafhandelparameters_list_the_zaaktypen_of_zacs_catalogus`, `test_new_zaaktype_in_zacs_catalogus_is_listed` | zac-rest | Open Zaak |  |
+| medium | Inrichtingscheck rejects a zaaktype without roltype Behandelaar/Initiator or status Wacht op aanvullende informatie, and accepts one without communicatiekanaal E-formulier | covered | Communicatiekanaal E-formulier is checked once, globally (no per-zaaktype field in 5.9.1); it is a system value that cannot be removed | `test_handled_zaaktypen_pass_zacs_inrichtingscheck`, `test_inrichtingscheck_rejects_a_zaaktype_without_behandelaar_initiator_or_aanvullende_informatie` | zac-rest | Open Zaak |  |
 | medium | ZAPs taakgegevens (groep, doorlooptijd) are applied to taak Aanvullende informatie | covered | ZAC's backend applies no default groep: the UI fills it from the plan item | `test_started_task_is_in_mijn_taken`, `test_taak_fatale_datum_stays_within_the_zaaks`, `test_zaaktype_gives_aanvullende_informatie_its_groep_and_doorlooptijd` | zac-rest |  |  |
 | medium | Automatische ontvangstbevestiging settings in ZAPs mailgegevens (toggle, template and mail van required, antwoord aan optional) are saved and used | covered | UI only (not planned): the backend checks no required field | `test_zac_mails_the_initiator_an_ontvangstbevestiging`, `test_saved_zaakafhandelparameters_are_read_back` | zac-rest | mail |  |
 | low | ZAPs behandelaar dropdown lists only members of the chosen group; taakgegevens groups load | covered |  | `test_new_group_and_its_members_show_in_zac` | zac-rest | Keycloak |  |
