@@ -7,6 +7,7 @@ so no test publishes a type it cannot delete.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -15,6 +16,7 @@ import pytest
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.lock import file_lock
 from podiumd_tests.responses import invalid_codes
+from podiumd_tests.seed.catalogi import make_concept_besluittype
 from podiumd_tests.seed.openzaak import BESLUIT_CREATE_LOCK
 from podiumd_tests.seed.openzaak import BESLUITEN
 from podiumd_tests.seed.openzaak import delete_besluit
@@ -25,9 +27,12 @@ from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.openzaak import today
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import requests
 
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.environment import Environment
     from podiumd_tests.seed.openzaak import ZaaktypeParts
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -70,47 +75,64 @@ def _besluit_body(registry: ResourceRegistry, besluittype: str, **fields: object
     }
 
 
+@dataclass(frozen=True)
+class Given:
+    """What a besluittype of a refused besluit is taken from."""
+
+    env: Environment
+    openzaak: ApiClient
+    registry: ResourceRegistry
+    parts: ZaaktypeParts
+    archief_parts: ZaaktypeParts
+
+
+def _concept_besluittype(given: Given) -> str:
+    catalogus = str(given.openzaak.get(given.parts.zaaktype)["catalogus"])
+    return str(make_concept_besluittype(given.env, given.openzaak, given.registry, catalogus)["url"])
+
+
 @pytest.mark.source(
     "external OneGround/ZGW-APIs-postman-tests ZGW business rules brc-001, brc-007",
     "A besluit needs a published besluittype that its zaak's zaaktype allows; the besluittype cannot change.",
 )
 @pytest.mark.parametrize(
-    "case",
+    ("besluittype_of", "code"),
     [
-        "does-not-exist",
+        pytest.param(lambda _: NOWHERE, "unknown-service", id="does-not-exist"),
         pytest.param(
-            "is-a-statustype",
+            lambda given: str(given.parts.statustypen[0]["url"]),
+            "invalid-resource",
+            id="is-a-statustype",
             marks=pytest.mark.xfail(
                 strict=True,
                 reason="[open-zaak-5] Open Zaak 1.29.3 answers 500 (StatusType has no catalogus in has_auth) for a "
                 "client with CatalogusAutorisaties; not yet reported upstream",
             ),
         ),
-        "not-of-the-zaaktype",
+        pytest.param(lambda given: given.archief_parts.besluittype, "zaaktype-mismatch", id="not-of-the-zaaktype"),
+        pytest.param(_concept_besluittype, "not-published", id="is-a-concept", marks=pytest.mark.requires("cluster")),
     ],
 )
 @pytest.mark.scenario("""
     Given a zaak of the test zaaktype
-    When a besluit on it is made with a besluittype that does not exist, is no besluittype or belongs to another zaaktype
+    When a besluit on it names a missing besluittype, no besluittype, one of another zaaktype or an unpublished one
     Then Open Zaak refuses the besluit
 """)
 def test_besluit_needs_a_besluittype_of_the_zaaktype(
+    podiumd_env: Environment,
     openzaak: ApiClient,
     registry: ResourceRegistry,
     parts: ZaaktypeParts,
     archief_parts: ZaaktypeParts,
-    case: str,
+    besluittype_of: Callable[[Given], str],
+    code: str,
 ) -> None:
-    """POST of a besluit whose besluittype is wrong for its zaak answers 400."""
+    """POST of a besluit whose besluittype is wrong for its zaak answers 400 with the code of the reason."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
-    besluittype = {
-        "does-not-exist": NOWHERE,
-        "is-a-statustype": str(parts.statustypen[0]["url"]),
-        "not-of-the-zaaktype": archief_parts.besluittype,
-    }[case]
+    besluittype = besluittype_of(Given(podiumd_env, openzaak, registry, parts, archief_parts))
     body = _besluit_body(registry, besluittype, zaak=zaak["url"])
     response = openzaak.request("POST", f"{BESLUITEN}/besluiten", HTTPStatus.BAD_REQUEST, json=body)
-    assert invalid_codes(response), response.text
+    assert invalid_codes(response) == [code], response.text
 
 
 @pytest.mark.source(
