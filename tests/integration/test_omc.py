@@ -22,6 +22,7 @@ from podiumd_tests.bootstrap.omc import notify_mock_missing
 from podiumd_tests.bootstrap.omc import omc_actor_missing
 from podiumd_tests.bootstrap.omc import omc_token
 from podiumd_tests.json_data import section
+from podiumd_tests.mailpit import own_address
 from podiumd_tests.omc import EMAIL
 from podiumd_tests.omc import MAIL_TIMEOUT
 from podiumd_tests.omc import SMS
@@ -71,11 +72,6 @@ def inwoner_zaak(
     return lambda adres: make_inwoner_zaak(openzaak, openklant, registry, parts, adres)[0]
 
 
-def email_address(registry: ResourceRegistry) -> str:
-    """A tagged address of this test only, which no one reads."""
-    return f"{registry.tagged(f'omc-{uuid.uuid4().hex[:8]}')}@example.invalid"
-
-
 @pytest.mark.scenario("""
     Given a zaak in Open Zaak whose initiator has an e-mail address in Open Klant
     When the zaak gets its first status
@@ -89,7 +85,7 @@ def test_new_zaak_mails_the_initiator(
     inwoner_zaak: Callable[[str], JsonObject],
 ) -> None:
     """The first status of an inwoner's zaak makes OMC send the zaak-created e-mail."""
-    adres = email_address(registry)
+    adres = own_address(registry)
     make_status(openzaak, inwoner_zaak(adres), str(parts.statustypen[0]["url"]))
     notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_ZAAKCREATE")
 
@@ -108,7 +104,7 @@ def test_next_status_mails_a_zaak_update(
 ) -> None:
     """A later status that does not close the zaak makes OMC send the zaak-updated e-mail."""
     assert len(parts.statustypen) >= 3, "the test zaaktype needs a status between the first and the eindstatus"
-    adres = email_address(registry)
+    adres = own_address(registry)
     zaak = inwoner_zaak(adres)
     make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
     notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_ZAAKCREATE")
@@ -129,7 +125,7 @@ def test_closing_the_zaak_mails_a_zaak_close(
     inwoner_zaak: Callable[[str], JsonObject],
 ) -> None:
     """The eindstatus makes OMC send the zaak-closed e-mail."""
-    adres = email_address(registry)
+    adres = own_address(registry)
     zaak = inwoner_zaak(adres)
     make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
     notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_ZAAKCREATE")
@@ -173,7 +169,7 @@ def test_delivery_receipt_becomes_a_klantcontact(
     reason = omc_actor_missing(podiumd_env, openklant)
     if reason:
         pytest.skip(reason)
-    adres = email_address(registry)
+    adres = own_address(registry)
     zaak = inwoner_zaak(adres)
     about = {"onderwerpobjectidentificatorObjectId": str(zaak["uuid"])}
     registry.add(

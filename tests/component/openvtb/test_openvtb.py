@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.seed.openvtb import make_bericht
+
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
@@ -74,26 +76,5 @@ def test_bericht_needs_a_berichttype(
     openvtb_berichten: ApiClient, podiumd_env: Environment, registry: ResourceRegistry
 ) -> None:
     """A bericht created against a berichttype reads back (Open VTB 0.2.0 berichten API)."""
-    berichttype = openvtb_berichten.post(
-        "berichttypen",
-        {"verantwoordelijkeOrganisatie": "urn:ptest:org", "mijnOverheidBerichtenbox": False, "bijlageTypen": []},
-    )
-    bt_url = str(berichttype["url"])
-    onderwerp = registry.tagged("bericht")
-    created = openvtb_berichten.post(
-        "berichten",
-        {"onderwerp": onderwerp, "berichtTekst": "ptest", "ontvanger": "urn:ptest:ontvanger:1", "berichtType": bt_url},
-    )
-    # Cleanup runs last-added first: delete the berichttype after the bericht, which it PROTECTs. The bericht
-    # answers 405 to DELETE, so it goes through the Django shell.
-    registry.add(f"openvtb berichttype {bt_url}", lambda: openvtb_berichten.delete(bt_url))
-    registry.add(
-        f"openvtb bericht {created['uuid']}", lambda: _delete_openvtb_bericht(podiumd_env, str(created["uuid"]))
-    )
-    assert openvtb_berichten.get(str(created["url"]))["onderwerp"] == onderwerp
-
-
-def _delete_openvtb_bericht(podiumd_env: Environment, uuid: str) -> None:
-    """Delete a bericht (and so free its berichttype) through Open VTB's Django shell; the API refuses it (405)."""
-    code = f"from openvtb.components.berichten.models import Bericht\nBericht.objects.filter(uuid={uuid!r}).delete()"
-    podiumd_env.kube.exec_django_shell(podiumd_env.deployment_for("openvtb"), code)
+    created = make_bericht(podiumd_env, openvtb_berichten, registry, "urn:ptest:ontvanger:1")
+    assert openvtb_berichten.get(str(created["url"]))["onderwerp"] == registry.tagged("bericht")

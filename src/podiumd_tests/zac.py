@@ -715,11 +715,13 @@ def reindex_zaken(env: Environment) -> None:
     wait_until(has_ended, timeout=REINDEX_TIMEOUT, interval=5, description=f"ZAC's reindex of zaken ({deployment})")
 
 
-def notificatie(kanaal: str, resource: str, url: str, actie: str, **kenmerken: object) -> JsonObject:
-    """Return the notificatie Open Notificaties delivers for the resource (url) and actie."""
+def notificatie(
+    kanaal: str, resource: str, url: str, actie: str, *, hoofd_object: str = "", **kenmerken: object
+) -> JsonObject:
+    """Return the notificatie Open Notificaties delivers for the resource (url) and actie, about hoofd_object or url."""
     return {
         "kanaal": kanaal,
-        "hoofdObject": url,
+        "hoofdObject": hoofd_object or url,
         "resource": resource,
         "resourceUrl": url,
         "actie": actie,

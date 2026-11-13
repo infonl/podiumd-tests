@@ -10,19 +10,19 @@ versions is not counted.
 
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
-| smoke | 248 | 39 | 9 |
+| smoke | 254 | 40 | 9 |
 | component | 873 | 561 | 72 |
-| integration | 156 | 99 | 13 |
+| integration | 170 | 112 | 13 |
 | perf | 54 | 3 | 0 |
-| **full tier** | **1240** | **672** |  |
+| **full tier** | **1260** | **686** |  |
 
-Unit tests (`unit_tests/`, functions): 813. Perf endpoints (`perf/runs.py`): 22.
+Unit tests (`unit_tests/`, functions): 822. Perf endpoints (`perf/runs.py`): 22.
 
 ## Per area
 
 | Tier | Area | Tests | Scenarios |
 | --- | --- | --- | --- |
-| smoke | api_health | 30 | 3 |
+| smoke | api_health | 36 | 4 |
 | smoke | cilium | 2 | 2 |
 | smoke | cluster | 9 | 9 |
 | smoke | frankgateway | 6 | 2 |
@@ -72,6 +72,8 @@ Unit tests (`unit_tests/`, functions): 813. Perf endpoints (`perf/runs.py`): 22.
 | integration | mail | 9 | 2 |
 | integration | notificaties | 8 | 8 |
 | integration | omc | 5 | 5 |
+| integration | omc_bericht | 3 | 3 |
+| integration | omc_scenarios | 11 | 10 |
 | integration | portaal_notificaties | 3 | 3 |
 | integration | portaal_openklant | 7 | 7 |
 | integration | portaal_samenwerken | 2 | 1 |
@@ -97,7 +99,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | draaiboek | 91 |
 | external | 150 |
 | podiumd-tests | 510 |
-| upstream | 174 |
+| upstream | 194 |
 
 ## Expected failures per known issue
 

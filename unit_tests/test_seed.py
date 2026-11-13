@@ -15,6 +15,7 @@ from podiumd_tests.json_data import JsonObject
 from podiumd_tests.json_data import section
 from podiumd_tests.seed import objecten as objecten_module
 from podiumd_tests.seed import openklant
+from podiumd_tests.seed import openvtb
 from podiumd_tests.seed import openzaak
 from podiumd_tests.seed.objecten import clean_up_logboek
 from podiumd_tests.seed.objecten import created_notificatie
@@ -63,6 +64,10 @@ def created(path: str) -> dict[str, _Answer]:
         (lambda c, r: openzaak.make_rol(c, r, {"url": ZAAK}, "rt", inpBsn="1"), "zaken/api/v1/rollen"),
         (lambda c, r: openzaak.make_document(c, r, "iot"), "documenten/api/v1/enkelvoudiginformatieobjecten"),
         (lambda c, r: openzaak.link_document(c, r, {"url": ZAAK}, {"url": "d"}), "zaken/api/v1/zaakinformatieobjecten"),
+        (
+            lambda c, r: openzaak.link_besluit_document(c, r, {"url": "b"}, {"url": "d"}),
+            "besluiten/api/v1/besluitinformatieobjecten",
+        ),
         (lambda c, r: openzaak.make_concept_zaaktype(c, r, "cat"), "catalogi/api/v1/zaaktypen"),
         (openklant.make_partij, "partijen"),
         (openklant.make_organisatie, "partijen"),
@@ -142,6 +147,20 @@ def test_besluit_is_deleted_after_its_document_links(fake_http):
         ("DELETE", f"/{links}/l1"),
         ("DELETE", f"/{path}/new"),
     ]
+
+
+def test_bericht_is_deleted_in_the_django_shell_before_its_berichttype(fake_http):
+    sent = fake_http(created("berichttypen") | {"POST /v1/berichten": (201, {"url": "b", "uuid": "b1"})})
+    shell = []
+    kube = SimpleNamespace(exec_django_shell=lambda deployment, code: shell.append((deployment, code)))
+    env = SimpleNamespace(kube=kube, deployment_for=lambda component: f"{component}-deploy")
+    registry = ResourceRegistry("run1")
+    openvtb.make_bericht(env, api(), registry, "urn:ptest:1")  # pyright: ignore[reportArgumentType]
+    assert body(sent[1])["berichtType"] == f"{API}/berichttypen/new"
+    registry.cleanup()
+    assert shell[0][0] == "openvtb-deploy"
+    assert "uuid='b1'" in shell[0][1]
+    assert calls(sent)[-1] == ("DELETE", "/berichttypen/new")
 
 
 def test_tagged_fields_carry_the_run_tag(fake_http):

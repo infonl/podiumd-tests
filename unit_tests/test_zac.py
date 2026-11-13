@@ -175,6 +175,11 @@ def test_notificatie_names_the_resource_as_main_object_with_the_kenmerken():
     assert str(deleted["aanmaakdatum"]).endswith("Z")
 
 
+def test_notificatie_names_another_main_object_when_given():
+    created = zac.notificatie("zaken", "status", "https://oz.test/statussen/s1", "create", hoofd_object="z1")
+    assert (created["hoofdObject"], created["resourceUrl"]) == ("z1", "https://oz.test/statussen/s1")
+
+
 def test_reindex_zaken_calls_zacs_internal_endpoint_in_the_pod(env_factory, fake_runner):
     fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "zac"}}]}))
     fake_runner.answers["exec deploy/zac"] = (0, "")

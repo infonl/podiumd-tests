@@ -354,6 +354,14 @@ def delete_besluit(openzaak: ApiClient, url: str) -> None:
     openzaak.delete(url)
 
 
+def link_besluit_document(
+    openzaak: ApiClient, registry: ResourceRegistry, besluit: JsonObject, document: JsonObject
+) -> JsonObject:
+    """Create a besluitinformatieobject linking a document to a besluit; register it after the document."""
+    body = {"besluit": besluit["url"], "informatieobject": document["url"]}
+    return _create(openzaak, registry, f"{BESLUITEN}/besluitinformatieobjecten", body)
+
+
 def zaaktype_body(registry: ResourceRegistry, catalogus: str, **fields: object) -> dict[str, object]:
     """Build a zaaktype of a catalogus whose identificatie carries the run tag; fields override defaults."""
     return {

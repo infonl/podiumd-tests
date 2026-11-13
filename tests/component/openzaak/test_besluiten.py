@@ -18,6 +18,7 @@ from podiumd_tests.responses import invalid_codes
 from podiumd_tests.seed.openzaak import BESLUIT_CREATE_LOCK
 from podiumd_tests.seed.openzaak import BESLUITEN
 from podiumd_tests.seed.openzaak import delete_besluit
+from podiumd_tests.seed.openzaak import link_besluit_document
 from podiumd_tests.seed.openzaak import make_besluit
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_zaak
@@ -164,8 +165,7 @@ def test_besluit_documents_follow_the_besluittype(
     assert [b["besluit"] for b in openzaak.list(f"{zaak['url']}/besluiten")] == [besluit["url"]]
     path = f"{BESLUITEN}/besluitinformatieobjecten"
     document = make_document(openzaak, registry, parts.informatieobjecttype)
-    link = openzaak.post(path, {"besluit": besluit["url"], "informatieobject": document["url"]})
-    registry.add(f"besluitinformatieobject {link['url']}", lambda: openzaak.delete(str(link["url"])))
+    link = link_besluit_document(openzaak, registry, besluit, document)
     vreemd = make_document(openzaak, registry, archief_parts.informatieobjecttype)
     nowhere = NOWHERE.replace("catalogi/api/v1/besluittypen", "documenten/api/v1/enkelvoudiginformatieobjecten")
     for informatieobject in (nowhere, vreemd["url"]):

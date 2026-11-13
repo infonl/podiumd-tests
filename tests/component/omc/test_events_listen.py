@@ -11,21 +11,23 @@ from __future__ import annotations
 import time
 import uuid
 
-from datetime import UTC
-from datetime import datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
 
 from podiumd_tests.bootstrap.omc import VALIDITY
-from podiumd_tests.bootstrap.omc import omc_token
+from podiumd_tests.omc import listen
+from podiumd_tests.omc import zaak_notificatie
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openzaak import CATALOGI
+from podiumd_tests.seed.openzaak import ZAKEN
 
 if TYPE_CHECKING:
     import requests
 
     from podiumd_tests.environment import Environment
+    from podiumd_tests.json_data import JsonObject
 
 pytestmark = [
     pytest.mark.component,
@@ -34,32 +36,16 @@ pytestmark = [
 ]
 
 
-def notification(urls: dict[str, str], root: tuple[str, ...]) -> dict[str, object]:
+def notification(urls: dict[str, str], root: tuple[str, ...]) -> JsonObject:
     """A new-status notification for a zaak that does not exist, with Open Notificaties as these root properties."""
-    zaken = f"{urls['openzaak']}/zaken/api/v1/"
-    body: dict[str, object] = {
-        "kanaal": "zaken",
-        "hoofdObject": f"{zaken}zaken/{uuid.uuid4()}",
-        "resource": "status",
-        "resourceUrl": f"{zaken}statussen/{uuid.uuid4()}",
-        "actie": "create",
-        "aanmaakdatum": datetime.now(tz=UTC).isoformat(),
-        "kenmerken": {
-            "bronorganisatie": "002220647",
-            "zaaktype": f"{urls['openzaak']}/catalogi/api/v1/zaaktypen/{uuid.uuid4()}",
-            "vertrouwelijkheidaanduiding": "openbaar",
-        },
+    zaak = {
+        "url": f"{urls['openzaak']}/{ZAKEN}/zaken/{uuid.uuid4()}",
+        "zaaktype": f"{urls['openzaak']}/{CATALOGI}/zaaktypen/{uuid.uuid4()}",
+        "bronorganisatie": "002220647",
+        "vertrouwelijkheidaanduiding": "openbaar",
     }
-    return body | dict.fromkeys(root, urls["opennotificaties"])
-
-
-def listen(
-    http: requests.Session, podiumd_env: Environment, body: dict[str, object], issued: float | None = None
-) -> requests.Response:
-    """POST a notification to OMC's Events/Listen with the token its abonnement uses, issued now unless given."""
-    token = omc_token(podiumd_env, time.time() if issued is None else issued)
-    url = f"{podiumd_env.profile.urls['omc']}/Events/Listen"
-    return http.post(url, json=body, headers={"Authorization": f"Bearer {token}"})
+    body = zaak_notificatie(zaak, "status", f"{urls['openzaak']}/{ZAKEN}/statussen/{uuid.uuid4()}")
+    return {**body, **dict.fromkeys(root, urls["opennotificaties"])}
 
 
 @pytest.mark.parametrize(

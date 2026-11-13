@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.seed.openzaak import BESLUITEN
 from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak
+from podiumd_tests.seed.openzaak import link_besluit_document
 from podiumd_tests.seed.openzaak import link_document
 from podiumd_tests.seed.openzaak import make_besluit
 from podiumd_tests.seed.openzaak import make_document
@@ -121,10 +121,7 @@ def test_deleting_a_besluit_deletes_its_document_links(
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
     besluit = make_besluit(openzaak, registry, parts.besluittype, zaak=zaak["url"])
     document = make_document(openzaak, registry, parts.informatieobjecttype)
-    body = {"besluit": besluit["url"], "informatieobject": document["url"]}
-    link = openzaak.post(f"{BESLUITEN}/besluitinformatieobjecten", body)
-    # Deleted before the document, which Open Zaak keeps while it is linked.
-    registry.add(f"besluitinformatieobject {link['url']}", lambda: openzaak.delete(str(link["url"])))
+    link = link_besluit_document(openzaak, registry, besluit, document)
     mirrored = objectinformatieobjecten(openzaak, document)
     assert [(o["object"], o["objectType"]) for o in mirrored] == [(besluit["url"], "besluit")]
     openzaak.delete(str(besluit["url"]))
