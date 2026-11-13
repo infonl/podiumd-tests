@@ -619,6 +619,11 @@ def test_word_document_is_converted_to_pdf(
     assert renamed == [(name, f"{name.rpartition('.')[0]}.pdf")]
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-37] ZAC 5.9.1 asks its converter for PDF/UA-1 without a title, so a converted Office document "
+    "without one fails PDF/UA-1 7.1-9 (no dc:title); not yet reported upstream",
+)
 @pytest.mark.source(
     "external ForumStandaardisatie/pdfchecker",
     "Government PDFs are checked for PDF/UA with veraPDF; ZAC's converter claims PDF/A-2b and PDF/UA-1.",

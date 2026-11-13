@@ -307,7 +307,16 @@ def _expand_through(relation: str) -> tuple[str, ...]:
     ("read", "paths"),
     [
         pytest.param("hoofdzaak", (*NESTED_EXPAND, *_expand_through("deelzaken")), id="zaak-and-deelzaken"),
-        pytest.param("hoofdzaak", ("eigenschappen", "eigenschappen.eigenschap"), id="eigenschappen"),
+        pytest.param(
+            "hoofdzaak",
+            ("eigenschappen", "eigenschappen.eigenschap"),
+            id="eigenschappen",
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason="[open-zaak-15] Open Zaak 1.29.3 answers 500 to expand=eigenschappen.eigenschap: the nested "
+                "zaakeigenschap's URL is reversed without zaak_uuid (NoReverseMatch); not yet reported upstream",
+            ),
+        ),
         pytest.param("deelzaak", _expand_through("hoofdzaak"), id="hoofdzaak"),
     ],
 )

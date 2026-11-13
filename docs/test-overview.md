@@ -11,7 +11,7 @@ versions is not counted.
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 256 | 41 | 10 |
-| component | 985 | 582 | 72 |
+| component | 985 | 582 | 76 |
 | integration | 183 | 119 | 14 |
 | perf | 54 | 3 | 0 |
 | **full tier** | **1387** | **715** |  |
@@ -152,6 +152,7 @@ Ids of infonl/podiumd-known-issues.
 | open-zaak-12 | 1 |
 | open-zaak-13 | 1 |
 | open-zaak-14 | 1 |
+| open-zaak-15 | 1 |
 | pabc-1 | 1 |
 | podiumd-chart-1 | 1 |
 | podiumd-chart-5 | 1 |
@@ -189,6 +190,7 @@ Ids of infonl/podiumd-known-issues.
 | zac-34 | 1 |
 | zac-35 | 1 |
 | zac-36 | 1 |
+| zac-37 | 3 |
 | zgw-office-addin-1 | 2 |
 
 Tests without a scenario: 0.
