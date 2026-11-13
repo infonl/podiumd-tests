@@ -14,6 +14,7 @@ from podiumd_tests.responses import invalid_codes
 from podiumd_tests.responses import invalid_names
 from podiumd_tests.responses import is_root_answering
 from podiumd_tests.responses import is_server_error
+from podiumd_tests.responses import root_problem
 from podiumd_tests.responses import url_host
 
 
@@ -65,10 +66,11 @@ def test_get_entries_needs_200(fake_http):
         get_entries(requests.Session(), "https://x.test/a")
 
 
-@pytest.mark.parametrize(("status", "answers"), [(200, True), (401, True), (502, False)])
-def test_root_answers_unless_the_component_fails(fake_http, status, answers):
+@pytest.mark.parametrize(("status", "problem"), [(200, None), (401, None), (502, "HTTP 502")])
+def test_root_answers_unless_the_component_fails(fake_http, status, problem):
     sent = fake_http({"/": (status, {})})
-    assert is_root_answering(requests.Session(), "https://zac.example.test", 5) is answers
+    assert root_problem(requests.Session(), "https://zac.example.test", 5) == problem
+    assert is_root_answering(requests.Session(), "https://zac.example.test", 5) is (problem is None)
     assert sent[0].url == "https://zac.example.test/"
 
 
@@ -77,6 +79,7 @@ def test_a_refused_connection_is_no_answer(monkeypatch):
         raise requests.ConnectionError
 
     monkeypatch.setattr(requests.Session, "get", refuse)
+    assert root_problem(requests.Session(), "https://zac.example.test", 5) == "ConnectionError"
     assert is_root_answering(requests.Session(), "https://zac.example.test", 5) is False
 
 

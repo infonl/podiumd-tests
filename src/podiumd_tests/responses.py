@@ -46,12 +46,18 @@ def get_root(session: requests.Session, base_url: str, timeout: float | tuple[fl
     return session.get(f"{base_url}/", timeout=timeout)
 
 
+def root_problem(session: requests.Session, base_url: str, timeout: float) -> str | None:
+    """Return why the component's root fails ("HTTP 503", "ConnectTimeout"); None when it answers without a 5xx."""
+    try:
+        response = get_root(session, base_url, timeout)
+    except requests.RequestException as exc:
+        return type(exc).__name__
+    return f"HTTP {response.status_code}" if is_server_error(response) else None
+
+
 def is_root_answering(session: requests.Session, base_url: str, timeout: float) -> bool:
     """Whether the component's root answers without a server error (a refused connection counts as no)."""
-    try:
-        return not is_server_error(get_root(session, base_url, timeout))
-    except requests.RequestException:
-        return False
+    return root_problem(session, base_url, timeout) is None
 
 
 def url_host(url: str) -> str:

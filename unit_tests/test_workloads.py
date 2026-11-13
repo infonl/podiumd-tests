@@ -222,10 +222,10 @@ def test_disruptions_name_moved_pods_restarts_and_nodes():
         frozenset(("n1",)),
     )
     assert disruptions(before, after) == [
-        "node n2 removed",
-        "pod keycloak-0 on n1 gone",
-        "pod keycloak-0 on n1 started 2026-10-15T09:52:10Z",
-        "container zac-1/app restarted 1x (last: OOMKilled at 2026-10-15T09:52:00Z)",
+        ("", "node n2 removed"),
+        ("", "pod keycloak-0 on n1 gone"),
+        ("2026-10-15T09:52:10Z", "pod keycloak-0 on n1 started 2026-10-15T09:52:10Z"),
+        ("2026-10-15T09:52:00Z", "container zac-1/app restarted 1x (last: OOMKilled at 2026-10-15T09:52:00Z)"),
     ]
 
 

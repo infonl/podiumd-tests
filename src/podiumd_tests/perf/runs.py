@@ -18,7 +18,7 @@ def locust_command(locustfile: Path, users: str, run_time: str, csv_prefix: Path
     """Return a headless Locust run of the locustfile against the environment, its CSVs at csv_prefix."""
     command = [sys.executable, "-m", "locust", "-f", str(locustfile), "--headless", "--only-summary"]
     command += ["--users", users, "--spawn-rate", users, "--run-time", run_time, "--exit-code-on-error", "0"]
-    return [*command, "--csv", str(csv_prefix), "--podiumd-env", env]
+    return [*command, "--csv", str(csv_prefix), "--csv-full-history", "--podiumd-env", env]
 
 
 # Endpoint name -> the component it needs. Reads are TA's k6 api-perf.js; writes create and delete

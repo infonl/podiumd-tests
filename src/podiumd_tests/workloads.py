@@ -16,7 +16,10 @@ import re
 from contextlib import contextmanager
 from contextlib import suppress
 from dataclasses import dataclass
+from itertools import chain
+from itertools import starmap
 from typing import TYPE_CHECKING
+from typing import NamedTuple
 from typing import cast
 
 import pytest
@@ -395,31 +398,46 @@ def cluster_state(env: Environment) -> ClusterState:
     return ClusterState(pods, frozenset(metadata_name(node) for node in env.kube.items("nodes")))
 
 
-def disruptions(before: ClusterState, after: ClusterState) -> list[str]:
-    """Nodes and pods that came or went between two states, and containers that restarted, one line each."""
-    found = [f"node {node} removed" for node in sorted(before.nodes - after.nodes)]
-    found += [f"node {node} added" for node in sorted(after.nodes - before.nodes)]
+class Disruption(NamedTuple):
+    """A pod or node change between two states and when it happened ("" when the cluster does not tell)."""
+
+    at: str
+    text: str
+
+
+def disruptions(before: ClusterState, after: ClusterState) -> list[Disruption]:
+    """Nodes and pods that came or went between two states, and containers that restarted."""
+    found = [Disruption("", f"node {node} removed") for node in sorted(before.nodes - after.nodes)]
+    found += [Disruption("", f"node {node} added") for node in sorted(after.nodes - before.nodes)]
     gone = [pod for uid, pod in before.pods.items() if uid not in after.pods]
-    found += [f"pod {_where(pod)} gone" for pod in gone]
-    found += [
-        f"pod {_where(pod)} started {section(pod, 'metadata').get('creationTimestamp')}"
-        for uid, pod in after.pods.items()
-        if uid not in before.pods
-    ]
-    for uid, pod in after.pods.items():
-        previous = entries(section(before.pods.get(uid, {}), "status").get("containerStatuses"))
-        earlier = {str(container.get("name")): container for container in previous}
-        for container in entries(section(pod, "status").get("containerStatuses")):
-            name = str(container.get("name"))
-            if name not in earlier:
-                continue
-            restarts = _int(container.get("restartCount")) - _int(earlier[name].get("restartCount"))
-            if restarts > 0:
-                last = section(section(container, "lastState"), "terminated")
-                found.append(
-                    f"container {metadata_name(pod)}/{name} restarted {restarts}x"
-                    f" (last: {last.get('reason', '?')} at {last.get('finishedAt', '?')})"
-                )
+    found += [Disruption("", f"pod {_where(pod)} gone") for pod in gone]
+    started = [pod for uid, pod in after.pods.items() if uid not in before.pods]
+    found += [_started(pod) for pod in started]
+    pairs = ((before.pods.get(uid, {}), pod) for uid, pod in after.pods.items())
+    return [*found, *chain.from_iterable(starmap(_restarts, pairs))]
+
+
+def _started(pod: Item) -> Disruption:
+    created = str(section(pod, "metadata").get("creationTimestamp", ""))
+    return Disruption(created, f"pod {_where(pod)} started {created}")
+
+
+def _restarts(before: Item, after: Item) -> list[Disruption]:
+    """Containers of the pod that restarted between its two states."""
+    statuses = entries(section(before, "status").get("containerStatuses"))
+    earlier = {str(status.get("name")): _int(status.get("restartCount")) for status in statuses}
+    found: list[Disruption] = []
+    for container in entries(section(after, "status").get("containerStatuses")):
+        name = str(container.get("name"))
+        count = _int(container.get("restartCount"))
+        restarts = count - earlier.get(name, count)
+        if restarts > 0:
+            last = section(section(container, "lastState"), "terminated")
+            finished = str(last.get("finishedAt", ""))
+            reason = f"last: {last.get('reason', '?')} at {finished or '?'}"
+            found.append(
+                Disruption(finished, f"container {metadata_name(after)}/{name} restarted {restarts}x ({reason})")
+            )
     return found
 
 

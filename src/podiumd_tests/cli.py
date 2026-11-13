@@ -445,7 +445,7 @@ def _run_tier(args: argparse.Namespace) -> int:
         info.counts = counts
     after = _cluster_state(env)
     if before and after:
-        details.disruptions = workloads.disruptions(before, after)
+        details.disruptions = [disruption.text for disruption in workloads.disruptions(before, after)]
     results.write_run(sink, directory, info, details, env.redactor)
     publish_summary(Path(sink.location(f"{directory}/summary.md")))
     print(f"results: {sink.location(directory)}")

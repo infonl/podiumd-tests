@@ -73,4 +73,4 @@ def test_locust_command_runs_headless_against_the_environment(tmp_path):
     command = locust_command(tmp_path / "lf.py", "10", "150s", tmp_path / "out", "ontw-dim1")
     assert command[1:5] == ["-m", "locust", "-f", str(tmp_path / "lf.py")]
     assert command[command.index("--users") + 1] == command[command.index("--spawn-rate") + 1] == "10"
-    assert command[-4:] == ["--csv", str(tmp_path / "out"), "--podiumd-env", "ontw-dim1"]
+    assert command[-5:] == ["--csv", str(tmp_path / "out"), "--csv-full-history", "--podiumd-env", "ontw-dim1"]

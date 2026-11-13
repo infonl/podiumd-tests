@@ -3,7 +3,8 @@
 One Locust run (src/podiumd_tests/perf/locustfile.py, headless, --perf-users users for
 --perf-duration) serves every test; each endpoint must meet its p95 and failure-ratio threshold
 from perf.yaml, and may not have slowed down (stats.slowdown_limit) against the environment's
-earlier runs with the same settings (users, duration, calls, volume data). Locust's stats and the
+earlier runs with the same settings (users, duration, calls, volume data). The components it loads
+must stay available (podiumd_tests.perf.availability). Locust's stats and the
 settings go to the run's perf/ directory; without a run directory (plain pytest) there is no history.
 """
 
@@ -18,8 +19,14 @@ import pytest
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.config import REPO_ROOT
+from podiumd_tests.perf.availability import Watch
+from podiumd_tests.perf.availability import availability_limits
+from podiumd_tests.perf.availability import watched
+from podiumd_tests.perf.availability_report import problems
+from podiumd_tests.perf.availability_report import report
 from podiumd_tests.perf.runs import ENDPOINTS
 from podiumd_tests.perf.runs import locust_command
+from podiumd_tests.perf.stats import HISTORY
 from podiumd_tests.perf.stats import SETTINGS
 from podiumd_tests.perf.stats import STATS
 from podiumd_tests.perf.stats import baseline_p95
@@ -47,15 +54,15 @@ pytestmark = pytest.mark.perf
 LOCUSTFILE = REPO_ROOT / "src" / "podiumd_tests" / "perf" / "locustfile.py"
 
 
-@pytest.fixture(scope="module", name="stats")
-def fixture_stats(
+@pytest.fixture(scope="module", name="load")
+def fixture_load(
     request: pytest.FixtureRequest,
     podiumd_env: Environment,
     need_bootstrap: Callable[..., None],
     perf_dir: Path,
     run_tag: str,
-) -> dict[str, EndpointStats]:
-    """The stats of one Locust run against the environment."""
+) -> tuple[dict[str, EndpointStats], Watch]:
+    """The stats of one Locust run against the environment, and the availability of the components it loads."""
     need_bootstrap("openzaak-client", "openklant-token", "objecten-token", "openzaak-zaaktype", ADMIN.name, KCC.name)
     if "zac" in podiumd_env.profile.urls:
         need_bootstrap("openzaak-client-productaanvraag")
@@ -69,8 +76,15 @@ def fixture_stats(
     command = locust_command(LOCUSTFILE, users, duration, directory / "locust", podiumd_env.profile.name)
     # Users finish their round, so every write is deleted.
     command += ["--stop-timeout", "60", "--podiumd-run-tag", run_tag]
-    run_checked(run_process, command, timeout=600)
-    return read_stats((directory / STATS).read_text(encoding="utf-8"))
+    with watched(podiumd_env, ENDPOINTS.values(), availability_limits(REPO_ROOT / "perf.yaml")) as watch:
+        run_checked(run_process, command, timeout=600)
+    return read_stats((directory / STATS).read_text(encoding="utf-8")), watch
+
+
+@pytest.fixture(scope="module", name="stats")
+def fixture_stats(load: tuple[dict[str, EndpointStats], Watch]) -> dict[str, EndpointStats]:
+    """The stats of the Locust run."""
+    return load[0]
 
 
 TA_K6 = pytest.mark.source(
@@ -133,3 +147,24 @@ def test_endpoint_is_not_slower_than_before(stats: dict[str, EndpointStats], per
     assert stats[endpoint].p95_ms <= limit, (
         f"p95 {stats[endpoint].p95_ms:.0f} ms > {limit:.0f} ms (baseline {baseline:.0f} ms)"
     )
+
+
+@pytest.mark.source(
+    "podiumd-tests",
+    "Load must not take a component down: Open Klant #636 and Open Zaak #1837 grew memory under load until restarted.",
+)
+@pytest.mark.scenario("""
+    Given simulated users call the API endpoints during a load test
+    When the load test ends
+    Then no pod of a loaded component restarted or was replaced
+    And their pods are ready again within the recovery time
+    And each loaded component answered its health check in nearly all samples during the load
+    And no container's memory came close to its limit
+""")
+def test_loaded_components_stay_available(
+    load: tuple[dict[str, EndpointStats], Watch], perf_dir: Path, record_property: Callable[[str, object], None]
+) -> None:
+    """The loaded components stay within perf.yaml's availability limits; the timeline goes to summary.md."""
+    watch = load[1]
+    record_property("report", report(watch, (perf_dir / HISTORY).read_text(encoding="utf-8")))
+    assert problems(watch) == []

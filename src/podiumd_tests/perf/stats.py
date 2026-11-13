@@ -35,9 +35,14 @@ class EndpointStats:
     p95_ms: float
 
 
+def perf_settings(path: Path) -> dict[str, object]:
+    """Return perf.yaml's contents."""
+    return cast("dict[str, object]", yaml.safe_load(path.read_text(encoding="utf-8")))
+
+
 def thresholds(path: Path, endpoint: str) -> Threshold:
     """Return the endpoint's threshold: perf.yaml's defaults with its entry under `endpoints` on top."""
-    data = cast("dict[str, object]", yaml.safe_load(path.read_text(encoding="utf-8")))
+    data = perf_settings(path)
     endpoints = cast("dict[str, dict[str, float]]", data.get("endpoints") or {})
     merged = {**cast("dict[str, float]", data["defaults"]), **endpoints.get(endpoint, {})}
     return Threshold(
@@ -71,6 +76,8 @@ def violations(stats: EndpointStats, threshold: Threshold) -> list[str]:
 
 
 STATS = "locust_stats.csv"
+# Written with --csv-full-history: a row per endpoint and second.
+HISTORY = "locust_stats_history.csv"
 SETTINGS = "settings.json"
 BASELINE_RUNS = 5
 # Fewer earlier runs give no baseline: one 30 s run's p95 swings with a single slow request.

@@ -13,10 +13,10 @@ versions is not counted.
 | smoke | 256 | 41 | 10 |
 | component | 986 | 583 | 76 |
 | integration | 184 | 120 | 14 |
-| perf | 54 | 3 | 0 |
+| perf | 55 | 4 | 0 |
 | **full tier** | **1388** | **716** |  |
 
-Unit tests (`unit_tests/`, functions): 847. Perf endpoints (`perf/runs.py`): 22.
+Unit tests (`unit_tests/`, functions): 862. Perf endpoints (`perf/runs.py`): 22.
 
 ## Per area
 
@@ -83,7 +83,7 @@ Unit tests (`unit_tests/`, functions): 847. Perf endpoints (`perf/runs.py`): 22.
 | integration | productaanvraag_bevestiging | 5 | 5 |
 | integration | productaanvraag_inbox | 4 | 4 |
 | integration | sso | 17 | 3 |
-| perf | api_perf | 44 | 2 |
+| perf | api_perf | 45 | 3 |
 | perf | gateway_perf | 10 | 1 |
 
 ## Per source
@@ -99,7 +99,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | ZAC | 19 |
 | draaiboek | 91 |
 | external | 235 |
-| podiumd-tests | 513 |
+| podiumd-tests | 514 |
 | upstream | 216 |
 
 ## Expected failures per known issue

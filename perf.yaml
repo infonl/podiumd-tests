@@ -9,3 +9,12 @@ defaults:
   max_slowdown: 1.5
   min_slowdown_ms: 200
 endpoints: {}
+# What a Locust run may do to the components it loads (podiumd_tests.perf.availability): their roots answer
+# without a 5xx in at least min_available of the samples taken every health_interval_s; no container restarts;
+# their pods are Ready again within recovery_s after the run; no container's working set passes max_memory_ratio
+# of its memory limit.
+availability:
+  health_interval_s: 5
+  recovery_s: 60
+  min_available: 0.99
+  max_memory_ratio: 0.9
