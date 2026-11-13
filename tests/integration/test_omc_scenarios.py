@@ -18,6 +18,7 @@ from podiumd_tests.bootstrap.names import TAAK_OBJECTTYPE
 from podiumd_tests.bootstrap.names import TAAK_OBJECTTYPE_UUID
 from podiumd_tests.bootstrap.names import TEST_ZAAKTYPE
 from podiumd_tests.bootstrap.omc import notify_mock_missing
+from podiumd_tests.json_data import section
 from podiumd_tests.mailpit import own_address
 from podiumd_tests.omc import EMAIL
 from podiumd_tests.omc import besluit_notificatie
@@ -65,6 +66,7 @@ SENT = "The notification has been successfully processed and sent to Notify NL"
 NOT_WHITELISTED = f"case type with identification {TEST_ZAAKTYPE!r} is not included in the"
 DECISION_IOTS = "ZGW_VARIABLE_OBJECTTYPE_DECISIONINFOOBJECTTYPE_UUIDS"
 TASK_OBJECTTYPE = "ZGW_VARIABLE_OBJECTTYPE_TASKOBJECTTYPE_UUID"
+MESSAGE_OBJECTTYPE = "ZGW_VARIABLE_OBJECTTYPE_MESSAGEOBJECTTYPE_UUID"
 # A document OMC tells the inwoner about.
 OPENBAAR_DEFINITIEF = {"status": "definitief", "vertrouwelijkheidaanduiding": "openbaar"}
 
@@ -235,33 +237,46 @@ def test_besluit_of_a_zaaktype_not_whitelisted_is_not_mailed(
     expect_outcome(listen(http, podiumd_env, notification), STOPPED, NOT_WHITELISTED)
 
 
+@pytest.mark.requires("objecten", "openklant")
 @pytest.mark.usefixtures("notify_mock")
 @pytest.mark.source(DOCS, "Besluit genomen: OMC tells the initiator of a besluit with a definitief, openbaar document.")
 @pytest.mark.scenario("""
-    Given a zaak whose initiator has an e-mail address in Open Klant
+    Given a zaak whose initiator is known in Open Klant
     And a besluit on the zaak with a definitief, openbaar document
     When OMC gets the notification that the document was linked to the besluit
-    Then OMC asks Notify to send the initiator the besluit e-mail
+    Then OMC stores a bericht about the besluit for the initiator, worded by Notify's besluit template
 """)
-def test_besluit_is_mailed_to_the_initiator(
+def test_besluit_becomes_a_bericht_for_the_initiator(
     http: requests.Session,
     podiumd_env: Environment,
     openzaak: ApiClient,
     openklant: ApiClient,
+    objecten: ApiClient,
+    objecttypen: ApiClient,
     registry: ResourceRegistry,
     parts: ZaaktypeParts,
 ) -> None:
-    """A definitief, openbaar besluit document makes OMC send the besluit e-mail to the initiator."""
+    """A definitief, openbaar besluit document makes OMC store a bericht in Objecten (OMC 2.3.1 sends no mail)."""
     informatieobjecttype_skip(podiumd_env, parts, listed=True)
     reason = setting_skip(podiumd_env, "ZGW_WHITELIST_DECISIONMADE_IDS", TEST_ZAAKTYPE, listed=True)
+    berichttype = podiumd_env.variable("omc", MESSAGE_OBJECTTYPE)
+    found = objecttypen.request("GET", f"objecttypes/{berichttype}", HTTPStatus.OK, HTTPStatus.NOT_FOUND)
+    if not reason and found.status_code == HTTPStatus.NOT_FOUND:
+        reason = f"OMC's {MESSAGE_OBJECTTYPE} {berichttype} is no objecttype in Objecttypen"
     if reason:
         pytest.skip(reason)
-    adres = own_address(registry)
-    zaak, _ = make_inwoner_zaak(openzaak, openklant, registry, parts, adres)
+    zaak, _ = make_inwoner_zaak(openzaak, openklant, registry, parts, own_address(registry))
     make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
     notification = besluit_document(openzaak, registry, parts, zaak, **OPENBAAR_DEFINITIEF)
+    stored = {"type": str(found.json()["url"]), "data_attr": f"referentie__exact__{notification['hoofdObject']}"}
+    registry.add(
+        f"OMC's bericht about {notification['hoofdObject']}",
+        lambda: [objecten.delete(str(bericht["url"])) for bericht in objecten.list("objects", stored)],
+    )
     expect_outcome(listen(http, podiumd_env, notification), HTTPStatus.ACCEPTED, SENT)
-    notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_DECISIONMADE")
+    template = podiumd_env.variable("omc", "NOTIFY_TEMPLATEID_DECISIONMADE")
+    berichten = [section(section(bericht, "record"), "data") for bericht in objecten.list("objects", stored)]
+    assert [bericht.get("onderwerp") for bericht in berichten] == [f"ptest preview {template}"]
 
 
 @pytest.fixture(name="taak_objecttype")
