@@ -22,9 +22,9 @@ to `openbaar`; `ptest-bootstrap-zgw-noauth` none. No client has Autorisaties API
 
 | # | Source @ commit | Licence | Unit | Total | Covered | Partly | Gap | n/a | Proposed tests | Days |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1a | `OneGround/ZGW-APIs-postman-tests` "ZGW business rules" | BSD-3-Clause | rule (659 requests, 357 `pm.test`) | 55 | 45 | 1 | 0 | 9 | 26 | 10 |
+| 1a | `OneGround/ZGW-APIs-postman-tests` "ZGW business rules" | BSD-3-Clause | rule (659 requests, 357 `pm.test`) | 55 | 46 | 0 | 0 | 9 | 26 | 10 |
 | 1b | same, "ZGW features" (ZGW 1.5 and 1.7) | BSD-3-Clause | folder (299 requests, 277 `pm.test`) | 31 | 19 | 4 | 3 | 5 | 5 | 1.5 |
-| 2a | `VNG-Realisatie/gemma-postman-tests` `ZGW_api_postman_tests.json` (standaard.md) | EUPL | rule (859 requests, 401 `pm.test`) | 56 | 2 (52 shared with 1a) | 1 | 1 | | 1 | 0.5 |
+| 2a | `VNG-Realisatie/gemma-postman-tests` `ZGW_api_postman_tests.json` (standaard.md) | EUPL | rule (859 requests, 401 `pm.test`) | 56 | 3 (52 shared with 1a) | 0 | 1 | | 1 | 0.5 |
 | 2b | same, `ZGW_OAS_tests.json` | EUPL | folder (228 requests, 243 `pm.test`) | 27 | 13 | 12 | 0 | 2 | 1 | 0.5 |
 | 2c | same, `issues_openzaak.md` | EUPL | note | 7 | | | 4 to recheck | 3 | 0 | 0 |
 | 3 | `GemeenteNijmegen/open-forms-testautomatisering` | EUPL-1.2 | pattern (21 specs) | 7 | 4 | 1 | 0 | 2 | 3 | 2.5 |
@@ -114,7 +114,7 @@ must succeed; most rules test POST, PUT and PATCH alike.
 | ztc-007 | afleidingswijze versus registratie (10 cases) | n/a | skip | as ztc-003 | |
 | ztc-008 | afleidingswijze versus procestermijn (10 cases) | n/a | skip | as ztc-003 | |
 | ztc-009 | a published zaaktype, besluittype or informatieobjecttype: PUT, PATCH and DELETE refused, PATCH of eindeGeldigheid allowed | covered: `test_catalogi_publicatie.py::test_published_type_changes_only_its_einde_geldigheid` (zaaktype, besluittype, informatieobjecttype) | port | a published type that changes breaks every zaak of it; throwaway types, removed with a Django snippet because the API refuses it | `tests/component/openzaak/test_catalogi_publicatie.py` (new) |
-| ztc-010 | eigenschap, resultaattype, roltype, statustype, ZIOT of a published zaaktype: no PUT, PATCH, DELETE; which may still be added | partly: `test_catalogi_publicatie.py::test_published_zaaktype_keeps_its_types` (statustype, roltype; a ZIOT may be added); missing: eigenschap and resultaattype | port | as ztc-009; one parametrized test | same |
+| ztc-010 | eigenschap, resultaattype, roltype, statustype, ZIOT of a published zaaktype: no PUT, PATCH, DELETE; which may still be added | covered: `test_catalogi_publicatie.py::test_published_zaaktype_keeps_its_types` (statustype, roltype, eigenschap, resultaattype; a ZIOT may be added) | port | as ztc-009; one parametrized test | same |
 | ztc-0xx | lists and details return only valid URLs (`datumGeldigheid`) | covered: `test_catalogi.py::test_zaaktype_versions` (list and detail with `datumGeldigheid`) | merge | the version valid on a date | `tests/component/openzaak/test_catalogi.py` |
 
 ## 1b. OneGround "ZGW features"
@@ -160,7 +160,7 @@ The other 52 rule groups have the ids of table 1a and the same cases.
 | Rule | Checks | Coverage | Decision | Reason | Target |
 | --- | --- | --- | --- | --- | --- |
 | drc-005 | ontvangstdatum with status `in_bewerking` or `ter_vaststelling`: 400 on POST, PUT, PATCH | covered: `test_documenten.py::test_document_in_progress_has_no_ontvangstdatum` (POST, PATCH) | merge | one parameter set of the document validation | `test_documenten.py` |
-| ztc-011 | besluittype, eigenschap, resultaattype, roltype, statustype or zaaktype relating to a published zaaktype: refused; ZIOT allowed | partly: `test_catalogi_publicatie.py::test_published_zaaktype_keeps_its_types` (statustype, roltype refused; ZIOT allowed); missing: besluittype, eigenschap, resultaattype and zaaktype | merge | into ztc-010 | `test_catalogi_publicatie.py` |
+| ztc-011 | besluittype, eigenschap, resultaattype, roltype, statustype or zaaktype relating to a published zaaktype: refused; ZIOT allowed | covered: `test_catalogi_publicatie.py::test_published_zaaktype_keeps_its_types` (statustype, roltype, eigenschap, resultaattype refused; ZIOT allowed), `test_catalogi_publicatie.py::test_concept_type_cannot_name_a_published_type` (besluittype naming a published IOT, zaaktype naming a published besluittype); a besluittype naming a zaaktype is n/a: `BesluitType.zaaktypen` is read-only in Open Zaak 1.29.3 | merge | into ztc-010 | `test_catalogi_publicatie.py` |
 | ztc-012 | publishing a zaaktype with a concept besluittype or informatieobjecttype: 400 | covered: `test_catalogi_publicatie.py::test_zaaktype_with_a_concept_type_does_not_publish` (besluittype, informatieobjecttype) | port | concepts only, deletable | `test_catalogi_publicatie.py` |
 | ztc-013 | relations to types of another catalogus refused | gap | skip | needs a second catalogus | |
 

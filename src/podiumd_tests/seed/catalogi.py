@@ -137,15 +137,8 @@ def make_publishable_zaaktype(
         openzaak.post(
             f"{CATALOGI}/roltypen", {"zaaktype": url, "omschrijving": omschrijving, "omschrijvingGeneriek": generiek}
         )
-    specificatie: dict[str, object] = {
-        "formaat": "tekst",
-        "lengte": "20",
-        "kardinaliteit": "1",
-        "waardenverzameling": [],
-    }
     for naam in types.eigenschappen:
-        eigenschap: dict[str, object] = {"zaaktype": url, "naam": naam, "definitie": naam, "specificatie": specificatie}
-        openzaak.post(f"{CATALOGI}/eigenschappen", eigenschap)
+        openzaak.post(f"{CATALOGI}/eigenschappen", eigenschap_body(str(url), naam))
     archief = {key: resultaattype[key] for key in ("archiefnominatie", "archiefactietermijn")}
     if not types.archiefactietermijn:
         archief["archiefactietermijn"] = None
@@ -162,6 +155,17 @@ def make_publishable_zaaktype(
             )
             openzaak.post(f"{CATALOGI}/resultaattypen", body)
     return openzaak.get(str(url))
+
+
+def eigenschap_body(zaaktype: str, naam: str) -> dict[str, object]:
+    """Build a text eigenschap of a zaaktype."""
+    specificatie: dict[str, object] = {
+        "formaat": "tekst",
+        "lengte": "20",
+        "kardinaliteit": "1",
+        "waardenverzameling": [],
+    }
+    return {"zaaktype": zaaktype, "naam": naam, "definitie": naam, "specificatie": specificatie}
 
 
 def _procedure(afleidingswijze: str, types: ZaaktypeTypes) -> dict[str, object]:

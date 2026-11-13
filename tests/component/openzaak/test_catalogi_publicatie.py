@@ -19,11 +19,16 @@ import pytest
 
 from podiumd_tests.json_data import strings
 from podiumd_tests.responses import invalid_codes
+from podiumd_tests.seed.catalogi import ZaaktypeTypes
+from podiumd_tests.seed.catalogi import eigenschap_body
 from podiumd_tests.seed.catalogi import make_concept_besluittype
 from podiumd_tests.seed.catalogi import make_concept_iot
 from podiumd_tests.seed.catalogi import make_publishable_zaaktype
 from podiumd_tests.seed.catalogi import publish
+from podiumd_tests.seed.catalogi import resultaattype_body
+from podiumd_tests.seed.catalogi import template_resultaattype
 from podiumd_tests.seed.openzaak import CATALOGI
+from podiumd_tests.seed.openzaak import make_concept_zaaktype
 from podiumd_tests.seed.openzaak import today
 
 if TYPE_CHECKING:
@@ -48,12 +53,27 @@ REFUSED_CHANGE = (HTTPStatus.BAD_REQUEST, HTTPStatus.FORBIDDEN, HTTPStatus.METHO
 def fixture_published(
     podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, selectielijst_zaaktype: JsonObject
 ) -> JsonObject:
-    """Return a throwaway published zaaktype."""
-    return publish(openzaak, make_publishable_zaaktype(podiumd_env, openzaak, registry, selectielijst_zaaktype))
+    """Return a throwaway published zaaktype with an eigenschap."""
+    types = ZaaktypeTypes(eigenschappen=("kenmerk",))
+    return publish(openzaak, make_publishable_zaaktype(podiumd_env, openzaak, registry, selectielijst_zaaktype, types))
 
 
 def _refused(openzaak: ApiClient, method: str, url: str, body: JsonObject | None = None) -> None:
     openzaak.request(method, url, *REFUSED_CHANGE, json=body or {})
+
+
+def _refused_as(openzaak: ApiClient, code: str, method: str, url: str, body: JsonObject | None = None) -> None:
+    response = openzaak.request(method, url, HTTPStatus.BAD_REQUEST, json=body or {})
+    assert invalid_codes(response) == [code], f"{method} {url}: {response.text}"
+
+
+# The field a PATCH of each child type changes.
+CHILD_FIELDS = {
+    "statustypen": "omschrijving",
+    "roltypen": "omschrijving",
+    "eigenschappen": "definitie",
+    "resultaattypen": "omschrijving",
+}
 
 
 @pytest.mark.parametrize("kind", ["zaaktype", "besluittype", "informatieobjecttype"])
@@ -94,28 +114,66 @@ def test_published_type_changes_only_its_einde_geldigheid(
 )
 @pytest.mark.scenario("""
     Given a published zaaktype
-    Then its statustype and roltype cannot be changed or deleted
-    And no statustype or roltype can be added to it
+    Then its statustype, roltype, eigenschap and resultaattype cannot be changed or deleted
+    And no statustype, roltype, eigenschap or resultaattype can be added to it
     But a concept informatieobjecttype can still be linked to it, and the zaaktype then lists it
 """)
 def test_published_zaaktype_keeps_its_types(
-    podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, published: JsonObject
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    selectielijst_zaaktype: JsonObject,
+    published: JsonObject,
 ) -> None:
     """Child types of a published zaaktype are fixed; a link to a concept informatieobjecttype is accepted and shows."""
     url = str(published["url"])
-    statustype = openzaak.list(f"{CATALOGI}/statustypen", {"zaaktype": url})[0]
-    roltype = openzaak.list(f"{CATALOGI}/roltypen", {"zaaktype": url})[0]
-    for child in (statustype, roltype):
-        _refused(openzaak, "PATCH", str(child["url"]), {"omschrijving": registry.tagged("gewijzigd")})
-        _refused(openzaak, "DELETE", str(child["url"]))
-    _refused(openzaak, "POST", f"{CATALOGI}/statustypen", {"zaaktype": url, "omschrijving": "Extra", "volgnummer": 3})
-    rol = {"zaaktype": url, "omschrijving": "Extra", "omschrijvingGeneriek": "belanghebbende"}
-    _refused(openzaak, "POST", f"{CATALOGI}/roltypen", rol)
+    new = {
+        "statustypen": {"zaaktype": url, "omschrijving": "Extra", "volgnummer": 3},
+        "roltypen": {"zaaktype": url, "omschrijving": "Extra", "omschrijvingGeneriek": "belanghebbende"},
+        "eigenschappen": eigenschap_body(url, "extra"),
+        "resultaattypen": resultaattype_body(
+            url, template_resultaattype(openzaak, selectielijst_zaaktype), omschrijving="Extra"
+        ),
+    }
+    for path, field in CHILD_FIELDS.items():
+        child = str(openzaak.list(f"{CATALOGI}/{path}", {"zaaktype": url})[0]["url"])
+        _refused_as(openzaak, "non-concept-zaaktype", "PATCH", child, {field: registry.tagged("gewijzigd")})
+        _refused_as(openzaak, "non-concept-zaaktype", "DELETE", child)
+        _refused_as(openzaak, "non-concept-zaaktype", "POST", f"{CATALOGI}/{path}", new[path])
     # Linking two published types is refused too (non-concept-relation); one side must be a concept.
     iot = make_concept_iot(podiumd_env, openzaak, registry, str(published["catalogus"]))
     ziot = {"zaaktype": url, "informatieobjecttype": iot["url"], "volgnummer": 2, "richting": "inkomend"}
     openzaak.post(f"{CATALOGI}/zaaktype-informatieobjecttypen", ziot)
     assert iot["url"] in strings(openzaak.get(url)["informatieobjecttypen"])
+
+
+@pytest.mark.source(
+    "external VNG-Realisatie/gemma-postman-tests ZGW_api_postman_tests ZGW business rule ztc-011",
+    "A type cannot be related to a published type unless one of them is a concept.",
+)
+@pytest.mark.parametrize("kind", ["besluittype", "zaaktype"])
+@pytest.mark.scenario("""
+    Given a concept besluittype and a published informatieobjecttype, or a concept zaaktype and a published besluittype
+    When the concept is changed to name the published type
+    Then Open Zaak refuses it
+""")
+def test_concept_type_cannot_name_a_published_type(
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    selectielijst_zaaktype: JsonObject,
+    kind: str,
+) -> None:
+    """PATCH of a concept besluittype's informatieobjecttypen or zaaktype's besluittypen to a published one is a 400."""
+    catalogus = str(selectielijst_zaaktype["catalogus"])
+    if kind == "besluittype":
+        concept = make_concept_besluittype(podiumd_env, openzaak, registry, catalogus)
+        field, related = "informatieobjecttypen", make_concept_iot(podiumd_env, openzaak, registry, catalogus)
+    else:
+        concept = make_concept_zaaktype(openzaak, registry, catalogus)
+        field, related = "besluittypen", make_concept_besluittype(podiumd_env, openzaak, registry, catalogus)
+    published = publish(openzaak, related)
+    _refused_as(openzaak, "non-concept-relation", "PATCH", str(concept["url"]), {field: [published["url"]]})
 
 
 @pytest.mark.source(
