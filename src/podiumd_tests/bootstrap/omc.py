@@ -37,6 +37,8 @@ if TYPE_CHECKING:
 STORE_KEY = "ptest_bootstrap_omc_abonnement_record"
 VALIDITY = 365 * 24 * 3600
 RENEW_BEFORE = 7 * 24 * 3600
+# OMC's endpoint for notifications, the end of its abonnement's callback URL.
+LISTEN_PATH = "/Events/Listen"
 # The taak as OMC 2.3.1 reads it first (its vHague TaskObject); the environment owner sets OMC's
 # ZGW_VARIABLE_OBJECTTYPE_TASKOBJECTTYPE_UUID to TAAK_OBJECTTYPE_UUID.
 TAAK_SCHEMA = {
@@ -170,7 +172,7 @@ class OmcAbonnement:
         """Replace the recorded abonnement with one carrying a fresh token."""
         self.remove(ctx)
         now = time.time()
-        callback = f"{ctx.env.profile.urls['omc']}/Events/Listen"
+        callback = ctx.env.profile.urls["omc"] + LISTEN_PATH
         body = abonnement_body(callback, "zaken", {}, auth=f"Bearer {omc_token(ctx.env, now)}")
         created = opennotificaties_client(ctx.env).post("abonnement", body)
         return {STORE_KEY: json.dumps({"url": created["url"], "expires": now + VALIDITY})}

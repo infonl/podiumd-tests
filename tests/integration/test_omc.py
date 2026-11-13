@@ -27,12 +27,16 @@ from podiumd_tests.omc import EMAIL
 from podiumd_tests.omc import MAIL_TIMEOUT
 from podiumd_tests.omc import OMC_LISTEN
 from podiumd_tests.omc import SMS
+from podiumd_tests.omc import listen_answers
+from podiumd_tests.omc import make_inwoner
 from podiumd_tests.omc import make_inwoner_zaak
 from podiumd_tests.omc import notify_request
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openklant import delete_klantcontact_tree
 from podiumd_tests.seed.openzaak import close_zaak
+from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
+from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
@@ -57,6 +61,14 @@ pytestmark = [
 ]
 
 
+def need_chain(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> None:
+    """Skip unless Open Notificaties delivers zaak events to OMC and OMC's Notify is the mock server."""
+    need_bootstrap("omc-abonnement", "infra-mock-server")
+    reason = notify_mock_missing(podiumd_env)
+    if reason:
+        pytest.skip(reason)
+
+
 @pytest.fixture
 def inwoner_zaak(
     podiumd_env: Environment,
@@ -67,10 +79,7 @@ def inwoner_zaak(
     parts: ZaaktypeParts,
 ) -> Callable[[str], JsonObject]:
     """A zaak whose initiator is a partij with only this digitaal adres (an e-mail address or phone number)."""
-    need_bootstrap("omc-abonnement", "infra-mock-server")
-    reason = notify_mock_missing(podiumd_env)
-    if reason:
-        pytest.skip(reason)
+    need_chain(podiumd_env, need_bootstrap)
     return lambda adres: make_inwoner_zaak(openzaak, openklant, registry, parts, adres)[0]
 
 
@@ -207,3 +216,41 @@ def test_delivery_receipt_becomes_a_klantcontact(
         timeout=MAIL_TIMEOUT,
         description=f"klantcontact about zaak {zaak['identificatie']} in Open Klant",
     )
+
+
+@pytest.mark.requires("cluster")
+@pytest.mark.source(
+    "upstream GemeenteNijmegen/mijn-services src/services/OpenKlantRegistrationService/README.md",
+    "OMC can get a zaak's status before the initiator rol names the inwoner; only Open Notificaties' retry then"
+    " delivers the mail.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner with an e-mail address in Open Klant
+    And a zaak in Open Zaak without an initiator
+    When the zaak gets its first status
+    Then OMC refuses the notification because the zaak has no initiator
+    When the inwoner becomes the zaak's initiator
+    Then Open Notificaties delivers the notification again and OMC sends the zaak-created e-mail
+""")
+def test_initiator_added_after_the_first_status_still_gets_the_mail(
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    parts: ZaaktypeParts,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """OMC answers 412 to the status of a zaak without rollen; Open Notificaties' retry brings the mail after the rol."""
+    need_chain(podiumd_env, need_bootstrap)
+    adres = own_address(registry)
+    bsn = make_inwoner(openklant, registry, adres)
+    zaak = make_zaak(openzaak, registry, parts.zaaktype)
+    status = str(make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))["url"])
+    wait_until(
+        lambda: HTTPStatus.PRECONDITION_FAILED in listen_answers(podiumd_env, status),
+        timeout=MAIL_TIMEOUT,
+        description=f"OMC's 412 to the status of zaak {zaak['identificatie']} in Open Notificaties' log",
+    )
+    make_rol(openzaak, registry, zaak, parts.roltypen["initiator"], inpBsn=bsn)
+    notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_ZAAKCREATE")
+    assert listen_answers(podiumd_env, status)[-1] == HTTPStatus.ACCEPTED

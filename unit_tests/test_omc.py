@@ -93,6 +93,19 @@ def test_listen_posts_with_omcs_token(fake_http, env_factory, profile_factory, m
     assert (sent[0].url, sent[0].headers["Authorization"]) == ("https://omc.example.test/Events/Listen", "Bearer t5")
 
 
+def test_listen_answers_reads_open_notificaties_log_of_deliveries_to_omc(page_env):
+    env = page_env(omc)
+    env.snippet_result = [412, 202]
+    assert omc.listen_answers(env, "https://oz.example.test/statussen/1") == [412, 202]
+    assert env.snippets == [
+        (
+            "opennotificaties",
+            "opennotificaties_deliveries",
+            {"resource_url": "https://oz.example.test/statussen/1", "callback_suffix": "/Events/Listen"},
+        )
+    ]
+
+
 def test_zaak_notificatie_is_about_the_zaak_with_its_kenmerken():
     zaak = {"url": "z", "zaaktype": "zt", "bronorganisatie": "1", "vertrouwelijkheidaanduiding": "openbaar", "x": 2}
     found = omc.zaak_notificatie(zaak, "status", "s")

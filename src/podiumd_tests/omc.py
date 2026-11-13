@@ -6,8 +6,11 @@ import time
 import uuid
 
 from typing import TYPE_CHECKING
+from typing import cast
 
+from podiumd_tests.bootstrap.omc import LISTEN_PATH
 from podiumd_tests.bootstrap.omc import omc_token
+from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import section
 from podiumd_tests.mock_server import NOTIFY_EMAIL
 from podiumd_tests.mock_server import NOTIFY_SMS
@@ -90,8 +93,18 @@ def notify_bodies(env: Environment, channel: tuple[str, str], template: str) -> 
 def listen(http: requests.Session, env: Environment, body: object, issued: float | None = None) -> requests.Response:
     """POST a notification to OMC's Events/Listen with the token its abonnement uses, issued now unless given."""
     token = omc_token(env, time.time() if issued is None else issued)
-    url = f"{env.profile.urls['omc']}/Events/Listen"
+    url = env.profile.urls["omc"] + LISTEN_PATH
     return http.post(url, json=body, headers={"Authorization": f"Bearer {token}"})
+
+
+def listen_answers(env: Environment, resource_url: str) -> list[int | None]:
+    """Return OMC's HTTP statuses to Open Notificaties' deliveries of the notification about resource_url.
+
+    Oldest first; Open Notificaties logs them only with LOG_NOTIFICATIONS_IN_DB.
+    """
+    params: dict[str, object] = {"resource_url": resource_url, "callback_suffix": LISTEN_PATH}
+    answers = run_snippet(env.kube, env.deployment_for("opennotificaties"), "opennotificaties_deliveries", params)
+    return cast("list[int | None]", answers)
 
 
 def expect_outcome(response: requests.Response, status: int, reason: str) -> None:
