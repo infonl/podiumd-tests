@@ -161,7 +161,8 @@ def test_hundred_zaken_are_assigned_and_released(
     def are_all(wanted: tuple[object, object] | None) -> bool:
         """None: any assignment. On a mismatch, wait_until reports the listed assignments' counts."""
         found = search_all(zac, urls["zac"], WERKLIJST_ROWS, **query)
-        listed = {str(item["id"]): listed_assignment(item) for item in found}
+        # ZAC's index keeps zaken of this zaaktype that other tests deleted with a 500 (open-zaak-1).
+        listed = {str(item["id"]): listed_assignment(item) for item in found if str(item["id"]) in uuids}
         assert sorted(listed) == uuids, f"listed {len(listed)} of {BULK} zaken"
         assert wanted is None or set(listed.values()) == {wanted}, f"listed {Counter(listed.values())}"
         return True
