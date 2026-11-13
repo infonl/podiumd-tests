@@ -6,6 +6,7 @@ from podiumd_tests.json_data import differences
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
+from podiumd_tests.json_data import unexpanded
 
 
 def test_section_gives_an_empty_object_for_other_shapes():
@@ -37,3 +38,29 @@ def test_entries_and_strings_keep_only_their_type():
 )
 def test_differences_lists_the_paths_found_lacks(wanted, found, expected):
     assert differences(wanted, found) == expected
+
+
+ZAAK = {
+    "status": "s1",
+    "rollen": ["r1", "r2"],
+    "resultaat": None,
+    "_expand": {
+        "status": {"url": "s1", "statustype": "st1", "_expand": {"statustype": {"url": "st1"}}},
+        "rollen": [{"url": "r2", "roltype": "rt"}, {"url": "r1", "roltype": "rt"}],
+    },
+}
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("status", []),
+        ("status.statustype", []),
+        ("rollen", []),
+        ("rollen.roltype", ["rollen.roltype", "rollen.roltype"]),
+        ("resultaat", ["resultaat"]),
+        ("zaaktype", ["zaaktype"]),
+    ],
+)
+def test_unexpanded_names_the_paths_without_their_objects(path, expected):
+    assert unexpanded(ZAAK, path) == expected

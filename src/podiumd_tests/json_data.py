@@ -55,3 +55,26 @@ def differences(wanted: object, found: object, path: str = "") -> list[str]:
             if all(differences(item, candidate) for candidate in candidates)
         ]
     return [] if wanted == found else [path]
+
+
+def unexpanded(item: JsonObject, path: str) -> list[str]:
+    """Return the paths below item whose _expand lacks the objects item names, or that name none.
+
+    path: an expand path of a ZGW API, e.g. "rollen.roltype"; a field holds a URL or a list of URLs.
+    """
+    head, _, rest = path.partition(".")
+    urls = strings(_listed(item.get(head)))
+    inlined = entries(_listed(section(item, "_expand").get(head)))
+    inlined_urls = sorted(str(found.get("url")) for found in inlined)
+    if not urls or inlined_urls != sorted(urls):
+        return [path]
+    if not rest:
+        return []
+    return [f"{head}.{missing}" for found in inlined for missing in unexpanded(found, rest)]
+
+
+def _listed(value: object) -> list[object]:
+    """Return a JSON list as it is, any other value but null as a list of it."""
+    if isinstance(value, list):
+        return cast("list[object]", value)
+    return [] if value is None else [value]

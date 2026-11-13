@@ -25,7 +25,7 @@ to `openbaar`; `ptest-bootstrap-zgw-noauth` none. No client has Autorisaties API
 | 1a | `OneGround/ZGW-APIs-postman-tests` "ZGW business rules" | BSD-3-Clause | rule (659 requests, 357 `pm.test`) | 55 | 46 | 0 | 0 | 9 | 26 | 10 |
 | 1b | same, "ZGW features" (ZGW 1.5 and 1.7) | BSD-3-Clause | folder (299 requests, 277 `pm.test`) | 31 | 20 | 3 | 3 | 5 | 5 | 1.5 |
 | 2a | `VNG-Realisatie/gemma-postman-tests` `ZGW_api_postman_tests.json` (standaard.md) | EUPL | rule (859 requests, 401 `pm.test`) | 56 | 3 (52 shared with 1a) | 0 | 1 | | 1 | 0.5 |
-| 2b | same, `ZGW_OAS_tests.json` | EUPL | folder (228 requests, 243 `pm.test`) | 27 | 14 | 11 | 0 | 2 | 1 | 0.5 |
+| 2b | same, `ZGW_OAS_tests.json` | EUPL | folder (228 requests, 243 `pm.test`) | 27 | 15 | 10 | 0 | 2 | 1 | 0.5 |
 | 2c | same, `issues_openzaak.md` | EUPL | note | 7 | | | 4 to recheck | 3 | 0 | 0 |
 | 3 | `GemeenteNijmegen/open-forms-testautomatisering` | EUPL-1.2 | pattern (21 specs) | 7 | 4 | 1 | 0 | 2 | 3 | 2.5 |
 | 4 | `VNG-Realisatie/gemma-zaken-test-integratie` (archived 2019) | none declared | test module | 10 | 9 | 1 | 0 | 0 | 0 (merged into 1a) | in 1a |
@@ -177,7 +177,7 @@ Per resource the status codes of its operations, plus expand and the Catalogi hi
 | ZRC rollen | list, create | covered: `test_rollen_of_two_kinds` | skip | covered | |
 | ZRC zaakobjecten | zaakobject CRUD | partly: `test_zaakobject_adres` | skip | status codes only | |
 | ZRC zaakinformatieobjecten | ZIO CRUD | covered: `test_document_linked_to_zaak`, `test_link_to_a_document_that_does_not_exist_is_refused`, `test_documenten.py::test_zaak_document_link_is_mirrored_and_fixed` | merge | zrc-003, 004 | `test_documenten.py` |
-| ZRC expand | 10 expand paths on a zaak, keys and non-empty arrays | partly: `test_autorisaties.py::test_expand_shows_no_more_than_the_client_may_list` (zaakinformatieobjecten); missing: the other expand paths | merge | into the expand test of 1b | `test_autorisaties.py` |
+| ZRC expand | 10 expand paths on a zaak, keys and non-empty arrays | covered: `test_zaken.py::test_expand_inlines_what_the_zaak_names` (the 31 paths of Open Zaak 1.29.3, through hoofdzaak and deelzaken; `eigenschappen,eigenschappen.eigenschap` answers 500, NoReverseMatch of `zaakeigenschap-detail`, not yet registered), `test_autorisaties.py::test_expand_shows_no_more_than_the_client_may_list` (rights) | port | Open Zaak 1.29.3 answers 400 to paths outside its list (`relevanteAndereZaken.zaaktype`, `zaaktype.catalogus`, `rollen.zaak`, `status.gezetdoor`), which 9 of the 10 requests use; Zaken API 1.5.1 allows any dotted path | `test_zaken.py` |
 | DRC enkelvoudiginformatieobjecten | EIO CRUD, lock, download, audittrail | covered: `test_documenten.py` | skip | covered | |
 | DRC gebruiksrechten | gebruiksrechten CRUD | covered: `test_indicatie_gebruiksrecht_follows_the_gebruiksrechten`, `test_verwijderen.py::test_linked_document_cannot_be_deleted` | merge | drc-006 | `test_documenten.py` |
 | DRC objectinformatieobjecten | list | covered: `test_documenten.py::test_zaak_document_link_is_mirrored_and_fixed`, `test_documenten.py::test_objectinformatieobject_follows_the_zaak` | merge | zrc-005 | `test_documenten.py` |

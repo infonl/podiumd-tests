@@ -354,6 +354,23 @@ def objectinformatieobjecten(openzaak: ApiClient, document: JsonObject) -> list[
     return openzaak.list(f"{DOCUMENTEN}/objectinformatieobjecten", {"informatieobject": str(document["url"])})
 
 
+def fill_zaak(
+    openzaak: ApiClient, registry: ResourceRegistry, zaak: JsonObject, parts: ZaaktypeParts
+) -> dict[str, JsonObject]:
+    """Give a zaak a status, rol, zaakobject, eigenschap and linked document; by the zaak field naming each.
+
+    No resultaat: deleting a zaak with one answers 500 on Open Zaak 1.29.3 (open-zaak-1).
+    """
+    document = make_document(openzaak, registry, parts.informatieobjecttype)
+    return {
+        "status": make_status(openzaak, zaak, str(parts.statustypen[0]["url"])),
+        "rollen": make_rol(openzaak, registry, zaak, parts.roltypen["initiator"], inpBsn="999990019"),
+        "zaakobjecten": openzaak.post(f"{ZAKEN}/zaakobjecten", zaakobject_body(zaak)),
+        "eigenschappen": openzaak.post(f"{zaak['url']}/zaakeigenschappen", zaakeigenschap_body(zaak, parts)),
+        "zaakinformatieobjecten": link_document(openzaak, registry, zaak, document),
+    }
+
+
 def clean_up_new_documents(openzaak: ApiClient, registry: ResourceRegistry, zaak: JsonObject) -> None:
     """Delete, at cleanup, the documents another component links to the zaak (e.g. a portal upload).
 

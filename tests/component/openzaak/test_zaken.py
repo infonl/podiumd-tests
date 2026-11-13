@@ -16,9 +16,11 @@ import pytest
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.json_data import unexpanded
 from podiumd_tests.responses import invalid_names
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak_at_cleanup
+from podiumd_tests.seed.openzaak import fill_zaak
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.openzaak import today
 
@@ -276,3 +278,54 @@ def test_reserved_zaaknummer_goes_to_one_zaak(
     }
     response = openzaak.request("POST", f"{ZAKEN}/zaken", HTTPStatus.BAD_REQUEST, json=body)
     assert "identificatie" in invalid_names(response)
+
+
+# The expand paths of Open Zaak 1.29.3 on a zaak, also through its hoofdzaak and deelzaken; eigenschappen only on
+# the zaak itself.
+NESTED_EXPAND = (
+    "zaaktype",
+    "status",
+    "status.statustype",
+    "resultaat",
+    "resultaat.resultaattype",
+    "rollen",
+    "rollen.roltype",
+    "zaakinformatieobjecten",
+    "zaakobjecten",
+)
+
+
+def _expand_through(relation: str) -> tuple[str, ...]:
+    return (relation, *(f"{relation}.{path}" for path in NESTED_EXPAND))
+
+
+@pytest.mark.source(
+    "external VNG-Realisatie/gemma-postman-tests ZGW_OAS_tests ZRC expand",
+    "expand inlines the objects a zaak names, nested with dots, up to its hoofdzaak and deelzaken.",
+)
+@pytest.mark.parametrize(
+    ("read", "paths"),
+    [
+        pytest.param("hoofdzaak", (*NESTED_EXPAND, *_expand_through("deelzaken")), id="zaak-and-deelzaken"),
+        pytest.param("hoofdzaak", ("eigenschappen", "eigenschappen.eigenschap"), id="eigenschappen"),
+        pytest.param("deelzaak", _expand_through("hoofdzaak"), id="hoofdzaak"),
+    ],
+)
+@pytest.mark.scenario("""
+    Given a hoofdzaak and its deelzaak, each with a status, resultaat, rol, eigenschap, zaakobject and document
+    When one of them is read with the expands Open Zaak offers
+    Then each expand inlines exactly the objects the zaak names, also of the hoofdzaak and the deelzaak
+""")
+def test_expand_inlines_what_the_zaak_names(
+    openzaak: ApiClient, registry: ResourceRegistry, archief_parts: ZaaktypeParts, read: str, paths: tuple[str, ...]
+) -> None:
+    """Each expand path of a zaak inlines the objects that the zaak's fields name, none missing."""
+    hoofdzaak = make_zaak(openzaak, registry, archief_parts.zaaktype)
+    deelzaak = make_zaak(openzaak, registry, archief_parts.zaaktype, hoofdzaak=hoofdzaak["url"])
+    for zaak in (hoofdzaak, deelzaak):
+        fill_zaak(openzaak, registry, zaak, archief_parts)
+        openzaak.post(f"{ZAKEN}/resultaten", {"zaak": zaak["url"], "resultaattype": archief_parts.resultaattypen[0]})
+    url = str({"hoofdzaak": hoofdzaak, "deelzaak": deelzaak}[read]["url"])
+    expanded = openzaak.get(url, {"expand": ",".join(paths)})
+    missing = [gap for path in paths for gap in unexpanded(expanded, path)]
+    assert not missing, f"expand paths without the objects the zaak names: {missing}"

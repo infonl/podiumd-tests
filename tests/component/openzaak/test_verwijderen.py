@@ -11,21 +11,17 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import audittrail
 from podiumd_tests.seed.openzaak import delete_besluit
 from podiumd_tests.seed.openzaak import delete_zaak
+from podiumd_tests.seed.openzaak import fill_zaak
 from podiumd_tests.seed.openzaak import link_besluit_document
 from podiumd_tests.seed.openzaak import link_document
 from podiumd_tests.seed.openzaak import make_besluit
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_gebruiksrechten
-from podiumd_tests.seed.openzaak import make_rol
-from podiumd_tests.seed.openzaak import make_status
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.openzaak import objectinformatieobjecten
-from podiumd_tests.seed.openzaak import zaakeigenschap_body
-from podiumd_tests.seed.openzaak import zaakobject_body
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -61,14 +57,10 @@ def test_deleting_a_zaak_deletes_what_belongs_to_it(
 ) -> None:
     """DELETE of a zaak without resultaat removes its sub-resources and the objectinformatieobject, not the document."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
-    status = make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
-    rol = make_rol(openzaak, registry, zaak, parts.roltypen["initiator"], inpBsn="999990019")
-    zaakobject = openzaak.post(f"{ZAKEN}/zaakobjecten", zaakobject_body(zaak))
-    eigenschap = openzaak.post(f"{zaak['url']}/zaakeigenschappen", zaakeigenschap_body(zaak, parts))
-    document = make_document(openzaak, registry, parts.informatieobjecttype)
-    link = link_document(openzaak, registry, zaak, document)
+    filled = fill_zaak(openzaak, registry, zaak, parts)
+    document = openzaak.get(str(filled["zaakinformatieobjecten"]["informatieobject"]))
     delete_zaak(openzaak, str(zaak["url"]))
-    gone(openzaak, zaak["url"], status["url"], rol["url"], zaakobject["url"], eigenschap["url"], link["url"])
+    gone(openzaak, zaak["url"], *(sub["url"] for sub in filled.values()))
     assert objectinformatieobjecten(openzaak, document) == []
     openzaak.get(str(document["url"]))
 
