@@ -32,9 +32,12 @@ from podiumd_tests.zaakbrug import cancel_checkout
 from podiumd_tests.zaakbrug import checked_out_id
 from podiumd_tests.zaakbrug import creeer_zaak
 from podiumd_tests.zaakbrug import document_identificatie
+from podiumd_tests.zaakbrug import document_inhoud
 from podiumd_tests.zaakbrug import expect_expired_version_bug
+from podiumd_tests.zaakbrug import geef_lijst_zaakdocumenten
 from podiumd_tests.zaakbrug import geef_zaak_details
 from podiumd_tests.zaakbrug import geef_zaakdocument_bewerken
+from podiumd_tests.zaakbrug import geef_zaakdocument_lezen
 from podiumd_tests.zaakbrug import genereer_document_id
 from podiumd_tests.zaakbrug import genereer_zaak_id
 from podiumd_tests.zaakbrug import is_bevestiging
@@ -44,6 +47,7 @@ from podiumd_tests.zaakbrug import update_zaak
 from podiumd_tests.zaakbrug import update_zaakdocument
 from podiumd_tests.zaakbrug import voeg_zaakdocument_toe
 from podiumd_tests.zaakbrug import zaak_identificatie
+from podiumd_tests.zaakbrug import zaakdocument_identificaties
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -63,6 +67,7 @@ pytestmark = [
 # ZaakBrug maps gemeentecode 1900 to this RSIN (zaakbrug.globals.organizations); the zaak's bronorganisatie.
 ZAAKBRUG_BRONORGANISATIE = "823288444"
 INITIATOR_BSN = "111111110"
+PDF = base64.b64encode(b"%PDF-1.4 ptest").decode()
 MADE_HERE = pytest.mark.source(
     "podiumd-tests",
     "PodiumD 4.10 adds ZaakBrug: ZDS 1.2 messages answer through its translate endpoints and reach Open Zaak.",
@@ -134,6 +139,19 @@ def fixture_zaakbrug_zaak(
     return create
 
 
+def _attach(http: requests.Session, urls: dict[str, str], zaak: str, status: str = "In bewerking") -> str:
+    """Attach a new document to the zaak with genereerDocumentIdentificatie and voegZaakdocumentToe; its identificatie."""
+    now = datetime.now(UTC)
+    base = urls["zaakbrug"] + ZDS
+    document = document_identificatie(
+        _post(http, f"{base}/VrijBericht", genereer_document_id(now), "genereerDocumentIdentificatie_Di02")
+    )
+    assert document
+    envelope = voeg_zaakdocument_toe(now, zaak, ZAAKBRUG_ZAAKTYPE, Document(document, ZAAKBRUG_IOT, PDF, status))
+    assert is_bevestiging(_post(http, f"{base}/OntvangAsynchroon", envelope, "voegZaakdocumentToe_Lk01"))
+    return document
+
+
 @pytest.mark.requires("openzaak")
 @MADE_HERE
 @pytest.mark.scenario("""
@@ -179,18 +197,50 @@ def test_voeg_zaakdocument_toe_attaches_a_document(
     http: requests.Session, urls: dict[str, str], openzaak: ApiClient, zaakbrug_zaak: Callable[..., CreatedZaak]
 ) -> None:
     """voegZaakdocumentToe_Lk01 attaches a document to a ZaakBrug zaak: Open Zaak links it as a zaakdocument."""
-    now = datetime.now(UTC)
-    base = urls["zaakbrug"] + ZDS
     zaak = zaakbrug_zaak()
-    document = document_identificatie(
-        _post(http, f"{base}/VrijBericht", genereer_document_id(now), "genereerDocumentIdentificatie_Di02")
-    )
-    assert document
-    pdf = base64.b64encode(b"%PDF-1.4 ptest").decode()
-    envelope = voeg_zaakdocument_toe(now, zaak.identificatie, ZAAKBRUG_ZAAKTYPE, Document(document, ZAAKBRUG_IOT, pdf))
-    assert is_bevestiging(_post(http, f"{base}/OntvangAsynchroon", envelope, "voegZaakdocumentToe_Lk01"))
+    _attach(http, urls, zaak.identificatie)
     links = openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": zaak.url})
     assert links, f"no zaakinformatieobject on {zaak.identificatie} after voegZaakdocumentToe"
+
+
+ZDS_TESTPLATFORM = "external softwarecatalogus.nl 20190501-Zaaksysteem-1346395-testrapportage.pdf"
+
+
+@pytest.mark.requires("openzaak")
+@pytest.mark.source(ZDS_TESTPLATFORM, "geefLijstZaakdocumenten: the zaak's documents are listed.")
+@pytest.mark.scenario("""
+    Given a zaak created through ZaakBrug
+    And a document attached to it through ZaakBrug
+    When a client asks ZaakBrug for the zaak's documents with a geefLijstZaakdocumenten message
+    Then the answer lists the document
+""")
+def test_geef_lijst_zaakdocumenten_lists_an_attached_document(
+    http: requests.Session, urls: dict[str, str], zaakbrug_zaak: Callable[..., CreatedZaak]
+) -> None:
+    """geefLijstZaakdocumenten_Lv01 lists the document attached with voegZaakdocumentToe."""
+    zaak = zaakbrug_zaak().identificatie
+    document = _attach(http, urls, zaak)
+    vraag = geef_lijst_zaakdocumenten(datetime.now(UTC), zaak)
+    answer = _post(http, f"{urls['zaakbrug']}{ZDS}/BeantwoordVraag", vraag, "geefLijstZaakdocumenten_Lv01")
+    assert zaakdocument_identificaties(answer) == [document]
+
+
+@pytest.mark.requires("openzaak")
+@pytest.mark.source(ZDS_TESTPLATFORM, "geefZaakdocumentLezen: a document is read with its inhoud.")
+@pytest.mark.scenario("""
+    Given a zaak created through ZaakBrug
+    And a document attached to it through ZaakBrug
+    When a client reads the document with a geefZaakdocumentLezen message
+    Then the answer carries the document's inhoud
+""")
+def test_geef_zaakdocument_lezen_returns_the_inhoud(
+    http: requests.Session, urls: dict[str, str], zaakbrug_zaak: Callable[..., CreatedZaak]
+) -> None:
+    """geefZaakdocumentLezen_Lv01 answers the inhoud sent with voegZaakdocumentToe."""
+    document = _attach(http, urls, zaakbrug_zaak().identificatie)
+    vraag = geef_zaakdocument_lezen(datetime.now(UTC), document)
+    answer = _post(http, f"{urls['zaakbrug']}{ZDS}/BeantwoordVraag", vraag, "geefZaakdocumentLezen_Lv01")
+    assert document_inhoud(answer) == PDF
 
 
 SOAPUI = "upstream wearefrank/zaakbrug e2e/SoapUI/zaakbrug-e2e-soapui-project.xml"
@@ -322,15 +372,7 @@ def test_definitief_document_is_not_updated(
     now = datetime.now(UTC)
     vrij = f"{urls['zaakbrug']}{ZDS}/VrijBericht"
     zaak = zaakbrug_zaak()
-    document = document_identificatie(
-        _post(http, vrij, genereer_document_id(now), "genereerDocumentIdentificatie_Di02")
-    )
-    assert document
-    pdf = base64.b64encode(b"%PDF-1.4 ptest").decode()
-    toe = voeg_zaakdocument_toe(
-        now, zaak.identificatie, ZAAKBRUG_ZAAKTYPE, Document(document, ZAAKBRUG_IOT, pdf, status="Definitief")
-    )
-    assert is_bevestiging(_post(http, f"{urls['zaakbrug']}{ZDS}/OntvangAsynchroon", toe, "voegZaakdocumentToe_Lk01"))
+    document = _attach(http, urls, zaak.identificatie, status="Definitief")
     checked_out = checked_out_id(
         _post(http, vrij, geef_zaakdocument_bewerken(now, document), "geefZaakdocumentbewerken_Di02")
     )

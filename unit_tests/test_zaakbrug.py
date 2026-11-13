@@ -14,8 +14,11 @@ from podiumd_tests.zaakbrug import cancel_checkout
 from podiumd_tests.zaakbrug import checked_out_id
 from podiumd_tests.zaakbrug import creeer_zaak
 from podiumd_tests.zaakbrug import document_identificatie
+from podiumd_tests.zaakbrug import document_inhoud
+from podiumd_tests.zaakbrug import geef_lijst_zaakdocumenten
 from podiumd_tests.zaakbrug import geef_zaak_details
 from podiumd_tests.zaakbrug import geef_zaakdocument_bewerken
+from podiumd_tests.zaakbrug import geef_zaakdocument_lezen
 from podiumd_tests.zaakbrug import genereer_document_id
 from podiumd_tests.zaakbrug import genereer_zaak_id
 from podiumd_tests.zaakbrug import is_bevestiging
@@ -25,6 +28,7 @@ from podiumd_tests.zaakbrug import update_zaak
 from podiumd_tests.zaakbrug import update_zaakdocument
 from podiumd_tests.zaakbrug import voeg_zaakdocument_toe
 from podiumd_tests.zaakbrug import zaak_identificatie
+from podiumd_tests.zaakbrug import zaakdocument_identificaties
 
 
 def test_zds_answer_gives_the_zaak_identificatie():
@@ -97,3 +101,24 @@ def test_document_envelopes_are_xml_with_the_zaak_and_the_document():
     answer = f"<E><x:Du02 xmlns:x={quoteattr(ZKN)}><x:document><x:identificatie>D-9</x:identificatie></x:document></x:Du02></E>"
     assert document_identificatie(answer) == "D-9"
     assert soap_action("creeerZaak_ZakLk01")["SOAPAction"] == f"{ZKN}/creeerZaak_ZakLk01"
+
+
+def test_document_queries_select_by_identificatie_and_answers_give_the_documents():
+    now = datetime(2026, 11, 13, tzinfo=UTC)
+    lijst = ET.fromstring(geef_lijst_zaakdocumenten(now, "Z-1"))  # noqa: S314  # nosec B314  # built here
+    assert lijst.findtext(f".//{{{ZKN}}}zakLv01/{{{ZKN}}}gelijk/{{{ZKN}}}identificatie") == "Z-1"
+    assert lijst.find(f".//{{{ZKN}}}scope/{{{ZKN}}}object/{{{ZKN}}}heeftRelevant") is not None
+    lezen = ET.fromstring(geef_zaakdocument_lezen(now, "D-1"))  # noqa: S314  # nosec B314  # built here
+    assert lezen.findtext(f".//{{{ZKN}}}edcLv01/{{{ZKN}}}gelijk/{{{ZKN}}}identificatie") == "D-1"
+    assert lezen.findtext(f".//{{{ZKN}}}stuurgegevens/{{http://www.egem.nl/StUF/StUF0301}}entiteittype") == "EDC"
+    related = "".join(
+        f"<x:heeftRelevant><x:gerelateerde><x:identificatie>{d}</x:identificatie></x:gerelateerde></x:heeftRelevant>"
+        for d in ("D-1", "D-2")
+    )
+    assert zaakdocument_identificaties(f"<E xmlns:x={quoteattr(ZKN)}><x:object>{related}</x:object></E>") == [
+        "D-1",
+        "D-2",
+    ]
+    assert zaakdocument_identificaties("<E/>") == []
+    assert document_inhoud(f"<E xmlns:x={quoteattr(ZKN)}><x:object><x:inhoud>cGRm</x:inhoud></x:object></E>") == "cGRm"
+    assert document_inhoud("<E/>") is None

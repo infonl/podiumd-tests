@@ -215,21 +215,45 @@ def actualiseer_zaakstatus(  # noqa: PLR0913  # one message
     return _zaak_wijziging(now, zaak, zaaktype_code, ((NO_VELDEN, zonder), (NO_VELDEN, status)), gemeentecode)
 
 
-def geef_zaak_details(now: datetime, zaak: str, gemeentecode: str = GEMEENTECODE) -> str:
-    """Return a geefZaakdetails_Lv01 envelope for the BeantwoordVraag endpoint: read one zaak by identificatie."""
-    stuurgegevens = _stuurgegevens("Lv01", now, gemeentecode, rest="<StUF:entiteittype>ZAK</StUF:entiteittype>")
+def _vraag(entiteittype: str, now: datetime, identificatie: str, scope: str, gemeentecode: str) -> str:
+    """Return a zakLv01 or edcLv01 envelope for the BeantwoordVraag endpoint: one object by identificatie."""
+    stuurgegevens = _stuurgegevens(
+        "Lv01", now, gemeentecode, rest=f"<StUF:entiteittype>{entiteittype}</StUF:entiteittype>"
+    )
+    element, soort = f"{entiteittype.lower()}Lv01", quoteattr(entiteittype)
     return f"""<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
  {XMLNS} xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-<SOAP-ENV:Body><ZKN:zakLv01>
+<SOAP-ENV:Body><ZKN:{element}>
 {stuurgegevens}
 <ZKN:parameters><StUF:sortering>0</StUF:sortering>
 <StUF:indicatorVervolgvraag>false</StUF:indicatorVervolgvraag></ZKN:parameters>
-<ZKN:gelijk StUF:entiteittype="ZAK"><ZKN:identificatie>{zaak}</ZKN:identificatie></ZKN:gelijk>
-<ZKN:scope><ZKN:object StUF:entiteittype="ZAK"><ZKN:identificatie xsi:nil="true"/>
-<ZKN:omschrijving xsi:nil="true"/>
+<ZKN:gelijk StUF:entiteittype={soort}><ZKN:identificatie>{identificatie}</ZKN:identificatie></ZKN:gelijk>
+<ZKN:scope><ZKN:object StUF:entiteittype={soort}><ZKN:identificatie xsi:nil="true"/>
+{scope}</ZKN:object></ZKN:scope>
+</ZKN:{element}></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
+
+
+def geef_zaak_details(now: datetime, zaak: str, gemeentecode: str = GEMEENTECODE) -> str:
+    """Return a geefZaakdetails_Lv01 envelope for the BeantwoordVraag endpoint: read one zaak by identificatie."""
+    scope = """<ZKN:omschrijving xsi:nil="true"/>
 <ZKN:isVan StUF:entiteittype="ZAKZKT"><ZKN:gerelateerde StUF:entiteittype="ZKT">
-<ZKN:code xsi:nil="true"/></ZKN:gerelateerde></ZKN:isVan></ZKN:object></ZKN:scope>
-</ZKN:zakLv01></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
+<ZKN:code xsi:nil="true"/></ZKN:gerelateerde></ZKN:isVan>"""
+    return _vraag("ZAK", now, zaak, scope, gemeentecode)
+
+
+def geef_lijst_zaakdocumenten(now: datetime, zaak: str, gemeentecode: str = GEMEENTECODE) -> str:
+    """Return a geefLijstZaakdocumenten_Lv01 envelope for the BeantwoordVraag endpoint: the documents of one zaak."""
+    scope = """<ZKN:heeftRelevant StUF:entiteittype="ZAKEDC"><ZKN:gerelateerde StUF:entiteittype="EDC">
+<ZKN:identificatie xsi:nil="true"/><ZKN:titel xsi:nil="true"/></ZKN:gerelateerde></ZKN:heeftRelevant>"""
+    return _vraag("ZAK", now, zaak, scope, gemeentecode)
+
+
+def geef_zaakdocument_lezen(now: datetime, document: str, gemeentecode: str = GEMEENTECODE) -> str:
+    """Return a geefZaakdocumentLezen_Lv01 envelope for the BeantwoordVraag endpoint: one document with its inhoud.
+
+    An inhoud element in the scope fails ZaakBrug's validation; the answer carries the inhoud without it.
+    """
+    return _vraag("EDC", now, document, '<ZKN:titel xsi:nil="true"/>', gemeentecode)
 
 
 def voeg_zaakdocument_toe(
@@ -321,6 +345,17 @@ def zaak_identificatie(answer: str) -> str | None:
         if found is not None and found.text:
             return found.text
     return None
+
+
+def zaakdocument_identificaties(answer: str) -> list[str]:
+    """Return the document identificaties in a geefLijstZaakdocumenten answer (La01)."""
+    path = f".//{{{ZKN}}}heeftRelevant/{{{ZKN}}}gerelateerde/{{{ZKN}}}identificatie"
+    return [found.text or "" for found in _parsed(answer).iterfind(path)]
+
+
+def document_inhoud(answer: str) -> str | None:
+    """Return the base64 inhoud in a geefZaakdocumentLezen answer (La01), or None."""
+    return _text(answer, f".//{{{ZKN}}}object/{{{ZKN}}}inhoud")
 
 
 def is_bevestiging(answer: str) -> bool:
