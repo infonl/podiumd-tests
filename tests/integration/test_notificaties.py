@@ -12,8 +12,10 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.bootstrap.names import ITA_OBJECTTYPES
+from podiumd_tests.bootstrap.names import OPENZAAK_TEST_KANAAL
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.json_data import section
+from podiumd_tests.kube import MANAGE_PY
 from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import close_internetaak
@@ -298,3 +300,31 @@ def test_object_is_notified_on_kanaal_objecten(
     created = make_object(objecten, registry, afdeling, {"identificatie": registry.tagged("afdeling"), "naam": "x"})
     body = notified(callback, event("objecten", "object", "create", created["url"]), "the object's create notification")
     assert section(body, "kenmerken").get("objectType") == afdeling
+
+
+@pytest.mark.requires("cluster")
+@pytest.mark.source(
+    "upstream open-zaak/open-zaak docs/installation/post_install.rst",
+    "After installation, `manage.py send_test_notification` shows that Open Zaak publishes on Open Notificaties.",
+)
+@pytest.mark.scenario("""
+    Given a subscriber on kanaal test in Open Notificaties
+    When Open Zaak sends its test notification
+    Then Open Zaak reports the notification as sent
+    And the subscriber gets the test notification
+""")
+def test_open_zaak_test_notification_reaches_a_subscriber(
+    podiumd_env: Environment,
+    opennotificaties: ApiClient,
+    registry: ResourceRegistry,
+    callback: Callback,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """Open Zaak's send_test_notification publishes with its own credentials and Open Notificaties delivers it."""
+    need_bootstrap("opennotificaties-kanalen")
+    make_abonnement(opennotificaties, registry, callback.url, OPENZAAK_TEST_KANAAL, {})
+    deployment = podiumd_env.deployment_for("openzaak")
+    output = podiumd_env.kube.exec(deployment, "python", MANAGE_PY, "send_test_notification", timeout=120)
+    assert "Notification successfully sent" in output
+    # The command's fixed hoofdObject and resource.
+    notified(callback, event(OPENZAAK_TEST_KANAAL, "test", "create", "https://example.com"), "the test notification")

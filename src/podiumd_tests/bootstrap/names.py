@@ -83,7 +83,13 @@ WORLDLINE_STORE_KEY = "ptest_bootstrap_worldline_secret"
 # and podiumd-infra.
 # The perf tier publishes on its own kanaal, which nothing subscribes to, so no app receives the load.
 PERF_KANAAL = "ptest-bootstrap-perf"
-KANALEN = {"zaken": ["bronorganisatie", "zaaktype", "vertrouwelijkheidaanduiding"], PERF_KANAAL: []}
+# Open Zaak's `manage.py send_test_notification` publishes on this kanaal; it creates the kanaal when missing.
+OPENZAAK_TEST_KANAAL = "test"
+KANALEN = {
+    "zaken": ["bronorganisatie", "zaaktype", "vertrouwelijkheidaanduiding"],
+    PERF_KANAAL: [],
+    OPENZAAK_TEST_KANAAL: [],
+}
 # API tokens (TokenAuth identifier = store key).
 # The productaanvraag chain (Objecten → Open Notificaties → ZAC → Open Zaak) runs on the
 # environment's own wiring: profile settings productaanvraag_type and productaanvraag_zaaktype.

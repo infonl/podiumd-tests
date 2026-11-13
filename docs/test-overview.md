@@ -11,10 +11,10 @@ versions is not counted.
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 254 | 40 | 9 |
-| component | 884 | 565 | 72 |
-| integration | 171 | 113 | 14 |
+| component | 885 | 565 | 72 |
+| integration | 172 | 114 | 14 |
 | perf | 54 | 3 | 0 |
-| **full tier** | **1272** | **691** |  |
+| **full tier** | **1274** | **692** |  |
 
 Unit tests (`unit_tests/`, functions): 825. Perf endpoints (`perf/runs.py`): 22.
 
@@ -44,7 +44,7 @@ Unit tests (`unit_tests/`, functions): 825. Perf endpoints (`perf/runs.py`): 22.
 | component | openformulieren | 15 | 10 |
 | component | openinwoner | 34 | 24 |
 | component | openklant | 19 | 15 |
-| component | opennotificaties | 7 | 6 |
+| component | opennotificaties | 8 | 6 |
 | component | openvtb | 3 | 3 |
 | component | openzaak | 155 | 76 |
 | component | pabc | 10 | 10 |
@@ -70,7 +70,7 @@ Unit tests (`unit_tests/`, functions): 825. Perf endpoints (`perf/runs.py`): 22.
 | integration | klacht_bezwaar | 1 | 1 |
 | integration | klantcontact_zaak | 3 | 3 |
 | integration | mail | 9 | 2 |
-| integration | notificaties | 8 | 8 |
+| integration | notificaties | 9 | 9 |
 | integration | omc | 5 | 5 |
 | integration | omc_bericht | 3 | 3 |
 | integration | omc_scenarios | 12 | 11 |
@@ -94,12 +94,12 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | EX | 19 |
 | MK | 47 |
 | PI | 57 |
-| TA | 261 |
+| TA | 262 |
 | ZAC | 19 |
 | draaiboek | 91 |
 | external | 164 |
 | podiumd-tests | 511 |
-| upstream | 194 |
+| upstream | 195 |
 
 ## Expected failures per known issue
 
