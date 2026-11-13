@@ -249,16 +249,8 @@ def test_rol_indicatie_machtiging(
 ) -> None:
     """indicatieMachtiging is stored on the rol (TA reg-122)."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
-    body = {
-        "zaak": zaak["url"],
-        "betrokkeneType": "natuurlijk_persoon",
-        "roltype": parts.roltypen["initiator"],
-        "roltoelichting": registry.tagged("rol"),
-        "indicatieMachtiging": machtiging,
-        "betrokkeneIdentificatie": {"inpBsn": random_bsn()},
-    }
-    rol = openzaak.post(f"{ZAKEN}/rollen", body)
-    registry.add("rol", lambda: openzaak.delete(str(rol["url"])))
+    initiator = parts.roltypen["initiator"]
+    rol = make_rol(openzaak, registry, zaak, initiator, "natuurlijk_persoon", machtiging, inpBsn=random_bsn())
     assert rol["indicatieMachtiging"] == machtiging
 
 
@@ -298,6 +290,6 @@ def test_rol_of_each_betrokkene_type_finds_the_zaak(  # parametrized rol kind
     """A rol of this betrokkeneType stores its identificatie, and the zaken filter on it finds only the zaak."""
     nummer = random_kvk_nummer()[:8] if betrokkene_type == "vestiging" else registry.tagged(betrokkene_type)[:24]
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
-    make_rol(openzaak, registry, zaak, parts.roltypen[generiek], betrokkene_type, **{key: nummer, **extra})
+    make_rol(openzaak, registry, zaak, parts.roltypen[generiek], betrokkene_type, "", **{key: nummer, **extra})
     found = openzaak.list(f"{ZAKEN}/zaken", {f"rol__betrokkeneIdentificatie__{filter_key}": nummer})
     assert urls(found) == {str(zaak["url"])}

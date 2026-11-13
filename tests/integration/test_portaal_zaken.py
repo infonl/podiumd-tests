@@ -30,6 +30,7 @@ from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.openinwoner import upload_document
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openklant import delete_klantcontact_tree
+from podiumd_tests.seed.openklant import random_bsn
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import clean_up_new_documents
 from podiumd_tests.seed.openzaak import link_document
@@ -93,18 +94,27 @@ def fixture_virus_scan(podiumd_env: Environment) -> None:
         )
 
 
-def zaak_of(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts, who: str = "inwoner") -> JsonObject:
-    """An openbaar zaak with its first status (Open Inwoner hides zaken without one) and the identity as initiator."""
+def zaak_of(
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    parts: ZaaktypeParts,
+    who: str = "inwoner",
+    generiek: str = "initiator",
+    machtiging: str = "",
+) -> JsonObject:
+    """An openbaar zaak with its first status (Open Inwoner hides zaken without one) and the identity as initiator.
+
+    generiek and machtiging: the omschrijvingGeneriek of the identity's roltype and its indicatieMachtiging.
+    """
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
     attributes = LOGINS[who][0].attributes
+    roltype = parts.roltypen[generiek]
     if who == "inwoner":
-        make_rol(
-            openzaak, registry, zaak, parts.roltypen["initiator"], "natuurlijk_persoon", inpBsn=attributes["bsn"][0]
-        )
+        make_rol(openzaak, registry, zaak, roltype, "natuurlijk_persoon", machtiging, inpBsn=attributes["bsn"][0])
     else:
         # The login carries the vestiging, and Open Inwoner filters on it too.
         vestiging = {"kvkNummer": attributes["kvk"][0], "vestigingsNummer": attributes["vestigingsnummer"][0]}
-        make_rol(openzaak, registry, zaak, parts.roltypen["initiator"], "niet_natuurlijk_persoon", **vestiging)
+        make_rol(openzaak, registry, zaak, roltype, "niet_natuurlijk_persoon", machtiging, **vestiging)
     make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
     return zaak
 
@@ -232,6 +242,37 @@ def test_bedrijfs_zaak_is_in_mijn_zaken(
     need_bootstrap(BEDRIJF.name, *WIRING)
     zaak = zaak_of(openzaak, registry, parts, "bedrijf")
     log_in(page, podiumd_env, "bedrijf")
+    expect_listed(page, zaak)
+
+
+@pytest.mark.tc("OI-016", "OI-070")
+@pytest.mark.parametrize("who", ["inwoner", "bedrijf"])
+@pytest.mark.source("draaiboek OI-016, OI-070", "Information a gemachtigde is entitled to see is visible.")
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak of another inwoner
+    And the inwoner or company is its gemachtigde
+    When the gemachtigde logs in to Open Inwoner with DigiD or eHerkenning
+    Then Mijn zaken lists the zaak
+""")
+def test_gemachtigde_sees_the_zaak_in_mijn_zaken(
+    page: Page,
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    parts: ZaaktypeParts,
+    need_bootstrap: Callable[..., None],
+    who: str,
+) -> None:
+    """Mijn zaken lists a zaak where the logged-in identity is belanghebbende, gemachtigde of the initiator.
+
+    Open Inwoner 2.5.0 has no DigiD Machtigen login; it lists every zaak with a rol of the logged-in identity.
+    Open Zaak allows one initiator per zaak.
+    """
+    need_bootstrap(LOGINS[who][0].name, *WIRING)
+    zaak = zaak_of(openzaak, registry, parts, who, "belanghebbende", "gemachtigde")
+    initiator = parts.roltypen["initiator"]
+    make_rol(openzaak, registry, zaak, initiator, "natuurlijk_persoon", "machtiginggever", inpBsn=random_bsn())
+    log_in(page, podiumd_env, who)
     expect_listed(page, zaak)
 
 

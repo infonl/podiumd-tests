@@ -201,20 +201,25 @@ def close_zaak(
 BSN_FILTER = "rol__betrokkeneIdentificatie__natuurlijkPersoon__inpBsn"
 
 
-def make_rol(
+def make_rol(  # noqa: PLR0913, PLR0917  # the rol's fields
     openzaak: ApiClient,
     registry: ResourceRegistry,
     zaak: JsonObject,
     roltype: str,
     betrokkene_type: str = "natuurlijk_persoon",
+    machtiging: str = "",
     **identificatie: object,
 ) -> JsonObject:
-    """Create a rol on a zaak; identificatie is the betrokkeneIdentificatie (e.g. inpBsn=...)."""
+    """Create a rol on a zaak; identificatie is the betrokkeneIdentificatie (e.g. inpBsn=...).
+
+    machtiging: the indicatieMachtiging, gemachtigde or machtiginggever.
+    """
     body: dict[str, object] = {
         "zaak": zaak["url"],
         "betrokkeneType": betrokkene_type,
         "roltype": roltype,
         "roltoelichting": registry.tagged("rol"),
+        "indicatieMachtiging": machtiging,
         "betrokkeneIdentificatie": identificatie,
     }
     return _create(openzaak, registry, f"{ZAKEN}/rollen", body)
