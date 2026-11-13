@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.names import TAAK_OBJECTTYPE
+from podiumd_tests.bootstrap.names import TAAK_OBJECTTYPE_UUID
 from podiumd_tests.bootstrap.names import TEST_ZAAKTYPE
 from podiumd_tests.bootstrap.omc import notify_mock_missing
 from podiumd_tests.mailpit import own_address
@@ -30,6 +32,7 @@ from podiumd_tests.seed.catalogi import make_publishable_zaaktype
 from podiumd_tests.seed.catalogi import publish
 from podiumd_tests.seed.objecten import created_notificatie
 from podiumd_tests.seed.objecten import make_object
+from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import random_bsn
 from podiumd_tests.seed.openzaak import link_besluit_document
 from podiumd_tests.seed.openzaak import make_besluit
@@ -262,13 +265,13 @@ def test_besluit_is_mailed_to_the_initiator(
 
 
 @pytest.fixture(name="taak_objecttype")
-def fixture_taak_objecttype(podiumd_env: Environment, objecttypen: ApiClient) -> str:
-    """Return the URL of OMC's taak objecttype; skip when Objecttypen has none."""
-    objecttype = podiumd_env.variable("omc", TASK_OBJECTTYPE)
-    found = objecttypen.request("GET", f"objecttypes/{objecttype}", HTTPStatus.OK, HTTPStatus.NOT_FOUND)
-    if found.status_code == HTTPStatus.NOT_FOUND:
-        pytest.skip(f"OMC's {TASK_OBJECTTYPE} {objecttype} is no objecttype in Objecttypen")
-    return str(found.json()["url"])
+def fixture_taak_objecttype(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> str:
+    """Return the URL Objecten knows bootstrap's taak objecttype by; skip unless it is OMC's taak objecttype."""
+    reason = setting_skip(podiumd_env, TASK_OBJECTTYPE, TAAK_OBJECTTYPE_UUID, listed=True)
+    if reason:
+        pytest.skip(reason)
+    need_bootstrap("objecttypen-taak")
+    return objecttype_url(podiumd_env, TAAK_OBJECTTYPE)
 
 
 def make_taak(
