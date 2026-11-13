@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.omc import notify_mock_missing
 from podiumd_tests.bootstrap.omc import omc_token
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import REFUSED
@@ -191,3 +192,38 @@ def test_omc_version_answers_to_its_token(
     expect_status(
         http.get(f"{urls['omc']}/Events/Version", headers={"Authorization": f"Bearer {token}"}), HTTPStatus.OK
     )
+
+
+# OMC's /Test check of a service it calls, and OMC's setting with that service's URL.
+OMC_SERVICES = [
+    ("ZGW/OpenZaakHealthCheck", "ZGW_ENDPOINT_OPENZAAK"),
+    ("ZGW/OpenKlantHealthCheck", "ZGW_ENDPOINT_OPENKLANT"),
+    ("ZGW/OpenBesluitenHealthCheck", "ZGW_ENDPOINT_BESLUITEN"),
+    ("ZGW/OpenObjectenHealthCheck", "ZGW_ENDPOINT_OBJECTEN"),
+    ("ZGW/OpenObjectTypenHealthCheck", "ZGW_ENDPOINT_OBJECTTYPEN"),
+    ("Notify/HealthCheck", "NOTIFY_API_BASEURL"),
+]
+
+
+@pytest.mark.requires("omc", "cluster")
+@pytest.mark.source(
+    "upstream Worth-NL/NotifyNL-OMC omc-notify.gitbook.io Test endpoints",
+    "OMC's /Test endpoints tell whether OMC reaches each service it calls.",
+)
+@pytest.mark.parametrize(("check", "setting"), [pytest.param(c, s, id=c.split("/")[1]) for c, s in OMC_SERVICES])
+@pytest.mark.scenario("""
+    Given OMC has the URL of a service it calls
+    When OMC's test endpoint for that service is called with OMC's own token
+    Then OMC answers that it reaches the service
+""")
+def test_omc_reaches_its_services(
+    http: requests.Session, podiumd_env: Environment, urls: dict[str, str], check: str, setting: str
+) -> None:
+    """OMC's GET /Test/<check> answers 202 for each service whose URL OMC has."""
+    if not podiumd_env.variable("omc", setting):
+        pytest.skip(f"OMC's {setting} is empty: OMC calls no such service")
+    if setting == "NOTIFY_API_BASEURL" and notify_mock_missing(podiumd_env) is None:
+        pytest.skip("OMC's Notify is podiumd-tests' mock server, which has no /_status")
+    token = omc_token(podiumd_env, time.time())
+    response = http.get(f"{urls['omc']}/Test/{check}", headers={"Authorization": f"Bearer {token}"})
+    expect_status(response, HTTPStatus.ACCEPTED)
