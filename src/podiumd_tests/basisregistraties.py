@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from typing import NamedTuple
+
+from podiumd_tests.json_data import entries
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -35,6 +38,34 @@ KVK_ANDERE_VESTIGING = "000038509490"
 KVK_TEST_ADRES = {"postcode": "8823SJ", "huisnummer": "3"}
 
 
+class KvkBedrijf(NamedTuple):
+    """A company of KvK's test set: its KvK-nummer, the naam of its basisprofiel and the rechtsvorm of its eigenaar."""
+
+    kvk_nummer: str
+    naam: str
+    rechtsvorm: str
+
+
+# One company of KvK's test set per rechtsvorm. The coöperatie of the set (55344526) has no basisprofiel (IPD0005).
+KVK_RECHTSVORMEN = {
+    "eenmanszaak": KvkBedrijf("69599084", "Test EMZ Dagobert", "Eenmanszaak"),
+    "bv": KvkBedrijf(KVK_TEST_NUMMER, "Test BV Donald", "Besloten vennootschap"),
+    "nv": KvkBedrijf("68727720", "Test NV Katrien", "Naamloze Vennootschap"),
+    "stichting": KvkBedrijf("69599068", "Test Stichting Bolderbast", "Stichting"),
+    "vof": KvkBedrijf("90005414", "Regional Qvolane - MA", "Vennootschap Onder Firma"),
+    "maatschap": KvkBedrijf("90001745", "Free Movelax", "Maatschap"),
+    "cv": KvkBedrijf("90003942", "Global Bigdofind", "Commanditaire Vennootschap"),
+    "vve": KvkBedrijf("90000749", "Global Conron", "Vereniging van Eigenaars"),
+    "kerkgenootschap": KvkBedrijf("90002520", "Global Kontex - MA", "Kerkgenootschap"),
+    "owm": KvkBedrijf("90002490", "Onderlinge Waarborgmaatschappij Local Dongplus", "Onderlinge Waarborg Maatschappij"),
+    "kerspel": KvkBedrijf("55505201", "Free Stathex", "Kerspel"),
+}
+# The KvK-nummers of KvK's test set that answer an error: 404 with IPD0005 (basisprofiel) or IPD5200 (zoeken).
+KVK_FOUTMELDINGEN = ("90004973", "90002903")
+KVK_GEEN_PRODUCT = "IPD0005"
+KVK_GEEN_RESULTATEN = "IPD5200"
+
+
 def brp_personen(http: requests.Session, proxy_url: str, query: Mapping[str, object]) -> requests.Response:
     """POST a Haal Centraal personen query (type, burgerservicenummer or search fields, fields)."""
     return http.post(proxy_url + BRP_PERSONEN, json=query)
@@ -58,3 +89,8 @@ def kvk_basisprofiel(http: requests.Session, proxy_url: str, kvk_nummer: str) ->
 def kvk_vestigingsprofiel(http: requests.Session, proxy_url: str, vestigingsnummer: str) -> requests.Response:
     """GET the vestigingsprofiel of a vestigingsnummer."""
     return http.get(f"{proxy_url}{KVK_VESTIGINGSPROFIELEN}/{vestigingsnummer}", params={"geoData": "false"})
+
+
+def kvk_foutcodes(response: requests.Response) -> set[str]:
+    """Return the codes of a KvK error answer's fout list."""
+    return {str(fout.get("code")) for fout in entries(response.json().get("fout"))}

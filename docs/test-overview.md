@@ -11,12 +11,12 @@ versions is not counted.
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 254 | 40 | 9 |
-| component | 885 | 565 | 72 |
+| component | 922 | 568 | 72 |
 | integration | 172 | 114 | 14 |
 | perf | 54 | 3 | 0 |
-| **full tier** | **1274** | **692** |  |
+| **full tier** | **1311** | **695** |  |
 
-Unit tests (`unit_tests/`, functions): 825. Perf endpoints (`perf/runs.py`): 22.
+Unit tests (`unit_tests/`, functions): 827. Perf endpoints (`perf/runs.py`): 22.
 
 ## Per area
 
@@ -32,11 +32,11 @@ Unit tests (`unit_tests/`, functions): 825. Perf endpoints (`perf/runs.py`): 22.
 | smoke | reachability | 35 | 2 |
 | smoke | web_security | 134 | 6 |
 | smoke | zgw_auth | 4 | 2 |
-| component | basisregistraties | 30 | 17 |
+| component | basisregistraties | 42 | 18 |
 | component | frankgateway | 8 | 2 |
 | component | ita | 46 | 31 |
 | component | keycloak | 22 | 13 |
-| component | kiss | 53 | 24 |
+| component | kiss | 66 | 25 |
 | component | objecten | 18 | 8 |
 | component | omc | 3 | 2 |
 | component | openarchiefbeheer | 36 | 30 |
@@ -51,7 +51,7 @@ Unit tests (`unit_tests/`, functions): 825. Perf endpoints (`perf/runs.py`): 22.
 | component | platform | 69 | 18 |
 | component | referentielijsten | 2 | 2 |
 | component | zaakbrug | 14 | 13 |
-| component | zac | 331 | 253 |
+| component | zac | 343 | 254 |
 | component | zgw_office_addin | 4 | 3 |
 | integration | continuiteit | 19 | 10 |
 | integration | formulier_betaling | 19 | 6 |
@@ -94,12 +94,12 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | EX | 19 |
 | MK | 47 |
 | PI | 57 |
-| TA | 262 |
+| TA | 271 |
 | ZAC | 19 |
 | draaiboek | 91 |
-| external | 164 |
-| podiumd-tests | 511 |
-| upstream | 195 |
+| external | 177 |
+| podiumd-tests | 513 |
+| upstream | 208 |
 
 ## Expected failures per known issue
 

@@ -15,6 +15,7 @@ import pytest
 
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import KLAMER
+from podiumd_tests.basisregistraties import KVK_RECHTSVORMEN
 from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
 from podiumd_tests.basisregistraties import KVK_TEST_VESTIGING
 from podiumd_tests.json_data import entries
@@ -51,6 +52,7 @@ if TYPE_CHECKING:
 
     import requests
 
+    from podiumd_tests.basisregistraties import KvkBedrijf
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
@@ -131,20 +133,20 @@ def test_person_abroad_shows_the_country(zac: requests.Session, urls: dict[str, 
     assert str(expect_status(shown, HTTPStatus.OK).json().get("verblijfplaats")).endswith("België")
 
 
+@pytest.mark.parametrize("bedrijf", KVK_RECHTSVORMEN.values(), ids=list(KVK_RECHTSVORMEN))
 @TA_REG_193
 @pytest.mark.tc("INT-004", "INT-005")
 @pytest.mark.scenario("""
     Given a behandelaar is logged in to ZAC
-    When the behandelaar looks up the test company by KvK number
+    When the behandelaar looks up a company of KvK's test set of each rechtsvorm by KvK number
     Then ZAC shows the company's basisprofiel with that KvK number
-    And shows the company's name
+    And shows the company's rechtsvorm
 """)
-def test_company_lookup(zac: requests.Session, urls: dict[str, str]) -> None:
-    """ZAC finds the KvK test company's basisprofiel by KvK number (TA reg-193)."""
-    url = f"{urls['zac']}/rest/klanten/basisprofiel/{KVK_TEST_NUMMER}"
-    bedrijf = expect_status(zac.get(url), HTTPStatus.OK).json()
-    assert bedrijf["kvkNummer"] == KVK_TEST_NUMMER
-    assert "Test BV Donald" in str(bedrijf.get("statutaireNaam") or bedrijf.get("eersteHandelsnaam"))
+def test_company_lookup(zac: requests.Session, urls: dict[str, str], bedrijf: KvkBedrijf) -> None:
+    """ZAC's basisprofiel of a KvK test company has its KvK number and rechtsvorm (TA reg-193)."""
+    url = f"{urls['zac']}/rest/klanten/basisprofiel/{bedrijf.kvk_nummer}"
+    profiel = expect_status(zac.get(url), HTTPStatus.OK).json()
+    assert (profiel["kvkNummer"], profiel.get("rechtsvorm")) == (bedrijf.kvk_nummer, bedrijf.rechtsvorm)
 
 
 def _add_belanghebbende(zac: requests.Session, zac_url: str, zaak: JsonObject) -> requests.Response:

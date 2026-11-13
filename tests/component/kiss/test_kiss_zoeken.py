@@ -15,8 +15,12 @@ import pytest
 
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import KIERKEGAARD
+from podiumd_tests.basisregistraties import KVK_FOUTMELDINGEN
+from podiumd_tests.basisregistraties import KVK_GEEN_RESULTATEN
+from podiumd_tests.basisregistraties import KVK_RECHTSVORMEN
 from podiumd_tests.basisregistraties import KVK_TEST_ADRES
 from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
+from podiumd_tests.basisregistraties import kvk_foutcodes
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.json_data import entries
@@ -27,6 +31,7 @@ if TYPE_CHECKING:
 
     import requests
 
+    from podiumd_tests.basisregistraties import KvkBedrijf
     from podiumd_tests.bootstrap.keycloak import KeycloakUser
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("kiss", "keycloak")]
@@ -136,6 +141,7 @@ KVK_SEVERAL_ADRES = {"postcode": "2352SZ", "huisnummer": "37"}
     [
         pytest.param({"kvkNummer": KVK_TEST_NUMMER}, KVK_TEST_NUMMER, 2, id="kvknummer-several"),
         pytest.param({"kvkNummer": "12345678"}, None, 0, id="kvknummer-unknown"),
+        *(pytest.param({"kvkNummer": n}, None, 0, id=f"kvknummer-foutmelding-{n}") for n in KVK_FOUTMELDINGEN),
         pytest.param({"naam": "Test"}, KVK_TEST_NUMMER, 1, id="naam"),
         pytest.param({"naam": "Donald"}, KVK_TEST_NUMMER, 2, id="naam-several"),
         pytest.param({"naam": "test automation"}, None, 0, id="naam-unknown"),
@@ -156,7 +162,7 @@ KVK_SEVERAL_ADRES = {"postcode": "2352SZ", "huisnummer": "37"}
     Given the KCC medewerker is logged in to KISS
     When the medewerker searches KvK by KvK number, naam, vestigingsnummer, or postcode and huisnummer
     Then KISS finds the company of the KvK test set, with each of its results where there are several
-    And finds nothing for an unknown KvK number, naam or address
+    And finds nothing for an unknown KvK number, naam or address, or a KvK number that KvK answers with an error
 """)
 def test_company_search(
     kiss_session: Callable[[KeycloakUser], requests.Session],
@@ -165,9 +171,13 @@ def test_company_search(
     kvk_nummer: str | None,
     minimum: int,
 ) -> None:
-    """KISS's KvK search gives at least the minimum of results of the KvK number, or nothing (404 or no results)."""
+    """KISS's KvK search gives at least the minimum of results of the KvK number, or nothing.
+
+    Nothing is no results, or 404 with fout code IPD5200, which KISS shows as no results; any other 404 is an error.
+    """
     response = kiss_session(KCC).get(f"{urls['kiss']}/api/kvk/v2/zoeken", params=query)
     if kvk_nummer is None and response.status_code == HTTPStatus.NOT_FOUND:
+        assert kvk_foutcodes(response) == {KVK_GEEN_RESULTATEN}
         return
     numbers = [
         str(r.get("kvkNummer")) for r in entries(expect_status(response, HTTPStatus.OK).json().get("resultaten"))
@@ -176,3 +186,33 @@ def test_company_search(
         assert numbers == []
     else:
         assert numbers.count(kvk_nummer) >= minimum, numbers
+
+
+@pytest.mark.parametrize("bedrijf", KVK_RECHTSVORMEN.values(), ids=list(KVK_RECHTSVORMEN))
+@pytest.mark.source(
+    "upstream klantinteractie-servicesysteem/KISS-frontend src/services/kvk/service.ts",
+    "KISS's company search reads the vestigingsprofiel of each vestiging found, and the eigenaar of the company.",
+)
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to KISS
+    And a company of KvK's test set of each rechtsvorm
+    When the medewerker searches KvK by its KvK number
+    Then KISS lists the company with a naam
+    And gets the vestigingsprofiel of each vestiging listed
+    And gets the company's eigenaar with its rechtsvorm
+""")
+def test_company_of_each_rechtsvorm(
+    kiss_session: Callable[[KeycloakUser], requests.Session], urls: dict[str, str], bedrijf: KvkBedrijf
+) -> None:
+    """KISS's zoeken, vestigingsprofielen and eigenaar calls answer for a KvK test company of each rechtsvorm."""
+    kiss, kvk = kiss_session(KCC), f"{urls['kiss']}/api/kvk"
+    response = kiss.get(f"{kvk}/v2/zoeken", params={"kvkNummer": bedrijf.kvk_nummer})
+    found = entries(expect_status(response, HTTPStatus.OK).json().get("resultaten"))
+    assert found
+    assert all(r.get("kvkNummer") == bedrijf.kvk_nummer and r.get("naam") for r in found), found
+    vestigingen = sorted({str(r["vestigingsnummer"]) for r in found if r.get("vestigingsnummer")})
+    for vestiging in vestigingen:
+        profiel = expect_status(kiss.get(f"{kvk}/v1/vestigingsprofielen/{vestiging}"), HTTPStatus.OK).json()
+        assert profiel["kvkNummer"] == bedrijf.kvk_nummer
+    eigenaar = expect_status(kiss.get(f"{kvk}/v1/basisprofielen/{bedrijf.kvk_nummer}/eigenaar"), HTTPStatus.OK)
+    assert eigenaar.json().get("rechtsvorm") == bedrijf.rechtsvorm

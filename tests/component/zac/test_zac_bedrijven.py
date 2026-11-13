@@ -1,4 +1,4 @@
-"""ZAC's companies from the KvK: search, profiles, and a vestiging that is not of the KvK-nummer."""
+"""ZAC's companies from the KvK: search, profiles, KvK's error numbers, and a vestiging that is not of the KvK-nummer."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.basisregistraties import KVK_ANDERE_VESTIGING
+from podiumd_tests.basisregistraties import KVK_FOUTMELDINGEN
 from podiumd_tests.basisregistraties import KVK_TEST_ADRES
 from podiumd_tests.basisregistraties import KVK_TEST_HOOFDVESTIGING
 from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
@@ -82,6 +83,22 @@ def test_bedrijf_profiles_show_the_rsin_and_addresses(zac: requests.Session, url
     adressen = {adres.get("type"): adres.get("postcode") for adres in entries(profiel.get("adressen"))}
     assert adressen.keys() == {"bezoekadres", "correspondentieadres"}
     assert adressen["bezoekadres"] == KVK_TEST_ADRES["postcode"]
+
+
+@pytest.mark.parametrize("nummer", KVK_FOUTMELDINGEN)
+@pytest.mark.scenario("""
+    Given a KvK number of KvK's test set that answers an error
+    When the behandelaar opens its basisprofiel in ZAC
+    Then ZAC answers that it is not found, not a server error
+    When the behandelaar searches companies by that KvK number
+    Then ZAC lists no company
+""")
+def test_kvk_foutmelding_is_not_found(zac: requests.Session, urls: dict[str, str], nummer: str) -> None:
+    """KvK's 404 for an error number becomes ZAC's 404 for the basisprofiel and an empty company search."""
+    klanten = f"{urls['zac']}/rest/klanten"
+    expect_status(zac.get(f"{klanten}/basisprofiel/{nummer}"), HTTPStatus.NOT_FOUND)
+    found = expect_status(zac.put(f"{klanten}/bedrijven", json={"kvkNummer": nummer}), HTTPStatus.OK).json()
+    assert entries(found.get("resultaten")) == []
 
 
 @pytest.mark.requires("openzaak")

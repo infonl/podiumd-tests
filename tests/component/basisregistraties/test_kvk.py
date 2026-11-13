@@ -1,4 +1,4 @@
-"""KvK through the api-proxy, against KvK's test API and its test set (Test BV Donald).
+"""KvK through the api-proxy, against KvK's test API and its test set (Test BV Donald, one company per rechtsvorm).
 
 Ported from TA regression 08, 47, 57, 125 and the KvK parts of 80, 150 and 157. TA called KvK's test
 API directly; here the requests go through the api-proxy, which routes there on every estate.
@@ -11,16 +11,23 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.basisregistraties import KVK_FOUTMELDINGEN
+from podiumd_tests.basisregistraties import KVK_GEEN_PRODUCT
+from podiumd_tests.basisregistraties import KVK_GEEN_RESULTATEN
+from podiumd_tests.basisregistraties import KVK_RECHTSVORMEN
 from podiumd_tests.basisregistraties import KVK_TEST_ADRES
 from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
 from podiumd_tests.basisregistraties import kvk_basisprofiel
+from podiumd_tests.basisregistraties import kvk_foutcodes
 from podiumd_tests.basisregistraties import kvk_zoeken
 from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
     import requests
 
+    from podiumd_tests.basisregistraties import KvkBedrijf
     from podiumd_tests.json_data import JsonObject
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("api-proxy")]
@@ -51,6 +58,10 @@ REG_150 = pytest.mark.source(
 REG_157 = pytest.mark.source(
     "TA regression/157-contact-haalcentraal-validatie.spec.ts",
     "Checks that a company unknown to Contact can be found through KvK.",
+)
+KVK_TESTSET = pytest.mark.source(
+    "external developers.kvk.nl documentation/testing",
+    "KvK's test set has a KvK-nummer per rechtsvorm, and two KvK-nummers that answer an error.",
 )
 
 
@@ -151,15 +162,38 @@ def test_postcode_without_huisnummer_is_refused(http: requests.Session, urls: di
     expect_status(kvk_zoeken(http, urls["api-proxy"], {"postcode": KVK_TEST_ADRES["postcode"]}), HTTPStatus.BAD_REQUEST)
 
 
+@pytest.mark.parametrize("bedrijf", KVK_RECHTSVORMEN.values(), ids=list(KVK_RECHTSVORMEN))
 @pytest.mark.tc("INT-004", "INT-005")
 @REG_157
 @REG_80
+@KVK_TESTSET
 @pytest.mark.scenario("""
-    Given the test company in KvK's test set
+    Given a company of KvK's test set of each rechtsvorm
     When its basisprofiel is requested through the api-proxy
-    Then KvK gives the basisprofiel with its KvK number
+    Then KvK gives the basisprofiel with its KvK number and naam
+    And its eigenaar has that rechtsvorm
 """)
-def test_basisprofiel(http: requests.Session, urls: dict[str, str]) -> None:
-    """The basisprofiel of the test company answers with its number (TA reg-157c, reg-80)."""
-    response = expect_status(kvk_basisprofiel(http, urls["api-proxy"], KVK_TEST_NUMMER), HTTPStatus.OK)
-    assert response.json()["kvkNummer"] == KVK_TEST_NUMMER
+def test_basisprofiel(http: requests.Session, urls: dict[str, str], bedrijf: KvkBedrijf) -> None:
+    """The basisprofiel carries the company's KvK number, naam and rechtsvorm (TA reg-157c, reg-80)."""
+    profiel = expect_status(kvk_basisprofiel(http, urls["api-proxy"], bedrijf.kvk_nummer), HTTPStatus.OK).json()
+    eigenaar = section(section(profiel, "_embedded"), "eigenaar")
+    assert (profiel["kvkNummer"], profiel["naam"], eigenaar.get("rechtsvorm")) == bedrijf
+
+
+@pytest.mark.parametrize("nummer", KVK_FOUTMELDINGEN)
+@KVK_TESTSET
+@pytest.mark.scenario("""
+    Given a KvK number of KvK's test set that answers an error
+    When its basisprofiel is requested through the api-proxy
+    Then KvK answers 404 with the fout code that it cannot deliver the product
+    When KvK is searched by that number
+    Then KvK answers 404 with the fout code that it found nothing
+""")
+def test_foutmelding_numbers_answer_404_with_a_fout_code(
+    http: requests.Session, urls: dict[str, str], nummer: str
+) -> None:
+    """The error numbers answer 404 with IPD0005 (basisprofiel) and IPD5200 (zoeken), never 5xx."""
+    profiel = expect_status(kvk_basisprofiel(http, urls["api-proxy"], nummer), HTTPStatus.NOT_FOUND)
+    assert kvk_foutcodes(profiel) == {KVK_GEEN_PRODUCT}
+    zoeken = expect_status(kvk_zoeken(http, urls["api-proxy"], {"kvkNummer": nummer}), HTTPStatus.NOT_FOUND)
+    assert kvk_foutcodes(zoeken) == {KVK_GEEN_RESULTATEN}
