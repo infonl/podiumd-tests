@@ -18,7 +18,7 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import invalid_names
 from podiumd_tests.seed.openzaak import ZAKEN
-from podiumd_tests.seed.openzaak import delete_zaak
+from podiumd_tests.seed.openzaak import delete_zaak_at_cleanup
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.openzaak import today
 
@@ -82,8 +82,7 @@ def test_identificatie_is_unique_under_concurrent_creates(
         }
         response = openzaak.http.post(openzaak.url(f"{ZAKEN}/zaken"), json=body, headers=openzaak.headers())
         if response.status_code == HTTPStatus.CREATED:
-            url = str(response.json()["url"])
-            registry.add(f"zaak {url}", lambda: delete_zaak(openzaak, url))
+            delete_zaak_at_cleanup(openzaak, registry, str(response.json()["url"]))
         return response.status_code
 
     with ThreadPoolExecutor(max_workers=5) as pool:

@@ -30,7 +30,7 @@ from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import BESLUIT_CREATE_LOCK
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_besluit
-from podiumd_tests.seed.openzaak import delete_zaak
+from podiumd_tests.seed.openzaak import delete_zaak_at_cleanup
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.wait import wait_until
 
@@ -460,7 +460,7 @@ def clean_up_zaak(  # noqa: PLR0913  # the zaak, its two APIs and the cleanup
 ) -> None:
     """Delete, at cleanup, the zaak ZAC shows from Open Zaak, after end_process."""
     url = openzaak.url(f"{ZAKEN}/zaken/{zaak['uuid']}")
-    registry.add(f"zaak {zaak['identificatie']}", lambda: delete_zaak(openzaak, url, with_documents=with_documents))
+    delete_zaak_at_cleanup(openzaak, registry, url, with_documents=with_documents)
     end_process_at_cleanup(http, zac_url, registry, zaak)
 
 

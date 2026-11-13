@@ -21,7 +21,7 @@ from podiumd_tests.lock import file_lock
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
-from podiumd_tests.seed.openzaak import delete_zaak
+from podiumd_tests.seed.openzaak import delete_zaak_at_cleanup
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.zaakbrug import NO_VELDEN
 from podiumd_tests.zaakbrug import ZDS
@@ -133,7 +133,7 @@ def fixture_zaakbrug_zaak(
         found = openzaak.list(f"{ZAKEN}/zaken", {"identificatie": zaak, "bronorganisatie": ZAAKBRUG_BRONORGANISATIE})
         assert found, f"no zaak {zaak} in Open Zaak after creeerZaak"
         url = str(found[0]["url"])
-        registry.add(f"zaakbrug zaak {zaak}", lambda: delete_zaak(openzaak, url, with_documents=True))
+        delete_zaak_at_cleanup(openzaak, registry, url, with_documents=True)
         return CreatedZaak(zaak, url)
 
     return create

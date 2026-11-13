@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import field
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
@@ -15,12 +16,17 @@ import pytest
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.responses import invalid_names
 from podiumd_tests.seed.openzaak import ZAKEN
+from podiumd_tests.seed.openzaak import delete_zaak_at_cleanup
 from podiumd_tests.seed.openzaak import make_concept_zaaktype
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.openzaak import today
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    import requests
+
+    from _pytest.mark import ParameterSet
 
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.json_data import JsonObject
@@ -59,13 +65,18 @@ type Value = object | Callable[[Given], object]
 
 @dataclass(frozen=True)
 class Case:
-    """Fields that make a zaak invalid, the name invalidParams gives, the methods it applies to, known defects."""
+    """Fields of a zaak, the name invalidParams gives, the methods it applies to, known defects.
+
+    A valid case has no name: before holds the fields of the zaak it changes, stored what Open Zaak then holds.
+    """
 
     id: str
     fields: dict[str, Value]
-    name: str
+    name: str = ""
     methods: tuple[str, ...] = ("POST", "PUT", "PATCH")
     xfail: dict[str, str] = field(default_factory=dict)  # method -> reason
+    before: dict[str, object] = field(default_factory=dict)
+    stored: dict[str, object] = field(default_factory=dict)
 
 
 def _concept_zaaktype(given: Given) -> str:
@@ -122,6 +133,17 @@ CASES = [
         "product-not-of-the-zaaktype", {"productenOfDiensten": ["https://example.com/product/1"]}, "productenOfDiensten"
     ),
 ]
+VALID_CASES = [
+    Case("opschorting-null", {"opschorting": None}),
+    Case("verlenging-null", {"verlenging": None}, stored={"verlenging": None}),
+    Case(
+        "betaling-nvt-clears-betaaldatum",
+        {"betalingsindicatie": "nvt"},
+        methods=("PUT", "PATCH"),
+        before={"betalingsindicatie": "geheel", "laatsteBetaaldatum": "2026-01-01T12:00:00Z"},
+        stored={"betalingsindicatie": "nvt", "laatsteBetaaldatum": None},
+    ),
+]
 
 
 def _body(given: Given, case: Case) -> dict[str, object]:
@@ -137,19 +159,35 @@ def _body(given: Given, case: Case) -> dict[str, object]:
     return {key: value for key, value in body.items() if value is not MISSING}
 
 
-@pytest.mark.parametrize(
-    ("case", "method"),
-    [
+def _params(cases: list[Case]) -> list[ParameterSet]:
+    return [
         pytest.param(
             case,
             method,
             id=f"{case.id}-{method}",
             marks=[pytest.mark.xfail(strict=True, reason=case.xfail[method])] if method in case.xfail else [],
         )
-        for case in CASES
+        for case in cases
         for method in case.methods
-    ],
-)
+    ]
+
+
+def _send(
+    openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts, case: Case, method: str, status: int
+) -> requests.Response:
+    """Create a zaak with the case's fields, or replace or change a zaak with them; Open Zaak's answer."""
+    zaak = None if method == "POST" else make_zaak(openzaak, registry, parts.zaaktype, **case.before)
+    body = _body(Given(openzaak, registry, parts, zaak), case)
+    if zaak is None:
+        response = openzaak.request("POST", f"{ZAKEN}/zaken", status, json=body)
+        if response.status_code == HTTPStatus.CREATED:
+            delete_zaak_at_cleanup(openzaak, registry, str(response.json()["url"]))
+        return response
+    changed = body if method == "PUT" else {key: body[key] for key in case.fields if key in body}
+    return openzaak.request(method, str(zaak["url"]), status, json=changed)
+
+
+@pytest.mark.parametrize(("case", "method"), _params(CASES))
 @pytest.mark.scenario("""
     Given a zaak with one invalid or missing field
     When it is created, replaced or changed in Open Zaak
@@ -160,12 +198,22 @@ def test_invalid_zaak_names_the_field(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts, case: Case, method: str
 ) -> None:
     """POST, PUT or PATCH of a zaak with one invalid field answers 400 and names that field."""
-    zaak = None if method == "POST" else make_zaak(openzaak, registry, parts.zaaktype)
-    body = _body(Given(openzaak, registry, parts, zaak), case)
-    if zaak is None:
-        response = openzaak.request("POST", f"{ZAKEN}/zaken", 400, json=body)
-    else:
-        changed = body if method == "PUT" else {key: body[key] for key in case.fields if key in body}
-        response = openzaak.request(method, str(zaak["url"]), 400, json=changed)
-    names = invalid_names(response)
+    names = invalid_names(_send(openzaak, registry, parts, case, method, HTTPStatus.BAD_REQUEST))
     assert any(name == case.name or name.startswith(f"{case.name}.") for name in names), names
+
+
+@pytest.mark.parametrize(("case", "method"), _params(VALID_CASES))
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak
+    When it is created, replaced or changed with no opschorting or no verlenging
+    Then Open Zaak accepts it
+    When its betalingsindicatie becomes "not applicable"
+    Then the zaak no longer has a date of its last payment
+""")
+def test_valid_zaak_is_stored(
+    openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts, case: Case, method: str
+) -> None:
+    """POST, PUT or PATCH of a zaak with null opschorting or verlenging, or betalingsindicatie nvt, is stored."""
+    status = HTTPStatus.CREATED if method == "POST" else HTTPStatus.OK
+    stored = _send(openzaak, registry, parts, case, method, status).json()
+    assert {key: stored[key] for key in case.stored} == case.stored

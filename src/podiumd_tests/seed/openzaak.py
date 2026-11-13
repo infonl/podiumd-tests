@@ -111,9 +111,15 @@ def make_zaak(openzaak: ApiClient, registry: ResourceRegistry, zaaktype: str, **
     }
     given = {field: value for field, value in body.items() if value is not None}
     zaak = openzaak.post(f"{ZAKEN}/zaken", given)
-    url = str(zaak["url"])
-    registry.add(f"zaak {url}", lambda: delete_zaak(openzaak, url))
+    delete_zaak_at_cleanup(openzaak, registry, str(zaak["url"]))
     return zaak
+
+
+def delete_zaak_at_cleanup(
+    openzaak: ApiClient, registry: ResourceRegistry, url: str, *, with_documents: bool = False
+) -> None:
+    """Register delete_zaak of a zaak for cleanup."""
+    registry.add(f"zaak {url}", lambda: delete_zaak(openzaak, url, with_documents=with_documents))
 
 
 DOCUMENTEN = "documenten/api/v1"
