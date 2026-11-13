@@ -83,4 +83,7 @@ settings:
   zac_email_confirmation: true
   zac_besluittype: true
   kiss_kanalen: true
+  # Open Formulieren's wait_for_payment_to_register is runtime data no environment sets; podiumd-infra allows
+  # bootstrap to switch it on (2026-11-13).
+  of_wait_for_payment: true
   zgw_client_id: formulier
