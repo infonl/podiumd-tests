@@ -85,6 +85,20 @@ def test_factories_post_and_delete_at_cleanup(fake_http, factory, path):
     assert calls(sent) == [("POST", f"/{path}"), ("DELETE", f"/{path}/new")]
 
 
+def test_objecttype_is_run_tagged_and_deleted_by_its_snippet(fake_http, monkeypatch):
+    sent = fake_http(created("objecttypes") | {"POST /v1/objecttypes/new/versions": (201, {"version": 1})})
+    ran = []
+    monkeypatch.setattr("podiumd_tests.seed.registry.run_snippet", lambda _k, d, n, p: ran.append((d, n, p)))
+    registry = ResourceRegistry("ptest-2611111200abcd")
+    env = SimpleNamespace(kube=object(), deployment_for=lambda component: f"{component}-deploy")
+    assert objecten_module.make_objecttype(env, api(), registry, "published") == {"version": 1}  # pyright: ignore[reportArgumentType]
+    registry.cleanup()
+    name = str(body(sent[0])["name"])
+    assert name.startswith("ptest-2611111200abcd-objecttype-")
+    assert body(sent[1])["status"] == "published"
+    assert ran == [("objecttypen-deploy", "objecttypen_tagged", {"action": "delete", "name": name})]
+
+
 def test_digitaal_adres_of_a_partij_is_its_standard_address_unless_told_otherwise(fake_http):
     sent = fake_http(created("digitaleadressen"))
     registry = ResourceRegistry("run1")

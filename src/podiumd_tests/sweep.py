@@ -32,8 +32,8 @@ from podiumd_tests.openformulieren import remove_form
 from podiumd_tests.openformulieren import tagged_forms
 from podiumd_tests.results import RUN_TAG
 from podiumd_tests.results import run_started
-from podiumd_tests.seed.catalogi import remove_catalogus_type
-from podiumd_tests.seed.catalogi import tagged_catalogus_types
+from podiumd_tests.seed.catalogi import CATALOGUS_TYPES
+from podiumd_tests.seed.objecten import OBJECTTYPES
 from podiumd_tests.seed.opennotificaties import delete_abonnement
 from podiumd_tests.seed.openzaak import BESLUITEN
 from podiumd_tests.seed.openzaak import CATALOGI
@@ -246,15 +246,16 @@ def _skip_reason(env: Environment, finder: Finder, present: set[str]) -> str | N
     return reason
 
 
+TAGGED_TYPES = {types.kind: types for types in (CATALOGUS_TYPES, OBJECTTYPES)}
 # Kinds the APIs cannot list or delete, with their component: listed and deleted with a Django snippet.
-SNIPPET_KINDS = (("form", "openformulieren"), ("catalogus type", "openzaak"))
+SNIPPET_KINDS = (("form", "openformulieren"), *((types.kind, types.component) for types in TAGGED_TYPES.values()))
 
 
 def _sweep_by_snippet(env: Environment, kind: str, cutoff: datetime, *, dry_run: bool) -> list[Swept]:
     if kind == "form":
         names, remove = tagged_forms(env), partial(remove_form, env)
     else:
-        names, remove = tagged_catalogus_types(env), partial(remove_catalogus_type, env)
+        names, remove = TAGGED_TYPES[kind].tagged(env), partial(TAGGED_TYPES[kind].remove, env)
     items: list[JsonObject] = [{"name": name} for name in names]
     return _sweep_items(kind, items, lambda item: remove(str(item["name"])), cutoff, dry_run=dry_run)
 

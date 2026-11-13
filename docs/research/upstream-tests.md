@@ -74,8 +74,9 @@ KISS and ITA log in through Azure AD in their own tests; here the same flows log
 
 - Admin and designer UI details (Open Formulieren form designer, Open Zaak object history, Objecten permission
   admin, sorting and filter widgets of Open Archiefbeheer and Open Beheer): no system behaviour beyond the UI.
-- Writes to shared configuration (Open Inwoner CMS homepage editing, publishing objecttypes or zaaktypen,
-  select-all in Open Archiefbeheer): they leave residue or touch other users' data.
+- Writes to shared configuration (Open Inwoner CMS homepage editing, select-all in Open Archiefbeheer): they leave
+  residue or touch other users' data. Published zaaktypen and objecttypes are run-tagged throwaways that a Django
+  snippet deletes (`test_catalogi_publicatie.py`, `test_objecttypen_publicatie.py`).
 - Recorded or mocked integrations (VCR tests of BRP, BRK, Signicat; SDK MSW stories): replay, not a test of
   the environment; the live paths are covered by `test_brp.py` and `test_formulier_login.py`.
 - eIDAS logins and appointment plugins (JCC, Qmatic): no estate configures them.
@@ -144,10 +145,8 @@ Done 2026-10-21, verified on minikube: 18 (698c7b6, related types added later), 
   mock page; the backend is covered.
 - ZaakBrug's role and translation suites (`2-` to `4-TestSuite...`): each needs its own zaaktype trees for one
   municipality's message flavour; revisit when an estate uses ZaakBrug for them.
-- Publishing zaaktypen or objecttypen, CMS editing, select-all in Open Archiefbeheer: they leave residue in a
-  shared environment.
-- PABC, Open Klant, Open Notificaties, Objecttypen, Referentielijsten, Open VTB: no upstream scenario beyond what is
-  covered.
+- CMS editing, select-all in Open Archiefbeheer: they leave residue in a shared environment.
+- PABC, Open Klant, Open Notificaties, Referentielijsten, Open VTB: no upstream scenario beyond what is covered.
 
 ## ZAC's own end-to-end suite (2026-11-04)
 

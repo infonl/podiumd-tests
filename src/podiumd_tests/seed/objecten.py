@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import secrets
+
 from typing import TYPE_CHECKING
 from typing import cast
 
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.seed.openzaak import today
+from podiumd_tests.seed.tagged_types import TaggedTypes
 from podiumd_tests.zac import notificatie
 
 if TYPE_CHECKING:
@@ -33,6 +36,19 @@ def objecttype_url(env: Environment, name: str) -> str:
         msg = f"Objecten has no objecttype {name}"
         raise LookupError(msg)
     return found["url"]
+
+
+OBJECTTYPES = TaggedTypes("objecttype", "objecttypen", "objecttypen_tagged")
+# A JSON schema every object meets.
+ANY_OBJECT = {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"}
+
+
+def make_objecttype(env: Environment, objecttypen: ApiClient, registry: ResourceRegistry, status: str) -> JsonObject:
+    """Create a run-tagged objecttype with one version of that status (draft or published); the version."""
+    name = registry.tagged(f"objecttype-{secrets.token_hex(3)}")
+    objecttype = objecttypen.post("objecttypes", {"name": name, "namePlural": name})
+    OBJECTTYPES.forget(env, registry, name)
+    return objecttypen.post(f"{objecttype['url']}/versions", {"jsonSchema": ANY_OBJECT, "status": status})
 
 
 def make_object(

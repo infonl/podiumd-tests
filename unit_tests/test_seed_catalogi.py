@@ -24,7 +24,7 @@ def fixture_snippets(monkeypatch):
         ran.append((deployment, name, params))
         return [TAGGED] if params["action"] == "list" else {"deleted": params.get("name")}
 
-    monkeypatch.setattr(catalogi, "run_snippet", run)
+    monkeypatch.setattr("podiumd_tests.seed.tagged_types.run_snippet", run)
     monkeypatch.setattr("podiumd_tests.seed.registry.run_snippet", run)
     return ran
 
@@ -41,13 +41,13 @@ def env(*, zac_writes=False):
 
 def test_removal_refuses_a_name_without_run_tag(snippets):
     with pytest.raises(ValueError, match="no run tag"):
-        catalogi.remove_catalogus_type(env(), "ptest-bootstrap-klacht")  # pyright: ignore[reportArgumentType]
+        catalogi.CATALOGUS_TYPES.remove(env(), "ptest-bootstrap-klacht")  # pyright: ignore[reportArgumentType]
     assert snippets == []
 
 
 def test_list_remove_and_forget_run_the_snippet(snippets):
-    assert catalogi.tagged_catalogus_types(env()) == [TAGGED]  # pyright: ignore[reportArgumentType]
-    catalogi.remove_catalogus_type(env(), TAGGED)  # pyright: ignore[reportArgumentType]
+    assert catalogi.CATALOGUS_TYPES.tagged(env()) == [TAGGED]  # pyright: ignore[reportArgumentType]
+    catalogi.CATALOGUS_TYPES.remove(env(), TAGGED)  # pyright: ignore[reportArgumentType]
     registry = ResourceRegistry("run1")
     catalogi.forget_catalogus_type(env(), registry, TAGGED)  # pyright: ignore[reportArgumentType]
     registry.cleanup()
@@ -60,8 +60,8 @@ def test_list_remove_and_forget_run_the_snippet(snippets):
 
 
 def test_list_and_remove_cover_zacs_catalogus_where_the_profile_allows_writes(snippets):
-    catalogi.tagged_catalogus_types(env(zac_writes=True))  # pyright: ignore[reportArgumentType]
-    catalogi.remove_catalogus_type(env(zac_writes=True), TAGGED)  # pyright: ignore[reportArgumentType]
+    catalogi.CATALOGUS_TYPES.tagged(env(zac_writes=True))  # pyright: ignore[reportArgumentType]
+    catalogi.CATALOGUS_TYPES.remove(env(zac_writes=True), TAGGED)  # pyright: ignore[reportArgumentType]
     zacs = {"domein": "zac-CATALOGUS_DOMEIN"}
     assert [p["catalogi"] for _, _, p in snippets] == [[catalogi.CATALOGUS, zacs], [catalogi.CATALOGUS, zacs]]
 

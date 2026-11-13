@@ -1,7 +1,7 @@
 """Throwaway catalogus types that tests publish, in the test catalogus or ZAC's own, and their removal.
 
 The Catalogi API refuses to delete a published type, so cleanup and sweep delete them with snippet
-openzaak_catalogi_types; that snippet only touches names carrying a run tag.
+openzaak_catalogi_types.
 """
 
 from __future__ import annotations
@@ -11,20 +11,17 @@ import secrets
 from dataclasses import dataclass
 from http import HTTPStatus
 from typing import TYPE_CHECKING
-from typing import cast
 
 import requests
 
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_DOMEIN
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
-from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
-from podiumd_tests.results import RUN_TAG
-from podiumd_tests.results import TAG_PREFIX
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import make_concept_zaaktype
 from podiumd_tests.seed.openzaak import today
+from podiumd_tests.seed.tagged_types import TaggedTypes
 
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
@@ -32,7 +29,6 @@ if TYPE_CHECKING:
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
-SNIPPET = "openzaak_catalogi_types"
 CATALOGUS = {"domein": TEST_CATALOGUS_DOMEIN, "rsin": TEST_CATALOGUS_RSIN}
 # Profile setting that allows tests to publish run-tagged zaaktypen in ZAC's own catalogus, which the environment owns.
 ZAC_CATALOGUS_WRITES = "zac_catalogus_writes"
@@ -50,11 +46,9 @@ def written_catalogi(env: Environment) -> list[dict[str, str]]:
     return [CATALOGUS, {"domein": zac_catalogus_domein(env)}]
 
 
-def _params(name: str, catalogi: list[dict[str, str]]) -> dict[str, object]:
-    if not RUN_TAG.search(name):
-        msg = f"refusing to delete catalogus type {name}: it carries no run tag"
-        raise ValueError(msg)
-    return {"catalogi": catalogi, "action": "delete", "name": name}
+CATALOGUS_TYPES = TaggedTypes(
+    "catalogus type", "openzaak", "openzaak_catalogi_types", lambda env: {"catalogi": written_catalogi(env)}
+)
 
 
 def forget_catalogus_type(
@@ -65,20 +59,7 @@ def forget_catalogus_type(
     catalogus: the Open Zaak catalogus it is in; by default the test catalogus.
     """
     where = {field: str(catalogus[field]) for field in ("domein", "rsin")} if catalogus else CATALOGUS
-    deployment = env.deployment_for("openzaak")
-    registry.add_snippet(f"catalogus type {name}", env.kube, deployment, SNIPPET, _params(name, [where]))
-
-
-def remove_catalogus_type(env: Environment, name: str) -> None:
-    """Delete a run-tagged catalogus type of written_catalogi, published or not, with what belongs to it."""
-    run_snippet(env.kube, env.deployment_for("openzaak"), SNIPPET, _params(name, written_catalogi(env)))
-
-
-def tagged_catalogus_types(env: Environment) -> list[str]:
-    """Return the names of the types in written_catalogi that start with ptest-, bootstrap ones included."""
-    params: dict[str, object] = {"catalogi": written_catalogi(env), "action": "list", "prefix": TAG_PREFIX}
-    found = run_snippet(env.kube, env.deployment_for("openzaak"), SNIPPET, params)
-    return [str(name) for name in cast("list[object]", found)]
+    CATALOGUS_TYPES.forget(env, registry, name, {"catalogi": [where]})
 
 
 def publish(openzaak: ApiClient, catalogus_type: JsonObject) -> JsonObject:

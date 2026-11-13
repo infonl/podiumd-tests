@@ -85,3 +85,5 @@ def test_invalid_codes_and_names(response_factory):
     response = response_factory(status=400, json_body={"invalidParams": params})
     assert invalid_codes(response) == ["bad-url", "zaaktype-mismatch"]
     assert invalid_names(response) == {"zaaktype", "nonFieldErrors"}
+    open_object = response_factory(status=400, json_body={"invalid_params": params[:1]})
+    assert invalid_codes(open_object) == ["bad-url"]
