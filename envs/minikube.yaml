@@ -108,6 +108,8 @@ settings:
   # Open Formulieren's wait_for_payment_to_register is runtime data no environment sets; bootstrap switches it on
   # (2026-10-10).
   of_wait_for_payment: true
+  # podiumd-minikube allows bootstrap to link Open Formulieren's BRP and KvK prefill (2026-11-13).
+  of_prefill: true
   # podiumd-minikube allows bootstrap to subscribe Open Inwoner to Open Notificaties (2026-11-13).
   oi_notifications: true
   # podiumd-minikube sets OMC's taak objecttype to the one bootstrap creates (2026-11-13).

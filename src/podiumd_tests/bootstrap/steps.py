@@ -433,6 +433,17 @@ OI_ZAAKTYPE_CONFIG = SnippetStep(
 )
 # An Open Formulieren form editor (its own group Redacteurs) that changes test forms through the API.
 OF_REDACTEUR = django_user_step("openformulieren", "redacteur", ("Redacteurs",), api_token=True)
+# BRP and KvK prefill through the services the environment registered, where the profile allows it.
+OF_PREFILL = SnippetStep(
+    "openformulieren-prefill",
+    ("openformulieren",),
+    "openformulieren_prefill",
+    "ptest_bootstrap_of_prefill_record",
+    {"links": {"brp_personen_service": "brp-api", "profile_service": "kvk-api"}},
+    record=True,
+    wiring=True,
+    opt_in="of_prefill",
+)
 # The test form's fields. The name makes the initiator of an anonymous submission: without it
 # Open Formulieren sends Open Zaak an initiator rol without betrokkeneIdentificatie, which it refuses.
 NAW = [
@@ -784,6 +795,7 @@ STEPS: tuple[Step, ...] = (
         wiring=True,
         opt_in="of_wait_for_payment",
     ),
+    OF_PREFILL,
     SnippetStep(
         "opennotificaties-kanalen",
         ("opennotificaties",),
