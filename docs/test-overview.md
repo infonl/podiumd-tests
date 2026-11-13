@@ -11,12 +11,12 @@ versions is not counted.
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 256 | 41 | 10 |
-| component | 970 | 576 | 72 |
-| integration | 180 | 117 | 14 |
+| component | 972 | 577 | 72 |
+| integration | 182 | 118 | 14 |
 | perf | 54 | 3 | 0 |
-| **full tier** | **1369** | **707** |  |
+| **full tier** | **1373** | **709** |  |
 
-Unit tests (`unit_tests/`, functions): 838. Perf endpoints (`perf/runs.py`): 22.
+Unit tests (`unit_tests/`, functions): 839. Perf endpoints (`perf/runs.py`): 22.
 
 ## Per area
 
@@ -42,7 +42,7 @@ Unit tests (`unit_tests/`, functions): 838. Perf endpoints (`perf/runs.py`): 22.
 | component | openarchiefbeheer | 36 | 30 |
 | component | openbeheer | 5 | 5 |
 | component | openformulieren | 12 | 9 |
-| component | openinwoner | 34 | 24 |
+| component | openinwoner | 36 | 25 |
 | component | openklant | 19 | 15 |
 | component | opennotificaties | 8 | 6 |
 | component | openvtb | 3 | 3 |
@@ -56,7 +56,7 @@ Unit tests (`unit_tests/`, functions): 838. Perf endpoints (`perf/runs.py`): 22.
 | integration | continuiteit | 19 | 10 |
 | integration | formulier_betaling | 19 | 6 |
 | integration | formulier_logica | 1 | 1 |
-| integration | formulier_login | 2 | 2 |
+| integration | formulier_login | 4 | 3 |
 | integration | formulier_mail | 2 | 2 |
 | integration | formulier_medeondertekening | 1 | 1 |
 | integration | formulier_opschonen | 1 | 1 |
@@ -98,7 +98,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | TA | 283 |
 | ZAC | 19 |
 | draaiboek | 91 |
-| external | 217 |
+| external | 221 |
 | podiumd-tests | 513 |
 | upstream | 214 |
 

@@ -17,6 +17,7 @@ from podiumd_tests.auth.django_admin import admin_login
 from podiumd_tests.auth.django_admin import is_logged_in
 from podiumd_tests.browser import NETWORK_CHANGED
 from podiumd_tests.browser import browser_session
+from podiumd_tests.browser import cancel_login
 from podiumd_tests.browser import challenge_login
 from podiumd_tests.browser import configure_totp
 from podiumd_tests.browser import context_args
@@ -218,3 +219,13 @@ def test_a_refused_login_callback_fails_with_the_page_title(fake_page):
     passed = fake_page(landings=[f"{app}/klacht/"])
     browser.leave_login_callback(passed, app, "/callback")
     assert passed.url == f"{app}/klacht/"
+
+
+def test_cancel_login_sends_the_cancel_error_and_state_to_the_redirect_uri(fake_page):
+    query = "client_id=c&redirect_uri=https%3A%2F%2Fpabc.example.test%2Fcallback%2F&state=s1"
+    page = fake_page(landings=[f"https://keycloak.example.test/realms/r/protocol/openid-connect/auth?{query}"])
+    cancel_login(page)
+    assert not page.waits[0](f"{APP}/")
+    assert page.actions == [
+        ("goto", f"{APP}/callback/?error=access_denied&error_description=The+user+cancelled&state=s1"),
+    ]

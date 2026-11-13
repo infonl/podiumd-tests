@@ -1,4 +1,4 @@
-"""Chain: a form submitted after a DigiD or eHerkenning login registers a zaak with that initiator.
+"""Chain: a form submitted after a DigiD or eHerkenning login registers a zaak with that initiator; a cancelled login.
 
 Ported from TA regression 158, 159 and 183. DigiD and eHerkenning are Keycloak's mock (wiring W1);
 without a login Open Formulieren registers no initiator.
@@ -6,16 +6,22 @@ without a login Open Formulieren registers no initiator.
 
 from __future__ import annotations
 
+import re
+
 from typing import TYPE_CHECKING
 
 import pytest
+
+from playwright.sync_api import expect
 
 from podiumd_tests.bootstrap.names import TEST_FORM
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.bootstrap.steps import NAW_DATA
 from podiumd_tests.browser import browser_session
+from podiumd_tests.browser import cancel_login
 from podiumd_tests.browser import keycloak_login
 from podiumd_tests.browser import leave_login_callback
+from podiumd_tests.browser import refuse_cookies
 from podiumd_tests.json_data import section
 from podiumd_tests.openformulieren import login_url
 from podiumd_tests.openformulieren import registered_zaak
@@ -126,3 +132,29 @@ def test_eherkenning_submission_has_the_vestiging_as_initiator(
     assert [(i.get("kvkNummer"), i.get("vestigingsNummer")) for i in initiators] == [
         (BEDRIJF.attributes["kvk"][0], BEDRIJF.attributes["vestigingsnummer"][0])
     ]
+
+
+@pytest.mark.source(
+    "external RWS/keycloak-saml-identiteitsaanbieders cancel_response.xml",
+    "A user who cancels at DigiD or eHerkenning returns to the form with a 'cancelled' message.",
+)
+@pytest.mark.parametrize("service", ["DigiD", "eHerkenning"])
+@pytest.mark.scenario("""
+    Given an inwoner or company opens the test form in Open Formulieren
+    And starts to log in with DigiD or eHerkenning
+    When the user cancels at DigiD or eHerkenning
+    Then the form's start page says the login was cancelled
+    And offers the login again
+""")
+def test_cancelled_login_returns_to_the_form_with_a_message(
+    page: Page, podiumd_env: Environment, need_bootstrap: Callable[..., None], service: str
+) -> None:
+    """A cancel at the identity provider ends on the form's start page with its 'geannuleerd' message."""
+    need_bootstrap("openformulieren-form", "openformulieren-oidc-mock")
+    page.goto(f"{podiumd_env.profile.urls['openformulieren']}/{TEST_FORM}/")
+    refuse_cookies(page)
+    login = page.get_by_role("link", name=f"Inloggen met {service}")
+    login.click()
+    cancel_login(page)
+    expect(page.get_by_role("alert")).to_contain_text(re.compile(f"inloggen met {service} geannuleerd", re.IGNORECASE))
+    expect(login).to_be_visible()

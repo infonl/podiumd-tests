@@ -30,10 +30,15 @@ INWONER, _, BEDRIJF = IDENTITIES
 LOGINS = {"inwoner": (INWONER, "digid"), "bedrijf": (BEDRIJF, "eherkenning")}
 
 
+def portal_login_url(env: Environment, method: str, next_path: str = "/") -> str:
+    """Return the URL that starts the portal's login with "digid" or "eherkenning" and returns to next_path."""
+    return f"{env.profile.urls['openinwoner']}/{method}-oidc/authenticate/?next={next_path}"
+
+
 def portal_login(page: Page, env: Environment, method: str, user: KeycloakUser, next_path: str = "/") -> None:
     """Log the test identity in with "digid" or "eherkenning"; the page ends on the portal, cookie banner closed."""
     portal = env.profile.urls["openinwoner"]
-    page.goto(f"{portal}/{method}-oidc/authenticate/?next={next_path}")
+    page.goto(portal_login_url(env, method, next_path))
     keycloak_login(page, user.username, env.credentials.get(user.store_key))
     leave_login_callback(page, portal, "-oidc/callback")
     refuse_cookies(page)

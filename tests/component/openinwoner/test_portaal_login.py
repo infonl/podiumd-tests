@@ -1,4 +1,4 @@
-"""Open Inwoner in a browser: DigiD and eHerkenning login through Keycloak's mock end in a session.
+"""Open Inwoner in a browser: DigiD and eHerkenning login through Keycloak's mock end in a session, unless cancelled.
 
 Ported from ExternalsPodiumD smoke 05b and 99 (TA portaal login specs) and TA regression 84; needs wiring W1.
 """
@@ -14,8 +14,10 @@ import pytest
 from playwright.sync_api import expect
 
 from podiumd_tests.bootstrap.steps import IDENTITIES
+from podiumd_tests.browser import cancel_login
 from podiumd_tests.openinwoner import count_accounts
 from podiumd_tests.openinwoner import portal_login
+from podiumd_tests.openinwoner import portal_login_url
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -116,3 +118,27 @@ def test_second_login_reuses_the_account(
         portal_login(page, podiumd_env, method, user)
         expect(page).not_to_have_url(FAILED)
     assert count_accounts(podiumd_env, **{lookup: user.attributes[lookup][0]}) == 1
+
+
+@pytest.mark.parametrize("method", ["digid", "eherkenning"])
+@pytest.mark.source(
+    "external RWS/keycloak-saml-identiteitsaanbieders cancel_response.xml",
+    "A user who cancels at DigiD or eHerkenning returns to the portal's login page with a 'cancelled' message.",
+)
+@pytest.mark.scenario("""
+    Given an inwoner or company starts to log in to Open Inwoner with DigiD or eHerkenning
+    When the user cancels at DigiD or eHerkenning
+    Then the portal's login page says the login was cancelled
+    And the user is not logged in
+""")
+def test_cancelled_login_returns_to_the_login_page_with_a_message(
+    page: Page, podiumd_env: Environment, need_bootstrap: Callable[..., None], method: str
+) -> None:
+    """A cancel at the identity provider ends on Open Inwoner's login page with its 'geannuleerd' message."""
+    need_bootstrap("openinwoner-oidc-mock")
+    page.goto(portal_login_url(podiumd_env, method, "/mijn-zaken/"))
+    cancel_login(page)
+    expect(page.get_by_role("alert")).to_contain_text(re.compile(f"inloggen met {method} geannuleerd", re.IGNORECASE))
+    expect(page).to_have_url(re.compile(r"/accounts/login/"))
+    page.goto(f"{podiumd_env.profile.urls['openinwoner']}/mijn-zaken/")
+    expect(page).to_have_url(re.compile(r"/accounts/login/\?next=/mijn-zaken/"))

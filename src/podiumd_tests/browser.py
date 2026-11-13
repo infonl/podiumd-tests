@@ -12,6 +12,9 @@ import warnings
 from contextlib import contextmanager
 from itertools import count
 from typing import TYPE_CHECKING
+from urllib.parse import parse_qs
+from urllib.parse import urlencode
+from urllib.parse import urlsplit
 
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
@@ -112,6 +115,19 @@ def keycloak_login(page: Page, username: str, password: str) -> None:
             page.locator("#kc-login").click()
 
     retry_network_change(page, submit, f"Keycloak login of {username}")
+
+
+# What the DigiD and eHerkenning brokers return when the user cancels; Open Inwoner and Open Formulieren
+# show their "cancelled" message only for this pair.
+CANCELLED = {"error": "access_denied", "error_description": "The user cancelled"}
+
+
+def cancel_login(page: Page) -> None:
+    """Leave the identity provider's login page as a user who cancels there: back to the app's redirect_uri."""
+    page.wait_for_url(lambda url: "redirect_uri=" in url)
+    query = parse_qs(urlsplit(page.url).query)
+    cancelled = urlencode({**CANCELLED, "state": query["state"][0]})
+    page.goto(f"{query['redirect_uri'][0]}?{cancelled}")
 
 
 def leave_login_callback(page: Page, app_url: str, callback: str) -> None:
