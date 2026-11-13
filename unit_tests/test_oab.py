@@ -5,6 +5,7 @@ import json
 from types import SimpleNamespace
 
 import pytest
+import requests
 
 from podiumd_tests import oab
 from podiumd_tests import workloads
@@ -64,3 +65,50 @@ def test_admin_logout_bug_is_expected_from_2_1(monkeypatch, version, xfail):
     markers = []
     oab.expect_admin_logout_bug(SimpleNamespace(applymarker=markers.append), None)  # pyright: ignore[reportArgumentType]
     assert bool(markers) is xfail
+
+
+API = f"{OAB}/api/v1"
+USERS = [{"pk": 7, "username": f"{PREFIX}-reviewer"}, {"pk": 9, "username": f"{PREFIX}-archivist"}]
+
+
+def _bodies(sent, suffix):
+    return [json.loads(request.body) for request in sent if request.url.endswith(suffix) and request.body]
+
+
+def test_list_goes_from_new_to_destroyed(fake_http, page_env):
+    sent = fake_http(
+        {
+            "/api/v1/users/": (200, USERS),
+            "POST /api/v1/destruction-lists/": (201, {"uuid": "l-1"}),
+            "/api/v1/destruction-lists/l-1/mark_ready_review/": (201, {}),
+            "/api/v1/destruction-list-reviews/": (201, {"pk": 3}),
+            "/api/v1/destruction-lists/l-1/make_final/": (201, {}),
+            "/api/v1/destruction-lists/l-1/queue_destruction/": (200, {}),
+            "GET /api/v1/destruction-lists/l-1/": (200, {"processingStatus": "failed", "status": "ready_to_delete"}),
+        }
+    )
+    env = page_env(oab)
+    http = requests.Session()
+    registry = SimpleNamespace(tagged=lambda name: f"run-{name}")
+    lijst = oab.ready_to_delete(lambda _role: http, API, {"url": "z-1"}, registry)  # pyright: ignore[reportArgumentType]
+    assert oab.run_destruction(env, lambda _role: http, API, lijst) == "failed"
+    assert oab.list_status(lambda _role: http, API, lijst) == "ready_to_delete"
+    created = _bodies(sent, "/destruction-lists/")[0]
+    assert (created["add"], created["reviewer"], created["name"].startswith("run-vernietigingslijst-")) == (
+        [{"zaak": "z-1"}],
+        {"user": 7},
+        True,
+    )
+    decisions = [body["decision"] for body in _bodies(sent, "/destruction-list-reviews/")]
+    assert (_bodies(sent, "/make_final/")[0]["user"], decisions) == (9, ["accepted", "accepted"])
+    assert env.snippets == [("openarchiefbeheer", "oab_destroy_now", {"uuid": "l-1"})]
+
+
+def test_new_list_stays_new_unless_ready(fake_http):
+    sent = fake_http({"/api/v1/users/": (200, USERS), "POST /api/v1/destruction-lists/": (201, {"uuid": "l-2"})})
+    http = requests.Session()
+    registry = SimpleNamespace(tagged=lambda name: name)
+    zaken = [{"url": "z-1"}, {"url": "z-2"}]
+    assert oab.new_list(lambda _role: http, API, zaken, registry, ready=False) == "l-2"  # pyright: ignore[reportArgumentType]
+    assert all(not request.url.endswith("/mark_ready_review/") for request in sent)
+    assert oab.user_pk(lambda _role: http, API, "archivist") == 9

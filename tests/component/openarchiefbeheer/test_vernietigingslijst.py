@@ -1,17 +1,14 @@
 """Open Archiefbeheer: roles, and a vernietigingslijst of the test's own zaak through its reviews.
 
-Ported from TA interaction 142 and 168, regression 143, 166, 169, 170 and 171. Lists never
+Ported from TA interaction 142 and 168, regression 143, 166 and 169. Lists never
 select all zaken: each holds only the test's own closed zaak, which the test puts in OAB's
-cache. The destruction and the short procedure change OAB's global ArchiveConfig, so those
-tests are destructive (tier chaos) and run on one worker.
+cache. The destruction tests are in test_vernietiging.py.
 """
 
 from __future__ import annotations
 
-import io
 import secrets
 import warnings
-import zipfile
 
 from datetime import UTC
 from datetime import datetime
@@ -24,36 +21,26 @@ import pytest
 from playwright.sync_api import expect
 
 from podiumd_tests.bootstrap.names import PREFIX
-from podiumd_tests.bootstrap.names import PRODUCTAANVRAAG_OBJECTTYPE
-from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
-from podiumd_tests.bootstrap.names import TEST_ZAAKTYPE
 from podiumd_tests.bootstrap.steps import OAB_ROLES
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
-from podiumd_tests.oab import API
-from podiumd_tests.oab import cache_zaken
-from podiumd_tests.oab import destroy_now
 from podiumd_tests.oab import forget_zaken
 from podiumd_tests.oab import is_review_queued_after_commit
-from podiumd_tests.oab import login
+from podiumd_tests.oab import list_status
+from podiumd_tests.oab import make_final
+from podiumd_tests.oab import new_list
 from podiumd_tests.oab import process_review_response
-from podiumd_tests.oab import set_archive_config
+from podiumd_tests.oab import review
 from podiumd_tests.oab import ui_login
+from podiumd_tests.oab import user_pk
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
-from podiumd_tests.seed.objecten import make_productaanvraag
-from podiumd_tests.seed.objecten import objecttype_url
-from podiumd_tests.seed.openzaak import ZAKEN
-from podiumd_tests.seed.openzaak import close_zaak
 from podiumd_tests.seed.openzaak import delete_zaak
-from podiumd_tests.seed.openzaak import make_zaak
-from podiumd_tests.seed.openzaak import today
 from podiumd_tests.wait import WaitTimeoutError
 from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from collections.abc import Iterator
 
     import requests
 
@@ -62,7 +49,6 @@ if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
-    from podiumd_tests.seed.openzaak import ZaaktypeParts
     from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [
@@ -91,14 +77,6 @@ REG_169 = pytest.mark.source(
     "TA regression/169-oab-process-review-flow.spec.ts",
     "OAB's record manager handles a reviewer's rejection: agrees with all, some or none of the proposals.",
 )
-REG_170 = pytest.mark.source(
-    "TA regression/170-oab-destruction-execute.spec.ts",
-    "OAB's record manager starts the destruction, after which a report is made.",
-)
-REG_171 = pytest.mark.source(
-    "TA regression/171-oab-short-procedure.spec.ts",
-    "OAB's short procedure: the full process with the archivist skipped.",
-)
 
 
 # What each role may do (whoami role flags).
@@ -118,65 +96,6 @@ REVIEWER_RENAMES = pytest.mark.xfail(
 )
 
 
-@pytest.fixture(name="oab")
-def fixture_oab(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> Callable[[str], requests.Session]:
-    """A logged-in session per role, made once per test."""
-    sessions: dict[str, requests.Session] = {}
-
-    def session(role: str) -> requests.Session:
-        if role not in sessions:
-            need_bootstrap(f"openarchiefbeheer-user-{role}")
-            sessions[role] = login(podiumd_env, role)
-        return sessions[role]
-
-    return session
-
-
-@pytest.fixture(name="api")
-def fixture_api(urls: dict[str, str]) -> str:
-    """OAB's API root."""
-    return urls["openarchiefbeheer"] + API
-
-
-@pytest.fixture(name="closed_zaak")
-def fixture_closed_zaak(
-    podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
-) -> Callable[[], JsonObject]:
-    """Makes a zaak of the test that ended two days ago with archiefnominatie vernietigen, in OAB's zaken cache.
-
-    Its archiefactiedatum is yesterday, not ten years ahead: queue_destruction accepts it.
-    """
-    if not parts.resultaattypen:
-        pytest.skip("test zaaktype has no resultaattype (Selectielijst API was unreachable at bootstrap)")
-    return lambda: _closed_zaak(podiumd_env, openzaak, registry, parts)
-
-
-@pytest.fixture(name="zaak")
-def fixture_zaak(closed_zaak: Callable[[], JsonObject]) -> JsonObject:
-    """One closed zaak of the test, in OAB's zaken cache."""
-    return closed_zaak()
-
-
-def _closed_zaak(
-    podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
-) -> JsonObject:
-    gezet = datetime.now(UTC) - timedelta(days=2)
-    zaak = close_zaak(openzaak, make_zaak(openzaak, registry, parts.zaaktype), parts, gezet)
-    yesterday = (datetime.now(UTC) - timedelta(days=1)).date().isoformat()
-    zaak = openzaak.request("PATCH", str(zaak["url"]), HTTPStatus.OK, json={"archiefactiedatum": yesterday}).json()
-    url = str(zaak["url"])
-    registry.add(f"OAB cache of {url}", lambda: cache_zaken(podiumd_env, [url], cached=False))
-    cache_zaken(podiumd_env, [url], cached=True)
-    return zaak
-
-
-def user_pk(oab: Callable[[str], requests.Session], api: str, role: str, user: str | None = None) -> int:
-    """The pk of a test user (default: the role's own) that OAB lists for the assignee role."""
-    filter_role = {"reviewer": "main_reviewer", "coreviewer": "co_reviewer"}.get(role, role)
-    users = expect_status(oab("recordmanager").get(f"{api}/users/", params={"role": filter_role}), HTTPStatus.OK)
-    return next(int(str(u["pk"])) for u in entries(users.json()) if str(u["username"]).endswith(f"-{user or role}"))
-
-
 def rows(response: requests.Response) -> list[JsonObject]:
     """The objects of an OAB list answer (200), paginated or not."""
     body = expect_status(response, HTTPStatus.OK).json()
@@ -188,44 +107,6 @@ def zaken_on(oab: Callable[[str], requests.Session], api: str, lijst: str) -> li
     params = {"item-destruction_list": lijst, "item-status": "suggested"}
     items = oab("recordmanager").get(f"{api}/destruction-list-items/", params=params)
     return [section(i, "zaak").get("url") for i in rows(items)]
-
-
-def status(oab: Callable[[str], requests.Session], api: str, lijst: str) -> str:
-    """The list's status, as the record manager sees it."""
-    return str(
-        expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/"), HTTPStatus.OK).json()["status"]
-    )
-
-
-def new_list(
-    oab: Callable[[str], requests.Session],
-    api: str,
-    zaak: JsonObject | list[JsonObject],
-    registry: ResourceRegistry,
-    *,
-    ready: bool = True,
-) -> str:
-    """A vernietigingslijst with only the test's zaak (or zaken) and the test reviewer, by default made ready to review."""
-    zaken = zaak if isinstance(zaak, list) else [zaak]
-    body = {
-        # OAB requires unique names, and the run tag is shared by all workers.
-        "name": registry.tagged(f"vernietigingslijst-{secrets.token_hex(3)}"),
-        "comment": "podiumd-tests",
-        "containsSensitiveInfo": False,
-        "add": [{"zaak": z["url"]} for z in zaken],
-        "reviewer": {"user": user_pk(oab, api, "reviewer")},
-    }
-    created = expect_status(
-        oab("recordmanager").post(f"{api}/destruction-lists/", json=body), HTTPStatus.CREATED
-    ).json()
-    lijst = str(created["uuid"])
-    if ready:
-        expect_status(
-            oab("recordmanager").post(f"{api}/destruction-lists/{lijst}/mark_ready_review/", json={}),
-            HTTPStatus.CREATED,
-            HTTPStatus.OK,
-        )
-    return lijst
 
 
 def reject(oab: Callable[[str], requests.Session], api: str, role: str, lijst: str, zaken: list[JsonObject]) -> int:
@@ -263,26 +144,14 @@ def respond(
     body = {"review": review_pk, "comment": "podiumd-tests", "itemsResponses": responses}
     expect_status(oab("recordmanager").post(f"{api}/review-responses/", json=body), HTTPStatus.CREATED)
     try:
-        wait_until(lambda: status(oab, api, lijst) == wanted, timeout=60, description=f"list {lijst} {wanted}")
+        wait_until(lambda: list_status(oab, api, lijst) == wanted, timeout=60, description=f"list {lijst} {wanted}")
     except WaitTimeoutError:
         if not process_review_response(env, lijst):
             raise
         warnings.warn(
             f"[open-archiefbeheer-1] list {lijst}: the test processed the dropped review response", stacklevel=2
         )
-        assert status(oab, api, lijst) == wanted
-
-
-def make_final(oab: Callable[[str], requests.Session], api: str, lijst: str) -> requests.Response:
-    """The record manager hands the list to the test archivist."""
-    final = {"user": user_pk(oab, api, "archivist"), "comment": "podiumd-tests"}
-    return oab("recordmanager").post(f"{api}/destruction-lists/{lijst}/make_final/", json=final)
-
-
-def review(oab: Callable[[str], requests.Session], api: str, role: str, lijst: str, **fields: object) -> JsonObject:
-    """A review of the list by the role's test user."""
-    body = {"destructionList": lijst, "listFeedback": "podiumd-tests", **fields}
-    return expect_status(oab(role).post(f"{api}/destruction-list-reviews/", json=body), HTTPStatus.CREATED).json()
+        assert list_status(oab, api, lijst) == wanted
 
 
 @INT_142
@@ -330,11 +199,11 @@ def test_list_goes_through_both_reviews(
     lijst = new_list(oab, api, zaak, registry)
     assert zaken_on(oab, api, lijst) == [zaak["url"]]
     review(oab, api, "reviewer", lijst, decision="accepted")
-    assert status(oab, api, lijst) == "internally_reviewed"
+    assert list_status(oab, api, lijst) == "internally_reviewed"
     expect_status(make_final(oab, api, lijst), HTTPStatus.CREATED, HTTPStatus.OK)
-    assert status(oab, api, lijst) == "ready_for_archivist"
+    assert list_status(oab, api, lijst) == "ready_for_archivist"
     review(oab, api, "archivist", lijst, decision="accepted")
-    assert status(oab, api, lijst) == "ready_to_delete"
+    assert list_status(oab, api, lijst) == "ready_to_delete"
 
 
 @pytest.mark.tc("ABC-009", "ABC-016")
@@ -354,7 +223,7 @@ def test_rejected_list_goes_back_to_the_record_manager(
     review(
         oab, api, "reviewer", lijst, decision="rejected", zakenReviews=[{"zaakUrl": zaak["url"], "feedback": "bewaren"}]
     )
-    assert status(oab, api, lijst) == "changes_requested"
+    assert list_status(oab, api, lijst) == "changes_requested"
     expect_status(
         make_final(oab, api, lijst),
         HTTPStatus.BAD_REQUEST,
@@ -512,7 +381,7 @@ def test_archivist_rejection_goes_back_and_returns_to_the_archivist(
     review(oab, api, "reviewer", lijst, decision="accepted")
     expect_status(make_final(oab, api, lijst), HTTPStatus.CREATED, HTTPStatus.OK)
     rejection = reject(oab, api, "archivist", lijst, [zaak])
-    assert status(oab, api, lijst) == "changes_requested"
+    assert list_status(oab, api, lijst) == "changes_requested"
     respond(oab, api, podiumd_env, lijst, rejection, {str(zaak["url"]): KEEP}, "ready_for_archivist")
     assert zaken_on(oab, api, lijst) == [zaak["url"]]
 
@@ -637,7 +506,7 @@ def test_record_manager_assigns_another_reviewer(
     assign("beheerder")
     assert str(main_reviewer(oab, api, lijst)).endswith("-beheerder")
     reject(oab, api, "beheerder", lijst, [zaak])
-    assert status(oab, api, lijst) == "changes_requested"
+    assert list_status(oab, api, lijst) == "changes_requested"
     assign("reviewer")
     assert str(main_reviewer(oab, api, lijst)).endswith("-reviewer")
 
@@ -662,7 +531,7 @@ def test_only_a_new_list_can_be_deleted(
     expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{new}/"), HTTPStatus.NOT_FOUND)
     ready = new_list(oab, api, closed_zaak(), registry)
     expect_status(oab("recordmanager").delete(f"{api}/destruction-lists/{ready}/"), *REFUSED)
-    assert status(oab, api, ready) == "ready_to_review"
+    assert list_status(oab, api, ready) == "ready_to_review"
 
 
 @pytest.mark.xfail(
@@ -707,7 +576,9 @@ def test_review_is_processed_after_a_zaak_was_deleted_elsewhere(
     answered = oab("recordmanager").post(f"{api}/review-responses/", json=body)
     expect_status(answered, HTTPStatus.CREATED)
     wait_until(
-        lambda: status(oab, api, lijst) == "ready_to_review", timeout=60, description=f"list {lijst} ready_to_review"
+        lambda: list_status(oab, api, lijst) == "ready_to_review",
+        timeout=60,
+        description=f"list {lijst} ready_to_review",
     )
 
 
@@ -725,7 +596,7 @@ def test_reviewer_forwards_without_the_coreviewer(
     lijst = new_list(oab, api, zaak, registry)
     assign_coreviewer(oab, api, lijst)
     review(oab, api, "reviewer", lijst, decision="accepted")
-    assert status(oab, api, lijst) == "internally_reviewed"
+    assert list_status(oab, api, lijst) == "internally_reviewed"
 
 
 def _compose_list(page: Page, identificatie: str, naam: str) -> None:
@@ -857,310 +728,3 @@ def test_coreviewer_feedback_reaches_the_reviewer(
     expect_status(oab("coreviewer").post(f"{api}/destruction-list-co-reviews/", json=co_review), HTTPStatus.CREATED)
     seen = oab("reviewer").get(f"{api}/destruction-list-co-reviews/", params={"destruction_list__uuid": lijst})
     assert feedback in [str(r.get("listFeedback")) for r in entries(expect_status(seen, HTTPStatus.OK).json())]
-
-
-def ready_to_delete(
-    oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
-) -> str:
-    """A list of the test's zaak that reviewer and archivist accepted; its uuid."""
-    lijst = new_list(oab, api, zaak, registry)
-    review(oab, api, "reviewer", lijst, decision="accepted")
-    expect_status(make_final(oab, api, lijst), HTTPStatus.CREATED, HTTPStatus.OK)
-    review(oab, api, "archivist", lijst, decision="accepted")
-    return lijst
-
-
-def queue(oab: Callable[[str], requests.Session], api: str, lijst: str) -> JsonObject:
-    """The record manager starts the destruction; the list afterwards."""
-    expect_status(
-        oab("recordmanager").post(f"{api}/destruction-lists/{lijst}/queue_destruction/", json={}),
-        HTTPStatus.OK,
-        HTTPStatus.NO_CONTENT,
-    )
-    return expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/"), HTTPStatus.OK).json()
-
-
-@pytest.mark.tc("ABC-024")
-@REG_170
-@pytest.mark.scenario("""
-    Given a vernietigingslijst that the reviewer and the archivist accepted
-    When the record manager starts the destruction
-    Then the destruction is planned after today
-    When the record manager aborts the destruction
-    Then the list is new again
-""")
-def test_destruction_waits_and_can_be_aborted(
-    oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
-) -> None:
-    """Started destruction is planned after the waiting period, and aborting returns the list (TA reg-170 ABC-034)."""
-    lijst = ready_to_delete(oab, api, zaak, registry)
-    planned = queue(oab, api, lijst).get("plannedDestructionDate")
-    assert planned
-    assert str(planned) > today()
-    abort = {"comment": "podiumd-tests"}
-    expect_status(oab("recordmanager").post(f"{api}/destruction-lists/{lijst}/abort/", json=abort), HTTPStatus.OK)
-    assert status(oab, api, lijst) == "new"
-
-
-@pytest.fixture(name="archive_config")
-def fixture_archive_config(podiumd_env: Environment) -> Iterator[Callable[..., None]]:
-    """set(**fields): change OAB's global ArchiveConfig for this test; the old values come back after it."""
-    old: dict[str, object] = {}
-
-    def set_config(**fields: object) -> None:
-        for field, value in set_archive_config(podiumd_env, fields).items():
-            old.setdefault(field, value)
-
-    yield set_config
-    if old:
-        set_archive_config(podiumd_env, old)
-
-
-# The destruction never completes on Open Zaak 1.29.3.
-DESTRUCTION_FAILS = pytest.mark.xfail(
-    strict=True,
-    reason="[open-archiefbeheer-4] Open Zaak 1.29.3 answers 500 on DELETE of a zaak with a resultaat although it deletes it"
-    " (test_closed_zaak_delete_answers_204); Open Archiefbeheer marks the item failed, so the list"
-    " never reaches deleted and files no report; open-zaak#2484",
-)
-# Columns of the report's sheet "Deleted zaken": the metadata OAB keeps of a destroyed zaak.
-REPORT_COLUMNS = ("Zaak Identificatie", "Zaaktype Identificatie", "Resultaat", "Zaak Startdatum", "Zaak Einddatum")
-
-
-def destroy(
-    podiumd_env: Environment,
-    oab: Callable[[str], requests.Session],
-    api: str,
-    openzaak: ApiClient,
-    parts: ZaaktypeParts,
-    registry: ResourceRegistry,
-    lijst: str,
-) -> str:
-    """Destroy the list now; once it is deleted, the text of the report the record manager downloads.
-
-    The report goes to a zaak of the test zaaktype (ArchiveConfig, set back after the test).
-    """
-    naam = str(
-        expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/"), HTTPStatus.OK).json()["name"]
-    )
-
-    def delete_report() -> None:
-        for rapport in openzaak.list(f"{ZAKEN}/zaken", {"zaaktype": parts.zaaktype}):
-            if naam in str(rapport.get("toelichting") or ""):
-                delete_zaak(openzaak, str(rapport["url"]), with_documents=True)
-
-    registry.add(f"destruction report of {naam}", delete_report)
-    assert run_destruction(podiumd_env, oab, api, lijst) == "succeeded"
-    assert status(oab, api, lijst) == "deleted"
-    report = oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/download_report/")
-    # An xlsx: its cell texts are in the shared strings.
-    with zipfile.ZipFile(io.BytesIO(expect_status(report, HTTPStatus.OK).content)) as workbook:
-        return workbook.read("xl/sharedStrings.xml").decode()
-
-
-def run_destruction(podiumd_env: Environment, oab: Callable[[str], requests.Session], api: str, lijst: str) -> str:
-    """Queue the list and destroy it now; its processingStatus once OAB has finished (succeeded, failed)."""
-    queue(oab, api, lijst)
-    destroy_now(podiumd_env, lijst)
-
-    def processed() -> str | None:
-        found = expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/"), HTTPStatus.OK).json()
-        return None if found["processingStatus"] in {"new", "queued", "processing"} else str(found["processingStatus"])
-
-    return wait_until(processed, timeout=120, description=f"destruction of list {lijst}")
-
-
-def report_config(parts: ZaaktypeParts) -> dict[str, object]:
-    """ArchiveConfig fields that file the destruction report as a zaak of the test zaaktype."""
-    return {
-        "bronorganisatie": TEST_CATALOGUS_RSIN,
-        "zaaktype": parts.zaaktype,
-        "statustype": str(parts.statustypen[-1]["url"]),
-        "resultaattype": parts.resultaattypen[0],
-        "informatieobjecttype": parts.informatieobjecttype,
-    }
-
-
-@pytest.mark.destructive
-@DESTRUCTION_FAILS
-@pytest.mark.tc("ABC-032", "ABC-033")
-@REG_170
-@pytest.mark.scenario("""
-    Given a vernietigingslijst of one closed zaak that the reviewer and the archivist accepted
-    When the record manager starts the destruction and it runs
-    Then the destruction succeeds
-    And the list is deleted
-    And the zaak is gone from Open Zaak
-    And the destruction report names the zaak with its metadata columns
-""")
-def test_destruction_deletes_the_zaak_and_leaves_a_report(
-    podiumd_env: Environment,
-    oab: Callable[[str], requests.Session],
-    api: str,
-    openzaak: ApiClient,
-    zaak: JsonObject,
-    parts: ZaaktypeParts,
-    registry: ResourceRegistry,
-    archive_config: Callable[..., None],
-) -> None:
-    """The destruction deletes the zaak in Open Zaak; the report keeps its metadata (TA reg-170)."""
-    archive_config(**report_config(parts))
-    report = destroy(podiumd_env, oab, api, openzaak, parts, registry, ready_to_delete(oab, api, zaak, registry))
-    openzaak.request("GET", str(zaak["url"]), HTTPStatus.NOT_FOUND)
-    assert str(zaak["identificatie"]) in report
-    assert [c for c in REPORT_COLUMNS if c not in report] == []
-
-
-@pytest.mark.destructive
-@pytest.mark.requires("objecten")
-@pytest.mark.source(
-    "podiumd-tests",
-    "Destroying a zaak also deletes its productaanvraag in Objecten, which needs OAB's token to write that objecttype.",
-)
-@pytest.mark.scenario("""
-    Given a closed zaak linked to a productaanvraag in Objecten
-    And a vernietigingslijst of the zaak that the reviewer and the archivist accepted
-    When the destruction runs
-    Then the productaanvraag is gone from Objecten
-""")
-def test_destruction_deletes_the_productaanvraag_of_the_zaak(
-    podiumd_env: Environment,
-    oab: Callable[[str], requests.Session],
-    api: str,
-    openzaak: ApiClient,
-    objecten: ApiClient,
-    zaak: JsonObject,
-    registry: ResourceRegistry,
-) -> None:
-    """OAB deletes the productaanvraag object linked to the zaak before it deletes the zaak itself."""
-    kenmerk = registry.tagged("oab-productaanvraag")
-    aanvraag = make_productaanvraag(
-        objecten, registry, objecttype_url(podiumd_env, PRODUCTAANVRAAG_OBJECTTYPE), kenmerk, kenmerk
-    )
-    link = {
-        "zaak": zaak["url"],
-        "object": aanvraag["url"],
-        "objectType": "overige",
-        "objectTypeOverige": "productaanvraag",
-    }
-    zaakobject = openzaak.post(f"{ZAKEN}/zaakobjecten", link)
-    registry.add("zaakobject", lambda: openzaak.delete(str(zaakobject["url"])))
-    # The list itself may fail on the zaak (open-archiefbeheer-4); the objects go first.
-    run_destruction(podiumd_env, oab, api, ready_to_delete(oab, api, zaak, registry))
-    objecten.request("GET", str(aanvraag["url"]), HTTPStatus.NOT_FOUND)
-
-
-@pytest.mark.destructive
-@pytest.mark.tc("ABC-038")
-@REG_171
-@pytest.mark.scenario("""
-    Given the test zaaktype takes the short procedure
-    And a vernietigingslijst of a closed zaak of that zaaktype, ready for review
-    When the reviewer accepts the list
-    Then the list is ready to delete
-""")
-def test_short_procedure_skips_the_archivist(
-    oab: Callable[[str], requests.Session],
-    api: str,
-    zaak: JsonObject,
-    registry: ResourceRegistry,
-    archive_config: Callable[..., None],
-) -> None:
-    """For a zaaktype with the short procedure, the reviewer's acceptance makes the list ready to delete (TA reg-171)."""
-    archive_config(zaaktypes_short_process=[TEST_ZAAKTYPE])
-    lijst = new_list(oab, api, zaak, registry)
-    review(oab, api, "reviewer", lijst, decision="accepted")
-    assert status(oab, api, lijst) == "ready_to_delete"
-
-
-@pytest.mark.destructive
-@pytest.mark.tc("ABC-034", "ABC-035")
-@pytest.mark.source(
-    "draaiboek ABC-034", "A functioneel beheerder chooses in OAB's settings which zaaktypen take the short procedure."
-)
-@pytest.mark.scenario("""
-    When the record manager sets which zaaktypen take the short procedure
-    Then Open Archiefbeheer refuses the change
-    When the functioneel beheerder sets the test zaaktype to take the short procedure
-    Then the record manager sees that setting
-""")
-def test_beheerder_sets_the_short_procedure_zaaktypen(
-    oab: Callable[[str], requests.Session], api: str, registry: ResourceRegistry
-) -> None:
-    """Only the functioneel beheerder changes which zaaktypen take the short procedure, and the choice is kept."""
-    config = f"{api}/archive-config"
-    old = expect_status(oab("beheerder").get(config), HTTPStatus.OK).json()["zaaktypesShortProcess"]
-    registry.add(
-        "short procedure zaaktypen",
-        lambda: expect_status(oab("beheerder").patch(config, json={"zaaktypesShortProcess": old}), HTTPStatus.OK),
-    )
-    refused = oab("recordmanager").patch(config, json={"zaaktypesShortProcess": [TEST_ZAAKTYPE]})
-    expect_status(refused, *REFUSED)
-    expect_status(oab("beheerder").patch(config, json={"zaaktypesShortProcess": [TEST_ZAAKTYPE]}), HTTPStatus.OK)
-    assert expect_status(oab("recordmanager").get(config), HTTPStatus.OK).json()["zaaktypesShortProcess"] == [
-        TEST_ZAAKTYPE
-    ]
-
-
-@pytest.mark.destructive
-@pytest.mark.tc("ABC-036")
-@pytest.mark.source(
-    "draaiboek ABC-036",
-    "Zaaktypen with the short procedure can only follow it; the route through the archivist is closed.",
-)
-@pytest.mark.scenario("""
-    Given the test zaaktype takes the short procedure
-    And the reviewer accepted a vernietigingslijst of a closed zaak of that zaaktype
-    When the archivist reviews the list
-    Then Open Archiefbeheer refuses the review
-    And the list stays ready to delete
-""")
-def test_short_procedure_list_cannot_go_to_the_archivist(
-    oab: Callable[[str], requests.Session],
-    api: str,
-    zaak: JsonObject,
-    registry: ResourceRegistry,
-    archive_config: Callable[..., None],
-) -> None:
-    """For a zaaktype with the short procedure, the archivist cannot review the accepted list."""
-    archive_config(zaaktypes_short_process=[TEST_ZAAKTYPE])
-    lijst = new_list(oab, api, zaak, registry)
-    review(oab, api, "reviewer", lijst, decision="accepted")
-    body = {"destructionList": lijst, "listFeedback": "podiumd-tests", "decision": "accepted"}
-    response = oab("archivist").post(f"{api}/destruction-list-reviews/", json=body)
-    expect_status(response, HTTPStatus.FORBIDDEN, HTTPStatus.BAD_REQUEST)
-    assert status(oab, api, lijst) == "ready_to_delete"
-
-
-@pytest.mark.destructive
-@DESTRUCTION_FAILS
-@pytest.mark.tc("ABC-039", "ABC-040", "ABC-041")
-@pytest.mark.source(
-    "draaiboek ABC-039",
-    "After a short-procedure destruction a report is made that can be exported for the destruction statement.",
-)
-@pytest.mark.scenario("""
-    Given the test zaaktype takes the short procedure
-    And the reviewer accepted a vernietigingslijst of a closed zaak of that zaaktype
-    When the destruction runs
-    Then the destruction succeeds
-    And the list is deleted
-    And the destruction report names the zaak with its metadata columns
-""")
-def test_short_procedure_destruction_leaves_a_report(
-    podiumd_env: Environment,
-    oab: Callable[[str], requests.Session],
-    api: str,
-    openzaak: ApiClient,
-    zaak: JsonObject,
-    parts: ZaaktypeParts,
-    registry: ResourceRegistry,
-    archive_config: Callable[..., None],
-) -> None:
-    """After a short-procedure destruction the report lists the zaak with its metadata columns."""
-    archive_config(zaaktypes_short_process=[TEST_ZAAKTYPE], **report_config(parts))
-    lijst = new_list(oab, api, zaak, registry)
-    review(oab, api, "reviewer", lijst, decision="accepted")
-    report = destroy(podiumd_env, oab, api, openzaak, parts, registry, lijst)
-    assert str(zaak["identificatie"]) in report
-    assert [c for c in REPORT_COLUMNS if c not in report] == []

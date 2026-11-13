@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import secrets
+
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
@@ -11,17 +13,25 @@ from playwright.sync_api import expect
 from podiumd_tests.bootstrap.names import PREFIX
 from podiumd_tests.bootstrap.steps import django_secret_key
 from podiumd_tests.django_snippets import run_snippet
+from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
 from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import expect_defect
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import pytest
     import requests
 
     from playwright.sync_api import Page
 
     from podiumd_tests.environment import Environment
+    from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.registry import ResourceRegistry
+
+    # A logged-in session per role (login).
+    Sessions = Callable[[str], requests.Session]
 
 API = "/api/v1"
 # Open Archiefbeheer from 2.1 runs on Django 5.2, whose admin logout accepts only POST.
@@ -116,3 +126,93 @@ def expect_admin_logout_bug(request: pytest.FixtureRequest, env: Environment) ->
         reason="[open-archiefbeheer-7] Open Archiefbeheer 2.1.2: the admin's 'Log out' link sends a GET,"
         " which Django 5.2's logout answers with 405; not yet reported upstream",
     )
+
+
+def user_pk(oab: Sessions, api: str, role: str, user: str | None = None) -> int:
+    """Return the pk of a test user (default: the role's own) that OAB lists for the assignee role."""
+    filter_role = {"reviewer": "main_reviewer", "coreviewer": "co_reviewer"}.get(role, role)
+    users = expect_status(oab("recordmanager").get(f"{api}/users/", params={"role": filter_role}), HTTPStatus.OK)
+    suffix = f"-{user or role}"
+    found = (item for item in entries(users.json()) if str(item["username"]).endswith(suffix))
+    return int(str(next(found)["pk"]))
+
+
+def list_status(oab: Sessions, api: str, lijst: str) -> str:
+    """Return the list's status, as the record manager sees it."""
+    return str(
+        expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/"), HTTPStatus.OK).json()["status"]
+    )
+
+
+def new_list(
+    oab: Sessions,
+    api: str,
+    zaak: JsonObject | list[JsonObject],
+    registry: ResourceRegistry,
+    *,
+    ready: bool = True,
+) -> str:
+    """Create a vernietigingslijst of the zaken for the test reviewer, by default ready to review; its uuid."""
+    zaken = zaak if isinstance(zaak, list) else [zaak]
+    body = {
+        # OAB requires unique names, and the run tag is shared by all workers.
+        "name": registry.tagged(f"vernietigingslijst-{secrets.token_hex(3)}"),
+        "comment": "podiumd-tests",
+        "containsSensitiveInfo": False,
+        "add": [{"zaak": item["url"]} for item in zaken],
+        "reviewer": {"user": user_pk(oab, api, "reviewer")},
+    }
+    created = expect_status(
+        oab("recordmanager").post(f"{api}/destruction-lists/", json=body), HTTPStatus.CREATED
+    ).json()
+    lijst = str(created["uuid"])
+    if ready:
+        expect_status(
+            oab("recordmanager").post(f"{api}/destruction-lists/{lijst}/mark_ready_review/", json={}),
+            HTTPStatus.CREATED,
+            HTTPStatus.OK,
+        )
+    return lijst
+
+
+def make_final(oab: Sessions, api: str, lijst: str) -> requests.Response:
+    """Hand the list to the test archivist as the record manager; OAB's answer."""
+    final = {"user": user_pk(oab, api, "archivist"), "comment": "podiumd-tests"}
+    return oab("recordmanager").post(f"{api}/destruction-lists/{lijst}/make_final/", json=final)
+
+
+def review(oab: Sessions, api: str, role: str, lijst: str, **fields: object) -> JsonObject:
+    """Review the list as the role's test user; the review."""
+    body = {"destructionList": lijst, "listFeedback": "podiumd-tests", **fields}
+    return expect_status(oab(role).post(f"{api}/destruction-list-reviews/", json=body), HTTPStatus.CREATED).json()
+
+
+def ready_to_delete(oab: Sessions, api: str, zaak: JsonObject, registry: ResourceRegistry) -> str:
+    """Create a list of the zaak that the reviewer and the archivist accepted; its uuid."""
+    lijst = new_list(oab, api, zaak, registry)
+    review(oab, api, "reviewer", lijst, decision="accepted")
+    expect_status(make_final(oab, api, lijst), HTTPStatus.CREATED, HTTPStatus.OK)
+    review(oab, api, "archivist", lijst, decision="accepted")
+    return lijst
+
+
+def queue(oab: Sessions, api: str, lijst: str) -> JsonObject:
+    """Start the destruction as the record manager; the list afterwards."""
+    expect_status(
+        oab("recordmanager").post(f"{api}/destruction-lists/{lijst}/queue_destruction/", json={}),
+        HTTPStatus.OK,
+        HTTPStatus.NO_CONTENT,
+    )
+    return expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/"), HTTPStatus.OK).json()
+
+
+def run_destruction(env: Environment, oab: Sessions, api: str, lijst: str) -> str:
+    """Queue the list and destroy it now; its processingStatus once OAB has finished (succeeded, failed)."""
+    queue(oab, api, lijst)
+    destroy_now(env, lijst)
+
+    def processed() -> str | None:
+        found = expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/"), HTTPStatus.OK).json()
+        return None if found["processingStatus"] in {"new", "queued", "processing"} else str(found["processingStatus"])
+
+    return wait_until(processed, timeout=120, description=f"destruction of list {lijst}")
