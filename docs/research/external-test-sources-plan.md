@@ -22,10 +22,10 @@ to `openbaar`; `ptest-bootstrap-zgw-noauth` none. No client has Autorisaties API
 
 | # | Source @ commit | Licence | Unit | Total | Covered | Partly | Gap | n/a | Proposed tests | Days |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1a | `OneGround/ZGW-APIs-postman-tests` "ZGW business rules" | BSD-3-Clause | rule (659 requests, 357 `pm.test`) | 55 | 42 | 4 | 0 | 9 | 26 | 10 |
+| 1a | `OneGround/ZGW-APIs-postman-tests` "ZGW business rules" | BSD-3-Clause | rule (659 requests, 357 `pm.test`) | 55 | 44 | 2 | 0 | 9 | 26 | 10 |
 | 1b | same, "ZGW features" (ZGW 1.5 and 1.7) | BSD-3-Clause | folder (299 requests, 277 `pm.test`) | 31 | 19 | 4 | 3 | 5 | 5 | 1.5 |
 | 2a | `VNG-Realisatie/gemma-postman-tests` `ZGW_api_postman_tests.json` (standaard.md) | EUPL | rule (859 requests, 401 `pm.test`) | 56 | 2 (52 shared with 1a) | 1 | 1 | | 1 | 0.5 |
-| 2b | same, `ZGW_OAS_tests.json` | EUPL | folder (228 requests, 243 `pm.test`) | 27 | 11 | 14 | 0 | 2 | 1 | 0.5 |
+| 2b | same, `ZGW_OAS_tests.json` | EUPL | folder (228 requests, 243 `pm.test`) | 27 | 13 | 12 | 0 | 2 | 1 | 0.5 |
 | 2c | same, `issues_openzaak.md` | EUPL | note | 7 | | | 4 to recheck | 3 | 0 | 0 |
 | 3 | `GemeenteNijmegen/open-forms-testautomatisering` | EUPL-1.2 | pattern (21 specs) | 7 | 4 | 1 | 0 | 2 | 3 | 2.5 |
 | 4 | `VNG-Realisatie/gemma-zaken-test-integratie` (archived 2019) | none declared | test module | 10 | 9 | 1 | 0 | 0 | 0 (merged into 1a) | in 1a |
@@ -41,7 +41,8 @@ Probable defect hits of the gaps (xfail ids from podiumd-known-issues):
 
 - `open-zaak-1` (DELETE of a zaak with a resultaat answers 500, fixed in 1.31.0): zrc-023, zrc-007e (DELETE of a
   resultaat recalculates the same ETag).
-- `open-zaak-3` (audittrail endpoints need all rights): drc-008c, brc-009d.
+- `open-zaak-3` (audittrail endpoints need all rights): drc-008c, brc-009d read the audittrail in Open Zaak's
+  database instead.
 - `open-zaak-4` (same-name large uploads lose content): the document create of the perf mix (batch 10) when it
   reuses one bestandsnaam.
 - `open-notificaties-1` and `-2` (500 for an unreachable callback, and when an abonnement is deleted during a
@@ -92,7 +93,7 @@ must succeed; most rules test POST, PUT and PATCH alike.
 | drc-004 | OIO without the ZIO or BIO in Zaken or Besluiten: 400 | covered: `test_documenten.py::test_objectinformatieobject_follows_the_zaak` (not-linked) | port | as drc-002 | same |
 | drc-006 | indicatieGebruiksrecht null by default; true needs gebruiksrechten; creating gebruiksrechten sets it true, deleting them null | covered: `test_documenten.py::test_indicatie_gebruiksrecht_follows_the_gebruiksrechten` | merge | needed to close a zaak (zrc-007b) | `tests/component/openzaak/test_documenten.py` |
 | drc-007 | explicit vertrouwelijkheidaanduiding kept; without it, the informatieobjecttype's | covered: `test_documenten.py::test_document_vertrouwelijkheidaanduiding_defaults_to_the_informatieobjecttypes` | merge | as zrc-009 | `tests/component/openzaak/test_documenten.py` |
-| drc-008 | EIO with an OIO cannot be deleted; deleting it deletes gebruiksrechten and audittrail | partly: `test_verwijderen.py::test_linked_document_cannot_be_deleted`; missing: the audittrail goes with the document | port | audittrail part reads with catalogus rights (`open-zaak-3`) | `tests/component/openzaak/test_verwijderen.py` |
+| drc-008 | EIO with an OIO cannot be deleted; deleting it deletes gebruiksrechten and audittrail | covered: `test_verwijderen.py::test_linked_document_cannot_be_deleted`, `test_verwijderen.py::test_audittrail_goes_with_the_deleted_object` (document) | port | the audittrail is read in Open Zaak's database: its API needs all rights (`open-zaak-3`) | `tests/component/openzaak/test_verwijderen.py` |
 | drc-009 | PUT/PATCH without lock or with a wrong lockId: 400; lock returns a lockId; forced unlock needs `documenten.geforceerd-unlock` | covered: `test_documenten.py::test_locked_document_needs_its_lock` | merge | the refusals and the forced unlock ZAC's beheer uses; forced unlock without the scope needs the client of zrc-007 to exclude `geforceerd` too | `tests/component/openzaak/test_documenten.py` |
 | drc-00x | a ZIO creates an OIO with objectType zaak, also for a client with limited rights | covered: `test_documenten.py::test_zaak_document_link_is_mirrored_and_fixed` (a), `test_autorisaties.py::test_vertrouwelijk_document_is_hidden_from_an_openbaar_client` (b: the openbaar client lists no OIO of a vertrouwelijk document) | merge | into zrc-005 | `tests/component/openzaak/test_documenten.py` |
 | brc-001 | besluit POST/PUT/PATCH; besluittype that does not resolve, is no besluittype, or is a concept: 400; besluittype cannot change | partly: `test_besluiten.py::test_besluit_needs_a_besluittype_of_the_zaaktype` (does-not-exist, is-a-statustype with xfail `open-zaak-5`), `test_besluiten.py::test_besluit_identificatie_is_unique_and_fixed` (besluittype fixed); missing: a concept besluittype | merge | refusals as parameters | `tests/component/openzaak/test_besluiten.py` (split from `test_besluiten_eigenschappen.py`) |
@@ -103,7 +104,7 @@ must succeed; most rules test POST, PUT and PATCH alike.
 | brc-006 | a besluit on a zaak shows in the zaak's `/besluiten` | covered: `test_besluiten.py::test_besluit_documents_follow_the_besluittype` | merge | one assertion | same |
 | brc-007 | a besluit on a zaak whose zaaktype lacks the besluittype: 400 | covered: `test_besluiten.py::test_besluit_needs_a_besluittype_of_the_zaaktype` (not-of-the-zaaktype) | port | `zaaktype-mismatch` was wrong in 2019 (`issues_openzaak.md`) | same |
 | brc-008 | BIO whose informatieobjecttype is not in the besluittype's: 400 | covered: `test_besluiten.py::test_besluit_documents_follow_the_besluittype` | port | needs the test besluittype to list the test informatieobjecttype (check snippet `openzaak_zaaktype`) | same |
-| brc-009 | deleting a besluit deletes its BIOs, audittrail and OIOs | partly: `test_verwijderen.py::test_deleting_a_besluit_deletes_its_document_links` (xfail `open-zaak-7`); missing: the audittrail goes with the besluit | port | audittrail part: `open-zaak-3` | `tests/component/openzaak/test_verwijderen.py` |
+| brc-009 | deleting a besluit deletes its BIOs, audittrail and OIOs | covered: `test_verwijderen.py::test_deleting_a_besluit_deletes_its_document_links` (xfail `open-zaak-7`), `test_verwijderen.py::test_audittrail_goes_with_the_deleted_object` (besluit) | port | audittrail as drc-008 (`open-zaak-3`) | `tests/component/openzaak/test_verwijderen.py` |
 | ztc-001 | zaaktype created; a selectielijstProcestype URL that is no procestype: 400 | covered: `test_concept_zaaktype_crud`, `test_catalogi.py::test_zaaktype_selectielijst_procestype_must_be_a_procestype` | merge | checks Open Zaak's link to the Selectielijst API | `tests/component/openzaak/test_catalogi.py` |
 | ztc-002 | resultaattype: omschrijvingGeneriek from its resultaattypeomschrijving; archiefnominatie and archiefactietermijn default to the selectielijstklasse's; wrong URLs refused | covered: `test_catalogi.py::test_resultaattype_takes_its_defaults_from_the_selectielijst`, `test_resultaattype_selectielijst_urls_are_checked` | port | depends on the Selectielijst API the environment reaches | `tests/component/openzaak/test_catalogi.py` |
 | ztc-003 | selectielijstklasse procestermijn versus afleidingswijze (20 cases) | n/a | skip | validation matrix without environment input; Open Zaak's own tests | |
@@ -169,7 +170,7 @@ Per resource the status codes of its operations, plus expand and the Catalogi hi
 
 | Folder | Checks | Coverage | Decision | Reason | Target |
 | --- | --- | --- | --- | --- | --- |
-| ZRC zaken | zaak CRUD, `_zoek`, audittrail, zaakbesluiten, zaakeigenschappen CRUD | partly: `test_zaak_lifecycle`, `test_zaakeigenschap` | skip | the zaak audittrail is the only gap; low value | |
+| ZRC zaken | zaak CRUD, `_zoek`, audittrail, zaakbesluiten, zaakeigenschappen CRUD | covered: `test_zaak_lifecycle`, `test_zaakeigenschap`, `test_verwijderen.py::test_audittrail_goes_with_the_deleted_object` (zaak) | skip | covered | |
 | ZRC klantcontacten | ZRC klantcontacten | n/a | skip | as 1b | |
 | ZRC resultaten | resultaat CRUD | partly | skip | status codes only | |
 | ZRC statussen | list, create | covered: `test_statussen_in_order` | skip | covered | |
@@ -184,7 +185,7 @@ Per resource the status codes of its operations, plus expand and the Catalogi hi
 | ZTC catalogussen | read | covered | skip | covered | |
 | ZTC besluittypen, eigenschappen, informatieobjecttypen, resultaattypen, roltypen, statustypen, zaaktype-informatieobjecttypen (7 folders) | CRUD and publish per type | partly: bootstrap snippet `openzaak_zaaktype` creates them in Django, not through the API | skip | the publication rules are ztc-009 to 012 | |
 | ZTC historiemodel | relations named by omschrijving or identificatie resolve to the latest version; a ZIOT adds its IOT to the zaaktype | partly: a ZIOT lists its IOT on the zaaktype (`test_catalogi_publicatie.py::test_published_zaaktype_keeps_its_types`), Open Formulieren takes the new zaaktype version by identificatie (`test_formulier_zaaktype_versie.py::test_new_zaaktype_version_is_used_at_once`); missing: relations by omschrijving resolve to the latest version | port | ZAC and Open Formulieren name types by identificatie; recheck of `issues_openzaak.md` | `test_catalogi_publicatie.py` |
-| BRC besluiten | besluit CRUD, audittrail | partly: `test_besluit_on_a_zaak`, `test_besluiten.py::test_besluit_needs_a_besluittype_of_the_zaaktype`, `test_besluiten.py::test_besluit_identificatie_is_unique_and_fixed`; missing: audittrail | merge | brc-001 | `test_besluiten.py` |
+| BRC besluiten | besluit CRUD, audittrail | covered: `test_besluit_on_a_zaak`, `test_besluiten.py::test_besluit_needs_a_besluittype_of_the_zaaktype`, `test_besluiten.py::test_besluit_identificatie_is_unique_and_fixed`, `test_verwijderen.py::test_audittrail_goes_with_the_deleted_object` (besluit: create and update recorded) | merge | brc-001; audittrail as drc-008 | `test_besluiten.py`, `test_verwijderen.py` |
 | BRC besluitinformatieobjecten | BIO CRUD | covered: `test_besluiten.py::test_besluit_documents_follow_the_besluittype`, `test_verwijderen.py::test_deleting_a_besluit_deletes_its_document_links` (xfail `open-zaak-7`) | merge | brc-003 to 005 | `test_besluiten.py` |
 | NRC abonnement | abonnement CRUD | partly: `test_kanalen_abonnementen.py` (create, refusals) | skip | PUT and PATCH: low value | |
 | NRC kanaal | list, create, read | covered: `test_kanaal_has_the_filters_tests_use`, `test_kanaal_name_is_unique` | skip | covered | |
@@ -317,7 +318,7 @@ kees00.
 - Files: new `tests/component/openzaak/test_verwijderen.py`.
 - Bootstrap: none.
 - Risks: the zaak with a resultaat hits `open-zaak-1` (build the cascade without a resultaat, plus one xfail case);
-  audittrail reads need the catalogus rights of `test_document_audittrail_with_catalogus_rights` (`open-zaak-3`).
+  the audittrail is read in Open Zaak's database: its API needs all rights (`open-zaak-3`).
 
 ### Batch 6: besluiten (1 day, 4 tests)
 

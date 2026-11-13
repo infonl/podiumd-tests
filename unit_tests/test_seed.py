@@ -218,6 +218,13 @@ def test_delete_zaak_with_documents_accepts_500_once_the_zaak_is_gone(fake_http)
     ]
 
 
+def test_audittrail_reads_the_entries_of_the_hoofdobject(env_factory, fake_runner):
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "openzaak"}}]}))
+    fake_runner.answers["exec -i deploy/openzaak"] = (0, 'PTEST_VALUE=[["zaak", "create"], ["rol", "create"]]\n')
+    assert openzaak.audittrail(env_factory(), ZAAK) == [("zaak", "create"), ("rol", "create")]
+    assert json.dumps({"url": ZAAK}).strip("{}") in fake_runner.stdins[-1]
+
+
 def test_zaaktype_parts_and_close_zaak(fake_http):
     catalogi = "/v1/catalogi/api/v1"
     sent = fake_http(

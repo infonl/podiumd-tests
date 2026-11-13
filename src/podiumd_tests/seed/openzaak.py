@@ -16,8 +16,10 @@ from datetime import timedelta
 from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING
+from typing import cast
 
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
+from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import strings
 from podiumd_tests.lock import file_lock
@@ -26,6 +28,7 @@ from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -96,6 +99,12 @@ def delete_zaak(openzaak: ApiClient, url: str, *, with_documents: bool = False) 
     wait_until(is_deleted, timeout=DELETE_TIMEOUT, description=f"DELETE {url}")
     for document in documents:
         openzaak.delete(document)
+
+
+def audittrail(env: Environment, url: str) -> list[tuple[str, str]]:
+    """Return (resource, actie) per audittrail entry of a zaak, document or besluit, oldest first."""
+    found = run_snippet(env.kube, env.deployment_for("openzaak"), "openzaak_audittrail", {"url": url})
+    return [(str(resource), str(actie)) for resource, actie in cast("list[list[object]]", found)]
 
 
 def make_zaak(openzaak: ApiClient, registry: ResourceRegistry, zaaktype: str, **fields: object) -> JsonObject:
