@@ -26,6 +26,7 @@ from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import INDEX_TIMEOUT
+from podiumd_tests.zac import attribuut_historie
 from podiumd_tests.zac import deliver_notificatie
 from podiumd_tests.zac import end_process
 from podiumd_tests.zac import is_taak_listed
@@ -152,6 +153,7 @@ def test_selected_document_is_signed(
     When the behandelaar confirms the summary
     Then the zaak is closed with the end status
     And it has the chosen resultaat
+    And the historie shows the status In behandeling, set after the intake, before the end status
 """)
 def test_summary_closes_the_zaak_with_its_resultaat(
     zac: requests.Session, urls: dict[str, str], bpmn_zaak: JsonObject, zac_group: str, registry: ResourceRegistry
@@ -164,6 +166,9 @@ def test_summary_closes_the_zaak_with_its_resultaat(
     assert not zaak["isOpen"], zaak.get("status")
     assert section(zaak, "status").get("naam") == EINDSTATUS
     assert section(section(zaak, "resultaat"), "resultaattype").get("naam") == EINDSTATUS, zaak.get("resultaat")
+    # Newest first; ZAC also logs each change of the zaak's status URL.
+    historie = attribuut_historie(zac, urls["zac"], bpmn_zaak, "status")
+    assert [nieuw for _, nieuw, _ in historie if not str(nieuw).startswith("http")] == [EINDSTATUS, IN_BEHANDELING]
 
 
 @pytest.mark.source("podiumd-tests", "Cleanup ends a BPMN zaak's process by afbreken before it deletes the zaak.")
