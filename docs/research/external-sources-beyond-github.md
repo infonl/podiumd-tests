@@ -382,11 +382,20 @@ Port value: only if an estate links Open VTB to the DSO. No PodiumD component do
 
 ## Pointers on GitHub-hosted sites (outside this scan)
 
-Not verified against the earlier GitHub scan:
+Checked 2026-11-13 against `upstream-tests.md` and `external-test-sources-plan.md`:
 
-- `open-formulieren/form-exports`: community form exports to import, a possible source of test forms.
-- `Sudwest-Fryslan/zaakbrug2`: a ZaakBrug successor.
-- Haal Centraal BRP features in `BRP-API/*`: the same rules as finding 10.
+- `open-formulieren/form-exports`: does not exist (GitHub answers 404; the organisation's 21 public repositories
+  have no form exports). Nothing to port.
+- `Sudwest-Fryslan/zaakbrug2`: a fork of `wearefrank/zaakbrug`, 0 commits ahead and 860 behind, last push
+  2023-03-22. Its `e2e/SoapUI` suite is the one `upstream-tests.md` already uses. Nothing to port.
+- `BRP-API/Haal-Centraal-BRP-bevragen` `features/` (373 feature files): the rules of finding 10. The personen mock
+  (`ghcr.io/brp-api/personen-mock` 2.7.0) applies their input validation and derived fields. Ported:
+  - the fout-cases (`fields` missing, empty, not a list or unknown; more than 20 BSNs; a search without
+    geboortedatum) with their `invalidParams` code: `test_brp.py::test_invalid_query_is_refused`;
+  - volledigeNaam, leeftijd and adressering of a test-set person: `test_brp.py::test_derived_name_age_and_adressering`.
+
+  Port value left (medium, with finding 2's persons): gezag, `inOnderzoek`, and the adressering rules for partners
+  and adellijke titels.
 
 ## Looked, nothing useful
 

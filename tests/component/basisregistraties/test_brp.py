@@ -7,6 +7,7 @@ BRP test set that the personen mock serves.
 from __future__ import annotations
 
 from http import HTTPStatus
+from itertools import repeat
 from typing import TYPE_CHECKING
 
 import pytest
@@ -51,6 +52,14 @@ REG_121 = pytest.mark.source(
     "TA regression/121-continuiteit-graceful-degradation.spec.ts",
     "Checks a component answers a clean error, not a crash or a hang, when its upstream fails.",
 )
+BRP_FEATURES = pytest.mark.source(
+    "external BRP-API/Haal-Centraal-BRP-bevragen features/bevragen/*fout-cases.feature",
+    "The BRP API refuses an invalid query with 400 and names each invalid parameter and the rule it breaks.",
+)
+BRP_ADRESSERING = pytest.mark.source(
+    "external BRP-API/Haal-Centraal-BRP-bevragen features/bevragen/persoon/adressering",
+    "The BRP API derives a person's full name, age and address lines (aanhef, aanschrijfwijze, adresregels).",
+)
 REG_150 = pytest.mark.source(
     "TA regression/150-of-prefill-foutpaden.spec.ts",
     "Checks that BRP and KvK calls fail gracefully on invalid input: a 4xx, never a 500.",
@@ -58,6 +67,9 @@ REG_150 = pytest.mark.source(
 
 
 NAAM = ["burgerservicenummer", "naam.voornamen", "naam.geslachtsnaam"]
+RAADPLEEG_EREBOS = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": [EREBOS]}
+# The most BSNs one query may ask for.
+MAX_BSNS = 20
 
 
 def personen(http: requests.Session, urls: dict[str, str], query: Mapping[str, object]) -> list[JsonObject]:
@@ -152,22 +164,73 @@ def test_search_by_postcode_and_huisnummer(http: requests.Session, urls: dict[st
 
 
 @pytest.mark.parametrize(
-    "query",
-    [{}, {"type": "OnbekendType"}, {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": ["abc"]}],
-    ids=["empty", "unknown-type", "invalid-bsn"],
+    ("query", "invalid"),
+    [
+        ({}, ("type", "required")),
+        ({"type": "OnbekendType"}, ("type", "value")),
+        ({**RAADPLEEG_EREBOS, "burgerservicenummer": ["abc"]}, ("burgerservicenummer[0]", "pattern")),
+        (
+            {**RAADPLEEG_EREBOS, "burgerservicenummer": list(repeat(EREBOS, MAX_BSNS + 1)), "fields": NAAM[:1]},
+            ("burgerservicenummer", "maxItems"),
+        ),
+        (RAADPLEEG_EREBOS, ("fields", "required")),
+        ({**RAADPLEEG_EREBOS, "fields": []}, ("fields", "minItems")),
+        ({**RAADPLEEG_EREBOS, "fields": "burgerservicenummer,geslacht"}, ("fields", "array")),
+        ({**RAADPLEEG_EREBOS, "fields": ["bestaatniet"]}, ("fields[0]", "fields")),
+        (
+            {"type": "ZoekMetGeslachtsnaamEnGeboortedatum", "geslachtsnaam": "Kierkegaard", "fields": NAAM[:1]},
+            ("geboortedatum", "required"),
+        ),
+    ],
+    ids=[
+        "empty",
+        "unknown-type",
+        "invalid-bsn",
+        "too-many-bsns",
+        "no-fields",
+        "empty-fields",
+        "fields-as-string",
+        "unknown-field",
+        "search-without-geboortedatum",
+    ],
 )
 @REG_40
 @REG_80
 @REG_121
+@BRP_FEATURES
 @pytest.mark.scenario("""
-    Given an invalid BRP query: empty, of an unknown type, or with a malformed BSN
+    Given a BRP query with one fault in its type, its BSNs, its fields or its search parameters
     When it is sent to the BRP through the api-proxy
-    Then the BRP refuses it with 400 or 422, not a server error
+    Then the BRP refuses it with 400 and names the invalid parameter and the rule it breaks
 """)
-def test_invalid_query_is_refused(http: requests.Session, urls: dict[str, str], query: Mapping[str, object]) -> None:
-    """An invalid query answers 400 or 422, never 5xx (TA reg-40c, reg-80, reg-121)."""
-    response = brp_personen(http, urls["api-proxy"], query)
-    expect_status(response, HTTPStatus.BAD_REQUEST, HTTPStatus.UNPROCESSABLE_ENTITY)
+def test_invalid_query_is_refused(
+    http: requests.Session, urls: dict[str, str], query: Mapping[str, object], invalid: tuple[str, str]
+) -> None:
+    """An invalid query answers 400 with the parameter and rule in invalidParams (TA reg-40c, reg-80, reg-121)."""
+    body = expect_status(brp_personen(http, urls["api-proxy"], query), HTTPStatus.BAD_REQUEST).json()
+    named = [(param["name"], param["code"]) for param in entries(body["invalidParams"])]
+    assert invalid in named, f"invalidParams {named}, expected {invalid}"
+
+
+@BRP_ADRESSERING
+@pytest.mark.scenario("""
+    Given a man in the BRP test set without a partner, living in Hellevoetsluis
+    When his full name, age and adressering are asked through the api-proxy
+    Then the BRP derives his full name, his age, the aanhef "Geachte heer" and his address lines
+""")
+def test_derived_name_age_and_adressering(http: requests.Session, urls: dict[str, str]) -> None:
+    """The BRP derives volledigeNaam, leeftijd and adressering for a test-set person."""
+    query = {**RAADPLEEG_EREBOS, "fields": ["naam.volledigeNaam", "leeftijd", "adressering"]}
+    found = personen(http, urls, query)
+    adressering = {
+        "aanhef": "Geachte heer Bultenaar",
+        "aanschrijfwijze": {"naam": "E. Bultenaar"},
+        "gebruikInLopendeTekst": "de heer Bultenaar",
+        "adresregel1": "Plataanlaan 4",
+        "adresregel2": "3224 TT  HELLEVOETSLUIS",
+    }
+    assert [(p["naam"], p["adressering"]) for p in found] == [({"volledigeNaam": "Erebos Bultenaar"}, adressering)]
+    assert isinstance(found[0]["leeftijd"], int)
 
 
 @REG_150
