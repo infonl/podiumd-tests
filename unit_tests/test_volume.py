@@ -203,7 +203,7 @@ def test_users_join_the_medewerkers_group(monkeypatch, profile_factory):
 
 def test_objecten_are_created_in_batches(snippets, profile_factory):
     ran = snippets(
-        {"objecttypen_volume": lambda _params: {"uuid": "ot1"}, "objecten_volume": lambda _params: {"count": 5}}
+        {"objecttypen_published": lambda _params: {"uuid": "ot1"}, "objecten_volume": lambda _params: {"count": 5}}
     )
     env = volume_env(profile_factory())
     kind("objecten").create(env, range(450), 1)
@@ -213,9 +213,9 @@ def test_objecten_are_created_in_batches(snippets, profile_factory):
     ran.clear()
     kind("objecten").delete_all(env)
     assert [(name, p["action"]) for name, p in ran] == [
-        ("objecttypen_volume", "status"),
+        ("objecttypen_published", "status"),
         ("objecten_volume", "delete"),
-        ("objecttypen_volume", "remove"),
+        ("objecttypen_published", "remove"),
     ]
 
 

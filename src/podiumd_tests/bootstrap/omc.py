@@ -1,4 +1,5 @@
-"""Wiring: OMC's abonnement on kanaal zaken, so zaak events reach OMC (TA and ExternalsPodiumD subscribe it by hand).
+"""OMC's taak objecttype, and wiring: OMC's abonnement on kanaal zaken, so zaak events reach OMC (TA and
+ExternalsPodiumD subscribe it by hand).
 
 The abonnement's auth is a token OMC accepts: HS256 with OMC's own secret and its issuer,
 audience and user claims, all read from the OMC pod. It expires after VALIDITY; the step then
@@ -16,6 +17,9 @@ from typing import TYPE_CHECKING
 from typing import cast
 
 from podiumd_tests.auth.zgw_jwt import hs256_jwt
+from podiumd_tests.bootstrap.names import TAAK_OBJECTTYPE
+from podiumd_tests.bootstrap.names import TAAK_OBJECTTYPE_UUID
+from podiumd_tests.bootstrap.snippet_step import SnippetStep
 from podiumd_tests.clients.platform import opennotificaties_client
 from podiumd_tests.mock_server import mock_server_root
 from podiumd_tests.responses import url_host
@@ -30,6 +34,32 @@ if TYPE_CHECKING:
 STORE_KEY = "ptest_bootstrap_omc_abonnement_record"
 VALIDITY = 365 * 24 * 3600
 RENEW_BEFORE = 7 * 24 * 3600
+# The taak as OMC 2.3.1 reads it first (its vHague TaskObject); the environment owner sets OMC's
+# ZGW_VARIABLE_OBJECTTYPE_TASKOBJECTTYPE_UUID to TAAK_OBJECTTYPE_UUID.
+TAAK_SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "required": ["zaak", "title", "status", "verloopdatum", "identificatie"],
+    "properties": {
+        "zaak": {"type": "string", "format": "uri"},
+        "title": {"type": "string"},
+        "status": {"enum": ["open", "gesloten"]},
+        "verloopdatum": {"type": "string", "format": "date-time"},
+        "identificatie": {
+            "type": "object",
+            "required": ["type", "value"],
+            "properties": {"type": {"enum": ["bsn", "kvk"]}, "value": {"type": "string"}},
+        },
+    },
+}
+OMC_TAAK_OBJECTTYPE = SnippetStep(
+    "objecttypen-taak",
+    ("objecttypen", "objecten", "omc"),
+    "objecttypen_published",
+    None,
+    {"name": TAAK_OBJECTTYPE, "uuid": TAAK_OBJECTTYPE_UUID, "schema": TAAK_SCHEMA},
+    opt_in="omc_taak_objecttype",
+)
 
 
 def notify_mock_missing(env: Environment) -> str | None:

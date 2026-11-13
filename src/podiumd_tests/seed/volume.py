@@ -65,6 +65,18 @@ VOLUME_TAG = "ptest-volume"
 VOLUME_ACTOR = f"{VOLUME_TAG}-actor"
 VOLUME_GROUP = "medewerkers"
 OBJECTEN_BATCH = 200
+OBJECTTYPE_SCHEMA = {
+    "type": "object",
+    "title": "podiumd-tests volume",
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "required": ["title", "tag"],
+    "properties": {
+        "title": {"type": "string"},
+        "body": {"type": "string"},
+        "seq": {"type": "integer"},
+        "tag": {"type": "string"},
+    },
+}
 # TA's partijen: 7 of every 10 are personen, the rest organisaties.
 PERSONEN_IN_TEN = 7
 # Deleting tens of thousands of objects through the ORM takes minutes.
@@ -290,8 +302,8 @@ def _delete_users(env: Environment) -> None:
 
 
 def _objecttype(env: Environment, action: str) -> str | None:
-    params: dict[str, object] = {"action": action, "name": VOLUME_TAG}
-    found = run_snippet(env.kube, env.deployment_for("objecttypen"), "objecttypen_volume", params)
+    params: dict[str, object] = {"action": action, "name": VOLUME_TAG, "schema": OBJECTTYPE_SCHEMA}
+    found = run_snippet(env.kube, env.deployment_for("objecttypen"), "objecttypen_published", params)
     uuid = cast("dict[str, object]", found)["uuid"]
     return str(uuid) if uuid else None
 

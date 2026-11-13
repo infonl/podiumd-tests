@@ -32,6 +32,9 @@ TEST_IOT = "ptest-bootstrap-bijlage"
 # Fixed uuids the environment owner configures OMC with: uuid5(NAMESPACE_URL,
 # "https://github.com/infonl/podiumd-tests/{informatieobjecttype|objecttype}/<name>").
 TEST_IOT_UUID = "320da3a6-d87d-5854-88ad-e8c534bc7e8b"
+# OMC's taak objecttype (bootstrap step objecttypen-taak).
+TAAK_OBJECTTYPE = "ptest-bootstrap-taak"
+TAAK_OBJECTTYPE_UUID = "81a4f784-997b-5ab7-a4c5-29c65410ee8b"
 TEST_BESLUITTYPE = "ptest-bootstrap-besluit"
 # ZAC stores a mail it sends as a document of the zaaktype's informatieobjecttype with exactly this omschrijving.
 EMAIL_IOT = "e-mail"

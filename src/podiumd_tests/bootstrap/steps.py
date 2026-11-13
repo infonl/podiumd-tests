@@ -21,6 +21,7 @@ from podiumd_tests.bootstrap.kiss import KissKanalen
 from podiumd_tests.bootstrap.oi_notifications import OiNotifications
 from podiumd_tests.bootstrap.oidc_mock import KeycloakOidcMock
 from podiumd_tests.bootstrap.oidc_mock import oidc_params
+from podiumd_tests.bootstrap.omc import OMC_TAAK_OBJECTTYPE
 from podiumd_tests.bootstrap.omc import OmcAbonnement
 from podiumd_tests.bootstrap.snippet_step import SnippetStep
 from podiumd_tests.bootstrap.zac import EMAIL_CONFIRMATION
@@ -574,11 +575,18 @@ STEPS: tuple[Step, ...] = (
         names.OBJECTTYPEN_STORE_KEY,
         objecttypen_api=True,
     ),
+    # Before objecten-token, which gets rights on it.
+    OMC_TAAK_OBJECTTYPE,
     token_step(
         "objecten",
         ("objects.token.models",),
         names.OBJECTEN_STORE_KEY,
-        object_types=[names.PRODUCTAANVRAAG_OBJECTTYPE, *names.ITA_OBJECTTYPES, *names.KISS_OBJECTTYPES],
+        object_types=[
+            names.PRODUCTAANVRAAG_OBJECTTYPE,
+            *names.ITA_OBJECTTYPES,
+            *names.KISS_OBJECTTYPES,
+            names.TAAK_OBJECTTYPE,
+        ],
     ),
     # A besluittype for the zaaktype ZAC handles, where the profile allows it: ZAC's inrichtingscheck needs one.
     # Before openzaak-client-productaanvraag, which gets rights on it.
