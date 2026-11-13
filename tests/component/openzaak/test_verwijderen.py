@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.openzaak import link_besluit_document
@@ -22,21 +21,16 @@ from podiumd_tests.seed.openzaak import make_gebruiksrechten
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
 from podiumd_tests.seed.openzaak import make_zaak
+from podiumd_tests.seed.openzaak import objectinformatieobjecten
 from podiumd_tests.seed.openzaak import zaakeigenschap_body
 from podiumd_tests.seed.openzaak import zaakobject_body
 
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
-    from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.openzaak import ZaaktypeParts
     from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("openzaak")]
-
-
-def objectinformatieobjecten(openzaak: ApiClient, document: JsonObject) -> list[JsonObject]:
-    """The objectinformatieobjecten Documenten API keeps for a document."""
-    return openzaak.list(f"{DOCUMENTEN}/objectinformatieobjecten", {"informatieobject": str(document["url"])})
 
 
 def gone(openzaak: ApiClient, *urls: object) -> None:

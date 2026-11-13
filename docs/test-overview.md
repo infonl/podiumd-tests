@@ -11,12 +11,12 @@ versions is not counted.
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 256 | 41 | 10 |
-| component | 940 | 571 | 72 |
+| component | 941 | 571 | 72 |
 | integration | 177 | 116 | 14 |
 | perf | 54 | 3 | 0 |
-| **full tier** | **1336** | **701** |  |
+| **full tier** | **1337** | **701** |  |
 
-Unit tests (`unit_tests/`, functions): 834. Perf endpoints (`perf/runs.py`): 22.
+Unit tests (`unit_tests/`, functions): 835. Perf endpoints (`perf/runs.py`): 22.
 
 ## Per area
 
@@ -46,7 +46,7 @@ Unit tests (`unit_tests/`, functions): 834. Perf endpoints (`perf/runs.py`): 22.
 | component | openklant | 19 | 15 |
 | component | opennotificaties | 8 | 6 |
 | component | openvtb | 3 | 3 |
-| component | openzaak | 169 | 78 |
+| component | openzaak | 170 | 78 |
 | component | pabc | 10 | 10 |
 | component | platform | 69 | 18 |
 | component | referentielijsten | 2 | 2 |
@@ -95,10 +95,10 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | EX | 19 |
 | MK | 47 |
 | PI | 57 |
-| TA | 284 |
+| TA | 283 |
 | ZAC | 19 |
 | draaiboek | 91 |
-| external | 183 |
+| external | 185 |
 | podiumd-tests | 513 |
 | upstream | 214 |
 

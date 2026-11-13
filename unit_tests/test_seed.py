@@ -252,6 +252,12 @@ def test_zaakobject_and_zaakeigenschap_bodies_name_the_zaak():
     }
 
 
+def test_objectinformatieobjecten_lists_by_the_document(fake_http):
+    sent = fake_http({"GET /v1/documenten/api/v1/objectinformatieobjecten": results({"objectType": "zaak"})})
+    assert openzaak.objectinformatieobjecten(api(), {"url": "d"}) == [{"objectType": "zaak"}]
+    assert sent[0].url.endswith("?informatieobject=d")
+
+
 @pytest.mark.parametrize(
     ("day", "period", "after"),
     [

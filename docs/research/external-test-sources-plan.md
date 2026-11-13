@@ -22,13 +22,13 @@ to `openbaar`; `ptest-bootstrap-zgw-noauth` none. No client has Autorisaties API
 
 | # | Source @ commit | Licence | Unit | Total | Covered | Partly | Gap | n/a | Proposed tests | Days |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1a | `OneGround/ZGW-APIs-postman-tests` "ZGW business rules" | BSD-3-Clause | rule (659 requests, 357 `pm.test`) | 55 | 41 | 5 | 0 | 9 | 26 | 10 |
+| 1a | `OneGround/ZGW-APIs-postman-tests` "ZGW business rules" | BSD-3-Clause | rule (659 requests, 357 `pm.test`) | 55 | 42 | 4 | 0 | 9 | 26 | 10 |
 | 1b | same, "ZGW features" (ZGW 1.5 and 1.7) | BSD-3-Clause | folder (299 requests, 277 `pm.test`) | 31 | 19 | 4 | 3 | 5 | 5 | 1.5 |
 | 2a | `VNG-Realisatie/gemma-postman-tests` `ZGW_api_postman_tests.json` (standaard.md) | EUPL | rule (859 requests, 401 `pm.test`) | 56 | 2 (52 shared with 1a) | 1 | 1 | | 1 | 0.5 |
 | 2b | same, `ZGW_OAS_tests.json` | EUPL | folder (228 requests, 243 `pm.test`) | 27 | 11 | 14 | 0 | 2 | 1 | 0.5 |
 | 2c | same, `issues_openzaak.md` | EUPL | note | 7 | | | 4 to recheck | 3 | 0 | 0 |
 | 3 | `GemeenteNijmegen/open-forms-testautomatisering` | EUPL-1.2 | pattern (21 specs) | 7 | 3 | 2 | 0 | 2 | 3 | 2.5 |
-| 4 | `VNG-Realisatie/gemma-zaken-test-integratie` (archived 2019) | none declared | test module | 10 | 8 | 2 | 0 | 0 | 0 (merged into 1a) | in 1a |
+| 4 | `VNG-Realisatie/gemma-zaken-test-integratie` (archived 2019) | none declared | test module | 10 | 9 | 1 | 0 | 0 | 0 (merged into 1a) | in 1a |
 | 5 | `Baseflow/cg-dmf-poc` `k6/perf.js`, Open Notificaties `docs/development/performance/scenarios.rst` | EUPL | operation or profile feature | 10 | 7 | 1 | 2 | 0 | 2 perf changes | 2 |
 | 6 | `ICATT-Menselijk-Digitaal/podiumd-adapter` xUnit tests | EUPL | test class | 9 | 1 | 0 | 7 | 1 | 2 (4 with a mock e-Suite) | 1 (3) |
 | | **Total** | | | | | | | | **38 tests, 2 perf changes** | **about 18** |
@@ -94,7 +94,7 @@ must succeed; most rules test POST, PUT and PATCH alike.
 | drc-007 | explicit vertrouwelijkheidaanduiding kept; without it, the informatieobjecttype's | covered: `test_documenten.py::test_document_vertrouwelijkheidaanduiding_defaults_to_the_informatieobjecttypes` | merge | as zrc-009 | `tests/component/openzaak/test_documenten.py` |
 | drc-008 | EIO with an OIO cannot be deleted; deleting it deletes gebruiksrechten and audittrail | partly: `test_verwijderen.py::test_linked_document_cannot_be_deleted`; missing: the audittrail goes with the document | port | audittrail part reads with catalogus rights (`open-zaak-3`) | `tests/component/openzaak/test_verwijderen.py` |
 | drc-009 | PUT/PATCH without lock or with a wrong lockId: 400; lock returns a lockId; forced unlock needs `documenten.geforceerd-unlock` | covered: `test_documenten.py::test_locked_document_needs_its_lock` | merge | the refusals and the forced unlock ZAC's beheer uses; forced unlock without the scope needs the client of zrc-007 to exclude `geforceerd` too | `tests/component/openzaak/test_documenten.py` |
-| drc-00x | a ZIO creates an OIO with objectType zaak, also for a client with limited rights | partly: `test_documenten.py::test_zaak_document_link_is_mirrored_and_fixed`; missing: the same for a client with limited rights | merge | into zrc-005 | `tests/component/openzaak/test_documenten.py` |
+| drc-00x | a ZIO creates an OIO with objectType zaak, also for a client with limited rights | covered: `test_documenten.py::test_zaak_document_link_is_mirrored_and_fixed` (a), `test_autorisaties.py::test_vertrouwelijk_document_is_hidden_from_an_openbaar_client` (b: the openbaar client lists no OIO of a vertrouwelijk document) | merge | into zrc-005 | `tests/component/openzaak/test_documenten.py` |
 | brc-001 | besluit POST/PUT/PATCH; besluittype that does not resolve, is no besluittype, or is a concept: 400; besluittype cannot change | partly: `test_besluiten.py::test_besluit_needs_a_besluittype_of_the_zaaktype` (does-not-exist, is-a-statustype with xfail `open-zaak-5`), `test_besluiten.py::test_besluit_identificatie_is_unique_and_fixed` (besluittype fixed); missing: a concept besluittype | merge | refusals as parameters | `tests/component/openzaak/test_besluiten.py` (split from `test_besluiten_eigenschappen.py`) |
 | brc-002 | identificatie unique per verantwoordelijkeOrganisatie; both cannot change; generated identificatie unique | covered: `test_besluiten.py::test_besluit_identificatie_is_unique_and_fixed`, `test_concurrent_besluiten_get_their_own_identificatie` | port | ZAC numbers besluiten | `tests/component/openzaak/test_besluiten.py` |
 | brc-003 | BIO with an informatieobject URL that does not resolve: 400 | covered: `test_besluiten.py::test_besluit_documents_follow_the_besluittype` | port | one test for brc-003, 004, 008 | same |
@@ -211,7 +211,7 @@ not exist in PodiumD; only the patterns port.
 | Module | Checks | Coverage | Decision | Reason | Target |
 | --- | --- | --- | --- | --- | --- |
 | `test_notificatie_zrc_to_drc.py` | kanaal, abonnement, a zaak notifies the subscriber | covered: `test_notificaties.py::test_zaak_changes_are_notified_with_their_resource` | skip | covered | |
-| `test_registreer_besluiten.py` | besluit on a zaak; BIO once; the relation must exist in Besluiten before Documenten | partly: `test_verwijderen.py::test_deleting_a_besluit_deletes_its_document_links` (xfail `open-zaak-7`) (OIO of a BIO), `test_documenten.py::test_objectinformatieobject_follows_the_zaak` (drc-003, drc-004 for a zaak); missing: an OIO for a besluit without its BIO | merge | brc-005, drc-003, drc-004 | `test_besluiten.py`, `test_documenten.py` |
+| `test_registreer_besluiten.py` | besluit on a zaak; BIO once; the relation must exist in Besluiten before Documenten | covered: `test_verwijderen.py::test_deleting_a_besluit_deletes_its_document_links` (xfail `open-zaak-7`) (OIO of a BIO), `test_documenten.py::test_objectinformatieobject_follows_the_zaak` (drc-003, drc-004 for a zaak; besluit-not-linked: an OIO for a besluit without its BIO) | merge | brc-005, drc-003, drc-004 | `test_besluiten.py`, `test_documenten.py` |
 | `test_registreer_zaakdocument.py` | ZIO once; the relation must exist in Zaken before Documenten | covered: `test_documenten.py::test_zaak_document_link_is_mirrored_and_fixed`, `test_documenten.py::test_objectinformatieobject_follows_the_zaak` | merge | zrc-005, drc-003, drc-004 | `test_documenten.py` |
 | `test_userstory_171.py` | document added to a zaak | covered: `test_document_linked_to_zaak` | skip | covered | |
 | `test_userstory_39.py` | melding overlast: zaak with location, status and document | covered: `test_zaakgeometrie_and_zoek_within`, `test_statussen_in_order`, `test_document_linked_to_zaak` | skip | covered | |

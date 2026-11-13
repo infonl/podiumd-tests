@@ -340,6 +340,11 @@ def link_document(
     return _create(openzaak, registry, f"{ZAKEN}/zaakinformatieobjecten", body)
 
 
+def objectinformatieobjecten(openzaak: ApiClient, document: JsonObject) -> list[JsonObject]:
+    """Return the objectinformatieobjecten of a document that the client may list."""
+    return openzaak.list(f"{DOCUMENTEN}/objectinformatieobjecten", {"informatieobject": str(document["url"])})
+
+
 def clean_up_new_documents(openzaak: ApiClient, registry: ResourceRegistry, zaak: JsonObject) -> None:
     """Delete, at cleanup, the documents another component links to the zaak (e.g. a portal upload).
 

@@ -22,10 +22,12 @@ from podiumd_tests.seed.catalogi import make_concept_iot
 from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import link_document
+from podiumd_tests.seed.openzaak import make_besluit
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_document_in_parts
 from podiumd_tests.seed.openzaak import make_gebruiksrechten
 from podiumd_tests.seed.openzaak import make_zaak
+from podiumd_tests.seed.openzaak import objectinformatieobjecten
 from podiumd_tests.seed.openzaak import text_document_body
 from podiumd_tests.seed.openzaak import today
 
@@ -214,11 +216,6 @@ def test_large_documents_with_the_same_name_keep_their_own_content(
 NOWHERE = "http://openzaak.invalid/documenten/api/v1/enkelvoudiginformatieobjecten/00000000-0000-0000-0000-000000000000"
 
 
-def objectinformatieobjecten(openzaak: ApiClient, document: JsonObject) -> list[JsonObject]:
-    """The objectinformatieobjecten Documenten API keeps for a document."""
-    return entries(openzaak.list(f"{DOCUMENTEN}/objectinformatieobjecten", {"informatieobject": str(document["url"])}))
-
-
 @pytest.mark.source(
     "external OneGround/ZGW-APIs-postman-tests ZGW business rules zrc-004, zrc-005, drc-00x",
     "A zaakinformatieobject gets aardRelatie hoort_bij and a registratiedatum; Documenten API mirrors it as an "
@@ -276,6 +273,10 @@ def test_link_to_a_document_that_does_not_exist_is_refused(
     "An objectinformatieobject is refused for an object that does not resolve or is no zaak, a second time, and "
     "without the zaakinformatieobject in Zaken API.",
 )
+@pytest.mark.source(
+    "external VNG-Realisatie/gemma-zaken-test-integratie test_registreer_besluiten.py",
+    "An objectinformatieobject of a besluit is refused without the besluitinformatieobject in Besluiten API.",
+)
 @pytest.mark.parametrize(
     "case",
     [
@@ -290,27 +291,31 @@ def test_link_to_a_document_that_does_not_exist_is_refused(
         "object-is-no-zaak",
         "already-mirrored",
         "not-linked",
+        "besluit-not-linked",
     ],
 )
 @pytest.mark.scenario("""
-    Given a zaak and a document in Open Zaak
+    Given a zaak or a besluit and a document in Open Zaak
     When a record linking them is added to Documenten directly
-    Then Open Zaak refuses it unless the zaak exists and holds the document in Zaken
+    Then Open Zaak refuses it unless the zaak or besluit exists and holds the document
     And it refuses a second record for the same link
 """)
 def test_objectinformatieobject_follows_the_zaak(
     openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts, case: str
 ) -> None:
-    """POST of an objectinformatieobject that does not mirror a zaakinformatieobject answers 400."""
+    """POST of an objectinformatieobject that does not mirror a zaak- or besluitinformatieobject answers 400."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
     document = make_document(openzaak, registry, parts.informatieobjecttype)
     target = {
         "object-does-not-exist": NOWHERE.replace("documenten/api/v1/enkelvoudiginformatieobjecten", f"{ZAKEN}/zaken"),
         "object-is-no-zaak": str(parts.statustypen[0]["url"]),
     }.get(case, str(zaak["url"]))
+    object_type = "zaak"
     if case == "already-mirrored":
         link_document(openzaak, registry, zaak, document)
-    body = {"informatieobject": document["url"], "object": target, "objectType": "zaak"}
+    if case == "besluit-not-linked":
+        target, object_type = str(make_besluit(openzaak, registry, parts.besluittype)["url"]), "besluit"
+    body = {"informatieobject": document["url"], "object": target, "objectType": object_type}
     response = openzaak.request("POST", f"{DOCUMENTEN}/objectinformatieobjecten", HTTPStatus.BAD_REQUEST, json=body)
     expected = "unique" if case == "already-mirrored" else "inconsistent-relation"
     assert invalid_codes(response) == [expected], response.text

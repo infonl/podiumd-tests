@@ -26,6 +26,7 @@ from podiumd_tests.seed.openzaak import link_document
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_zaak
+from podiumd_tests.seed.openzaak import objectinformatieobjecten
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -69,20 +70,27 @@ def test_zaakvertrouwelijke_zaak_is_hidden_from_an_openbaar_client(
     "TA regression/17-document-va-handhaving.spec.ts",
     "A vertrouwelijk document must not be readable by an application with maximum vertrouwelijkheid openbaar.",
 )
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW business rule drc-00x",
+    "A client that may not read a document does not see the objectinformatieobject its zaakinformatieobject made.",
+)
 @pytest.mark.scenario("""
-    Given a vertrouwelijk informatieobject in Open Zaak
+    Given a vertrouwelijk informatieobject in Open Zaak, linked to an openbaar zaak
     When an API client with maximum vertrouwelijkheid openbaar lists and reads informatieobjecten
     Then the list does not contain the informatieobject
     And reading it is refused
-    But the API client that made it finds it in the list
+    And it sees no record in Documenten of the informatieobject's link to the zaak
+    But the API client that made it finds it in the list, and the record of its link
 """)
 def test_vertrouwelijk_document_is_hidden_from_an_openbaar_client(
     openzaak: ApiClient, openzaak_openbaar: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
 ) -> None:
-    """The openbaar client neither lists nor reads a vertrouwelijk document (TA reg-17)."""
+    """The openbaar client neither lists nor reads a vertrouwelijk document or its objectinformatieobject (TA reg-17)."""
+    zaak = make_zaak(openzaak, registry, parts.zaaktype)
     document = make_document(
         openzaak, registry, parts.informatieobjecttype, vertrouwelijkheidaanduiding="vertrouwelijk"
     )
+    link_document(openzaak, registry, zaak, document)
     # Not titel: every document of a run has the same one. Compare URLs: Open Zaak can give a parallel worker's
     # document the same identificatie.
     own = {"identificatie": str(document["identificatie"])}
@@ -91,6 +99,9 @@ def test_vertrouwelijk_document_is_hidden_from_an_openbaar_client(
     ]
     assert document["url"] in [d["url"] for d in openzaak.list(f"{DOCUMENTEN}/enkelvoudiginformatieobjecten", own)]
     openzaak_openbaar.request("GET", str(document["url"]), *REFUSED, 404)
+    assert objectinformatieobjecten(openzaak_openbaar, document) == []
+    mirrored = objectinformatieobjecten(openzaak, document)
+    assert [(o["object"], o["objectType"]) for o in mirrored] == [(zaak["url"], "zaak")]
 
 
 @pytest.mark.source(
