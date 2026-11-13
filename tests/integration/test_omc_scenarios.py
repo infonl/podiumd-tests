@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.names import BERICHT_OBJECTTYPE
+from podiumd_tests.bootstrap.names import BERICHT_OBJECTTYPE_UUID
 from podiumd_tests.bootstrap.names import TAAK_OBJECTTYPE
 from podiumd_tests.bootstrap.names import TAAK_OBJECTTYPE_UUID
 from podiumd_tests.bootstrap.names import TEST_ZAAKTYPE
@@ -252,23 +254,22 @@ def test_besluit_becomes_a_bericht_for_the_initiator(
     openzaak: ApiClient,
     openklant: ApiClient,
     objecten: ApiClient,
-    objecttypen: ApiClient,
+    need_bootstrap: Callable[..., None],
     registry: ResourceRegistry,
     parts: ZaaktypeParts,
 ) -> None:
     """A definitief, openbaar besluit document makes OMC store a bericht in Objecten (OMC 2.3.1 sends no mail)."""
     informatieobjecttype_skip(podiumd_env, parts, listed=True)
     reason = setting_skip(podiumd_env, "ZGW_WHITELIST_DECISIONMADE_IDS", TEST_ZAAKTYPE, listed=True)
-    berichttype = podiumd_env.variable("omc", MESSAGE_OBJECTTYPE)
-    found = objecttypen.request("GET", f"objecttypes/{berichttype}", HTTPStatus.OK, HTTPStatus.NOT_FOUND)
-    if not reason and found.status_code == HTTPStatus.NOT_FOUND:
-        reason = f"OMC's {MESSAGE_OBJECTTYPE} {berichttype} is no objecttype in Objecttypen"
+    reason = reason or setting_skip(podiumd_env, MESSAGE_OBJECTTYPE, BERICHT_OBJECTTYPE_UUID, listed=True)
     if reason:
         pytest.skip(reason)
+    need_bootstrap("objecttypen-bericht")
     zaak, _ = make_inwoner_zaak(openzaak, openklant, registry, parts, own_address(registry))
     make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
     notification = besluit_document(openzaak, registry, parts, zaak, **OPENBAAR_DEFINITIEF)
-    stored = {"type": str(found.json()["url"]), "data_attr": f"referentie__exact__{notification['hoofdObject']}"}
+    berichttype = objecttype_url(podiumd_env, BERICHT_OBJECTTYPE)
+    stored = {"type": berichttype, "data_attr": f"referentie__exact__{notification['hoofdObject']}"}
     registry.add(
         f"OMC's bericht about {notification['hoofdObject']}",
         lambda: [objecten.delete(str(bericht["url"])) for bericht in objecten.list("objects", stored)],

@@ -35,6 +35,9 @@ TEST_IOT_UUID = "320da3a6-d87d-5854-88ad-e8c534bc7e8b"
 # OMC's taak objecttype (bootstrap step objecttypen-taak).
 TAAK_OBJECTTYPE = "ptest-bootstrap-taak"
 TAAK_OBJECTTYPE_UUID = "81a4f784-997b-5ab7-a4c5-29c65410ee8b"
+# OMC's message objecttype, where it stores a besluit for the portal (bootstrap step objecttypen-bericht).
+BERICHT_OBJECTTYPE = "ptest-bootstrap-bericht"
+BERICHT_OBJECTTYPE_UUID = "9ce7e670-31a3-52a2-a042-b9ec64910f37"
 TEST_BESLUITTYPE = "ptest-bootstrap-besluit"
 # ZAC stores a mail it sends as a document of the zaaktype's informatieobjecttype with exactly this omschrijving.
 EMAIL_IOT = "e-mail"

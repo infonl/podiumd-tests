@@ -112,6 +112,8 @@ settings:
   oi_notifications: true
   # podiumd-minikube sets OMC's taak objecttype to the one bootstrap creates (2026-11-13).
   omc_taak_objecttype: true
+  # Bootstrap creates OMC's bericht objecttype, which podiumd-minikube sets as OMC's message objecttype (2026-11-13).
+  omc_bericht_objecttype: true
   # seed-volume --scale perf on one laptop; other environments take TA's counts.
   seed_volume_users: "20"
   seed_volume_zaken: "2000"

@@ -12,11 +12,14 @@ import json
 import time
 
 from dataclasses import dataclass
+from functools import partial
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
 from podiumd_tests.auth.zgw_jwt import hs256_jwt
+from podiumd_tests.bootstrap.names import BERICHT_OBJECTTYPE
+from podiumd_tests.bootstrap.names import BERICHT_OBJECTTYPE_UUID
 from podiumd_tests.bootstrap.names import TAAK_OBJECTTYPE
 from podiumd_tests.bootstrap.names import TAAK_OBJECTTYPE_UUID
 from podiumd_tests.bootstrap.snippet_step import SnippetStep
@@ -54,9 +57,45 @@ TAAK_SCHEMA = {
 }
 
 
-def omc_objecten_key(ctx: Context) -> dict[str, object]:
-    """Return the snippet parameter reader: OMC's Objecten token, which must read the taken."""
-    return {"reader": ctx.env.variable("omc", "ZGW_AUTH_KEY_OBJECTEN")}
+# The bericht OMC 2.3.1's besluit scenario writes for the portal (DecisionMadeScenario.PrepareDataJson), as typeVersion
+# ZGW_VARIABLE_OBJECTTYPE_MESSAGEOBJECTTYPE_VERSION: the environment owner sets that to 1 and
+# ZGW_VARIABLE_OBJECTTYPE_MESSAGEOBJECTTYPE_UUID to BERICHT_OBJECTTYPE_UUID. publicatiedatum is dd-MM-yyyy;
+# identificatie type is "-" when the zaak has no BSN.
+BERICHT_SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "required": [
+        "onderwerp",
+        "berichtTekst",
+        "publicatiedatum",
+        "referentie",
+        "handelingsperspectief",
+        "geopend",
+        "berichtType",
+        "identificatie",
+        "bijlages",
+    ],
+    "properties": {
+        "onderwerp": {"type": "string"},
+        "berichtTekst": {"type": "string"},
+        "publicatiedatum": {"type": "string"},
+        "referentie": {"type": "string", "format": "uri"},
+        "handelingsperspectief": {"type": "string"},
+        "geopend": {"type": "boolean"},
+        "berichtType": {"type": "string"},
+        "identificatie": {
+            "type": "object",
+            "required": ["type", "value"],
+            "properties": {"type": {"enum": ["bsn", "-"]}, "value": {"type": "string"}},
+        },
+        "bijlages": {"type": "array", "items": {"type": "string", "format": "uri"}},
+    },
+}
+
+
+def omc_grant(mode: str, ctx: Context) -> dict[str, object]:
+    """Return the snippet parameter grants: OMC's Objecten token gets this mode on the objecttype."""
+    return {"grants": {ctx.env.variable("omc", "ZGW_AUTH_KEY_OBJECTEN"): mode}}
 
 
 OMC_TAAK_OBJECTTYPE = SnippetStep(
@@ -66,7 +105,17 @@ OMC_TAAK_OBJECTTYPE = SnippetStep(
     None,
     {"name": TAAK_OBJECTTYPE, "uuid": TAAK_OBJECTTYPE_UUID, "schema": TAAK_SCHEMA},
     opt_in="omc_taak_objecttype",
-    context_params=omc_objecten_key,
+    context_params=partial(omc_grant, "read_only"),
+)
+# OMC creates the bericht objects.
+OMC_BERICHT_OBJECTTYPE = SnippetStep(
+    "objecttypen-bericht",
+    ("objecttypen", "objecten", "omc"),
+    "objecttypen_published",
+    None,
+    {"name": BERICHT_OBJECTTYPE, "uuid": BERICHT_OBJECTTYPE_UUID, "schema": BERICHT_SCHEMA},
+    opt_in="omc_bericht_objecttype",
+    context_params=partial(omc_grant, "read_and_write"),
 )
 
 
