@@ -16,9 +16,11 @@ DELETE_TIMEOUT = 30
 CALLBACK_AUTH = "Bearer ptest-callback"
 
 
-def abonnement_body(callback_url: str, kanaal: str, filters: dict[str, str]) -> dict[str, object]:
-    """Return an abonnement on one kanaal."""
-    return {"callbackUrl": callback_url, "auth": CALLBACK_AUTH, "kanalen": [{"naam": kanaal, "filters": filters}]}
+def abonnement_body(
+    callback_url: str, kanaal: str, filters: dict[str, str], auth: str = CALLBACK_AUTH
+) -> dict[str, object]:
+    """Return an abonnement on one kanaal; auth is the Authorization header the callback gets."""
+    return {"callbackUrl": callback_url, "auth": auth, "kanalen": [{"naam": kanaal, "filters": filters}]}
 
 
 def make_abonnement(

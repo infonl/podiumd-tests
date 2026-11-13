@@ -19,6 +19,7 @@ from podiumd_tests.auth.zgw_jwt import hs256_jwt
 from podiumd_tests.clients.platform import opennotificaties_client
 from podiumd_tests.mock_server import mock_server_root
 from podiumd_tests.responses import url_host
+from podiumd_tests.seed.opennotificaties import abonnement_body
 from podiumd_tests.seed.opennotificaties import delete_abonnement
 
 if TYPE_CHECKING:
@@ -70,7 +71,7 @@ class OmcAbonnement:
 
     def is_present(self, ctx: Context, /) -> bool:  # noqa: PLR6301  # a Step method
         """Return whether the recorded abonnement exists and its token is not about to expire."""
-        record = _record(ctx)
+        record = ctx.record(STORE_KEY)
         if not record or float(cast("float", record["expires"])) < time.time() + RENEW_BEFORE:
             return False
         response = opennotificaties_client(ctx.env).request(
@@ -82,21 +83,14 @@ class OmcAbonnement:
         """Replace the recorded abonnement with one carrying a fresh token."""
         self.remove(ctx)
         now = time.time()
-        body: dict[str, object] = {
-            "callbackUrl": f"{ctx.env.profile.urls['omc']}/Events/Listen",
-            "auth": f"Bearer {omc_token(ctx.env, now)}",
-            "kanalen": [{"naam": "zaken", "filters": {}}],
-        }
+        callback = f"{ctx.env.profile.urls['omc']}/Events/Listen"
+        body = abonnement_body(callback, "zaken", {}, auth=f"Bearer {omc_token(ctx.env, now)}")
         created = opennotificaties_client(ctx.env).post("abonnement", body)
         return {STORE_KEY: json.dumps({"url": created["url"], "expires": now + VALIDITY})}
 
     def remove(self, ctx: Context, /) -> tuple[str, ...]:  # noqa: PLR6301  # a Step method
         """Delete the recorded abonnement."""
-        record = _record(ctx)
+        record = ctx.record(STORE_KEY)
         if record:
             delete_abonnement(opennotificaties_client(ctx.env), str(record["url"]))
         return (STORE_KEY,)
-
-
-def _record(ctx: Context) -> dict[str, object]:
-    return cast("dict[str, object]", json.loads(ctx.store.read().get(STORE_KEY, "{}")))

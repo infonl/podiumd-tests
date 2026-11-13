@@ -106,10 +106,6 @@ def _clients(ctx: Context, admin: KeycloakAdmin) -> list[_ClientScopes]:
     return found
 
 
-def _record(ctx: Context) -> dict[str, object]:
-    return cast("dict[str, object]", json.loads(ctx.store.read().get(KEYCLOAK_STORE_KEY, "{}")))
-
-
 @dataclass(frozen=True)
 class KeycloakOidcMock:
     """Keycloak side: the bsn and eherkenning client scopes on the apps' clients, with Open Inwoner's redirect URI."""
@@ -126,7 +122,7 @@ class KeycloakOidcMock:
     def apply(self, ctx: Context, /) -> dict[str, str]:  # noqa: PLR6301  # a Step method
         """Add what is missing, and extend the stored record with it."""
         admin = for_environment(ctx.env)
-        record = _record(ctx)
+        record = ctx.record(KEYCLOAK_STORE_KEY)
         scopes = _ensure_scopes(admin, record)
         attached = cast("dict[str, list[str]]", record.setdefault("attached", {}))
         redirects = cast("dict[str, str]", record.setdefault("redirects", {}))
@@ -143,7 +139,7 @@ class KeycloakOidcMock:
 
     def remove(self, ctx: Context, /) -> tuple[str, ...]:  # noqa: PLR6301  # a Step method
         """Undo exactly what the record lists."""
-        record = _record(ctx)
+        record = ctx.record(KEYCLOAK_STORE_KEY)
         if record:
             admin = for_environment(ctx.env)
             scopes = admin.client_scopes()

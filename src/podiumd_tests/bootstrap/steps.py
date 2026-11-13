@@ -18,6 +18,7 @@ from podiumd_tests.bootstrap.inway import InwayConsumers
 from podiumd_tests.bootstrap.keycloak import KeycloakRoles
 from podiumd_tests.bootstrap.keycloak import KeycloakUser
 from podiumd_tests.bootstrap.kiss import KissKanalen
+from podiumd_tests.bootstrap.oi_notifications import OiNotifications
 from podiumd_tests.bootstrap.oidc_mock import KeycloakOidcMock
 from podiumd_tests.bootstrap.oidc_mock import oidc_params
 from podiumd_tests.bootstrap.omc import OmcAbonnement
@@ -411,6 +412,22 @@ OI_BEGELEIDER = django_user_step(
     "begeleider",
     staff=False,
     fields={"contact_type": "begeleider", "first_name": "PodiumD", "last_name": "Begeleider"},
+)
+# The test zaaktype in Open Inwoner, with contact form and document upload (TA zgw_import_data).
+OI_ZAAKTYPE_CONFIG = SnippetStep(
+    "openinwoner-zaaktype-config",
+    ("openinwoner", "openzaak"),
+    "oi_zaaktype_config",
+    "ptest_bootstrap_openinwoner_zaaktype_config_record",
+    {
+        "group": f"{names.PREFIX}-openzaak",
+        "domein": names.TEST_CATALOGUS_DOMEIN,
+        "rsin": names.TEST_CATALOGUS_RSIN,
+        "identificatie": names.TEST_ZAAKTYPE,
+        "iot_omschrijving": names.TEST_IOT,
+    },
+    record=True,
+    wiring=True,
 )
 # An Open Formulieren form editor (its own group Redacteurs) that changes test forms through the API.
 OF_REDACTEUR = django_user_step("openformulieren", "redacteur", ("Redacteurs",), api_token=True)
@@ -870,22 +887,8 @@ STEPS: tuple[Step, ...] = (
         wiring=True,
         context_params=lambda ctx: {"clamav": ctx.env.profile.settings.get("clamav", "")},
     ),
-    # The test zaaktype in Open Inwoner, with contact form and document upload (TA zgw_import_data).
-    SnippetStep(
-        "openinwoner-zaaktype-config",
-        ("openinwoner", "openzaak"),
-        "oi_zaaktype_config",
-        "ptest_bootstrap_openinwoner_zaaktype_config_record",
-        {
-            "group": f"{names.PREFIX}-openzaak",
-            "domein": names.TEST_CATALOGUS_DOMEIN,
-            "rsin": names.TEST_CATALOGUS_RSIN,
-            "identificatie": names.TEST_ZAAKTYPE,
-            "iot_omschrijving": names.TEST_IOT,
-        },
-        record=True,
-        wiring=True,
-    ),
+    OI_ZAAKTYPE_CONFIG,
+    OiNotifications(),
     # Wiring W6 and W8: Open Inwoner's klantensysteem is Open Klant 2, with the contact flow
     # (TA seed-oi-openklant2.sh, seed-oi-contactflow.sh).
     SnippetStep(

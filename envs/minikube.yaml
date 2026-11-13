@@ -108,6 +108,8 @@ settings:
   # Open Formulieren's wait_for_payment_to_register is runtime data no environment sets; bootstrap switches it on
   # (2026-10-10).
   of_wait_for_payment: true
+  # podiumd-minikube allows bootstrap to subscribe Open Inwoner to Open Notificaties (2026-11-13).
+  oi_notifications: true
   # seed-volume --scale perf on one laptop; other environments take TA's counts.
   seed_volume_users: "20"
   seed_volume_zaken: "2000"

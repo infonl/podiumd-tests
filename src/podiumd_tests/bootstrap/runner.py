@@ -8,6 +8,7 @@ Credentials a step creates go to the credentials Secret only.
 
 from __future__ import annotations
 
+import json
 import time
 
 from collections import defaultdict
@@ -23,6 +24,7 @@ from threading import Lock
 from typing import TYPE_CHECKING
 from typing import Literal
 from typing import Protocol
+from typing import cast
 from typing import runtime_checkable
 
 import requests
@@ -62,6 +64,10 @@ class Context:
     store: CredentialStore
     # What a step wants the user to know, e.g. roles the realm lacks; shown in the step's outcome.
     notes: list[str] = field(default_factory=list[str])
+
+    def record(self, key: str) -> dict[str, object]:
+        """Return the JSON object a step stored under key; empty when none."""
+        return cast("dict[str, object]", json.loads(self.store.read().get(key, "{}")))
 
 
 class Step(Protocol):
