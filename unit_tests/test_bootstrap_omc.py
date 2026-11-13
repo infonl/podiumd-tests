@@ -7,11 +7,13 @@ import time
 import pytest
 import requests
 
+from podiumd_tests.bootstrap.omc import OMC_TAAK_OBJECTTYPE
 from podiumd_tests.bootstrap.omc import STORE_KEY
 from podiumd_tests.bootstrap.omc import VALIDITY
 from podiumd_tests.bootstrap.omc import OmcAbonnement
 from podiumd_tests.bootstrap.omc import notify_mock_missing
 from podiumd_tests.bootstrap.omc import omc_actor_missing
+from podiumd_tests.bootstrap.omc import omc_objecten_key
 from podiumd_tests.bootstrap.runner import Context
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.credential_store import CredentialStore
@@ -99,3 +101,10 @@ def test_omc_actor_missing(ctx, fake_runner, fake_http, status, missing):
     openklant = ApiClient(requests.Session(), "https://ok.example.test/klantinteracties/api/v1", {})
     reason = omc_actor_missing(context.env, openklant) or ""
     assert ("a1" in reason) is missing
+
+
+def test_taak_objecttype_lets_omcs_objecten_token_read_it(ctx, fake_runner):
+    context = ctx()
+    fake_runner.answers["printenv ZGW_AUTH_KEY_OBJECTEN"] = (0, "omc-key\n")
+    assert omc_objecten_key(context) == {"reader": "omc-key"}
+    assert OMC_TAAK_OBJECTTYPE.context_params is omc_objecten_key

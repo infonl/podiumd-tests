@@ -52,6 +52,13 @@ TAAK_SCHEMA = {
         },
     },
 }
+
+
+def omc_objecten_key(ctx: Context) -> dict[str, object]:
+    """Return the snippet parameter reader: OMC's Objecten token, which must read the taken."""
+    return {"reader": ctx.env.variable("omc", "ZGW_AUTH_KEY_OBJECTEN")}
+
+
 OMC_TAAK_OBJECTTYPE = SnippetStep(
     "objecttypen-taak",
     ("objecttypen", "objecten", "omc"),
@@ -59,6 +66,7 @@ OMC_TAAK_OBJECTTYPE = SnippetStep(
     None,
     {"name": TAAK_OBJECTTYPE, "uuid": TAAK_OBJECTTYPE_UUID, "schema": TAAK_SCHEMA},
     opt_in="omc_taak_objecttype",
+    context_params=omc_objecten_key,
 )
 
 
