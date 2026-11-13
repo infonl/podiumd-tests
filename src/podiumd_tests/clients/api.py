@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
@@ -19,6 +21,18 @@ if TYPE_CHECKING:
 type _Headers = dict[str, str] | Callable[[], dict[str, str]]
 
 MAX_PAGES = 50
+
+
+def per_thread[ClientT](make: Callable[[], ClientT]) -> Callable[[], ClientT]:
+    """Return a client per thread: requests sessions are not thread-safe."""
+    local = threading.local()
+
+    def client() -> ClientT:
+        if not hasattr(local, "client"):
+            local.client = make()
+        return cast("ClientT", local.client)
+
+    return client
 
 
 class ApiClient:

@@ -81,6 +81,21 @@ def mock_server_root(env: Environment) -> str:
     return f"http://{NAME}.{env.profile.kube.namespace}"
 
 
+def notification(kanaal: str, resource: str, actie: str, hoofd: object) -> Callable[[JsonObject], bool]:
+    """Return a match of received entries: a notification of this kind about hoofd (a URL)."""
+
+    def is_match(entry: JsonObject) -> bool:
+        body = section(entry, "body")
+        return (
+            body.get("kanaal") == kanaal
+            and body.get("resource") == resource
+            and body.get("actie") == actie
+            and body.get("hoofdObject") == hoofd
+        )
+
+    return is_match
+
+
 @dataclass(frozen=True)
 class Callback:
     """One test's callback path on the mock server."""

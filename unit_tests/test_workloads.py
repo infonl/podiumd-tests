@@ -309,3 +309,28 @@ def test_cronjob_ending_finds_the_cronjob_or_none():
     env = SimpleNamespace(items=lambda _kind: [{"metadata": {"name": n}} for n in ("zac-sig-del", "zac-signaleren")])
     assert cronjob_ending(env, "-signaleren") == "zac-signaleren"  # pyright: ignore[reportArgumentType]
     assert cronjob_ending(env, "-x") is None  # pyright: ignore[reportArgumentType]
+
+
+def owned_pod(uid, name, owner, kind="ReplicaSet"):
+    found = placed_pod(uid, name)
+    return {**found, "metadata": {**found["metadata"], "ownerReferences": [{"kind": kind, "name": owner}]}}
+
+
+def test_pod_workload_names_the_deployment_statefulset_or_daemonset():
+    assert workloads.pod_workload(owned_pod("a", "openzaak-7d9-x", "openzaak-7d9")) == "openzaak"
+    assert workloads.pod_workload(owned_pod("b", "keycloak-0", "keycloak", "StatefulSet")) == "keycloak"
+    assert workloads.pod_workload(owned_pod("c", "job-x", "job", "Job")) is None
+
+
+def test_disruptions_leave_out_the_workloads_stopped_on_purpose():
+    before = ClusterState({"a": owned_pod("a", "keycloak-0", "keycloak", "StatefulSet")}, frozenset(("n1",)))
+    after = ClusterState({"b": owned_pod("b", "keycloak-0", "keycloak", "StatefulSet")}, frozenset(("n1",)))
+    assert disruptions(before, after, {"keycloak"}) == []
+    assert len(disruptions(before, after)) == 2
+
+
+def test_worker_deployment_is_the_main_deployment_with_worker(env_factory):
+    env = env_factory()
+    env.__dict__["deployment_names"] = ["openformulieren", "openformulieren-worker", "openzaak"]
+    assert workloads.worker_deployment(env, "openformulieren") == "openformulieren-worker"
+    assert workloads.worker_deployment(env, "openzaak") is None

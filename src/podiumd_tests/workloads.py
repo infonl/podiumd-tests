@@ -38,6 +38,7 @@ from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from collections.abc import Collection
     from collections.abc import Generator
     from collections.abc import Mapping
     from collections.abc import Sequence
@@ -234,6 +235,25 @@ def scaled(kube: Kube, deployment: str, replicas: int, timeout: int = 300) -> Ge
         scale(before)
 
 
+def replace_pod(env: Environment, pod: Item, timeout: float) -> None:
+    """Delete the pod, then wait until its workload runs as many pods as before, all ready."""
+    workload, uid = pod_workload(pod), section(pod, "metadata").get("uid")
+
+    def pods() -> list[Item]:
+        return [found for found in entries(env.items("pods")) if pod_workload(found) == workload]
+
+    count = len(pods())
+    # Without waiting: the pod's graceful shutdown can outlast kubectl's timeout.
+    env.kube.run("delete", "pod", metadata_name(pod), "--wait=false", namespace=metadata_namespace(pod))
+
+    def is_replaced() -> bool:
+        current = pods()
+        gone = uid not in {section(found, "metadata").get("uid") for found in current}
+        return gone and len(current) == count and not unhealthy_pods(current)
+
+    wait_until(is_replaced, timeout=timeout, description=f"a ready replacement of pod {metadata_name(pod)}")
+
+
 # Environment variables of a container: name -> value.
 type Variables = Mapping[str, str]
 
@@ -405,8 +425,20 @@ class Disruption(NamedTuple):
     text: str
 
 
-def disruptions(before: ClusterState, after: ClusterState) -> list[Disruption]:
-    """Nodes and pods that came or went between two states, and containers that restarted."""
+def pod_workload(pod: Item) -> str | None:
+    """Return the name of the Deployment, StatefulSet or DaemonSet that runs the pod."""
+    replicaset = _owner_name(pod, "ReplicaSet")
+    if replicaset is not None:
+        return replicaset.rsplit("-", 1)[0]
+    return _owner_name(pod, "StatefulSet") or _owner_name(pod, "DaemonSet")
+
+
+def disruptions(before: ClusterState, after: ClusterState, besides: Collection[str] = ()) -> list[Disruption]:
+    """Nodes and pods that came or went between two states, and containers that restarted.
+
+    Pods of the workloads in `besides` (stopped on purpose) are left out.
+    """
+    before, after = (_without(state, besides) for state in (before, after))
     found = [Disruption("", f"node {node} removed") for node in sorted(before.nodes - after.nodes)]
     found += [Disruption("", f"node {node} added") for node in sorted(after.nodes - before.nodes)]
     gone = [pod for uid, pod in before.pods.items() if uid not in after.pods]
@@ -439,6 +471,11 @@ def _restarts(before: Item, after: Item) -> list[Disruption]:
                 Disruption(finished, f"container {metadata_name(after)}/{name} restarted {restarts}x ({reason})")
             )
     return found
+
+
+def _without(state: ClusterState, workloads: Collection[str]) -> ClusterState:
+    kept = {uid: pod for uid, pod in state.pods.items() if pod_workload(pod) not in workloads}
+    return ClusterState(kept, state.nodes)
 
 
 def _where(pod: Item) -> str:
@@ -483,6 +520,12 @@ def failed_jobs(items: Sequence[Item], keycloaks: Sequence[Item] = ()) -> list[s
     expected = recreate_update_jobs(keycloaks)
     counted = (*standalone, *latest.values())
     return sorted(metadata_name(job) for job in counted if _has_failed(job) and metadata_name(job) not in expected)
+
+
+def worker_deployment(env: Environment, component: str) -> str | None:
+    """Return the Celery worker Deployment of a component (<main>-worker), or None when it has none."""
+    worker = f"{env.deployment_for(component)}-worker"
+    return worker if worker in env.deployment_names else None
 
 
 @contextmanager

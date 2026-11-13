@@ -104,13 +104,30 @@ def complete_submission(  # noqa: PLR0913  # one flow
     registers: bool = True,
 ) -> JsonObject:
     """Fill the submission's single step with data, complete it and return its final status (see submit)."""
-    expect_status(save_step(http, submission, headers, data), HTTPStatus.CREATED, HTTPStatus.OK)
-    completed = submission_action(http, submission, "_complete", COMPLETE, headers, timeout=timeout)
-    complete = _json(completed, HTTPStatus.OK)
-    status = _processed(http, str(complete["statusUrl"]), str(submission["id"]), timeout=timeout)
+    status_url = send_submission(http, submission, headers, data, timeout=timeout)
+    status = submission_result(http, status_url, str(submission["id"]), timeout=timeout)
     if registers:
         wait_for_registration(env, str(submission["id"]), timeout=timeout)
-    return {**status, "submission": submission["id"]}
+    return status
+
+
+def send_submission(
+    http: requests.Session,
+    submission: JsonObject,
+    headers: dict[str, str],
+    data: Mapping[str, object],
+    *,
+    timeout: float,
+) -> str:
+    """Fill the submission's single step with data and complete it; return the URL of its processing status."""
+    expect_status(save_step(http, submission, headers, data), HTTPStatus.CREATED, HTTPStatus.OK)
+    completed = submission_action(http, submission, "_complete", COMPLETE, headers, timeout=timeout)
+    return str(_json(completed, HTTPStatus.OK)["statusUrl"])
+
+
+def submission_result(http: requests.Session, status_url: str, submission: str, *, timeout: float) -> JsonObject:
+    """Return the final status of a completed submission, with its uuid as `submission`."""
+    return {**_processed(http, status_url, submission, timeout=timeout), "submission": submission}
 
 
 def save_step(

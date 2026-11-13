@@ -8,8 +8,6 @@ through Django snippets, which is what makes tens of thousands of objects workab
 
 from __future__ import annotations
 
-import threading
-
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from contextlib import contextmanager
@@ -27,6 +25,7 @@ from podiumd_tests.bootstrap.names import TEST_CATALOGUS_DOMEIN
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
+from podiumd_tests.clients.api import per_thread
 from podiumd_tests.clients.platform import openklant_client
 from podiumd_tests.clients.platform import openzaak_client
 from podiumd_tests.credentials import SecretError
@@ -51,6 +50,7 @@ from podiumd_tests.seed.zac_zaaktype import pabc_as_admin
 from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.workloads import run_cronjob
 from podiumd_tests.workloads import scaled
+from podiumd_tests.workloads import worker_deployment
 from podiumd_tests.zac import count_zaken_found
 from podiumd_tests.zac import reindex_zaken
 
@@ -181,18 +181,6 @@ def _one_by_one(
     return create
 
 
-def _per_thread(make: Callable[[], ApiClient]) -> Callable[[], ApiClient]:
-    """Return a client per worker thread: requests sessions are not thread-safe."""
-    local = threading.local()
-
-    def client() -> ApiClient:
-        if not hasattr(local, "client"):
-            local.client = make()
-        return cast("ApiClient", local.client)
-
-    return client
-
-
 def _zaaktype_snippet(env: Environment, action: str) -> dict[str, object]:
     params: dict[str, object] = {"action": action, **VOLUME_ZAAKTYPE}
     deployment = env.deployment_for("openzaak")
@@ -221,7 +209,7 @@ def _zaak_creator(env: Environment) -> Callable[[int], None]:
     """Zaken of the volume zaaktype (created first), with a scenario as omschrijving and a long toelichting."""
     if not _zaaktype_snippet(env, "status").get("present"):
         _zaaktype_snippet(env, "apply")
-    openzaak = _per_thread(lambda: _openzaak(env))
+    openzaak = per_thread(lambda: _openzaak(env))
     registry = ResourceRegistry(VOLUME_TAG, keep=True)
     zaaktype = str(_volume_zaaktype(openzaak()))
 
@@ -243,7 +231,7 @@ def _openklant_volume(env: Environment, action: str, kind: str) -> int:
 
 def _partij_creator(env: Environment) -> Callable[[int], None]:
     """Partijen in TA's mix of 7 personen to 3 organisaties, tagged in interneNotitie."""
-    openklant = _per_thread(lambda: openklant_client(env))
+    openklant = per_thread(lambda: openklant_client(env))
     registry = ResourceRegistry(VOLUME_TAG, keep=True)
 
     def create(index: int) -> None:
@@ -262,7 +250,7 @@ def _partij_creator(env: Environment) -> Callable[[int], None]:
 
 def _internetaak_creator(env: Environment) -> Callable[[int], None]:
     """Internetaken (TA's ita module), each raised by its klantcontact and assigned to one volume actor."""
-    openklant = _per_thread(lambda: openklant_client(env))
+    openklant = per_thread(lambda: openklant_client(env))
     registry = ResourceRegistry(VOLUME_TAG, keep=True)
     actoren = openklant().list("actoren", {"naam": VOLUME_ACTOR})
     actor = actoren[0] if actoren else make_actor(openklant(), registry, name=VOLUME_ACTOR)
@@ -449,9 +437,8 @@ def faster(env: Environment, replicas: int) -> Generator[None]:
     with ExitStack() as stack:
         for component in ("openzaak", "openklant"):
             if replicas and not env.capabilities.skip_reason(component):
-                main = env.deployment_for(component)
-                present = [name for name in (main, f"{main}-worker") if name in env.deployment_names]
-                for deployment in present:
+                present = (env.deployment_for(component), worker_deployment(env, component))
+                for deployment in filter(None, present):
                     stack.enter_context(scaled(env.kube, deployment, replicas))
         yield
 

@@ -16,6 +16,7 @@ from podiumd_tests.bootstrap.names import OPENZAAK_TEST_KANAAL
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import MANAGE_PY
+from podiumd_tests.mock_server import notification
 from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import close_internetaak
@@ -47,23 +48,6 @@ DELIVERY_TIMEOUT = 90
 OWN = {"bronorganisatie": TEST_CATALOGUS_RSIN}
 
 
-def event(kanaal: str, resource: str, actie: str, hoofd: object) -> Callable[[JsonObject], bool]:
-    """Matches a received notification of this kind about hoofd (a URL)."""
-
-    def is_match(entry: JsonObject) -> bool:
-        body = entry.get("body")
-        if not isinstance(body, dict):
-            return False
-        return (
-            body.get("kanaal") == kanaal
-            and body.get("resource") == resource
-            and body.get("actie") == actie
-            and body.get("hoofdObject") == hoofd
-        )
-
-    return is_match
-
-
 def notified(callback: Callback, match: Callable[[JsonObject], bool], description: str) -> JsonObject:
     """The body of the first matching notification the callback got."""
     return section(callback.wait_for(match, timeout=DELIVERY_TIMEOUT, description=description), "body")
@@ -92,11 +76,11 @@ def test_kenmerk_filter_selects_the_subscriber(
         make_abonnement(opennotificaties, registry, callback.url, "zaken", {**OWN, "vertrouwelijkheidaanduiding": va})
     zaaktype = str(test_zaaktype["url"])
     open_zaak = make_zaak(openzaak, registry, zaaktype, vertrouwelijkheidaanduiding="openbaar")
-    notified(openbaar, event("zaken", "zaak", "create", open_zaak["url"]), "the openbaar zaak")
+    notified(openbaar, notification("zaken", "zaak", "create", open_zaak["url"]), "the openbaar zaak")
     # A later zaak for the other subscriber: once it arrived, the first one would have too.
     secret = make_zaak(openzaak, registry, zaaktype, vertrouwelijkheidaanduiding="vertrouwelijk")
-    notified(vertrouwelijk, event("zaken", "zaak", "create", secret["url"]), "the vertrouwelijk zaak")
-    assert not any(event("zaken", "zaak", "create", open_zaak["url"])(e) for e in vertrouwelijk.received())
+    notified(vertrouwelijk, notification("zaken", "zaak", "create", secret["url"]), "the vertrouwelijk zaak")
+    assert not any(notification("zaken", "zaak", "create", open_zaak["url"])(e) for e in vertrouwelijk.received())
 
 
 @pytest.mark.core
@@ -125,7 +109,7 @@ def test_every_subscriber_gets_the_notification(
     for callback in callbacks:
         make_abonnement(opennotificaties, registry, callback.url, "zaken", OWN)
     zaak = make_zaak(openzaak, registry, str(test_zaaktype["url"]))
-    match = event("zaken", "zaak", "create", zaak["url"])
+    match = notification("zaken", "zaak", "create", zaak["url"])
     first, second = (notified(c, match, "the zaak's create notification") for c in callbacks)
     core = ("kanaal", "resource", "actie", "hoofdObject", "resourceUrl", "kenmerken")
     assert {k: first[k] for k in core} == {k: second[k] for k in core}
@@ -178,8 +162,8 @@ def test_zaak_changes_are_notified_with_their_resource(
         ("rol", "destroy", rol["url"]),
     ]
     for resource, actie, url in expected:
-        notification = notified(callback, event("zaken", resource, actie, zaak["url"]), f"{resource} {actie}")
-        assert notification["resourceUrl"] == url
+        body = notified(callback, notification("zaken", resource, actie, zaak["url"]), f"{resource} {actie}")
+        assert body["resourceUrl"] == url
 
 
 @pytest.mark.source(
@@ -200,7 +184,7 @@ def test_document_is_notified_on_kanaal_documenten(
     """A new document reaches kanaal documenten, apart from the zaken (TA reg-34)."""
     make_abonnement(opennotificaties, registry, callback.url, "documenten", OWN)
     document = make_document(openzaak, registry, parts.informatieobjecttype)
-    match = event("documenten", "enkelvoudiginformatieobject", "create", document["url"])
+    match = notification("documenten", "enkelvoudiginformatieobject", "create", document["url"])
     notified(callback, match, "the document's create notification")
 
 
@@ -222,7 +206,7 @@ def test_partij_changes_are_notified(
     partij = make_partij(openklant, registry)
     openklant.patch(str(partij["url"]), {"indicatieActief": False})
     for actie in ("create", "partial_update"):
-        notified(callback, event("partijen", "partij", actie, partij["url"]), f"partij {actie}")
+        notified(callback, notification("partijen", "partij", actie, partij["url"]), f"partij {actie}")
 
 
 @pytest.mark.requires("openklant")
@@ -243,7 +227,7 @@ def test_internetaak_changes_are_notified(
     taak = make_internetaak(openklant, registry, make_klantcontact(openklant, registry), [])
     close_internetaak(openklant, taak)
     for actie in ("create", "partial_update"):
-        notified(callback, event("internetaken", "internetaak", actie, taak["url"]), f"internetaak {actie}")
+        notified(callback, notification("internetaken", "internetaak", actie, taak["url"]), f"internetaak {actie}")
 
 
 @pytest.mark.source(
@@ -269,7 +253,7 @@ def test_failed_delivery_is_retried(
     only = {**OWN, "vertrouwelijkheidaanduiding": "beperkt_openbaar"}
     make_abonnement(opennotificaties, registry, callback.url, "zaken", only)
     zaak = make_zaak(openzaak, registry, str(test_zaaktype["url"]), vertrouwelijkheidaanduiding="beperkt_openbaar")
-    match = event("zaken", "zaak", "create", zaak["url"])
+    match = notification("zaken", "zaak", "create", zaak["url"])
     callback.wait_for(lambda e: match(e) and e.get("status") == 204, timeout=DELIVERY_TIMEOUT, description="redelivery")
     assert [e.get("status") for e in callback.received() if match(e)] == [500, 204]
 
@@ -298,7 +282,9 @@ def test_object_is_notified_on_kanaal_objecten(
     make_abonnement(opennotificaties, registry, callback.url, "objecten", {})
     afdeling = objecttype_url(podiumd_env, ITA_OBJECTTYPES[0])
     created = make_object(objecten, registry, afdeling, {"identificatie": registry.tagged("afdeling"), "naam": "x"})
-    body = notified(callback, event("objecten", "object", "create", created["url"]), "the object's create notification")
+    body = notified(
+        callback, notification("objecten", "object", "create", created["url"]), "the object's create notification"
+    )
     assert section(body, "kenmerken").get("objectType") == afdeling
 
 
@@ -327,4 +313,6 @@ def test_open_zaak_test_notification_reaches_a_subscriber(
     output = podiumd_env.kube.exec(deployment, "python", MANAGE_PY, "send_test_notification", timeout=120)
     assert "Notification successfully sent" in output
     # The command's fixed hoofdObject and resource.
-    notified(callback, event(OPENZAAK_TEST_KANAAL, "test", "create", "https://example.com"), "the test notification")
+    notified(
+        callback, notification(OPENZAAK_TEST_KANAAL, "test", "create", "https://example.com"), "the test notification"
+    )
