@@ -41,6 +41,8 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
     opt_in: str | None = None
     # Parameters known only at run time, e.g. a stored secret or an in-cluster URL.
     context_params: Callable[[Context], dict[str, object]] | None = None
+    # Deployments restarted after apply and remove: processes that read the objects only at start.
+    restart: tuple[str, ...] = ()
 
     def is_present(self, ctx: Context, /) -> bool:
         """Not allowed (nothing to do), or the objects exist and what the step stores is in the credentials Secret."""
@@ -73,6 +75,7 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
     def remove(self, ctx: Context, /) -> tuple[str, ...]:
         """Delete the objects, or undo what the stored record lists."""
         self._run(ctx, "remove", **({"record": self._stored_record(ctx)} if self.record else {}))
+        self._restart(ctx)
         return () if self.store_key is None else (self.store_key,)
 
     def _call(self, ctx: Context, action: str, **extra: object) -> tuple[str, SnippetCall]:
@@ -110,4 +113,12 @@ class SnippetStep:  # pylint: disable=too-many-instance-attributes  # a declarat
             return None
         notes = cast("list[object]", result.get("notes") or [])
         ctx.notes.extend(str(note) for note in notes)
+        self._restart(ctx)
         return result
+
+    def _restart(self, ctx: Context) -> None:
+        """Roll the restart deployments and wait for them."""
+        for deployment in self.restart:
+            ctx.env.kube.run("rollout", "restart", f"deployment/{deployment}")
+            ctx.env.kube.run("rollout", "status", f"deployment/{deployment}", "--timeout=300s", timeout=310)
+        ctx.notes.extend(f"restarted {deployment}" for deployment in self.restart)

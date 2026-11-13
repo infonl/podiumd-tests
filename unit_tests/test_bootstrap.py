@@ -508,6 +508,18 @@ def test_a_step_without_store_key_stores_nothing(env_factory, fake_runner, profi
     assert snippet_params(fake_runner.stdins[-1]) == {"action": "apply"}
 
 
+def test_restart_rolls_the_deployments_after_apply_and_remove(env_factory, fake_runner, profile_factory):
+    ctx = objecten_ctx(env_factory, fake_runner, profile_factory, {})
+    fake_runner.answers["exec -i deploy/objecten"] = snippet_answer({})
+    fake_runner.answers["rollout"] = (0, "")
+    step = SnippetStep("x", ("objecten",), "token_auth", None, restart=("worker",))
+    step.apply(ctx)
+    step.remove(ctx)
+    rollouts = [" ".join(call) for call in fake_runner.calls if "rollout" in call]
+    once = ["restart deployment/worker", "status deployment/worker --timeout=300s"]
+    assert [r.split("rollout ")[1] for r in rollouts] == [*once, *once]
+
+
 def test_openformulieren_params_prefer_the_internal_open_zaak_url(env_factory, fake_runner, profile_factory):
     settings = {"openzaak_internal_url": "http://openzaak.podiumd.svc.cluster.local:8000"}
     env = cluster_env(env_factory, fake_runner, profile_factory, settings=settings)

@@ -863,6 +863,9 @@ STEPS: tuple[Step, ...] = (
         },
         record=True,
         wiring=True,
+        # Open Inwoner's Celery workers load the pages' apphook URLs (cases, ...) only at start; without a restart
+        # their mails fail with NoReverseMatch "'cases' is not a registered namespace".
+        restart=("openinwoner-worker", "openinwoner-low-latency-worker"),
     ),
     OI_BEGELEIDER,
     # Wiring W4: Open Inwoner shows zaken through an API group (TA seed-oi-bedrading.sh).
