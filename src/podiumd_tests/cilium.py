@@ -15,6 +15,7 @@ from datetime import UTC
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from podiumd_tests.background import running
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import KubeError
@@ -89,12 +90,8 @@ def recorded_drops(kube: Kube, path: Path) -> Generator[None]:
                     out.flush()
 
         threads = [threading.Thread(target=copy, args=(monitor,), daemon=True) for monitor in monitors]
-        for thread in threads:
-            thread.start()
-        try:
+        with running(threads, lambda: _stop_monitors(kube, pods, monitors, threads)):
             yield
-        finally:
-            _stop_monitors(kube, pods, monitors, threads)
 
 
 def _drop_records(monitor: Monitor) -> Generator[str]:
