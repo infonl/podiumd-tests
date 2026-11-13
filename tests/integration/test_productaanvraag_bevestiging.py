@@ -340,7 +340,7 @@ def test_zaak_from_the_inbox_productaanvragen_gets_no_ontvangstbevestiging(
     adres = own_address(registry)
     clean_up_inbox_entries(zac, urls["zac"], registry, kenmerk)
     make_submission_contact(openklant, registry, kenmerk, adres)
-    # As Open Formulieren sends it: ZAC 5.9.1 answers 500 to a zaak from an inbox productaanvraag without bijlagen.
+    # As Open Formulieren sends it; without bijlagen ZAC 5.9.1 answers 500 (zac-36).
     make_productaanvraag(objecten, registry, productaanvraag_objecttype, kenmerk, kenmerk, bijlagen=[])
     entry = inbox_productaanvraag(zac, urls["zac"], kenmerk)
     body = zaak_body(zac_parameters, omschrijving=kenmerk, communicatiekanaal=E_FORMULIER)

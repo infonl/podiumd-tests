@@ -110,6 +110,39 @@ def test_unhandled_productaanvraag_becomes_a_zaak_from_the_inbox(
     assert inbox_productaanvragen(zac, urls["zac"], kenmerk) == []
 
 
+# A failed start leaves its zaak in Open Zaak; its run-tagged omschrijving lets sweep remove it.
+@pytest.mark.xfail(
+    strict=True,
+    reason="[zac-36] ZAC 5.9.1 answers 500 to a zaak started from an inbox productaanvraag without bijlagen "
+    "(pairBijlagenWithZaak takes no null); not yet reported upstream",
+)
+@pytest.mark.source(PRODUCTAANVRAAG_SOURCE, "The Productaanvraag-Dimpact schema makes bijlagen optional.")
+@pytest.mark.scenario("""
+    Given a productaanvraag without bijlagen, of a type no zaaktype in ZAC handles, in ZAC's Inbox productaanvragen
+    When the behandelaar starts a zaak from it through E-formulier
+    Then ZAC starts the zaak
+    And the inbox no longer lists the productaanvraag
+""")
+def test_productaanvraag_without_bijlagen_becomes_a_zaak_from_the_inbox(
+    zac: requests.Session,
+    urls: dict[str, str],
+    objecten: ApiClient,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    productaanvraag_objecttype: str,
+    bpmn_parameters: JsonObject,
+) -> None:
+    """A zaak starts from an inbox productaanvraag that has no bijlagen field."""
+    kenmerk = registry.tagged("inbox-zonder-bijlagen")
+    clean_up_inbox_entries(zac, urls["zac"], registry, kenmerk)
+    make_productaanvraag(objecten, registry, productaanvraag_objecttype, kenmerk, kenmerk)
+    entry = inbox_productaanvraag(zac, urls["zac"], kenmerk)
+    body = zaak_body(bpmn_parameters, omschrijving=kenmerk, communicatiekanaal=E_FORMULIER)
+    zaak = start_zaak(zac, urls["zac"], {**body, "inboxProductaanvraag": entry})
+    clean_up_zaak(zac, urls["zac"], openzaak, registry, zaak, with_documents=False)
+    assert inbox_productaanvragen(zac, urls["zac"], kenmerk) == []
+
+
 @pytest.mark.source(
     "podiumd-tests",
     "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, "
