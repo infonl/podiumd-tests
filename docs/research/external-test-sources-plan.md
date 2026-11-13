@@ -46,9 +46,8 @@ Probable defect hits of the gaps (xfail ids from podiumd-known-issues):
   reuses one bestandsnaam.
 - `open-notificaties-1` and `-2` (500 for an unreachable callback, and when an abonnement is deleted during a
   delivery): the Open Notificaties perf scenario.
-- Not registered yet: Open Zaak #2577 (stale `ETag`, a conditional GET answers 304 for a changed resource after
-  deleting a rol or resultaat or closing a hoofdzaak; fixed in 1.31.1). The ETag cases of 1b would likely
-  reproduce it on 1.29.3; register as `open-zaak-5` only after reproducing.
+- Open Zaak #2577 (stale `ETag`, a conditional GET answers 304 for a changed resource after deleting a rol or
+  resultaat or closing a hoofdzaak; fixed in 1.31.1) is reproduced and registered as `open-zaak-11`.
 - `issues_openzaak.md` (2019, Open Zaak 1.0) lists four behaviours the planned tests recheck: ZaakInformatieObject
   with an invalid URL answers 500 (zrc-003d), besluit on a zaak gives `zaaktype-mismatch` (brc-007), a
   Zaaktype-Informatieobjecttype does not appear in `Zaaktype.informatieobjecttypen` (2b historiemodel),
