@@ -773,6 +773,19 @@ def test_deliver_notificatie_posts_it_in_the_zac_pod_this_many_times(env_factory
     assert json.loads(argv[-1]) == {"actie": "create"}
 
 
+def test_forget_zaak_at_cleanup_delivers_its_destroy_notificatie(env_factory, monkeypatch):
+    delivered = []
+    monkeypatch.setattr(zac, "deliver_notificatie", lambda _env, message, times: delivered.append((message, times)))
+    env = env_factory()
+    registry = ResourceRegistry("run1")
+    zac.forget_zaak_at_cleanup(env, registry, {"uuid": "z1", "identificatie": "ZAAK-1"})
+    assert delivered == []
+    registry.cleanup()
+    message, times = delivered[0]
+    url = f"{env.profile.urls['openzaak']}/zaken/api/v1/zaken/z1"
+    assert (message["resource"], message["resourceUrl"], message["actie"], times) == ("zaak", url, "destroy", 1)
+
+
 def test_taak_listed_searches_by_zaak_identificatie_and_matches_the_id(fake_http):
     sent = fake_http({"PUT /rest/zoeken/list": (200, {"resultaten": [{"id": "t1"}]})})
     taak = {"id": "t1", "zaakIdentificatie": "ZAAK-1"}

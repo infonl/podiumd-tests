@@ -460,6 +460,16 @@ def clean_up_zaak(  # noqa: PLR0913  # the zaak, its two APIs and the cleanup
     end_process_at_cleanup(http, zac_url, registry, zaak)
 
 
+def forget_zaak_at_cleanup(env: Environment, registry: ResourceRegistry, zaak: JsonObject) -> None:
+    """Deliver ZAC, at cleanup, Open Zaak's destroy notificatie of the zaak: ZAC drops its case, signals and index.
+
+    For a zaak the suite's client may not delete; the snippet that deletes its zaaktype deletes it from Open Zaak.
+    """
+    url = f"{env.profile.urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}"
+    destroyed = notificatie("zaken", "zaak", url, "destroy")
+    registry.add(f"zaak {zaak['identificatie']} in ZAC", lambda: deliver_notificatie(env, destroyed, 1))
+
+
 def afsluiten(
     http: requests.Session, zac_url: str, zaak: JsonObject, resultaattype: str | None = None
 ) -> requests.Response:
