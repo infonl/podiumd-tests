@@ -26,6 +26,10 @@ EREBOS = "999990019"
 KIERKEGAARD = "999990020"
 # Lukas Klamer, a person of the BRP test set that only the ZAC e-mail test gives an Open Klant partij.
 KLAMER = "999991723"
+# Persons of the BRP test set with one edge case each.
+BRP_OVERLEDEN = "999999655"
+BRP_EMIGRATIE = "999991024"
+BRP_GEHEIMHOUDING = "999990792"
 # The api-proxy of every estate the suite tests routes KvK to KvK's test API; its test set has
 # Test BV Donald, with this hoofdvestiging address.
 KVK_TEST_NUMMER = "68750110"

@@ -5,8 +5,6 @@ Ported from TA smoke 06 and 113, and regression 12 and 100.
 
 from __future__ import annotations
 
-import json
-
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
@@ -27,6 +25,7 @@ from podiumd_tests.json_data import section
 from podiumd_tests.kcc import KENNIS_URL
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.kcc import kiss_betrokkene
+from podiumd_tests.kcc import kiss_brp_personen
 from podiumd_tests.kcc import kiss_contactmomentdetails
 from podiumd_tests.kcc import kiss_contactmomenten
 from podiumd_tests.kcc import kiss_klant
@@ -312,18 +311,9 @@ def test_kiss_reports_the_bronnen_of_a_contactmoment(
     Then KISS finds exactly that person, by name
 """)
 def test_person_unknown_to_kiss_is_found_in_the_brp(kiss: requests.Session, urls: dict[str, str]) -> None:
-    """KISS finds a person by BSN through its Haal Centraal BRP proxy.
-
-    KISS rewrites the request body and keeps its Content-Length, so the JSON must be compact, as
-    KISS's own frontend sends it.
-    """
+    """KISS finds a person by BSN through its Haal Centraal BRP proxy."""
     query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": [EREBOS], "fields": ["naam"]}
-    found = kiss.post(
-        f"{urls['kiss']}/api/haalcentraal/brp/personen",
-        data=json.dumps(query, separators=(",", ":")),
-        headers={"Content-Type": "application/json"},
-    )
-    personen = entries(expect_status(found, HTTPStatus.OK).json()["personen"])
+    personen = kiss_brp_personen(kiss, urls["kiss"], query)
     assert [section(p, "naam").get("voornamen") for p in personen] == ["Erebos"]
 
 

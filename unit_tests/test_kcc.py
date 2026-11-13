@@ -26,6 +26,7 @@ from podiumd_tests.kcc import kcc_login
 from podiumd_tests.kcc import kennisartikel_data
 from podiumd_tests.kcc import kiss_actor
 from podiumd_tests.kcc import kiss_betrokkene
+from podiumd_tests.kcc import kiss_brp_personen
 from podiumd_tests.kcc import kiss_contactmomentdetails
 from podiumd_tests.kcc import kiss_contactmomenten
 from podiumd_tests.kcc import kiss_contactverzoek
@@ -69,6 +70,13 @@ def test_kcc_login_uses_the_kcc_test_user(monkeypatch, page_env):
 def test_kiss_register_picks_the_default_open_klant_2_systeem(fake_http):
     fake_http({"/api/environment/registers": (200, REGISTERS)})
     assert kiss_register(requests.Session(), KISS) == {"systemIdentifier": "ok-1"}
+
+
+def test_kiss_brp_personen_sends_compact_json(fake_http):
+    sent = fake_http({"POST /api/haalcentraal/brp/personen": (200, {"personen": [{"burgerservicenummer": "1"}]})})
+    query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": ["1"]}
+    assert kiss_brp_personen(requests.Session(), KISS, query) == [{"burgerservicenummer": "1"}]
+    assert sent[0].body == '{"type":"RaadpleegMetBurgerservicenummer","burgerservicenummer":["1"]}'
 
 
 def test_kiss_register_skips_without_an_open_klant_2_systeem(fake_http):

@@ -13,6 +13,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.basisregistraties import BRP_EMIGRATIE
+from podiumd_tests.basisregistraties import BRP_GEHEIMHOUDING
+from podiumd_tests.basisregistraties import BRP_OVERLEDEN
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import KLAMER
 from podiumd_tests.basisregistraties import KVK_RECHTSVORMEN
@@ -99,11 +102,11 @@ def test_person_lookup(zac: requests.Session, urls: dict[str, str]) -> None:
 @pytest.mark.parametrize(
     ("bsn", "indicaties"),
     [
-        pytest.param("999999655", {"OVERLEDEN", "OPSCHORTING_BIJHOUDING"}, id="overleden"),
-        pytest.param("999991024", {"EMIGRATIE", "OPSCHORTING_BIJHOUDING"}, id="emigratie"),
+        pytest.param(BRP_OVERLEDEN, {"OVERLEDEN", "OPSCHORTING_BIJHOUDING"}, id="overleden"),
+        pytest.param(BRP_EMIGRATIE, {"EMIGRATIE", "OPSCHORTING_BIJHOUDING"}, id="emigratie"),
         pytest.param("999993586", {"MINISTERIELE_REGELING", "OPSCHORTING_BIJHOUDING"}, id="ministeriele-regeling"),
         pytest.param("999996277", {"NIET_INGEZETENE"}, id="niet-ingezetene"),
-        pytest.param("999990792", {"GEHEIMHOUDING_OP_PERSOONSGEGEVENS"}, id="geheimhouding"),
+        pytest.param(BRP_GEHEIMHOUDING, {"GEHEIMHOUDING_OP_PERSOONSGEGEVENS"}, id="geheimhouding"),
         pytest.param("999993355", {"IN_ONDERZOEK"}, id="in-onderzoek"),
         pytest.param("999990822", {"ONDER_CURATELE"}, id="curatele"),
     ],

@@ -92,6 +92,18 @@ def post_kiss_klantcontact(kiss: requests.Session, kiss_url: str, body: JsonObje
     return kiss.post(kiss_url + KISS_POST_KLANTCONTACTEN, json=body, headers=kiss_register(kiss, kiss_url))
 
 
+def kiss_brp_personen(kiss: requests.Session, kiss_url: str, query: JsonObject) -> list[JsonObject]:
+    """Return the personen of a Haal Centraal query through KISS's BRP proxy.
+
+    KISS rewrites the body and keeps its Content-Length, so the JSON is compact, as KISS's frontend sends it.
+    """
+    body = json.dumps(query, separators=(",", ":"))
+    found = kiss.post(
+        f"{kiss_url}/api/haalcentraal/brp/personen", data=body, headers={"Content-Type": "application/json"}
+    )
+    return entries(expect_status(found, HTTPStatus.OK).json()["personen"])
+
+
 def kiss_klantcontact(
     kiss: requests.Session, kiss_url: str, openklant: ApiClient, registry: ResourceRegistry, body: JsonObject
 ) -> JsonObject:

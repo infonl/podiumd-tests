@@ -6,13 +6,14 @@ page. The api-proxy itself is tested in tests/component/basisregistraties.
 
 from __future__ import annotations
 
-import json
-
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.basisregistraties import BRP_EMIGRATIE
+from podiumd_tests.basisregistraties import BRP_GEHEIMHOUDING
+from podiumd_tests.basisregistraties import BRP_OVERLEDEN
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import KIERKEGAARD
 from podiumd_tests.basisregistraties import KVK_FOUTMELDINGEN
@@ -24,6 +25,8 @@ from podiumd_tests.basisregistraties import kvk_foutcodes
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
+from podiumd_tests.kcc import kiss_brp_personen
 from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
@@ -119,17 +122,71 @@ def test_person_search(
     expected: str | None,
     count: int,
 ) -> None:
-    """KISS's BRP search finds the number of test-set persons, the expected one among them.
-
-    KISS rewrites the body and keeps its Content-Length, so the JSON is compact, as KISS's frontend sends it.
-    """
-    body = json.dumps({**query, "fields": ["burgerservicenummer"]}, separators=(",", ":"))
-    found = kiss_session(KCC).post(
-        f"{urls['kiss']}/api/haalcentraal/brp/personen", data=body, headers={"Content-Type": "application/json"}
-    )
-    bsns = [str(p.get("burgerservicenummer")) for p in entries(expect_status(found, HTTPStatus.OK).json()["personen"])]
+    """KISS's BRP search finds the number of test-set persons, the expected one among them."""
+    found = kiss_brp_personen(kiss_session(KCC), urls["kiss"], {**query, "fields": ["burgerservicenummer"]})
+    bsns = [str(p.get("burgerservicenummer")) for p in found]
     assert len(bsns) == count, bsns
     assert expected is None or expected in bsns
+
+
+# The fields KISS's frontend asks for a person by BSN (src/services/brp/service.ts).
+KISS_PERSOON_FIELDS = [
+    "burgerservicenummer",
+    "geboorte.datum",
+    "geslacht",
+    "adressering.adresregel1",
+    "adressering.adresregel2",
+    "adressering.adresregel3",
+    "adressering.land.omschrijving",
+    "naam.voornamen",
+    "naam.voorvoegsel",
+    "naam.geslachtsnaam",
+    "geboorte.land",
+    "geboorte.plaats",
+]
+
+
+@pytest.mark.parametrize(
+    ("bsn", "geheim", "land"),
+    [
+        pytest.param(EREBOS, False, None, id="ingezetene"),
+        pytest.param(BRP_GEHEIMHOUDING, True, None, id="geheimhouding"),
+        pytest.param(BRP_OVERLEDEN, False, None, id="overleden"),
+        pytest.param(BRP_EMIGRATIE, False, "Verenigde Arabische Emiraten", id="emigratie"),
+    ],
+)
+@pytest.mark.source(
+    "upstream klantinteractie-servicesysteem/KISS-frontend src/features/persoon/persoon-details/BrpGegevens.vue",
+    "KISS warns that a person has geheimhouding of persoonsgegevens, and shows the BRP's adresregels.",
+)
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to KISS
+    And a person of the BRP test set: an inwoner, or one with geheimhouding, overleden or emigrated
+    When the medewerker opens the person found by BSN
+    Then KISS gets the person's naam and first adresregel
+    And gets the geheimhouding indication, for its warning, only for the person with geheimhouding
+    And gets the land only for the address abroad
+""")
+def test_person_details_carry_geheimhouding_and_address(
+    kiss_session: Callable[[KeycloakUser], requests.Session],
+    urls: dict[str, str],
+    bsn: str,
+    geheim: bool,  # noqa: FBT001  # a parameter of the test
+    land: str | None,
+) -> None:
+    """KISS's BSN query, with its own fields, gives naam, adresregel1, land and geheimhoudingPersoonsgegevens.
+
+    KISS does not ask for geheimhoudingPersoonsgegevens; the BRP adds it when it is true.
+    """
+    query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": [bsn], "fields": KISS_PERSOON_FIELDS}
+    personen = kiss_brp_personen(kiss_session(KCC), urls["kiss"], query)
+    assert [p.get("burgerservicenummer") for p in personen] == [bsn]
+    persoon = personen[0]
+    adressering = section(persoon, "adressering")
+    assert section(persoon, "naam").get("geslachtsnaam")
+    assert adressering.get("adresregel1")
+    assert bool(persoon.get("geheimhoudingPersoonsgegevens")) is geheim
+    assert section(adressering, "land").get("omschrijving") == land
 
 
 # A KvK test-set address with several vestigingen of another company (90004051).
