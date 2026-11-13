@@ -10,11 +10,13 @@ from urllib3 import HTTPResponse
 
 from podiumd_tests.security import conforming_password
 from podiumd_tests.security import days_valid
+from podiumd_tests.security import has_api_version
 from podiumd_tests.security import insecure_session_cookies
 from podiumd_tests.security import is_foreign_origin_allowed
 from podiumd_tests.security import missing_security_headers
 from podiumd_tests.security import policy_breaking_passwords
 from podiumd_tests.security import realm_policy_gaps
+from podiumd_tests.security import tls_below_ncsc
 
 PODIUMD_REALM = {
     "bruteForceProtected": True,
@@ -170,3 +172,31 @@ def test_each_breaking_password_breaks_only_its_rule():
 
 def test_a_policy_without_counted_rules_has_nothing_to_break():
     assert policy_breaking_passwords("notUsername(undefined) and passwordHistory(5)") == {}
+
+
+@pytest.mark.parametrize(
+    ("value", "valid"),
+    [("1.5.1", True), ("0.6.0", True), ("2.0.0-rc.1+build.5", True), ("v1.5.1", False), ("1.5", False), ("", False)],
+)
+def test_has_api_version(response_factory, value, valid):
+    response = response_factory()
+    if value:
+        response.headers["api-version"] = value
+    assert has_api_version(response) is valid
+
+
+def test_tls_below_ncsc_lists_old_versions_and_each_weak_tls12_suite():
+    weak = ["AES256-SHA", "ECDHE-ARIA128-GCM-SHA256"]
+    offered = []
+
+    def agreed(version, ciphers):
+        offered.append(ciphers)
+        if version is not ssl.TLSVersion.TLSv1_2:
+            return "AES128-SHA" if version is ssl.TLSVersion.TLSv1_1 else None
+        excluded = set(re.findall(r"!([\w-]+)", ciphers))
+        return next((name for name in weak if name not in excluded), None)
+
+    assert tls_below_ncsc(agreed) == ["TLSv1.1", "TLSv1.2 AES256-SHA", "TLSv1.2 ECDHE-ARIA128-GCM-SHA256"]
+    assert offered[0] == "ALL:COMPLEMENTOFALL:@SECLEVEL=0"
+    assert "!ECDHE-RSA-AES128-GCM-SHA256" in offered[2]
+    assert offered[-1].endswith("!AES256-SHA:!ECDHE-ARIA128-GCM-SHA256:@SECLEVEL=0")

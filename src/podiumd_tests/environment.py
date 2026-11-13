@@ -27,11 +27,14 @@ from podiumd_tests.kube import cluster_service
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.process import Runner
 from podiumd_tests.process import run_process
+from podiumd_tests.sessions import agreed_cipher
 from podiumd_tests.sessions import announced_body_status
 from podiumd_tests.sessions import make_session
 from podiumd_tests.sessions import peer_certificate
 
 if TYPE_CHECKING:
+    import ssl
+
     from collections.abc import Generator
     from collections.abc import Sequence
 
@@ -116,6 +119,10 @@ class Environment:
     def peer_certificate(self, url: str) -> dict[str, object]:
         """Return the verified certificate the host of an https profile URL presents."""
         return peer_certificate(url, self.ingress_ip(), self.ca_file)
+
+    def agreed_cipher(self, url: str, version: ssl.TLSVersion, ciphers: str) -> str | None:
+        """Return the cipher suite the host of an https profile URL agrees to (sessions.agreed_cipher)."""
+        return agreed_cipher(url, version, ciphers, self.ingress_ip(), self.ca_file)
 
     def announced_body_status(self, url: str, size: int) -> int | None:
         """Return the status of a POST to a profile URL that announces size bytes (sessions.announced_body_status)."""

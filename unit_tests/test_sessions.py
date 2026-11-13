@@ -1,6 +1,9 @@
 """Unit tests for HTTP sessions in direct and host-header mode."""
 
+import ssl
+
 from contextlib import contextmanager
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from typing import cast
 
@@ -103,3 +106,51 @@ def test_announced_body_status_reads_the_status_or_none(monkeypatch, reply, stat
     assert fake.sent.startswith(b"POST /rest/x HTTP/1.1\r\nHost: zac.test\r\nContent-Length: 1000000000\r\n")
     head, body = fake.sent.split(b"\r\n\r\n")
     assert (head.endswith(b"application/octet-stream"), body) == (True, b"x" * 1024)
+
+
+def _reason_error(reason):
+    error = ssl.SSLError(1, reason)
+    error.reason = reason
+    return error
+
+
+def _fake_tls(monkeypatch, outcome):
+    """Make sessions._tls yield a socket that agreed to the outcome cipher, or raise the outcome; the contexts used."""
+    contexts = []
+
+    @contextmanager
+    def tls(_url, _ip, _ca, context):
+        contexts.append(context)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        yield SimpleNamespace(cipher=lambda: outcome)
+
+    monkeypatch.setattr(sessions, "_tls", tls)
+    return contexts
+
+
+@pytest.mark.parametrize(
+    ("outcome", "cipher"),
+    [
+        (("ECDHE-RSA-AES128-GCM-SHA256", "TLSv1.2", 128), "ECDHE-RSA-AES128-GCM-SHA256"),
+        (_reason_error("TLSV1_ALERT_PROTOCOL_VERSION"), None),
+        (ConnectionResetError(), None),
+    ],
+)
+def test_agreed_cipher_reads_the_cipher_or_none(monkeypatch, outcome, cipher):
+    contexts = _fake_tls(monkeypatch, outcome)
+    assert sessions.agreed_cipher("https://zac.test/", ssl.TLSVersion.TLSv1_1, "ALL:@SECLEVEL=0") == cipher
+    assert contexts[0].maximum_version is ssl.TLSVersion.TLSv1_1
+
+
+def test_agreed_cipher_is_none_when_the_cipher_string_leaves_none():
+    assert sessions.agreed_cipher("https://zac.test/", ssl.TLSVersion.TLSv1_2, "!ALL") is None
+
+
+@pytest.mark.parametrize(
+    "error", [_reason_error("NO_PROTOCOLS_AVAILABLE"), ssl.SSLCertVerificationError(1, "certificate verify failed")]
+)
+def test_agreed_cipher_raises_what_is_no_refusal(monkeypatch, error):
+    _fake_tls(monkeypatch, error)
+    with pytest.raises(type(error)):
+        sessions.agreed_cipher("https://zac.test/", ssl.TLSVersion.TLSv1, "ALL")

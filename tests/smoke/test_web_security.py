@@ -1,10 +1,11 @@
-"""Security baseline of every public host: headers, session cookies, CORS and the TLS certificate.
+"""Security baseline of every public host: headers, session cookies, CORS, TLS, and the APIs' API-Version header.
 
 Neither estate's edge adds security headers, so each app must send its own.
 """
 
 from __future__ import annotations
 
+import functools
 import time
 
 from typing import TYPE_CHECKING
@@ -15,11 +16,14 @@ from podiumd_tests.components import HOSTED
 from podiumd_tests.pytest_plugin import public_url
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import describe
+from podiumd_tests.responses import url_host
 from podiumd_tests.security import MIN_CERT_DAYS
 from podiumd_tests.security import days_valid
+from podiumd_tests.security import has_api_version
 from podiumd_tests.security import insecure_session_cookies
 from podiumd_tests.security import is_foreign_origin_allowed
 from podiumd_tests.security import missing_security_headers
+from podiumd_tests.security import tls_below_ncsc
 from podiumd_tests.workloads import is_chart_older_than
 
 if TYPE_CHECKING:
@@ -41,6 +45,17 @@ pytestmark = [
 NOT_PUBLIC = ("mailpit", "api-proxy", "frankgateway")
 PUBLIC = sorted(set(HOSTED) - set(NOT_PUBLIC))
 FOREIGN_ORIGIN = "https://ptest-foreign.example.invalid"
+# Base paths of the ZGW and Common Ground APIs per component.
+APIS = {
+    "openzaak": ("zaken/api/v1", "catalogi/api/v1", "documenten/api/v1", "besluiten/api/v1", "autorisaties/api/v1"),
+    "openklant": ("klantinteracties/api/v1", "contactgegevens/api/v1"),
+    "objecten": ("api/v2",),
+    "objecttypen": ("api/v2",),
+    "opennotificaties": ("api/v1",),
+    "referentielijsten": ("api/v1",),
+    "openvtb": ("taken/api/v1", "verzoeken/api/v1", "berichten/api/v1"),
+}
+ADR_VALIDATOR = "external commonground/don/adr-validator"
 # Apps that send none or part of the headers themselves; xfail without strict, as an edge may add them.
 HEADER_GAPS = {
     "pabc": "[pabc-1] PABC sends no HSTS, nosniff or frame protection",
@@ -111,6 +126,14 @@ def test_foreign_origin_gets_no_cors_access(
         assert not is_foreign_origin_allowed(response, FOREIGN_ORIGIN), describe(response)
 
 
+def https_url(podiumd_env: Environment, urls: dict[str, str], component: str) -> str:
+    """Return the component's public https URL; skips when the profile serves it otherwise."""
+    url = public_url(podiumd_env, urls, component)
+    if not url.startswith("https://"):
+        pytest.skip(f"{component} is not served over https in this profile")
+    return url
+
+
 @pytest.mark.parametrize("component", [requiring(c, c) for c in PUBLIC])
 @pytest.mark.scenario("""
     When the TLS certificate of each public host is read
@@ -118,8 +141,34 @@ def test_foreign_origin_gets_no_cors_access(
 """)
 def test_certificate_is_valid_long_enough(podiumd_env: Environment, urls: dict[str, str], component: str) -> None:
     """The host's certificate is valid for it and for at least MIN_CERT_DAYS more days."""
-    url = public_url(podiumd_env, urls, component)
-    if not url.startswith("https://"):
-        pytest.skip(f"{component} is not served over https in this profile")
-    days = days_valid(podiumd_env.peer_certificate(url), time.time())
+    days = days_valid(podiumd_env.peer_certificate(https_url(podiumd_env, urls, component)), time.time())
     assert days >= MIN_CERT_DAYS, f"{component}'s certificate expires in {days:.0f} days"
+
+
+@pytest.mark.parametrize("component", [requiring(c, c) for c in PUBLIC])
+@pytest.mark.source(f"{ADR_VALIDATOR} security-tls", "TLS versions and cipher suites per NCSC's TLS guidelines 2.1.")
+@pytest.mark.scenario("""
+    When a client offers each public host TLS 1.0, TLS 1.1
+    And TLS 1.2 with only cipher suites NCSC rates below sufficient
+    Then the host refuses each of them
+""")
+def test_tls_meets_ncsc_guidelines(podiumd_env: Environment, urls: dict[str, str], component: str) -> None:
+    """The host refuses TLS 1.0 and 1.1, and every TLS 1.2 cipher suite NCSC rates neither good nor sufficient."""
+    url = https_url(podiumd_env, urls, component)
+    weak = tls_below_ncsc(functools.partial(podiumd_env.agreed_cipher, url))
+    assert not weak, f"{url_host(url)} agrees to {weak}"
+
+
+@pytest.mark.parametrize(
+    ("component", "base"),
+    [requiring(c, c, base, test_id=f"{c}-{base}") for c, bases in APIS.items() for base in bases],
+)
+@pytest.mark.source(f"{ADR_VALIDATOR} core API-57", "Return the full version number in a response header.")
+@pytest.mark.scenario("""
+    When the root of each ZGW and Common Ground API is opened
+    Then it sends its full version, without prefix, in the API-Version header
+""")
+def test_api_sends_its_version(http: requests.Session, urls: dict[str, str], component: str, base: str) -> None:
+    """The API root sends an unprefixed SemVer API-Version header."""
+    response = http.get(f"{urls[component]}/{base}/")
+    assert has_api_version(response), f"{describe(response)}: API-Version {response.headers.get('API-Version')!r}"

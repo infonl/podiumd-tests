@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import socket
 import ssl
+import warnings
 
 from contextlib import contextmanager
 from http.cookiejar import DefaultCookiePolicy
@@ -142,11 +143,13 @@ def make_session(
 
 
 @contextmanager
-def _tls(url: str, ingress_ip: str | None, ca_file: str | None) -> Generator[ssl.SSLSocket]:
+def _tls(
+    url: str, ingress_ip: str | None, ca_file: str | None, context: ssl.SSLContext | None = None
+) -> Generator[ssl.SSLSocket]:
     """Yield a TLS connection to the host of an https URL, verified for that host; through ingress_ip if given."""
     parts = urlsplit(url)
     host = parts.hostname or ""
-    context = ssl.create_default_context(cafile=ca_file)
+    context = context or ssl.create_default_context(cafile=ca_file)
     with (
         socket.create_connection((ingress_ip or host, parts.port or 443), DEFAULT_TIMEOUT) as connection,
         context.wrap_socket(connection, server_hostname=host) as tls,
@@ -158,6 +161,37 @@ def peer_certificate(url: str, ingress_ip: str | None = None, ca_file: str | Non
     """Return the certificate the host of an https URL presents, verified for that host; through ingress_ip if given."""
     with _tls(url, ingress_ip, ca_file) as tls:
         return cast("dict[str, object]", tls.getpeercert())
+
+
+def agreed_cipher(
+    url: str, version: ssl.TLSVersion, ciphers: str, ingress_ip: str | None = None, ca_file: str | None = None
+) -> str | None:
+    """Return the cipher suite the host of an https URL agrees to with only this TLS version and these ciphers.
+
+    None when the host refuses them, or when the cipher string leaves none; raises when this OpenSSL cannot offer
+    the version (NO_PROTOCOLS_AVAILABLE) or the certificate does not verify.
+    """
+    context = ssl.create_default_context(cafile=ca_file)
+    # Python deprecates TLS 1.0 and 1.1; offering them is what the caller probes.
+    with warnings.catch_warnings(action="ignore", category=DeprecationWarning):
+        context.minimum_version = version
+        context.maximum_version = version
+    try:
+        context.set_ciphers(ciphers)
+    except ssl.SSLError:
+        return None
+    try:
+        with _tls(url, ingress_ip, ca_file, context) as tls:
+            cipher = tls.cipher()
+    except ssl.SSLCertVerificationError:
+        raise
+    except ssl.SSLError as error:
+        if getattr(error, "reason", None) == "NO_PROTOCOLS_AVAILABLE":
+            raise
+        return None
+    except ConnectionResetError:
+        return None
+    return cipher[0] if cipher else None
 
 
 def announced_body_status(
