@@ -29,6 +29,9 @@ NRC_STORE_KEY = "ptest_bootstrap_nrc_secret"
 # Open Formulieren test form that registers zaken on it (TA poc-klacht-test).
 TEST_ZAAKTYPE = "ptest-bootstrap-klacht"
 TEST_IOT = "ptest-bootstrap-bijlage"
+# Fixed uuids the environment owner configures OMC with: uuid5(NAMESPACE_URL,
+# "https://github.com/infonl/podiumd-tests/{informatieobjecttype|objecttype}/<name>").
+TEST_IOT_UUID = "320da3a6-d87d-5854-88ad-e8c534bc7e8b"
 TEST_BESLUITTYPE = "ptest-bootstrap-besluit"
 # ZAC stores a mail it sends as a document of the zaaktype's informatieobjecttype with exactly this omschrijving.
 EMAIL_IOT = "e-mail"

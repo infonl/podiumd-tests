@@ -615,6 +615,7 @@ STEPS: tuple[Step, ...] = (
             "rsin": names.TEST_CATALOGUS_RSIN,
             "identificatie": names.TEST_ZAAKTYPE,
             "iot_omschrijving": names.TEST_IOT,
+            "iot_uuid": names.TEST_IOT_UUID,
             "besluittype": names.TEST_BESLUITTYPE,
         },
     ),

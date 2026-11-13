@@ -5,8 +5,9 @@ and belanghebbende roltypen, eigenschap "kenteken", a published besluittype, and
 resultaattype whose selectielijst klasse comes from Open Zaak's own Selectielijst API (left out,
 with a note, when that API cannot be reached).
 Actions: status, apply (recreates; adds missing statustypen in place, keeping the zaaktype's uuid and zaken), remove
-(also the zaken of the zaaktype and the documents of its type).
-Params: action, domein, rsin, identificatie, iot_omschrijving, besluittype; optional statustypen (default
+(also the zaken of the zaaktype, the documents of its type and the besluiten of its besluittype).
+Params: action, domein, rsin, identificatie, iot_omschrijving, besluittype; optional iot_uuid, the
+informatieobjecttype's fixed uuid (another uuid makes the step missing); optional statustypen (default
 STATUSTYPEN, the last is the eindstatus); optional versions, a list of
 [begin, end] dates (ISO, end may be null): one published version each, whose statustypen end in " v<n>";
 optional archief: one resultaattype per afleidingswijze of ARCHIEF, named after it, eigenschap "peildatum"
@@ -32,6 +33,7 @@ def run(params):
     import datetime as dt
 
     from django.db import transaction
+    from openzaak.components.besluiten.models import Besluit
     from openzaak.components.catalogi.models import BesluitType
     from openzaak.components.catalogi.models import Catalogus
     from openzaak.components.catalogi.models import InformatieObjectType
@@ -50,11 +52,15 @@ def run(params):
         for number, (begin, end) in enumerate(params.get("versions") or [], start=1)
     ] or [(today, None, "")]
     statustypen = _statustypen_per_version(params, zaaktypen, versions)
-    complete = catalogus and statustypen is not None and iots.exists() and besluittypen.exists()
+    iot = iots.filter(uuid=params["iot_uuid"]) if params.get("iot_uuid") else iots
+    complete = catalogus and statustypen is not None and iot.exists() and besluittypen.exists()
     if params["action"] == "status":
         return {"present": bool(complete and _as_wanted(params, statustypen))}
     if params["action"] == "apply" and complete and _added_in_place(params, statustypen):
         return {"present": True}
+    # Besluiten protect their zaak and besluittype; Open Zaak forbids deleting them as a queryset.
+    for besluit in Besluit.objects.filter(_besluittype__in=besluittypen):
+        besluit.delete()
     # zaaktype is a "foreign key or URL" field; _zaaktype is its local foreign key.
     Zaak.objects.filter(_zaaktype__in=zaaktypen).delete()
     # Documents protect their informatieobjecttype; one per canonical deletes all its versions.
@@ -79,6 +85,7 @@ def _create(params, catalogus, versions):
     from openzaak.components.catalogi.models import InformatieObjectType
 
     iot = InformatieObjectType.objects.create(
+        **({"uuid": params["iot_uuid"]} if params.get("iot_uuid") else {}),
         catalogus=catalogus,
         omschrijving=params["iot_omschrijving"],
         informatieobjectcategorie="podiumd-tests",
