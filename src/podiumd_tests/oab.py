@@ -91,9 +91,10 @@ def forget_zaken(env: Environment, urls: list[str]) -> None:
     run_snippet(env.kube, env.deployment_for("openarchiefbeheer"), "oab_zaken", {"action": "forget", "urls": urls})
 
 
-def set_archive_config(env: Environment, fields: dict[str, object]) -> dict[str, object]:
-    """Set fields of OAB's global ArchiveConfig; their old values, to set back."""
-    old = run_snippet(env.kube, env.deployment_for("openarchiefbeheer"), "oab_archive_config", {"fields": fields})
+def set_config(env: Environment, model: str, fields: dict[str, object]) -> dict[str, object]:
+    """Set fields of OAB's global ArchiveConfig or EmailConfig; their old values, to set back."""
+    params: dict[str, object] = {"model": model, "fields": fields}
+    old = run_snippet(env.kube, env.deployment_for("openarchiefbeheer"), "oab_config", params)
     return cast("dict[str, object]", old)
 
 

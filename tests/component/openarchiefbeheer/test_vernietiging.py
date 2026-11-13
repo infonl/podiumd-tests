@@ -1,4 +1,5 @@
-"""Open Archiefbeheer: the destruction of a vernietigingslijst of the test's own zaak, and the short procedure.
+"""Open Archiefbeheer: the destruction of a vernietigingslijst of the test's own zaak, also one ZAC closed, and
+the short procedure.
 
 Ported from TA regression 170 and 171. The destruction and the short procedure change OAB's global ArchiveConfig, so
 these tests are destructive (tier chaos) and run on one worker.
@@ -9,28 +10,44 @@ from __future__ import annotations
 import io
 import zipfile
 
+from datetime import date
+from datetime import timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.auth.keycloak_admin import user_email
+from podiumd_tests.bootstrap.bpmn import SELECT
+from podiumd_tests.bootstrap.bpmn import SIGN
+from podiumd_tests.bootstrap.bpmn import SUMMARY
+from podiumd_tests.bootstrap.bpmn import complete_intake
+from podiumd_tests.bootstrap.names import PREFIX
 from podiumd_tests.bootstrap.names import PRODUCTAANVRAAG_OBJECTTYPE
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.bootstrap.names import TEST_ZAAKTYPE
+from podiumd_tests.bootstrap.steps import ADMIN
+from podiumd_tests.mailpit import received
+from podiumd_tests.oab import cache_zaken
 from podiumd_tests.oab import list_status
 from podiumd_tests.oab import new_list
 from podiumd_tests.oab import queue
 from podiumd_tests.oab import ready_to_delete
 from podiumd_tests.oab import review
 from podiumd_tests.oab import run_destruction
-from podiumd_tests.oab import set_archive_config
+from podiumd_tests.oab import set_config
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import make_productaanvraag
 from podiumd_tests.seed.objecten import objecttype_url
+from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.openzaak import today
+from podiumd_tests.zac import heropenen
+from podiumd_tests.zac_documents import uploaded_document
+from podiumd_tests.zac_taken import complete_task
+from podiumd_tests.zac_taken import open_task
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -82,18 +99,18 @@ def test_destruction_waits_and_can_be_aborted(
     assert list_status(oab, api, lijst) == "new"
 
 
-@pytest.fixture(name="archive_config")
-def fixture_archive_config(podiumd_env: Environment) -> Iterator[Callable[..., None]]:
-    """set(**fields): change OAB's global ArchiveConfig for this test; the old values come back after it."""
-    old: dict[str, object] = {}
+@pytest.fixture(name="oab_config")
+def fixture_oab_config(podiumd_env: Environment) -> Iterator[Callable[..., None]]:
+    """set(model, **fields): change OAB's global ArchiveConfig or EmailConfig for this test; the old values come back."""
+    old: dict[str, dict[str, object]] = {}
 
-    def set_config(**fields: object) -> None:
-        for field, value in set_archive_config(podiumd_env, fields).items():
-            old.setdefault(field, value)
+    def change(model: str, **fields: object) -> None:
+        for field, value in set_config(podiumd_env, model, fields).items():
+            old.setdefault(model, {}).setdefault(field, value)
 
-    yield set_config
-    if old:
-        set_archive_config(podiumd_env, old)
+    yield change
+    for model, fields in old.items():
+        set_config(podiumd_env, model, fields)
 
 
 # The destruction never completes on Open Zaak 1.29.3.
@@ -169,10 +186,10 @@ def test_destruction_deletes_the_zaak_and_leaves_a_report(
     zaak: JsonObject,
     parts: ZaaktypeParts,
     registry: ResourceRegistry,
-    archive_config: Callable[..., None],
+    oab_config: Callable[..., None],
 ) -> None:
     """The destruction deletes the zaak in Open Zaak; the report keeps its metadata (TA reg-170)."""
-    archive_config(**report_config(parts))
+    oab_config("ArchiveConfig", **report_config(parts))
     report = destroy(podiumd_env, oab, api, openzaak, parts, registry, ready_to_delete(oab, api, zaak, registry))
     openzaak.request("GET", str(zaak["url"]), HTTPStatus.NOT_FOUND)
     assert str(zaak["identificatie"]) in report
@@ -232,10 +249,10 @@ def test_short_procedure_skips_the_archivist(
     api: str,
     zaak: JsonObject,
     registry: ResourceRegistry,
-    archive_config: Callable[..., None],
+    oab_config: Callable[..., None],
 ) -> None:
     """For a zaaktype with the short procedure, the reviewer's acceptance makes the list ready to delete (TA reg-171)."""
-    archive_config(zaaktypes_short_process=[TEST_ZAAKTYPE])
+    oab_config("ArchiveConfig", zaaktypes_short_process=[TEST_ZAAKTYPE])
     lijst = new_list(oab, api, zaak, registry)
     review(oab, api, "reviewer", lijst, decision="accepted")
     assert list_status(oab, api, lijst) == "ready_to_delete"
@@ -288,10 +305,10 @@ def test_short_procedure_list_cannot_go_to_the_archivist(
     api: str,
     zaak: JsonObject,
     registry: ResourceRegistry,
-    archive_config: Callable[..., None],
+    oab_config: Callable[..., None],
 ) -> None:
     """For a zaaktype with the short procedure, the archivist cannot review the accepted list."""
-    archive_config(zaaktypes_short_process=[TEST_ZAAKTYPE])
+    oab_config("ArchiveConfig", zaaktypes_short_process=[TEST_ZAAKTYPE])
     lijst = new_list(oab, api, zaak, registry)
     review(oab, api, "reviewer", lijst, decision="accepted")
     body = {"destructionList": lijst, "listFeedback": "podiumd-tests", "decision": "accepted"}
@@ -323,12 +340,168 @@ def test_short_procedure_destruction_leaves_a_report(
     zaak: JsonObject,
     parts: ZaaktypeParts,
     registry: ResourceRegistry,
-    archive_config: Callable[..., None],
+    oab_config: Callable[..., None],
 ) -> None:
     """After a short-procedure destruction the report lists the zaak with its metadata columns."""
-    archive_config(zaaktypes_short_process=[TEST_ZAAKTYPE], **report_config(parts))
+    oab_config("ArchiveConfig", zaaktypes_short_process=[TEST_ZAAKTYPE], **report_config(parts))
     lijst = new_list(oab, api, zaak, registry)
     review(oab, api, "reviewer", lijst, decision="accepted")
     report = destroy(podiumd_env, oab, api, openzaak, parts, registry, lijst)
     assert str(zaak["identificatie"]) in report
     assert [c for c in REPORT_COLUMNS if c not in report] == []
+
+
+ZAC_TEAM = pytest.mark.source(
+    "podiumd-tests",
+    "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, integraties-intake):"
+    " a zaak handled in ZAC is destroyed with its documents through a vernietigingslijst, which mails its users; a"
+    " reopened zaak is not.",
+)
+# A zaak of the BPMN test zaaktype through ZAC.
+ZAC_ZAAK = pytest.mark.requires("zac", "pabc", "keycloak")
+
+
+@pytest.fixture(name="zac_zaak_on_list")
+def fixture_zac_zaak_on_list(
+    podiumd_env: Environment,
+    zac: requests.Session,
+    urls: dict[str, str],
+    bpmn_zaak: JsonObject,
+    zac_group: str,
+    openzaak: ApiClient,
+    oab: Callable[[str], requests.Session],
+    api: str,
+    registry: ResourceRegistry,
+) -> tuple[JsonObject, str, str]:
+    """A BPMN zaak with a PDF, closed by its process in ZAC, due for destruction and on an accepted list.
+
+    Returns the zaak in Open Zaak, its document's URL there and the list's uuid.
+    """
+    zac_url, uuid = urls["zac"], str(bpmn_zaak["uuid"])
+    document = uploaded_document(zac, zac_url, bpmn_zaak, registry, suffix="pdf")
+    complete_intake(zac, zac_url, bpmn_zaak, (zac_group, ADMIN.username))
+    for task, field in ((SELECT, "ZAAK_Documenten_Ondertekenen_Selectie"), (SIGN, "ZAAK_Documenten_Te_Ondertekenen")):
+        complete_task(zac, zac_url, open_task(zac, zac_url, uuid, task), {field: []})
+    complete_task(zac, zac_url, open_task(zac, zac_url, uuid, SUMMARY), {})
+    url = openzaak.url(f"{ZAKEN}/zaken/{uuid}")
+    yesterday = (date.today() - timedelta(days=1)).isoformat()  # noqa: DTZ011  # Open Zaak's local date
+    zaak = openzaak.request("PATCH", url, HTTPStatus.OK, json={"archiefactiedatum": yesterday}).json()
+    if zaak.get("archiefnominatie") != "vernietigen":
+        pytest.skip(
+            f"zaak {zaak.get('identificatie')} has archiefnominatie {zaak.get('archiefnominatie')!r}, not vernietigen"
+        )
+    registry.add(f"OAB cache of {url}", lambda: cache_zaken(podiumd_env, [url], cached=False))
+    cache_zaken(podiumd_env, [url], cached=True)
+    lijst = ready_to_delete(oab, api, zaak, registry)
+    return zaak, openzaak.url(f"{DOCUMENTEN}/enkelvoudiginformatieobjecten/{document['uuid']}"), lijst
+
+
+def _is_in_open_zaak(openzaak: ApiClient, url: str) -> bool:
+    return openzaak.request("GET", url, HTTPStatus.OK, HTTPStatus.NOT_FOUND).status_code == HTTPStatus.OK
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="[open-archiefbeheer-8] Open Archiefbeheer 2.0.0 keeps the documents of a destroyed zaak (resource_type "
+    "enkelvoudiginformatieobject vs enkelvoudiginformatieobjecten); fixed on main (open-archiefbeheer#1124), not released",
+)
+@pytest.mark.destructive
+@ZAC_ZAAK
+@ZAC_TEAM
+@pytest.mark.scenario("""
+    Given a zaak with a document that ZAC closed, due for destruction
+    And a vernietigingslijst of the zaak that the reviewer and the archivist accepted
+    When the destruction runs
+    Then the document is gone from Open Zaak
+    And the zaak is gone from Open Zaak
+""")
+def test_destruction_deletes_a_zac_zaak_and_its_document(
+    podiumd_env: Environment,
+    oab: Callable[[str], requests.Session],
+    api: str,
+    openzaak: ApiClient,
+    zac_zaak_on_list: tuple[JsonObject, str, str],
+) -> None:
+    """OAB deletes the documents of the zaak, then the zaak."""
+    zaak, document, lijst = zac_zaak_on_list
+    run_destruction(podiumd_env, oab, api, lijst)
+    assert (_is_in_open_zaak(openzaak, document), _is_in_open_zaak(openzaak, str(zaak["url"]))) == (False, False)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason="[open-archiefbeheer-9] Open Archiefbeheer 2.0.0 destroys a zaak reopened after its list was accepted: it "
+    "checks only its cached archiefactiedatum; not yet reported upstream",
+)
+@pytest.mark.destructive
+@ZAC_ZAAK
+@ZAC_TEAM
+@pytest.mark.scenario("""
+    Given a zaak with a document that ZAC closed, due for destruction
+    And a vernietigingslijst of the zaak that the reviewer and the archivist accepted
+    When the behandelaar reopens the zaak in ZAC
+    And the destruction runs
+    Then the zaak and its document are still in Open Zaak
+""")
+def test_zaak_reopened_in_zac_is_not_destroyed(
+    podiumd_env: Environment,
+    zac: requests.Session,
+    urls: dict[str, str],
+    bpmn_zaak: JsonObject,
+    oab: Callable[[str], requests.Session],
+    api: str,
+    openzaak: ApiClient,
+    zac_zaak_on_list: tuple[JsonObject, str, str],
+) -> None:
+    """Reopening clears the zaak's archiefnominatie and archiefactiedatum in Open Zaak, so the zaak is not due."""
+    zaak, document, lijst = zac_zaak_on_list
+    expect_status(heropenen(zac, urls["zac"], bpmn_zaak), HTTPStatus.OK)
+    run_destruction(podiumd_env, oab, api, lijst)
+    assert (_is_in_open_zaak(openzaak, document), _is_in_open_zaak(openzaak, str(zaak["url"]))) == (True, True)
+
+
+# OAB's mails per event: (EmailConfig field prefix, the user who gets it).
+MAILS = (("review_required", "reviewer"), ("changes_requested", "recordmanager"))
+MAIL_TIMEOUT = 60
+
+
+@pytest.mark.destructive
+@pytest.mark.requires("mailpit")
+@ZAC_TEAM
+@pytest.mark.scenario("""
+    Given Open Archiefbeheer has mails for a list to review and for changes requested
+    When the record manager makes a vernietigingslijst ready to review
+    Then the reviewer gets the mail naming the list
+    When the reviewer rejects the list
+    Then the record manager gets the mail naming the list
+""")
+def test_reviewer_and_record_manager_get_their_mails(  # OAB, its config and Mailpit
+    oab: Callable[[str], requests.Session],
+    api: str,
+    zaak: JsonObject,
+    registry: ResourceRegistry,
+    oab_config: Callable[..., None],
+    mailpit: ApiClient,
+) -> None:
+    """OAB mails the reviewer when a list is ready to review, and its author when the reviewer requests changes."""
+    subjects = {event: registry.tagged(f"oab-{event}") for event, _ in MAILS}
+    fields = {
+        f"{part}_{event}{suffix}": value
+        for event, subject in subjects.items()
+        for part, suffix, value in (
+            ("subject", "", subject),
+            ("body", "_text", "{{ list_name }}"),
+            ("body", "_html", "<p>{{ list_name }}</p>"),
+        )
+    }
+    oab_config("EmailConfig", **fields)
+    lijst = new_list(oab, api, zaak, registry)
+    naam = str(
+        expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/"), HTTPStatus.OK).json()["name"]
+    )
+    proposals = [{"zaakUrl": zaak["url"], "feedback": "bewaren"}]
+    for event, role in MAILS:
+        if event == "changes_requested":
+            review(oab, api, "reviewer", lijst, decision="rejected", zakenReviews=proposals)
+        to = user_email(f"{PREFIX}-{role}")
+        assert naam in received(mailpit, registry, timeout=MAIL_TIMEOUT, to=to, subject=subjects[event])

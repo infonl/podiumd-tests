@@ -47,12 +47,12 @@ def test_snippet_helpers_pass_their_parameters(page_env):
     env.snippet_result = {"old": True}
     oab.cache_zaken(env, ["z1"], cached=True)
     oab.cache_zaken(env, ["z1"], cached=False)
-    assert oab.set_archive_config(env, {"x": 1}) == {"old": True}
+    assert oab.set_config(env, "EmailConfig", {"x": 1}) == {"old": True}
     oab.destroy_now(env, "u-1")
     assert [(n, p) for _, n, p in env.snippets] == [
         ("oab_zaken", {"action": "cache", "urls": ["z1"]}),
         ("oab_zaken", {"action": "uncache", "urls": ["z1"]}),
-        ("oab_archive_config", {"fields": {"x": 1}}),
+        ("oab_config", {"model": "EmailConfig", "fields": {"x": 1}}),
         ("oab_destroy_now", {"uuid": "u-1"}),
     ]
 

@@ -11,7 +11,7 @@ versions is not counted.
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 210 | 37 | 9 |
-| component | 869 | 557 | 70 |
+| component | 872 | 560 | 72 |
 | integration | 156 | 99 | 13 |
 | perf | 54 | 3 | 0 |
 | **full tier** | **1201** | **669** |  |
@@ -39,7 +39,7 @@ Unit tests (`unit_tests/`, functions): 806. Perf endpoints (`perf/runs.py`): 22.
 | component | kiss | 53 | 24 |
 | component | objecten | 17 | 7 |
 | component | omc | 3 | 2 |
-| component | openarchiefbeheer | 33 | 27 |
+| component | openarchiefbeheer | 36 | 30 |
 | component | openbeheer | 5 | 5 |
 | component | openformulieren | 15 | 10 |
 | component | openinwoner | 34 | 24 |
@@ -96,7 +96,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | ZAC | 19 |
 | draaiboek | 91 |
 | external | 111 |
-| podiumd-tests | 507 |
+| podiumd-tests | 510 |
 | upstream | 174 |
 
 ## Expected failures per known issue
@@ -121,6 +121,8 @@ Ids of infonl/podiumd-known-issues.
 | open-archiefbeheer-4 | 2 |
 | open-archiefbeheer-5 | 1 |
 | open-archiefbeheer-6 | 1 |
+| open-archiefbeheer-8 | 1 |
+| open-archiefbeheer-9 | 1 |
 | open-beheer-1 | 1 |
 | open-beheer-2 | 1 |
 | open-formulieren-2 | 1 |
