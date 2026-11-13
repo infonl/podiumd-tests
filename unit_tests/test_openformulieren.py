@@ -3,6 +3,7 @@
 import json
 import re
 
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -254,3 +255,24 @@ def test_submission_summary_lists_label_and_value_in_order(fake_http):
     submission = {"url": f"{OF}/api/v2/submissions/s"}
     pairs = openformulieren.submission_summary(requests.Session(), submission, {})
     assert pairs == [("Kinderen", None), ("Naam", "Anna"), ("Naam", "Bram")]
+
+
+@pytest.mark.parametrize(("final", "refused"), [(f"{OF}/klacht/", False), (f"{OF}/auth/oidc/callback?error=x", True)])
+def test_log_in_starts_the_forms_login_method_and_fails_on_a_refused_callback(fake_http, monkeypatch, final, refused):
+    options = [{"identifier": "digid_oidc", "url": f"{OF}/auth/klacht/digid_oidc/start"}]
+    fake_http({"GET /api/v2/forms/klacht": (200, {"loginOptions": options})})
+    started = []
+
+    def form_login(_http, start_url, username, password):
+        started.append((start_url, username, password))
+        return SimpleNamespace(url=final, status_code=400)
+
+    monkeypatch.setattr(openformulieren, "form_login", form_login)
+    if refused:
+        with pytest.raises(AssertionError, match=r"login refused at .*/callback: HTTP 400"):
+            openformulieren.log_in(requests.Session(), OF, "klacht", "digid_oidc", ("u", "p"))
+    else:
+        openformulieren.log_in(requests.Session(), OF, "klacht", "digid_oidc", ("u", "p"))
+    assert started == [(f"{OF}/auth/klacht/digid_oidc/start?next={OF}/klacht/", "u", "p")]
+    with pytest.raises(AssertionError, match="form klacht has no login method eherkenning_oidc"):
+        openformulieren.login_url(requests.Session(), OF, "klacht", "eherkenning_oidc")

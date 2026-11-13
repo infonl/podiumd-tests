@@ -12,11 +12,11 @@ versions is not counted.
 | --- | --- | --- | --- |
 | smoke | 256 | 41 | 10 |
 | component | 926 | 569 | 72 |
-| integration | 172 | 114 | 14 |
+| integration | 177 | 116 | 14 |
 | perf | 54 | 3 | 0 |
-| **full tier** | **1317** | **697** |  |
+| **full tier** | **1322** | **699** |  |
 
-Unit tests (`unit_tests/`, functions): 832. Perf endpoints (`perf/runs.py`): 22.
+Unit tests (`unit_tests/`, functions): 833. Perf endpoints (`perf/runs.py`): 22.
 
 ## Per area
 
@@ -61,6 +61,7 @@ Unit tests (`unit_tests/`, functions): 832. Perf endpoints (`perf/runs.py`): 22.
 | integration | formulier_medeondertekening | 1 | 1 |
 | integration | formulier_opschonen | 1 | 1 |
 | integration | formulier_pauzeren | 2 | 2 |
+| integration | formulier_prefill | 5 | 2 |
 | integration | formulier_wijzigen | 1 | 1 |
 | integration | formulier_zaak | 2 | 2 |
 | integration | formulier_zaaktype_versie | 1 | 1 |
@@ -94,7 +95,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | EX | 19 |
 | MK | 47 |
 | PI | 57 |
-| TA | 271 |
+| TA | 276 |
 | ZAC | 19 |
 | draaiboek | 91 |
 | external | 177 |

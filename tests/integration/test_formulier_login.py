@@ -16,8 +16,8 @@ from podiumd_tests.bootstrap.steps import NAW_DATA
 from podiumd_tests.browser import browser_session
 from podiumd_tests.browser import keycloak_login
 from podiumd_tests.browser import leave_login_callback
-from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.openformulieren import login_url
 from podiumd_tests.openformulieren import registered_zaak
 from podiumd_tests.openformulieren import submit
 from podiumd_tests.seed.openzaak import ZAKEN
@@ -54,10 +54,7 @@ def submit_after_login(
 ) -> list[JsonObject]:
     """Log in on the test form with method (digid_oidc, eherkenning_oidc), submit it; the rollen of its zaak."""
     base = podiumd_env.profile.urls["openformulieren"]
-    form_url = f"{base}/{TEST_FORM}/"
-    form = browser_session(page, podiumd_env).get(f"{base}/api/v2/forms/{TEST_FORM}").json()
-    login = next(o for o in entries(form["loginOptions"]) if o.get("identifier") == method)
-    page.goto(f"{login['url']}?next={form_url}")
+    page.goto(login_url(browser_session(page, podiumd_env), base, TEST_FORM, method))
     keycloak_login(page, user.username, podiumd_env.credentials.get(user.store_key))
     leave_login_callback(page, base, "/callback")
     # The form's SDK in the page shares the session and overwrites it with its own requests,

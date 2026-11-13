@@ -6,6 +6,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
+from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.bootstrap.steps import OF_REDACTEUR
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
@@ -40,6 +41,24 @@ def form_and_headers(http: requests.Session, base_url: str, slug: str) -> tuple[
     # Every write echoes the CSRF token that API responses carry in this header.
     headers = {"X-CSRFToken": form_response.headers.get("X-CSRFToken", ""), "Referer": f"{base_url}/{slug}/"}
     return cast("JsonObject", form_response.json()), headers
+
+
+def login_url(http: requests.Session, base_url: str, slug: str, method: str) -> str:
+    """Return the URL that starts the form's login with method (digid_oidc, eherkenning_oidc) and returns to it."""
+    form, _ = form_and_headers(http, base_url, slug)
+    starts = {option.get("identifier"): option.get("url") for option in entries(form["loginOptions"])}
+    if method not in starts:
+        msg = f"form {slug} has no login method {method}"
+        raise AssertionError(msg)
+    return f"{starts[method]}?next={base_url}/{slug}/"
+
+
+def log_in(http: requests.Session, base_url: str, slug: str, method: str, user: tuple[str, str]) -> None:
+    """Log the session in on the form through Keycloak's login form (username, password), without a browser."""
+    response = form_login(http, login_url(http, base_url, slug, method), *user)
+    if "/callback" in response.url:
+        msg = f"login refused at {response.url.split('?')[0]}: HTTP {response.status_code}"
+        raise AssertionError(msg)
 
 
 def start_submission(http: requests.Session, base_url: str, slug: str) -> tuple[JsonObject, dict[str, str]]:
