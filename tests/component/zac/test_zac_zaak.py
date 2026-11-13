@@ -46,6 +46,7 @@ from podiumd_tests.zac_betrokkenen import betrokkene_roltype
 from podiumd_tests.zac_betrokkenen import betrokkenen
 from podiumd_tests.zac_betrokkenen import wijzig_initiator
 from podiumd_tests.zac_documents import convert_to_pdf
+from podiumd_tests.zac_documents import document_historie
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
 from podiumd_tests.zac_documents import zaak_documents
@@ -588,6 +589,7 @@ def test_sent_document_is_marked_verzonden(
     Given a definitief Word document, small or large, an Excel or a PowerPoint document, on a zaak in ZAC
     When the behandelaar converts the document to PDF
     Then the document's current version is a PDF/A-2b and PDF/UA with embedded fonts
+    And the document's historie shows the Office file name changed to the PDF file name
 """)
 def test_word_document_is_converted_to_pdf(
     zac: requests.Session,
@@ -606,3 +608,10 @@ def test_word_document_is_converted_to_pdf(
     content = expect_status(zac.get(f"{documents}/download"), HTTPStatus.OK).content
     assert content.startswith(b"%PDF")
     assert pdfa_problems(content) == []
+    renamed = [
+        (line.get("oudeWaarde"), line.get("nieuweWaarde"))
+        for line in document_historie(zac, urls["zac"], document)
+        if line.get("attribuutLabel") == "bestandsnaam"
+    ]
+    name = str(document["bestandsnaam"])
+    assert renamed == [(name, f"{name.rpartition('.')[0]}.pdf")]

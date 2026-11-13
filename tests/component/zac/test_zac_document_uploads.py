@@ -20,6 +20,7 @@ from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.zac_documents import FILES
+from podiumd_tests.zac_documents import convert_to_pdf
 from podiumd_tests.zac_documents import document_historie
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import documenttypen
@@ -170,12 +171,11 @@ def test_document_that_is_not_definitief_is_not_converted(
     Given a Word document in bewerking on a zaak in ZAC
     When the behandelaar adds a definitief version, converts it to PDF and ondertekent it
     Then the document's historie shows each step with its time, its user and its reason
-    And the conversion from the Word file name to the PDF file name
 """)
 def test_document_historie_shows_versie_conversion_and_ondertekening(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
 ) -> None:
-    """Open Zaak's audittrail of the document, as ZAC shows it: toelichting, door, datumTijd and bestandsnaam."""
+    """Open Zaak's audittrail of the document, as ZAC shows it: toelichting, door and datumTijd."""
     start = datetime.now(tz=UTC).replace(microsecond=0)
     zaak = zac_zaak()
     document = uploaded_document(zac, urls["zac"], zaak, registry, suffix="word", status="in_bewerking")
@@ -183,19 +183,12 @@ def test_document_historie_shows_versie_conversion_and_ondertekening(
     of_zaak = {"zaak": str(zaak["uuid"])}
     versie = {"status": "definitief", "toelichting": "podiumd-tests definitief"}
     expect_status(nieuwe_versie(zac, urls["zac"], zaak, document, versie), HTTPStatus.OK)
-    expect_status(zac.post(f"{url}/convert", params=of_zaak, timeout=60), HTTPStatus.NO_CONTENT, HTTPStatus.OK)
+    expect_status(convert_to_pdf(zac, urls["zac"], zaak, document), HTTPStatus.NO_CONTENT, HTTPStatus.OK)
     expect_status(zac.post(f"{url}/onderteken", params=of_zaak), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     historie = document_historie(zac, urls["zac"], document)
 
     reasons = {str(line.get("toelichting")) for line in historie}
     assert {"podiumd-tests definitief", "Geconverteerd naar PDF", "Door ondertekenen"} <= reasons, reasons
-    renamed = [
-        (line.get("oudeWaarde"), line.get("nieuweWaarde"))
-        for line in historie
-        if line.get("attribuutLabel") == "bestandsnaam"
-    ]
-    name = str(document["bestandsnaam"]).removesuffix(".docx")
-    assert (f"{name}.docx", f"{name}.pdf") in renamed
     end = datetime.now(tz=UTC)
     for line in historie:
         assert start <= datetime.fromisoformat(str(line["datumTijd"])) <= end, line
