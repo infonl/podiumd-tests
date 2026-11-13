@@ -6,7 +6,7 @@ This directory holds test-run results, one subdirectory per run.
 results/<YYYY-MM>/<YYYYMMDD-HHMMSS>_<env>_<tier>_<runid>/
   run.json      # environment, chart version, component versions, capabilities, suite commit, counts
   junit.xml     # every test with its outcome and message (JUnit XML)
-  summary.md    # counts, failures, known defects and skip reasons
+  summary.md    # counts, failures, known defects, skip reasons and the reports tests record
   report.html   # every test with outcome, duration, message and log (pytest-html); not committed
   perf/         # perf tier only
   cilium-drops.jsonl  # clusters with Cilium only: each packet a network policy denied during the run

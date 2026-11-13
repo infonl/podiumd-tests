@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from dataclasses import field
 from datetime import UTC
 from datetime import datetime
+from itertools import chain
 from typing import TYPE_CHECKING
 from typing import Protocol
 
@@ -128,6 +129,8 @@ class Details:
     skipped: list[Entry] = field(default_factory=list[Entry])
     # Pods and nodes that came, went or restarted during the run (workloads.disruptions).
     disruptions: list[str] = field(default_factory=list[str])
+    # (test id, Markdown) of each junit property "report", which a test records with record_property.
+    reports: list[tuple[str, str]] = field(default_factory=list[tuple[str, str]])
 
 
 @dataclass
@@ -185,6 +188,7 @@ def _count(case: ET.Element, counts: Counts, details: Details) -> None:
     elements = case.iter("property")
     properties = [(prop.get("name"), prop.get("value") or "") for prop in elements]
     found = [value for name, value in properties if name == "source"]
+    details.reports += [(test_id, value) for name, value in properties if name == "report"]
     failure = case.find("failure")
     problem = case.find("error") if failure is None else failure
     if problem is not None:
@@ -300,6 +304,8 @@ def _detail_lines(details: Details) -> list[str]:
     if details.disruptions:
         lines += ["", "## Pods replaced or restarted during the run", ""]
         lines += [f"- {disruption}" for disruption in details.disruptions]
+    reports = (["", f"## Report of `{test_id}`", "", report] for test_id, report in details.reports)
+    lines += chain.from_iterable(reports)
     if details.failures:
         lines += ["", "## Failed and errors", ""]
         lines += [f"- `{failure.test_id}`: {failure.message or 'no message'}" for failure in details.failures]

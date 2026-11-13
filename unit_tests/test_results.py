@@ -22,7 +22,8 @@ from podiumd_tests.results import write_run
 
 JUNIT = """<?xml version="1.0" encoding="utf-8"?>
 <testsuites><testsuite name="pytest">
-  <testcase classname="tests.smoke.test_up" name="test_ok"/>
+  <testcase classname="tests.smoke.test_up" name="test_ok">
+    <properties><property name="report" value="| a |&#10;| 1 |"/></properties></testcase>
   <testcase classname="tests.smoke.test_up" name="test_bad"><failure message="assert 500 == 200&#10;more"/></testcase>
   <testcase classname="tests.smoke.test_up" name="test_err"><error message="fixture failed"/></testcase>
   <testcase classname="tests.smoke.test_up" name="test_skip"><skipped type="pytest.skip" message="requires: oab"/></testcase>
@@ -49,6 +50,7 @@ def test_parse_junit_counts_every_outcome():
     assert [(e.test_id, e.message) for e in details.xpassed] == [("tests.smoke.test_up::test_fixed", "TICKET-2")]
     assert [e.message for e in details.xfailed + details.skipped] == ["TICKET-1", "requires: oab"]
     assert details.xfailed[0].sources == ["TA regression/1-x.spec.ts: why"]
+    assert details.reports == [("tests.smoke.test_up::test_ok", "| a |\n| 1 |")]
 
 
 def test_known_defects_lists_reports_whose_defect_did_not_show_first():
@@ -101,6 +103,7 @@ def test_write_run_redacts_secrets(tmp_path):
     assert "| no report id | **did not show in 1 of 2 tests** | 2 |" in summary
     assert "- requires: oab (1): `tests.smoke.test_up::test_skip`" in summary
     assert "## Pods replaced or restarted during the run\n\n- pod openzaak-0 restarted" in summary
+    assert "## Report of `tests.smoke.test_up::test_ok`\n\n| a |\n| 1 |\n" in summary
 
 
 def test_summary_table_puts_each_count_under_its_header():
