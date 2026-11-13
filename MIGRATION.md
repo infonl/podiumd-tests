@@ -292,3 +292,12 @@ them as out of scope with this reason.
 | CONT-046, CONT-047, CONT-050, CONT-051, CONT-052, CONT-053, CONT-054, CONT-055 | expected result "?", and the catalog lost which connection |
 | OF-066, OF-069 | the case does not say what to check |
 | OI-100 | no case: "beheer tests toevoegen" |
+
+## Draaiboek, waiting
+
+Draaiboek cases no test can show until an environment is set up for them; `python -m podiumd_tests.draaiboek` reports
+them as blocked with this reason, even when a ported TA spec cites them.
+
+| Cases | Reason |
+|---|---|
+| OI-042, OI-043, OI-044 | Open Inwoner's own notifications: no environment subscribes Open Inwoner to Open Notificaties (minikube, kees00, ExternalsPodiumD), so only OMC notifies; requested from podiumd-minikube and podiumd-infra (2026-11-13) |

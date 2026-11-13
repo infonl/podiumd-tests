@@ -40,6 +40,8 @@ CITED_SHEETS = {
 CITATION = re.compile(rf"\b({'|'.join(CITED_SHEETS)})[- ]r(\d+)\b")
 TEST_FILE = re.compile(r"\btest_\w+\.py\b")
 ROW = re.compile(r"^\| `([^`]+)` \|[^|]*\|[^|]*\| (\w+) \| (.*) \|$")
+# TA spec file name -> (decision, notes).
+Decisions = dict[str, tuple[str, str]]
 REASON_ROW = re.compile(r"^\| ([A-Z]+-\d+(?:, [A-Z]+-\d+)*) \| (.*) \|$")
 
 
@@ -61,10 +63,13 @@ def migration() -> dict[str, tuple[str, str]]:
     return {Path(match[1]).name: (match[2], match[3]) for match in rows if match}
 
 
-def out_of_scope() -> dict[str, str]:
-    """Case id -> why no test covers it, from MIGRATION.md's Draaiboek section."""
-    rows = (REASON_ROW.match(line) for line in _section("Draaiboek"))
-    return {case: match[2] for match in rows if match for case in match[1].split(", ")}
+def uncovered() -> dict[str, tuple[str, str]]:
+    """Case id -> (status, reason) of a case no test shows: MIGRATION.md's sections Draaiboek and Draaiboek, waiting."""
+    found: dict[str, tuple[str, str]] = {}
+    for section, state in (("Draaiboek", "out of scope"), ("Draaiboek, waiting", "blocked")):
+        for match in filter(None, (REASON_ROW.match(line) for line in _section(section))):
+            found.update(dict.fromkeys(match[1].split(", "), (state, match[2])))
+    return found
 
 
 def cited(tests: Path) -> dict[tuple[str, int], set[str]]:
@@ -126,25 +131,31 @@ def status(specs: set[str], decisions: dict[str, tuple[str, str]]) -> str:
     return "dropped" if kinds else ""
 
 
+def _state(case: Mapping[str, object], specs: set[str], decisions: Decisions, reason: str) -> str:
+    """Return the status of a case no test is marked with; a "blocked" reason outranks TA's citations."""
+    if reason == "blocked":
+        return reason
+    found = status(specs, decisions) or reason
+    if found:
+        return found
+    return "not covered" if case["klasse"] in {"A", "B"} else "out of scope"
+
+
 def report_row(
     case: Mapping[str, object],
     specs: set[str],
     decisions: dict[str, tuple[str, str]],
     own: set[str],
-    reason: str,
+    reason: tuple[str, str] = ("", ""),
 ) -> tuple[str, str]:
-    """Return the case's status and its report row; reason: why no test covers it, or ""."""
-    state = "covered" if own else status(specs, decisions)
-    if not state and reason:
-        state = "out of scope"
-    if not state:
-        state = "not covered" if case["klasse"] in {"A", "B"} else "out of scope"
+    """Return the case's status and its report row; reason: (status, why) from `uncovered`, or empty."""
+    state = "covered" if own else _state(case, specs, decisions, reason[0])
     kept = [decisions[spec] for spec in specs if spec in decisions]
     notes = " ".join(note for decision, note in kept if decision != "drop")
     names = set(TEST_FILE.findall(notes)) | {test.split("::")[1] for test in own}
     where = ", ".join(f"`{name}`" for name in sorted(names))
-    if not where and state == "out of scope":
-        where = reason
+    if state in {"blocked", "out of scope"} and reason[0] == state:
+        where = reason[1]
     description = str(case["sub"] or case["proces"])
     text = re.sub(r"\s+", " ", description)
     text = text.replace("|", "/").replace("<", "&lt;")[:110]
@@ -155,7 +166,7 @@ def main(ta: Path) -> None:
     """Write the report."""
     catalog = yaml.safe_load((ta / "test-catalog" / "cases.yaml").read_text(encoding="utf-8"))
     decisions = migration()
-    reasons = out_of_scope()
+    reasons = uncovered()
     citations = cited(ta / "tests")
     tests = marked(REPO_ROOT / "tests")
     rows: list[str] = []
@@ -165,7 +176,11 @@ def main(ta: Path) -> None:
             (case["sheet"], case["excel_rij"]), set()
         )
         state, row = report_row(
-            case, specs, decisions, tests.get(case["test_id"], set()), reasons.get(case["test_id"], "")
+            case,
+            specs,
+            decisions,
+            tests.get(case["test_id"], set()),
+            reasons.get(case["test_id"], ("", "")),
         )
         totals[case["klasse"]][state] += 1
         rows.append(row)
@@ -181,7 +196,8 @@ def main(ta: Path) -> None:
         "546 cases), `MIGRATION.md` and the tests' `@pytest.mark.tc` markers. Class A: automatable, B: with a "
         "mock, C: manual, N: placeholder. A case is covered when a test is marked with it, or when a TA spec "
         "that covered it (catalog mapping or a row the spec cites) was ported or merged. Why an A or B case "
-        "is out of scope: `MIGRATION.md`, section Draaiboek.\n\n"
+        "is out of scope: `MIGRATION.md`, section Draaiboek; what a blocked case waits for: its section "
+        "Draaiboek, waiting.\n\n"
         + "\n".join(summary)
         + "\n\n| Case | Class | Status | Draaiboek | podiumd-tests |\n|---|---|---|---|---|\n"
         + "\n".join(rows)

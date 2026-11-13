@@ -6,9 +6,9 @@ from podiumd_tests import draaiboek
 from podiumd_tests.draaiboek import cited
 from podiumd_tests.draaiboek import marked
 from podiumd_tests.draaiboek import migration
-from podiumd_tests.draaiboek import out_of_scope
 from podiumd_tests.draaiboek import report_row
 from podiumd_tests.draaiboek import status
+from podiumd_tests.draaiboek import uncovered
 
 DECISIONS = {"a.spec.ts": ("port", "x"), "b.spec.ts": ("todo", "y"), "c.spec.ts": ("drop", "z")}
 
@@ -48,20 +48,20 @@ def test_tc_markers_of_functions_and_modules_are_found(tmp_path):
     assert found["OF-004"] == {"tests/test_x.py::test_c"}
 
 
-def test_out_of_scope_reads_the_draaiboek_reasons():
-    reasons = out_of_scope()
-    assert reasons["OI-022"] == reasons["KI-021"] == "eSuite, outside PodiumD"
+def test_uncovered_reads_the_draaiboek_reasons():
+    reasons = uncovered()
+    assert reasons["OI-022"] == reasons["KI-021"] == ("out of scope", "eSuite, outside PodiumD")
     assert "ARCH-011" not in reasons
 
 
 def test_a_reason_makes_an_uncovered_case_out_of_scope_but_never_hides_a_test():
     case = {"test_id": "OF-066", "klasse": "A", "sub": "Verwijderen", "proces": ""}
     assert (
-        report_row(case, set(), DECISIONS, set(), "unclear")[1]
+        report_row(case, set(), DECISIONS, set(), ("out of scope", "unclear"))[1]
         == "| OF-066 | A | out of scope | Verwijderen | unclear |"
     )
-    assert report_row(case, set(), DECISIONS, set(), "")[0] == "not covered"
-    assert report_row(case, set(), DECISIONS, {"tests/test_x.py::test_a"}, "unclear")[0] == "covered"
+    assert report_row(case, set(), DECISIONS, set())[0] == "not covered"
+    assert report_row(case, set(), DECISIONS, {"tests/test_x.py::test_a"}, ("out of scope", "unclear"))[0] == "covered"
 
 
 def _ta_checkout(ta):
@@ -86,10 +86,24 @@ def test_main_writes_the_report_with_totals_per_class(tmp_path, monkeypatch, cap
     (repo / "tests").mkdir()
     monkeypatch.setattr(draaiboek, "REPO_ROOT", repo)
     monkeypatch.setattr(draaiboek, "migration", lambda: DECISIONS)
-    monkeypatch.setattr(draaiboek, "out_of_scope", dict)
+    monkeypatch.setattr(draaiboek, "uncovered", dict)
     draaiboek.main(ta)
     report = (repo / "docs" / "draaiboek-coverage.md").read_text(encoding="utf-8")
     assert "| A | 1 | 1 | 0 | 0 | 0 |" in report
     assert "| C | 0 | 0 | 0 | 0 | 1 |" in report
     assert "| ZAC-1 | A | blocked | Zaak / aanmaken |  |" in report
     assert capsys.readouterr().out.strip() == str(repo / "docs" / "draaiboek-coverage.md")
+
+
+def test_a_waiting_case_is_blocked_even_when_a_ported_spec_cites_it():
+    case = {"test_id": "OI-042", "klasse": "A", "sub": "document notificatie", "proces": ""}
+    specs = {"a.spec.ts"}
+    state, row = report_row(case, specs, DECISIONS, set(), ("blocked", "no subscription"))
+    assert (state, row.endswith("| no subscription |")) == ("blocked", True)
+    assert (
+        report_row(case, specs, DECISIONS, {"tests/test_x.py::test_a"}, ("blocked", "no subscription"))[0] == "covered"
+    )
+
+
+def test_uncovered_reads_the_waiting_cases_as_blocked():
+    assert uncovered()["OI-042"][0] == "blocked"
