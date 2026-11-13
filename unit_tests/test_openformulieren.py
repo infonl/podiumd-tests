@@ -96,6 +96,21 @@ def test_submit_waits_out_the_completion_throttle(fake_http, env, fake_runner, m
     assert [s.url for s in sent].count(f"{OF}/api/v2/submissions/s1/_complete") == 2
 
 
+def test_submission_action_waits_the_retry_after_of_a_429(response_factory, monkeypatch):
+    slept = []
+    monkeypatch.setattr(wait, "Clock", lambda: Clock(sleep=slept.append))
+    throttled = response_factory(status=429, json_body={"code": "throttled"})
+    throttled.headers["Retry-After"] = "17"
+    answers = iter([throttled, response_factory(status=400, json_body={})])
+    http = requests.Session()
+    monkeypatch.setattr(http, "post", lambda *_args, **_kwargs: next(answers))
+    submission = {"url": f"{OF}/api/v2/submissions/s1"}
+    response = openformulieren.submission_action(
+        http, submission, "_complete", openformulieren.COMPLETE, {}, timeout=60
+    )
+    assert (response.status_code, slept) == (400, [17.0])
+
+
 def test_failed_submission_names_the_submission(fake_http, env, fake_runner):
     snippet_answers(fake_runner, None)
     fake_http(answers({"status": "failed", "errorMessage": "zaaktype not found"}))

@@ -15,6 +15,7 @@ from podiumd_tests.bootstrap.steps import NAW
 from podiumd_tests.bootstrap.steps import NAW_DATA
 from podiumd_tests.bootstrap.steps import ZGW_REGISTRATION
 from podiumd_tests.json_data import section
+from podiumd_tests.openformulieren import COMPLETE
 from podiumd_tests.openformulieren import complete_submission
 from podiumd_tests.openformulieren import download_report
 from podiumd_tests.openformulieren import forget_submission
@@ -22,6 +23,7 @@ from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import registered_zaak
 from podiumd_tests.openformulieren import save_step
 from podiumd_tests.openformulieren import start_submission
+from podiumd_tests.openformulieren import submission_action
 from podiumd_tests.openformulieren import submission_summary
 from podiumd_tests.openformulieren import submit
 from podiumd_tests.responses import expect_status
@@ -154,7 +156,7 @@ def test_repeating_group_rows_are_added_edited_and_submitted(
     ]
     expect_status(save(*gewijzigd, {"naam": "C"}, {"naam": "D"}), HTTPStatus.BAD_REQUEST)
     expect_status(save(*gewijzigd, {"leeftijd": 1}), HTTPStatus.OK)
-    refused = http.post(f"{submission['url']}/_complete", json={"privacyPolicyAccepted": True}, headers=headers)
+    refused = submission_action(http, submission, "_complete", COMPLETE, headers, timeout=REGISTRATION_TIMEOUT)
     assert expect_status(refused, HTTPStatus.BAD_REQUEST).json()["invalidParams"][0]["name"] == (
         "steps.0.data.kinderen.2.naam"
     )

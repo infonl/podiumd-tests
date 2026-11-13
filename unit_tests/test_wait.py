@@ -31,6 +31,19 @@ def test_returns_the_first_truthy_value():
     assert clock.now == 2
 
 
+def test_a_callable_interval_is_asked_after_each_attempt():
+    clock = FakeClock()
+    values, pauses = iter([None, None, "ja"]), iter([5, 7])
+    result = wait_until(
+        lambda: next(values),
+        timeout=20,
+        interval=lambda: next(pauses),
+        description="x",
+        clock=Clock(clock, clock.sleep),
+    )
+    assert (result, clock.now) == ("ja", 12)
+
+
 def test_exceptions_count_as_not_yet_and_are_reported():
     clock = FakeClock()
 

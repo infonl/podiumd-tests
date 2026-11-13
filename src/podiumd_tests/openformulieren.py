@@ -86,7 +86,8 @@ def complete_submission(  # noqa: PLR0913  # one flow
 ) -> JsonObject:
     """Fill the submission's single step with data, complete it and return its final status (see submit)."""
     expect_status(save_step(http, submission, headers, data), HTTPStatus.CREATED, HTTPStatus.OK)
-    complete = _complete(http, str(submission["url"]), headers, timeout=timeout)
+    completed = submission_action(http, submission, "_complete", COMPLETE, headers, timeout=timeout)
+    complete = _json(completed, HTTPStatus.OK)
     status = _processed(http, str(complete["statusUrl"]), str(submission["id"]), timeout=timeout)
     if registers:
         wait_for_registration(env, str(submission["id"]), timeout=timeout)
@@ -115,16 +116,39 @@ def submission_summary(
     return [(str(field["name"]), field.get("value")) for field in fields]
 
 
-def _complete(http: requests.Session, submission_url: str, headers: dict[str, str], *, timeout: float) -> JsonObject:
-    """Complete the submission; waits out Open Formulieren's throttle (HTTP 429), which parallel test workers hit."""
+# The body of _complete, as Verzenden sends it.
+COMPLETE = {"privacyPolicyAccepted": True}
+# Seconds to wait after a 429 without Retry-After.
+THROTTLE_WAIT = 2.0
+
+
+def submission_action(  # noqa: PLR0913  # the action, its body and the session's headers
+    http: requests.Session,
+    submission: JsonObject,
+    action: str,
+    body: Mapping[str, object],
+    headers: dict[str, str],
+    *,
+    timeout: float,
+) -> requests.Response:
+    """POST the submission's _complete or _suspend; Open Formulieren's answer once it is not 429.
+
+    Open Formulieren throttles both per client address (OPEN_FORMS_API_SUBMIT_RATE_LIMIT 10/minute and
+    OPEN_FORMS_API_PAUSE_RATE_LIMIT 3/minute by default), which parallel test workers exceed; its 429 says in
+    Retry-After when to try again.
+    """
+    url = f"{submission['url']}/{action}"
+    retry_after = [THROTTLE_WAIT]
 
     def attempt() -> tuple[requests.Response] | None:
-        response = http.post(f"{submission_url}/_complete", json={"privacyPolicyAccepted": True}, headers=headers)
-        # In a tuple: a Response is falsy for any error status, which wait_until would retry.
-        return None if response.status_code == HTTPStatus.TOO_MANY_REQUESTS else (response,)
+        response = http.post(url, json=dict(body), headers=headers)
+        if response.status_code != HTTPStatus.TOO_MANY_REQUESTS:
+            # In a tuple: a Response is falsy for any error status, which wait_until would retry.
+            return (response,)
+        retry_after[0] = float(response.headers.get("Retry-After", THROTTLE_WAIT))
+        return None
 
-    response = wait_until(attempt, timeout=timeout, description=f"{submission_url}/_complete not throttled")[0]
-    return _json(response, HTTPStatus.OK)
+    return wait_until(attempt, timeout=timeout, interval=lambda: retry_after[0], description=f"{url} not throttled")[0]
 
 
 def wait_for_registration(env: Environment, submission: str, *, timeout: float) -> None:

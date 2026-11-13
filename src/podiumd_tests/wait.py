@@ -44,13 +44,14 @@ def wait_until[ResultT](
     probe: Callable[[], ResultT | None],
     *,
     timeout: float,
-    interval: float = 2.0,
+    interval: float | Callable[[], float] = 2.0,
     description: str,
     clock: Clock | None = None,
 ) -> ResultT:
     """Call probe until it returns a truthy value and return that value.
 
-    Exceptions from probe count as "not yet"; the last one is reported on timeout.
+    Exceptions from probe count as "not yet"; the last one is reported on timeout. A callable interval is asked
+    after each attempt, e.g. for a server's Retry-After.
     """
     clock = clock or Clock()
     deadline = clock.now() + timeout
@@ -61,7 +62,7 @@ def wait_until[ResultT](
         if clock.now() >= deadline:
             msg = f"timed out after {timeout:g}s waiting for {description}; last attempt {last}"
             raise WaitTimeoutError(msg)
-        clock.sleep(interval)
+        clock.sleep(interval() if callable(interval) else interval)
 
 
 def _attempt[ResultT](probe: Callable[[], ResultT | None]) -> tuple[ResultT | None, str]:

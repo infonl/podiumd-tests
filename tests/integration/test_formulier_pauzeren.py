@@ -25,6 +25,7 @@ from podiumd_tests.openformulieren import form_and_headers
 from podiumd_tests.openformulieren import registered_zaak
 from podiumd_tests.openformulieren import save_step
 from podiumd_tests.openformulieren import start_submission
+from podiumd_tests.openformulieren import submission_action
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import url_host
 
@@ -45,6 +46,9 @@ pytestmark = [
         "Checks that a created Open Formulieren submission has a resume URL, for completing it later.",
     ),
 ]
+
+# Open Formulieren allows 3 pauses a minute per client address by default.
+SUSPEND_TIMEOUT = 90
 
 
 @pytest.mark.tc("INT-009")
@@ -68,7 +72,7 @@ def test_paused_submission_mails_its_resume_link(
     data = {"klacht_omschrijving": registry.tagged("gepauzeerd")}
     expect_status(save_step(http, submission, headers, data), HTTPStatus.CREATED, HTTPStatus.OK)
     address = f"{registry.tagged('pauze')}@example.invalid"
-    suspend = http.post(f"{submission['url']}/_suspend", json={"email": address}, headers=headers)
+    suspend = submission_action(http, submission, "_suspend", {"email": address}, headers, timeout=SUSPEND_TIMEOUT)
     expect_status(suspend, HTTPStatus.CREATED)
     html = received(mailpit, registry, timeout=60, to=address)
     assert url_host(urls["openformulieren"]) in html, "no link to Open Formulieren in the mail"
@@ -108,7 +112,8 @@ def test_resume_link_continues_and_completes_the_submission(
         http.put(str(step["url"]), json={"data": {"klacht_omschrijving": omschrijving}}, headers=headers), 201, 200
     )
     address = f"{registry.tagged('hervat')}@example.invalid"
-    expect_status(http.post(f"{submission['url']}/_suspend", json={"email": address}, headers=headers), 201)
+    suspend = submission_action(http, submission, "_suspend", {"email": address}, headers, timeout=SUSPEND_TIMEOUT)
+    expect_status(suspend, HTTPStatus.CREATED)
     links = re.findall(r'href="([^"]+)"', received(mailpit, registry, timeout=60, to=address))
     resume = next(html.unescape(link) for link in links if str(submission["id"]) in link)
     resumed = podiumd_env.session()
