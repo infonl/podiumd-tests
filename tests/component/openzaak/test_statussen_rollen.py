@@ -6,20 +6,26 @@ a resultaat and the eindstatus is new (TA's seed had no resultaattype).
 
 from __future__ import annotations
 
+import secrets
+
 from datetime import date
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.json_data import section
+from podiumd_tests.responses import invalid_names
 from podiumd_tests.seed.openklant import random_bsn
 from podiumd_tests.seed.openklant import random_kvk_nummer
+from podiumd_tests.seed.openklant import random_vestigingsnummer
 from podiumd_tests.seed.openzaak import BSN_FILTER
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import close_zaak
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
 from podiumd_tests.seed.openzaak import make_zaak
+from podiumd_tests.seed.openzaak import rol_body
 
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
@@ -45,16 +51,21 @@ def urls(objects: list[JsonObject]) -> set[str]:
     Then the zaak has no status
     When it gets the first two statussen of its zaaktype
     Then the zaak's status is the second
-    And the zaak has two statussen
+    And the zaak has two statussen, of which only the second is marked as the last one set
+    And a search for the zaak's last status set finds only the second
 """)
 def test_statussen_in_order(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
-    """A new zaak has no status; after two statussen the zaak points at the second (TA reg-15)."""
+    """A new zaak has no status; after two statussen the zaak and indicatieLaatstGezetteStatus name the second."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
     assert not zaak["status"]
-    make_status(openzaak, zaak, str(parts.statustypen[0]["url"]), "Ingediend door podiumd-tests")
+    eerste = make_status(openzaak, zaak, str(parts.statustypen[0]["url"]), "Ingediend door podiumd-tests")
     tweede = make_status(openzaak, zaak, str(parts.statustypen[1]["url"]), "In behandeling genomen")
     assert openzaak.get(str(zaak["url"]))["status"] == tweede["url"]
-    assert len(openzaak.list(f"{ZAKEN}/statussen", {"zaak": str(zaak["url"])})) == 2
+    statussen = openzaak.list(f"{ZAKEN}/statussen", {"zaak": str(zaak["url"])})
+    laatst = {str(status["url"]): status["indicatieLaatstGezetteStatus"] for status in statussen}
+    assert laatst == {str(eerste["url"]): False, str(tweede["url"]): True}
+    filtered = {"zaak": str(zaak["url"]), "indicatieLaatstGezetteStatus": "true"}
+    assert urls(openzaak.list(f"{ZAKEN}/statussen", filtered)) == {str(tweede["url"])}
 
 
 @pytest.mark.source(
@@ -258,23 +269,29 @@ def test_rol_indicatie_machtiging(
     "external OneGround/ZGW-APIs-postman-tests ZGW features, ZRC zaak maken en wijzigen, ZRC rollen",
     "A rol can name a vestiging, a medewerker or an organisatorische eenheid, and the zaak is found by it.",
 )
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW features, ZRC 1.7 rol met medewerker",
+    "A medewerker's identificatie may be longer than the 24 characters of Zaken API 1.5, at least a GUID.",
+)
 @pytest.mark.parametrize(
-    ("betrokkene_type", "generiek", "filter_key", "key", "extra"),
+    ("betrokkene_type", "generiek", "filter_key", "key", "extra", "size"),
     [
-        ("vestiging", "initiator", "vestiging__vestigingsNummer", "vestigingsNummer", {"handelsnaam": ["ptest"]}),
-        ("medewerker", "behandelaar", "medewerker__identificatie", "identificatie", {"achternaam": "Test"}),
+        ("vestiging", "initiator", "vestiging__vestigingsNummer", "vestigingsNummer", {"handelsnaam": ["ptest"]}, 8),
+        ("medewerker", "behandelaar", "medewerker__identificatie", "identificatie", {"achternaam": "Test"}, 64),
         (
             "organisatorische_eenheid",
             "behandelaar",
             "organisatorischeEenheid__identificatie",
             "identificatie",
             {"naam": "ptest"},
+            24,
         ),
     ],
 )
 @pytest.mark.scenario("""
     Given a zaak in Open Zaak
     When a vestiging, a medewerker or an organisatorische eenheid is added to it as a rol
+    And the medewerker's identificatie is 64 characters long
     Then the zaak is found by that betrokkene's identificatie
 """)
 def test_rol_of_each_betrokkene_type_finds_the_zaak(  # parametrized rol kind
@@ -286,10 +303,48 @@ def test_rol_of_each_betrokkene_type_finds_the_zaak(  # parametrized rol kind
     filter_key: str,
     key: str,
     extra: dict[str, object],
+    size: int,
 ) -> None:
-    """A rol of this betrokkeneType stores its identificatie, and the zaken filter on it finds only the zaak."""
-    nummer = random_kvk_nummer()[:8] if betrokkene_type == "vestiging" else registry.tagged(betrokkene_type)[:24]
+    """A rol of this betrokkeneType stores its identificatie of size characters; the zaken filter finds only the zaak."""
+    unique = (
+        random_kvk_nummer()
+        if betrokkene_type == "vestiging"
+        else f"{registry.tagged(betrokkene_type)}-{secrets.token_hex(32)}"
+    )
+    nummer = unique[:size]
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
     make_rol(openzaak, registry, zaak, parts.roltypen[generiek], betrokkene_type, "", **{key: nummer, **extra})
     found = openzaak.list(f"{ZAKEN}/zaken", {f"rol__betrokkeneIdentificatie__{filter_key}": nummer})
     assert urls(found) == {str(zaak["url"])}
+
+
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW features, ZRC rollen",
+    "A rol's contactpersoonRol without naam is refused.",
+)
+@pytest.mark.parametrize(
+    "contactpersoon",
+    [
+        pytest.param({"emailadres": "cp@example.invalid", "naam": None}, id="naam-null"),
+        pytest.param({"emailadres": "cp@example.invalid"}, id="no-naam"),
+    ],
+)
+@pytest.mark.scenario("""
+    Given a zaak in Open Zaak
+    When a vestiging is added as initiator with a contactpersoon without a name
+    Then Open Zaak refuses the rol and names the contactpersoon's name
+    And with a name the rol is stored
+""")
+def test_contactpersoon_of_a_rol_needs_a_naam(
+    openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts, contactpersoon: dict[str, object]
+) -> None:
+    """POST of a rol whose contactpersoonRol has no naam answers 400 naming contactpersoonRol.naam."""
+    zaak = make_zaak(openzaak, registry, parts.zaaktype)
+    initiator = parts.roltypen["initiator"]
+    body = rol_body(
+        registry, zaak, initiator, "vestiging", vestigingsNummer=random_vestigingsnummer(), handelsnaam=["ptest"]
+    )
+    refused = openzaak.request("POST", f"{ZAKEN}/rollen", 400, json={**body, "contactpersoonRol": contactpersoon})
+    assert "contactpersoonRol.naam" in invalid_names(refused), refused.text
+    rol = openzaak.post(f"{ZAKEN}/rollen", {**body, "contactpersoonRol": {**contactpersoon, "naam": "ptest"}})
+    assert section(rol, "contactpersoonRol")["naam"] == "ptest"

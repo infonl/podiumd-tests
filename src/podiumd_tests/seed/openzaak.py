@@ -236,7 +236,20 @@ def make_rol(  # noqa: PLR0913, PLR0917  # the rol's fields
 
     machtiging: the indicatieMachtiging, gemachtigde or machtiginggever.
     """
-    body: dict[str, object] = {
+    body = rol_body(registry, zaak, roltype, betrokkene_type, machtiging, **identificatie)
+    return _create(openzaak, registry, f"{ZAKEN}/rollen", body)
+
+
+def rol_body(
+    registry: ResourceRegistry,
+    zaak: JsonObject,
+    roltype: str,
+    betrokkene_type: str = "natuurlijk_persoon",
+    machtiging: str = "",
+    **identificatie: object,
+) -> dict[str, object]:
+    """Return the body of a rol on a zaak whose roltoelichting carries the run tag (see make_rol)."""
+    return {
         "zaak": zaak["url"],
         "betrokkeneType": betrokkene_type,
         "roltype": roltype,
@@ -244,7 +257,6 @@ def make_rol(  # noqa: PLR0913, PLR0917  # the rol's fields
         "indicatieMachtiging": machtiging,
         "betrokkeneIdentificatie": identificatie,
     }
-    return _create(openzaak, registry, f"{ZAKEN}/rollen", body)
 
 
 def document_body(

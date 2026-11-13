@@ -18,6 +18,7 @@ from podiumd_tests.seed.openzaak import link_document
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_gebruiksrechten
 from podiumd_tests.seed.openzaak import make_zaak
+from podiumd_tests.seed.openzaak import rol_body
 from podiumd_tests.seed.openzaak import status_body
 from podiumd_tests.seed.openzaak import zaakeigenschap_body
 from podiumd_tests.seed.openzaak import zaakobject_body
@@ -127,13 +128,7 @@ def test_closed_zaak_changes_only_with_geforceerd_bijwerken(
         "add-rol": (
             "POST",
             f"{ZAKEN}/rollen",
-            {
-                "zaak": zaak["url"],
-                "betrokkeneType": "natuurlijk_persoon",
-                "roltype": closable.roltypen["initiator"],
-                "roltoelichting": registry.tagged("rol"),
-                "betrokkeneIdentificatie": {"inpBsn": "999990019"},
-            },
+            rol_body(registry, zaak, closable.roltypen["initiator"], inpBsn="999990019"),
         ),
         "add-status": ("POST", f"{ZAKEN}/statussen", status_body(zaak, str(closable.statustypen[-1]["url"]))),
         "patch-resultaat": ("PATCH", str(zaak["resultaat"]), {"toelichting": registry.tagged("resultaat")}),
