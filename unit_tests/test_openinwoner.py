@@ -7,12 +7,16 @@ import pytest
 from podiumd_tests import browser
 from podiumd_tests import openinwoner
 from podiumd_tests.auth.keycloak_admin import user_email
+from podiumd_tests.bootstrap.steps import OI_ZAAKTYPE_CONFIG
 from podiumd_tests.openinwoner import LOGINS
 from podiumd_tests.openinwoner import ask_anonymously
 from podiumd_tests.openinwoner import begeleider_login
+from podiumd_tests.openinwoner import configure_zaaktype
 from podiumd_tests.openinwoner import count_accounts
 from podiumd_tests.openinwoner import is_virus_scan_enabled
 from podiumd_tests.openinwoner import kvk_api_root
+from podiumd_tests.openinwoner import make_account
+from podiumd_tests.openinwoner import notification_outcome
 from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.openinwoner import reset_begeleider
 from podiumd_tests.openinwoner import search_data
@@ -20,6 +24,7 @@ from podiumd_tests.openinwoner import set_account
 from podiumd_tests.openinwoner import set_site_configuration
 from podiumd_tests.openinwoner import solve_captcha
 from podiumd_tests.openinwoner import upload_document
+from podiumd_tests.seed.registry import ResourceRegistry
 
 PORTAL = "https://openinwoner.example.test"
 BANNER = "button:Alles weigeren"
@@ -120,3 +125,26 @@ def test_count_accounts_asks_the_account_snippet_for_a_count(env):
     env.snippet_result = 1
     assert count_accounts(env, kvk="68750110") == 1
     assert env.snippets[-1][1:] == ("oi_account", {"count": {"kvk": "68750110"}})
+
+
+def test_make_account_registers_its_deletion(env):
+    registry = ResourceRegistry("ptest-x", keep=True)
+    make_account(env, registry, "999", "a@example.invalid")
+    assert env.snippets == [("openinwoner", "oi_account", {"create": {"bsn": "999", "email": "a@example.invalid"}})]
+    assert registry.cleanup() == ["Open Inwoner account 999"]
+
+
+def test_configure_zaaktype_sets_notify_and_registers_the_undo(env):
+    env.snippet_result = {"present": True, "record": {"created": [["zaaktype", 1]]}}
+    registry = ResourceRegistry("ptest-x", keep=True)
+    configure_zaaktype(env, registry, "ptest-x-zaaktype", notify=False)
+    sent = env.snippets[0][2]
+    assert (sent["identificatie"], sent["notify"], sent["action"]) == ("ptest-x-zaaktype", False, "apply")
+    assert sent["iot_omschrijving"] == OI_ZAAKTYPE_CONFIG.params["iot_omschrijving"]
+    assert registry.cleanup() == ["Open Inwoner zaaktype ptest-x-zaaktype"]
+
+
+def test_notification_outcome_asks_for_the_resource(env):
+    env.snippet_result = {"status": "success", "output": "processed"}
+    assert notification_outcome(env, "https://oz/statussen/1") == {"status": "success", "output": "processed"}
+    assert env.snippets[-1][1:] == ("oi_notification_record", {"resource_url": "https://oz/statussen/1"})

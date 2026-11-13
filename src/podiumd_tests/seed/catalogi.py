@@ -88,8 +88,10 @@ def publish(openzaak: ApiClient, catalogus_type: JsonObject) -> JsonObject:
 
 
 @dataclass(frozen=True)
-class ZaaktypeTypes:
+class ZaaktypeTypes:  # pylint: disable=too-many-instance-attributes  # one field per part of a zaaktype
     """Statustypen (the last is the eindstatus), (omschrijving, omschrijvingGeneriek) roltypen and text eigenschappen.
+
+    informeren: the initiator is to be informed of each status. informatieobjecttypen: URLs of published ones.
 
     afleidingswijzen: a resultaattype per brondatum afleidingswijze, named after it; eigenschap takes the first
     eigenschap as datumkenmerk, termijn the procestermijn ARCHIEF_PROCESTERMIJN. besluittypen: URLs of concept ones,
@@ -103,6 +105,8 @@ class ZaaktypeTypes:
     afleidingswijzen: tuple[str, ...] = ()
     besluittypen: tuple[str, ...] = ()
     archiefactietermijn: bool = True
+    informeren: bool = False
+    informatieobjecttypen: tuple[str, ...] = ()
 
 
 # The procestermijn of a resultaattype with afleidingswijze termijn.
@@ -143,9 +147,11 @@ def make_publishable_zaaktype(
     forget_catalogus_type(env, registry, str(zaaktype["identificatie"]), where)
     url = zaaktype["url"]
     for volgnummer, omschrijving in enumerate(types.statustypen, start=1):
-        openzaak.post(
-            f"{CATALOGI}/statustypen", {"zaaktype": url, "omschrijving": omschrijving, "volgnummer": volgnummer}
-        )
+        statustype = {"zaaktype": url, "omschrijving": omschrijving, "volgnummer": volgnummer}
+        openzaak.post(f"{CATALOGI}/statustypen", {**statustype, "informeren": types.informeren})
+    for volgnummer, iot in enumerate(types.informatieobjecttypen, start=1):
+        ziot = {"zaaktype": url, "informatieobjecttype": iot, "volgnummer": volgnummer, "richting": "inkomend"}
+        openzaak.post(f"{CATALOGI}/zaaktype-informatieobjecttypen", ziot)
     for omschrijving, generiek in types.roltypen:
         openzaak.post(
             f"{CATALOGI}/roltypen", {"zaaktype": url, "omschrijving": omschrijving, "omschrijvingGeneriek": generiek}

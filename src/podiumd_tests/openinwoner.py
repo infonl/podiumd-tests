@@ -10,6 +10,7 @@ from typing import cast
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.bootstrap.steps import OI_BEGELEIDER
+from podiumd_tests.bootstrap.steps import OI_ZAAKTYPE_CONFIG
 from podiumd_tests.browser import keycloak_login
 from podiumd_tests.browser import leave_login_callback
 from podiumd_tests.browser import refuse_cookies
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
     from podiumd_tests.bootstrap.keycloak import KeycloakUser
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.registry import ResourceRegistry
 
 INWONER, _, BEDRIJF = IDENTITIES
 # The portal's kinds of user: their test identity and login method.
@@ -141,6 +143,36 @@ def count_accounts(env: Environment, **lookup: str) -> int:
     """How many Open Inwoner accounts match the lookup, e.g. bsn=... or kvk=..."""
     params: dict[str, object] = {"count": lookup}
     return int(str(run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_account", params)))
+
+
+def make_account(env: Environment, registry: ResourceRegistry, bsn: str, email: str) -> None:
+    """Create an Open Inwoner DigiD account with this BSN and e-mail address, case notifications on."""
+    deployment = env.deployment_for("openinwoner")
+    run_snippet(env.kube, deployment, "oi_account", {"create": {"bsn": bsn, "email": email}})
+    registry.add_snippet(f"Open Inwoner account {bsn}", env.kube, deployment, "oi_account", {"delete": bsn})
+
+
+def configure_zaaktype(env: Environment, registry: ResourceRegistry, identificatie: str, *, notify: bool) -> None:
+    """Configure a zaaktype of the test catalogus in Open Inwoner like the test zaaktype, its notifications on or off.
+
+    The portal mails on each status and on a document of the test informatieobjecttype.
+    """
+    deployment = env.deployment_for("openinwoner")
+    params = {**OI_ZAAKTYPE_CONFIG.params, "identificatie": identificatie, "notify": notify}
+    applied = cast(
+        "JsonObject", run_snippet(env.kube, deployment, OI_ZAAKTYPE_CONFIG.snippet, {**params, "action": "apply"})
+    )
+    undo = {**params, "action": "remove", "record": applied["record"]}
+    registry.add_snippet(
+        f"Open Inwoner zaaktype {identificatie}", env.kube, deployment, OI_ZAAKTYPE_CONFIG.snippet, undo
+    )
+
+
+def notification_outcome(env: Environment, resource_url: str) -> JsonObject | None:
+    """Status and processing output of Open Inwoner's latest notification about the resource; None before one."""
+    params: dict[str, object] = {"resource_url": resource_url}
+    found = run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_notification_record", params)
+    return cast("JsonObject | None", found)
 
 
 def set_site_configuration(env: Environment, **fields: object) -> dict[str, object]:

@@ -105,5 +105,8 @@ def test_a_waiting_case_is_blocked_even_when_a_ported_spec_cites_it():
     )
 
 
-def test_uncovered_reads_the_waiting_cases_as_blocked():
-    assert uncovered()["OI-042"][0] == "blocked"
+def test_uncovered_reads_the_waiting_cases_as_blocked(tmp_path, monkeypatch):
+    waiting = "## Draaiboek, waiting\n\n| Cases | Reason |\n|---|---|\n| OI-042, OI-043 | no subscription |\n"
+    (tmp_path / "MIGRATION.md").write_text(waiting, encoding="utf-8")
+    monkeypatch.setattr(draaiboek, "REPO_ROOT", tmp_path)
+    assert uncovered()["OI-043"] == ("blocked", "no subscription")

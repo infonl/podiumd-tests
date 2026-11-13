@@ -22,19 +22,15 @@ from podiumd_tests.bootstrap.omc import notify_mock_missing
 from podiumd_tests.bootstrap.omc import omc_actor_missing
 from podiumd_tests.bootstrap.omc import omc_token
 from podiumd_tests.json_data import section
-from podiumd_tests.mock_server import NOTIFY_EMAIL
-from podiumd_tests.mock_server import NOTIFY_SMS
-from podiumd_tests.mock_server import Callback
+from podiumd_tests.omc import EMAIL
+from podiumd_tests.omc import MAIL_TIMEOUT
+from podiumd_tests.omc import SMS
+from podiumd_tests.omc import make_inwoner_zaak
+from podiumd_tests.omc import notify_request
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openklant import delete_klantcontact_tree
-from podiumd_tests.seed.openklant import make_digitaal_adres
-from podiumd_tests.seed.openklant import make_partij
-from podiumd_tests.seed.openklant import make_partij_identificator
-from podiumd_tests.seed.openklant import random_bsn
 from podiumd_tests.seed.openzaak import close_zaak
-from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
-from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
@@ -57,12 +53,6 @@ pytestmark = [
     ),
 ]
 
-# Open Zaak, Open Notificaties and OMC each hand the event on in a background task.
-MAIL_TIMEOUT = 120
-# The Notify mock's path and the key of the address in OMC's request body.
-EMAIL = (NOTIFY_EMAIL, "email_address")
-SMS = (NOTIFY_SMS, "phone_number")
-
 
 @pytest.fixture
 def inwoner_zaak(
@@ -78,28 +68,7 @@ def inwoner_zaak(
     reason = notify_mock_missing(podiumd_env)
     if reason:
         pytest.skip(reason)
-
-    def make(adres: str) -> JsonObject:
-        bsn = random_bsn()
-        partij = make_partij(openklant, registry)
-        make_partij_identificator(openklant, registry, partij, "bsn", bsn)
-        make_digitaal_adres(openklant, registry, partij, adres)
-        zaak = make_zaak(openzaak, registry, parts.zaaktype)
-        make_rol(openzaak, registry, zaak, parts.roltypen["initiator"], inpBsn=bsn)
-        return zaak
-
-    return make
-
-
-def notify_request(env: Environment, channel: tuple[str, str], adres: str, template: str) -> JsonObject:
-    """The mock server's record of OMC's Notify request to adres with the template of OMC setting `template`."""
-    template_id = env.variable("omc", template)
-
-    def is_wanted(entry: JsonObject) -> bool:
-        body = section(entry, "body")
-        return body.get(channel[1]) == adres and body.get("template_id") == template_id
-
-    return Callback(env, channel[0]).wait_for(is_wanted, timeout=MAIL_TIMEOUT, description=f"OMC {template} to {adres}")
+    return lambda adres: make_inwoner_zaak(openzaak, openklant, registry, parts, adres)[0]
 
 
 def email_address(registry: ResourceRegistry) -> str:

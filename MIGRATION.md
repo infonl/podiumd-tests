@@ -300,4 +300,3 @@ them as blocked with this reason, even when a ported TA spec cites them.
 
 | Cases | Reason |
 |---|---|
-| OI-042, OI-043, OI-044 | Open Inwoner's own notifications: no environment subscribes Open Inwoner to Open Notificaties (minikube, kees00, ExternalsPodiumD), so only OMC notifies; requested from podiumd-minikube and podiumd-infra (2026-11-13) |

@@ -6,7 +6,8 @@ API has the same catalogus gets the same configuration: Mijn zaken lists a zaak 
 so a group without it shows the zaak without contact form or upload. Actions: status, apply, remove.
 Params: action, group (ZGWApiGroupConfig name), domein, rsin, identificatie, iot_omschrijving,
 record ({"created": [[model, pk]], "changed": [[model, pk, {field: old value}]]}), which remove
-undoes.
+undoes. Optional notify (apply only): the portal's mail on each status and on a document of the
+informatieobjecttype, on or off.
 """
 
 import contextlib
@@ -36,6 +37,8 @@ def run(params):
     record.setdefault("changed", [])
     for target, types in targets:
         _apply(models, record, target, types)
+        if "notify" in params:
+            _notify(models, record, _found(models, *types), types[1], params["notify"])
     return {"present": True, "record": record}
 
 
@@ -81,12 +84,28 @@ def _apply(models, record, group, types):
     )
 
 
+def _notify(models, record, found, zaaktype, notify):
+    _enable(record, "iot", found["iot"], {"document_notification_enabled": notify})
+    for url in zaaktype["statustypen"]:
+        config = models["statustype"].objects.filter(zaaktype_config=found["zaaktype"], statustype_url=url).first()
+        if config is None:
+            fields = {"zaaktype_config": found["zaaktype"], "statustype_url": url, "zaaktype_uuids": [zaaktype["uuid"]]}
+            config = _create(models, record, "statustype", **fields)
+        _enable(record, "statustype", config, {"notify_status_change": notify})
+
+
 def _models():
     from open_inwoner.openzaak.models import CatalogusConfig
     from open_inwoner.openzaak.models import ZaakTypeConfig
     from open_inwoner.openzaak.models import ZaakTypeInformatieObjectTypeConfig
+    from open_inwoner.openzaak.models import ZaakTypeStatusTypeConfig
 
-    return {"catalogus": CatalogusConfig, "zaaktype": ZaakTypeConfig, "iot": ZaakTypeInformatieObjectTypeConfig}
+    return {
+        "catalogus": CatalogusConfig,
+        "zaaktype": ZaakTypeConfig,
+        "iot": ZaakTypeInformatieObjectTypeConfig,
+        "statustype": ZaakTypeStatusTypeConfig,
+    }
 
 
 def _types(client, params):

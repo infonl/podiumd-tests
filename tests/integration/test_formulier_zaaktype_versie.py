@@ -20,9 +20,9 @@ from podiumd_tests.bootstrap.steps import ZGW_REGISTRATION
 from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import registered_zaak
 from podiumd_tests.openformulieren import submit
+from podiumd_tests.seed.catalogi import ZaaktypeTypes
 from podiumd_tests.seed.catalogi import make_publishable_zaaktype
 from podiumd_tests.seed.catalogi import publish
-from podiumd_tests.seed.openzaak import CATALOGI
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -52,10 +52,8 @@ def _version(  # one zaaktype version
     **fields: object,
 ) -> JsonObject:
     """Publish a version of a throwaway zaaktype that allows the test informatieobjecttype."""
-    zaaktype = make_publishable_zaaktype(env, openzaak, registry, template, **fields)
-    ziot = {"zaaktype": zaaktype["url"], "informatieobjecttype": parts.informatieobjecttype, "volgnummer": 1}
-    openzaak.post(f"{CATALOGI}/zaaktype-informatieobjecttypen", {**ziot, "richting": "inkomend"})
-    return publish(openzaak, zaaktype)
+    types = ZaaktypeTypes(informatieobjecttypen=(parts.informatieobjecttype,))
+    return publish(openzaak, make_publishable_zaaktype(env, openzaak, registry, template, types, **fields))
 
 
 @pytest.mark.source(

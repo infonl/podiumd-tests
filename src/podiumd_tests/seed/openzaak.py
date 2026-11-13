@@ -129,7 +129,7 @@ class ZaaktypeParts:
     roltypen: dict[str, str]  # omschrijvingGeneriek -> url
     informatieobjecttype: str
     eigenschappen: dict[str, str]  # naam -> url
-    besluittype: str
+    besluittype: str  # "" when the zaaktype has none
     resultaattypen: list[str]
 
 
@@ -163,9 +163,8 @@ def zaaktype_parts(openzaak: ApiClient, zaaktype: JsonObject) -> ZaaktypeParts:
         str(resultaattype["url"]) for resultaattype in openzaak.list(f"{CATALOGI}/resultaattypen", {"zaaktype": url})
     ]
     iots = strings(zaaktype.get("informatieobjecttypen"))
-    return ZaaktypeParts(
-        url, statustypen, roltypen, iots[0], eigenschappen, str(besluittypen[0]["url"]), resultaattypen
-    )
+    besluittype = str(besluittypen[0]["url"]) if besluittypen else ""
+    return ZaaktypeParts(url, statustypen, roltypen, iots[0], eigenschappen, besluittype, resultaattypen)
 
 
 def status_body(zaak: JsonObject, statustype: str, toelichting: str = "", gezet: datetime | None = None) -> JsonObject:
