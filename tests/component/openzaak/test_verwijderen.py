@@ -22,6 +22,8 @@ from podiumd_tests.seed.openzaak import make_gebruiksrechten
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
 from podiumd_tests.seed.openzaak import make_zaak
+from podiumd_tests.seed.openzaak import zaakeigenschap_body
+from podiumd_tests.seed.openzaak import zaakobject_body
 
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
@@ -62,10 +64,8 @@ def test_deleting_a_zaak_deletes_what_belongs_to_it(
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
     status = make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
     rol = make_rol(openzaak, registry, zaak, parts.roltypen["initiator"], inpBsn="999990019")
-    body = {"zaak": zaak["url"], "objectType": "overige", "objectTypeOverige": "ptest", "relatieomschrijving": "x"}
-    zaakobject = openzaak.post(f"{ZAKEN}/zaakobjecten", {**body, "objectIdentificatie": {"overigeData": {"a": 1}}})
-    eigenschap_body = {"zaak": zaak["url"], "eigenschap": parts.eigenschappen["kenteken"], "waarde": "12-AB-34"}
-    eigenschap = openzaak.post(f"{zaak['url']}/zaakeigenschappen", eigenschap_body)
+    zaakobject = openzaak.post(f"{ZAKEN}/zaakobjecten", zaakobject_body(zaak))
+    eigenschap = openzaak.post(f"{zaak['url']}/zaakeigenschappen", zaakeigenschap_body(zaak, parts))
     document = make_document(openzaak, registry, parts.informatieobjecttype)
     link = link_document(openzaak, registry, zaak, document)
     delete_zaak(openzaak, str(zaak["url"]))

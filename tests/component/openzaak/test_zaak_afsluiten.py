@@ -19,6 +19,8 @@ from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_gebruiksrechten
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.openzaak import status_body
+from podiumd_tests.seed.openzaak import zaakeigenschap_body
+from podiumd_tests.seed.openzaak import zaakobject_body
 
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
@@ -91,7 +93,18 @@ def test_zaak_closes_only_with_gebruiksrechten_of_its_documents(
     "external OneGround/ZGW-APIs-postman-tests ZGW business rule zrc-007c to zrc-007p",
     "A closed zaak and what belongs to it change only for a client with zaken.geforceerd-bijwerken.",
 )
-@pytest.mark.parametrize("change", ["patch-zaak", "add-rol", "add-status"])
+@pytest.mark.parametrize(
+    "change",
+    [
+        "patch-zaak",
+        "add-rol",
+        "add-status",
+        "patch-resultaat",
+        "add-zaakinformatieobject",
+        "add-zaakobject",
+        "add-zaakeigenschap",
+    ],
+)
 @pytest.mark.scenario("""
     Given a closed zaak in Open Zaak
     When a client without the right to change closed zaken changes the zaak or adds to it
@@ -106,6 +119,8 @@ def test_closed_zaak_changes_only_with_geforceerd_bijwerken(
     change: str,
 ) -> None:
     """A change to a closed zaak is refused without zaken.geforceerd-bijwerken and accepted with it."""
+    # Made before the zaak: cleanup deletes the zaak with its link to the document first.
+    document = make_document(openzaak, registry, closable.informatieobjecttype) if "informatieobject" in change else {}
     zaak = _closed(openzaak, registry, closable)
     method, path, body = {
         "patch-zaak": ("PATCH", str(zaak["url"]), {"toelichting": registry.tagged("gesloten")}),
@@ -121,6 +136,14 @@ def test_closed_zaak_changes_only_with_geforceerd_bijwerken(
             },
         ),
         "add-status": ("POST", f"{ZAKEN}/statussen", status_body(zaak, str(closable.statustypen[-1]["url"]))),
+        "patch-resultaat": ("PATCH", str(zaak["resultaat"]), {"toelichting": registry.tagged("resultaat")}),
+        "add-zaakinformatieobject": (
+            "POST",
+            f"{ZAKEN}/zaakinformatieobjecten",
+            {"zaak": zaak["url"], "informatieobject": document.get("url")},
+        ),
+        "add-zaakobject": ("POST", f"{ZAKEN}/zaakobjecten", zaakobject_body(zaak)),
+        "add-zaakeigenschap": ("POST", f"{zaak['url']}/zaakeigenschappen", zaakeigenschap_body(zaak, closable)),
     }[change]
     openzaak_gesloten.request(method, path, *REFUSED, json=body)
     openzaak.request(method, path, HTTPStatus.OK, HTTPStatus.CREATED, json=body)

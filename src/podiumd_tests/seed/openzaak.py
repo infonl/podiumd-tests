@@ -197,6 +197,22 @@ def close_zaak(
     return openzaak.get(str(zaak["url"]))
 
 
+def zaakobject_body(zaak: JsonObject) -> JsonObject:
+    """Return the body of a zaakobject of type overige on a zaak; deleted with the zaak."""
+    return {
+        "zaak": zaak["url"],
+        "objectType": "overige",
+        "objectTypeOverige": "ptest",
+        "relatieomschrijving": "ptest",
+        "objectIdentificatie": {"overigeData": {"a": 1}},
+    }
+
+
+def zaakeigenschap_body(zaak: JsonObject, parts: ZaaktypeParts) -> JsonObject:
+    """Return the body of the value 12-AB-34 for the test zaaktype's eigenschap kenteken; deleted with the zaak."""
+    return {"zaak": zaak["url"], "eigenschap": parts.eigenschappen["kenteken"], "waarde": "12-AB-34"}
+
+
 # The _zoek and list filter for the BSN of a natuurlijk-persoon rol.
 BSN_FILTER = "rol__betrokkeneIdentificatie__natuurlijkPersoon__inpBsn"
 

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.seed.openzaak import make_zaak
+from podiumd_tests.seed.openzaak import zaakeigenschap_body
 
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
@@ -33,9 +34,7 @@ def test_zaakeigenschap(openzaak: ApiClient, registry: ResourceRegistry, parts: 
     """A value for eigenschap kenteken is stored on the zaak (TA reg-24)."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
     url = f"{zaak['url']}/zaakeigenschappen"
-    created = openzaak.post(
-        url, {"zaak": zaak["url"], "eigenschap": parts.eigenschappen["kenteken"], "waarde": "12-AB-34"}
-    )
+    created = openzaak.post(url, zaakeigenschap_body(zaak, parts))
     assert (created["naam"], created["waarde"]) == ("kenteken", "12-AB-34")
     listed = openzaak.list(url)
     assert [e["waarde"] for e in listed] == ["12-AB-34"]

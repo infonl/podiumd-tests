@@ -242,6 +242,16 @@ def test_zaaktype_parts_and_close_zaak(fake_http):
     assert body(sent[1])["statustype"] == "st2"
 
 
+def test_zaakobject_and_zaakeigenschap_bodies_name_the_zaak():
+    parts = openzaak.ZaaktypeParts("zt", [], {}, "iot", {"kenteken": "eu"}, "", [])
+    assert openzaak.zaakobject_body({"url": ZAAK})["zaak"] == ZAAK
+    assert openzaak.zaakeigenschap_body({"url": ZAAK}, parts) == {
+        "zaak": ZAAK,
+        "eigenschap": "eu",
+        "waarde": "12-AB-34",
+    }
+
+
 @pytest.mark.parametrize(
     ("day", "period", "after"),
     [
