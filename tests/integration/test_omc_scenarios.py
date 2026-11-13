@@ -118,6 +118,11 @@ def test_status_without_informeren_is_not_mailed(
     expect_outcome(response, STOPPED, "the inform field in the case type is set to false")
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason="[omc-4] OMC 2.3.1 answers 412 to an Objecten notification of an objecttype it does not handle while "
+    "ZGW_VARIABLE_OBJECTTYPE_PRINTOBJECTTYPE_UUID is empty (the chart default), instead of 206; not yet reported upstream",
+)
 @pytest.mark.source(DOCS, "Only the objecttypen OMC is configured with (taak, bericht, KTO, print) start a scenario.")
 @pytest.mark.scenario("""
     Given an object of an objecttype that OMC does not know

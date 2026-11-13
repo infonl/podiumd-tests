@@ -39,6 +39,10 @@ SMS = (NOTIFY_SMS, "phone_number")
 EVERY = "*"
 
 
+# The first OMC that reads an Open VTB 0.2.0 bericht (mijnOverheidBerichtenbox moved to the berichttype).
+OMC_READS_NEW_OPENVTB = (2, 3, 2)
+
+
 def make_inwoner(openklant: ApiClient, registry: ResourceRegistry, adres: str) -> str:
     """Create a partij with a new BSN and only this digitaal adres (an e-mail address or phone); the BSN."""
     bsn = random_bsn()

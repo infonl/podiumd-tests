@@ -12,7 +12,7 @@ versions is not counted.
 | --- | --- | --- | --- |
 | smoke | 254 | 40 | 9 |
 | component | 873 | 561 | 72 |
-| integration | 170 | 112 | 13 |
+| integration | 170 | 112 | 14 |
 | perf | 54 | 3 | 0 |
 | **full tier** | **1260** | **686** |  |
 
@@ -117,6 +117,7 @@ Ids of infonl/podiumd-known-issues.
 | kiss-5 | 1 |
 | omc-1 | 1 |
 | omc-3 | 1 |
+| omc-4 | 1 |
 | open-archiefbeheer-1 | 1 |
 | open-archiefbeheer-2 | 1 |
 | open-archiefbeheer-3 | 1 |

@@ -16,13 +16,16 @@ import pytest
 from podiumd_tests.bootstrap.omc import notify_mock_missing
 from podiumd_tests.mailpit import own_address
 from podiumd_tests.omc import EMAIL
+from podiumd_tests.omc import OMC_READS_NEW_OPENVTB
 from podiumd_tests.omc import bericht_event
 from podiumd_tests.omc import expect_outcome
 from podiumd_tests.omc import listen
 from podiumd_tests.omc import make_inwoner
 from podiumd_tests.omc import notify_request
 from podiumd_tests.omc import setting_skip
+from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.seed.openvtb import make_bericht
+from podiumd_tests.workloads import expect_defect
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -62,9 +65,22 @@ def test_registered_bericht_needs_no_action(http: requests.Session, podiumd_env:
     Then OMC drops the bericht
 """)
 def test_bericht_to_a_non_citizen_is_dropped(
-    http: requests.Session, podiumd_env: Environment, openvtb_berichten: ApiClient, registry: ResourceRegistry
+    request: pytest.FixtureRequest,
+    http: requests.Session,
+    podiumd_env: Environment,
+    openvtb_berichten: ApiClient,
+    registry: ResourceRegistry,
 ) -> None:
     """An ontvanger URN without a BSN: 202 "Dropped", no notification."""
+    expect_defect(
+        request,
+        podiumd_env,
+        "omc",
+        lambda version: version < OMC_READS_NEW_OPENVTB,
+        raises=UnexpectedStatusError,
+        reason="[omc-5] OMC before 2.3.2 requires mijnOverheidBerichtenbox on an Open VTB 0.2.0 bericht, where it lives "
+        "on the berichttype, and cannot read any bericht (206); fixed in OMC v.2.3.2",
+    )
     bericht = make_bericht(podiumd_env, openvtb_berichten, registry, "urn:ptest:ontvanger:1")
     event = bericht_event(PUBLISHED, str(bericht["uuid"]))
     expect_outcome(listen(http, podiumd_env, event), HTTPStatus.ACCEPTED, "Dropped: recipient is not a citizen")
