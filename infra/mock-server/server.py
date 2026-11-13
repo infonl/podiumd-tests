@@ -4,7 +4,8 @@ A POST with an Authorization header gets 204; one without gets 403. Open Notific
 both when an abonnement is created: it refuses a callback that accepts requests without auth.
 It also stands in for Notify (NotifyNL): a POST to .../v2/notifications/email or /sms gets
 the 201 and notification JSON a Notify client expects, and the entry records the notification's
-"id"; GET .../v2/notifications/<id> answers with that notification. On a path with /fail-first/ the first
+"id"; GET .../v2/notifications/<id> answers with that notification. POST .../v2/template/<id>/preview gets
+200 and a preview, whose subject and body are "ptest preview <id>". On a path with /fail-first/ the first
 notification (not Open Notificaties' kanaal "test" check) gets 500, to test redelivery.
 Each recorded entry carries the status it got.
 
@@ -34,11 +35,12 @@ RECEIVED = Path(os.environ.get("RECEIVED_FILE", "/data/received.jsonl"))
 CHECKOUTS = Path(os.environ.get("CHECKOUTS_DIR", "/data/worldline"))
 HOSTED_CHECKOUT = re.compile(r"^/v2/[^/]+/hostedcheckouts(?:/([0-9a-f]+))?$")
 NOTIFICATION = re.compile(r"/v2/notifications/([0-9a-f-]{36})$")
+PREVIEW = re.compile(r"/v2/template/([0-9a-f-]{36})/preview$")
 NOTIFICATIONS: dict[str, dict] = {}
 
 
 class Handler(BaseHTTPRequestHandler):
-    """POST: record, then 204 (Notify: 201) with Authorization and 403 without. GET /healthz: 200."""
+    """POST: record, then 204 (Notify: 201, a preview 200) with Authorization and 403 without. GET /healthz: 200."""
 
     def do_POST(self) -> None:  # http.server's method name
         length = int(self.headers.get("Content-Length") or 0)
@@ -68,11 +70,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_response(507)
             self.end_headers()
             return
-        if entry["status"] == HTTPStatus.CREATED:
-            self.notify_created(entry["id"], parsed if isinstance(parsed, dict) else {})
-        else:
-            self.send_response(entry["status"])
-            self.end_headers()
+        self._answer(entry)
 
     def do_GET(self) -> None:  # http.server's method name
         notification = NOTIFICATION.search(self.path)
@@ -95,6 +93,8 @@ class Handler(BaseHTTPRequestHandler):
             return 403
         if "/v2/notifications/" in self.path:
             return 201
+        if PREVIEW.search(self.path):
+            return 200
         body = entry["body"]
         check = isinstance(body, dict) and body.get("kanaal") == "test"
         if "/fail-first/" in self.path and not check and self.path not in FAILED_ONCE:
@@ -136,6 +136,18 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
+
+    def _answer(self, entry) -> None:
+        """Send the answer to a recorded POST: Notify's JSON, or its status alone."""
+        preview = PREVIEW.search(self.path)
+        if entry["status"] == HTTPStatus.CREATED:
+            self.notify_created(entry["id"], entry["body"] if isinstance(entry["body"], dict) else {})
+        elif preview and entry["status"] == HTTPStatus.OK:
+            subject = f"ptest preview {preview[1]}"
+            self.send_json(200, {"id": preview[1], "type": "email", "version": 1, "body": subject, "subject": subject})
+        else:
+            self.send_response(entry["status"])
+            self.end_headers()
 
     def _create_checkout(self, request) -> None:
         checkout_id, mac = uuid.uuid4().hex, uuid.uuid4().hex

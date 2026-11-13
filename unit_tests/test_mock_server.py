@@ -113,6 +113,8 @@ def test_mock_server_refuses_without_authorization_and_answers_notify():
     assert mock_server_handler("/ptest-x/abc").answer_status({"authorization": None, "body": None}) == 403
     notify = mock_server_handler("/ptest-x/notify/v2/notifications/email")
     assert notify.answer_status({"authorization": "ApiKey-v1 k", "body": {}}) == 201
+    preview = mock_server_handler("/v2/template/00000000-0000-1000-8000-000000000000/preview")
+    assert preview.answer_status({"authorization": "Bearer t", "body": {}}) == 200
 
 
 def test_notify_notification_is_recorded_with_an_id_and_answers_a_get():
