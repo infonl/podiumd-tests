@@ -15,7 +15,9 @@ import pytest
 from podiumd_tests.basisregistraties import BRP_PERSONEN
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import KIERKEGAARD
+from podiumd_tests.basisregistraties import brp_gevonden
 from podiumd_tests.basisregistraties import brp_personen
+from podiumd_tests.basisregistraties import brp_persoon
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
 
@@ -53,7 +55,7 @@ REG_121 = pytest.mark.source(
     "Checks a component answers a clean error, not a crash or a hang, when its upstream fails.",
 )
 BRP_FEATURES = pytest.mark.source(
-    "external BRP-API/Haal-Centraal-BRP-bevragen features/bevragen/*fout-cases.feature",
+    "external BRP-API/Haal-Centraal-BRP-bevragen features/bevragen/*fout-cases.feature, features/input-validatie",
     "The BRP API refuses an invalid query with 400 and names each invalid parameter and the rule it breaks.",
 )
 BRP_ADRESSERING = pytest.mark.source(
@@ -72,13 +74,6 @@ RAADPLEEG_EREBOS = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenum
 MAX_BSNS = 20
 
 
-def personen(http: requests.Session, urls: dict[str, str], query: Mapping[str, object]) -> list[JsonObject]:
-    """The personen a query finds; it must answer 200 with the query's type."""
-    body = expect_status(brp_personen(http, urls["api-proxy"], query), HTTPStatus.OK).json()
-    assert body["type"] == query["type"]
-    return entries(body["personen"])
-
-
 @REG_07
 @REG_11
 @pytest.mark.scenario("""
@@ -88,12 +83,11 @@ def personen(http: requests.Session, urls: dict[str, str], query: Mapping[str, o
 """)
 def test_person_by_bsn(http: requests.Session, urls: dict[str, str]) -> None:
     """A test-set BSN gives that person with a name (TA reg-07, reg-11)."""
-    found = personen(
-        http, urls, {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": [EREBOS], "fields": NAAM}
+    found = brp_persoon(http, urls["api-proxy"], EREBOS, NAAM)
+    assert (found["burgerservicenummer"], found["naam"]) == (
+        EREBOS,
+        {"voornamen": "Erebos", "geslachtsnaam": "Bultenaar"},
     )
-    assert [(p["burgerservicenummer"], p["naam"]) for p in found] == [
-        (EREBOS, {"voornamen": "Erebos", "geslachtsnaam": "Bultenaar"})
-    ]
 
 
 @REG_07
@@ -106,7 +100,7 @@ def test_person_by_bsn(http: requests.Session, urls: dict[str, str]) -> None:
 def test_unknown_bsn_finds_no_one(http: requests.Session, urls: dict[str, str]) -> None:
     """A BSN outside the test set gives an empty list, not an error (TA reg-07)."""
     query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": ["123456789"], "fields": NAAM[:1]}
-    assert personen(http, urls, query) == []
+    assert brp_gevonden(http, urls["api-proxy"], query) == []
 
 
 @REG_40
@@ -122,7 +116,7 @@ def test_several_bsns_at_once(http: requests.Session, urls: dict[str, str]) -> N
         "burgerservicenummer": [EREBOS, KIERKEGAARD],
         "fields": NAAM[:1],
     }
-    assert {p["burgerservicenummer"] for p in personen(http, urls, query)} == {EREBOS, KIERKEGAARD}
+    assert {p["burgerservicenummer"] for p in brp_gevonden(http, urls["api-proxy"], query)} == {EREBOS, KIERKEGAARD}
 
 
 @pytest.mark.parametrize(
@@ -145,7 +139,7 @@ def test_search_by_name_and_birth_date(
         "geboortedatum": geboortedatum,
         "fields": NAAM[:1],
     }
-    assert [p["burgerservicenummer"] for p in personen(http, urls, query)] == expected
+    assert [p["burgerservicenummer"] for p in brp_gevonden(http, urls["api-proxy"], query)] == expected
 
 
 @REG_119
@@ -158,9 +152,9 @@ def test_search_by_name_and_birth_date(
 def test_search_by_postcode_and_huisnummer(http: requests.Session, urls: dict[str, str]) -> None:
     """Searching by postcode and huisnummer finds the residents of that address, and no one at an unknown one (TA reg-119)."""
     query = {"type": "ZoekMetPostcodeEnHuisnummer", "fields": NAAM[:1]}
-    erebos = personen(http, urls, {**query, "postcode": "3224TT", "huisnummer": 4})
+    erebos = brp_gevonden(http, urls["api-proxy"], {**query, "postcode": "3224TT", "huisnummer": 4})
     assert EREBOS in [p["burgerservicenummer"] for p in erebos]
-    assert personen(http, urls, {**query, "postcode": "1234AB", "huisnummer": 1}) == []
+    assert brp_gevonden(http, urls["api-proxy"], {**query, "postcode": "1234AB", "huisnummer": 1}) == []
 
 
 @pytest.mark.parametrize(
@@ -177,6 +171,7 @@ def test_search_by_postcode_and_huisnummer(http: requests.Session, urls: dict[st
         ({**RAADPLEEG_EREBOS, "fields": []}, ("fields", "minItems")),
         ({**RAADPLEEG_EREBOS, "fields": "burgerservicenummer,geslacht"}, ("fields", "array")),
         ({**RAADPLEEG_EREBOS, "fields": ["bestaatniet"]}, ("fields[0]", "fields")),
+        ({**RAADPLEEG_EREBOS, "fields": ["gezag.type"]}, ("fields[0]", "fields")),
         (
             {"type": "ZoekMetGeslachtsnaamEnGeboortedatum", "geslachtsnaam": "Kierkegaard", "fields": NAAM[:1]},
             ("geboortedatum", "required"),
@@ -191,6 +186,7 @@ def test_search_by_postcode_and_huisnummer(http: requests.Session, urls: dict[st
         "empty-fields",
         "fields-as-string",
         "unknown-field",
+        "gezag-subfield",
         "search-without-geboortedatum",
     ],
 )
@@ -220,8 +216,7 @@ def test_invalid_query_is_refused(
 """)
 def test_derived_name_age_and_adressering(http: requests.Session, urls: dict[str, str]) -> None:
     """The BRP derives volledigeNaam, leeftijd and adressering for a test-set person."""
-    query = {**RAADPLEEG_EREBOS, "fields": ["naam.volledigeNaam", "leeftijd", "adressering"]}
-    found = personen(http, urls, query)
+    found = brp_persoon(http, urls["api-proxy"], EREBOS, ["naam.volledigeNaam", "leeftijd", "adressering"])
     adressering = {
         "aanhef": "Geachte heer Bultenaar",
         "aanschrijfwijze": {"naam": "E. Bultenaar"},
@@ -229,8 +224,113 @@ def test_derived_name_age_and_adressering(http: requests.Session, urls: dict[str
         "adresregel1": "Plataanlaan 4",
         "adresregel2": "3224 TT  HELLEVOETSLUIS",
     }
-    assert [(p["naam"], p["adressering"]) for p in found] == [({"volledigeNaam": "Erebos Bultenaar"}, adressering)]
-    assert isinstance(found[0]["leeftijd"], int)
+    assert (found["naam"], found["adressering"]) == ({"volledigeNaam": "Erebos Bultenaar"}, adressering)
+    assert isinstance(found["leeftijd"], int)
+
+
+def aanschrijving(aanhef: str, naam: str, gebruik_in_lopende_tekst: str, aanspreekvorm: str = "") -> JsonObject:
+    """Return the adressering fields aanhef, aanschrijfwijze and gebruikInLopendeTekst."""
+    aanschrijfwijze = {"naam": naam, "aanspreekvorm": aanspreekvorm} if aanspreekvorm else {"naam": naam}
+    return {"aanhef": aanhef, "aanschrijfwijze": aanschrijfwijze, "gebruikInLopendeTekst": gebruik_in_lopende_tekst}
+
+
+@pytest.mark.parametrize(
+    ("bsn", "expected"),
+    [
+        # Thea Kouwenhoven, naamgebruik P, partner Rozen Groeman.
+        ("999993409", aanschrijving("Geachte mevrouw Groeman", "T. Groeman", "mevrouw Groeman")),
+        # Kevin de Boer, naamgebruik P, partner Olivia Charbon.
+        ("999996538", aanschrijving("Geachte heer Charbon", "K. Charbon", "de heer Charbon")),
+        # Wilma van Zon, naamgebruik V, partner Gerrit den Braber.
+        (
+            "999993112",
+            aanschrijving("Geachte mevrouw Den Braber-van Zon", "W. den Braber-van Zon", "mevrouw Den Braber-van Zon"),
+        ),
+        # A jonkvrouw 'S Streeveld with a partner (gravin te Schaars), naamgebruik N: no predicaat.
+        (
+            "999994669",
+            aanschrijving(
+                "Geachte mevrouw 'S Streeveld-te Schaars",
+                "Ż.Å.Đ. 'S Streeveld-te Schaars",
+                "mevrouw 'S Streeveld-te Schaars",
+            ),
+        ),
+        # Róza Żywiałowska, naamgebruik E, partner graaf Wałęsa: no hoffelijkheidstitel.
+        ("999990172", aanschrijving("Geachte mevrouw Żywiałowska", "R.M. Żywiałowska", "mevrouw Żywiałowska")),
+        # Guðrún Sigurðardóttir, naamgebruik P, partner graaf De Marchant et d'Ansembourg: hoffelijkheidstitel.
+        (
+            "999991553",
+            aanschrijving(
+                "Hooggeboren vrouwe",
+                "G.S. gravin De Marchant et d'Ansembourg",
+                "gravin De Marchant et d'Ansembourg",
+                "De hooggeboren vrouwe",
+            ),
+        ),
+        # Carolina barones van der Hom, naamgebruik P, partner baron van Brest naar Kempen.
+        (
+            "999994037",
+            aanschrijving(
+                "Hoogwelgeboren vrouwe",
+                "C. barones van Brest naar Kempen",
+                "barones van Brest naar Kempen",
+                "De hoogwelgeboren vrouwe",
+            ),
+        ),
+        # Robert Johannes graaf van der Leijenhorst, no partner.
+        (
+            "999992922",
+            aanschrijving(
+                "Hooggeboren heer",
+                "R.J. graaf van der Leijenhorst",
+                "graaf van der Leijenhorst",
+                "De hooggeboren heer",
+            ),
+        ),
+        # Catherine barones Van Nassau la Lecq, no partner.
+        (
+            "999992016",
+            aanschrijving(
+                "Hoogwelgeboren vrouwe",
+                "C. barones Van Nassau la Lecq",
+                "barones Van Nassau la Lecq",
+                "De hoogwelgeboren vrouwe",
+            ),
+        ),
+        # Hendrik Jan Coenraad Maurits ridder den Brinck, no partner.
+        (
+            "999990160",
+            aanschrijving(
+                "Hoogwelgeboren heer", "H.J.C.M. ridder den Brinck", "ridder den Brinck", "De hoogwelgeboren heer"
+            ),
+        ),
+    ],
+    ids=[
+        "partner-naam",
+        "partner-naam-man",
+        "partner-naam-voor-eigen-naam",
+        "predicaat-vrouw-met-partner",
+        "eigen-naam-adellijke-partner",
+        "hoffelijkheidstitel",
+        "titel-en-hoffelijkheidstitel",
+        "graaf",
+        "barones",
+        "ridder",
+    ],
+)
+@BRP_ADRESSERING
+@pytest.mark.scenario("""
+    Given a person in the BRP test set with a partner, an adellijke titel or predicaat, or both
+    When the aanhef, aanschrijfwijze and gebruikInLopendeTekst are asked through the api-proxy
+    Then the BRP composes them by the person's aanduiding naamgebruik from the own and the partner's name
+    And uses the own titel, or the hoffelijkheidstitel of a woman who uses the name of a partner with a titel
+""")
+def test_adressering_with_partner_or_adellijke_titel(
+    http: requests.Session, urls: dict[str, str], bsn: str, expected: JsonObject
+) -> None:
+    """The BRP derives aanhef, aanschrijfwijze and gebruikInLopendeTekst by the rules for partners and titels."""
+    found = brp_persoon(http, urls["api-proxy"], bsn, [f"adressering.{field}" for field in expected])
+    assert found["adressering"] == expected
 
 
 @REG_150

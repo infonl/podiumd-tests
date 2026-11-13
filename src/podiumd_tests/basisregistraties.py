@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import NamedTuple
 
 from podiumd_tests.json_data import entries
+from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     import requests
+
+    from podiumd_tests.json_data import JsonObject
 
 BRP_PERSONEN = "/haalcentraal/api/brp/personen"
 BAG_ADRESSEN = "/lvbag/individuelebevragingen/v2/adressen"
@@ -73,6 +77,25 @@ KVK_GEEN_RESULTATEN = "IPD5200"
 def brp_personen(http: requests.Session, proxy_url: str, query: Mapping[str, object]) -> requests.Response:
     """POST a Haal Centraal personen query (type, burgerservicenummer or search fields, fields)."""
     return http.post(proxy_url + BRP_PERSONEN, json=query)
+
+
+def brp_gevonden(http: requests.Session, proxy_url: str, query: Mapping[str, object]) -> list[JsonObject]:
+    """Return the personen a Haal Centraal query finds; the BRP must answer 200 with the query's type."""
+    body = expect_status(brp_personen(http, proxy_url, query), HTTPStatus.OK).json()
+    if body["type"] != query["type"]:
+        msg = f"BRP answered type {body['type']} to a {query['type']} query"
+        raise AssertionError(msg)
+    return entries(body["personen"])
+
+
+def brp_persoon(http: requests.Session, proxy_url: str, bsn: str, fields: list[str]) -> JsonObject:
+    """Return the fields of the one person the BRP has under a BSN."""
+    query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": [bsn], "fields": fields}
+    found = brp_gevonden(http, proxy_url, query)
+    if len(found) != 1:
+        msg = f"BRP found {len(found)} personen under BSN {bsn}, expected 1"
+        raise AssertionError(msg)
+    return found[0]
 
 
 def bag_adres(http: requests.Session, proxy_url: str, nummeraanduiding: str) -> requests.Response:
