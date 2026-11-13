@@ -24,7 +24,10 @@ You need:
   kube context; with the profile's `kube.aks`, doctor rewrites the context
   when the cluster's API address changed;
 - network access to the environment's URLs (for ExternalsPodiumD: the VPN, and
-  `KUBECONFIG` including the cluster's kubeconfig).
+  `KUBECONFIG` including the cluster's kubeconfig);
+- for the veraPDF tests of generated PDFs: `verapdf` on `PATH`, or Docker,
+  which runs the image `verapdf/cli`; without either these tests skip. The
+  container image has neither.
 
 Install:
 

@@ -75,16 +75,22 @@ def start_process(
     )
 
 
-def run_checked[ErrorT: ProcessError](
-    runner: Runner, command: Sequence[str], timeout: int, error: type[ErrorT] = ProcessError, stdin: str | None = None
+def run_checked[ErrorT: ProcessError](  # noqa: PLR0913  # the command and how to run and judge it
+    runner: Runner,
+    command: Sequence[str],
+    timeout: int,
+    error: type[ErrorT] = ProcessError,
+    stdin: str | None = None,
+    *,
+    accept: tuple[int, ...] = (0,),
 ) -> str:
-    """stdout of a command; `error` when it is missing, times out or exits non-zero."""
+    """stdout of a command; `error` when it is missing, times out or exits with a code not in accept."""
     try:
         result = runner(command, timeout, stdin)
     except FileNotFoundError as exc:
         raise error(command, f"{command[0]} not found on PATH") from exc
     except subprocess.TimeoutExpired as exc:
         raise error(command, f"timed out after {timeout}s") from exc
-    if result.returncode != 0:
+    if result.returncode not in accept:
         raise error(command, result.stderr or f"exit code {result.returncode}")
     return result.stdout

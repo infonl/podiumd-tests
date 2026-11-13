@@ -16,6 +16,7 @@ from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.mailpit import received_message
 from podiumd_tests.pdf import pdfa_problems
+from podiumd_tests.pdf import verapdf_report
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import CATALOGI
@@ -108,6 +109,33 @@ def test_email_with_an_attachment_arrives_and_is_kept_on_the_zaak(
     assert [item.get("Address") for item in entries(message.get("ReplyTo"))] == [REPLY_TO]
     assert _attachments(message) == [document["bestandsnaam"]]
     assert _stored_mail(zac, urls["zac"], zaak, message)["vertrouwelijkheidaanduiding"] == "VERTROUWELIJK"
+
+
+@pytest.mark.source(
+    "external ForumStandaardisatie/pdfchecker",
+    "Government PDFs are checked for PDF/UA with veraPDF; ZAC's mail PDF claims PDF/A-2b and PDF/UA-1.",
+)
+@pytest.mark.usefixtures("verapdf")
+@pytest.mark.scenario("""
+    Given a zaak in ZAC
+    When the behandelaar mails it and keeps the mail as a document
+    Then veraPDF finds the kept mail compliant with PDF/A-2b and PDF/UA-1, which it claims
+""")
+def test_kept_mail_passes_verapdf(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    zac_mail: Callable[..., JsonObject],
+    mailpit: ApiClient,
+    registry: ResourceRegistry,
+) -> None:
+    """veraPDF finds the PDF of a mail ZAC kept compliant with the PDF/A-2b and PDF/UA-1 it claims."""
+    zaak = zac_zaak()
+    body = zac_mail(zaak, createDocumentFromMail=True)
+    expect_status(send_mail(zac, urls["zac"], zaak, body), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=str(body["ontvanger"]))
+    _, pdf = stored_mail(zac, urls["zac"], zaak, message)
+    assert verapdf_report(pdf) == {"2b": [], "ua1": []}
 
 
 @pytest.mark.scenario("""

@@ -11,6 +11,7 @@ from podiumd_tests.browser import context_args
 from podiumd_tests.browser import guard_navigation
 from podiumd_tests.browser import launch_args
 from podiumd_tests.mailpit import own_address
+from podiumd_tests.pdf import verapdf_unavailable
 from podiumd_tests.zac import afzenders
 
 if TYPE_CHECKING:
@@ -67,3 +68,11 @@ def fixture_zac_mail(
         }
 
     return build
+
+
+@pytest.fixture(scope="session", name="verapdf")
+def fixture_verapdf() -> None:
+    """Skips unless veraPDF runs here: its CLI on PATH or Docker."""
+    reason = verapdf_unavailable()
+    if reason:
+        pytest.skip(reason)

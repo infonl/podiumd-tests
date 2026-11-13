@@ -21,6 +21,7 @@ from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.pdf import pdfa_problems
+from podiumd_tests.pdf import verapdf_report
 from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import CATALOGI
@@ -46,6 +47,7 @@ from podiumd_tests.zac_betrokkenen import betrokkene_roltype
 from podiumd_tests.zac_betrokkenen import betrokkenen
 from podiumd_tests.zac_betrokkenen import wijzig_initiator
 from podiumd_tests.zac_documents import convert_to_pdf
+from podiumd_tests.zac_documents import document_content
 from podiumd_tests.zac_documents import document_historie
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
@@ -548,7 +550,7 @@ def test_word_saves_an_edited_document_as_a_new_version(
     expect_status(http.put(url, data=b"versie 2"), HTTPStatus.CREATED, HTTPStatus.NO_CONTENT)
     current = expect_status(zac.get(documents, params=of_zaak), HTTPStatus.OK).json()
     assert current["versie"] == int(str(document["versie"])) + 1
-    assert expect_status(zac.get(f"{documents}/download"), HTTPStatus.OK).content == b"versie 2"
+    assert document_content(zac, urls["zac"], document) == b"versie 2"
 
 
 @pytest.mark.tc("ZAC-039")
@@ -605,7 +607,7 @@ def test_word_document_is_converted_to_pdf(
     expect_status(convert_to_pdf(zac, urls["zac"], zaak, document), HTTPStatus.NO_CONTENT, HTTPStatus.OK)
     current = expect_status(zac.get(documents, params={"zaak": str(zaak["uuid"])}), HTTPStatus.OK).json()
     assert current["formaat"] == "application/pdf", current.get("formaat")
-    content = expect_status(zac.get(f"{documents}/download"), HTTPStatus.OK).content
+    content = document_content(zac, urls["zac"], document)
     assert content.startswith(b"%PDF")
     assert pdfa_problems(content) == []
     renamed = [
@@ -615,3 +617,28 @@ def test_word_document_is_converted_to_pdf(
     ]
     name = str(document["bestandsnaam"])
     assert renamed == [(name, f"{name.rpartition('.')[0]}.pdf")]
+
+
+@pytest.mark.source(
+    "external ForumStandaardisatie/pdfchecker",
+    "Government PDFs are checked for PDF/UA with veraPDF; ZAC's converter claims PDF/A-2b and PDF/UA-1.",
+)
+@pytest.mark.usefixtures("verapdf")
+@pytest.mark.parametrize("suffix", ["word", "excel", "powerpoint"])
+@pytest.mark.scenario("""
+    Given a definitief Word, Excel or PowerPoint document on a zaak in ZAC
+    When the behandelaar converts the document to PDF
+    Then veraPDF finds the PDF compliant with PDF/A-2b and PDF/UA-1, which it claims
+""")
+def test_converted_document_passes_verapdf(
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    registry: ResourceRegistry,
+    suffix: str,
+) -> None:
+    """veraPDF finds an Office document ZAC converted compliant with the PDF/A-2b and PDF/UA-1 it claims."""
+    zaak = zac_zaak()
+    document = uploaded_document(zac, urls["zac"], zaak, registry, suffix=suffix)
+    expect_status(convert_to_pdf(zac, urls["zac"], zaak, document), HTTPStatus.NO_CONTENT, HTTPStatus.OK)
+    assert verapdf_report(document_content(zac, urls["zac"], document)) == {"2b": [], "ua1": []}

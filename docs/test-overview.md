@@ -11,12 +11,12 @@ versions is not counted.
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 256 | 41 | 10 |
-| component | 981 | 580 | 72 |
-| integration | 182 | 118 | 14 |
+| component | 985 | 582 | 72 |
+| integration | 183 | 119 | 14 |
 | perf | 54 | 3 | 0 |
-| **full tier** | **1382** | **712** |  |
+| **full tier** | **1387** | **715** |  |
 
-Unit tests (`unit_tests/`, functions): 841. Perf endpoints (`perf/runs.py`): 22.
+Unit tests (`unit_tests/`, functions): 846. Perf endpoints (`perf/runs.py`): 22.
 
 ## Per area
 
@@ -51,7 +51,7 @@ Unit tests (`unit_tests/`, functions): 841. Perf endpoints (`perf/runs.py`): 22.
 | component | platform | 69 | 18 |
 | component | referentielijsten | 2 | 2 |
 | component | zaakbrug | 14 | 13 |
-| component | zac | 343 | 254 |
+| component | zac | 347 | 256 |
 | component | zgw_office_addin | 4 | 3 |
 | integration | continuiteit | 19 | 10 |
 | integration | formulier_betaling | 19 | 6 |
@@ -63,7 +63,7 @@ Unit tests (`unit_tests/`, functions): 841. Perf endpoints (`perf/runs.py`): 22.
 | integration | formulier_pauzeren | 2 | 2 |
 | integration | formulier_prefill | 5 | 2 |
 | integration | formulier_wijzigen | 1 | 1 |
-| integration | formulier_zaak | 5 | 3 |
+| integration | formulier_zaak | 6 | 4 |
 | integration | formulier_zaaktype_versie | 1 | 1 |
 | integration | kiss_contactverzoek | 8 | 4 |
 | integration | kiss_kennis | 7 | 3 |
@@ -98,7 +98,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | TA | 283 |
 | ZAC | 19 |
 | draaiboek | 91 |
-| external | 230 |
+| external | 235 |
 | podiumd-tests | 513 |
 | upstream | 214 |
 

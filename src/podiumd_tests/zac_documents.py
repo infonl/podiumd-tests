@@ -160,6 +160,11 @@ def document_url(zac_url: str, document: JsonObject) -> str:
     return f"{zac_url}/rest/informatieobjecten/informatieobject/{document['uuid']}"
 
 
+def document_content(http: requests.Session, zac_url: str, document: JsonObject) -> bytes:
+    """Return the content of the document's current version, downloaded through ZAC."""
+    return expect_status(http.get(f"{document_url(zac_url, document)}/download"), HTTPStatus.OK).content
+
+
 def delete_document(http: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject) -> requests.Response:
     """Delete the zaak's document with a reden; ZAC's answer."""
     return http.delete(document_url(zac_url, document), json={"zaakUuid": zaak["uuid"], "reden": "podiumd-tests"})
@@ -366,7 +371,7 @@ def stored_mail(zac: requests.Session, zac_url: str, zaak: JsonObject, message: 
         return next((item for item in zaak_documents(zac, zac_url, zaak) if item.get("titel") == subject), None)
 
     stored = wait_until(document, timeout=CONVERT_TIMEOUT, description=f"document {subject!r} of zaak {zaak['uuid']}")
-    return stored, expect_status(zac.get(f"{document_url(zac_url, stored)}/download"), HTTPStatus.OK).content
+    return stored, document_content(zac, zac_url, stored)
 
 
 # A mail ZAC keeps without offering a vertrouwelijkheidaanduiding (PlanItemsRestService, ProductaanvraagEmailService).

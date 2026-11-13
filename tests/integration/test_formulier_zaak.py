@@ -30,6 +30,7 @@ from podiumd_tests.openformulieren import submission_action
 from podiumd_tests.openformulieren import submission_summary
 from podiumd_tests.openformulieren import submit
 from podiumd_tests.openformulieren import upload_file
+from podiumd_tests.pdf import verapdf_report
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
 
@@ -64,6 +65,20 @@ pytestmark = [
 REGISTRATION_TIMEOUT = 90
 
 
+def _anonymous_submission(
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+) -> tuple[requests.Session, JsonObject, JsonObject]:
+    """Submit the test form without a login; the inwoner's session, the submission's status and its zaak."""
+    need_bootstrap("openformulieren-form", "openformulieren-zgw-group", "openzaak-of-autorisatie")
+    session = podiumd_env.session()
+    data = {"klacht_omschrijving": registry.tagged("klacht"), **NAW_DATA}
+    status = submit(podiumd_env, session, registry, TEST_FORM, data, timeout=REGISTRATION_TIMEOUT)
+    return session, status, registered_zaak(podiumd_env, openzaak, registry, status)
+
+
 @pytest.mark.core
 @pytest.mark.tc("OF-007", "OF-020")
 @pytest.mark.scenario("""
@@ -84,23 +99,33 @@ def test_submission_creates_a_zaak_with_the_form_pdf(
 
     The inwoner downloads the PDF.
     """
-    need_bootstrap("openformulieren-form", "openformulieren-zgw-group", "openzaak-of-autorisatie")
-    omschrijving = registry.tagged("klacht")
-    session = podiumd_env.session()
-    status = submit(
-        podiumd_env,
-        session,
-        registry,
-        TEST_FORM,
-        {"klacht_omschrijving": omschrijving, **NAW_DATA},
-        timeout=REGISTRATION_TIMEOUT,
-    )
-    zaak = registered_zaak(podiumd_env, openzaak, registry, status)
+    session, status, zaak = _anonymous_submission(podiumd_env, openzaak, registry, need_bootstrap)
     assert zaak["zaaktype"] == test_zaaktype["url"]
     assert openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": str(zaak["url"])})
     rollen = openzaak.list(f"{ZAKEN}/rollen", {"zaak": str(zaak["url"])})
     assert [section(r, "betrokkeneIdentificatie").get("geslachtsnaam") for r in rollen] == [NAW_DATA["achternaam"]]
     assert download_report(podiumd_env, session, status).startswith(b"%PDF")
+
+
+@pytest.mark.source(
+    "external ForumStandaardisatie/pdfchecker",
+    "Government PDFs are checked for PDF/UA with veraPDF; Open Formulieren renders its report as PDF/UA-1.",
+)
+@pytest.mark.usefixtures("verapdf")
+@pytest.mark.scenario("""
+    Given an anonymous inwoner submitted the test form in Open Formulieren
+    When the inwoner downloads the form as PDF
+    Then veraPDF finds the PDF compliant with PDF/UA-1, which it claims
+""")
+def test_submission_report_passes_verapdf(
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """veraPDF finds the submission's PDF report compliant with the PDF/UA-1 it claims."""
+    session, status, _ = _anonymous_submission(podiumd_env, openzaak, registry, need_bootstrap)
+    assert verapdf_report(download_report(podiumd_env, session, status)) == {"ua1": []}
 
 
 # A repeating group (Form.io editgrid) of at most three rows, each with a required naam.
