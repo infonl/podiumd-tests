@@ -45,6 +45,7 @@ if TYPE_CHECKING:
 
 # Days a Goedkeuren taak of the taken zaaktype takes: more than any zaak of it has left.
 GOEDKEUREN_DOORLOOPTIJD = 3650
+TAKEN_TYPES = dataclasses.replace(ZAC_TYPES, roltypen=(*ZAC_TYPES.roltypen, ("Belanghebbende", "belanghebbende")))
 
 
 @pytest.fixture(scope="session", name="zaaktype_registry")
@@ -95,8 +96,9 @@ def fixture_zac_taken_zaaktype(
 ) -> JsonObject:
     """ZAC's zaakafhandelparameters of a throwaway zaaktype as zac_eigen_zaaktype, with every human task on.
 
-    Its documents are of the test informatieobjecttype or e-mail; Advies extern mails the adviseur, Goedkeuren takes
-    GOEDKEUREN_DOORLOOPTIJD days. Tests using it share xdist group zac-taken-zaaktype, so a run makes one.
+    Its documents are of the test informatieobjecttype or e-mail; it has roltype Belanghebbende; Advies extern mails
+    the adviseur, Goedkeuren takes GOEDKEUREN_DOORLOOPTIJD days. Tests using it share xdist group zac-taken-zaaktype,
+    so a run makes one.
     """
     need_bootstrap("zac-bpmn-process")
     need_bootstrap("openzaak-iot-email")
@@ -108,6 +110,7 @@ def fixture_zac_taken_zaaktype(
         zaaktype_registry,
         test_zaaktype,
         informatieobjecttypen=(parts.informatieobjecttype, email),
+        types=TAKEN_TYPES,
     )
     return activate_human_tasks(
         zac_as_admin(podiumd_env),

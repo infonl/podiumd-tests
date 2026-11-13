@@ -21,17 +21,17 @@ from podiumd_tests.zac import E_FORMULIER
 from podiumd_tests.zac import NOTIFICATION_TIMEOUT
 from podiumd_tests.zac import PRODUCTAANVRAAG_SOURCE
 from podiumd_tests.zac import PRODUCTAANVRAAG_TIMEOUT
-from podiumd_tests.zac import clean_up_inbox_entries
 from podiumd_tests.zac import clean_up_zaak
-from podiumd_tests.zac import inbox_productaanvraag
-from podiumd_tests.zac import inbox_productaanvragen
-from podiumd_tests.zac import inbox_productaanvragen_page
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import start_zaak
 from podiumd_tests.zac import zaak_body
 from podiumd_tests.zac_beheer import communicatiekanalen
 from podiumd_tests.zac_documents import inbox_documenten
 from podiumd_tests.zac_documents import zaak_documents
+from podiumd_tests.zac_productaanvraag import clean_up_inbox_entries
+from podiumd_tests.zac_productaanvraag import inbox_productaanvraag
+from podiumd_tests.zac_productaanvraag import inbox_productaanvragen
+from podiumd_tests.zac_productaanvraag import inbox_productaanvragen_page
 
 if TYPE_CHECKING:
     import requests

@@ -47,10 +47,10 @@ from podiumd_tests.workloads import ROOT_TIMEOUT
 from podiumd_tests.workloads import component_down
 from podiumd_tests.workloads import scaled
 from podiumd_tests.zac import PRODUCTAANVRAAG_TIMEOUT
-from podiumd_tests.zac import productaanvraag_zaak
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import zaak_body
 from podiumd_tests.zac_betrokkenen import make_person_initiator
+from podiumd_tests.zac_productaanvraag import productaanvraag_zaak
 
 if TYPE_CHECKING:
     from collections.abc import Callable

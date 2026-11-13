@@ -9,6 +9,7 @@ import pytest
 import requests
 
 from podiumd_tests import zac
+from podiumd_tests import zac_productaanvraag
 from podiumd_tests import zac_taken
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.oidc import LOGIN_PATHS
@@ -155,7 +156,7 @@ def test_productaanvraag_zaak_finds_the_zaak_by_kenmerk_and_cleanup_deletes_it(f
     )
     registry = ResourceRegistry("ptest-abc")
     openzaak = ApiClient(requests.Session(), "https://oz.test", {})
-    assert zac.productaanvraag_zaak(openzaak, registry, "OF-42", timeout=0)["url"] == zaken[0]["url"]
+    assert zac_productaanvraag.productaanvraag_zaak(openzaak, registry, "OF-42", timeout=0)["url"] == zaken[0]["url"]
     assert "startdatum__gte" in sent[0].url
     assert registry.cleanup() == []
     assert sent[-1].method == "DELETE"
@@ -729,7 +730,7 @@ def test_productaanvraag_zaken_are_all_zaken_with_the_kenmerk(fake_http):
     zaken = [{"url": "z/1", "toelichting": "kenmerk OF-42"}, {"url": "z/2"}, {"url": "z/3", "toelichting": "OF-42"}]
     fake_http({"GET /zaken/api/v1/zaken": (200, zaken)})
     openzaak = ApiClient(requests.Session(), "https://oz.test", {})
-    assert [zaak["url"] for zaak in zac.productaanvraag_zaken(openzaak, "OF-42")] == ["z/1", "z/3"]
+    assert [zaak["url"] for zaak in zac_productaanvraag.productaanvraag_zaken(openzaak, "OF-42")] == ["z/1", "z/3"]
 
 
 def test_inbox_productaanvragen_of_a_type_and_their_cleanup(fake_http):
@@ -738,28 +739,28 @@ def test_inbox_productaanvragen_of_a_type_and_their_cleanup(fake_http):
         {"PUT /rest/inbox-productaanvragen": (200, found), "DELETE /rest/inbox-productaanvragen/7": (204, None)}
     )
     http, registry = requests.Session(), ResourceRegistry("ptest-abc")
-    assert zac.inbox_productaanvragen(http, ZAC, "t") == found["resultaten"]
+    assert zac_productaanvraag.inbox_productaanvragen(http, ZAC, "t") == found["resultaten"]
     assert json.loads(sent[0].body)["type"] == "t"
-    zac.clean_up_inbox_entries(http, ZAC, registry, "t")
+    zac_productaanvraag.clean_up_inbox_entries(http, ZAC, registry, "t")
     assert registry.cleanup() == []
     assert (sent[-1].method, sent[-1].url) == ("DELETE", f"{ZAC}/rest/inbox-productaanvragen/7")
 
 
 def test_inbox_productaanvraag_is_the_first_entry_of_the_type(fake_http):
     fake_http({"PUT /rest/inbox-productaanvragen": (200, {"resultaten": [{"id": 7}, {"id": 8}], "totaal": 2})})
-    assert zac.inbox_productaanvraag(requests.Session(), ZAC, "t") == {"id": 7}
+    assert zac_productaanvraag.inbox_productaanvraag(requests.Session(), ZAC, "t") == {"id": 7}
 
 
 def test_zaak_with_contactgegevens_is_the_zaak_once_zac_shows_them(fake_http):
     shown = {"uuid": "u-1", "zaakSpecificContactDetails": {"emailAddress": "a@example.invalid"}}
     fake_http({"GET /rest/zaken/zaak/u-1": (200, shown)})
-    assert zac.zaak_with_contactgegevens(requests.Session(), ZAC, "u-1") == shown
+    assert zac_productaanvraag.zaak_with_contactgegevens(requests.Session(), ZAC, "u-1") == shown
 
 
 def test_inbox_productaanvragen_page_sends_the_type_the_page_and_its_size(fake_http):
     page = {"resultaten": [{"id": 7}], "totaal": 2.0}
     sent = fake_http({"PUT /rest/inbox-productaanvragen": (200, page)})
-    assert zac.inbox_productaanvragen_page(requests.Session(), ZAC, "t", 1, 1) == page
+    assert zac_productaanvraag.inbox_productaanvragen_page(requests.Session(), ZAC, "t", 1, 1) == page
     assert json.loads(sent[-1].body) == {"type": "t", "page": 1, "maxResults": 1}
 
 

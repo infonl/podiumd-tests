@@ -11,6 +11,7 @@ from podiumd_tests.basisregistraties import BAG_DAM
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
+from podiumd_tests.zac import DAM
 from podiumd_tests.zac import attempt_zaak
 from podiumd_tests.zac import attribuut_historie
 from podiumd_tests.zac import bag_object
@@ -39,8 +40,7 @@ ZAC_TEAM = pytest.mark.source(
     "podiumd-tests",
     "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, zaak-lifecycle).",
 )
-# The Dam in Amsterdam as ZAC's locatie of a zaak, and as Open Zaak's historie shows it.
-DAM = {"type": "POINT", "point": {"latitude": 52.37, "longitude": 4.89}}
+# DAM as Open Zaak's historie shows it.
 DAM_WKT = "POINT(4.89 52.37)"
 
 # A BAG URL on a host that never resolves (RFC 2606).

@@ -347,6 +347,10 @@ def ontkoppel_bag_object(
     return http.delete(f"{zac_url}/rest/bag", json=body)
 
 
+# The Dam in Amsterdam as ZAC's locatie of a zaak.
+DAM = {"type": "POINT", "point": {"latitude": 52.37, "longitude": 4.89}}
+
+
 def zaaklocatie(
     http: requests.Session, zac_url: str, zaak: JsonObject, geometrie: JsonObject | None, reden: str
 ) -> requests.Response:
@@ -679,83 +683,10 @@ def recent_zaken(openzaak: ApiClient) -> list[JsonObject]:
     return openzaak.list(f"{ZAKEN}/zaken", {"startdatum__gte": since})
 
 
-def productaanvraag_zaken(openzaak: ApiClient, kenmerk: str) -> list[JsonObject]:
-    """Return the zaken started since yesterday with the productaanvraag's kenmerk in the toelichting."""
-    return [zaak for zaak in recent_zaken(openzaak) if kenmerk in str(zaak.get("toelichting") or "")]
-
-
-def productaanvraag_zaak(
-    openzaak: ApiClient, registry: ResourceRegistry, kenmerk: str, timeout: float = PRODUCTAANVRAAG_TIMEOUT
-) -> JsonObject:
-    """Return the zaak ZAC starts for a productaanvraag, with its kenmerk in the toelichting; cleanup deletes it.
-
-    openzaak: a client that may read and delete zaken of the zaaktype (bootstrap openzaak-client-productaanvraag).
-    """
-
-    def started() -> JsonObject | None:
-        return next(iter(productaanvraag_zaken(openzaak, kenmerk)), None)
-
-    def delete() -> None:
-        zaak = started()
-        if zaak:
-            delete_zaak(openzaak, str(zaak["url"]), with_documents=True)
-
-    # Registered before the wait, so a zaak started after a timeout goes too.
-    registry.add(f"zaak for productaanvraag {kenmerk}", delete)
-    return wait_until(started, timeout=timeout, interval=3, description=f"zaak for productaanvraag {kenmerk}")
-
-
-def zaak_with_contactgegevens(zac: requests.Session, zac_url: str, uuid: str) -> JsonObject:
-    """Return the zaak as ZAC shows it, once ZAC has linked the aanvraag's contactgegevens to it.
-
-    ZAC links them after it assigned the zaak and added the betrokkenen, right before it sends the
-    ontvangstbevestiging.
-    """
-
-    def shown() -> JsonObject | None:
-        found = read_zaak(zac, zac_url, uuid)
-        return found if found.get("zaakSpecificContactDetails") else None
-
-    return wait_until(shown, timeout=PRODUCTAANVRAAG_TIMEOUT, description=f"contactgegevens on zaak {uuid}")
-
-
-def inbox_productaanvragen(http: requests.Session, zac_url: str, productaanvraagtype: str) -> list[JsonObject]:
-    """Return the entries of ZAC's Inbox productaanvragen of the productaanvraagtype."""
-    return entries(inbox_productaanvragen_page(http, zac_url, productaanvraagtype, 0, 100).get("resultaten"))
-
-
-def inbox_productaanvragen_page(
-    http: requests.Session, zac_url: str, productaanvraagtype: str, page: int, max_results: int
-) -> JsonObject:
-    """Return one page of ZAC's Inbox productaanvragen of the productaanvraagtype, with its totaal."""
-    return list_page(http, f"{zac_url}/rest/inbox-productaanvragen", {"type": productaanvraagtype}, page, max_results)
-
-
-def inbox_productaanvraag(http: requests.Session, zac_url: str, productaanvraagtype: str) -> JsonObject:
-    """Return the first entry of ZAC's Inbox productaanvragen of the productaanvraagtype, once ZAC lists one."""
-    return wait_until(
-        lambda: next(iter(inbox_productaanvragen(http, zac_url, productaanvraagtype)), None),
-        timeout=PRODUCTAANVRAAG_TIMEOUT,
-        description=f"productaanvraag {productaanvraagtype} in the Inbox productaanvragen",
-    )
-
-
 def list_page(http: requests.Session, url: str, filters: JsonObject, page: int, max_results: int) -> JsonObject:
     """Return one page of ZAC's paged list at url (the inbox and ontkoppelde documenten lists), with its totaal."""
     response = http.put(url, json={**filters, "page": page, "maxResults": max_results})
     return cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
-
-
-def clean_up_inbox_entries(
-    http: requests.Session, zac_url: str, registry: ResourceRegistry, productaanvraagtype: str
-) -> None:
-    """Delete, at cleanup, the entries of ZAC's Inbox productaanvragen of the productaanvraagtype."""
-
-    def delete() -> None:
-        for entry in inbox_productaanvragen(http, zac_url, productaanvraagtype):
-            expect_status(http.delete(f"{zac_url}/rest/inbox-productaanvragen/{entry['id']}"), HTTPStatus.NO_CONTENT)
-
-    registry.add(f"Inbox productaanvragen of type {productaanvraagtype}", delete)
 
 
 # ZAC's log line at the end of a reindex of zaken (ReindexSupportService.finishReindex).
