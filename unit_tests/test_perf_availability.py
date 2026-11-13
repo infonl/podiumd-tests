@@ -141,6 +141,7 @@ def test_a_quiet_load_has_no_problems_and_says_so():
         memory={KEY: 512 * MIB, ("podiumd", "zac-1", "zac"): 300 * MIB},
         memory_limits={KEY: 1024 * MIB, ("podiumd", "zac-1", "zac"): None},
         recovered_s=2.0,
+        throttled={KEY: 0.004},
         notes=["CPU throttling: kubelet cAdvisor metrics unreadable: forbidden"],
     )
     assert problems(found) == []

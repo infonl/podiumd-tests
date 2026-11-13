@@ -28,6 +28,8 @@ MIB = 1024 * 1024
 # Seconds without failed requests that end a burst.
 BURST_GAP_S = 5
 QUIET = "No failed requests, failing root answers or pod changes."
+# Lower CPU throttling shares would show as 0%.
+SHOWN_SHARE = 0.005
 
 
 def availability(samples: Iterable[Sample]) -> dict[str, tuple[int, int]]:
@@ -197,7 +199,7 @@ def _component_rows(watch: Watch) -> list[str]:
 
 def _remarks(watch: Watch) -> list[str]:
     shares_by_key = watch.throttled.items()
-    throttled = sorted(((share, key) for key, share in shares_by_key if share > 0), reverse=True)
+    throttled = sorted(((share, key) for key, share in shares_by_key if share >= SHOWN_SHARE), reverse=True)
     no_limit = sorted(_container(key) for key, limit in watch.memory_limits.items() if limit is None)
     shares = ", ".join(f"{_container(key)} {share:.0%}" for share, key in throttled)
     found = [f"CPU throttled (share of CFS periods): {shares}."] if throttled else []
