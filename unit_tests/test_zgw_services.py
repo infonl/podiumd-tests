@@ -1,6 +1,7 @@
 """Unit tests for the zgw_consumers Service checks."""
 
 import pytest
+import requests
 
 from podiumd_tests import zgw_services
 from podiumd_tests.zgw_services import SERVICE_REFERENCES
@@ -9,6 +10,7 @@ from podiumd_tests.zgw_services import list_path
 from podiumd_tests.zgw_services import reference_problems
 from podiumd_tests.zgw_services import service_problem
 from podiumd_tests.zgw_services import service_problems
+from podiumd_tests.zgw_services import view_config_problems
 
 
 @pytest.mark.parametrize(
@@ -100,3 +102,36 @@ def test_reference_problems_name_missing_rows_and_unset_fields(page_env, monkeyp
         "field": "",
         "where": {"api_type": "ztc"},
     }
+
+
+VIEW_CONFIG = """<table><tbody>
+<tr><td><strong>Site domain</strong></td><td>openzaak.local</td><td><i class="fas fa-check"></i></td></tr>
+<tr><td><strong>NRC</strong></td>
+<td><a href="https://on.local/api/v1/">https://on.local/api/v1/</a></td><td><i class="fas fa-check"></i></td></tr>
+<tr><td><strong>Type of component</strong></td><td>Notificaties API</td><td><i class="fas fa-minus"></i></td></tr>
+<tr><td><strong>Listens to AC notifications?</strong></td><td>Nee</td>
+<td><i class="fas fa-times"></i></td></tr>
+</tbody></table>"""
+
+
+@pytest.mark.parametrize(
+    ("page", "problems"),
+    [
+        (VIEW_CONFIG, ["Listens to AC notifications?: Nee"]),
+        (VIEW_CONFIG.replace("fa-times", "fa-check"), []),
+        (
+            VIEW_CONFIG.replace('</a></td><td><i class="fas fa-check">', '</a></td><td><i class="fas fa-times">'),
+            ["NRC: https://on.local/api/v1/", "Listens to AC notifications?: Nee"],
+        ),
+        ("<table></table>", ["https://openzaak.local/view-config/: no configuration checks on the page"]),
+    ],
+)
+def test_view_config_problems_are_the_failed_checks(monkeypatch, response_factory, page, problems):
+    url = "https://openzaak.local/view-config/"
+    asked = []
+    session = requests.Session()
+    monkeypatch.setattr(
+        session, "get", lambda get_url: asked.append(get_url) or response_factory(body=page.encode(), url=url)
+    )
+    assert view_config_problems(session, "https://openzaak.local") == problems
+    assert asked == [url]

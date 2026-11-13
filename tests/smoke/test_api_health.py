@@ -19,6 +19,8 @@ from podiumd_tests.bootstrap.omc import omc_token
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
+from podiumd_tests.zgw_services import VIEW_CONFIG_APPS
+from podiumd_tests.zgw_services import view_config_problems
 
 if TYPE_CHECKING:
     import requests
@@ -101,6 +103,32 @@ ANONYMOUS = [
 def test_health_endpoint(http: requests.Session, urls: dict[str, str], component: str, path: str) -> None:
     """The component's own health endpoint reports healthy."""
     expect_status(http.get(urls[component] + path), HTTPStatus.OK)
+
+
+# The podiumd chart sets up no subscription of Open Notificaties on kanaal autorisaties (podiumd-chart-44).
+ON_WITHOUT_AC_SUBSCRIPTION = pytest.mark.xfail(
+    strict=True,
+    reason="[podiumd-chart-44] the podiumd chart (4.10.1) gives Open Notificaties no subscription on kanaal "
+    "autorisaties, so its cached applicaties never refresh (view-config: Listens to AC notifications? Nee)",
+)
+
+
+@pytest.mark.source(
+    "upstream open-zaak/open-zaak docs/installation/post_install.rst",
+    "After installation, /view-config/ shows whether the site domain and the Notificaties API are configured.",
+)
+@pytest.mark.parametrize(
+    "component",
+    [requiring(c, c, marks=[ON_WITHOUT_AC_SUBSCRIPTION] if c == "opennotificaties" else []) for c in VIEW_CONFIG_APPS],
+)
+@pytest.mark.scenario("""
+    Given each deployed app with a configuration page (Open Zaak, Open Notificaties)
+    When the configuration page is opened
+    Then every check of the site domain, the Notificaties API and the Autorisaties API passes
+""")
+def test_view_config_checks_pass(http: requests.Session, urls: dict[str, str], component: str) -> None:
+    """The app's /view-config/ page marks no configuration check failed."""
+    assert view_config_problems(http, urls[component]) == []
 
 
 @pytest.mark.source(

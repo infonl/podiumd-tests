@@ -1,6 +1,11 @@
-"""The zgw_consumers Services of the Django apps: their credentials, and the config fields that reference them."""
+"""The zgw_consumers Services of the Django apps: their credentials, the config fields that reference them, and the
+/view-config/ checks.
+"""
 
 from __future__ import annotations
+
+import html
+import re
 
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -11,9 +16,12 @@ from urllib.parse import urlsplit
 
 from podiumd_tests.components import component_for_host
 from podiumd_tests.django_snippets import run_snippet
+from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    import requests
 
     from podiumd_tests.environment import Environment
 
@@ -151,3 +159,27 @@ def reference_problems(env: Environment, component: str) -> list[str]:
         elif None in rows:
             problems.append(f"{reference}: unset in {rows.count(None)} of {len(rows)} rows")
     return problems
+
+
+# Apps with vng_api_common's /view-config/ page: a row per check of the site domain, Notificaties API and
+# Autorisaties API, marked with the icon fa-check (ok), fa-times (failed) or fa-minus (information).
+VIEW_CONFIG_APPS = ("openzaak", "opennotificaties")
+VIEW_CONFIG_ROW = re.compile(
+    r"<td><strong>(?P<parameter>.*?)</strong></td>\s*<td>(?P<value>.*?)</td>\s*<td><i class=\"fas fa-(?P<icon>\w+)\"",
+    re.DOTALL,
+)
+TAG = re.compile(r"<[^>]+>")
+
+
+def view_config_problems(session: requests.Session, base_url: str) -> list[str]:
+    """Return "parameter: value" of each check the app's /view-config/ page marks failed; [] when all pass."""
+    page = expect_status(session.get(f"{base_url}/view-config/"), HTTPStatus.OK)
+    rows = list(VIEW_CONFIG_ROW.finditer(page.text))
+    if not rows:
+        return [f"{page.url}: no configuration checks on the page"]
+    return [_check_text(row) for row in rows if row["icon"] == "times"]
+
+
+def _check_text(row: re.Match[str]) -> str:
+    value = TAG.sub("", row["value"]).strip()
+    return html.unescape(f"{row['parameter']}: {value}")
