@@ -1,21 +1,27 @@
-"""ZAC's dashboard for a CMMN taak started for another user (signalering TAAK_OP_NAAM)."""
+"""ZAC's dashboard (signalering TAAK_OP_NAAM) and Mijn taken for a CMMN taak of another user."""
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import ZAC_ROLE_USERS
+from podiumd_tests.responses import expect_status
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import LIST_TIMEOUT
+from podiumd_tests.zac import assignment
 from podiumd_tests.zac import is_taak_listed
 from podiumd_tests.zac_signaleringen import signalering_taken
 from podiumd_tests.zac_signaleringen import turn_signaleringen
 from podiumd_tests.zac_taken import ADVIES_INTERN
 from podiumd_tests.zac_taken import read_taak
 from podiumd_tests.zac_taken import started_taak
+from podiumd_tests.zac_taken import verdelen_taken
+from podiumd_tests.zac_taken import vrijgeven_taken
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -72,3 +78,45 @@ def test_taak_started_for_a_behandelaar_is_on_their_dashboard(
     )
     read_taak(behandelaar, zac_url, str(taak["id"]))
     assert taak["id"] not in signalering_taken(behandelaar, zac_url)
+
+
+@pytest.mark.source(
+    "ZAC features/7-taken-verdelen-vrijgeven.feature",
+    "Bob assigns selected taken from the werkvoorraad to a group and user, and releases them.",
+)
+@pytest.mark.scenario("""
+    Given a taak Aanvullende informatie on a zaak in ZAC, assigned to the test admin
+    When the admin releases the taak from the list
+    Then the taak keeps its group but has no behandelaar, and leaves the admin's Mijn taken
+    When the admin assigns the taak from the list to the group and another behandelaar
+    Then the taak has that group and behandelaar, and is in that behandelaar's Mijn taken
+""")
+def test_taken_from_the_list_are_released_and_assigned(
+    zac: requests.Session,
+    zac_as: Callable[[str], requests.Session],
+    urls: dict[str, str],
+    taak: JsonObject,
+    zac_group: str,
+) -> None:
+    """Vrijgeven takes the behandelaar away from the selected task; verdelen gives it a new one, in their Mijn taken."""
+    zac_url = urls["zac"]
+    behandelaar = zac_as("behandelaar")
+    naam = ZAC_ROLE_USERS["behandelaar"].username
+
+    def is_(wanted: tuple[object, object]) -> bool:
+        return assignment(read_taak(zac, zac_url, str(taak["id"]))) == wanted
+
+    expect_status(vrijgeven_taken(zac, zac_url, [taak]), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    wait_until(lambda: is_((zac_group, None)), timeout=LIST_TIMEOUT, description=f"task {taak['id']} vrijgegeven")
+    wait_until(
+        lambda: not is_taak_listed(zac, zac_url, taak, alleenMijnTaken=True),
+        timeout=LIST_TIMEOUT,
+        description=f"task {taak['id']} out of Mijn taken of {ADMIN.username}",
+    )
+    expect_status(verdelen_taken(zac, zac_url, [taak], zac_group, naam), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    wait_until(lambda: is_((zac_group, naam)), timeout=LIST_TIMEOUT, description=f"task {taak['id']} verdeeld")
+    wait_until(
+        lambda: is_taak_listed(behandelaar, zac_url, taak, alleenMijnTaken=True),
+        timeout=LIST_TIMEOUT,
+        description=f"task {taak['id']} in Mijn taken of {naam}",
+    )

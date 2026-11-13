@@ -1,5 +1,5 @@
 """ZAC's CMMN human tasks: Aanvullende informatie in the intake; Goedkeuren, Advies intern, Advies extern and
-Document verzenden in behandeling. Started, in Mijn taken, distributed, released and completed.
+Document verzenden in behandeling. Started, in Mijn taken and completed.
 
 Partly ported from ZAC's own e2e features taken-toevoegen and taken-verdelen-vrijgeven, through the REST API its UI
 calls. The taken in behandeling run on a throwaway zaaktype with every human task on: the estate's zaaktypen keep
@@ -53,8 +53,6 @@ from podiumd_tests.zac_taken import open_task
 from podiumd_tests.zac_taken import read_taak
 from podiumd_tests.zac_taken import start_human_task
 from podiumd_tests.zac_taken import started_taak
-from podiumd_tests.zac_taken import verdelen_taken
-from podiumd_tests.zac_taken import vrijgeven_taken
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -151,36 +149,6 @@ def test_aanvullende_informatie_gives_the_zaak_its_waiting_status(
         return str(naam) if naam == WAITING else None
 
     wait_until(status, timeout=LIST_TIMEOUT, description=f"status {WAITING!r} on {taak['zaakIdentificatie']}")
-
-
-@pytest.mark.source(
-    "ZAC features/7-taken-verdelen-vrijgeven.feature",
-    "Bob assigns selected taken from the werkvoorraad to a group and user, and releases them.",
-)
-@THROWAWAY
-@TAKEN_ZAAKTYPE
-@pytest.mark.scenario("""
-    Given a taak Aanvullende informatie on a zaak in ZAC, assigned to a behandelaar
-    When the behandelaar releases the taak from the list
-    Then the taak keeps its group but has no behandelaar
-    When the behandelaar assigns the taak from the list to the group and a behandelaar
-    Then the taak has that group and behandelaar again
-""")
-def test_taken_from_the_list_are_released_and_assigned(
-    zac: requests.Session, urls: dict[str, str], taak: JsonObject, zac_group: str
-) -> None:
-    """Vrijgeven takes the behandelaar away from the selected task; verdelen gives it back."""
-
-    def is_(wanted: tuple[object, object]) -> bool:
-        return assignment(read_taak(zac, urls["zac"], str(taak["id"]))) == wanted
-
-    expect_status(vrijgeven_taken(zac, urls["zac"], [taak]), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    wait_until(lambda: is_((zac_group, None)), timeout=LIST_TIMEOUT, description=f"task {taak['id']} vrijgegeven")
-    verdeeld = verdelen_taken(zac, urls["zac"], [taak], zac_group, ADMIN.username)
-    expect_status(verdeeld, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    wait_until(
-        lambda: is_((zac_group, ADMIN.username)), timeout=LIST_TIMEOUT, description=f"task {taak['id']} verdeeld"
-    )
 
 
 @ZAAK_LIFECYCLE
