@@ -48,6 +48,19 @@ pytestmark = [
 PUBLISHED = "bericht-gepubliceerd"
 
 
+def expect_omc_5(request: pytest.FixtureRequest, env: Environment) -> None:
+    """Mark the test a strict xfail where OMC cannot read an Open VTB 0.2.0 bericht."""
+    expect_defect(
+        request,
+        env,
+        "omc",
+        lambda version: version < OMC_READS_NEW_OPENVTB,
+        raises=UnexpectedStatusError,
+        reason="[omc-5] OMC before 2.3.2 requires mijnOverheidBerichtenbox on an Open VTB 0.2.0 bericht, where it lives "
+        "on the berichttype, and cannot read any bericht (206); fixed in OMC v.2.3.2",
+    )
+
+
 @pytest.mark.scenario("""
     Given Open VTB registered a bericht that is not yet published
     When OMC gets Open VTB's event about it
@@ -72,15 +85,7 @@ def test_bericht_to_a_non_citizen_is_dropped(
     registry: ResourceRegistry,
 ) -> None:
     """An ontvanger URN without a BSN: 202 "Dropped", no notification."""
-    expect_defect(
-        request,
-        podiumd_env,
-        "omc",
-        lambda version: version < OMC_READS_NEW_OPENVTB,
-        raises=UnexpectedStatusError,
-        reason="[omc-5] OMC before 2.3.2 requires mijnOverheidBerichtenbox on an Open VTB 0.2.0 bericht, where it lives "
-        "on the berichttype, and cannot read any bericht (206); fixed in OMC v.2.3.2",
-    )
+    expect_omc_5(request, podiumd_env)
     bericht = make_bericht(podiumd_env, openvtb_berichten, registry, "urn:ptest:ontvanger:1")
     event = bericht_event(PUBLISHED, str(bericht["uuid"]))
     expect_outcome(listen(http, podiumd_env, event), HTTPStatus.ACCEPTED, "Dropped: recipient is not a citizen")
@@ -94,6 +99,7 @@ def test_bericht_to_a_non_citizen_is_dropped(
     Then OMC asks Notify to send the inwoner the digitale post e-mail
 """)
 def test_bericht_is_mailed_to_the_inwoner(
+    request: pytest.FixtureRequest,
     http: requests.Session,
     podiumd_env: Environment,
     need_bootstrap: Callable[..., None],
@@ -114,6 +120,7 @@ def test_bericht_is_mailed_to_the_inwoner(
     reason = setting_skip(podiumd_env, "ZGW_WHITELIST_VTBMESSAGE_TYPES", str(bericht["berichtType"]), listed=True)
     if reason:
         pytest.skip(reason)
+    expect_omc_5(request, podiumd_env)
     event = bericht_event(PUBLISHED, str(bericht["uuid"]))
     expect_outcome(listen(http, podiumd_env, event), HTTPStatus.ACCEPTED, "Digitale post (email) notification sent")
     notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_MESSAGEBOX")
