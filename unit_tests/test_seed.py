@@ -99,6 +99,27 @@ def test_objecttype_is_run_tagged_and_deleted_by_its_snippet(fake_http, monkeypa
     assert ran == [("objecttypen-deploy", "objecttypen_tagged", {"action": "delete", "name": name})]
 
 
+def test_named_objecttypes_and_newest_version(fake_http):
+    versions = [f"{API}/objecttypes/a/versions/{number}" for number in (2, 10, 9)]
+    fake_http(
+        {
+            "/v1/objecttypes": results({"name": "Productaanvraag-Dimpact-oud"}, {"name": "P", "versions": versions}),
+            "/v1/objecttypes/a/versions/10": (200, {"version": 10}),
+        }
+    )
+    found = objecten_module.named_objecttypes(api(), "P")
+    assert len(found) == 1
+    assert objecten_module.newest_version(api(), found[0]) == {"version": 10}
+
+
+def test_dimpact_productaanvraag_schema_is_the_vendored_copy():
+    schema = objecten_module.dimpact_productaanvraag_schema()
+    assert (schema["$id"], schema["required"]) == (
+        "https://open-objecten.org/schemas/productaanvraag",
+        ["bron", "type", "aanvraaggegevens"],
+    )
+
+
 def test_digitaal_adres_of_a_partij_is_its_standard_address_unless_told_otherwise(fake_http):
     sent = fake_http(created("digitaleadressen"))
     registry = ResourceRegistry("run1")

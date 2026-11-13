@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import json
 import secrets
 
+from importlib.resources import files
 from typing import TYPE_CHECKING
 from typing import cast
 
+from podiumd_tests.bootstrap.bpmn import uuid_of
 from podiumd_tests.django_snippets import run_snippet
+from podiumd_tests.json_data import strings
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.seed.tagged_types import TaggedTypes
 from podiumd_tests.zac import notificatie
@@ -36,6 +40,27 @@ def objecttype_url(env: Environment, name: str) -> str:
         msg = f"Objecten has no objecttype {name}"
         raise LookupError(msg)
     return found["url"]
+
+
+def named_objecttypes(objecttypen: ApiClient, name: str) -> list[JsonObject]:
+    """Return the objecttypes the Objecttypen API lists with exactly this name."""
+    return [found for found in objecttypen.list("objecttypes", {"name": name}) if found.get("name") == name]
+
+
+def newest_version(objecttypen: ApiClient, objecttype: JsonObject) -> JsonObject:
+    """Return the objecttype's version with the highest number."""
+    versions = strings(objecttype.get("versions"))
+    return objecttypen.get(max(versions, key=lambda url: int(uuid_of(url))))
+
+
+def dimpact_productaanvraag_schema() -> JsonObject:
+    """Return Dimpact's Productaanvraag-Dimpact JSON schema.
+
+    Copied unchanged (CC0 1.0) from https://codeberg.org/Dimpact/objecttypes at commit
+    675666d9741170fca200fef4527fb1ea6ac6ac76 (2026-07-09): Productaanvraag/productaanvraag-dimpact.json.
+    """
+    text = files("podiumd_tests.seed").joinpath("productaanvraag-dimpact.json").read_text(encoding="utf-8")
+    return cast("JsonObject", json.loads(text))
 
 
 OBJECTTYPES = TaggedTypes("objecttype", "objecttypen", "objecttypen_tagged")

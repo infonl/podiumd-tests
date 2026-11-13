@@ -15,8 +15,9 @@ from podiumd_tests.bootstrap.names import ITA_OBJECTTYPES
 from podiumd_tests.bootstrap.names import KISS_OBJECTTYPES
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import section
-from podiumd_tests.json_data import strings
 from podiumd_tests.pytest_plugin import requiring
+from podiumd_tests.seed.objecten import named_objecttypes
+from podiumd_tests.seed.objecten import newest_version
 
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
@@ -66,8 +67,6 @@ def test_api_serves_the_objecttype_with_its_schema(objecttypen: ApiClient, name:
 
     Once: podiumd's create-required-objecttypen Job runs on every upgrade and must not create it again.
     """
-    found = [t for t in objecttypen.list("objecttypes", {"name": name}) if t.get("name") == name]
+    found = named_objecttypes(objecttypen, name)
     assert len(found) == 1, f"Objecttypen API lists {len(found)} objecttypes named {name}, expected 1"
-    versions = strings(found[0].get("versions"))
-    newest = objecttypen.get(max(versions, key=lambda url: int(url.rstrip("/").rsplit("/", 1)[-1])))
-    assert section(newest, "jsonSchema"), f"{name}: newest version has no jsonSchema"
+    assert section(newest_version(objecttypen, found[0]), "jsonSchema"), f"{name}: newest version has no jsonSchema"
