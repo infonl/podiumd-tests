@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 
     from playwright.sync_api import Page
 
+    from podiumd_tests.bootstrap.keycloak import KeycloakUser
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
@@ -47,6 +48,20 @@ def fixture_ita(page: Page, podiumd_env: Environment, need_bootstrap: Callable[.
     """Return ITA in the KCC test user's session; ITA finds the user's Open Klant actor by e-mail."""
     need_bootstrap(KCC.name, "openklant-actor-kcc")
     return kcc_login(page, podiumd_env, "ita")
+
+
+@pytest.fixture(name="ita_as")
+def fixture_ita_as(
+    page: Page, podiumd_env: Environment, need_bootstrap: Callable[..., None]
+) -> Callable[[KeycloakUser], requests.Session]:
+    """Return a login to ITA as a test user, in the browser; each login replaces the browser's previous one."""
+
+    def login(user: KeycloakUser) -> requests.Session:
+        need_bootstrap(user.name)
+        page.context.clear_cookies()
+        return kcc_login(page, podiumd_env, "ita", user)
+
+    return login
 
 
 @pytest.fixture(scope="session", name="logboek_type")

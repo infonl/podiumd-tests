@@ -12,9 +12,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.bootstrap.steps import KCC
+from podiumd_tests.bootstrap.steps import ITA_BEHEERDER
 from podiumd_tests.clients.platform import mailpit_client
-from podiumd_tests.ita import assign_to_me
 from podiumd_tests.ita import forward
 from podiumd_tests.ita import mailbox
 from podiumd_tests.ita import make_contactverzoek
@@ -36,6 +35,7 @@ if TYPE_CHECKING:
 
     import requests
 
+    from podiumd_tests.bootstrap.keycloak import KeycloakUser
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
@@ -256,26 +256,27 @@ def test_medewerkers_are_found_by_name_afdeling_and_groep(
     "Regression #425: a contactverzoek assigned through the user's object-register medewerker id is the user's.",
 )
 @pytest.mark.scenario("""
-    Given a contactverzoek assigned to the KCC medewerker by their identificatie in the medewerker register
+    Given a contactverzoek assigned to a medewerker by their identificatie in the medewerker register
     When the medewerker opens their own contactverzoeken in ITA
     Then ITA lists it, so the medewerker need not assign it to themselves
 """)
 def test_contactverzoek_assigned_by_objectregister_id_is_mine(  # fixtures
-    ita: requests.Session,
+    ita_as: Callable[[KeycloakUser], requests.Session],
     urls: dict[str, str],
     openklant: ApiClient,
     registry: ResourceRegistry,
     objecten: ApiClient,
     logboek_type: str,
-    need_bootstrap: Callable[..., None],
 ) -> None:
-    """ITA counts an actor mdw/obj/idf with the user's samaccountname as the user's (ITA#425)."""
-    need_bootstrap("objecten-medewerker-kcc")
-    identificatie = KCC.attributes["samaccountname"][0]
+    """ITA counts an actor mdw/obj/idf with the user's samaccountname as the user's (ITA#425).
+
+    The ITA beheerder, not the KCC user: KISS links the KCC user's contactmomenten to the newest actor with the KCC
+    username as objectId (kiss-4), and this test deletes its actor under them.
+    """
+    identificatie = ITA_BEHEERDER.attributes["samaccountname"][0]
     # ITA's key for a medewerker in the object register (KnownMedewerkerIdentificators.ObjectRegisterId).
     key = {"CodeObjecttype": "mdw", "CodeRegister": "obj", "CodeSoortObjectId": "idf", "ObjectId": identificatie}
     existing = openklant.list("actoren", {f"actoridentificator{name}": value for name, value in key.items()})
     actor = existing[0] if existing else make_actor(openklant, registry, "medewerker", identificatie, "mdw")
     taak = make_contactverzoek(openklant, objecten, registry, logboek_type, [actor])
-    assert str(taak["uuid"]) in uuids(my_internetaken(ita, urls["ita"]))
-    assign_to_me(ita, urls["ita"], taak)
+    assert str(taak["uuid"]) in uuids(my_internetaken(ita_as(ITA_BEHEERDER), urls["ita"]))

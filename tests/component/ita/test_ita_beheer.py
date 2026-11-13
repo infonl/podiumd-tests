@@ -20,7 +20,6 @@ from podiumd_tests.ita import logboek
 from podiumd_tests.ita import make_eenheid
 from podiumd_tests.ita import overview
 from podiumd_tests.kcc import ita_afhandeltermijn_hours
-from podiumd_tests.kcc import kcc_login
 from podiumd_tests.kcc import weekday_hours_before
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
@@ -33,8 +32,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     import requests
-
-    from playwright.sync_api import Page
 
     from podiumd_tests.bootstrap.keycloak import KeycloakUser
     from podiumd_tests.clients.api import ApiClient
@@ -51,20 +48,6 @@ E2E = "upstream interne-taak-afhandeling/ITA InterneTaakAfhandeling.EndToEndTest
 def fixture_closed_taak(openklant: ApiClient, internetaak: JsonObject) -> JsonObject:
     """An internetaak set to verwerkt."""
     return close_internetaak(openklant, internetaak)
-
-
-@pytest.fixture(name="ita_as")
-def fixture_ita_as(
-    page: Page, podiumd_env: Environment, need_bootstrap: Callable[..., None]
-) -> Callable[[KeycloakUser], requests.Session]:
-    """An ITA session of a test user, logged in in the browser; each login replaces the browser's previous one."""
-
-    def login(user: KeycloakUser) -> requests.Session:
-        need_bootstrap(user.name)
-        page.context.clear_cookies()
-        return kcc_login(page, podiumd_env, "ita", user)
-
-    return login
 
 
 @pytest.mark.source(
