@@ -23,7 +23,7 @@ to `openbaar`; `ptest-bootstrap-zgw-noauth` none. No client has Autorisaties API
 | # | Source @ commit | Licence | Unit | Total | Covered | Partly | Gap | n/a | Proposed tests | Days |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1a | `OneGround/ZGW-APIs-postman-tests` "ZGW business rules" | BSD-3-Clause | rule (659 requests, 357 `pm.test`) | 55 | 46 | 0 | 0 | 9 | 26 | 10 |
-| 1b | same, "ZGW features" (ZGW 1.5 and 1.7) | BSD-3-Clause | folder (299 requests, 277 `pm.test`) | 31 | 19 | 4 | 3 | 5 | 5 | 1.5 |
+| 1b | same, "ZGW features" (ZGW 1.5 and 1.7) | BSD-3-Clause | folder (299 requests, 277 `pm.test`) | 31 | 20 | 3 | 3 | 5 | 5 | 1.5 |
 | 2a | `VNG-Realisatie/gemma-postman-tests` `ZGW_api_postman_tests.json` (standaard.md) | EUPL | rule (859 requests, 401 `pm.test`) | 56 | 3 (52 shared with 1a) | 0 | 1 | | 1 | 0.5 |
 | 2b | same, `ZGW_OAS_tests.json` | EUPL | folder (228 requests, 243 `pm.test`) | 27 | 13 | 12 | 0 | 2 | 1 | 0.5 |
 | 2c | same, `issues_openzaak.md` | EUPL | note | 7 | | | 4 to recheck | 3 | 0 | 0 |
@@ -129,7 +129,7 @@ must succeed; most rules test POST, PUT and PATCH alike.
 | Besluittype | besluittype with zaaktypen and IOTs, PATCH, resultaattype with besluittype | partly: bootstrap | skip | the rules are brc-007, brc-008 | |
 | different catalogi | same IOT, BT, ZT in two catalogi | gap | skip | needs a second catalogus; the client must stay on the test catalogus | |
 | ZRC zaak maken en wijzigen | deelzaak, eigenschap, resultaat, rol per betrokkeneType (NP, NNP, vestiging, medewerker, organisatorische eenheid), locatie, contactmoment, HEAD, ETag | covered: `test_rollen_of_two_kinds`, `test_rol_of_a_company`, `test_rol_of_each_betrokkene_type_finds_the_zaak` (vestiging, medewerker, organisatorische eenheid), `test_zaakgeometrie_and_zoek_within`, `test_etag.py` | merge | rol of a vestiging, medewerker and organisatorische eenheid as parameters; ETag as below | `test_statussen_rollen.py` |
-| ZRC zaak zoekopties | 55 filters on GET /zaken and `_zoek` | partly: `test_zaken_zoeken.py::test_filters_find_and_leave_out_the_zaak` (identificatie, startdatum, rol, maximaleVertrouwelijkheidaanduiding, archiefstatus; list and `_zoek`); missing: einddatum and archiefactiedatum | merge | one parametrized test on identificatie, startdatum, einddatum, archiefactiedatum, rol filters; ZAC and OAB filter this way | `tests/component/openzaak/test_zaken_zoeken.py` (new) |
+| ZRC zaak zoekopties | 55 filters on GET /zaken and `_zoek` | covered: `test_zaken_zoeken.py::test_filters_find_and_leave_out_the_zaak` (identificatie, startdatum, einddatum, archiefactiedatum, rol, maximaleVertrouwelijkheidaanduiding, archiefstatus; list and `_zoek`) | merge | one parametrized test on identificatie, startdatum, einddatum, archiefactiedatum, rol filters; ZAC and OAB filter this way | `tests/component/openzaak/test_zaken_zoeken.py` (new) |
 | ZRC rollen | rol by vestigingsNummer, ETag, rol without naam refused | covered: `test_rol_of_each_betrokkene_type_finds_the_zaak` (vestigingsNummer), `test_etag.py::test_zaak_etag_follows_its_rollen`, `test_contactpersoon_of_a_rol_needs_a_naam` (a contactpersoonRol without naam, the only naam the rol requires) | merge | into the rol parameters | `test_statussen_rollen.py` |
 | ZRC contactmomenten | zaakcontactmoment | n/a | skip | needs a Contactmomenten API v1; PodiumD links klantcontacten in Open Klant 2 (`test_klantcontact_zaak.py`) | |
 | Voeg documenten aan de zaak toe | upload and link | covered: `test_document_linked_to_zaak` | skip | covered | |
