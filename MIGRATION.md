@@ -278,6 +278,7 @@ them as out of scope with this reason.
 |---|---|
 | OF-055, OF-057, OF-058, OF-072, OI-022, OI-024, OI-030, OI-032, OI-047, OI-049, OI-052, OI-053, OI-067, KI-021, KI-022 | eSuite, outside PodiumD |
 | ARCH-008, ARCH-014 | legal check, no system behaviour |
+| OI-016, OI-070 | DigiD Machtigen: Open Inwoner 2.5.0 has no DigiD Machtigen login (its OIDC plugins are DigiD, eHerkenning and eIDAS; nothing reads a representee); a gemachtigde recorded as a rol is shown by `test_gemachtigde_sees_the_zaak_in_mijn_zaken` |
 | OF-074 | a gemeente's own TSA |
 | ZAC-004, FB-013, FB-014 | upgrade acceptance: needs the state from before the upgrade, which belongs to the deploy process, not to podiumd-tests |
 | OFA-001, OFA-003, OFA-005, OFA-006, OFA-011 | Office add-in, outside PodiumD |

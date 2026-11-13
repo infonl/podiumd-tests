@@ -245,9 +245,11 @@ def test_bedrijfs_zaak_is_in_mijn_zaken(
     expect_listed(page, zaak)
 
 
-@pytest.mark.tc("OI-016", "OI-070")
 @pytest.mark.parametrize("who", ["inwoner", "bedrijf"])
-@pytest.mark.source("draaiboek OI-016, OI-070", "Information a gemachtigde is entitled to see is visible.")
+@pytest.mark.source(
+    "podiumd-tests",
+    "A gemachtigde recorded as a rol of the zaak sees it; DigiD Machtigen itself (OI-016, OI-070) is out of scope.",
+)
 @pytest.mark.scenario("""
     Given a zaak in Open Zaak of another inwoner
     And the inwoner or company is its gemachtigde

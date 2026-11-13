@@ -94,9 +94,9 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | PI | 57 |
 | TA | 264 |
 | ZAC | 19 |
-| draaiboek | 93 |
+| draaiboek | 91 |
 | external | 111 |
-| podiumd-tests | 503 |
+| podiumd-tests | 505 |
 | upstream | 173 |
 
 ## Expected failures per known issue
