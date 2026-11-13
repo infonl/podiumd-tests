@@ -13,6 +13,7 @@ from podiumd_tests.bootstrap.names import EMAIL_IOT
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import get_entries
+from podiumd_tests.seed.catalogi import ZAC_CATALOGUS_WRITES
 from podiumd_tests.seed.catalogi import ZaaktypeTypes
 from podiumd_tests.seed.catalogi import make_concept_besluittype
 from podiumd_tests.seed.openzaak import CATALOGI
@@ -20,6 +21,7 @@ from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.seed.zac_zaaktype import ZAC_TYPES
 from podiumd_tests.seed.zac_zaaktype import make_zac_zaaktype
 from podiumd_tests.seed.zac_zaaktype import zac_as_admin
+from podiumd_tests.seed.zac_zaaktype import zac_catalogus
 from podiumd_tests.zac import HEROPEND
 from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import clean_up_zaak
@@ -53,6 +55,17 @@ def fixture_zaaktype_registry(request: pytest.FixtureRequest, run_tag: str) -> I
         yield registry
     finally:
         registry.cleanup()
+
+
+@pytest.fixture(scope="session", name="eigen_catalogus")
+def fixture_eigen_catalogus(podiumd_env: Environment, openzaak: ApiClient) -> JsonObject:
+    """ZAC's own catalogus in Open Zaak, where the profile allows tests to publish run-tagged zaaktypen."""
+    if not podiumd_env.profile.is_allowed(ZAC_CATALOGUS_WRITES):
+        pytest.skip(
+            f"profile {podiumd_env.profile.name} keeps tests out of ZAC's catalogus: allow it with profile setting"
+            f" {ZAC_CATALOGUS_WRITES}"
+        )
+    return zac_catalogus(podiumd_env, openzaak)
 
 
 @pytest.fixture(scope="session", name="zac_eigen_zaaktype")

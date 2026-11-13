@@ -1,4 +1,4 @@
-"""Throwaway catalogus types in the test catalogus that tests publish, and their removal.
+"""Throwaway catalogus types that tests publish, in the test catalogus or ZAC's own, and their removal.
 
 The Catalogi API refuses to delete a published type, so cleanup and sweep delete them with snippet
 openzaak_catalogi_types; that snippet only touches names carrying a run tag.
@@ -34,29 +34,49 @@ if TYPE_CHECKING:
 
 SNIPPET = "openzaak_catalogi_types"
 CATALOGUS = {"domein": TEST_CATALOGUS_DOMEIN, "rsin": TEST_CATALOGUS_RSIN}
+# Profile setting that allows tests to publish run-tagged zaaktypen in ZAC's own catalogus, which the environment owns.
+ZAC_CATALOGUS_WRITES = "zac_catalogus_writes"
 
 
-def _params(name: str) -> dict[str, object]:
+def zac_catalogus_domein(env: Environment) -> str:
+    """Return the domein of ZAC's own catalogus, whose zaaktypen ZAC lists, checks and signals."""
+    return env.variable("zac", "CATALOGUS_DOMEIN")
+
+
+def written_catalogi(env: Environment) -> list[dict[str, str]]:
+    """Return the catalogi tests publish types in: the test catalogus, and ZAC's where the profile allows it."""
+    if not env.profile.is_allowed(ZAC_CATALOGUS_WRITES):
+        return [CATALOGUS]
+    return [CATALOGUS, {"domein": zac_catalogus_domein(env)}]
+
+
+def _params(name: str, catalogi: list[dict[str, str]]) -> dict[str, object]:
     if not RUN_TAG.search(name):
         msg = f"refusing to delete catalogus type {name}: it carries no run tag"
         raise ValueError(msg)
-    return {**CATALOGUS, "action": "delete", "name": name}
+    return {"catalogi": catalogi, "action": "delete", "name": name}
 
 
-def forget_catalogus_type(env: Environment, registry: ResourceRegistry, name: str) -> None:
-    """Delete, at cleanup, the zaaktype (by identificatie) or besluittype or informatieobjecttype (by omschrijving)."""
+def forget_catalogus_type(
+    env: Environment, registry: ResourceRegistry, name: str, catalogus: JsonObject | None = None
+) -> None:
+    """Delete, at cleanup, the zaaktype (by identificatie) or besluittype or informatieobjecttype (by omschrijving).
+
+    catalogus: the Open Zaak catalogus it is in; by default the test catalogus.
+    """
+    where = {field: str(catalogus[field]) for field in ("domein", "rsin")} if catalogus else CATALOGUS
     deployment = env.deployment_for("openzaak")
-    registry.add_snippet(f"catalogus type {name}", env.kube, deployment, SNIPPET, _params(name))
+    registry.add_snippet(f"catalogus type {name}", env.kube, deployment, SNIPPET, _params(name, [where]))
 
 
 def remove_catalogus_type(env: Environment, name: str) -> None:
-    """Delete a run-tagged catalogus type, published or not, with what belongs to it."""
-    run_snippet(env.kube, env.deployment_for("openzaak"), SNIPPET, _params(name))
+    """Delete a run-tagged catalogus type of written_catalogi, published or not, with what belongs to it."""
+    run_snippet(env.kube, env.deployment_for("openzaak"), SNIPPET, _params(name, written_catalogi(env)))
 
 
 def tagged_catalogus_types(env: Environment) -> list[str]:
-    """Return the names of the test catalogus's types that start with ptest-, bootstrap ones included."""
-    params: dict[str, object] = {**CATALOGUS, "action": "list", "prefix": TAG_PREFIX}
+    """Return the names of the types in written_catalogi that start with ptest-, bootstrap ones included."""
+    params: dict[str, object] = {"catalogi": written_catalogi(env), "action": "list", "prefix": TAG_PREFIX}
     found = run_snippet(env.kube, env.deployment_for("openzaak"), SNIPPET, params)
     return [str(name) for name in cast("list[object]", found)]
 
@@ -73,8 +93,8 @@ class ZaaktypeTypes:
 
     afleidingswijzen: a resultaattype per brondatum afleidingswijze, named after it; eigenschap takes the first
     eigenschap as datumkenmerk, termijn the procestermijn ARCHIEF_PROCESTERMIJN. besluittypen: URLs of concept ones,
-    linked: Open Zaak links a concept zaaktype only to concept besluittypen; publish them before the zaaktype. The
-    defaults are what publishing needs.
+    linked: Open Zaak links a concept zaaktype only to concept besluittypen; publish them before the zaaktype.
+    archiefactietermijn: False gives resultaattype Afgehandeld none. The defaults are what publishing needs.
     """
 
     statustypen: tuple[str, ...] = ("Ontvangen", "Afgehandeld")
@@ -82,6 +102,7 @@ class ZaaktypeTypes:
     eigenschappen: tuple[str, ...] = ()
     afleidingswijzen: tuple[str, ...] = ()
     besluittypen: tuple[str, ...] = ()
+    archiefactietermijn: bool = True
 
 
 # The procestermijn of a resultaattype with afleidingswijze termijn.
@@ -103,20 +124,23 @@ def make_publishable_zaaktype(
     """Create a concept zaaktype with what publishing needs, copied from a published template zaaktype.
 
     The types and a resultaattype "Afgehandeld" of the template's selectielijst; children are not registered: they go
-    with the zaaktype, and the API refuses to delete those of a published one.
+    with the zaaktype, and the API refuses to delete those of a published one. Field catalogus (a URL) creates it in
+    another catalogus than the template's, the test catalogus.
     """
     resultaattype = template_resultaattype(openzaak, template)
+    catalogus = str(fields.pop("catalogus", template["catalogus"]))
     zaaktype = make_concept_zaaktype(
         openzaak,
         registry,
-        str(template["catalogus"]),
+        catalogus,
         **{
             "selectielijstProcestype": template["selectielijstProcestype"],
             "besluittypen": list(types.besluittypen),
             **fields,
         },
     )
-    forget_catalogus_type(env, registry, str(zaaktype["identificatie"]))
+    where = None if catalogus == template["catalogus"] else openzaak.get(catalogus)
+    forget_catalogus_type(env, registry, str(zaaktype["identificatie"]), where)
     url = zaaktype["url"]
     for volgnummer, omschrijving in enumerate(types.statustypen, start=1):
         openzaak.post(
@@ -136,6 +160,8 @@ def make_publishable_zaaktype(
         eigenschap: dict[str, object] = {"zaaktype": url, "naam": naam, "definitie": naam, "specificatie": specificatie}
         openzaak.post(f"{CATALOGI}/eigenschappen", eigenschap)
     archief = {key: resultaattype[key] for key in ("archiefnominatie", "archiefactietermijn")}
+    if not types.archiefactietermijn:
+        archief["archiefactietermijn"] = None
     openzaak.post(f"{CATALOGI}/resultaattypen", resultaattype_body(str(url), resultaattype, **archief))
     if types.afleidingswijzen:
         klasse = {**resultaattype, "selectielijstklasse": selectielijstklasse(str(template["selectielijstProcestype"]))}

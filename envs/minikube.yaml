@@ -101,6 +101,8 @@ settings:
   zac_email_confirmation: true
   # podiumd-minikube asks bootstrap to give that zaaktype the besluittype ZAC's inrichtingscheck needs (2026-10-09).
   zac_besluittype: true
+  # podiumd-minikube allows run-tagged zaaktypen without productaanvraagtype in ZAC's catalogus ALG (2026-11-13).
+  zac_catalogus_writes: true
   # KISS's kanalen are runtime data no environment seeds; bootstrap adds Balie, Telefoon and Internet (2026-10-10).
   kiss_kanalen: true
   # Open Formulieren's wait_for_payment_to_register is runtime data no environment sets; bootstrap switches it on

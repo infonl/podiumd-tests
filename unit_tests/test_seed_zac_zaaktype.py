@@ -35,9 +35,17 @@ def test_publish_zac_zaaktype_gives_zacs_types_and_itself_as_deelzaaktype(fake_h
 
     monkeypatch.setattr(zac_zaaktype, "make_publishable_zaaktype", make)
     monkeypatch.setattr(zac_zaaktype, "publish", lambda _openzaak, concept: {**concept, "concept": False})
+    monkeypatch.setattr(zac_zaaktype, "zac_session", lambda *_args: "zac")
+    cleared = []
+    monkeypatch.setattr(zac_zaaktype, "clear_ztc_cache", lambda _http, url: cleared.append(url))
     sent = fake_http({f"PATCH {ZAAKTYPEN}/v1": (200, {})})
     client = ApiClient(requests.Session(), API, {})
-    published = zac_zaaktype.publish_zac_zaaktype(env(), client, ResourceRegistry(RUN), {}, servicenorm="P10D")
+    registry = ResourceRegistry(RUN)
+    alg = {"url": "alg"}
+    published = zac_zaaktype.publish_zac_zaaktype(env(), client, registry, {}, catalogus=alg, servicenorm="P10D")
+    registry.cleanup()
+    assert cleared == ["https://zac.test"]
+    assert made["catalogus"] == alg
     assert published == {"url": f"{API}{ZAAKTYPEN}/v1", "concept": False}
     assert made["statustypen"] == ("Intake", "Wacht op aanvullende informatie", "In behandeling", "Afgerond")
     assert ("Behandelaar", "behandelaar") in made["roltypen"]
@@ -204,7 +212,6 @@ def test_make_zac_zaaktype_configures_the_granted_zaaktype_in_the_admins_group(m
     monkeypatch.setattr(zac_zaaktype, "grant_zaaktype", lambda _env, _reg, name: calls.append(("grant", name)))
     monkeypatch.setattr(zac_zaaktype, "zac_session", lambda *_args: "zac")
     monkeypatch.setattr(zac_zaaktype, "user_groups", lambda _http, _url: ["g1", "g2"])
-    monkeypatch.setattr(zac_zaaktype, "clear_ztc_cache", lambda _http, url: calls.append(("clear", url)))
 
     def configure(_http, _url, uuid, groep):
         calls.append(("configure", uuid, groep))
@@ -214,7 +221,7 @@ def test_make_zac_zaaktype_configures_the_granted_zaaktype_in_the_admins_group(m
     registry = ResourceRegistry(RUN)
     assert zac_zaaktype.make_zac_zaaktype(env(), None, registry, {}) == {"id": 1}  # pyright: ignore[reportArgumentType]
     registry.cleanup()
-    assert calls == [("grant", "o"), ("configure", "zt1", "g1"), ("clear", "https://zac.test")]
+    assert calls == [("grant", "o"), ("configure", "zt1", "g1")]
 
 
 def test_other_domain_group_holds_the_number_of_zaaktypen_and_forgets_them_at_once(monkeypatch):

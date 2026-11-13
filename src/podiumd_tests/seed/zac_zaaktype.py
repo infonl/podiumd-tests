@@ -30,6 +30,7 @@ from podiumd_tests.pabc import find_entity_type
 from podiumd_tests.seed.catalogi import ZaaktypeTypes
 from podiumd_tests.seed.catalogi import make_publishable_zaaktype
 from podiumd_tests.seed.catalogi import publish
+from podiumd_tests.seed.catalogi import zac_catalogus_domein
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.zac import clear_ztc_cache
@@ -61,6 +62,11 @@ ZAAKSPECIFIEK_TYPES = ZaaktypeTypes(
 )
 
 
+def zac_catalogus(env: Environment, openzaak: ApiClient) -> JsonObject:
+    """Return ZAC's own catalogus in Open Zaak: the first with its domein, as ZAC finds it."""
+    return openzaak.list(f"{CATALOGI}/catalogussen", {"domein": zac_catalogus_domein(env)})[0]
+
+
 def zac_as_admin(env: Environment) -> requests.Session:
     """Return a session on ZAC's REST API as the test admin, ZAC's beheerder."""
     return zac_session(env, ADMIN.username, env.credentials.get(ADMIN.store_key))
@@ -84,8 +90,11 @@ def publish_zac_zaaktype(  # noqa: PLR0913  # the zaaktype's parts
     """Publish a throwaway zaaktype with run-tagged omschrijving that ZAC can handle and that is its own deelzaaktype.
 
     informatieobjecttypen: URLs of published ones in its catalogus. A new version takes the identificatie and
-    omschrijving of the one before in fields.
+    omschrijving of the one before in fields, catalogus as make_publishable_zaaktype takes it. Cleanup deletes it and
+    then clears ZAC's ZTC cache.
     """
+    zac_url = env.profile.urls["zac"]
+    registry.add("ZAC's ZTC cache", lambda: clear_ztc_cache(zac_as_admin(env), zac_url))
     body: dict[str, object] = {"omschrijving": registry.tagged(f"zac-{secrets.token_hex(3)}"), **fields}
     concept = make_publishable_zaaktype(env, openzaak, registry, template, types, **body)
     openzaak.patch(str(concept["url"]), {"deelzaaktypen": [concept["url"]]})
@@ -216,11 +225,9 @@ def make_zac_zaaktype(  # noqa: PLR0913  # the zaaktype's parts
 
     Cleanup deletes it and then clears ZAC's ZTC cache.
     """
-    zac_url = env.profile.urls["zac"]
-    registry.add("ZAC's ZTC cache", lambda: clear_ztc_cache(zac_as_admin(env), zac_url))
     zaaktype = publish_zac_zaaktype(
         env, openzaak, registry, template, informatieobjecttypen=informatieobjecttypen, types=types, **fields
     )
     grant_zaaktype(env, registry, str(zaaktype["omschrijving"]))
-    admin = zac_as_admin(env)
+    admin, zac_url = zac_as_admin(env), env.profile.urls["zac"]
     return configure_zaaktype(admin, zac_url, uuid_of(zaaktype["url"]), user_groups(admin, zac_url)[0])

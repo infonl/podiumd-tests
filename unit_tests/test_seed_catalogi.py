@@ -29,8 +29,14 @@ def fixture_snippets(monkeypatch):
     return ran
 
 
-def env():
-    return SimpleNamespace(kube=object(), deployment_for=lambda component: f"{component}-deploy")
+def env(*, zac_writes=False):
+    profile = SimpleNamespace(is_allowed=lambda setting: zac_writes and setting == catalogi.ZAC_CATALOGUS_WRITES)
+    return SimpleNamespace(
+        kube=object(),
+        deployment_for=lambda component: f"{component}-deploy",
+        profile=profile,
+        variable=lambda component, name: f"{component}-{name}",
+    )
 
 
 def test_removal_refuses_a_name_without_run_tag(snippets):
@@ -50,13 +56,30 @@ def test_list_remove_and_forget_run_the_snippet(snippets):
         ("openzaak-deploy", "delete", TAGGED),
         ("openzaak-deploy", "delete", TAGGED),
     ]
+    assert {str(p["catalogi"]) for _, _, p in snippets} == {str([catalogi.CATALOGUS])}
+
+
+def test_list_and_remove_cover_zacs_catalogus_where_the_profile_allows_writes(snippets):
+    catalogi.tagged_catalogus_types(env(zac_writes=True))  # pyright: ignore[reportArgumentType]
+    catalogi.remove_catalogus_type(env(zac_writes=True), TAGGED)  # pyright: ignore[reportArgumentType]
+    zacs = {"domein": "zac-CATALOGUS_DOMEIN"}
+    assert [p["catalogi"] for _, _, p in snippets] == [[catalogi.CATALOGUS, zacs], [catalogi.CATALOGUS, zacs]]
+
+
+ALG = {"url": f"{API}/catalogi/api/v1/catalogussen/alg", "domein": "ALG", "rsin": "002220647"}
 
 
 @pytest.mark.parametrize(
-    ("types", "statustypen", "roltypen"),
-    [((), 2, 1), ((catalogi.ZaaktypeTypes(("a", "b", "c"), (("i", "initiator"), ("b", "behandelaar"))),), 3, 2)],
+    ("types", "fields", "statustypen", "roltypen", "termijn"),
+    [
+        ((), {}, 2, 1, "P10Y"),
+        ((catalogi.ZaaktypeTypes(("a", "b", "c"), (("i", "initiator"), ("b", "behandelaar"))),), {}, 3, 2, "P10Y"),
+        ((catalogi.ZaaktypeTypes(archiefactietermijn=False),), {"catalogus": ALG["url"]}, 2, 1, None),
+    ],
 )
-def test_publishable_zaaktype_copies_the_templates_resultaattype(snippets, fake_http, types, statustypen, roltypen):
+def test_publishable_zaaktype_copies_the_templates_resultaattype(
+    snippets, fake_http, types, fields, statustypen, roltypen, termijn
+):
     zaaktypen = "catalogi/api/v1/zaaktypen"
     resultaattype = {
         "resultaattypeomschrijving": "rto",
@@ -75,18 +98,23 @@ def test_publishable_zaaktype_copies_the_templates_resultaattype(snippets, fake_
             f"GET /v1/{zaaktypen}/new": (200, new),
             f"POST /v1/{zaaktypen}/new/publish": (200, {}),
             f"DELETE /v1/{zaaktypen}/new": (404, {}),
+            "GET /v1/catalogi/api/v1/catalogussen/alg": (200, ALG),
         }
     )
     client = ApiClient(requests.Session(), API, {})
     registry = ResourceRegistry("run1")
     template = {"url": "tpl", "catalogus": "cat", "selectielijstProcestype": "proc"}
-    zaaktype = catalogi.make_publishable_zaaktype(env(), client, registry, template, *types)  # pyright: ignore[reportArgumentType]
+    zaaktype = catalogi.make_publishable_zaaktype(env(), client, registry, template, *types, **fields)  # pyright: ignore[reportArgumentType]
     assert catalogi.publish(client, zaaktype) == new
     posted = [s.url.removeprefix(API) for s in sent if s.method == "POST"]
     assert posted.count("/catalogi/api/v1/statustypen") == statustypen
     assert posted.count("/catalogi/api/v1/roltypen") == roltypen
+    bodies = {s.url.removeprefix(API): json.loads(s.body) for s in sent if s.method == "POST" and s.body}
+    assert bodies[f"/{zaaktypen}"]["catalogus"] == fields.get("catalogus", "cat")
+    assert bodies["/catalogi/api/v1/resultaattypen"]["archiefactietermijn"] == termijn
     registry.cleanup()
-    assert [p["name"] for _, _, p in snippets] == [TAGGED]
+    where = {"domein": ALG["domein"], "rsin": ALG["rsin"]} if fields else catalogi.CATALOGUS
+    assert [(p["name"], p["catalogi"]) for _, _, p in snippets] == [(TAGGED, [where])]
 
 
 def test_concept_iot_and_besluittype_are_tagged_and_forgotten(snippets, fake_http):

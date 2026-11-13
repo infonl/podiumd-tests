@@ -31,6 +31,7 @@ from podiumd_tests.seed.zac_zaaktype import make_zac_zaaktype
 from podiumd_tests.seed.zac_zaaktype import publish_new_version
 from podiumd_tests.seed.zac_zaaktype import publish_zac_zaaktype
 from podiumd_tests.seed.zac_zaaktype import zac_as_admin
+from podiumd_tests.seed.zac_zaaktype import zac_catalogus
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import behandelaar_groups
 from podiumd_tests.zac import clean_up_zaak
@@ -77,6 +78,8 @@ ZAC_TEAM = pytest.mark.source(
 THROWAWAY = pytest.mark.requires("pabc", "cluster")
 # The tests of fixture zac_eigen_zaaktype.
 EIGEN_ZAAKTYPE = pytest.mark.xdist_group("zac-eigen-zaaktype")
+# Tests that read every zaaktype of ZAC's catalogus, where test_zac_catalogus.py publishes some.
+ZAC_CATALOGUS = pytest.mark.xdist_group("zac-catalogus")
 # A bedrijf from the KvK as BetrokkeneIdentificatie.
 BEDRIJF = {"type": "RSIN", "kvkNummer": KVK_TEST_NUMMER}
 
@@ -101,6 +104,7 @@ def test_zaakafhandelparameters_are_valide(
 
 
 @PI
+@ZAC_CATALOGUS
 @pytest.mark.scenario("""
     Given ZAC has zaakafhandelparameters for a set of zaaktypen
     When the beheerder clears ZAC's catalogus cache and runs the inrichtingscheck
@@ -435,6 +439,7 @@ def test_new_zaaktype_has_empty_zaakafhandelparameters(
 
 
 @ZAC_TEAM
+@ZAC_CATALOGUS
 @pytest.mark.requires("cluster")
 @pytest.mark.scenario("""
     Given the zaaktypen of ZAC's own catalogus in Open Zaak
@@ -446,8 +451,7 @@ def test_zaakafhandelparameters_list_the_zaaktypen_of_zacs_catalogus(
     podiumd_env: Environment, zac: requests.Session, urls: dict[str, str], openzaak: ApiClient
 ) -> None:
     """GET zaakafhandelparameters lists the zaaktypen of catalogus CATALOGUS_DOMEIN; creatiedatum is set iff id is."""
-    domein = podiumd_env.variable("zac", "CATALOGUS_DOMEIN")
-    catalogus = openzaak.list(f"{CATALOGI}/catalogussen", {"domein": domein})[0]
+    catalogus = zac_catalogus(podiumd_env, openzaak)
     zaaktypen = openzaak.list(f"{CATALOGI}/zaaktypen", {"catalogus": str(catalogus["url"])})
     listed = get_entries(zac, f"{urls['zac']}/rest/zaakafhandelparameters")
     # ZAC lists only the first page of Open Zaak's answer: 100 zaaktypen.
