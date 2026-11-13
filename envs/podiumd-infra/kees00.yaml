@@ -64,6 +64,9 @@ secrets:
     k8s_secret: {name: monitoring-logging-grafana, key: admin-user, namespace: monitoring}
   grafana_password:
     k8s_secret: {name: monitoring-logging-grafana, key: admin-password, namespace: monitoring}
+  # PABC's API key, from PABC's own Secret.
+  pabc_api_key:
+    k8s_secret: {name: pabc, key: API_KEY__0}
   # Signs the bootstrap's OMC abonnement token; read from OMC's own Secret.
   omc_jwt_secret:
     k8s_secret: {name: omc, key: OMC_AUTH_JWT_SECRET}
