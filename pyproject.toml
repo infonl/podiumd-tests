@@ -310,7 +310,8 @@ sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 #   - pytest_* hooks, test_* functions, pytestmark and @pytest.fixture functions: used by pytest.
 #   - __call__ of a callable Protocol (process.Runner): called through the protocol.
 #   - wait_until, tagged: library API without a caller in tests/.
-#   - Locust's hooks in perf/*locustfile.py (wait_time, @task, @events listeners): called by Locust.
+#   - Locust's hooks in perf/*locustfile.py (wait_time, tick, @task, @events listeners) and its User and
+#     LoadTestShape classes: called by Locust.
 [tool.deptry]
 known_first_party = ["podiumd_tests"]
 # Django snippets: their imports exist only in the component images.
@@ -324,7 +325,7 @@ DEP002 = ["pytest-playwright", "pytest-xdist", "pytest-html", "axe-playwright-py
 [tool.vulture]
 # Django snippets: run() is called inside the component, not from here.
 exclude = ["*/snippets/*.py"]
-ignore_names = ["pytest_*", "test_*", "pytestmark", "__call__", "wait_until", "tagged", "wait_time"]
+ignore_names = ["pytest_*", "test_*", "pytestmark", "__call__", "wait_until", "tagged", "wait_time", "tick", "*User", "*Shape"]
 ignore_decorators = ["@pytest.fixture", "@task", "@events.*.add_listener"]
 
 [tool.bandit]

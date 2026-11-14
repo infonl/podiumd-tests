@@ -13,6 +13,7 @@ from typing import cast
 import yaml
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from collections.abc import Iterable
     from collections.abc import Mapping
     from pathlib import Path
@@ -94,6 +95,41 @@ def by_label(stats: Mapping[str, EndpointStats]) -> dict[int, dict[str, Endpoint
         if separator and number.isdigit():
             found.setdefault(int(number), {})[endpoint] = endpoint_stats
     return dict(sorted(found.items()))
+
+
+def first_violation(
+    steps: Mapping[int, Mapping[str, EndpointStats]], threshold_of: Callable[[str], Threshold]
+) -> tuple[int, list[str]] | None:
+    """Return the lowest number at which an endpoint exceeds its threshold, with what it exceeds; None if none does."""
+    for number, endpoints in sorted(steps.items()):
+        found = [
+            f"{endpoint}: {violation}"
+            for endpoint, endpoint_stats in sorted(endpoints.items())
+            for violation in violations(endpoint_stats, threshold_of(endpoint))
+        ]
+        if found:
+            return number, found
+    return None
+
+
+def _p95(named: tuple[str, EndpointStats]) -> float:
+    return named[1].p95_ms
+
+
+def ramp_report(steps: Mapping[int, Mapping[str, EndpointStats]], threshold_of: Callable[[str], Threshold]) -> str:
+    """Return a table of the ramp's steps and the knee: the users at which an endpoint first exceeds its threshold."""
+    rows = ["| Users | Requests | Failed | Highest p95 |", "|---|---|---|---|"]
+    for users, endpoints in sorted(steps.items()):
+        total = summed(endpoints.values())
+        slowest = max(endpoints.items(), key=_p95)[0]
+        p95 = f"{total.p95_ms:.0f} ms ({slowest})"
+        rows.append(f"| {users} | {total.requests} | {total.failures} | {p95} |")
+    knee = first_violation(steps, threshold_of)
+    if knee is None:
+        found = f"No endpoint exceeded its threshold up to {max(steps, default=0)} users."
+    else:
+        found = f"Knee at {knee[0]} users: {'; '.join(knee[1])}."
+    return "\n".join([*rows, "", found])
 
 
 def summed(parts: Iterable[EndpointStats]) -> EndpointStats:

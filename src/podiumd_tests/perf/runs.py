@@ -12,6 +12,8 @@ import sys
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from podiumd_tests.bootstrap.steps import ADMIN
+from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.bootstrap.steps import ZAC_ROLE_USERS
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
@@ -20,6 +22,7 @@ from podiumd_tests.environment import Environment
 if TYPE_CHECKING:
     from argparse import ArgumentParser
     from collections.abc import Mapping
+    from collections.abc import Sequence
     from pathlib import Path
 
 
@@ -91,6 +94,42 @@ ENDPOINTS = {
 KEYCLOAK_PER_VCPU = {"kc_login": 15, "kc_client_credentials": 120}
 # The accounts of kc_login. Not the test admin: every Locust user logs in as the admin when it starts.
 LOGIN_USERS = tuple(ZAC_ROLE_USERS.values())
+
+
+def api_user_steps(env: Environment) -> list[str]:
+    """Return the bootstrap steps that the calls of the locustfile's ApiUser need on the environment."""
+    steps = ["openzaak-client", "openklant-token", "objecten-token", "openzaak-zaaktype", ADMIN.name, KCC.name]
+    if "zac" in env.profile.urls:
+        steps += ["openzaak-client-productaanvraag", *(user.name for user in LOGIN_USERS)]
+    return steps
+
+
+# The ramp's calls (tests/perf/test_ramp_perf.py): a working day's mix of logins, ZAC work, searches and reads.
+RAMP_MIX = (
+    "kc_login",
+    "zac_zaak_create",
+    "zac_document_upload",
+    "zac_search",
+    "kiss_search",
+    "oi_search",
+    "oz_zaken",
+    "ok2_partij_by_bsn",
+)
+
+
+def ramp_steps(text: str) -> tuple[int, ...]:
+    """Return the user counts of --perf-ramp ("2,4,8,16"); ValueError unless they are positive and ascending."""
+    steps = tuple(int(step) for step in text.split(","))
+    if steps[0] < 1 or list(steps) != sorted(set(steps)):
+        msg = f"--perf-ramp {text!r}: expected ascending user counts such as 2,4,8,16"
+        raise ValueError(msg)
+    return steps
+
+
+def ramp_users(steps: Sequence[int], step_s: float, run_time_s: float) -> int | None:
+    """Return the users of the ramp's step at run_time_s seconds, each step_s long; None once the last has ended."""
+    index = int(run_time_s // step_s)
+    return steps[index] if index < len(steps) else None
 
 
 # Open Zaak #2577: every user links documents to one zaak (tests/perf/test_hot_zaak_perf.py), whose stats are split

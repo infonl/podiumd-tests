@@ -34,6 +34,7 @@ from podiumd_tests.kcc import vac_data
 from podiumd_tests.oidc import challenge_session
 from podiumd_tests.perf.keycloak_calls import keycloak_calls
 from podiumd_tests.perf.keycloak_calls import login_accounts
+from podiumd_tests.perf.runs import ENDPOINTS
 from podiumd_tests.perf.runs import HOT_ZAAK
 from podiumd_tests.perf.runs import HOT_ZAAK_BUCKET
 from podiumd_tests.perf.runs import HOT_ZAAK_LINKS
@@ -69,6 +70,7 @@ if TYPE_CHECKING:
 def _arguments(parser: ArgumentParser) -> None:
     add_environment_arguments(parser)
     parser.add_argument("--podiumd-run-tag", required=True, help="run tag of what the writes create")
+    parser.add_argument("--podiumd-calls", help="ApiUser: comma-separated calls to make (default: all)")
     parser.add_argument("--podiumd-zaak", help="HotZaakUser: URL of the zaak to link documents to")
     parser.add_argument("--podiumd-links", type=int, default=HOT_ZAAK_LINKS, help="HotZaakUser: links to make")
 
@@ -82,6 +84,8 @@ def _on_init(environment: LocustEnvironment, **_kwargs: object) -> None:
     HotZaakUser.env_under_test = ApiUser.env_under_test
     if "zac" in ApiUser.env_under_test.profile.urls:
         ApiUser.accounts = login_accounts(ApiUser.env_under_test)
+    if options.podiumd_calls:
+        ApiUser.selected = frozenset(options.podiumd_calls.split(","))
 
 
 def _openklant_calls(env: Environment) -> dict[str, Call]:
@@ -157,10 +161,11 @@ class ApiUser(User):
     env_under_test: Environment
     run_tag: str
     accounts: Accounts
+    selected: frozenset[str] = frozenset(ENDPOINTS)
 
     def __init__(self, environment: LocustEnvironment) -> None:
         super().__init__(environment)
-        self.calls = self._calls()
+        self.calls = {name: call for name, call in self._calls().items() if name in self.selected}
 
     @task
     def round_of_calls(self) -> None:
@@ -168,10 +173,14 @@ class ApiUser(User):
         for name, call in self.calls.items():
             registry = ResourceRegistry(self.run_tag)
             try:
-                _timed(self, name, call, registry)
+                _timed(self, self.stats_name(name), call, registry)
             finally:
                 # Also when Locust stops the user (GreenletExit) right after a write.
                 registry.cleanup()
+
+    def stats_name(self, name: str) -> str:  # noqa: PLR6301  # RampUser labels it with its step
+        """Return the name a call's stats get, at its start."""
+        return name
 
     def _calls(self) -> dict[str, Call | Prepared]:
         """Return the calls of podiumd_tests.perf.runs.ENDPOINTS whose component the environment has."""

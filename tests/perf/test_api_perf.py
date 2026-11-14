@@ -16,8 +16,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.bootstrap.steps import ADMIN
-from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.config import REPO_ROOT
 from podiumd_tests.perf.availability import Watch
 from podiumd_tests.perf.availability import availability_limits
@@ -27,7 +25,7 @@ from podiumd_tests.perf.availability_report import problems
 from podiumd_tests.perf.availability_report import report
 from podiumd_tests.perf.runs import ENDPOINTS
 from podiumd_tests.perf.runs import KEYCLOAK_PER_VCPU
-from podiumd_tests.perf.runs import LOGIN_USERS
+from podiumd_tests.perf.runs import api_user_steps
 from podiumd_tests.perf.runs import locust_command
 from podiumd_tests.perf.stats import HISTORY
 from podiumd_tests.perf.stats import SETTINGS
@@ -67,9 +65,7 @@ def fixture_load(
     run_tag: str,
 ) -> tuple[dict[str, EndpointStats], Watch]:
     """The stats of one Locust run against the environment, and the availability of the components it loads."""
-    need_bootstrap("openzaak-client", "openklant-token", "objecten-token", "openzaak-zaaktype", ADMIN.name, KCC.name)
-    if "zac" in podiumd_env.profile.urls:
-        need_bootstrap("openzaak-client-productaanvraag", *(user.name for user in LOGIN_USERS))
+    need_bootstrap(*api_user_steps(podiumd_env))
     directory = perf_dir
     users = str(request.config.getoption("--perf-users"))
     duration = str(request.config.getoption("--perf-duration"))
