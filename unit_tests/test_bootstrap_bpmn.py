@@ -5,6 +5,7 @@ import json
 import zipfile
 
 from types import SimpleNamespace
+from xml.etree import ElementTree as ET  # nosec B405  # parses the suite's own process
 
 import pytest
 import requests
@@ -27,6 +28,7 @@ from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.seed.openzaak import published_zaaktype
 from podiumd_tests.zac import HEROPEND
 
+BPMN_MODEL = "http://www.omg.org/spec/BPMN/20100524/MODEL"
 ZAAKTYPE = {
     "url": "https://oz/catalogi/api/v1/zaaktypen/zt-1/",
     "omschrijving": "ptest-bootstrap-bpmn",
@@ -313,6 +315,22 @@ def test_complete_intake_assigns_and_chooses_the_eindstatus(fake_http):
         "ZK_Result": bpmn.EINDSTATUS,
         "extra": "x",
     }
+
+
+def test_complete_keuze_sends_the_actie_and_its_fields(fake_http):
+    keuze = {"id": "t2", "naam": bpmn.KEUZE, "status": "TOEGEKEND", "taakdata": {"ptestActie": "status"}}
+    sent = fake_http({"GET /rest/taken/zaak/z1": (200, [keuze]), "PATCH /rest/taken/complete": (200, keuze)})
+    bpmn.complete_keuze(requests.Session(), "https://zac", {"uuid": "z1"}, "opschorten", ptestDagen=3)
+    assert json.loads(sent[-1].body)["taakdata"] == {"ptestActie": "opschorten", "ptestDagen": 3}
+
+
+def test_process_is_xml_with_the_named_tasks_and_the_keuze_route():
+    model = bpmn.process_files()[f"{PROCESS_KEY}.bpmn"]
+    process = ET.fromstring(model)  # noqa: S314  # nosec B314  # the suite's own file
+    names = {task.get("name") for task in process.iter(f"{{{BPMN_MODEL}}}userTask")}
+    wanted = {bpmn.INTAKE, bpmn.SELECT, bpmn.SIGN, bpmn.SUMMARY, bpmn.HARDCODED, bpmn.INHERITED}
+    assert wanted | {bpmn.KEUZE, bpmn.TERMIJN, bpmn.VORIGE} <= names
+    assert f"var:getOrDefault({bpmn.KEUZE_ROUTE}, false)" in model
 
 
 def test_process_names_the_hardcoded_assignment():

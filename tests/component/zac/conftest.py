@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.bpmn import KEUZE_ROUTE
+from podiumd_tests.bootstrap.bpmn import complete_intake
 from podiumd_tests.bootstrap.names import EMAIL_IOT
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import section
@@ -26,6 +28,7 @@ from podiumd_tests.zac import HEROPEND
 from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
+from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import save_zaakafhandelparameters
 from podiumd_tests.zac_signaleringen import turn_signaleringen
 from podiumd_tests.zac_taken import AANVULLENDE_INFORMATIE
@@ -251,6 +254,15 @@ def fixture_zac_archief_zaak(
     The zaaktype comes first: ZAC reads a user's zaaktypen at login.
     """
     return _zaak_starter(zac, urls, zac_archief_zaaktype, openzaak, registry)
+
+
+@pytest.fixture(name="keuze_zaak")
+def fixture_keuze_zaak(
+    zac: requests.Session, urls: dict[str, str], bpmn_zaak: JsonObject, zac_group: str
+) -> JsonObject:
+    """A BPMN zaak whose intake chose the task Keuze for the group and the test admin; ZAC's view after the intake."""
+    complete_intake(zac, urls["zac"], bpmn_zaak, (zac_group, ADMIN.username), **{KEUZE_ROUTE: True})
+    return read_zaak(zac, urls["zac"], str(bpmn_zaak["uuid"]))
 
 
 @pytest.fixture(name="signaleringen")

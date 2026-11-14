@@ -51,6 +51,12 @@
       "input": true
     },
     {
+      "type": "checkbox",
+      "key": "ptestKeuze",
+      "label": "Actions on the zaak instead of documents",
+      "input": true
+    },
+    {
       "type": "button",
       "key": "submit",
       "label": "Submit",

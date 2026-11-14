@@ -2,6 +2,9 @@
 <!-- podiumd-tests' BPMN process for ZAC: intake (assign, status In behandeling, a mail when the intake names
      MAIL_To), select and sign documents, summary, close the zaak. An intake with ptestToewijzing true takes the
      tasks Hardcoded (fixed group and behandelaar) and Inherited (those of Hardcoded) instead of the documents.
+     An intake with ptestKeuze true takes the task Keuze instead: its field ptestActie runs one action and returns to
+     Keuze (opschorten, hervatten, verlengen, a status, the ontvangstbevestiging, a taak with a fatale datum beside
+     Keuze, a taak for Keuze's behandelaar); any other actie goes to the summary.
      Modelled on ZAC's own test processes (src/itest/resources/bpmn, ZAC 5.9.1). -->
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:flowable="http://flowable.org/bpmn"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" targetNamespace="http://podiumd-tests">
@@ -35,6 +38,52 @@
               flowable:candidateGroups="beheerders" flowable:formKey="ptestConfirmForm" flowable:formFieldValidation="false"/>
     <userTask id="inherited" name="Inherited" flowable:assignee="${taken:behandelaar('hardcoded')}"
               flowable:candidateGroups="${taken:groep('hardcoded')}" flowable:formKey="ptestConfirmForm" flowable:formFieldValidation="false"/>
+    <userTask id="keuze" name="Keuze" flowable:assignee="${var:get(zaakBehandelaar)}"
+              flowable:candidateGroups="${zaakGroep}" flowable:formKey="ptestKeuzeForm" flowable:formFieldValidation="false"/>
+    <exclusiveGateway id="actie" name="Actie?" default="toSummary"/>
+    <serviceTask id="opschorten" name="Opschorten" flowable:class="net.atos.zac.flowable.delegate.SuspendZaakDelegate">
+      <extensionElements>
+        <flowable:field name="aantalDagen"><flowable:expression><![CDATA[${ptestDagen}]]></flowable:expression></flowable:field>
+        <flowable:field name="opschortingReden"><flowable:expression><![CDATA[${ptestReden}]]></flowable:expression></flowable:field>
+      </extensionElements>
+    </serviceTask>
+    <!-- ResumeZaakDelegate parses a hervattenDatum it has, also an empty one: without a date, leave the field out. -->
+    <exclusiveGateway id="hervatDatum" name="Hervatdatum?" default="toHervatten"/>
+    <serviceTask id="hervatten" name="Hervatten" flowable:class="net.atos.zac.flowable.delegate.ResumeZaakDelegate">
+      <extensionElements>
+        <flowable:field name="hervattenReden"><flowable:expression><![CDATA[${ptestReden}]]></flowable:expression></flowable:field>
+      </extensionElements>
+    </serviceTask>
+    <serviceTask id="hervattenOp" name="Hervatten op datum" flowable:class="net.atos.zac.flowable.delegate.ResumeZaakDelegate">
+      <extensionElements>
+        <flowable:field name="hervattenReden"><flowable:expression><![CDATA[${ptestReden}]]></flowable:expression></flowable:field>
+        <flowable:field name="hervattenDatum"><flowable:expression><![CDATA[${ptestHervatDatum}]]></flowable:expression></flowable:field>
+      </extensionElements>
+    </serviceTask>
+    <serviceTask id="verlengen" name="Verlengen" flowable:class="net.atos.zac.flowable.delegate.ExtendZaakDelegate">
+      <extensionElements>
+        <flowable:field name="aantalDagen"><flowable:expression><![CDATA[${ptestDagen}]]></flowable:expression></flowable:field>
+        <flowable:field name="verlengingReden"><flowable:expression><![CDATA[${ptestReden}]]></flowable:expression></flowable:field>
+        <flowable:field name="takenVerlengen"><flowable:expression><![CDATA[${var:getOrDefault(ptestTakenVerlengen, false)}]]></flowable:expression></flowable:field>
+      </extensionElements>
+    </serviceTask>
+    <serviceTask id="status" name="Status" flowable:class="net.atos.zac.flowable.delegate.UpdateZaakJavaDelegate">
+      <extensionElements>
+        <flowable:field name="statustypeOmschrijving"><flowable:expression><![CDATA[${ptestStatus}]]></flowable:expression></flowable:field>
+      </extensionElements>
+    </serviceTask>
+    <serviceTask id="bevestiging" name="Ontvangstbevestiging" flowable:class="nl.info.zac.flowable.bpmn.delegate.SendConfirmationEmailDelegate">
+      <extensionElements>
+        <flowable:field name="from"><flowable:string><![CDATA[podiumd-tests@example.invalid]]></flowable:string></flowable:field>
+        <flowable:field name="template"><flowable:string><![CDATA[Ontvangstbevestiging]]></flowable:string></flowable:field>
+      </extensionElements>
+    </serviceTask>
+    <parallelGateway id="termijnFork" name="Termijn beside Keuze"/>
+    <userTask id="termijn" name="Termijn" flowable:assignee="${var:get(zaakBehandelaar)}" flowable:candidateGroups="${zaakGroep}"
+              flowable:dueDate="${ptestTaakFataleDatum}" flowable:formKey="ptestConfirmForm" flowable:formFieldValidation="false"/>
+    <endEvent id="termijnEnd"/>
+    <userTask id="vorige" name="Vorige behandelaar" flowable:assignee="${taken:behandelaar('keuze')}"
+              flowable:candidateGroups="${taken:groep('keuze')}" flowable:formKey="ptestConfirmForm" flowable:formFieldValidation="false"/>
     <userTask id="selectDocuments" name="Select documents to sign" flowable:assignee="${var:get(zaakBehandelaar)}"
               flowable:candidateGroups="${zaakGroep}" flowable:formKey="ptestSelectDocumentsForm" flowable:formFieldValidation="false"/>
     <userTask id="signDocuments" name="Sign the selected documents" flowable:assignee="${var:get(zaakBehandelaar)}"
@@ -62,6 +111,46 @@
     <sequenceFlow id="toHardcoded" sourceRef="route" targetRef="hardcoded">
       <conditionExpression xsi:type="tFormalExpression"><![CDATA[${var:getOrDefault(ptestToewijzing, false)}]]></conditionExpression>
     </sequenceFlow>
+    <sequenceFlow id="toKeuze" sourceRef="route" targetRef="keuze">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${var:getOrDefault(ptestKeuze, false)}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="k1" sourceRef="keuze" targetRef="actie"/>
+    <sequenceFlow id="toSummary" sourceRef="actie" targetRef="summary"/>
+    <sequenceFlow id="toOpschorten" sourceRef="actie" targetRef="opschorten">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${var:equals(ptestActie, 'opschorten')}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="toHervatDatum" sourceRef="actie" targetRef="hervatDatum">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${var:equals(ptestActie, 'hervatten')}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="toHervatten" sourceRef="hervatDatum" targetRef="hervatten"/>
+    <sequenceFlow id="toHervattenOp" sourceRef="hervatDatum" targetRef="hervattenOp">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${var:isNotEmpty(ptestHervatDatum)}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="toVerlengen" sourceRef="actie" targetRef="verlengen">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${var:equals(ptestActie, 'verlengen')}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="toStatus" sourceRef="actie" targetRef="status">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${var:equals(ptestActie, 'status')}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="toBevestiging" sourceRef="actie" targetRef="bevestiging">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${var:equals(ptestActie, 'bevestiging')}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="toTermijn" sourceRef="actie" targetRef="termijnFork">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${var:equals(ptestActie, 'termijn')}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="toVorige" sourceRef="actie" targetRef="vorige">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${var:equals(ptestActie, 'vorige')}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="fromOpschorten" sourceRef="opschorten" targetRef="keuze"/>
+    <sequenceFlow id="fromHervatten" sourceRef="hervatten" targetRef="keuze"/>
+    <sequenceFlow id="fromHervattenOp" sourceRef="hervattenOp" targetRef="keuze"/>
+    <sequenceFlow id="fromVerlengen" sourceRef="verlengen" targetRef="keuze"/>
+    <sequenceFlow id="fromStatus" sourceRef="status" targetRef="keuze"/>
+    <sequenceFlow id="fromBevestiging" sourceRef="bevestiging" targetRef="keuze"/>
+    <sequenceFlow id="forkTermijn" sourceRef="termijnFork" targetRef="termijn"/>
+    <sequenceFlow id="forkKeuze" sourceRef="termijnFork" targetRef="keuze"/>
+    <sequenceFlow id="fromTermijn" sourceRef="termijn" targetRef="termijnEnd"/>
+    <sequenceFlow id="fromVorige" sourceRef="vorige" targetRef="keuze"/>
     <sequenceFlow id="toInherited" sourceRef="hardcoded" targetRef="inherited"/>
     <sequenceFlow id="fromInherited" sourceRef="inherited" targetRef="summary"/>
     <sequenceFlow id="f4" sourceRef="selectDocuments" targetRef="signDocuments"/>

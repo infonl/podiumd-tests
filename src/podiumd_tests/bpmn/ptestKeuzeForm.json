@@ -1,0 +1,87 @@
+{
+  "display": "form",
+  "name": "ptestKeuzeForm",
+  "title": "Keuze",
+  "path": "ptestkeuzeform",
+  "type": "form",
+  "components": [
+    {
+      "type": "select",
+      "key": "ptestActie",
+      "label": "Actie",
+      "input": true,
+      "data": {
+        "values": [
+          {"label": "Opschorten", "value": "opschorten"},
+          {"label": "Hervatten", "value": "hervatten"},
+          {"label": "Verlengen", "value": "verlengen"},
+          {"label": "Status", "value": "status"},
+          {"label": "Ontvangstbevestiging", "value": "bevestiging"},
+          {"label": "Taak with a fatale datum", "value": "termijn"},
+          {"label": "Taak for this behandelaar", "value": "vorige"},
+          {"label": "Afronden", "value": "afronden"}
+        ]
+      }
+    },
+    {
+      "type": "number",
+      "key": "ptestDagen",
+      "label": "Dagen",
+      "input": true
+    },
+    {
+      "type": "textfield",
+      "key": "ptestReden",
+      "label": "Reden",
+      "input": true
+    },
+    {
+      "type": "datetime",
+      "key": "ptestHervatDatum",
+      "label": "Hervatdatum",
+      "input": true
+    },
+    {
+      "type": "checkbox",
+      "key": "ptestTakenVerlengen",
+      "label": "Also extend the open taken",
+      "input": true
+    },
+    {
+      "type": "select",
+      "key": "ptestStatus",
+      "label": "Status",
+      "input": true,
+      "dataSrc": "custom",
+      "attributes": {
+        "ZAC_TYPE": "ZAC_status"
+      }
+    },
+    {
+      "type": "select",
+      "key": "ptestKanaal",
+      "label": "Communicatiekanaal",
+      "input": true,
+      "dataSrc": "custom",
+      "attributes": {
+        "ZAC_TYPE": "ZAC_referentie_tabel"
+      },
+      "properties": {
+        "ReferenceTable_Code": "COMMUNICATIEKANAAL"
+      }
+    },
+    {
+      "type": "datetime",
+      "key": "ptestTaakFataleDatum",
+      "label": "Fatale datum of the taak Termijn",
+      "input": true
+    },
+    {
+      "type": "button",
+      "key": "submit",
+      "label": "Submit",
+      "action": "submit",
+      "input": true
+    }
+  ]
+}

@@ -348,9 +348,16 @@ def test_human_tasks_and_user_events_offered_are_zacs_plan_items(fake_http):
     assert zac.user_events_offered(http, ZAC, "z1") == [{"userEventListenerActie": "X"}]
 
 
-def test_resultaattypen_are_those_of_the_zaaktype(fake_http):
-    fake_http({"GET /rest/zaken/resultaattypes/zt1": (200, [{"id": "r1"}])})
-    assert zac.resultaattypen(requests.Session(), ZAC, {"zaaktype": {"uuid": "zt1"}}) == [{"id": "r1"}]
+def test_resultaattypen_and_statustypen_are_those_of_the_zaaktype(fake_http):
+    fake_http(
+        {
+            "GET /rest/zaken/resultaattypes/zt1": (200, [{"id": "r1"}]),
+            "GET /rest/zaken/statustypes/zt1": (200, [{"id": "s1"}]),
+        }
+    )
+    zaak = {"zaaktype": {"uuid": "zt1"}}
+    assert zac.resultaattypen(requests.Session(), ZAC, zaak) == [{"id": "r1"}]
+    assert zac.statustypen(requests.Session(), ZAC, zaak) == [{"id": "s1"}]
 
 
 def test_koppel_and_ontkoppel_send_zacs_link_data(fake_http):

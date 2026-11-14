@@ -71,6 +71,10 @@ HARDCODED, INHERITED = "Hardcoded", "Inherited"
 HARDCODED_TO = ("beheerders", f"{PREFIX}-admin")
 # Intake form fields: the process mails MAIL_To with this vertrouwelijkheidaanduiding when MAIL_To is not empty.
 MAIL_TO, MAIL_VERTROUWELIJKHEID = "MAIL_To", "MAIL_Vertrouwelijkheidaanduiding"
+# Intake form field: true takes the task KEUZE instead of the document tasks.
+KEUZE_ROUTE = "ptestKeuze"
+# KEUZE runs the action its form names and opens again; actions termijn and vorige start TERMIJN and VORIGE.
+KEUZE, TERMIJN, VORIGE = "Keuze", "Termijn", "Vorige behandelaar"
 
 
 def complete_intake(
@@ -89,6 +93,15 @@ def complete_intake(
         **fields,
     }
     complete_task(http, zac_url, open_task(http, zac_url, str(zaak["uuid"]), INTAKE), data)
+
+
+def complete_keuze(http: requests.Session, zac_url: str, zaak: JsonObject, actie: str, **fields: object) -> None:
+    """Complete the open task KEUZE with this ptestActie; an actie the process does not know goes to the summary.
+
+    fields: the action's form fields, such as ptestDagen and ptestReden.
+    """
+    data = {"ptestActie": actie, **fields}
+    complete_task(http, zac_url, open_task(http, zac_url, str(zaak["uuid"]), KEUZE), data)
 
 
 def process_files() -> dict[str, str]:

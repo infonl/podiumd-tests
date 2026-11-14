@@ -386,8 +386,17 @@ def afronden_intake(http: requests.Session, zac_url: str, zaak: JsonObject) -> N
 
 def resultaattypen(http: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:
     """Return the resultaattypen ZAC offers for the zaak's zaaktype."""
+    return _zaaktype_types(http, zac_url, zaak, "resultaattypes")
+
+
+def statustypen(http: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:
+    """Return the statustypen ZAC offers for the zaak's zaaktype, as a task form's ZAC_status select lists them."""
+    return _zaaktype_types(http, zac_url, zaak, "statustypes")
+
+
+def _zaaktype_types(http: requests.Session, zac_url: str, zaak: JsonObject, kind: str) -> list[JsonObject]:
     zaaktype = section(zaak, "zaaktype")["uuid"]
-    response = http.get(f"{zac_url}/rest/zaken/resultaattypes/{zaaktype}")
+    response = http.get(f"{zac_url}/rest/zaken/{kind}/{zaaktype}")
     return entries(expect_status(response, HTTPStatus.OK).json())
 
 
