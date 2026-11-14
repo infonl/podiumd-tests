@@ -14,6 +14,8 @@ import pytest
 from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.auth.keycloak_admin import for_environment
 from podiumd_tests.bootstrap.steps import OF_REDACTEUR
+from podiumd_tests.bootstrap.steps import OF_REFERENTIELIJSTEN
+from podiumd_tests.bootstrap.steps import referentielijsten_api
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
@@ -463,6 +465,13 @@ def need_opt_in(env: Environment, need_bootstrap: Callable[..., None], step: Sni
             f"profile setting {step.opt_in} is off on {env.profile.name}: set it and run bootstrap step {step.name}"
         )
     need_bootstrap(step.name, *also)
+
+
+def referentielijsten_service(env: Environment) -> str:
+    """Return the slug of Open Formulieren's service for Referentielijsten (bootstrap step OF_REFERENTIELIJSTEN)."""
+    params = {**OF_REFERENTIELIJSTEN.params, "api_root": referentielijsten_api(env), "action": "status"}
+    found = run_snippet(env.kube, env.deployment_for("openformulieren"), OF_REFERENTIELIJSTEN.snippet, params)
+    return str(cast("dict[str, object]", found)["slug"])
 
 
 def objects_token(env: Environment, api_root: str) -> str:

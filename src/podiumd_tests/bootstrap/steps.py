@@ -47,6 +47,7 @@ if TYPE_CHECKING:
 
     from podiumd_tests.bootstrap.runner import Context
     from podiumd_tests.bootstrap.runner import Step
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
 
 
@@ -444,6 +445,23 @@ OF_PREFILL = SnippetStep(
     wiring=True,
     opt_in="of_prefill",
 )
+
+
+def referentielijsten_api(env: Environment) -> str:
+    """Return the Referentielijsten API root as Open Formulieren calls it."""
+    return f"{env.profile.urls['referentielijsten']}/api/v1/"
+
+
+# A service for Referentielijsten, the options source of select fields; an existing one for its API root is used.
+OF_REFERENTIELIJSTEN = SnippetStep(
+    "openformulieren-referentielijsten",
+    ("openformulieren", "referentielijsten"),
+    "openformulieren_reflijsten",
+    None,
+    {"prefix": names.PREFIX},
+    wiring=True,
+    context_params=lambda ctx: {"api_root": referentielijsten_api(ctx.env)},
+)
 # The test form's fields. The name makes the initiator of an anonymous submission: without it
 # Open Formulieren sends Open Zaak an initiator rol without betrokkeneIdentificatie, which it refuses.
 NAW = [
@@ -796,6 +814,7 @@ STEPS: tuple[Step, ...] = (
         opt_in="of_wait_for_payment",
     ),
     OF_PREFILL,
+    OF_REFERENTIELIJSTEN,
     SnippetStep(
         "opennotificaties-kanalen",
         ("opennotificaties",),

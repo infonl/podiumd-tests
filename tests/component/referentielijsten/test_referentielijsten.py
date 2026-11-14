@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.referentielijsten import make_tabel
 
 if TYPE_CHECKING:
     import requests
@@ -51,17 +51,8 @@ def test_items_of_a_tabel_are_listed(
     http: requests.Session, urls: dict[str, str], podiumd_env: Environment, registry: ResourceRegistry
 ) -> None:
     """A tabel made in the admin (here: through Django) shows in the API with exactly its items."""
-    deployment = podiumd_env.deployment_for("referentielijsten")
     code = registry.tagged("tabel")
-    items = [{"code": "ja", "naam": "Ja"}, {"code": "nee", "naam": "Nee"}]
-    params: dict[str, object] = {"action": "create", "code": code, "naam": code, "items": items}
-    registry.add(
-        f"tabel {code}",
-        lambda: run_snippet(
-            podiumd_env.kube, deployment, "referentielijsten_tabel", {"action": "delete", "code": code}
-        ),
-    )
-    run_snippet(podiumd_env.kube, deployment, "referentielijsten_tabel", params)
+    make_tabel(podiumd_env, registry, code, [{"code": "ja", "naam": "Ja"}, {"code": "nee", "naam": "Nee"}])
     api = f"{urls['referentielijsten']}/api/v1"
     tabellen = expect_status(http.get(f"{api}/tabellen", params={"code": code}), HTTPStatus.OK).json()
     assert code in {t.get("code") for t in entries(tabellen.get("results"))}

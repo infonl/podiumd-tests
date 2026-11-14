@@ -17,6 +17,7 @@ from podiumd_tests.seed import objecten as objecten_module
 from podiumd_tests.seed import openklant
 from podiumd_tests.seed import openvtb
 from podiumd_tests.seed import openzaak
+from podiumd_tests.seed import referentielijsten
 from podiumd_tests.seed.objecten import clean_up_logboek
 from podiumd_tests.seed.objecten import created_notificatie
 from podiumd_tests.seed.objecten import make_productaanvraag
@@ -130,6 +131,24 @@ def test_granted_objecttype_is_published_with_write_rights_for_the_tokens(monkey
     )
     registry.cleanup()
     assert ran[-1] == ("objecttypen-deploy", "objecttypen_tagged", {"action": "delete", "name": name})
+
+
+def test_make_tabel_creates_it_and_cleanup_deletes_it(monkeypatch):
+    ran = []
+    monkeypatch.setattr(referentielijsten, "run_snippet", lambda _k, d, n, p: ran.append((d, n, p)))
+    monkeypatch.setattr("podiumd_tests.seed.registry.run_snippet", lambda _k, d, n, p: ran.append((d, n, p)))
+    registry = ResourceRegistry("run1")
+    env = SimpleNamespace(kube=object(), deployment_for=lambda component: f"{component}-deploy")
+    referentielijsten.make_tabel(env, registry, "t", [{"code": "a", "naam": "A"}])  # pyright: ignore[reportArgumentType]
+    registry.cleanup()
+    assert ran == [
+        (
+            "referentielijsten-deploy",
+            "referentielijsten_tabel",
+            {"action": "create", "code": "t", "naam": "t", "items": [{"code": "a", "naam": "A"}]},
+        ),
+        ("referentielijsten-deploy", "referentielijsten_tabel", {"action": "delete", "code": "t"}),
+    ]
 
 
 def test_named_objecttypes_and_newest_version(fake_http):

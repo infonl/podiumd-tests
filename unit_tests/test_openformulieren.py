@@ -353,3 +353,10 @@ def test_objects_token_is_what_the_snippet_finds(env_factory, profile_factory, f
     snippet_answers(fake_runner, {"token": "t0ken"})
     env = env_factory(profile_factory(urls={"openformulieren": OF}))
     assert openformulieren.objects_token(env, "https://objecten.test/api/v2/") == "t0ken"
+
+
+def test_referentielijsten_service_is_the_slug_the_snippet_finds(env_factory, profile_factory, fake_runner):
+    snippet_answers(fake_runner, {"present": True, "slug": "rl"})
+    env = env_factory(profile_factory(urls={"openformulieren": OF, "referentielijsten": "https://rl.test"}))
+    assert openformulieren.referentielijsten_service(env) == "rl"
+    assert '"api_root": "https://rl.test/api/v1/"' in (fake_runner.stdins[-1] or "")
