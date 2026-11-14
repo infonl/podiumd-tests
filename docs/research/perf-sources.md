@@ -230,7 +230,7 @@ with curl or WebFetch. "verify" marks a fact not confirmed.
 
 | # | Source | URL | Why low |
 | --- | --- | --- | --- |
-| L1 | TA `perf/hairpin-compare.js` + `run-hairpin-compare.sh` (only in TA podiumd-4.8.2, removed in 4.8.4; not in MIGRATION.md) | local `icatt-menselijk-digitaal/podiumd-testautomation/podiumd-4.8.2/test-automation/tests/perf/` | k6, constant arrival rate 10/s; public hostname vs `frankgateway-internal:9080`, run as an in-cluster Job. Network-path cost, not availability; needs an in-cluster runner. Add a MIGRATION row (drop or todo) |
+| L1 | TA `perf/hairpin-compare.js` + `run-hairpin-compare.sh` (only in TA podiumd-4.8.2, removed in 4.8.4) | local `icatt-menselijk-digitaal/podiumd-testautomation/podiumd-4.8.2/test-automation/tests/perf/` | k6, constant arrival rate 10/s; public hostname vs `frankgateway-internal:9080`, run as an in-cluster Job. Network-path cost, not availability; needs an in-cluster runner. MIGRATION: drop |
 | L2 | Open Zaak "Apache Benchmark stress test" | <https://open-zaak.readthedocs.io/en/latest/development/performance/apachebench.html> | `ab -n 1000 -c 100` on the API root; tests ingress/TLS throughput. The gateway scenario `openzaak_root` already covers it |
 | L3 | APISIX benchmark | <https://apisix.apache.org/docs/apisix/benchmark/> | wrk numbers for bare APISIX; Frank!Gateway publishes none; only a comparison for `test_gateway_perf.py` |
 | L4 | Keycloak admin scenarios (`CreateDeleteUsers`, `UserCrawl`, …) | keycloak-benchmark | admin load is no PodiumD use; would write to the shared realm |

@@ -48,6 +48,7 @@ Sources:
 | `maintenance/cleanup-test-zaken.spec.ts` | `podiumd-tests sweep` (CLI, not a test) | 2 | replace | |
 | `perf/api-perf.js` | perf (Locust) | 6 | port | `tests/perf/test_api_perf.py` with `src/podiumd_tests/perf/locustfile.py`; thresholds in `perf.yaml`. |
 | `perf/fg-compare.js` | perf (Locust) | 6 | todo | Needs an environment with both a Frank!Gateway and a direct route to Open Zaak (TA used a temporary `openzaak-direct` host); minikube's outway is in-cluster only. |
+| `perf/hairpin-compare.js` (only in TA 4.8.2) | perf | 6 | drop | Compares the public hostname with the in-cluster Frank!Gateway route: network-path cost, not availability; needs an in-cluster runner. `test_gateway_perf.py` covers the gateway route. |
 | `perf/lib.js` | perf (Locust) | 6 | merge | Its auth helpers are the suite's own clients (`clients/platform.py`). |
 | `regression/07-brp-persoon-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/basisregistraties/test_brp.py`, through the api-proxy. |
 | `regression/08-kvk-bedrijf-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/basisregistraties/test_kvk.py` through the api-proxy, which routes to KvK's test API on every estate (TA called that API directly); test set Test BV Donald. |
