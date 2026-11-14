@@ -40,6 +40,7 @@ from podiumd_tests.perf.runs import SEARCH_TERM
 from podiumd_tests.perf.runs import add_environment_arguments
 from podiumd_tests.perf.runs import locust_environment
 from podiumd_tests.perf.stats import labelled
+from podiumd_tests.perf.zaakbrug_calls import zaakbrug_calls
 from podiumd_tests.perf.zac_calls import zac_calls
 from podiumd_tests.perf.zgw_calls import Call
 from podiumd_tests.perf.zgw_calls import Prepared
@@ -78,6 +79,7 @@ def _on_init(environment: LocustEnvironment, **_kwargs: object) -> None:
     options = environment.parsed_options
     ApiUser.env_under_test = locust_environment(options.podiumd_env, options.podiumd_urls)
     ApiUser.run_tag = options.podiumd_run_tag
+    ApiUser.identificaties = set()
     HotZaakUser.run_tag = options.podiumd_run_tag
     HotZaakUser.env_under_test = ApiUser.env_under_test
     if "zac" in ApiUser.env_under_test.profile.urls:
@@ -152,6 +154,8 @@ class ApiUser(User):
     run_tag: str
     accounts: Accounts
     selected: frozenset[str] = frozenset(ENDPOINTS)
+    # The zaak identificaties ZaakBrug handed out in this run.
+    identificaties: set[str]
 
     def __init__(self, environment: LocustEnvironment) -> None:
         super().__init__(environment)
@@ -194,6 +198,9 @@ class ApiUser(User):
             calls["kc_discovery"] = lambda _registry: expect_status(http.get(discovery), 200)
         if "zac" in urls:
             calls |= zac_calls(env) | keycloak_calls(env, self.accounts)
+        # Only when selected: its setup makes a call.
+        if "zaakbrug" in urls and "zaakbrug_genereer" in self.selected:
+            calls |= zaakbrug_calls(env, self.identificaties)
         return calls | _search_calls(env)
 
 

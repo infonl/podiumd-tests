@@ -93,6 +93,8 @@ ENDPOINTS = {
     "ok2_klantcontacten_expand": "openklant",
     # Objecten's performance_test (maykinmedia/open-object): a page of 500 objects ordered on a data attribute.
     "obj_vac_ordered": "objecten",
+    # ZaakBrug #714: genereerZaakIdentificatie answered Fo03 faults under concurrent load.
+    "zaakbrug_genereer": "zaakbrug",
 }
 
 # Keycloak's sizing guide: what one vCPU serves per second (keycloak.org high-availability, CPU and memory sizing).

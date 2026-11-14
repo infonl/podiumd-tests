@@ -102,7 +102,7 @@ def fake_http(monkeypatch, response_factory):
     """Replace the network under requests. install({path: (status, json)}) returns the list of Sent requests.
 
     A key "METHOD path" answers only that method; a plain path answers any method; unknown paths
-    answer 404. The real adapters (host-header mode) still run.
+    answer 404. Bytes answer as the body itself. The real adapters (host-header mode) still run.
     """
     sent = []
 
@@ -112,7 +112,10 @@ def fake_http(monkeypatch, response_factory):
             path = request.path_url.split("?")[0]
             table = answers or {}
             status, json_body = table.get(f"{request.method} {path}", table.get(path, (404, {"detail": "not found"})))
-            response = response_factory(status=status, json_body=json_body, url=request.url)
+            if isinstance(json_body, bytes):
+                response = response_factory(status=status, body=json_body, url=request.url)
+            else:
+                response = response_factory(status=status, json_body=json_body, url=request.url)
             response.request = request
             return response
 

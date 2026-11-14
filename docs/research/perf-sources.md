@@ -190,6 +190,7 @@ with curl or WebFetch. "verify" marks a fact not confirmed.
 | Kind | issue (open, 2026-10-26): `genereer[Zaak|Document]Identificatie` answers Fo03 under concurrent load since 1.26.17; quick fix PR #717, structural fix #718 (database sequences) |
 | Port value | the suite serializes the first genereer calls because of zaakbrug-2 (first calls). #714 is about sustained concurrency after that. A Locust call on `genereer_zaak_id` shows it and gives ZaakBrug a load point at all |
 | How | add `zaakbrug_genereer` to `ENDPOINTS` (component `zaakbrug`), assert distinct identificaties within a round; check known-issues before marking (may be zaakbrug-2 or a new id) |
+| Ported | `zaakbrug_genereer`: fails on a fault or on an identificatie handed out twice in the run; the run's first call goes alone (zaakbrug-2) |
 
 #### M6. Open Archiefbeheer performance flow (Playwright, 10,000 zaken)
 

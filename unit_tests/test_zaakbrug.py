@@ -6,6 +6,12 @@ from datetime import datetime
 from xml.etree import ElementTree as ET  # nosec B405  # parses an envelope built here
 from xml.sax.saxutils import quoteattr
 
+import pytest
+
+from podiumd_tests.perf.zaakbrug_calls import new_identificatie
+from podiumd_tests.perf.zaakbrug_calls import zaakbrug_calls
+from podiumd_tests.seed.registry import ResourceRegistry
+from podiumd_tests.zaakbrug import ZDS
 from podiumd_tests.zaakbrug import ZKN
 from podiumd_tests.zaakbrug import Document
 from podiumd_tests.zaakbrug import ZaakVelden
@@ -122,3 +128,36 @@ def test_document_queries_select_by_identificatie_and_answers_give_the_documents
     assert zaakdocument_identificaties("<E/>") == []
     assert document_inhoud(f"<E xmlns:x={quoteattr(ZKN)}><x:object><x:inhoud>cGRm</x:inhoud></x:object></E>") == "cGRm"
     assert document_inhoud("<E/>") is None
+
+
+def _genereer_answer(identificatie):
+    return (
+        f"<Envelope><Body><x:Du02 xmlns:x={quoteattr(ZKN)}><x:zaak><x:identificatie>{identificatie}</x:identificatie>"
+        "</x:zaak></x:Du02></Body></Envelope>"
+    )
+
+
+def test_new_identificatie_refuses_a_fault_none_and_a_repeat():
+    seen = set()
+    assert new_identificatie(_genereer_answer("ZK2026-00001"), seen) == "ZK2026-00001"
+    assert seen == {"ZK2026-00001"}
+    with pytest.raises(ValueError, match="twice"):
+        new_identificatie(_genereer_answer("ZK2026-00001"), seen)
+    fault = '<e:Envelope xmlns:e="http://schemas.xmlsoap.org/soap/envelope/"><e:Body><e:Fault/></e:Body></e:Envelope>'
+    with pytest.raises(ValueError, match="fault"):
+        new_identificatie(fault, seen)
+    with pytest.raises(ValueError, match="no zaak identificatie"):
+        new_identificatie("<Envelope/>", seen)
+
+
+def test_zaakbrug_calls_make_the_first_call_alone(env_factory, profile_factory, fake_http):
+    sent = fake_http({f"{ZDS}/VrijBericht": (200, _genereer_answer("ZK2026-00001").encode())})
+    env = env_factory(profile_factory(urls={"zaakbrug": "https://zaakbrug.example.test"}))
+    seen = set()
+    genereer = zaakbrug_calls(env, seen)["zaakbrug_genereer"]
+    assert seen == {"ZK2026-00001"}
+    assert sent[0].headers["SOAPAction"].endswith("genereerZaakIdentificatie_Di02")
+    zaakbrug_calls(env, seen)
+    assert len(sent) == 1
+    with pytest.raises(ValueError, match="twice"):
+        genereer(ResourceRegistry("ptest-x"))

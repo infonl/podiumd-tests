@@ -114,6 +114,10 @@ SOURCES = {
         "upstream maykinmedia/open-object performance_test/",
         "Objecten's own benchmark: a page of 500 objects ordered on a data attribute, within 1 s.",
     ),
+    "zaakbrug_genereer": pytest.mark.source(
+        "upstream wearefrank/zaakbrug issue 714",
+        "ZaakBrug 1.26.17 answered genereerZaakIdentificatie with Fo03 faults under concurrent load.",
+    ),
     **dict.fromkeys(("oz_zaken", "oz_zaaktypen", "ok2_partijen", "brp_persoon", "kc_discovery"), TA_K6),
     **dict.fromkeys(("oz_documenten_ordered", "oz_zaken_one_zaaktype"), OZ_BENCHMARK),
     **dict.fromkeys(KEYCLOAK_PER_VCPU, KC_BENCHMARK),
