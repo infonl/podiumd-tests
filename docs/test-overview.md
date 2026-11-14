@@ -11,12 +11,12 @@ versions is not counted.
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 256 | 41 | 10 |
-| component | 994 | 591 | 76 |
+| component | 1000 | 594 | 78 |
 | integration | 191 | 127 | 14 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1399** | **727** |  |
+| **full tier** | **1405** | **730** |  |
 
-Unit tests (`unit_tests/`, functions): 917. Perf endpoints (`perf/runs.py`): 32.
+Unit tests (`unit_tests/`, functions): 920. Perf endpoints (`perf/runs.py`): 32.
 
 ## Per area
 
@@ -50,7 +50,7 @@ Unit tests (`unit_tests/`, functions): 917. Perf endpoints (`perf/runs.py`): 32.
 | component | pabc | 10 | 10 |
 | component | platform | 69 | 18 |
 | component | referentielijsten | 2 | 2 |
-| component | zaakbrug | 14 | 13 |
+| component | zaakbrug | 20 | 16 |
 | component | zac | 354 | 263 |
 | component | zgw_office_addin | 4 | 3 |
 | integration | continuiteit | 19 | 10 |
@@ -107,7 +107,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | draaiboek | 91 |
 | external | 244 |
 | podiumd-tests | 525 |
-| upstream | 236 |
+| upstream | 242 |
 
 ## Expected failures per known issue
 
@@ -167,6 +167,7 @@ Ids of infonl/podiumd-known-issues.
 | podiumd-chart-42 | 1 |
 | podiumd-chart-43 | 1 |
 | podiumd-chart-44 | 1 |
+| zaakbrug-5 | 2 |
 | zac-2 | 1 |
 | zac-3 | 1 |
 | zac-7 | 2 |

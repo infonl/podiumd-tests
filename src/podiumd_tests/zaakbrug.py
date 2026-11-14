@@ -5,11 +5,13 @@ from __future__ import annotations
 import uuid
 
 from dataclasses import dataclass
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import NamedTuple
 from xml.etree.ElementTree import fromstring  # nosec B405  # parses ZaakBrug's own answer
 from xml.sax.saxutils import quoteattr  # nosec B406  # escapes, parses nothing
 
+from podiumd_tests.responses import expect_status
 from podiumd_tests.workloads import expect_defect
 
 if TYPE_CHECKING:
@@ -17,6 +19,7 @@ if TYPE_CHECKING:
     from xml.etree.ElementTree import Element  # nosec B405  # type only
 
     import pytest
+    import requests
 
     from podiumd_tests.environment import Environment
 
@@ -25,8 +28,11 @@ ZDS = "/services/translate/generic/zds"
 STUF = "http://www.egem.nl/StUF/StUF0301"
 ZKN = "http://www.egem.nl/StUF/sector/zkn/0310"
 XMLNS = f"xmlns:StUF={quoteattr(STUF)} xmlns:ZKN={quoteattr(ZKN)}"
-# ZaakBrug's default organisation (zaakbrug.globals.organizations).
+# ZaakBrug's default organisation (zaakbrug.globals.organizations) and the RSIN it maps it to, a zaak's bronorganisatie.
 GEMEENTECODE = "1900"
+ZAAKBRUG_BRONORGANISATIE = "823288444"
+# The identificatie of a natuurlijk persoon as betrokkene is this prefix and the BSN (as Verint KANA sends it).
+NPS_PREFIX = "11"
 # The mutation parameters shared by the Lk01 messages (creeerZaak, voegZaakdocumentToe).
 MUTATIE = (
     "<ZKN:parameters><StUF:mutatiesoort>T</StUF:mutatiesoort>\n"
@@ -58,6 +64,13 @@ class ZaakVelden:
 NO_VELDEN = ZaakVelden()
 
 
+class CreatedZaak(NamedTuple):
+    """A zaak created through ZaakBrug: its identificatie and its URL in Open Zaak."""
+
+    identificatie: str
+    url: str
+
+
 class Document(NamedTuple):
     """A document for voegZaakdocumentToe: its identificatie, informatieobjecttype omschrijving, content and status."""
 
@@ -72,12 +85,17 @@ def soap_action(message: str) -> dict[str, str]:
     return {"Content-Type": "text/xml; charset=utf-8", "SOAPAction": f"{ZKN}/{message}"}
 
 
-def _stuurgegevens(berichtcode: str, now: datetime, gemeentecode: str, *, rest: str) -> str:
+def send(http: requests.Session, url: str, envelope: str, message: str) -> str:
+    """POST a ZDS envelope with the SOAPAction of message; ZaakBrug's answer, which must be 200."""
+    return expect_status(http.post(url, data=envelope, headers=soap_action(message)), HTTPStatus.OK).text
+
+
+def _stuurgegevens(code: str, now: datetime, gemeentecode: str, *, rest: str) -> str:
     """Return the StUF stuurgegevens shared by the ZDS messages; rest adds elements after the standard ones.
 
     tijdstipBericht has 16 digits (hundredths of a second); more fails ZaakBrug's XML validation.
     """
-    return f"""<ZKN:stuurgegevens><StUF:berichtcode>{berichtcode}</StUF:berichtcode>
+    return f"""<ZKN:stuurgegevens><StUF:berichtcode>{code}</StUF:berichtcode>
 <StUF:zender><StUF:organisatie>{gemeentecode}</StUF:organisatie>
 <StUF:applicatie>ptest</StUF:applicatie></StUF:zender>
 <StUF:ontvanger><StUF:organisatie>{gemeentecode}</StUF:organisatie>
@@ -215,8 +233,8 @@ def actualiseer_zaakstatus(  # noqa: PLR0913  # one message
     return _zaak_wijziging(now, zaak, zaaktype_code, ((NO_VELDEN, zonder), (NO_VELDEN, status)), gemeentecode)
 
 
-def _vraag(entiteittype: str, now: datetime, identificatie: str, scope: str, gemeentecode: str) -> str:
-    """Return a zakLv01 or edcLv01 envelope for the BeantwoordVraag endpoint: one object by identificatie."""
+def _vraag(entiteittype: str, now: datetime, gelijk: str, scope: str, gemeentecode: str) -> str:
+    """Return a zakLv01 or edcLv01 envelope for the BeantwoordVraag endpoint: the objects that match gelijk."""
     stuurgegevens = _stuurgegevens(
         "Lv01", now, gemeentecode, rest=f"<StUF:entiteittype>{entiteittype}</StUF:entiteittype>"
     )
@@ -227,7 +245,7 @@ def _vraag(entiteittype: str, now: datetime, identificatie: str, scope: str, gem
 {stuurgegevens}
 <ZKN:parameters><StUF:sortering>0</StUF:sortering>
 <StUF:indicatorVervolgvraag>false</StUF:indicatorVervolgvraag></ZKN:parameters>
-<ZKN:gelijk StUF:entiteittype={soort}><ZKN:identificatie>{identificatie}</ZKN:identificatie></ZKN:gelijk>
+<ZKN:gelijk StUF:entiteittype={soort}>{gelijk}</ZKN:gelijk>
 <ZKN:scope><ZKN:object StUF:entiteittype={soort}><ZKN:identificatie xsi:nil="true"/>
 {scope}</ZKN:object></ZKN:scope>
 </ZKN:{element}></SOAP-ENV:Body></SOAP-ENV:Envelope>"""
@@ -238,14 +256,24 @@ def geef_zaak_details(now: datetime, zaak: str, gemeentecode: str = GEMEENTECODE
     scope = """<ZKN:omschrijving xsi:nil="true"/>
 <ZKN:isVan StUF:entiteittype="ZAKZKT"><ZKN:gerelateerde StUF:entiteittype="ZKT">
 <ZKN:code xsi:nil="true"/></ZKN:gerelateerde></ZKN:isVan>"""
-    return _vraag("ZAK", now, zaak, scope, gemeentecode)
+    return _vraag("ZAK", now, _gelijk_aan(zaak), scope, gemeentecode)
+
+
+def geef_zaken_van_initiator(now: datetime, bsn: str, gemeentecode: str = GEMEENTECODE) -> str:
+    """Return a geefZaakdetails_Lv01 envelope for the BeantwoordVraag endpoint: the zaken of an initiator by BSN.
+
+    A KCC system lists a person's zaken this way.
+    """
+    gelijk = f"""<ZKN:heeftAlsInitiator StUF:entiteittype="ZAKBTRINI"><ZKN:gerelateerde StUF:entiteittype="BTR">
+<ZKN:identificatie>{NPS_PREFIX}{bsn}</ZKN:identificatie></ZKN:gerelateerde></ZKN:heeftAlsInitiator>"""
+    return _vraag("ZAK", now, gelijk, '<ZKN:omschrijving xsi:nil="true"/>', gemeentecode)
 
 
 def geef_lijst_zaakdocumenten(now: datetime, zaak: str, gemeentecode: str = GEMEENTECODE) -> str:
     """Return a geefLijstZaakdocumenten_Lv01 envelope for the BeantwoordVraag endpoint: the documents of one zaak."""
     scope = """<ZKN:heeftRelevant StUF:entiteittype="ZAKEDC"><ZKN:gerelateerde StUF:entiteittype="EDC">
 <ZKN:identificatie xsi:nil="true"/><ZKN:titel xsi:nil="true"/></ZKN:gerelateerde></ZKN:heeftRelevant>"""
-    return _vraag("ZAK", now, zaak, scope, gemeentecode)
+    return _vraag("ZAK", now, _gelijk_aan(zaak), scope, gemeentecode)
 
 
 def geef_zaakdocument_lezen(now: datetime, document: str, gemeentecode: str = GEMEENTECODE) -> str:
@@ -253,7 +281,11 @@ def geef_zaakdocument_lezen(now: datetime, document: str, gemeentecode: str = GE
 
     An inhoud element in the scope fails ZaakBrug's validation; the answer carries the inhoud without it.
     """
-    return _vraag("EDC", now, document, '<ZKN:titel xsi:nil="true"/>', gemeentecode)
+    return _vraag("EDC", now, _gelijk_aan(document), '<ZKN:titel xsi:nil="true"/>', gemeentecode)
+
+
+def _gelijk_aan(identificatie: str) -> str:
+    return f"<ZKN:identificatie>{identificatie}</ZKN:identificatie>"
 
 
 def voeg_zaakdocument_toe(
@@ -358,9 +390,20 @@ def document_inhoud(answer: str) -> str | None:
     return _text(answer, f".//{{{ZKN}}}object/{{{ZKN}}}inhoud")
 
 
+def berichtcode(answer: str) -> str | None:
+    """Return the StUF berichtcode of a ZDS answer (Bv03, La01, Fo03), or None; a Fault carries it in its detail."""
+    return _text(answer, f".//{{{STUF}}}berichtcode")
+
+
 def is_bevestiging(answer: str) -> bool:
     """Return True when the ZDS answer is a Bv03 confirmation (not an Fo03 fault)."""
-    return _text(answer, f".//{{{STUF}}}berichtcode") == "Bv03"
+    return berichtcode(answer) == "Bv03"
+
+
+def zaak_identificaties(answer: str) -> list[str]:
+    """Return the identificaties of the zaken in a zakLa01 answer."""
+    path = f".//{{{ZKN}}}antwoord/{{{ZKN}}}object/{{{ZKN}}}identificatie"
+    return [found.text or "" for found in _parsed(answer).iterfind(path)]
 
 
 def _parsed(answer: str) -> Element:

@@ -7,9 +7,7 @@ import base64
 from dataclasses import replace
 from datetime import UTC
 from datetime import datetime
-from http import HTTPStatus
 from typing import TYPE_CHECKING
-from typing import NamedTuple
 
 import pytest
 
@@ -17,20 +15,17 @@ from podiumd_tests.bootstrap.names import ZAAKBRUG_IOT
 from podiumd_tests.bootstrap.names import ZAAKBRUG_VERSIES_ZAAKTYPE
 from podiumd_tests.bootstrap.names import ZAAKBRUG_ZAAKTYPE
 from podiumd_tests.json_data import strings
-from podiumd_tests.lock import file_lock
-from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openklant import random_bsn
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
-from podiumd_tests.seed.openzaak import delete_zaak_at_cleanup
 from podiumd_tests.seed.openzaak import make_zaak
-from podiumd_tests.zaakbrug import NO_VELDEN
+from podiumd_tests.zaakbrug import ZAAKBRUG_BRONORGANISATIE
 from podiumd_tests.zaakbrug import ZDS
 from podiumd_tests.zaakbrug import Document
 from podiumd_tests.zaakbrug import ZaakVelden
 from podiumd_tests.zaakbrug import actualiseer_zaakstatus
 from podiumd_tests.zaakbrug import cancel_checkout
 from podiumd_tests.zaakbrug import checked_out_id
-from podiumd_tests.zaakbrug import creeer_zaak
 from podiumd_tests.zaakbrug import document_identificatie
 from podiumd_tests.zaakbrug import document_inhoud
 from podiumd_tests.zaakbrug import expect_expired_version_bug
@@ -38,57 +33,40 @@ from podiumd_tests.zaakbrug import geef_lijst_zaakdocumenten
 from podiumd_tests.zaakbrug import geef_zaak_details
 from podiumd_tests.zaakbrug import geef_zaakdocument_bewerken
 from podiumd_tests.zaakbrug import geef_zaakdocument_lezen
+from podiumd_tests.zaakbrug import geef_zaken_van_initiator
 from podiumd_tests.zaakbrug import genereer_document_id
 from podiumd_tests.zaakbrug import genereer_zaak_id
 from podiumd_tests.zaakbrug import is_bevestiging
 from podiumd_tests.zaakbrug import is_fault
-from podiumd_tests.zaakbrug import soap_action
+from podiumd_tests.zaakbrug import send
 from podiumd_tests.zaakbrug import update_zaak
 from podiumd_tests.zaakbrug import update_zaakdocument
 from podiumd_tests.zaakbrug import voeg_zaakdocument_toe
 from podiumd_tests.zaakbrug import zaak_identificatie
+from podiumd_tests.zaakbrug import zaak_identificaties
 from podiumd_tests.zaakbrug import zaakdocument_identificaties
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     import requests
 
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.seed.registry import ResourceRegistry
+    from podiumd_tests.zaakbrug import CreatedZaak
 
 pytestmark = [
     pytest.mark.component,
     pytest.mark.requires("zaakbrug"),
+    pytest.mark.usefixtures("first_identificaties"),
 ]
 
-# ZaakBrug maps gemeentecode 1900 to this RSIN (zaakbrug.globals.organizations); the zaak's bronorganisatie.
-ZAAKBRUG_BRONORGANISATIE = "823288444"
-INITIATOR_BSN = "111111110"
 PDF = base64.b64encode(b"%PDF-1.4 ptest").decode()
 MADE_HERE = pytest.mark.source(
     "podiumd-tests",
     "PodiumD 4.10 adds ZaakBrug: ZDS 1.2 messages answer through its translate endpoints and reach Open Zaak.",
 )
-
-
-@pytest.fixture(scope="module", autouse=True, name="first_identificaties")
-def fixture_first_identificaties(http: requests.Session, urls: dict[str, str], run_dir: Path) -> None:
-    """The run's first genereer calls, one worker at a time: parallel first calls break ZaakBrug's counter (zaakbrug-2)."""
-    done = run_dir / "zaakbrug-identificaties"
-    with file_lock(run_dir / "zaakbrug-identificaties.lock"):
-        if done.exists():
-            return
-        now, url = datetime.now(UTC), f"{urls['zaakbrug']}{ZDS}/VrijBericht"
-        _post(http, url, genereer_zaak_id(now), "genereerZaakIdentificatie_Di02")
-        _post(http, url, genereer_document_id(now), "genereerDocumentIdentificatie_Di02")
-        done.touch()
-
-
-def _post(http: requests.Session, url: str, envelope: str, message: str) -> str:
-    return expect_status(http.post(url, data=envelope, headers=soap_action(message)), HTTPStatus.OK).text
 
 
 @MADE_HERE
@@ -99,7 +77,7 @@ def _post(http: requests.Session, url: str, envelope: str, message: str) -> str:
 """)
 def test_genereer_zaak_identificatie(http: requests.Session, urls: dict[str, str]) -> None:
     """genereerZaakIdentificatie_Di02 answers a new zaak identificatie (stored in ZaakBrug, not in Open Zaak)."""
-    answer = _post(
+    answer = send(
         http,
         f"{urls['zaakbrug']}{ZDS}/VrijBericht",
         genereer_zaak_id(datetime.now(UTC)),
@@ -108,47 +86,16 @@ def test_genereer_zaak_identificatie(http: requests.Session, urls: dict[str, str
     assert zaak_identificatie(answer)
 
 
-class CreatedZaak(NamedTuple):
-    """A zaak created through ZaakBrug: its identificatie and its URL in Open Zaak."""
-
-    identificatie: str
-    url: str
-
-
-@pytest.fixture(name="zaakbrug_zaak")
-def fixture_zaakbrug_zaak(
-    http: requests.Session, urls: dict[str, str], openzaak: ApiClient, registry: ResourceRegistry
-) -> Callable[..., CreatedZaak]:
-    """Create a zaak through genereerZaakIdentificatie and creeerZaak (Bv03); cleanup deletes it with its documents."""
-
-    def create(velden: ZaakVelden = NO_VELDEN) -> CreatedZaak:
-        now = datetime.now(UTC)
-        base = urls["zaakbrug"] + ZDS
-        zaak = zaak_identificatie(
-            _post(http, f"{base}/VrijBericht", genereer_zaak_id(now), "genereerZaakIdentificatie_Di02")
-        )
-        assert zaak
-        envelope = creeer_zaak(now, zaak, ZAAKBRUG_ZAAKTYPE, INITIATOR_BSN, velden=velden)
-        assert is_bevestiging(_post(http, f"{base}/OntvangAsynchroon", envelope, "creeerZaak_Lk01"))
-        found = openzaak.list(f"{ZAKEN}/zaken", {"identificatie": zaak, "bronorganisatie": ZAAKBRUG_BRONORGANISATIE})
-        assert found, f"no zaak {zaak} in Open Zaak after creeerZaak"
-        url = str(found[0]["url"])
-        delete_zaak_at_cleanup(openzaak, registry, url, with_documents=True)
-        return CreatedZaak(zaak, url)
-
-    return create
-
-
 def _attach(http: requests.Session, urls: dict[str, str], zaak: str, status: str = "In bewerking") -> str:
     """Attach a new document to the zaak with genereerDocumentIdentificatie and voegZaakdocumentToe; its identificatie."""
     now = datetime.now(UTC)
     base = urls["zaakbrug"] + ZDS
     document = document_identificatie(
-        _post(http, f"{base}/VrijBericht", genereer_document_id(now), "genereerDocumentIdentificatie_Di02")
+        send(http, f"{base}/VrijBericht", genereer_document_id(now), "genereerDocumentIdentificatie_Di02")
     )
     assert document
     envelope = voeg_zaakdocument_toe(now, zaak, ZAAKBRUG_ZAAKTYPE, Document(document, ZAAKBRUG_IOT, PDF, status))
-    assert is_bevestiging(_post(http, f"{base}/OntvangAsynchroon", envelope, "voegZaakdocumentToe_Lk01"))
+    assert is_bevestiging(send(http, f"{base}/OntvangAsynchroon", envelope, "voegZaakdocumentToe_Lk01"))
     return document
 
 
@@ -180,8 +127,36 @@ def test_geef_zaak_details_reads_a_created_zaak(
     """geefZaakdetails_Lv01 reads back a zaak created through creeerZaak (La01 carries its identificatie)."""
     zaak = zaakbrug_zaak().identificatie
     details = geef_zaak_details(datetime.now(UTC), zaak)
-    answer = _post(http, f"{urls['zaakbrug']}{ZDS}/BeantwoordVraag", details, "geefZaakdetails_Lv01")
+    answer = send(http, f"{urls['zaakbrug']}{ZDS}/BeantwoordVraag", details, "geefZaakdetails_Lv01")
     assert zaak_identificatie(answer) == zaak
+
+
+@pytest.mark.requires("openzaak")
+@pytest.mark.source(
+    "upstream Sudwest-Fryslan/OpenZaakBrug src/test/resources/ladybug/Verint KANA",
+    "A KCC system (Verint KANA) lists a person's zaken with a zakLv01 that selects on the initiator.",
+)
+@pytest.mark.parametrize("message", ["geefZaakdetails_Lv01", "zakLv01"])
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="[zaakbrug-5] ZaakBrug 1.27.1 strips one character of the initiator's 11 prefix and answers an empty La01;"
+    " the zakLv01 SOAPAction gets Fo03; not yet reported upstream",
+)
+@pytest.mark.scenario("""
+    Given a zaak created through ZaakBrug whose initiator has a BSN no other zaak has
+    When a KCC system asks ZaakBrug for the zaken of that initiator, as a ZDS or as a StUF-ZKN question
+    Then the answer lists the zaak
+""")
+def test_zaken_of_an_initiator_are_listed(
+    http: requests.Session, urls: dict[str, str], zaakbrug_zaak: Callable[..., CreatedZaak], message: str
+) -> None:
+    """A zakLv01 that selects on heeftAlsInitiator answers the initiator's zaken, with either SOAPAction."""
+    bsn = random_bsn()
+    zaak = zaakbrug_zaak(bsn=bsn)
+    vraag = geef_zaken_van_initiator(datetime.now(UTC), bsn)
+    answer = send(http, f"{urls['zaakbrug']}{ZDS}/BeantwoordVraag", vraag, message)
+    assert zaak_identificaties(answer) == [zaak.identificatie]
 
 
 @pytest.mark.requires("openzaak")
@@ -221,7 +196,7 @@ def test_geef_lijst_zaakdocumenten_lists_an_attached_document(
     zaak = zaakbrug_zaak().identificatie
     document = _attach(http, urls, zaak)
     vraag = geef_lijst_zaakdocumenten(datetime.now(UTC), zaak)
-    answer = _post(http, f"{urls['zaakbrug']}{ZDS}/BeantwoordVraag", vraag, "geefLijstZaakdocumenten_Lv01")
+    answer = send(http, f"{urls['zaakbrug']}{ZDS}/BeantwoordVraag", vraag, "geefLijstZaakdocumenten_Lv01")
     assert zaakdocument_identificaties(answer) == [document]
 
 
@@ -239,7 +214,7 @@ def test_geef_zaakdocument_lezen_returns_the_inhoud(
     """geefZaakdocumentLezen_Lv01 answers the inhoud sent with voegZaakdocumentToe."""
     document = _attach(http, urls, zaakbrug_zaak().identificatie)
     vraag = geef_zaakdocument_lezen(datetime.now(UTC), document)
-    answer = _post(http, f"{urls['zaakbrug']}{ZDS}/BeantwoordVraag", vraag, "geefZaakdocumentLezen_Lv01")
+    answer = send(http, f"{urls['zaakbrug']}{ZDS}/BeantwoordVraag", vraag, "geefZaakdocumentLezen_Lv01")
     assert document_inhoud(answer) == PDF
 
 
@@ -249,7 +224,7 @@ CREATED = ZaakVelden(kenmerk="K-1", verlenging=(5, "Eerste"))
 
 def _update(http: requests.Session, urls: dict[str, str], zaak: str, old: ZaakVelden, new: ZaakVelden) -> None:
     envelope = update_zaak(datetime.now(UTC), zaak, ZAAKBRUG_ZAAKTYPE, old=old, new=new)
-    assert is_bevestiging(_post(http, f"{urls['zaakbrug']}{ZDS}/OntvangAsynchroon", envelope, "updateZaak_Lk01"))
+    assert is_bevestiging(send(http, f"{urls['zaakbrug']}{ZDS}/OntvangAsynchroon", envelope, "updateZaak_Lk01"))
 
 
 @pytest.mark.requires("openzaak")
@@ -347,7 +322,7 @@ def test_status_at_an_existing_datum_status_gezet_is_refused(
             omschrijving=omschrijving,
             gezet=gezet,
         )
-        return _post(http, endpoint, envelope, "actualiseerZaakstatus_Lk01")
+        return send(http, endpoint, envelope, "actualiseerZaakstatus_Lk01")
 
     assert is_bevestiging(status(1, "Ingediend"))
     assert is_fault(status(2, "In behandeling"))
@@ -374,14 +349,14 @@ def test_definitief_document_is_not_updated(
     zaak = zaakbrug_zaak()
     document = _attach(http, urls, zaak.identificatie, status="Definitief")
     checked_out = checked_out_id(
-        _post(http, vrij, geef_zaakdocument_bewerken(now, document), "geefZaakdocumentbewerken_Di02")
+        send(http, vrij, geef_zaakdocument_bewerken(now, document), "geefZaakdocumentbewerken_Di02")
     )
     assert checked_out
     update = update_zaakdocument(now, zaak.identificatie, document, checked_out, titel="gewijzigd door podiumd-tests")
     try:
-        assert is_fault(_post(http, vrij, update, "updateZaakdocument_Di02"))
+        assert is_fault(send(http, vrij, update, "updateZaakdocument_Di02"))
     finally:
-        _post(http, vrij, cancel_checkout(now, document, checked_out), "cancelCheckout_Di02")
+        send(http, vrij, cancel_checkout(now, document, checked_out), "cancelCheckout_Di02")
     links = openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": zaak.url})
     titels = [str(openzaak.get(str(link["informatieobject"]))["titel"]) for link in links]
     assert "gewijzigd door podiumd-tests" not in titels
@@ -425,7 +400,7 @@ def test_status_on_an_expired_zaaktype_version_uses_that_versions_statustype(
         gezet=datetime.now(UTC).replace(microsecond=0),
     )
     assert is_bevestiging(
-        _post(http, f"{urls['zaakbrug']}{ZDS}/OntvangAsynchroon", envelope, "actualiseerZaakstatus_Lk01")
+        send(http, f"{urls['zaakbrug']}{ZDS}/OntvangAsynchroon", envelope, "actualiseerZaakstatus_Lk01")
     )
     statussen = openzaak.list(f"{ZAKEN}/statussen", {"zaak": str(zaak["url"])})
     of_version = strings(expired.get("statustypen"))

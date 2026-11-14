@@ -7,15 +7,18 @@ from xml.etree import ElementTree as ET  # nosec B405  # parses an envelope buil
 from xml.sax.saxutils import quoteattr
 
 import pytest
+import requests
 
 from podiumd_tests.perf.zaakbrug_calls import new_identificatie
 from podiumd_tests.perf.zaakbrug_calls import zaakbrug_calls
 from podiumd_tests.seed.registry import ResourceRegistry
+from podiumd_tests.zaakbrug import NPS_PREFIX
 from podiumd_tests.zaakbrug import ZDS
 from podiumd_tests.zaakbrug import ZKN
 from podiumd_tests.zaakbrug import Document
 from podiumd_tests.zaakbrug import ZaakVelden
 from podiumd_tests.zaakbrug import actualiseer_zaakstatus
+from podiumd_tests.zaakbrug import berichtcode
 from podiumd_tests.zaakbrug import cancel_checkout
 from podiumd_tests.zaakbrug import checked_out_id
 from podiumd_tests.zaakbrug import creeer_zaak
@@ -25,15 +28,18 @@ from podiumd_tests.zaakbrug import geef_lijst_zaakdocumenten
 from podiumd_tests.zaakbrug import geef_zaak_details
 from podiumd_tests.zaakbrug import geef_zaakdocument_bewerken
 from podiumd_tests.zaakbrug import geef_zaakdocument_lezen
+from podiumd_tests.zaakbrug import geef_zaken_van_initiator
 from podiumd_tests.zaakbrug import genereer_document_id
 from podiumd_tests.zaakbrug import genereer_zaak_id
 from podiumd_tests.zaakbrug import is_bevestiging
 from podiumd_tests.zaakbrug import is_fault
+from podiumd_tests.zaakbrug import send
 from podiumd_tests.zaakbrug import soap_action
 from podiumd_tests.zaakbrug import update_zaak
 from podiumd_tests.zaakbrug import update_zaakdocument
 from podiumd_tests.zaakbrug import voeg_zaakdocument_toe
 from podiumd_tests.zaakbrug import zaak_identificatie
+from podiumd_tests.zaakbrug import zaak_identificaties
 from podiumd_tests.zaakbrug import zaakdocument_identificaties
 
 
@@ -161,3 +167,25 @@ def test_zaakbrug_calls_make_the_first_call_alone(env_factory, profile_factory, 
     assert len(sent) == 1
     with pytest.raises(ValueError, match="twice"):
         genereer(ResourceRegistry("ptest-x"))
+
+
+def test_zaken_of_an_initiator_select_on_the_prefixed_bsn_and_answers_give_the_zaken():
+    envelope = geef_zaken_van_initiator(datetime(2026, 11, 14, tzinfo=UTC), "123456782")
+    initiator = f'<ZKN:gerelateerde StUF:entiteittype="BTR">\n<ZKN:identificatie>{NPS_PREFIX}123456782<'
+    assert initiator in envelope
+    objects = "".join(f"<x:object><x:identificatie>{z}</x:identificatie></x:object>" for z in ("Z-1", "Z-2"))
+    answer = f"<E xmlns:x={quoteattr(ZKN)}><x:antwoord>{objects}</x:antwoord></E>"
+    assert zaak_identificaties(answer) == ["Z-1", "Z-2"]
+    assert zaak_identificaties("<E/>") == []
+
+
+def test_berichtcode_reads_the_stuf_berichtcode():
+    fo03 = '<E xmlns:S="http://www.egem.nl/StUF/StUF0301"><S:berichtcode>Fo03</S:berichtcode></E>'
+    assert berichtcode(fo03) == "Fo03"
+    assert berichtcode("<E/>") is None
+
+
+def test_send_posts_with_the_soapaction_and_wants_200(fake_http):
+    sent = fake_http({"POST /zds/VrijBericht": (200, None)})
+    send(requests.Session(), "https://zaakbrug.example.test/zds/VrijBericht", "<E/>", "genereerZaakIdentificatie_Di02")
+    assert sent[0].headers["SOAPAction"] == f"{ZKN}/genereerZaakIdentificatie_Di02"
