@@ -98,6 +98,7 @@ KEYCLOAK_RECOVERY = 300
 """)
 def test_no_notificatie_is_lost_while_open_notificaties_is_down(  # fixtures
     podiumd_env: Environment,
+    urls: dict[str, str],
     http: requests.Session,
     run_tag: str,
     opennotificaties: ApiClient,
@@ -114,7 +115,7 @@ def test_no_notificatie_is_lost_while_open_notificaties_is_down(  # fixtures
     before = cluster_state(podiumd_env)
     start = time.time()
     calls = {"oz_zaak_create": lambda: make_zaak(openzaak(), registry, zaaktype)}
-    with watched_load(podiumd_env, ["openzaak"], calls, workers=2, pause=1) as (load, watch):
+    with watched_load(podiumd_env, urls, ["openzaak"], calls, workers=2, pause=1) as (load, watch):
         load.run_for(CALM)
         with component_down(podiumd_env, http, "opennotificaties"):
             down = time.time()
@@ -193,6 +194,7 @@ def unregistered(
 """)
 def test_no_submission_is_lost_while_the_open_formulieren_worker_is_down(
     podiumd_env: Environment,
+    urls: dict[str, str],
     openzaak: ApiClient,
     registry: ResourceRegistry,
     need_bootstrap: Callable[..., None],
@@ -206,7 +208,7 @@ def test_no_submission_is_lost_while_the_open_formulieren_worker_is_down(
     before = cluster_state(podiumd_env)
     start = time.time()
     calls = {"of_submit": sender(podiumd_env, registry)}
-    with watched_load(podiumd_env, ["openzaak"], calls, workers=2, pause=2) as (load, watch):
+    with watched_load(podiumd_env, urls, ["openzaak"], calls, workers=2, pause=2) as (load, watch):
         load.run_for(CALM)
         with scaled(podiumd_env.kube, worker, 0):
             load.run_for(OUTAGE)
@@ -247,6 +249,7 @@ def login_calls(env: Environment) -> dict[str, Callable[[], object]]:
 """)
 def test_logins_recover_after_a_keycloak_pod_is_deleted(
     podiumd_env: Environment,
+    urls: dict[str, str],
     need_bootstrap: Callable[..., None],
     record_property: Callable[[str, object], None],
 ) -> None:
@@ -262,7 +265,7 @@ def test_logins_recover_after_a_keycloak_pod_is_deleted(
     workload = str(pod_workload(pods[0]))
     record_property("keycloak_pods", len(pods))
     before = cluster_state(podiumd_env)
-    with watched_load(podiumd_env, ["kiss"], calls, workers=2, pause=1) as (load, watch):
+    with watched_load(podiumd_env, urls, ["kiss"], calls, workers=2, pause=1) as (load, watch):
         load.run_for(CALM)
         deleted = time.time()
         replace_pod(podiumd_env, pods[0], KEYCLOAK_RECOVERY)

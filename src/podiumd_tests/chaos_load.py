@@ -101,13 +101,22 @@ def loaded(calls: Calls, *, workers: int, pause: float) -> Generator[Load]:
 
 
 @contextmanager
-def watched_load(
-    env: Environment, served: Sequence[str], calls: Calls, *, workers: int, pause: float
+def watched_load(  # noqa: PLR0913  # the load and what watches it
+    env: Environment,
+    urls: Mapping[str, str],
+    served: Sequence[str],
+    calls: Calls,
+    *,
+    workers: int,
+    pause: float,
 ) -> Generator[tuple[Load, Watch]]:
-    """Run the calls as `loaded` does while perf.yaml's availability gate watches the components that serve them."""
+    """Run the calls as `loaded` does while perf.yaml's availability gate watches the components that serve them.
+
+    urls: the component URLs as this console reaches them (the `urls` fixture).
+    """
     limits = availability_limits(REPO_ROOT / "perf.yaml")
     # watched measures the recovery after its block; a block that raises needs no recovery measured.
-    gate = watched(env, served, limits)
+    gate = watched(env, urls, served, limits)
     with gate as watch, loaded(calls, workers=workers, pause=pause) as load:  # pylint: disable=contextmanager-generator-missing-cleanup
         yield load, watch
 

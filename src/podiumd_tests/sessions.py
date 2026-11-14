@@ -23,6 +23,7 @@ import requests
 
 from requests.adapters import HTTPAdapter
 
+from podiumd_tests.kube import LOOPBACK
 from podiumd_tests.responses import url_host
 
 if TYPE_CHECKING:
@@ -135,7 +136,8 @@ def make_session(
     if not cookies:
         session.cookies.set_policy(DefaultCookiePolicy(allowed_domains=[]))
     if ingress_ip:
-        hosts = {url_host(url) for url in urls.values()}
+        # A port-forwarded URL (Environment.console_urls) is reached on this console, not through the ingress.
+        hosts = {url_host(url) for url in urls.values()} - {LOOPBACK}
         adapter = HostHeaderAdapter(hosts, ingress_ip)
         session.mount("http://", adapter)
         session.mount("https://", adapter)

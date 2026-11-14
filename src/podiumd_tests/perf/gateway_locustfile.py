@@ -18,22 +18,23 @@ from locust import constant
 from locust import events
 from locust import task
 
-from podiumd_tests.config import default_envs_dir
-from podiumd_tests.config import load_profile
-from podiumd_tests.environment import Environment
 from podiumd_tests.perf.runs import GATEWAY_SCENARIOS
+from podiumd_tests.perf.runs import add_environment_arguments
+from podiumd_tests.perf.runs import locust_environment
 
 if TYPE_CHECKING:
     from argparse import ArgumentParser
 
     from locust.env import Environment as LocustEnvironment
 
+    from podiumd_tests.environment import Environment
+
 ASSET = re.compile(r'(?:src|href)="(/[^"]+\.(?:js|css))"')
 
 
 @events.init_command_line_parser.add_listener
 def _arguments(parser: ArgumentParser) -> None:
-    parser.add_argument("--podiumd-env", required=True, help="environment profile name")
+    add_environment_arguments(parser)
     parser.add_argument("--podiumd-scenario", required=True, choices=sorted(GATEWAY_SCENARIOS), help="scenario")
     parser.add_argument("--podiumd-warmup", type=float, default=0, help="seconds before the stats restart")
 
@@ -41,7 +42,7 @@ def _arguments(parser: ArgumentParser) -> None:
 @events.init.add_listener
 def _on_init(environment: LocustEnvironment, **_kwargs: object) -> None:
     options = environment.parsed_options
-    GatewayUser.env_under_test = Environment(load_profile(options.podiumd_env, default_envs_dir()))
+    GatewayUser.env_under_test = locust_environment(options.podiumd_env, options.podiumd_urls)
     GatewayUser.scenario = options.podiumd_scenario
 
 

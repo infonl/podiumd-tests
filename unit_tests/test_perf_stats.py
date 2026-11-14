@@ -1,6 +1,8 @@
 """Unit tests for reading Locust's stats and checking them against perf.yaml."""
 
+from podiumd_tests.perf import runs
 from podiumd_tests.perf.runs import locust_command
+from podiumd_tests.perf.runs import locust_environment
 from podiumd_tests.perf.stats import SETTINGS
 from podiumd_tests.perf.stats import STATS
 from podiumd_tests.perf.stats import EndpointStats
@@ -70,7 +72,16 @@ def test_a_slowdown_must_pass_both_the_ratio_and_the_margin():
 
 
 def test_locust_command_runs_headless_against_the_environment(tmp_path):
-    command = locust_command(tmp_path / "lf.py", "10", "150s", tmp_path / "out", "ontw-dim1")
+    urls = {"api-proxy": "http://127.0.0.1:4711"}
+    command = locust_command(tmp_path / "lf.py", "10", "150s", tmp_path / "out", "ontw-dim1", urls=urls)
     assert command[1:5] == ["-m", "locust", "-f", str(tmp_path / "lf.py")]
     assert command[command.index("--users") + 1] == command[command.index("--spawn-rate") + 1] == "10"
-    assert command[-5:] == ["--csv", str(tmp_path / "out"), "--csv-full-history", "--podiumd-env", "ontw-dim1"]
+    assert command[-7:-4] == ["--csv", str(tmp_path / "out"), "--csv-full-history"]
+    assert command[-4:] == ["--podiumd-env", "ontw-dim1", "--podiumd-urls", '{"api-proxy": "http://127.0.0.1:4711"}']
+
+
+def test_locust_environment_reaches_components_at_the_given_urls(monkeypatch, profile_factory):
+    monkeypatch.setattr(runs, "load_profile", lambda _name, _envs: profile_factory())
+    env = locust_environment("test-env", '{"openzaak": "http://127.0.0.1:4711"}')
+    assert env.profile.urls["openzaak"] == "http://127.0.0.1:4711"
+    assert env.profile.urls["keycloak-admin"] == "https://kc-admin.example.test"

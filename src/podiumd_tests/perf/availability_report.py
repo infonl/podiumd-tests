@@ -44,9 +44,9 @@ def availability(samples: Iterable[Sample]) -> dict[str, tuple[int, int]]:
 
 
 def memory_ratios(watch: Watch) -> dict[ContainerKey, float]:
-    """Return each container's peak working set as a share of its memory limit; containers without one are left out."""
+    """Return each container's peak RSS as a share of its memory limit; containers without one are left out."""
     found: dict[ContainerKey, float] = {}
-    for key, peak in watch.memory.items():
+    for key, peak in watch.rss.items():
         limit = watch.memory_limits.get(key)
         if limit:
             found[key] = peak / limit
@@ -67,7 +67,7 @@ def problems(watch: Watch) -> list[str]:
             found.append(f"{component} root healthy in {healthy} of {total} samples < {limits.min_available:.0%}")
     for key, ratio in sorted(memory_ratios(watch).items()):
         if ratio > limits.max_memory_ratio:
-            peak = f"{_container(key)} peak memory {watch.memory[key] / MIB:.0f} MiB"
+            peak = f"{_container(key)} peak RSS {watch.rss[key] / MIB:.0f} MiB"
             found.append(f"{peak} = {ratio:.0%} of its limit > {limits.max_memory_ratio:.0%}")
     return found
 
@@ -176,7 +176,8 @@ def _highest_share(watch: Watch, mine: list[ContainerKey]) -> str:
 
 
 def _largest(watch: Watch, mine: list[ContainerKey]) -> str:
-    largest = max(((watch.memory[key], key) for key in mine), default=None)
+    sets = watch.working_set
+    largest = max(((sets[key], key) for key in mine if key in sets), default=None)
     if largest is None:
         return "-"
     peak, key = largest
@@ -186,12 +187,13 @@ def _largest(watch: Watch, mine: list[ContainerKey]) -> str:
 
 def _component_rows(watch: Watch) -> list[str]:
     counts = availability(watch.samples)
-    rows = ["| Component | Healthy root answers | Highest share of a memory limit | Largest working set |"]
+    rows = ["| Component | Healthy root answers | Highest RSS share of a memory limit | Largest working set |"]
     rows.append("|---|---|---|---|")
     for component in sorted(watch.components):
         healthy, total = counts.get(component, (0, 0))
         only = frozenset((component,))
-        mine = [key for key in watch.memory if is_loaded(key[1], only)]
+        measured = watch.working_set.keys() | watch.rss.keys()
+        mine = [key for key in measured if is_loaded(key[1], only)]
         memory = f"{_highest_share(watch, mine)} | {_largest(watch, mine)}"
         rows.append(f"| {component} | {healthy}/{total} | {memory} |")
     return rows

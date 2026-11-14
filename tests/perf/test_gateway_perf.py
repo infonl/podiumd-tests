@@ -58,6 +58,7 @@ ROUNDS = (1, 2)
 def test_gateway_scenario_meets_its_threshold(  # fixtures
     request: pytest.FixtureRequest,
     podiumd_env: Environment,
+    urls: dict[str, str],
     perf_dir: Path,
     record_property: Callable[[str, object], None],
     scenario: str,
@@ -70,9 +71,9 @@ def test_gateway_scenario_meets_its_threshold(  # fixtures
     run_time = f"{int(warmup + measured.total_seconds())}s"
     prefix = perf_dir / "gateway" / f"{scenario}-{rnd}"
     prefix.parent.mkdir(exist_ok=True)
-    command = locust_command(LOCUSTFILE, users, run_time, prefix, podiumd_env.profile.name)
+    command = locust_command(LOCUSTFILE, users, run_time, prefix, podiumd_env.profile.name, urls=urls)
     component = GATEWAY_SCENARIOS[scenario][0]
-    with watched(podiumd_env, [component], availability_limits(REPO_ROOT / "perf.yaml")) as watch:
+    with watched(podiumd_env, urls, [component], availability_limits(REPO_ROOT / "perf.yaml")) as watch:
         run_checked(
             run_process, [*command, "--podiumd-scenario", scenario, "--podiumd-warmup", str(warmup)], timeout=900
         )

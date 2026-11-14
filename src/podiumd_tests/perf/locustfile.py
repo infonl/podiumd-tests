@@ -25,11 +25,10 @@ from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.clients.platform import openklant_client
-from podiumd_tests.config import default_envs_dir
-from podiumd_tests.config import load_profile
-from podiumd_tests.environment import Environment
 from podiumd_tests.kcc import vac_data
 from podiumd_tests.oidc import challenge_session
+from podiumd_tests.perf.runs import add_environment_arguments
+from podiumd_tests.perf.runs import locust_environment
 from podiumd_tests.perf.zgw_calls import Call
 from podiumd_tests.perf.zgw_calls import Prepared
 from podiumd_tests.perf.zgw_calls import opennotificaties_calls
@@ -48,6 +47,8 @@ if TYPE_CHECKING:
 
     from locust.env import Environment as LocustEnvironment
 
+    from podiumd_tests.environment import Environment
+
 
 # A word the volume corpus, KISS's kennisbank and the portal's products all use.
 SEARCH_TERM = "aanvraag"
@@ -55,14 +56,14 @@ SEARCH_TERM = "aanvraag"
 
 @events.init_command_line_parser.add_listener
 def _arguments(parser: ArgumentParser) -> None:
-    parser.add_argument("--podiumd-env", required=True, help="environment profile name")
+    add_environment_arguments(parser)
     parser.add_argument("--podiumd-run-tag", required=True, help="run tag of what the writes create")
 
 
 @events.init.add_listener
 def _on_init(environment: LocustEnvironment, **_kwargs: object) -> None:
-    profile = load_profile(environment.parsed_options.podiumd_env, default_envs_dir())
-    ApiUser.env_under_test = Environment(profile)
+    options = environment.parsed_options
+    ApiUser.env_under_test = locust_environment(options.podiumd_env, options.podiumd_urls)
     ApiUser.run_tag = environment.parsed_options.podiumd_run_tag
 
 

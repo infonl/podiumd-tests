@@ -6,19 +6,45 @@ the Locust process may have.
 
 from __future__ import annotations
 
+import json
 import sys
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from podiumd_tests.config import default_envs_dir
+from podiumd_tests.config import load_profile
+from podiumd_tests.environment import Environment
+
 if TYPE_CHECKING:
+    from argparse import ArgumentParser
+    from collections.abc import Mapping
     from pathlib import Path
 
 
-def locust_command(locustfile: Path, users: str, run_time: str, csv_prefix: Path, env: str) -> list[str]:
-    """Return a headless Locust run of the locustfile against the environment, its CSVs at csv_prefix."""
+def locust_command(  # noqa: PLR0913  # the run's settings
+    locustfile: Path, users: str, run_time: str, csv_prefix: Path, env: str, *, urls: Mapping[str, str]
+) -> list[str]:
+    """Return a headless Locust run of the locustfile against the environment at urls, its CSVs at csv_prefix.
+
+    urls: the component URLs as this console reaches them (the `urls` fixture: in-cluster ones port-forwarded).
+    """
     command = [sys.executable, "-m", "locust", "-f", str(locustfile), "--headless", "--only-summary"]
     command += ["--users", users, "--spawn-rate", users, "--run-time", run_time, "--exit-code-on-error", "0"]
-    return [*command, "--csv", str(csv_prefix), "--csv-full-history", "--podiumd-env", env]
+    command += ["--csv", str(csv_prefix), "--csv-full-history"]
+    return [*command, "--podiumd-env", env, "--podiumd-urls", json.dumps(dict(urls), sort_keys=True)]
+
+
+def add_environment_arguments(parser: ArgumentParser) -> None:
+    """Add a locustfile's --podiumd-env and --podiumd-urls, which locust_command sets."""
+    parser.add_argument("--podiumd-env", required=True, help="environment profile name")
+    parser.add_argument("--podiumd-urls", required=True, help="JSON of the component URLs this console reaches")
+
+
+def locust_environment(env: str, urls: str) -> Environment:
+    """Return the environment of the profile with the component URLs of --podiumd-urls (JSON) in place of its own."""
+    profile = load_profile(env, default_envs_dir())
+    return Environment(replace(profile, urls={**profile.urls, **json.loads(urls)}))
 
 
 # Endpoint name -> the component it needs. Reads are TA's k6 api-perf.js; writes create and delete

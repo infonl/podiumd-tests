@@ -11,8 +11,9 @@ defaults:
 endpoints: {}
 # What a Locust run may do to the components it loads (podiumd_tests.perf.availability): their roots answer
 # without a 5xx in at least min_available of the samples taken every health_interval_s; no container restarts;
-# their pods are Ready again within recovery_s after the run; no container's working set passes max_memory_ratio
-# of its memory limit.
+# their pods are Ready again within recovery_s after the run; no container's RSS passes max_memory_ratio of its
+# memory limit. RSS, not the working set: the working set includes page cache the kernel reclaims before an OOM kill
+# (Elasticsearch's sits near its limit by design); the report shows it as information.
 availability:
   health_interval_s: 5
   recovery_s: 60

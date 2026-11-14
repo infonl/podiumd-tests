@@ -58,6 +58,7 @@ LOCUSTFILE = REPO_ROOT / "src" / "podiumd_tests" / "perf" / "locustfile.py"
 def fixture_load(
     request: pytest.FixtureRequest,
     podiumd_env: Environment,
+    urls: dict[str, str],
     need_bootstrap: Callable[..., None],
     perf_dir: Path,
     run_tag: str,
@@ -73,10 +74,10 @@ def fixture_load(
     calls = sorted(e for e, c in ENDPOINTS.items() if c in podiumd_env.profile.urls)
     settings = {"users": users, "duration": duration, "calls": calls, "volume": counts(podiumd_env)}
     (directory / SETTINGS).write_text(f"{json.dumps(settings, sort_keys=True)}\n", encoding="utf-8")
-    command = locust_command(LOCUSTFILE, users, duration, directory / "locust", podiumd_env.profile.name)
+    command = locust_command(LOCUSTFILE, users, duration, directory / "locust", podiumd_env.profile.name, urls=urls)
     # Users finish their round, so every write is deleted.
     command += ["--stop-timeout", "60", "--podiumd-run-tag", run_tag]
-    with watched(podiumd_env, ENDPOINTS.values(), availability_limits(REPO_ROOT / "perf.yaml")) as watch:
+    with watched(podiumd_env, urls, ENDPOINTS.values(), availability_limits(REPO_ROOT / "perf.yaml")) as watch:
         run_checked(run_process, command, timeout=600)
     return read_stats((directory / STATS).read_text(encoding="utf-8")), watch
 

@@ -1,7 +1,8 @@
 """Availability of the loaded components during and after a Locust run, against perf.yaml's `availability`.
 
-During the run: each component's root at an interval, and the working set memory of its containers from the
-kubelet. Afterwards: its pods Ready again within recovery_s, with no restart or replacement (workloads.disruptions).
+During the run: each component's root at an interval, and the RSS and working set of its containers from the
+kubelet's cAdvisor. Afterwards: its pods Ready again within recovery_s, with no restart or replacement
+(workloads.disruptions).
 """
 
 from __future__ import annotations
@@ -24,7 +25,6 @@ from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.kube import metadata_namespace
 from podiumd_tests.kubelet import CADVISOR
-from podiumd_tests.kubelet import RESOURCE
 from podiumd_tests.kubelet import ContainerKey
 from podiumd_tests.kubelet import container_values
 from podiumd_tests.kubelet import node_metrics
@@ -43,6 +43,7 @@ from podiumd_tests.workloads import unhealthy_pods
 if TYPE_CHECKING:
     from collections.abc import Generator
     from collections.abc import Iterable
+    from collections.abc import Mapping
     from collections.abc import Sequence
     from pathlib import Path
 
@@ -51,7 +52,8 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
 
-MEMORY = "container_memory_working_set_bytes"
+RSS = "container_memory_rss"
+WORKING_SET = "container_memory_working_set_bytes"
 THROTTLED = "container_cpu_cfs_throttled_periods_total"
 PERIODS = "container_cpu_cfs_periods_total"
 NO_CLUSTER = "pods, restarts and memory: the environment has no cluster access"
@@ -99,8 +101,10 @@ class Watch:  # pylint: disable=too-many-instance-attributes  # one field per me
     started: float = 0
     ended: float = 0
     samples: list[Sample] = field(default_factory=list[Sample])
-    # Highest working set seen per container, in bytes, and its memory limit (None: no limit).
-    memory: Values = field(default_factory=dict[ContainerKey, float])
+    # Highest RSS and working set seen per container, in bytes, and its memory limit (None: no limit). Only RSS
+    # (anonymous memory) counts against the limit: the kernel reclaims the page cache in the working set first.
+    rss: Values = field(default_factory=dict[ContainerKey, float])
+    working_set: Values = field(default_factory=dict[ContainerKey, float])
     memory_limits: dict[ContainerKey, float | None] = field(default_factory=dict[ContainerKey, float | None])
     # Share of CFS periods in which the container was throttled, for containers with a CPU limit.
     throttled: Values = field(default_factory=dict[ContainerKey, float])
@@ -188,16 +192,16 @@ class _Cluster:
             return None
 
     def sample_memory(self, stop: threading.Event) -> None:
-        """Keep the highest working set per loaded container until stop is set."""
-        memory = self.watch.memory
+        """Keep the highest RSS and working set per loaded container until stop is set."""
+        peaks = (self.watch.rss, self.watch.working_set)
         while True:
             try:
-                values = self.metrics(RESOURCE, (MEMORY,))[0]
+                readings = self.metrics(CADVISOR, (RSS, WORKING_SET))
             except KubeError as error:
-                self.watch.notes.append(f"memory: kubelet metrics unreadable (needs get nodes/proxy): {error}")
+                self.watch.notes.append(f"memory: kubelet cAdvisor metrics unreadable (needs get nodes/proxy): {error}")
                 return
-            for key, value in values.items():
-                memory[key] = max(value, memory.get(key, 0))
+            for peak, values in zip(peaks, readings, strict=True):
+                _keep_highest(peak, values)
             if stop.wait(self.watch.limits.health_interval_s):
                 return
 
@@ -222,6 +226,11 @@ class _Cluster:
             watch.throttled = throttled_shares(self.cpu_before, cpu_after)
 
 
+def _keep_highest(peak: Values, values: Values) -> None:
+    for key, value in values.items():
+        peak[key] = max(value, peak.get(key, 0))
+
+
 def _stop(threads: list[threading.Thread], stop: threading.Event, watch: Watch) -> None:
     stop.set()
     for thread in threads:
@@ -230,9 +239,11 @@ def _stop(threads: list[threading.Thread], stop: threading.Event, watch: Watch) 
 
 
 @contextmanager
-def watched(env: Environment, components: Iterable[str], limits: Limits) -> Generator[Watch]:
-    """Measure the components' availability while the block runs a load, and their recovery after it."""
-    urls = env.profile.urls
+def watched(env: Environment, urls: Mapping[str, str], components: Iterable[str], limits: Limits) -> Generator[Watch]:
+    """Measure the components' availability while the block runs a load, and their recovery after it.
+
+    urls: the component URLs as this console reaches them (the `urls` fixture).
+    """
     watch = Watch(frozenset(component for component in components if component in urls), limits)
     stop = threading.Event()
     threads = [

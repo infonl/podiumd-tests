@@ -29,12 +29,11 @@ _FACTORS = {
     **{f"{unit}i": 1024.0 ** (power + 1) for power, unit in enumerate("KMGTP")},
 }
 
-RESOURCE = "resource"
 CADVISOR = "cadvisor"
 
 
 def node_metrics(kube: Kube, node: str, endpoint: str) -> str:
-    """Return the kubelet's Prometheus text of /metrics/<endpoint> (resource or cadvisor) on the node."""
+    """Return the kubelet's Prometheus text of /metrics/<endpoint> (cadvisor, resource) on the node."""
     return kube.run("get", "--raw", f"/api/v1/nodes/{node}/proxy/metrics/{endpoint}", timeout=60)
 
 

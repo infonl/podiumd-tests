@@ -21,6 +21,7 @@ from podiumd_tests.components import DJANGO_APPS
 from podiumd_tests.credentials import Redactor
 from podiumd_tests.credentials import SecretResolver
 from podiumd_tests.json_data import section
+from podiumd_tests.kube import LOOPBACK
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import cluster_service
@@ -143,7 +144,7 @@ class Environment:
                     continue
                 name, namespace, port = service
                 local = forwards.enter_context(self.kube.port_forward(name, port, namespace=namespace))
-                urls[component] = urlunsplit(urlsplit(url)._replace(netloc=f"127.0.0.1:{local}"))
+                urls[component] = urlunsplit(urlsplit(url)._replace(netloc=f"{LOOPBACK}:{local}"))
             yield urls
 
     def items(self, kind: str, namespaces: Sequence[str] | None = None) -> list[dict[str, object]]:

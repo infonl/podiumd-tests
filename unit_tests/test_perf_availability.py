@@ -110,22 +110,23 @@ def test_problems_name_restarts_unready_pods_unavailability_and_memory():
         disruptions=[restart],
         unready=["zac-1/zac: not ready"],
         samples=[Sample(at(0), "zac", None), Sample(at(5), "zac", "HTTP 503")],
-        memory={KEY: 950 * MIB},
+        rss={KEY: 950 * MIB},
+        working_set={KEY: 990 * MIB},
         memory_limits={KEY: 1000 * MIB},
     )
     assert problems(found) == [
         "container openzaak-1/openzaak restarted 1x (last: OOMKilled at x) during the load",
         "zac-1/zac: not ready not Ready 1s after the load",
         "zac root healthy in 1 of 2 samples < 90%",
-        "openzaak-1/openzaak peak memory 950 MiB = 95% of its limit > 90%",
+        "openzaak-1/openzaak peak RSS 950 MiB = 95% of its limit > 90%",
     ]
 
 
 QUIET_REPORT = """Load 10:00:00-10:01:00 UTC; Ready again 2 s after it.
 
-| Component | Healthy root answers | Highest share of a memory limit | Largest working set |
+| Component | Healthy root answers | Highest RSS share of a memory limit | Largest working set |
 |---|---|---|---|
-| openzaak | 1/1 | 50% (openzaak-1/openzaak) | 512 MiB (openzaak-1/openzaak) |
+| openzaak | 1/1 | 50% (openzaak-1/openzaak) | 1000 MiB (openzaak-1/openzaak) |
 | zac | 1/1 | - | 300 MiB (zac-1/zac, no limit) |
 
 No failed requests, failing root answers or pod changes.
@@ -138,7 +139,9 @@ Not measured: CPU throttling: kubelet cAdvisor metrics unreadable: forbidden."""
 def test_a_quiet_load_has_no_problems_and_says_so():
     found = watch(
         samples=[Sample(at(0), "zac", None), Sample(at(0), "openzaak", None)],
-        memory={KEY: 512 * MIB, ("podiumd", "zac-1", "zac"): 300 * MIB},
+        rss={KEY: 512 * MIB, ("podiumd", "zac-1", "zac"): 200 * MIB},
+        # Page cache near the limit, as Elasticsearch has: no problem.
+        working_set={KEY: 1000 * MIB, ("podiumd", "zac-1", "zac"): 300 * MIB},
         memory_limits={KEY: 1024 * MIB, ("podiumd", "zac-1", "zac"): None},
         recovered_s=2.0,
         throttled={KEY: 0.004},
@@ -169,6 +172,7 @@ def test_timeline_puts_bursts_next_to_restarts_and_untimed_changes_last():
 
 
 METRICS = """container_memory_working_set_bytes{container="openzaak",namespace="podiumd",pod="openzaak-1"} 3e+08 1
+container_memory_rss{container="openzaak",namespace="podiumd",pod="openzaak-1"} 2e+08 1
 container_memory_working_set_bytes{container="kiss",namespace="podiumd",pod="kiss-1"} 9e+08 1
 container_cpu_cfs_throttled_periods_total{container="openzaak",namespace="podiumd",pod="openzaak-1"} 5 1
 container_cpu_cfs_periods_total{container="openzaak",namespace="podiumd",pod="openzaak-1"} 100 1
@@ -196,11 +200,12 @@ def test_watched_samples_the_roots_and_memory_of_the_loaded_components(env_facto
     fake_http({"/": (200, {})})
     env = env_factory()
     env.capabilities = Capabilities(frozenset(("cluster", "openzaak")), {})
-    with watched(env, ["openzaak", "zac"], LIMITS) as found:
+    with watched(env, env.profile.urls, ["openzaak", "zac"], LIMITS) as found:
         assert found.components == frozenset(("openzaak",))  # zac has no URL in the profile
     assert found.samples
     assert {sample.problem for sample in found.samples} == {None}
-    assert found.memory == {KEY: 3e8}
+    assert found.rss == {KEY: 2e8}
+    assert found.working_set == {KEY: 3e8}
     assert found.memory_limits == {KEY: 1024**3}
     assert found.throttled == {}  # no CFS period passed between the two readings
     assert found.recovered_s is not None
@@ -213,7 +218,7 @@ def test_watched_without_cluster_access_only_samples_the_roots(env_factory, fake
     fake_http({"/": (503, {})})
     env = env_factory()
     env.capabilities = Capabilities(frozenset(("openzaak",)), {"cluster": "kubectl failed"})
-    with watched(env, ["openzaak"], LIMITS) as found:
+    with watched(env, env.profile.urls, ["openzaak"], LIMITS) as found:
         assert found.components == frozenset(("openzaak",))
     assert {sample.problem for sample in found.samples} == {"HTTP 503"}
     assert found.notes == ["pods, restarts and memory: the environment has no cluster access"]

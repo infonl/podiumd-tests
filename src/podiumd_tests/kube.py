@@ -47,6 +47,10 @@ SERVICE_HOST = re.compile(r"^(?P<service>[a-z0-9-]+)\.(?P<namespace>[a-z0-9-]+)\
 FORWARDING = re.compile(r"^Forwarding from 127\.0\.0\.1:(\d+) -> \d+$")
 
 
+# The address port_forward listens on.
+LOOPBACK = "127.0.0.1"
+
+
 class KubeError(ProcessError):
     """kubectl failed or returned something unexpected."""
 
@@ -163,7 +167,7 @@ class Kube:
     ) -> Generator[int]:
         """Yield a free local port forwarded to a Service's port while the context is open."""
         command = self.command(
-            "port-forward", f"service/{service}", f":{port}", "--address=127.0.0.1", namespace=namespace
+            "port-forward", f"service/{service}", f":{port}", f"--address={LOOPBACK}", namespace=namespace
         )
         try:
             process = start_process(command)

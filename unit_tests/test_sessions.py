@@ -47,6 +47,13 @@ def test_host_header_mode_leaves_other_hosts_alone(fake_http):
     assert [(r.url, r.headers.get("Host"), r.timeout) for r in sent] == [("https://example.test/", None, 3)]
 
 
+def test_host_header_mode_reaches_a_port_forwarded_url_directly(fake_http):
+    sent = fake_http()
+    session = make_session({"api-proxy": "http://127.0.0.1:4711"}, ingress_ip="10.0.0.5")
+    session.get("http://127.0.0.1:4711/haalcentraal", timeout=3)
+    assert [(r.url, r.headers.get("Host")) for r in sent] == [("http://127.0.0.1:4711/haalcentraal", None)]
+
+
 def test_direct_mode_does_not_rewrite(fake_http):
     sent = fake_http()
     make_session({"openzaak": "https://openzaak.example.test"}).get("https://openzaak.example.test/")
