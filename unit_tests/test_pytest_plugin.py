@@ -213,7 +213,7 @@ def test_environment_fixtures(podiumd_env, kube, credentials, caps, urls, http):
 
 
 def test_again(openzaak, callback, new_callback):
-    assert callback.path != new_callback(fail_first=True).path
+    assert callback.path != new_callback(answer="refuse").path
 """
     )
     pytester.runpytest_inprocess(*INNER_ARGS, "--podiumd-run-tag=ptest-unit").assert_outcomes(passed=3)

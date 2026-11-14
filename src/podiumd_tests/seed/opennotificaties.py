@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -31,6 +33,12 @@ def make_abonnement(
     url = str(created["url"])
     registry.add(f"abonnement {url}", lambda: delete_abonnement(opennotificaties, url))
     return created
+
+
+def delivery_attempts(env: Environment) -> int:
+    """Return how often Open Notificaties sends a notificatie to an abonnement that refuses it: 1 plus its retries."""
+    retries = run_snippet(env.kube, env.deployment_for("opennotificaties"), "opennotificaties_max_retries", {})
+    return 1 + int(str(retries))
 
 
 def delete_abonnement(opennotificaties: ApiClient, url: str) -> None:

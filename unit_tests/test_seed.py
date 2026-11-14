@@ -2,6 +2,7 @@
 
 import base64
 import json
+import threading
 
 from types import SimpleNamespace
 from typing import cast
@@ -23,6 +24,7 @@ from podiumd_tests.seed.objecten import created_notificatie
 from podiumd_tests.seed.objecten import make_productaanvraag
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.opennotificaties import CALLBACK_AUTH
+from podiumd_tests.seed.opennotificaties import delivery_attempts
 from podiumd_tests.seed.opennotificaties import make_abonnement
 from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -270,6 +272,30 @@ def test_audittrail_reads_the_entries_of_the_hoofdobject(env_factory, fake_runne
     fake_runner.answers["exec -i deploy/openzaak"] = (0, 'PTEST_VALUE=[["zaak", "create"], ["rol", "create"]]\n')
     assert openzaak.audittrail(env_factory(), ZAAK) == [("zaak", "create"), ("rol", "create")]
     assert json.dumps({"url": ZAAK}).strip("{}") in fake_runner.stdins[-1]
+
+
+def test_delivery_attempts_are_the_first_one_plus_the_retries(env_factory, fake_runner):
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "opennotificaties"}}]}))
+    fake_runner.answers["exec -i deploy/opennotificaties"] = (0, "PTEST_VALUE=5\n")
+    assert delivery_attempts(env_factory()) == 6
+
+
+def test_zaak_maker_makes_zaken_with_a_client_per_thread(monkeypatch, env_factory):
+    made = []
+    monkeypatch.setattr(openzaak, "openzaak_client", lambda *_args: object())
+    monkeypatch.setattr(
+        openzaak, "make_zaak", lambda client, _registry, *args, **fields: made.append((client, args, fields))
+    )
+    create = openzaak.zaak_maker(env_factory(), "run1", ResourceRegistry("run1"), "zt", vertrouwelijkheidaanduiding="v")
+    create()
+    create()
+    thread = threading.Thread(target=create)
+    thread.start()
+    thread.join()
+    clients = [client for client, _args, _fields in made]
+    assert clients[0] is clients[1]
+    assert clients[2] is not clients[0]
+    assert made[0][1:] == (("zt",), {"vertrouwelijkheidaanduiding": "v"})
 
 
 def test_zaaktype_parts_and_close_zaak(fake_http):

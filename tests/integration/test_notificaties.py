@@ -248,7 +248,7 @@ def test_failed_delivery_is_retried(
     new_callback: Callable[..., Callback],
 ) -> None:
     """A subscriber that answers 500 gets the notification again and then accepts it (TA reg-42)."""
-    callback = new_callback(fail_first=True)
+    callback = new_callback(answer="fail-first")
     # A vertrouwelijkheidaanduiding no other test uses: another test's notification must not take the 500.
     only = {**OWN, "vertrouwelijkheidaanduiding": "beperkt_openbaar"}
     make_abonnement(opennotificaties, registry, callback.url, "zaken", only)

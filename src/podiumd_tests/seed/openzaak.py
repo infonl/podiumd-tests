@@ -19,6 +19,10 @@ from typing import TYPE_CHECKING
 from typing import cast
 
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
+from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
+from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
+from podiumd_tests.clients.api import per_thread
+from podiumd_tests.clients.platform import openzaak_client
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import strings
@@ -27,6 +31,8 @@ from podiumd_tests.responses import expect_status
 from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
@@ -124,6 +130,14 @@ def make_zaak(openzaak: ApiClient, registry: ResourceRegistry, zaaktype: str, **
     zaak = openzaak.post(f"{ZAKEN}/zaken", given)
     delete_zaak_at_cleanup(openzaak, registry, str(zaak["url"]))
     return zaak
+
+
+def zaak_maker(
+    env: Environment, run_tag: str, registry: ResourceRegistry, zaaktype: str, **fields: object
+) -> Callable[[], JsonObject]:
+    """Return a call that makes a zaak as make_zaak does, with an Open Zaak client per thread."""
+    openzaak = per_thread(lambda: openzaak_client(env, ZGW_CLIENT_ID, ZGW_STORE_KEY, run_tag))
+    return lambda: make_zaak(openzaak(), registry, zaaktype, **fields)
 
 
 def delete_zaak_at_cleanup(

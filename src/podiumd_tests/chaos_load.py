@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import statistics
 import threading
 import time
 
@@ -17,6 +18,8 @@ from podiumd_tests.config import REPO_ROOT
 from podiumd_tests.perf.availability import availability_limits
 from podiumd_tests.perf.availability import watched
 from podiumd_tests.perf.availability_report import report
+from podiumd_tests.perf.stats import slowdown_limit
+from podiumd_tests.perf.stats import thresholds
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -132,6 +135,23 @@ def failures(attempts: Sequence[Attempt], since: float) -> list[str]:
     """Return one line per failed call: its name, start in seconds after `since`, and its error."""
     failed = (attempt for attempt in attempts if attempt.error is not None)
     return [f"{attempt.name} at +{attempt.start - since:.0f}s: {attempt.error}" for attempt in failed]
+
+
+def p95_ms(attempts: Sequence[Attempt]) -> float:
+    """Return the 95th percentile duration in milliseconds of the calls that succeeded; StatisticsError below two."""
+    durations = [attempt.seconds * 1000 for attempt in attempts if attempt.error is None]
+    return statistics.quantiles(durations, n=20, method="inclusive")[-1]
+
+
+def slowdown(attempts: Sequence[Attempt], since: float, name: str) -> tuple[float, float, float]:
+    """Return the p95 in ms of the calls `name` that ended before `since`, of those that started after, and the limit.
+
+    The limit is perf.yaml's slowdown limit of the call (stats.slowdown_limit) against the first p95.
+    """
+    calls = [attempt for attempt in attempts if attempt.name == name]
+    before = p95_ms([attempt for attempt in calls if attempt.end <= since])
+    after = p95_ms([attempt for attempt in calls if attempt.start >= since])
+    return before, after, slowdown_limit(thresholds(REPO_ROOT / "perf.yaml", name), before)
 
 
 def recovery_seconds(attempts: Sequence[Attempt], since: float) -> float | None:

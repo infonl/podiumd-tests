@@ -6,7 +6,9 @@ from podiumd_tests.chaos_load import Attempt
 from podiumd_tests.chaos_load import failures
 from podiumd_tests.chaos_load import load_report
 from podiumd_tests.chaos_load import loaded
+from podiumd_tests.chaos_load import p95_ms
 from podiumd_tests.chaos_load import recovery_seconds
+from podiumd_tests.chaos_load import slowdown
 from podiumd_tests.chaos_load import summary
 from podiumd_tests.perf.availability import Limits
 from podiumd_tests.perf.availability import Watch
@@ -72,3 +74,16 @@ def test_load_report_names_the_calls_the_failures_and_the_gate():
     assert lines[0].startswith("Calls: broken ")
     assert lines[2] == "- broken at +0s: ConnectionError: refused"
     assert "Load 08:00:00-08:01:00 UTC; not all Ready again." in lines
+
+
+def test_p95_counts_only_the_calls_that_succeeded():
+    durations = [attempt(0, seconds=n / 1000) for n in range(1, 101)]
+    assert round(p95_ms([*durations, attempt(0, failed=True, seconds=60)])) == 95
+
+
+def test_slowdown_compares_the_p95_after_with_perf_yamls_limit_against_the_p95_before():
+    calls = [attempt(0, seconds=0.1), attempt(1, seconds=0.1), attempt(10, seconds=0.5), attempt(11, seconds=0.5)]
+    before, after, limit = slowdown([*calls, Attempt("other", 12, 9.0)], 5, "kc_token")
+    assert (round(before), round(after)) == (100, 500)
+    # perf.yaml's defaults: 1.5 times, and at least 200 ms more.
+    assert limit == 300

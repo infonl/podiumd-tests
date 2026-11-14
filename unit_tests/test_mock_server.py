@@ -109,6 +109,27 @@ def test_fail_first_path_fails_the_first_notification_only():
     assert [handler.answer_status(e) for e in (check, notification, notification)] == [204, 500, 204]
 
 
+def test_refuse_path_refuses_every_notification_but_not_the_check():
+    handler = mock_server_handler("/ptest-x/refuse/abc")
+    check = {"authorization": "Bearer t", "body": {"kanaal": "test"}}
+    notification = {"authorization": "Bearer t", "body": {"kanaal": "zaken"}}
+    assert [handler.answer_status(e) for e in (check, notification, notification)] == [204, 403, 403]
+
+
+def test_callback_counts_notifications_of_a_kind_per_hoofd_object(env_factory, fake_runner):
+    zaak = {"kanaal": "zaken", "resource": "zaak", "actie": "create", "hoofdObject": "z1"}
+    lines = [
+        {"path": "/run1/abc", "body": zaak},
+        {"path": "/run1/abc", "body": zaak},
+        {"path": "/run1/abc", "body": {**zaak, "actie": "update"}},
+        {"path": "/run1/other", "body": zaak},
+    ]
+    fake_runner.answers[f"exec deploy/{NAME}"] = (0, "".join(f"{json.dumps(line)}\n" for line in lines))
+    notified = Callback(env_factory(), "/run1/abc").notified("zaken", "zaak", "create")
+    assert notified == {"z1": 2}
+    assert notified["z2"] == 0
+
+
 def test_mock_server_refuses_without_authorization_and_answers_notify():
     assert mock_server_handler("/ptest-x/abc").answer_status({"authorization": None, "body": None}) == 403
     notify = mock_server_handler("/ptest-x/notify/v2/notifications/email")
@@ -133,4 +154,4 @@ def test_notify_notification_is_recorded_with_an_id_and_answers_a_get():
 
 
 def test_fail_first_callback_path(env_factory):
-    assert "/fail-first/" in Callback.new(env_factory(), "ptest-x", fail_first=True).path
+    assert "/fail-first/" in Callback.new(env_factory(), "ptest-x", answer="fail-first").path

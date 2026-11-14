@@ -6,7 +6,8 @@ It also stands in for Notify (NotifyNL): a POST to .../v2/notifications/email or
 the 201 and notification JSON a Notify client expects, and the entry records the notification's
 "id"; GET .../v2/notifications/<id> answers with that notification. POST .../v2/template/<id>/preview gets
 200 and a preview, whose subject and body are "ptest preview <id>". On a path with /fail-first/ the first
-notification (not Open Notificaties' kanaal "test" check) gets 500, to test redelivery.
+notification (not Open Notificaties' kanaal "test" check) gets 500, to test redelivery; on a path with /refuse/
+every notification gets 403, to test the retries to a subscriber that refuses.
 Each recorded entry carries the status it got.
 
 It also stands in for Worldline's Hosted Checkout API (Open Formulieren's worldline plugin):
@@ -89,14 +90,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def answer_status(self, entry) -> int:
         """Return the answer to a POST; called under WRITE_LOCK."""
-        if not entry["authorization"]:
+        body = entry["body"]
+        check = isinstance(body, dict) and body.get("kanaal") == "test"
+        if not entry["authorization"] or ("/refuse/" in self.path and not check):
             return 403
         if "/v2/notifications/" in self.path:
             return 201
         if PREVIEW.search(self.path):
             return 200
-        body = entry["body"]
-        check = isinstance(body, dict) and body.get("kanaal") == "test"
         if "/fail-first/" in self.path and not check and self.path not in FAILED_ONCE:
             FAILED_ONCE.add(self.path)
             return 500

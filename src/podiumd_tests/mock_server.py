@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import secrets
 
+from collections import Counter
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from typing import cast
@@ -81,19 +82,15 @@ def mock_server_root(env: Environment) -> str:
     return f"http://{NAME}.{env.profile.kube.namespace}"
 
 
+def _about(entry: JsonObject) -> tuple[object, ...]:
+    """Kanaal, resource, actie and hoofdObject of a received notification."""
+    body = section(entry, "body")
+    return body.get("kanaal"), body.get("resource"), body.get("actie"), body.get("hoofdObject")
+
+
 def notification(kanaal: str, resource: str, actie: str, hoofd: object) -> Callable[[JsonObject], bool]:
     """Return a match of received entries: a notification of this kind about hoofd (a URL)."""
-
-    def is_match(entry: JsonObject) -> bool:
-        body = section(entry, "body")
-        return (
-            body.get("kanaal") == kanaal
-            and body.get("resource") == resource
-            and body.get("actie") == actie
-            and body.get("hoofdObject") == hoofd
-        )
-
-    return is_match
+    return lambda entry: _about(entry) == (kanaal, resource, actie, hoofd)
 
 
 @dataclass(frozen=True)
@@ -109,15 +106,24 @@ class Callback:
         return mock_server_root(self.env) + self.path
 
     @classmethod
-    def new(cls, env: Environment, run_tag: str, *, fail_first: bool = False) -> Callback:
-        """Return a callback path of its own, under the run tag; fail_first: the first notification gets 500."""
-        return cls(env, f"/{run_tag}{'/fail-first' if fail_first else ''}/{secrets.token_hex(6)}")
+    def new(cls, env: Environment, run_tag: str, *, answer: str = "") -> Callback:
+        """Return a callback path of its own, under the run tag.
+
+        answer: "fail-first" (the first notification gets 500) or "refuse" (every notification gets 403).
+        """
+        return cls(env, f"/{run_tag}{f'/{answer}' if answer else ''}/{secrets.token_hex(6)}")
 
     def received(self) -> list[JsonObject]:
         """Everything the mock server got on this path, oldest first."""
         out = self.env.kube.exec(NAME, "sh", "-c", f"cat {RECEIVED_FILE} 2>/dev/null || true")
         parsed = map(_entry, out.splitlines())
         return [entry for entry in parsed if entry is not None and entry.get("path") == self.path]
+
+    def notified(self, kanaal: str, resource: str, actie: str) -> Counter[object]:
+        """Return how many notifications of this kind the path received, per hoofdObject."""
+        kind = (kanaal, resource, actie)
+        found = [_about(entry) for entry in self.received()]
+        return Counter(about[-1] for about in found if about[:3] == kind)
 
     def wait_for(self, match: Callable[[JsonObject], bool], *, timeout: float, description: str) -> JsonObject:
         """Return the first received entry that matches; WaitTimeoutError when none arrives in time."""

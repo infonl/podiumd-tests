@@ -19,18 +19,15 @@ from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.auth.keycloak import password_grant
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.bootstrap.names import TEST_FORM
-from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
-from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.bootstrap.steps import NAW_DATA
 from podiumd_tests.chaos_load import failures
 from podiumd_tests.chaos_load import load_report
 from podiumd_tests.chaos_load import recovery_seconds
+from podiumd_tests.chaos_load import slowdown
 from podiumd_tests.chaos_load import watched_load
 from podiumd_tests.clients.api import per_thread
-from podiumd_tests.clients.platform import openzaak_client
 from podiumd_tests.components import COMPONENTS
-from podiumd_tests.mock_server import notification
 from podiumd_tests.oidc import LOGIN_PATHS
 from podiumd_tests.openformulieren import forget_submission
 from podiumd_tests.openformulieren import registered_zaak
@@ -39,8 +36,10 @@ from podiumd_tests.openformulieren import start_submission
 from podiumd_tests.openformulieren import submission_result
 from podiumd_tests.openformulieren import wait_for_registration
 from podiumd_tests.perf.availability_report import problems
+from podiumd_tests.seed.opennotificaties import delivery_attempts
 from podiumd_tests.seed.opennotificaties import make_abonnement
-from podiumd_tests.seed.openzaak import make_zaak
+from podiumd_tests.seed.openzaak import zaak_maker
+from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.wait import WaitTimeoutError
 from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import cluster_state
@@ -53,6 +52,7 @@ from podiumd_tests.workloads import worker_deployment
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from collections.abc import Sequence
 
     import requests
 
@@ -61,7 +61,6 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.mock_server import Callback
-    from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [
     pytest.mark.integration,
@@ -75,6 +74,10 @@ OUTAGE = 60
 CALM = 15
 # Open Zaak retries a failed notificatie 5 times, at most 48 s apart (NotificationsConfig defaults).
 DELIVERY_TIMEOUT = 300
+# Seconds of load while a subscriber refuses: Open Notificaties' default retries of one notificatie span about 160 s.
+REFUSING = 180
+# Only this test's zaken carry it, so the refusing subscriber gets no other test's notificaties.
+REFUSED_VERTROUWELIJKHEID = "zaakvertrouwelijk"
 # Open Formulieren registers each submission in a Celery task once its worker is back.
 REGISTRATION_TIMEOUT = 300
 # Open Formulieren throttles _complete to 10 per minute per client address.
@@ -110,11 +113,9 @@ def test_no_notificatie_is_lost_while_open_notificaties_is_down(  # fixtures
     """Every zaak created while Open Notificaties is down reaches the subscriber once it is back."""
     callback = new_callback()
     make_abonnement(opennotificaties, registry, callback.url, "zaken", {"bronorganisatie": TEST_CATALOGUS_RSIN})
-    openzaak = per_thread(lambda: openzaak_client(podiumd_env, ZGW_CLIENT_ID, ZGW_STORE_KEY, run_tag))
-    zaaktype = str(test_zaaktype["url"])
     before = cluster_state(podiumd_env)
     start = time.time()
-    calls = {"oz_zaak_create": lambda: make_zaak(openzaak(), registry, zaaktype)}
+    calls = {"oz_zaak_create": zaak_maker(podiumd_env, run_tag, registry, str(test_zaaktype["url"]))}
     with watched_load(podiumd_env, urls, ["openzaak"], calls, workers=2, pause=1) as (load, watch):
         load.run_for(CALM)
         with component_down(podiumd_env, http, "opennotificaties"):
@@ -124,20 +125,106 @@ def test_no_notificatie_is_lost_while_open_notificaties_is_down(  # fixtures
         load.run_for(CALM)
     record_property("report", load_report(load, watch, start))
     assert [*failures(load.attempts, start), *problems(watch)] == []
-    zaken = [str(cast("JsonObject", a.result)["url"]) for a in load.attempts]
-
-    def undelivered() -> list[str]:
-        received = callback.received()
-        return [z for z in zaken if not any(notification("zaken", "zaak", "create", z)(e) for e in received)]
-
+    zaken = created_zaken(load.attempts)
     with suppress(WaitTimeoutError):
-        wait_until(lambda: not undelivered(), timeout=DELIVERY_TIMEOUT, interval=10, description="every notificatie")
+        wait_until(
+            lambda: not undelivered(callback, zaken),
+            timeout=DELIVERY_TIMEOUT,
+            interval=10,
+            description="every notificatie",
+        )
     record_property("outage_seconds", round(back - down))
     record_property("delivered_seconds_after_restart", round(time.time() - back))
-    lost = undelivered()
+    lost = undelivered(callback, zaken)
     assert lost == [], f"{len(lost)} of {len(zaken)} notificaties lost"
     deployment = podiumd_env.deployment_for("opennotificaties")
     assert disruptions(before, cluster_state(podiumd_env), {deployment}) == []
+
+
+def created_zaken(attempts: Sequence[Attempt]) -> list[str]:
+    """Return the URLs of the zaken the load created."""
+    return [str(cast("JsonObject", attempt.result)["url"]) for attempt in attempts if attempt.error is None]
+
+
+def undelivered(callback: Callback, zaken: Sequence[str]) -> list[str]:
+    """Return the zaken whose create notificatie the callback did not receive."""
+    received = callback.notified("zaken", "zaak", "create")
+    return [zaak for zaak in zaken if not received[zaak]]
+
+
+@pytest.mark.requires("openzaak", "opennotificaties")
+@pytest.mark.source(
+    "external maykinmedia/open-object#534",
+    "A subscriber that answered 403 drove 10k deliveries a minute and 100 % database use; every component degraded.",
+)
+@pytest.mark.scenario("""
+    Given a subscriber on kanaal zaken in Open Notificaties
+    And zaken are created in Open Zaak without pause
+    When a second subscriber refuses every notification for three minutes
+    Then Open Zaak creates zaken as fast as before and no component restarts
+    And Open Notificaties stops sending each refused notification after its retries
+    And the first subscriber gets the notification of every zaak
+""")
+def test_a_refusing_subscriber_does_not_slow_down_open_zaak(  # fixtures
+    podiumd_env: Environment,
+    urls: dict[str, str],
+    run_tag: str,
+    opennotificaties: ApiClient,
+    test_zaaktype: JsonObject,
+    registry: ResourceRegistry,
+    new_callback: Callable[..., Callback],
+    record_property: Callable[[str, object], None],
+) -> None:
+    """Under write load, a subscriber that answers 403 gets each notificatie once plus Open Notificaties' retries.
+
+    Open Zaak's p95 of a zaak create stays within perf.yaml's slowdown limit and the other subscriber gets every one.
+    """
+    healthy, refusing = new_callback(), new_callback(answer="refuse")
+    make_abonnement(opennotificaties, registry, healthy.url, "zaken", {"bronorganisatie": TEST_CATALOGUS_RSIN})
+    deliveries = delivery_attempts(podiumd_env)
+    # Removed before the refusing abonnement: their delete notificaties would schedule retries that block its removal.
+    load_registry = ResourceRegistry(run_tag)
+    registry.add("zaken of the load", load_registry.cleanup)
+    vertrouwelijk = {"vertrouwelijkheidaanduiding": REFUSED_VERTROUWELIJKHEID}
+    before = cluster_state(podiumd_env)
+    start = time.time()
+    zaaktype = str(test_zaaktype["url"])
+    calls = {"oz_zaak_create": zaak_maker(podiumd_env, run_tag, load_registry, zaaktype, **vertrouwelijk)}
+    served = ["openzaak", "opennotificaties"]
+    with watched_load(podiumd_env, urls, served, calls, workers=2, pause=1) as (load, watch):
+        load.run_for(CALM)
+        filters = {"bronorganisatie": TEST_CATALOGUS_RSIN, **vertrouwelijk}
+        make_abonnement(opennotificaties, registry, refusing.url, "zaken", filters)
+        refused_since = time.time()
+        load.run_for(REFUSING)
+    ended = time.time()
+    zaken = created_zaken(load.attempts)
+    later = created_zaken([attempt for attempt in load.attempts if attempt.start >= refused_since])
+
+    def is_settled() -> bool:
+        refused = refusing.notified("zaken", "zaak", "create")
+        return not undelivered(healthy, zaken) and all(refused[zaak] >= deliveries for zaak in later)
+
+    with suppress(WaitTimeoutError):
+        wait_until(is_settled, timeout=DELIVERY_TIMEOUT, interval=10, description="every delivery and retry")
+    refused = refusing.notified("zaken", "zaak", "create")
+    calm, refusal, limit = slowdown(load.attempts, refused_since, "oz_zaak_create")
+    record_property("report", load_report(load, watch, start))
+    measured = {
+        "p95_ms": {"before": round(calm), "while_refusing": round(refusal), "limit": round(limit)},
+        "refused": {"notificaties": len(later), "deliveries": sum(refused[zaak] for zaak in zaken)},
+        "settled_seconds_after_load": round(time.time() - ended),
+    }
+    record_property("measured", measured)
+    assert [*failures(load.attempts, start), *problems(watch)] == []
+    assert disruptions(before, cluster_state(podiumd_env), set()) == []
+    assert refusal <= limit, f"p95 while refusing {refusal:.0f} ms > {limit:.0f} ms (before {calm:.0f})"
+    lost = undelivered(healthy, zaken)
+    assert lost == [], f"{len(lost)} of {len(zaken)} notificaties lost"
+    unbounded = {zaak: refused[zaak] for zaak in zaken if refused[zaak] > deliveries}
+    assert unbounded == {}, f"more than {deliveries} deliveries of a refused notificatie"
+    unretried = {zaak: refused[zaak] for zaak in later if refused[zaak] < deliveries}
+    assert unretried == {}, f"fewer than {deliveries} deliveries of a refused notificatie in {DELIVERY_TIMEOUT} s"
 
 
 type Sent = tuple[requests.Session, str, str]

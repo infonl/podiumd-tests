@@ -71,6 +71,7 @@ with curl or WebFetch. "verify" marks a fact not confirmed.
 | Reference numbers | burst: 10/20/40 users → 1,430/1,479/1,429 requests per minute, ~24 req/s, 0 failures, median 390/740/1,200 ms, median notification 84–89 ms. Downtime (10 users, 1 min, default retry): 10 s and 60 s → 0 lost; 300 s → 1,276 lost. With max retries 7 and backoff max 192: 300 s → 0 lost, 600 s → 1,181 lost |
 | Port value | the missing "dependency down under load" case; the notification-delay median as a threshold for the time from a zaak create to its notificatie at the mock server; the retry schedule (3, 9, 21, 45, 93 s) as the window for "delivered after recovery" |
 | How | port to the suite's Locust (`oz_zaak_create` load) plus a chaos-tier wrapper that scales Open Notificaties to 0 (existing `test_continuiteit.py` scaling helpers) and counts deliveries on the `ptest-bootstrap-perf` kanaal's mock-server abonnement. Only on environments whose `allowed_tiers` include chaos |
+| Ported | `tests/integration/test_continuiteit_belasting.py::test_no_notificatie_is_lost_while_open_notificaties_is_down` |
 
 #### H2. Objecten #534: back pressure and circuit breaker (notification storm)
 
@@ -82,6 +83,7 @@ with curl or WebFetch. "verify" marks a fact not confirmed.
 | Activity | closed 2026-02-18; outcome: a health endpoint exposing the task-queue length was proposed |
 | Port value | names the failure to provoke: a notification target that refuses (403), producing 10k calls/min and 100 % database use, after which every component degrades. Combined with H1, test both the "down" and the "refuses" variants (an abonnement with a wrong auth header on the perf kanaal) and assert that the other components' p95 does not degrade beyond the slowdown limit |
 | How | Locust load + an extra abonnement in bootstrap on `ptest-bootstrap-perf` pointing at a mock-server path that answers 403 |
+| Ported | `tests/integration/test_continuiteit_belasting.py::test_a_refusing_subscriber_does_not_slow_down_open_zaak`: the test's own abonnement on kanaal zaken to a mock-server `/refuse/` path (403) during `oz_zaak_create` load |
 
 #### H3. Open Zaak #2577: hot zaak, ETag snowball, deadlock answered 503
 

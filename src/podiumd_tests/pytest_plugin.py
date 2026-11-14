@@ -402,7 +402,7 @@ def fixture_pabc_api_key(credentials: SecretResolver) -> str:
 def fixture_new_callback(
     run_tag: str, podiumd_env: Environment, need_bootstrap: Callable[..., None]
 ) -> Callable[..., Callback]:
-    """Make callback paths of this test's own on the mock server (infra/mock-server); takes fail_first."""
+    """Make callback paths of this test's own on the mock server (infra/mock-server); takes answer."""
     need_bootstrap("infra-mock-server")
     return functools.partial(Callback.new, podiumd_env, run_tag)
 
