@@ -27,6 +27,7 @@ from podiumd_tests.seed.openzaak import link_document
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.openzaak import published_zaaktype
+from podiumd_tests.seed.registry import ResourceRegistry
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -34,7 +35,6 @@ if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
-    from podiumd_tests.seed.registry import ResourceRegistry
 
 # Open Zaak's performance_test reads documents and zaken at page 34 of 100.
 PAGE_SIZE = 100
@@ -50,12 +50,30 @@ def _deep_page(openzaak: ApiClient, path: str) -> str:
     return str(max(1, min(DEEP_PAGE, -(-count // PAGE_SIZE))))
 
 
-def openzaak_calls(env: Environment) -> dict[str, Call | Prepared]:
-    """Return Open Zaak's calls: zaken, documents and their links, by the suite's client and a limited one."""
+def _test_zaaktype(env: Environment) -> tuple[ApiClient, str, str]:
+    """Return the suite's Open Zaak client, the test zaaktype and its first informatieobjecttype."""
     openzaak = openzaak_client(env, ZGW_CLIENT_ID, ZGW_STORE_KEY, "perf")
     test_zaaktype = published_zaaktype(openzaak, TEST_ZAAKTYPE, "openzaak-zaaktype")
-    zaaktype = str(test_zaaktype["url"])
-    iot = strings(test_zaaktype.get("informatieobjecttypen"))[0]
+    return openzaak, str(test_zaaktype["url"]), strings(test_zaaktype.get("informatieobjecttypen"))[0]
+
+
+def hot_zaak_link(env: Environment, zaak: str, run_tag: str) -> Prepared:
+    """Return a link of a new document to the zaak, timed without the document's creation.
+
+    The registry's cleanup deletes the document; after a successful link, the zaak's cleanup deletes it instead.
+    """
+    openzaak, _zaaktype, iot = _test_zaaktype(env)
+    # Never cleaned up: deleting the zaak deletes its links.
+    links = ResourceRegistry(run_tag, keep=True)
+    return (
+        lambda registry: make_document(openzaak, registry, iot),
+        lambda document: link_document(openzaak, links, {"url": zaak}, cast("JsonObject", document)),
+    )
+
+
+def openzaak_calls(env: Environment) -> dict[str, Call | Prepared]:
+    """Return Open Zaak's calls: zaken, documents and their links, by the suite's client and a limited one."""
+    openzaak, zaaktype, iot = _test_zaaktype(env)
     documenten = f"{DOCUMENTEN}/enkelvoudiginformatieobjecten"
     ordered = {"pageSize": str(PAGE_SIZE), "ordering": "-auteur", "page": _deep_page(openzaak, documenten)}
     calls: dict[str, Call | Prepared] = {

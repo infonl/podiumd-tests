@@ -1,6 +1,7 @@
 """Locust users of the perf tier: reads, writes and searches, with the suite's own sessions and credentials.
 
-tests/perf starts Locust on this file with --podiumd-env and --podiumd-run-tag. Timings reach Locust
+tests/perf starts Locust on this file with --podiumd-env, --podiumd-run-tag and the user class to run
+(ApiUser or HotZaakUser). Timings reach Locust
 through its request event, so host-header mode, the CA file and the tokens work as in the other tiers.
 A write's cleanup runs after its timing, tagged with the run tag so sweep finds what a crash leaves.
 """
@@ -9,34 +10,41 @@ from __future__ import annotations
 
 import time
 
+from contextlib import suppress
 from functools import partial
+from itertools import count
 from typing import TYPE_CHECKING
-from typing import cast
+
+import gevent
 
 from locust import User
 from locust import constant
 from locust import events
 from locust import task
+from locust.exception import StopUser
 
 from podiumd_tests.auth.keycloak import discovery_url
 from podiumd_tests.auth.keycloak_admin import realm_of
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import brp_personen
-from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_CLIENT_ID
-from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_STORE_KEY
-from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.clients.platform import openklant_client
-from podiumd_tests.clients.platform import openzaak_client
 from podiumd_tests.kcc import vac_data
 from podiumd_tests.oidc import challenge_session
 from podiumd_tests.perf.keycloak_calls import keycloak_calls
 from podiumd_tests.perf.keycloak_calls import login_accounts
+from podiumd_tests.perf.runs import HOT_ZAAK
+from podiumd_tests.perf.runs import HOT_ZAAK_BUCKET
+from podiumd_tests.perf.runs import HOT_ZAAK_LINKS
+from podiumd_tests.perf.runs import SEARCH_TERM
 from podiumd_tests.perf.runs import add_environment_arguments
 from podiumd_tests.perf.runs import locust_environment
+from podiumd_tests.perf.stats import labelled
+from podiumd_tests.perf.zac_calls import zac_calls
 from podiumd_tests.perf.zgw_calls import Call
 from podiumd_tests.perf.zgw_calls import Prepared
+from podiumd_tests.perf.zgw_calls import hot_zaak_link
 from podiumd_tests.perf.zgw_calls import opennotificaties_calls
 from podiumd_tests.perf.zgw_calls import openzaak_calls
 from podiumd_tests.responses import expect_status
@@ -44,12 +52,8 @@ from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import make_klantcontact
 from podiumd_tests.seed.openklant import random_bsn
+from podiumd_tests.seed.registry import CleanupError
 from podiumd_tests.seed.registry import ResourceRegistry
-from podiumd_tests.zac import clean_up_zaak
-from podiumd_tests.zac import create_zaak
-from podiumd_tests.zac import productaanvraag_parameters
-from podiumd_tests.zac import zac_session
-from podiumd_tests.zac_documents import uploaded_document
 
 if TYPE_CHECKING:
     from argparse import ArgumentParser
@@ -58,25 +62,24 @@ if TYPE_CHECKING:
     from locust.env import Environment as LocustEnvironment
 
     from podiumd_tests.environment import Environment
-    from podiumd_tests.json_data import JsonObject
     from podiumd_tests.perf.keycloak_calls import Accounts
-
-
-# A word the volume corpus, KISS's kennisbank and the portal's products all use.
-SEARCH_TERM = "aanvraag"
 
 
 @events.init_command_line_parser.add_listener
 def _arguments(parser: ArgumentParser) -> None:
     add_environment_arguments(parser)
     parser.add_argument("--podiumd-run-tag", required=True, help="run tag of what the writes create")
+    parser.add_argument("--podiumd-zaak", help="HotZaakUser: URL of the zaak to link documents to")
+    parser.add_argument("--podiumd-links", type=int, default=HOT_ZAAK_LINKS, help="HotZaakUser: links to make")
 
 
 @events.init.add_listener
 def _on_init(environment: LocustEnvironment, **_kwargs: object) -> None:
     options = environment.parsed_options
     ApiUser.env_under_test = locust_environment(options.podiumd_env, options.podiumd_urls)
-    ApiUser.run_tag = environment.parsed_options.podiumd_run_tag
+    ApiUser.run_tag = options.podiumd_run_tag
+    HotZaakUser.run_tag = options.podiumd_run_tag
+    HotZaakUser.env_under_test = ApiUser.env_under_test
     if "zac" in ApiUser.env_under_test.profile.urls:
         ApiUser.accounts = login_accounts(ApiUser.env_under_test)
 
@@ -104,30 +107,6 @@ def _objecten_calls(env: Environment) -> dict[str, Call]:
     }
 
 
-def _zac_calls(env: Environment) -> dict[str, Call | Prepared]:
-    """ZAC as its users load it (ZAC's scripts/test-data/create-load.py): a new zaak, an upload to one, a search."""
-    zac_url = env.profile.urls["zac"]
-    zac = zac_session(env, ADMIN.username, env.credentials.get(ADMIN.store_key))
-    openzaak = openzaak_client(env, ZGW_PRODUCTAANVRAAG_CLIENT_ID, ZGW_PRODUCTAANVRAAG_STORE_KEY, "perf")
-    parameters = productaanvraag_parameters(zac, zac_url, env.profile)
-
-    def new_zaak(registry: ResourceRegistry) -> JsonObject:
-        zaak = create_zaak(zac, zac_url, parameters, omschrijving=registry.tagged("perf-zaak"))
-        clean_up_zaak(zac, zac_url, openzaak, registry, zaak)
-        return zaak
-
-    query = {"page": 0, "rows": 10, "type": "ZAAK", "zoeken": {"ALLE": SEARCH_TERM}}
-    return {
-        "zac_zaak_create": new_zaak,
-        # The zaak's cleanup deletes the document.
-        "zac_document_upload": (
-            lambda registry: (new_zaak(registry), registry),
-            lambda prepared: uploaded_document(zac, zac_url, *cast("tuple[JsonObject, ResourceRegistry]", prepared)),
-        ),
-        "zac_search": lambda _registry: expect_status(zac.put(f"{zac_url}/rest/zoeken/list", json=query), 200),
-    }
-
-
 def _search_calls(env: Environment) -> dict[str, Call]:
     """Return the searches users do in KISS (Elasticsearch) logged in, and in the portal anonymous."""
     urls = env.profile.urls
@@ -141,6 +120,34 @@ def _search_calls(env: Environment) -> dict[str, Call]:
         search = f"{urls['openinwoner']}/search/"
         calls["oi_search"] = lambda _registry: expect_status(portal.get(search, params={"query": SEARCH_TERM}), 200)
     return calls
+
+
+def _timed(user: User, name: str, call: Call | Prepared, registry: ResourceRegistry) -> Exception | None:
+    """Make the call and report its time and outcome to Locust; its error. A setup failure counts as a failed call."""
+    error = None
+    timed: Callable[[], object]
+    if isinstance(call, tuple):
+        prepare, run = call
+        try:
+            prepared = prepare(registry)
+        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught  # Locust counts it
+            user.environment.events.request.fire(
+                request_type="API", name=name, response_time=0, response_length=0, exception=exc
+            )
+            return exc
+        timed = partial(run, prepared)
+    else:
+        timed = partial(call, registry)
+    started = time.perf_counter()
+    try:
+        timed()
+    except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught  # Locust counts it
+        error = exc
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    user.environment.events.request.fire(
+        request_type="API", name=name, response_time=elapsed_ms, response_length=0, exception=error
+    )
+    return error
 
 
 class ApiUser(User):
@@ -161,36 +168,10 @@ class ApiUser(User):
         for name, call in self.calls.items():
             registry = ResourceRegistry(self.run_tag)
             try:
-                self._timed(name, call, registry)
+                _timed(self, name, call, registry)
             finally:
                 # Also when Locust stops the user (GreenletExit) right after a write.
                 registry.cleanup()
-
-    def _timed(self, name: str, call: Call | Prepared, registry: ResourceRegistry) -> None:
-        """Make the call and report its time and outcome to Locust; a setup failure counts as a failed call."""
-        error = None
-        timed: Callable[[], object]
-        if isinstance(call, tuple):
-            prepare, run = call
-            try:
-                prepared = prepare(registry)
-            except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught  # Locust counts it
-                self.environment.events.request.fire(
-                    request_type="API", name=name, response_time=0, response_length=0, exception=exc
-                )
-                return
-            timed = partial(run, prepared)
-        else:
-            timed = partial(call, registry)
-        started = time.perf_counter()
-        try:
-            timed()
-        except Exception as exc:  # noqa: BLE001  # pylint: disable=broad-exception-caught  # Locust counts it
-            error = exc
-        elapsed_ms = (time.perf_counter() - started) * 1000
-        self.environment.events.request.fire(
-            request_type="API", name=name, response_time=elapsed_ms, response_length=0, exception=error
-        )
 
     def _calls(self) -> dict[str, Call | Prepared]:
         """Return the calls of podiumd_tests.perf.runs.ENDPOINTS whose component the environment has."""
@@ -213,5 +194,37 @@ class ApiUser(User):
             discovery = discovery_url(urls["keycloak"], realm_of(env))
             calls["kc_discovery"] = lambda _registry: expect_status(http.get(discovery), 200)
         if "zac" in urls:
-            calls |= _zac_calls(env) | keycloak_calls(env, self.accounts)
+            calls |= zac_calls(env) | keycloak_calls(env, self.accounts)
         return calls | _search_calls(env)
+
+
+class HotZaakUser(User):
+    """Links new documents to one zaak without pause; Locust stops after --podiumd-links links."""
+
+    wait_time = constant(0)
+    env_under_test: Environment
+    run_tag: str
+    # Links started, and users done, of this process.
+    started = count()
+    done = count()
+
+    def __init__(self, environment: LocustEnvironment) -> None:
+        super().__init__(environment)
+        options = environment.parsed_options
+        self.links: int = options.podiumd_links
+        self.call: Prepared = hot_zaak_link(self.env_under_test, options.podiumd_zaak, self.run_tag)
+
+    @task
+    def link(self) -> None:
+        """Link a document, its stats labelled with the links started before it, per HOT_ZAAK_BUCKET."""
+        started = next(self.started)
+        if started >= self.links:
+            # The last user to finish stops the run, so every link started is timed.
+            if next(self.done) + 1 >= self.environment.parsed_options.num_users:
+                gevent.spawn(self.environment.runner.quit)  # pyright: ignore[reportOptionalMemberAccess]
+            raise StopUser
+        registry = ResourceRegistry(self.run_tag)
+        if _timed(self, labelled(HOT_ZAAK, started - started % HOT_ZAAK_BUCKET), self.call, registry) is not None:
+            # The document no link refers to; a link Open Zaak made after all goes with the zaak.
+            with suppress(CleanupError):
+                registry.cleanup()

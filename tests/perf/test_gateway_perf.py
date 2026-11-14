@@ -20,6 +20,7 @@ from podiumd_tests.perf.runs import GATEWAY_SCENARIOS
 from podiumd_tests.perf.runs import locust_command
 from podiumd_tests.perf.stats import HISTORY
 from podiumd_tests.perf.stats import STATS
+from podiumd_tests.perf.stats import locust_csv
 from podiumd_tests.perf.stats import read_stats
 from podiumd_tests.perf.stats import thresholds
 from podiumd_tests.perf.stats import violations
@@ -77,8 +78,8 @@ def test_gateway_scenario_meets_its_threshold(  # fixtures
         run_checked(
             run_process, [*command, "--podiumd-scenario", scenario, "--podiumd-warmup", str(warmup)], timeout=900
         )
-    history = prefix.with_name(prefix.name + HISTORY.removeprefix("locust")).read_text(encoding="utf-8")
+    history = locust_csv(prefix, HISTORY).read_text(encoding="utf-8")
     record_property("report", report(watch, history))
-    stats = read_stats(prefix.with_name(prefix.name + STATS.removeprefix("locust")).read_text(encoding="utf-8"))
+    stats = read_stats(locust_csv(prefix, STATS).read_text(encoding="utf-8"))
     assert scenario in stats, f"Locust made no {scenario} requests"
     assert [*violations(stats[scenario], thresholds(REPO_ROOT / "perf.yaml", scenario)), *problems(watch)] == []

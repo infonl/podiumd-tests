@@ -13,6 +13,8 @@ from typing import cast
 import yaml
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from collections.abc import Mapping
     from pathlib import Path
 
 
@@ -65,6 +67,46 @@ def read_stats(csv_text: str) -> dict[str, EndpointStats]:
     return found
 
 
+def read_failures(csv_text: str) -> list[tuple[str, str, int]]:
+    """(name, error, occurrences) per row of Locust's <prefix>_failures.csv, most frequent first."""
+    rows = [_failure(row) for row in csv.DictReader(io.StringIO(csv_text))]
+    return sorted(rows, key=lambda row: -row[2])
+
+
+def _failure(row: dict[str, str]) -> tuple[str, str, int]:
+    return row["Name"], row["Error"], int(row["Occurrences"])
+
+
+# Separates an endpoint's name from a number its requests are split by: users of a ramp step, links of a hot zaak.
+LABEL = "@"
+
+
+def labelled(endpoint: str, number: int) -> str:
+    """Return the stats name of the endpoint's requests at a number."""
+    return f"{endpoint}{LABEL}{number}"
+
+
+def by_label(stats: Mapping[str, EndpointStats]) -> dict[int, dict[str, EndpointStats]]:
+    """Return the stats of labelled names per number (ascending) and endpoint; other names are left out."""
+    found: dict[int, dict[str, EndpointStats]] = {}
+    for name, endpoint_stats in stats.items():
+        endpoint, separator, number = name.rpartition(LABEL)
+        if separator and number.isdigit():
+            found.setdefault(int(number), {})[endpoint] = endpoint_stats
+    return dict(sorted(found.items()))
+
+
+def summed(parts: Iterable[EndpointStats]) -> EndpointStats:
+    """Return the parts' requests and failures added up, with the highest p95 of them."""
+    listed = list(parts)
+    return EndpointStats(
+        sum(part.requests for part in listed),
+        sum(part.failures for part in listed),
+        max((part.p95_ms for part in listed), default=0),
+        sum(part.per_second for part in listed),
+    )
+
+
 def violations(stats: EndpointStats, threshold: Threshold) -> list[str]:
     """Return what the stats exceed of the threshold; empty when they meet it."""
     found: list[str] = []
@@ -80,6 +122,14 @@ def violations(stats: EndpointStats, threshold: Threshold) -> list[str]:
 STATS = "locust_stats.csv"
 # Written with --csv-full-history: a row per endpoint and second.
 HISTORY = "locust_stats_history.csv"
+FAILURES = "locust_failures.csv"
+
+
+def locust_csv(prefix: Path, name: str) -> Path:
+    """Return the path of Locust's CSV of this name (STATS, HISTORY, FAILURES) for a run with --csv prefix."""
+    return prefix.with_name(prefix.name + name.removeprefix("locust"))
+
+
 SETTINGS = "settings.json"
 BASELINE_RUNS = 5
 # Fewer earlier runs give no baseline: one 30 s run's p95 swings with a single slow request.

@@ -48,6 +48,9 @@ def locust_environment(env: str, urls: str) -> Environment:
     return Environment(replace(profile, urls={**profile.urls, **json.loads(urls)}))
 
 
+# A word the volume corpus, KISS's kennisbank and the portal's products all use.
+SEARCH_TERM = "aanvraag"
+
 # Endpoint name -> the component it needs. Reads are TA's k6 api-perf.js; writes create and delete
 # their own objects; searches are what users type in ZAC, KISS and the portal.
 ENDPOINTS = {
@@ -88,6 +91,13 @@ ENDPOINTS = {
 KEYCLOAK_PER_VCPU = {"kc_login": 15, "kc_client_credentials": 120}
 # The accounts of kc_login. Not the test admin: every Locust user logs in as the admin when it starts.
 LOGIN_USERS = tuple(ZAC_ROLE_USERS.values())
+
+
+# Open Zaak #2577: every user links documents to one zaak (tests/perf/test_hot_zaak_perf.py), whose stats are split
+# per HOT_ZAAK_BUCKET links (stats.labelled) to compare the first links with the last.
+HOT_ZAAK = "oz_hot_zio_create"
+HOT_ZAAK_LINKS = 400
+HOT_ZAAK_BUCKET = 100
 
 # Anonymous requests through the public gateway, one Locust run each (tests/perf/test_gateway_perf.py), to compare
 # gateway settings such as upstream keep-alive. Name -> (component, path, expected status); kiss_page also loads

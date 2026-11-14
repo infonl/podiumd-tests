@@ -74,7 +74,9 @@ def _create(openzaak: ApiClient, registry: ResourceRegistry, path: str, body: di
     return created
 
 
-def delete_zaak(openzaak: ApiClient, url: str, *, with_documents: bool = False) -> None:
+def delete_zaak(
+    openzaak: ApiClient, url: str, *, with_documents: bool = False, timeout: float = DELETE_TIMEOUT
+) -> None:
     """DELETE a zaak, retrying until it is gone; with_documents also its documents, which Open Zaak keeps.
 
     Open Zaak 1.29.3 answers 500 on deleting a zaak with a resultaat although it deletes it
@@ -96,7 +98,7 @@ def delete_zaak(openzaak: ApiClient, url: str, *, with_documents: bool = False) 
         if with_documents
         else []
     )
-    wait_until(is_deleted, timeout=DELETE_TIMEOUT, description=f"DELETE {url}")
+    wait_until(is_deleted, timeout=timeout, description=f"DELETE {url}")
     for document in documents:
         openzaak.delete(document)
 
@@ -125,10 +127,15 @@ def make_zaak(openzaak: ApiClient, registry: ResourceRegistry, zaaktype: str, **
 
 
 def delete_zaak_at_cleanup(
-    openzaak: ApiClient, registry: ResourceRegistry, url: str, *, with_documents: bool = False
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    url: str,
+    *,
+    with_documents: bool = False,
+    timeout: float = DELETE_TIMEOUT,
 ) -> None:
     """Register delete_zaak of a zaak for cleanup."""
-    registry.add(f"zaak {url}", lambda: delete_zaak(openzaak, url, with_documents=with_documents))
+    registry.add(f"zaak {url}", lambda: delete_zaak(openzaak, url, with_documents=with_documents, timeout=timeout))
 
 
 DOCUMENTEN = "documenten/api/v1"

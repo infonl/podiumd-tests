@@ -85,7 +85,7 @@ markers = [
 [tool.coverage.run]
 source = ["src/podiumd_tests"]
 # Same excludes as the static checks: snippets run inside the components, the locustfiles under Locust.
-omit = ["*/snippets/*.py", "*/perf/*locustfile.py", "*/perf/zgw_calls.py", "*/perf/keycloak_calls.py"]
+omit = ["*/snippets/*.py", "*/perf/*locustfile.py", "*/perf/zgw_calls.py", "*/perf/keycloak_calls.py", "*/perf/zac_calls.py"]
 branch = true
 
 [tool.coverage.report]

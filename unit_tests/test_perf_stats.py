@@ -3,14 +3,20 @@
 from podiumd_tests.perf import runs
 from podiumd_tests.perf.runs import locust_command
 from podiumd_tests.perf.runs import locust_environment
+from podiumd_tests.perf.stats import FAILURES
 from podiumd_tests.perf.stats import SETTINGS
 from podiumd_tests.perf.stats import STATS
 from podiumd_tests.perf.stats import EndpointStats
 from podiumd_tests.perf.stats import Threshold
 from podiumd_tests.perf.stats import baseline_p95
+from podiumd_tests.perf.stats import by_label
 from podiumd_tests.perf.stats import earlier_stats
+from podiumd_tests.perf.stats import labelled
+from podiumd_tests.perf.stats import locust_csv
+from podiumd_tests.perf.stats import read_failures
 from podiumd_tests.perf.stats import read_stats
 from podiumd_tests.perf.stats import slowdown_limit
+from podiumd_tests.perf.stats import summed
 from podiumd_tests.perf.stats import thresholds
 from podiumd_tests.perf.stats import violations
 
@@ -85,3 +91,30 @@ def test_locust_environment_reaches_components_at_the_given_urls(monkeypatch, pr
     env = locust_environment("test-env", '{"openzaak": "http://127.0.0.1:4711"}')
     assert env.profile.urls["openzaak"] == "http://127.0.0.1:4711"
     assert env.profile.urls["keycloak-admin"] == "https://kc-admin.example.test"
+
+
+def test_labelled_stats_group_by_number_and_endpoint():
+    stats = read_stats(
+        "Type,Name,Request Count,Failure Count,95%\n"
+        f"API,{labelled('oz_hot', 100)},100,3,900\nAPI,{labelled('oz_hot', 0)},100,0,300\n"
+        f"API,{labelled('zac_search', 4)},10,0,50\nAPI,kc_discovery,5,0,20\n"
+    )
+    assert by_label(stats) == {
+        0: {"oz_hot": EndpointStats(100, 0, 300)},
+        4: {"zac_search": EndpointStats(10, 0, 50)},
+        100: {"oz_hot": EndpointStats(100, 3, 900)},
+    }
+
+
+def test_summed_stats_add_up_and_keep_the_highest_p95():
+    assert summed([EndpointStats(100, 0, 300, 2), EndpointStats(100, 3, 900, 1)]) == EndpointStats(200, 3, 900, 3)
+    assert summed([]) == EndpointStats(0, 0, 0)
+
+
+def test_read_failures_puts_the_most_frequent_first():
+    text = "Method,Name,Error,Occurrences\nAPI,a,HTTP 503,2\nAPI,a,HTTP 500,7\n"
+    assert read_failures(text) == [("a", "HTTP 500", 7), ("a", "HTTP 503", 2)]
+
+
+def test_locust_csv_follows_the_csv_prefix(tmp_path):
+    assert locust_csv(tmp_path / "hot-zaak", FAILURES) == tmp_path / "hot-zaak_failures.csv"

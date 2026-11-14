@@ -79,7 +79,7 @@ def fixture_load(
     (directory / SETTINGS).write_text(f"{json.dumps(settings, sort_keys=True)}\n", encoding="utf-8")
     command = locust_command(LOCUSTFILE, users, duration, directory / "locust", podiumd_env.profile.name, urls=urls)
     # Users finish their round, so every write is deleted.
-    command += ["--stop-timeout", "60", "--podiumd-run-tag", run_tag]
+    command += ["--stop-timeout", "60", "--podiumd-run-tag", run_tag, "ApiUser"]
     with watched(podiumd_env, urls, ENDPOINTS.values(), availability_limits(REPO_ROOT / "perf.yaml")) as watch:
         run_checked(run_process, command, timeout=600)
     return read_stats((directory / STATS).read_text(encoding="utf-8")), watch
