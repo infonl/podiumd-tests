@@ -28,9 +28,7 @@ from podiumd_tests.auth.keycloak_admin import realm_of
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import brp_personen
 from podiumd_tests.bootstrap.steps import KCC
-from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.clients.platform import openklant_client
-from podiumd_tests.kcc import vac_data
 from podiumd_tests.oidc import challenge_session
 from podiumd_tests.perf.keycloak_calls import keycloak_calls
 from podiumd_tests.perf.keycloak_calls import login_accounts
@@ -46,11 +44,10 @@ from podiumd_tests.perf.zac_calls import zac_calls
 from podiumd_tests.perf.zgw_calls import Call
 from podiumd_tests.perf.zgw_calls import Prepared
 from podiumd_tests.perf.zgw_calls import hot_zaak_link
+from podiumd_tests.perf.zgw_calls import objecten_calls
 from podiumd_tests.perf.zgw_calls import opennotificaties_calls
 from podiumd_tests.perf.zgw_calls import openzaak_calls
 from podiumd_tests.responses import expect_status
-from podiumd_tests.seed.objecten import make_object
-from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import KLANTCONTACT_EXPAND
 from podiumd_tests.seed.openklant import make_klantcontact
 from podiumd_tests.seed.openklant import random_bsn
@@ -101,17 +98,6 @@ def _openklant_calls(env: Environment) -> dict[str, Call]:
         "ok2_partij_by_bsn": lambda _registry: openklant.request(
             "GET", "partij-identificatoren", 200, params={"partijIdentificatorObjectId": random_bsn()}
         ),
-    }
-
-
-def _objecten_calls(env: Environment) -> dict[str, Call]:
-    """VAC objects: harmless to create, as no app acts on a new one (a productaanvraag would start a zaak)."""
-    objecten = objecten_client(env)
-    vac = objecttype_url(env, "VAC")
-    query = {"type": vac, "data_attr": f"vraag__icontains__{SEARCH_TERM}", "pageSize": "20"}
-    return {
-        "obj_vac_create": lambda registry: make_object(objecten, registry, vac, vac_data(registry.tagged("perf-vac"))),
-        "obj_vac_search": lambda _registry: objecten.request("GET", "objects", 200, params=query),
     }
 
 
@@ -199,7 +185,7 @@ class ApiUser(User):
         if "opennotificaties" in urls:
             calls |= opennotificaties_calls(env)
         if "objecten" in urls:
-            calls |= _objecten_calls(env)
+            calls |= objecten_calls(env)
         if "api-proxy" in urls:
             query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": [EREBOS], "fields": ["naam"]}
             calls["brp_persoon"] = lambda _registry: expect_status(brp_personen(http, urls["api-proxy"], query), 200)

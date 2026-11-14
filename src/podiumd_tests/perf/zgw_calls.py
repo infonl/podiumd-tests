@@ -1,4 +1,4 @@
-"""The perf tier's calls to the ZGW components: Open Zaak and Open Notificaties."""
+"""The perf tier's calls to Open Zaak, Open Notificaties and Objecten."""
 
 from __future__ import annotations
 
@@ -15,9 +15,14 @@ from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_STORE_KEY
 from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
+from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.clients.platform import opennotificaties_client
 from podiumd_tests.clients.platform import openzaak_client
 from podiumd_tests.json_data import strings
+from podiumd_tests.kcc import vac_data
+from podiumd_tests.perf.runs import SEARCH_TERM
+from podiumd_tests.seed.objecten import make_object
+from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import random_bsn
 from podiumd_tests.seed.openzaak import BSN_FILTER
 from podiumd_tests.seed.openzaak import CATALOGI
@@ -154,4 +159,15 @@ def opennotificaties_calls(env: Environment) -> dict[str, Call | Prepared]:
         "onrc_notificatie": lambda _registry: opennotificaties.request(
             "POST", "notificaties", 200, 201, json={**body, "aanmaakdatum": datetime.now(tz=UTC).isoformat()}
         )
+    }
+
+
+def objecten_calls(env: Environment) -> dict[str, Call]:
+    """Return Objecten's calls on VAC objects: no app acts on a new VAC (a new productaanvraag would start a zaak)."""
+    objecten = objecten_client(env)
+    vac = objecttype_url(env, "VAC")
+    query = {"type": vac, "data_attr": f"vraag__icontains__{SEARCH_TERM}", "pageSize": "20"}
+    return {
+        "obj_vac_create": lambda registry: make_object(objecten, registry, vac, vac_data(registry.tagged("perf-vac"))),
+        "obj_vac_search": lambda _registry: objecten.request("GET", "objects", 200, params=query),
     }
