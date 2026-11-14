@@ -51,6 +51,7 @@ from podiumd_tests.perf.zgw_calls import openzaak_calls
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import make_object
 from podiumd_tests.seed.objecten import objecttype_url
+from podiumd_tests.seed.openklant import KLANTCONTACT_EXPAND
 from podiumd_tests.seed.openklant import make_klantcontact
 from podiumd_tests.seed.openklant import random_bsn
 from podiumd_tests.seed.registry import CleanupError
@@ -92,6 +93,9 @@ def _openklant_calls(env: Environment) -> dict[str, Call]:
     openklant = openklant_client(env)
     return {
         "ok2_partijen": lambda _registry: openklant.request("GET", "partijen", 200),
+        "ok2_klantcontacten_expand": lambda _registry: openklant.request(
+            "GET", "klantcontacten", 200, params={"pageSize": "20", "expand": KLANTCONTACT_EXPAND}
+        ),
         "ok2_klantcontact_create": lambda registry: make_klantcontact(openklant, registry),
         # KISS and the portal find a person's partij by BSN.
         "ok2_partij_by_bsn": lambda _registry: openklant.request(

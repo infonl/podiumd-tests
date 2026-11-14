@@ -107,6 +107,13 @@ ZAC_LOAD = pytest.mark.source(
     "ZAC's own load script: zaken started in ZAC and documents uploaded to them.",
 )
 SOURCES = {
+    "oz_zaken_expand": pytest.mark.source(
+        "upstream open-zaak/open-zaak issue 1837", "Open Zaak 1.15 kept the memory of each zaken list with expand."
+    ),
+    "ok2_klantcontacten_expand": pytest.mark.source(
+        "upstream maykinmedia/open-klant issue 636",
+        "Open Klant 2.17.1 grew 30 MiB per klantcontacten list with expand.",
+    ),
     **dict.fromkeys(("oz_zaken", "oz_zaaktypen", "ok2_partijen", "brp_persoon", "kc_discovery"), TA_K6),
     **dict.fromkeys(("oz_documenten_ordered", "oz_zaken_one_zaaktype"), OZ_BENCHMARK),
     **dict.fromkeys(KEYCLOAK_PER_VCPU, KC_BENCHMARK),

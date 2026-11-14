@@ -265,10 +265,13 @@ def make_onderwerpobject(
     return _create(openklant, registry, "onderwerpobjecten", body)
 
 
+# What a klantcontact links to: its interne taken, onderwerpobjecten and betrokkenen.
+KLANTCONTACT_EXPAND = "leiddeTotInterneTaken,gingOverOnderwerpobjecten,hadBetrokkenen"
+
+
 def delete_klantcontact_tree(openklant: ApiClient, url: str) -> None:
     """Delete a klantcontact with the interne taken, onderwerpobjecten, betrokkenen and their digitale adressen."""
-    expand = "leiddeTotInterneTaken,gingOverOnderwerpobjecten,hadBetrokkenen"
-    found = openklant.request("GET", url, HTTPStatus.OK, HTTPStatus.NOT_FOUND, params={"expand": expand})
+    found = openklant.request("GET", url, HTTPStatus.OK, HTTPStatus.NOT_FOUND, params={"expand": KLANTCONTACT_EXPAND})
     if found.status_code == HTTPStatus.NOT_FOUND:
         return
     inlined = section(cast("JsonObject", found.json()), "_expand")
@@ -276,7 +279,7 @@ def delete_klantcontact_tree(openklant: ApiClient, url: str) -> None:
     for betrokkene in entries(inlined.get("hadBetrokkenen")):
         for adres in entries(betrokkene.get("digitaleAdressen")):
             openklant.delete(str(adres["url"]))
-    for key in expand.split(","):
+    for key in KLANTCONTACT_EXPAND.split(","):
         for item in entries(inlined.get(key)):
             openklant.delete(str(item["url"]))
     openklant.delete(url)

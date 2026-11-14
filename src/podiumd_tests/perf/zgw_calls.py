@@ -39,6 +39,8 @@ if TYPE_CHECKING:
 # Open Zaak's performance_test reads documents and zaken at page 34 of 100.
 PAGE_SIZE = 100
 DEEP_PAGE = 34
+# A portal's "mijn zaken": each zaak with its zaaktype, status, rollen, resultaat and documents.
+ZAAK_EXPAND = "zaaktype,status,status.statustype,rollen,resultaat,zaakinformatieobjecten"
 type Call = Callable[[ResourceRegistry], object]
 # A call whose setup is not timed: prepare(registry) makes what the timed part needs and gets its cleanup.
 type Prepared = tuple[Callable[[ResourceRegistry], object], Callable[[object], object]]
@@ -78,6 +80,9 @@ def openzaak_calls(env: Environment) -> dict[str, Call | Prepared]:
     ordered = {"pageSize": str(PAGE_SIZE), "ordering": "-auteur", "page": _deep_page(openzaak, documenten)}
     calls: dict[str, Call | Prepared] = {
         "oz_zaken": lambda _registry: openzaak.request("GET", f"{ZAKEN}/zaken", 200, params={"pageSize": "20"}),
+        "oz_zaken_expand": lambda _registry: openzaak.request(
+            "GET", f"{ZAKEN}/zaken", 200, params={"pageSize": "20", "expand": ZAAK_EXPAND}
+        ),
         "oz_zaaktypen": lambda _registry: openzaak.request("GET", f"{CATALOGI}/zaaktypen", 200),
         "oz_zaak_create": lambda registry: make_zaak(openzaak, registry, zaaktype),
         # Mijn zaken: the zaken of one inwoner, a join over every zaak's rollen.

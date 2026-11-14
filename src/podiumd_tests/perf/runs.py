@@ -88,6 +88,9 @@ ENDPOINTS = {
     # ZAC's create-load.py: a zaak started in ZAC, and a document uploaded to it.
     "zac_zaak_create": "zac",
     "zac_document_upload": "zac",
+    # Lists with their related objects inlined (expand), whose memory Open Klant #636 and Open Zaak #1837 kept.
+    "oz_zaken_expand": "openzaak",
+    "ok2_klantcontacten_expand": "openklant",
 }
 
 # Keycloak's sizing guide: what one vCPU serves per second (keycloak.org high-availability, CPU and memory sizing).
