@@ -65,7 +65,9 @@ def test_load_report_names_the_calls_the_failures_and_the_gate():
 
     with loaded({"broken": broken}, workers=1, pause=0) as load:
         assert done.wait(5)
-    watch = Watch(frozenset(("openzaak",)), Limits(5, 60, 0.99, 0.9), started=1_800_000_000, ended=1_800_000_060)
+    watch = Watch(
+        frozenset(("openzaak",)), Limits(5, 60, 0.99, 0.9, 300, 1), started=1_800_000_000, ended=1_800_000_060
+    )
     lines = load_report(load, watch, since=load.attempts[0].start).splitlines()
     assert lines[0].startswith("Calls: broken ")
     assert lines[2] == "- broken at +0s: ConnectionError: refused"

@@ -119,6 +119,32 @@ RAMP_MIX = (
     "ok2_partij_by_bsn",
 )
 
+# The soak's calls (tests/perf/test_soak_perf.py): lists with expand, writes, searches and logins.
+SOAK_MIX = (
+    "oz_zaken_expand",
+    "ok2_klantcontacten_expand",
+    "oz_zaak_create",
+    "oz_document_create",
+    "ok2_klantcontact_create",
+    "obj_vac_create",
+    "onrc_notificatie",
+    "brp_persoon",
+    "kc_login",
+    "zac_zaak_create",
+    "zac_search",
+    "kiss_search",
+    "oi_search",
+)
+
+
+def mix_arguments(mix: Sequence[str], urls: Mapping[str, str], run_tag: str) -> list[str]:
+    """Return the locustfile's arguments for ApiUser to make the calls of the mix whose component is at urls.
+
+    Users finish their round when the run ends, so every write is deleted.
+    """
+    calls = ",".join(call for call in mix if ENDPOINTS[call] in urls)
+    return ["--stop-timeout", "60", "--podiumd-run-tag", run_tag, "--podiumd-calls", calls]
+
 
 def ramp_steps(text: str) -> tuple[int, ...]:
     """Return the user counts of --perf-ramp ("2,4,8,16"); ValueError unless they are positive and ascending."""

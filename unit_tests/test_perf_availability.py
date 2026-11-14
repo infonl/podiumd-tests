@@ -1,6 +1,7 @@
 """Unit tests for the availability gate of the perf tier."""
 
 import json
+import sys
 
 from datetime import UTC
 from datetime import datetime
@@ -14,16 +15,22 @@ from podiumd_tests.kubelet import quantity_bytes
 from podiumd_tests.kubelet import quantity_cores
 from podiumd_tests.perf.availability import Limits
 from podiumd_tests.perf.availability import Sample
+from podiumd_tests.perf.availability import Series
 from podiumd_tests.perf.availability import Values
 from podiumd_tests.perf.availability import Watch
 from podiumd_tests.perf.availability import availability_limits
 from podiumd_tests.perf.availability import resource_limits
 from podiumd_tests.perf.availability import throttled_shares
 from podiumd_tests.perf.availability import watched
+from podiumd_tests.perf.availability import watched_run
 from podiumd_tests.perf.availability_report import Event
+from podiumd_tests.perf.availability_report import Trend
 from podiumd_tests.perf.availability_report import availability
 from podiumd_tests.perf.availability_report import capacity
 from podiumd_tests.perf.availability_report import failure_bursts
+from podiumd_tests.perf.availability_report import growth_per_min
+from podiumd_tests.perf.availability_report import memory_trend
+from podiumd_tests.perf.availability_report import memory_trends
 from podiumd_tests.perf.availability_report import problems
 from podiumd_tests.perf.availability_report import report
 from podiumd_tests.perf.availability_report import timeline
@@ -31,7 +38,14 @@ from podiumd_tests.perf.availability_report import unhealthy_runs
 from podiumd_tests.perf.stats import EndpointStats
 from podiumd_tests.workloads import Disruption
 
-LIMITS = Limits(health_interval_s=0.01, recovery_s=1, min_available=0.9, max_memory_ratio=0.9)
+LIMITS = Limits(
+    health_interval_s=0.01,
+    recovery_s=1,
+    min_available=0.9,
+    max_memory_ratio=0.9,
+    memory_warmup_s=300,
+    max_rss_growth_mib_per_min=1,
+)
 KEY: ContainerKey = ("podiumd", "openzaak-1", "openzaak")
 MIB = 1024 * 1024
 # 2026-11-14T10:00:00Z
@@ -131,7 +145,7 @@ def test_problems_name_restarts_unready_pods_unavailability_and_memory():
         disruptions=[restart],
         unready=["zac-1/zac: not ready"],
         samples=[Sample(at(0), "zac", None), Sample(at(5), "zac", "HTTP 503")],
-        rss={KEY: 950 * MIB},
+        rss_series={KEY: [(at(0), 900 * MIB), (at(5), 950 * MIB)]},
         working_set={KEY: 990 * MIB},
         memory_limits={KEY: 1000 * MIB},
     )
@@ -160,7 +174,7 @@ Not measured: CPU throttling: kubelet cAdvisor metrics unreadable: forbidden."""
 def test_a_quiet_load_has_no_problems_and_says_so():
     found = watch(
         samples=[Sample(at(0), "zac", None), Sample(at(0), "openzaak", None)],
-        rss={KEY: 512 * MIB, ("podiumd", "zac-1", "zac"): 200 * MIB},
+        rss_series={KEY: [(at(0), 512 * MIB)], ("podiumd", "zac-1", "zac"): [(at(0), 200 * MIB)]},
         # Page cache near the limit, as Elasticsearch has: no problem.
         working_set={KEY: 1000 * MIB, ("podiumd", "zac-1", "zac"): 300 * MIB},
         memory_limits={KEY: 1024 * MIB, ("podiumd", "zac-1", "zac"): None},
@@ -244,3 +258,56 @@ def test_watched_without_cluster_access_only_samples_the_roots(env_factory, fake
     assert {sample.problem for sample in found.samples} == {"HTTP 503"}
     assert found.notes == ["pods, restarts and memory: the environment has no cluster access"]
     assert problems(found) == [f"openzaak root healthy in 0 of {len(found.samples)} samples < 90%"]
+
+
+def test_watched_run_watches_the_command_with_the_limits_of_perf_yaml(env_factory, fake_http):
+    fake_http({"/": (200, {})})
+    env = env_factory()
+    env.capabilities = Capabilities(frozenset(("openzaak",)), {"cluster": "kubectl failed"})
+    found = watched_run(env, env.profile.urls, ["openzaak"], [sys.executable, "-c", "pass"], timeout=60)
+    assert found.limits == availability_limits(REPO_ROOT / "perf.yaml")
+    assert found.ended >= found.started
+
+
+def readings(*mib: float) -> Series:
+    """RSS readings a minute apart from at(0), in MiB."""
+    return [(float(at(60 * minute)), value * MIB) for minute, value in enumerate(mib)]
+
+
+LEAKING: ContainerKey = ("podiumd", "openklant-1", "openklant")
+# 2 MiB/min for 15 minutes.
+LEAK = readings(*range(100, 132, 2))
+# 3 MiB/min for 10 minutes, then flat.
+LEVELLING = readings(*(100 + 3 * min(minute, 10) for minute in range(16)))
+
+
+def test_growth_per_min_is_the_least_squares_slope():
+    assert growth_per_min(LEAK) == pytest.approx(2)
+    # A sawtooth, as uWSGI max-requests makes it: well below 1 MiB/min.
+    assert growth_per_min(readings(100, 104, 100, 104, 100, 104)) == pytest.approx(6 / 17.5)
+
+
+def test_memory_trend_leaves_out_the_warm_up():
+    trend = memory_trend(readings(*(min(100 * (minute + 1), 600) for minute in range(16))), at(0), warmup_s=300)
+    assert trend == Trend(first=100, last=600, peak=600, steps=(100, 600, 600, 600), growth=0, late_growth=0)
+
+
+def test_memory_trend_needs_readings_that_span_the_warm_up_after_it():
+    assert memory_trend(LEAK[:10], at(0), warmup_s=300) is None  # 4 minutes after the warm-up
+    assert memory_trend(LEAK[:3], at(0), warmup_s=0) is None  # too few readings
+    assert memory_trend(LEAK[:10], at(0), warmup_s=0) is not None
+
+
+def test_problems_flag_rss_that_keeps_growing_but_not_rss_that_levels_off():
+    found = watch(rss_series={LEAKING: LEAK, KEY: LEVELLING})
+    trends = memory_trends(found)
+    assert trends[KEY].growth > 1
+    assert trends[KEY].late_growth == pytest.approx(0)
+    assert problems(found) == [
+        "openklant-1/openklant RSS keeps growing: 2.0 MiB/min after the warm-up, 2.0 in its last half > 1"
+    ]
+    lines = report(found, HEADER).splitlines()
+    table = lines.index("| Container | Start | End | Peak | Growth MiB/min | In its last half | Every 5 min |")
+    assert lines[table - 2] == "RSS in MiB; growth after a warm-up of 300 s, least squares."
+    assert lines[table + 2] == "| openklant-1/openklant | 100 | 130 | 130 | +2.00 | +2.00 | 100 110 120 130 |"
+    assert lines[table + 3].startswith("| openzaak-1/openzaak | 100 | 130 | 130 | +1.")

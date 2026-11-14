@@ -12,8 +12,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.config import REPO_ROOT
-from podiumd_tests.perf.availability import availability_limits
-from podiumd_tests.perf.availability import watched
+from podiumd_tests.perf.availability import watched_run
 from podiumd_tests.perf.availability_report import problems
 from podiumd_tests.perf.availability_report import report
 from podiumd_tests.perf.runs import GATEWAY_SCENARIOS
@@ -24,8 +23,6 @@ from podiumd_tests.perf.stats import locust_csv
 from podiumd_tests.perf.stats import read_stats
 from podiumd_tests.perf.stats import thresholds
 from podiumd_tests.perf.stats import violations
-from podiumd_tests.process import run_checked
-from podiumd_tests.process import run_process
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.wait import parse_duration
 
@@ -74,10 +71,8 @@ def test_gateway_scenario_meets_its_threshold(  # fixtures
     prefix.parent.mkdir(exist_ok=True)
     command = locust_command(LOCUSTFILE, users, run_time, prefix, podiumd_env.profile.name, urls=urls)
     component = GATEWAY_SCENARIOS[scenario][0]
-    with watched(podiumd_env, urls, [component], availability_limits(REPO_ROOT / "perf.yaml")) as watch:
-        run_checked(
-            run_process, [*command, "--podiumd-scenario", scenario, "--podiumd-warmup", str(warmup)], timeout=900
-        )
+    command += ["--podiumd-scenario", scenario, "--podiumd-warmup", str(warmup)]
+    watch = watched_run(podiumd_env, urls, [component], command, timeout=900)
     history = locust_csv(prefix, HISTORY).read_text(encoding="utf-8")
     record_property("report", report(watch, history))
     stats = read_stats(locust_csv(prefix, STATS).read_text(encoding="utf-8"))

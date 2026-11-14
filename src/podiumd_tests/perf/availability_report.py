@@ -1,4 +1,5 @@
-"""What a perf.availability Watch shows: its problems against perf.yaml's limits, and its report with a timeline."""
+"""What a perf.availability Watch shows: its problems against perf.yaml's limits, and its report with memory trends
+and a timeline."""
 
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ from datetime import UTC
 from datetime import datetime
 from itertools import chain
 from itertools import groupby
+from statistics import linear_regression
 from typing import TYPE_CHECKING
 
 from podiumd_tests.perf.availability import is_loaded
@@ -22,6 +24,7 @@ if TYPE_CHECKING:
 
     from podiumd_tests.kubelet import ContainerKey
     from podiumd_tests.perf.availability import Sample
+    from podiumd_tests.perf.availability import Series
     from podiumd_tests.perf.availability import Watch
     from podiumd_tests.perf.stats import EndpointStats
 
@@ -31,6 +34,10 @@ BURST_GAP_S = 5
 QUIET = "No failed requests, failing root answers or pod changes."
 # Lower CPU throttling shares would show as 0%.
 SHOWN_SHARE = 0.005
+# The report shows a container's RSS this many seconds apart.
+TREND_STEP_S = 300
+# Fewer RSS readings after the warm-up give no trend.
+MIN_READINGS = 4
 
 
 def availability(samples: Iterable[Sample]) -> dict[str, tuple[int, int]]:
@@ -58,6 +65,62 @@ def _container(key: ContainerKey) -> str:
     return f"{key[1]}/{key[2]}"
 
 
+@dataclass(frozen=True)
+class Trend:
+    """A container's RSS during the load in MiB, and its growth in MiB per minute after the warm-up."""
+
+    first: float
+    last: float
+    peak: float
+    # The first reading at or after each TREND_STEP_S since the start of the load.
+    steps: tuple[float, ...]
+    growth: float
+    # Growth in the last half of the readings after the warm-up: whether it still grows at the end.
+    late_growth: float
+
+
+def growth_per_min(series: Series) -> float:
+    """Return the least-squares slope of the readings, bytes over seconds, in MiB per minute."""
+    times, values = zip(*series, strict=True)
+    return linear_regression(times, values).slope * 60 / MIB
+
+
+def _steps(series: Series, started: float) -> tuple[float, ...]:
+    found: list[float] = []
+    due = started
+    for at, value in series:
+        if at >= due:
+            found.append(value / MIB)
+            due = at - (at - started) % TREND_STEP_S + TREND_STEP_S
+    return tuple(found)
+
+
+def memory_trend(series: Series, started: float, warmup_s: float) -> Trend | None:
+    """Return the trend of the RSS readings of a load that started at `started` (Unix seconds).
+
+    None when the readings after the warm-up are fewer than MIN_READINGS or span less than the warm-up itself.
+    """
+    window = [reading for reading in series if reading[0] >= started + warmup_s]
+    span = window[-1][0] - window[0][0] if window else 0
+    if len(window) < MIN_READINGS or span <= 0 or span < warmup_s:
+        return None
+    middle = window[0][0] + span / 2
+    late = [reading for reading in window if reading[0] >= middle]
+    values = [value / MIB for _at, value in series]
+    rss = (values[0], values[-1], max(values))
+    return Trend(*rss, _steps(series, started), growth_per_min(window), growth_per_min(late))
+
+
+def memory_trends(watch: Watch) -> dict[ContainerKey, Trend]:
+    """Return the RSS trend of each container whose readings span enough time after perf.yaml's warm-up."""
+    found: dict[ContainerKey, Trend] = {}
+    for key, series in watch.rss_series.items():
+        trend = memory_trend(series, watch.started, watch.limits.memory_warmup_s)
+        if trend is not None:
+            found[key] = trend
+    return found
+
+
 def capacity(watch: Watch, component: str, per_vcpu: float, measured: EndpointStats) -> str:
     """Return the measured rate and p95 against per_vcpu requests per second per vCPU of the component's CPU limits."""
     rate = f"{measured.per_second:.1f}/s at p95 {measured.p95_ms:.0f} ms; reference {per_vcpu:g}/s per vCPU"
@@ -81,6 +144,11 @@ def problems(watch: Watch) -> list[str]:
         if ratio > limits.max_memory_ratio:
             peak = f"{_container(key)} peak RSS {watch.rss[key] / MIB:.0f} MiB"
             found.append(f"{peak} = {ratio:.0%} of its limit > {limits.max_memory_ratio:.0%}")
+    growth_limit = limits.max_rss_growth_mib_per_min
+    for key, trend in sorted(memory_trends(watch).items()):
+        if min(trend.growth, trend.late_growth) > growth_limit:
+            rates = f"{trend.growth:.1f} MiB/min after the warm-up, {trend.late_growth:.1f} in its last half"
+            found.append(f"{_container(key)} RSS keeps growing: {rates} > {growth_limit:g}")
     return found
 
 
@@ -211,6 +279,27 @@ def _component_rows(watch: Watch) -> list[str]:
     return rows
 
 
+def _fastest_first(item: tuple[ContainerKey, Trend]) -> tuple[float, ContainerKey]:
+    return -item[1].growth, item[0]
+
+
+def _trend_rows(watch: Watch) -> list[str]:
+    trends = sorted(memory_trends(watch).items(), key=_fastest_first)
+    if not trends:
+        return []
+    warmup = f"after a warm-up of {watch.limits.memory_warmup_s:g} s"
+    rows = ["", f"RSS in MiB; growth {warmup}, least squares.", ""]
+    every = f"Every {TREND_STEP_S // 60} min"
+    rows += [f"| Container | Start | End | Peak | Growth MiB/min | In its last half | {every} |"]
+    rows.append("|---|---|---|---|---|---|---|")
+    for key, trend in trends:
+        rss = f"{trend.first:.0f} | {trend.last:.0f} | {trend.peak:.0f}"
+        growth = f"{trend.growth:+.2f} | {trend.late_growth:+.2f}"
+        steps = " ".join(f"{step:.0f}" for step in trend.steps)
+        rows.append(f"| {_container(key)} | {rss} | {growth} | {steps} |")
+    return rows
+
+
 def _remarks(watch: Watch) -> list[str]:
     shares_by_key = watch.throttled.items()
     throttled = sorted(((share, key) for key, share in shares_by_key if share >= SHOWN_SHARE), reverse=True)
@@ -223,12 +312,12 @@ def _remarks(watch: Watch) -> list[str]:
 
 
 def report(watch: Watch, history_csv: str) -> str:
-    """Return the Markdown report of the watch: per component, then the timeline and remarks."""
+    """Return the Markdown report of the watch: per component, the memory trends, then the timeline and remarks."""
     recovery = "not all Ready again"
     if watch.recovered_s is not None:
         recovery = f"Ready again {watch.recovered_s:.0f} s after it"
     load = f"{_clock(watch.started)}-{_clock(watch.ended)}"
-    lines = [f"Load {load} UTC; {recovery}.", "", *_component_rows(watch)]
+    lines = [f"Load {load} UTC; {recovery}.", "", *_component_rows(watch), *_trend_rows(watch)]
     events = timeline(watch, history_csv)
     lines += ["", "| Time (UTC) | Event |", "|---|---|"] if events else ["", QUIET]
     lines += [f"| {_span(event)} | {event.text} |" for event in events]

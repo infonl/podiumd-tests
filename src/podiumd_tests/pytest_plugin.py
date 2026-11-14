@@ -71,11 +71,16 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     group.addoption("--podiumd-envs-dir", default=str(default_envs_dir()), help="profile directory (default: envs/)")
     group.addoption("--podiumd-run-tag", help="tag for created resources (default: ptest-<random>)")
     group.addoption("--keep-data", action="store_true", help="skip cleanup of created resources")
+    group.addoption("--auto-bootstrap", action="store_true", help="apply missing bootstrap steps instead of failing")
+    _add_perf_options(group)
+
+
+def _add_perf_options(group: pytest.OptionGroup) -> None:
     group.addoption("--perf-users", type=int, default=5, help="Locust users in the perf tier (default 5)")
     # 60 s: a single stall of a one-process app (a uWSGI worker restart) then stays below the p95.
     group.addoption("--perf-duration", default="60s", help="duration of the perf tier's Locust run (default 60s)")
     group.addoption("--perf-ramp", help="user counts of the perf tier's ramp, such as 2,4,8,16 (default: no ramp)")
-    group.addoption("--auto-bootstrap", action="store_true", help="apply missing bootstrap steps instead of failing")
+    group.addoption("--perf-soak", help="duration of the perf tier's soak, such as 60m (default: no soak)")
 
 
 ENVIRONMENT_KEY = pytest.StashKey[Environment]()

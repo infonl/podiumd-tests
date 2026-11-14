@@ -11,14 +11,14 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.config import REPO_ROOT
-from podiumd_tests.perf.availability import availability_limits
-from podiumd_tests.perf.availability import watched
+from podiumd_tests.perf.availability import watched_run
 from podiumd_tests.perf.availability_report import problems
 from podiumd_tests.perf.availability_report import report
 from podiumd_tests.perf.runs import ENDPOINTS
 from podiumd_tests.perf.runs import RAMP_MIX
 from podiumd_tests.perf.runs import api_user_steps
 from podiumd_tests.perf.runs import locust_command
+from podiumd_tests.perf.runs import mix_arguments
 from podiumd_tests.perf.runs import ramp_steps
 from podiumd_tests.perf.stats import HISTORY
 from podiumd_tests.perf.stats import STATS
@@ -27,8 +27,6 @@ from podiumd_tests.perf.stats import locust_csv
 from podiumd_tests.perf.stats import ramp_report
 from podiumd_tests.perf.stats import read_stats
 from podiumd_tests.perf.stats import thresholds
-from podiumd_tests.process import run_checked
-from podiumd_tests.process import run_process
 from podiumd_tests.wait import parse_duration
 
 if TYPE_CHECKING:
@@ -70,15 +68,17 @@ def test_ramp_finds_the_knee(
     need_bootstrap(*api_user_steps(podiumd_env))
     steps = ramp_steps(str(ramp))
     step_s = parse_duration(str(request.config.getoption("--perf-duration"))).total_seconds()
-    mix = [call for call in RAMP_MIX if ENDPOINTS[call] in urls]
     prefix = perf_dir / PREFIX
     run_time = f"{int(step_s * len(steps))}s"
     command = locust_command(LOCUSTFILE, str(steps[0]), run_time, prefix, podiumd_env.profile.name, urls=urls)
-    command += ["--stop-timeout", "60", "--podiumd-run-tag", run_tag, "--podiumd-calls", ",".join(mix)]
-    command += ["--podiumd-steps", str(ramp), "--podiumd-step-time", str(step_s)]
-    limits = availability_limits(REPO_ROOT / "perf.yaml")
-    with watched(podiumd_env, urls, ENDPOINTS.values(), limits) as watch:
-        run_checked(run_process, command, timeout=int(step_s * len(steps)) + 600)
+    command += [
+        *mix_arguments(RAMP_MIX, urls, run_tag),
+        "--podiumd-steps",
+        str(ramp),
+        "--podiumd-step-time",
+        str(step_s),
+    ]
+    watch = watched_run(podiumd_env, urls, ENDPOINTS.values(), command, timeout=int(step_s * len(steps)) + 600)
     stats = by_label(read_stats(locust_csv(prefix, STATS).read_text(encoding="utf-8")))
     knee = ramp_report(stats, lambda endpoint: thresholds(REPO_ROOT / "perf.yaml", endpoint))
     record_property("report", f"{knee}\n\n{report(watch, locust_csv(prefix, HISTORY).read_text(encoding='utf-8'))}")

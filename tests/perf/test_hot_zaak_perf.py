@@ -13,8 +13,7 @@ import pytest
 
 from podiumd_tests.config import REPO_ROOT
 from podiumd_tests.perf.availability import Watch
-from podiumd_tests.perf.availability import availability_limits
-from podiumd_tests.perf.availability import watched
+from podiumd_tests.perf.availability import watched_run
 from podiumd_tests.perf.availability_report import problems
 from podiumd_tests.perf.availability_report import report
 from podiumd_tests.perf.runs import HOT_ZAAK
@@ -33,8 +32,6 @@ from podiumd_tests.perf.stats import slowdown_limit
 from podiumd_tests.perf.stats import summed
 from podiumd_tests.perf.stats import thresholds
 from podiumd_tests.perf.stats import violations
-from podiumd_tests.process import run_checked
-from podiumd_tests.process import run_process
 from podiumd_tests.seed.openzaak import delete_zaak_at_cleanup
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.registry import ResourceRegistry
@@ -95,8 +92,7 @@ def fixture_hot_zaak(
     users = str(request.config.getoption("--perf-users"))
     command = locust_command(LOCUSTFILE, users, RUN_TIME, prefix, podiumd_env.profile.name, urls=urls)
     command += ["--podiumd-run-tag", run_tag, "--podiumd-zaak", zaak, "HotZaakUser"]
-    with watched(podiumd_env, urls, ["openzaak"], availability_limits(REPO_ROOT / "perf.yaml")) as watch:
-        run_checked(run_process, command, timeout=900)
+    watch = watched_run(podiumd_env, urls, ["openzaak"], command, timeout=900)
     stats = read_stats(locust_csv(prefix, STATS).read_text(encoding="utf-8"))
     failures = locust_csv(prefix, FAILURES).read_text(encoding="utf-8")
     return {number: found[HOT_ZAAK] for number, found in by_label(stats).items()}, failures, watch

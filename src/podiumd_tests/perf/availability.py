@@ -1,8 +1,8 @@
 """Availability of the loaded components during and after a Locust run, against perf.yaml's `availability`.
 
 During the run: each component's root at an interval, and the RSS and working set of its containers from the
-kubelet's cAdvisor. Afterwards: its pods Ready again within recovery_s, with no restart or replacement
-(workloads.disruptions).
+kubelet's cAdvisor; RSS as a series, for its trend. Afterwards: its pods Ready again within recovery_s, with no
+restart or replacement (workloads.disruptions).
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from typing import cast
 from podiumd_tests.background import running
 from podiumd_tests.capabilities import CLUSTER
 from podiumd_tests.components import deployed_components
+from podiumd_tests.config import REPO_ROOT
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import KubeError
@@ -31,6 +32,8 @@ from podiumd_tests.kubelet import node_metrics
 from podiumd_tests.kubelet import quantity_bytes
 from podiumd_tests.kubelet import quantity_cores
 from podiumd_tests.perf.stats import perf_settings
+from podiumd_tests.process import run_checked
+from podiumd_tests.process import run_process
 from podiumd_tests.responses import root_problem
 from podiumd_tests.wait import WaitTimeoutError
 from podiumd_tests.wait import wait_until
@@ -62,6 +65,8 @@ NO_CLUSTER = "pods, restarts and memory: the environment has no cluster access"
 
 # A value per container.
 type Values = dict[ContainerKey, float]
+# Readings of a value: (Unix seconds, value).
+type Series = list[tuple[float, float]]
 
 
 @dataclass(frozen=True)
@@ -72,6 +77,8 @@ class Limits:
     recovery_s: float
     min_available: float
     max_memory_ratio: float
+    memory_warmup_s: float
+    max_rss_growth_mib_per_min: float
 
 
 def availability_limits(path: Path) -> Limits:
@@ -82,6 +89,8 @@ def availability_limits(path: Path) -> Limits:
         float(data["recovery_s"]),
         float(data["min_available"]),
         float(data["max_memory_ratio"]),
+        float(data["memory_warmup_s"]),
+        float(data["max_rss_growth_mib_per_min"]),
     )
 
 
@@ -103,9 +112,9 @@ class Watch:  # pylint: disable=too-many-instance-attributes  # one field per me
     started: float = 0
     ended: float = 0
     samples: list[Sample] = field(default_factory=list[Sample])
-    # Highest RSS and working set seen per container, in bytes, and its memory limit (None: no limit). Only RSS
+    # RSS readings and highest working set per container, in bytes, and its memory limit (None: no limit). Only RSS
     # (anonymous memory) counts against the limit: the kernel reclaims the page cache in the working set first.
-    rss: Values = field(default_factory=dict[ContainerKey, float])
+    rss_series: dict[ContainerKey, Series] = field(default_factory=dict[ContainerKey, Series])
     working_set: Values = field(default_factory=dict[ContainerKey, float])
     memory_limits: dict[ContainerKey, float | None] = field(default_factory=dict[ContainerKey, float | None])
     # In cores; None: no limit.
@@ -118,6 +127,11 @@ class Watch:  # pylint: disable=too-many-instance-attributes  # one field per me
     recovered_s: float | None = None
     # What was not measured, and why.
     notes: list[str] = field(default_factory=list[str])
+
+    @property
+    def rss(self) -> Values:
+        """Return the highest RSS per container."""
+        return {key: max(value for _at, value in series) for key, series in self.rss_series.items()}
 
 
 def is_loaded(pod: str, components: frozenset[str]) -> bool:
@@ -198,16 +212,18 @@ class _Cluster:
             return None
 
     def sample_memory(self, stop: threading.Event) -> None:
-        """Keep the highest RSS and working set per loaded container until stop is set."""
-        peaks = (self.watch.rss, self.watch.working_set)
+        """Record the RSS and keep the highest working set per loaded container until stop is set."""
         while True:
             try:
-                readings = self.metrics(CADVISOR, (RSS, WORKING_SET))
+                rss, working_set = self.metrics(CADVISOR, (RSS, WORKING_SET))
             except KubeError as error:
                 self.watch.notes.append(f"memory: kubelet cAdvisor metrics unreadable (needs get nodes/proxy): {error}")
                 return
-            for peak, values in zip(peaks, readings, strict=True):
-                _keep_highest(peak, values)
+            now = time.time()
+            for key, value in rss.items():
+                self.watch.rss_series.setdefault(key, []).append((now, value))
+            for key, value in working_set.items():
+                self.watch.working_set[key] = max(value, self.watch.working_set.get(key, 0))
             if stop.wait(self.watch.limits.health_interval_s):
                 return
 
@@ -231,11 +247,6 @@ class _Cluster:
         cpu_after = None if self.cpu_before is None else self.cpu_counters()
         if self.cpu_before is not None and cpu_after is not None:
             watch.throttled = throttled_shares(self.cpu_before, cpu_after)
-
-
-def _keep_highest(peak: Values, values: Values) -> None:
-    for key, value in values.items():
-        peak[key] = max(value, peak.get(key, 0))
 
 
 def _stop(threads: list[threading.Thread], stop: threading.Event, watch: Watch) -> None:
@@ -267,3 +278,12 @@ def watched(env: Environment, urls: Mapping[str, str], components: Iterable[str]
         yield watch
     if cluster is not None:
         cluster.recover()
+
+
+def watched_run(
+    env: Environment, urls: Mapping[str, str], components: Iterable[str], command: Sequence[str], timeout: int
+) -> Watch:
+    """Run the command, a Locust run, while `watched` measures the components against perf.yaml; return the watch."""
+    with watched(env, urls, components, availability_limits(REPO_ROOT / "perf.yaml")) as watch:
+        run_checked(run_process, command, timeout=timeout)
+    return watch

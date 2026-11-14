@@ -18,8 +18,7 @@ import pytest
 
 from podiumd_tests.config import REPO_ROOT
 from podiumd_tests.perf.availability import Watch
-from podiumd_tests.perf.availability import availability_limits
-from podiumd_tests.perf.availability import watched
+from podiumd_tests.perf.availability import watched_run
 from podiumd_tests.perf.availability_report import capacity
 from podiumd_tests.perf.availability_report import problems
 from podiumd_tests.perf.availability_report import report
@@ -27,6 +26,7 @@ from podiumd_tests.perf.runs import ENDPOINTS
 from podiumd_tests.perf.runs import KEYCLOAK_PER_VCPU
 from podiumd_tests.perf.runs import api_user_steps
 from podiumd_tests.perf.runs import locust_command
+from podiumd_tests.perf.runs import mix_arguments
 from podiumd_tests.perf.stats import HISTORY
 from podiumd_tests.perf.stats import SETTINGS
 from podiumd_tests.perf.stats import STATS
@@ -36,8 +36,6 @@ from podiumd_tests.perf.stats import read_stats
 from podiumd_tests.perf.stats import slowdown_limit
 from podiumd_tests.perf.stats import thresholds
 from podiumd_tests.perf.stats import violations
-from podiumd_tests.process import run_checked
-from podiumd_tests.process import run_process
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.seed.volume import counts
 
@@ -74,10 +72,8 @@ def fixture_load(
     settings = {"users": users, "duration": duration, "calls": calls, "volume": counts(podiumd_env)}
     (directory / SETTINGS).write_text(f"{json.dumps(settings, sort_keys=True)}\n", encoding="utf-8")
     command = locust_command(LOCUSTFILE, users, duration, directory / "locust", podiumd_env.profile.name, urls=urls)
-    # Users finish their round, so every write is deleted.
-    command += ["--stop-timeout", "60", "--podiumd-run-tag", run_tag, "ApiUser"]
-    with watched(podiumd_env, urls, ENDPOINTS.values(), availability_limits(REPO_ROOT / "perf.yaml")) as watch:
-        run_checked(run_process, command, timeout=600)
+    command += [*mix_arguments(calls, urls, run_tag), "ApiUser"]
+    watch = watched_run(podiumd_env, urls, ENDPOINTS.values(), command, timeout=600)
     return read_stats((directory / STATS).read_text(encoding="utf-8")), watch
 
 

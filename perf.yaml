@@ -23,3 +23,8 @@ availability:
   recovery_s: 60
   min_available: 0.99
   max_memory_ratio: 0.9
+  # No container's RSS keeps growing: a least-squares fit over the readings after memory_warmup_s, and over the last
+  # half of those, both above max_rss_growth_mib_per_min. 1 MiB/min passes a 1 GiB limit within a day. A run
+  # shorter than twice the warm-up has no trend.
+  memory_warmup_s: 300
+  max_rss_growth_mib_per_min: 1

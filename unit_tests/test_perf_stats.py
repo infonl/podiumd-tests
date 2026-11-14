@@ -7,6 +7,7 @@ from podiumd_tests.perf.runs import LOGIN_USERS
 from podiumd_tests.perf.runs import api_user_steps
 from podiumd_tests.perf.runs import locust_command
 from podiumd_tests.perf.runs import locust_environment
+from podiumd_tests.perf.runs import mix_arguments
 from podiumd_tests.perf.runs import ramp_steps
 from podiumd_tests.perf.runs import ramp_users
 from podiumd_tests.perf.stats import FAILURES
@@ -133,6 +134,11 @@ def test_ramp_steps_are_ascending_user_counts():
     for wrong in ("0,2", "4,2", "2,2"):
         with pytest.raises(ValueError, match="ascending user counts"):
             ramp_steps(wrong)
+
+
+def test_mix_arguments_name_the_calls_whose_component_the_environment_has():
+    arguments = mix_arguments(("oz_zaken", "zac_search", "ok2_partijen"), {"openzaak": "u", "openklant": "u"}, "t")
+    assert arguments == ["--stop-timeout", "60", "--podiumd-run-tag", "t", "--podiumd-calls", "oz_zaken,ok2_partijen"]
 
 
 def test_ramp_users_follow_the_step_at_the_run_time():
