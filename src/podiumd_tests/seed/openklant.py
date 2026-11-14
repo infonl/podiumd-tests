@@ -131,10 +131,11 @@ def make_digitaal_adres(  # noqa: PLR0913  # the address and its owner
     betrokkene: JsonObject | None = None,
     *,
     standaard: bool | None = None,
+    **fields: object,
 ) -> JsonObject:
     """Create an e-mail address, or telefoonnummer when adres has no @, of a partij or betrokkene.
 
-    standaard: isStandaardAdres; by default a partij's address is its standard address.
+    standaard: isStandaardAdres; by default a partij's address is its standard address. fields override the rest.
     """
     body: dict[str, object] = {
         "verstrektDoorBetrokkene": ref(betrokkene) if betrokkene else None,
@@ -143,6 +144,7 @@ def make_digitaal_adres(  # noqa: PLR0913  # the address and its owner
         "soortDigitaalAdres": "email" if "@" in adres else "telefoonnummer",
         "omschrijving": registry.tagged("adres"),
         "isStandaardAdres": partij is not None if standaard is None else standaard,
+        **fields,
     }
     return _create(openklant, registry, "digitaleadressen", body)
 

@@ -1,11 +1,12 @@
-"""A one-step test form in Open Formulieren with one registration backend.
+"""A one-step test form in Open Formulieren with at most one registration backend.
 
 Actions: status, apply (recreates), remove (needs only slug), list (the slugs of the forms, steps and
 products whose name starts with param prefix). Params: action, slug, components (Form.io
-components of the step), registration ({"backend", "options"}; "api_group" names the ZGW
+components of the step), registration ({"backend", "options"}, or {} for none; "api_group" names the ZGW
 API group whose pk goes into the options, "objects_api" is the Objecten API root of the Objects
-API group whose identifier goes into the options), auth_backends (login plugins, e.g. digid_oidc),
-settings (other Form fields); apply clears Open Formulieren's catalogi lookup cache; payment (optional {"backend": ogone-legacy or worldline, "merchant":
+API group whose identifier goes into the options), variables (user-defined form variables: {"key",
+"data_type", "prefill_plugin", "prefill_options"}; an option of GROUPS is the API root of the group's service),
+auth_backends (login plugins, e.g. digid_oidc), settings (other Form fields); apply clears Open Formulieren's catalogi lookup cache; payment (optional {"backend": ogone-legacy or worldline, "merchant":
 an Ogone merchant's label or a Worldline merchant's pspid, "price"}: a product named after the form
 carries the price). Submissions of the form are test data and go with it.
 """
@@ -15,9 +16,7 @@ def run(params):
     from openforms.forms.models import Form
     from openforms.forms.models import FormAuthenticationBackend
     from openforms.forms.models import FormDefinition
-    from openforms.forms.models import FormRegistrationBackend
     from openforms.forms.models import FormStep
-    from openforms.forms.models import FormVariable
     from openforms.products.models import Product
     from openforms.submissions.models import Submission
 
@@ -51,15 +50,8 @@ def run(params):
     payment_fields = _payment(params, slug)
     form = Form.objects.create(slug=slug, name=slug, active=True, **params["settings"], **payment_fields)
     FormStep.objects.create(form=form, form_definition=definition, order=0, slug="stap")
-    FormVariable.objects.create_for_form(form)
-    registration = params["registration"]
-    FormRegistrationBackend.objects.create(
-        form=form,
-        key=registration["backend"],
-        name=registration["backend"],
-        backend=registration["backend"],
-        options=_options(registration),
-    )
+    _add_variables(form, params.get("variables", []))
+    _add_registration(form, params["registration"])
     for backend in params["auth_backends"]:
         FormAuthenticationBackend.objects.create(form=form, backend=backend, options={})
     # Open Formulieren caches catalogus and zaaktype lookups for 12 hours: after a re-bootstrap it would register
@@ -71,6 +63,20 @@ def run(params):
     return {"present": True}
 
 
+def _add_registration(form, registration):
+    """Give the form its registration backend, if any."""
+    from openforms.forms.models import FormRegistrationBackend
+
+    if registration:
+        FormRegistrationBackend.objects.create(
+            form=form,
+            key=registration["backend"],
+            name=registration["backend"],
+            backend=registration["backend"],
+            options=_options(registration),
+        )
+
+
 def _options(registration):
     """Return the registration backend's options with the pk or identifier of the API group they name."""
     from openforms.registrations.contrib.zgw_apis.models import ZGWApiGroupConfig
@@ -80,11 +86,48 @@ def _options(registration):
         group = ZGWApiGroupConfig.objects.filter(identifier=registration["api_group"]).first()
         options["zgw_api_group"] = group.pk if group else None
     if "objects_api" in registration:
-        from openforms.contrib.objects_api.models import ObjectsAPIGroupConfig
-
-        objects = ObjectsAPIGroupConfig.objects.filter(objects_service__api_root=registration["objects_api"]).first()
-        options["objects_api_group"] = objects.identifier if objects else None
+        options["objects_api_group"] = _group("objects_api_group", registration["objects_api"])
     return options
+
+
+# Option: (module, model, service field) of an API group.
+GROUPS = {
+    "objects_api_group": ("openforms.contrib.objects_api.models", "ObjectsAPIGroupConfig", "objects_service"),
+    "customer_interactions_api_group": (
+        "openforms.contrib.customer_interactions.models",
+        "CustomerInteractionsAPIGroupConfig",
+        "customer_interactions_service",
+    ),
+}
+
+
+def _group(option, api_root):
+    """Return the identifier of the option's API group whose service has the API root, None when there is none."""
+    from importlib import import_module
+
+    module, model, field = GROUPS[option]
+    group = getattr(import_module(module), model).objects.filter(**{f"{field}__api_root": api_root}).first()
+    return group.identifier if group else None
+
+
+def _add_variables(form, variables):
+    """Give the form the variables of its components and the user-defined variables."""
+    from openforms.forms.models import FormVariable
+
+    FormVariable.objects.create_for_form(form)
+    for variable in variables:
+        options = dict(variable.get("prefill_options", {}))
+        for option in GROUPS.keys() & options.keys():
+            options[option] = _group(option, options[option])
+        FormVariable.objects.create(
+            form=form,
+            source="user_defined",
+            key=variable["key"],
+            name=variable["key"],
+            data_type=variable["data_type"],
+            prefill_plugin=variable.get("prefill_plugin", ""),
+            prefill_options=options,
+        )
 
 
 def _status(params, forms):

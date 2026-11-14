@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import re
+import secrets
+
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
+import pytest
+
 from podiumd_tests.auth.keycloak import form_login
+from podiumd_tests.auth.keycloak_admin import for_environment
 from podiumd_tests.bootstrap.steps import OF_REDACTEUR
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
@@ -20,11 +26,13 @@ from podiumd_tests.wait import Clock
 from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from collections.abc import Mapping
     from collections.abc import Sequence
 
     import requests
 
+    from podiumd_tests.bootstrap.snippet_step import SnippetStep
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
@@ -61,15 +69,59 @@ def log_in(http: requests.Session, base_url: str, slug: str, method: str, user: 
         raise AssertionError(msg)
 
 
-def start_submission(http: requests.Session, base_url: str, slug: str) -> tuple[JsonObject, dict[str, str]]:
-    """Start an anonymous submission of the form; returns it and the headers its writes need."""
-    form_url = f"{base_url}/{slug}/"
+def new_submission(
+    http: requests.Session, base_url: str, slug: str, **fields: object
+) -> tuple[requests.Response, dict[str, str]]:
+    """POST a new submission of the form as the session; Open Formulieren's answer and the headers writes need.
+
+    fields: further fields of the submission, e.g. initialDataReference.
+    """
     form, headers = form_and_headers(http, base_url, slug)
-    submission = _json(
-        http.post(f"{base_url}/api/v2/submissions", json={"form": form["url"], "formUrl": form_url}, headers=headers),
-        HTTPStatus.CREATED,
-    )
-    return submission, headers
+    body = {"form": form["url"], "formUrl": f"{base_url}/{slug}/", **fields}
+    return http.post(f"{base_url}/api/v2/submissions", json=body, headers=headers), headers
+
+
+def start_submission(
+    http: requests.Session, base_url: str, slug: str, **fields: object
+) -> tuple[JsonObject, dict[str, str]]:
+    """Start a submission of the form as the session (new_submission); returns it and the headers its writes need."""
+    response, headers = new_submission(http, base_url, slug, **fields)
+    return _json(response, HTTPStatus.CREATED), headers
+
+
+def log_in_as(
+    env: Environment, registry: ResourceRegistry, slug: str, method: str, identity: Mapping[str, list[str]]
+) -> requests.Session:
+    """Return a session of a new Keycloak user with the identity attributes, logged in on the form.
+
+    Cleanup deletes the user.
+    """
+    admin = for_environment(env)
+    username, password = f"{slug}-login-{secrets.token_hex(3)}", admin.new_password()
+    user_id = admin.create_user(username, password, dict(identity))
+    # A fresh admin: the master realm's tokens expire within minutes.
+    registry.add(f"keycloak user {username}", lambda: for_environment(env).delete_user(user_id))
+    http = env.session()
+    log_in(http, env.profile.urls["openformulieren"], slug, method, (username, password))
+    return http
+
+
+def logged_in_submission(
+    env: Environment,
+    registry: ResourceRegistry,
+    slug: str,
+    method: str,
+    identity: Mapping[str, list[str]],
+    **fields: object,
+) -> tuple[requests.Session, JsonObject, dict[str, str]]:
+    """Start a submission of the form as a new user (log_in_as); the session, the submission and its headers.
+
+    Cleanup deletes the user and the submission.
+    """
+    http = log_in_as(env, registry, slug, method, identity)
+    submission, headers = start_submission(http, env.profile.urls["openformulieren"], slug, **fields)
+    forget_submission(env, registry, str(submission["id"]))
+    return http, submission, headers
 
 
 def submit(  # noqa: PLR0913  # one flow
@@ -150,6 +202,46 @@ def submission_summary(
         field for step in entries(expect_status(response, HTTPStatus.OK).json()) for field in entries(step["data"])
     ]
     return [(str(field["name"]), field.get("value")) for field in fields]
+
+
+def communication_preferences(
+    http: requests.Session, base_url: str, submission: JsonObject, headers: dict[str, str], component: str
+) -> list[JsonObject]:
+    """Return the addresses a customerProfile component offers: per type its options and the preferred one."""
+    url = (
+        f"{base_url}/api/v2/prefill/plugins/customer-interactions/communication-preferences/"
+        f"{submission['id']}/component/{component}"
+    )
+    return entries(expect_status(http.get(url, headers=headers), HTTPStatus.OK).json())
+
+
+# The code in Open Formulieren's verification mail (template emails/email_verification/request.html).
+VERIFICATION_CODE = re.compile(r"<strong>\s*([A-Z2-9]{6})\s*</strong>")
+
+
+def verify_email(
+    http: requests.Session,
+    submission: JsonObject,
+    headers: dict[str, str],
+    field: tuple[str, str],
+    read_mail: Callable[[str], str],
+) -> None:
+    """Verify the e-mail address of the submission's field (component key, address) with the code it is mailed.
+
+    read_mail returns the HTML of the first mail to an address.
+    """
+    component, email = field
+    body = {"submission": submission["url"], "componentKey": component, "email": email}
+    base_url = str(submission["url"]).split("/api/v2/", maxsplit=1)[0]
+    verifications = f"{base_url}/api/v2/submissions/email-verifications"
+    expect_status(http.post(verifications, json=body, headers=headers), HTTPStatus.CREATED)
+    mail = read_mail(email)
+    code = VERIFICATION_CODE.search(mail)
+    if code is None:
+        msg = f"no verification code in Open Formulieren's mail to {email}: {mail[:300]}"
+        raise AssertionError(msg)
+    verified = http.post(f"{verifications}/verify", json={**body, "code": code[1]}, headers=headers)
+    expect_status(verified, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
 
 
 # The body of _complete, as Verzenden sends it.
@@ -291,17 +383,20 @@ def make_form(  # noqa: PLR0913, PLR0917  # mirrors the snippet's parameters
     registration: Mapping[str, object],
     auth_backends: tuple[str, ...] = (),
     payment: Mapping[str, object] | None = None,
+    variables: Sequence[Mapping[str, object]] = (),
     **settings: object,
 ) -> None:
     """Create a one-step test form (snippet openformulieren_form) that cleanup deletes with its submissions.
 
-    payment: {"backend", "merchant", "price"} for a form that asks for a payment.
+    registration: {} for none. payment: {"backend", "merchant", "price"} for a form that asks for a payment.
+    variables: user-defined form variables, e.g. one a prefill plugin fills.
     """
     deployment = env.deployment_for("openformulieren")
     params: dict[str, object] = {
         "slug": slug,
         "components": [dict(component) for component in components],
         "registration": dict(registration),
+        "variables": [dict(variable) for variable in variables],
         "auth_backends": list(auth_backends),
         "payment": dict(payment or {}),
     }
@@ -359,6 +454,23 @@ def set_logic_rules(editor: requests.Session, base_url: str, form: JsonObject, r
     """Replace the form's logic rules, as the form designer saves them."""
     response = editor.put(f"{base_url}/api/v2/forms/{form['uuid']}/logic-rules", json=[dict(rule) for rule in rules])
     expect_status(response, HTTPStatus.OK)
+
+
+def need_opt_in(env: Environment, need_bootstrap: Callable[..., None], step: SnippetStep, *also: str) -> None:
+    """Skip where the profile does not allow the opt-in bootstrap step; else need it and the steps also."""
+    if not env.profile.is_allowed(str(step.opt_in)):
+        pytest.skip(
+            f"profile setting {step.opt_in} is off on {env.profile.name}: set it and run bootstrap step {step.name}"
+        )
+    need_bootstrap(step.name, *also)
+
+
+def objects_token(env: Environment, api_root: str) -> str:
+    """Return the Objecten token of Open Formulieren's Objects API group on the API root; "" when it has none."""
+    found = run_snippet(
+        env.kube, env.deployment_for("openformulieren"), "openformulieren_objects_token", {"api_root": api_root}
+    )
+    return str(cast("dict[str, object]", found)["token"])
 
 
 def redacteur_session(env: Environment) -> requests.Session:

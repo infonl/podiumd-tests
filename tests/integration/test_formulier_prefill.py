@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.auth.keycloak_admin import for_environment
 from podiumd_tests.basisregistraties import BRP_GEHEIMHOUDING
 from podiumd_tests.basisregistraties import BRP_OVERLEDEN
 from podiumd_tests.basisregistraties import EREBOS
@@ -19,10 +18,9 @@ from podiumd_tests.basisregistraties import KVK_RECHTSVORMEN
 from podiumd_tests.bootstrap.steps import OF_PREFILL
 from podiumd_tests.bootstrap.steps import ZGW_REGISTRATION
 from podiumd_tests.json_data import entries
-from podiumd_tests.openformulieren import forget_submission
-from podiumd_tests.openformulieren import log_in
+from podiumd_tests.openformulieren import logged_in_submission
 from podiumd_tests.openformulieren import make_form
-from podiumd_tests.openformulieren import start_submission
+from podiumd_tests.openformulieren import need_opt_in
 from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
@@ -73,12 +71,7 @@ INWONERS = {
 @pytest.fixture(autouse=True)
 def prefill_linked(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> None:
     """Skip where the profile does not let bootstrap link Open Formulieren's prefill services."""
-    if not podiumd_env.profile.is_allowed(str(OF_PREFILL.opt_in)):
-        pytest.skip(
-            f"profile setting {OF_PREFILL.opt_in} is off on {podiumd_env.profile.name}: Open Formulieren's BRP and "
-            f"KvK prefill are unlinked; set it and run bootstrap step {OF_PREFILL.name}"
-        )
-    need_bootstrap(OF_PREFILL.name, "openformulieren-oidc-mock")
+    need_opt_in(podiumd_env, need_bootstrap, OF_PREFILL, "openformulieren-oidc-mock")
 
 
 def prefill_after_login(
@@ -90,17 +83,9 @@ def prefill_after_login(
     identity: Mapping[str, list[str]],
 ) -> JsonObject:
     """Log a new Keycloak user with the identity attributes in on a new form with fields; the step's prefilled data."""
-    base = podiumd_env.profile.urls["openformulieren"]
     slug = registry.tagged(name)
     make_form(podiumd_env, registry, slug, fields, ZGW_REGISTRATION, (method,))
-    admin = for_environment(podiumd_env)
-    username, password = registry.tagged(f"{name}-login"), admin.new_password()
-    user_id = admin.create_user(username, password, dict(identity))
-    registry.add(f"keycloak user {username}", lambda: admin.delete_user(user_id))
-    http = podiumd_env.session()
-    log_in(http, base, slug, method, (username, password))
-    submission, _ = start_submission(http, base, slug)
-    forget_submission(podiumd_env, registry, str(submission["id"]))
+    http, submission, _ = logged_in_submission(podiumd_env, registry, slug, method, identity)
     step = expect_status(http.get(str(entries(submission["steps"])[0]["url"])), HTTPStatus.OK).json()
     return dict(step["data"])
 

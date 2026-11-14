@@ -104,6 +104,34 @@ def test_objecttype_is_run_tagged_and_deleted_by_its_snippet(fake_http, monkeypa
     assert ran == [("objecttypen-deploy", "objecttypen_tagged", {"action": "delete", "name": name})]
 
 
+@pytest.mark.parametrize(("notes", "error"), [([], None), (["1 granted key(s) are no Objecten token"], "no Objecten")])
+def test_granted_objecttype_is_published_with_write_rights_for_the_tokens(monkeypatch, notes, error):
+    ran = []
+
+    def run(_kube, deployment, name, params):
+        ran.append((deployment, name, params))
+        return {"present": True, "uuid": "u1", "notes": notes}
+
+    monkeypatch.setattr(objecten_module, "run_snippet", run)
+    monkeypatch.setattr("podiumd_tests.seed.registry.run_snippet", run)
+    registry = ResourceRegistry("ptest-2611111200abcd")
+    env = SimpleNamespace(kube=object(), deployment_for=lambda component: f"{component}-deploy")
+    if error:
+        with pytest.raises(AssertionError, match=error):
+            objecten_module.make_granted_objecttype(env, registry, {"type": "object"}, ["t1", "t2"])  # pyright: ignore[reportArgumentType]
+        return
+    name = objecten_module.make_granted_objecttype(env, registry, {"type": "object"}, ["t1", "t2"])  # pyright: ignore[reportArgumentType]
+    assert name.startswith("ptest-2611111200abcd-objecttype-")
+    params = ran[0][2]
+    assert (ran[0][:2], params["grants"], params["schema"]) == (
+        ("objecttypen-deploy", "objecttypen_published"),
+        {"t1": "read_and_write", "t2": "read_and_write"},
+        {"type": "object"},
+    )
+    registry.cleanup()
+    assert ran[-1] == ("objecttypen-deploy", "objecttypen_tagged", {"action": "delete", "name": name})
+
+
 def test_named_objecttypes_and_newest_version(fake_http):
     versions = [f"{API}/objecttypes/a/versions/{number}" for number in (2, 10, 9)]
     fake_http(

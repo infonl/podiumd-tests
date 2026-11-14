@@ -12,11 +12,11 @@ versions is not counted.
 | --- | --- | --- | --- |
 | smoke | 256 | 41 | 10 |
 | component | 993 | 590 | 76 |
-| integration | 187 | 123 | 14 |
+| integration | 189 | 125 | 14 |
 | perf | 55 | 4 | 0 |
-| **full tier** | **1395** | **723** |  |
+| **full tier** | **1397** | **725** |  |
 
-Unit tests (`unit_tests/`, functions): 876. Perf endpoints (`perf/runs.py`): 22.
+Unit tests (`unit_tests/`, functions): 882. Perf endpoints (`perf/runs.py`): 22.
 
 ## Per area
 
@@ -56,10 +56,12 @@ Unit tests (`unit_tests/`, functions): 876. Perf endpoints (`perf/runs.py`): 22.
 | integration | continuiteit | 19 | 10 |
 | integration | continuiteit_belasting | 3 | 3 |
 | integration | formulier_betaling | 19 | 6 |
+| integration | formulier_klantprofiel | 1 | 1 |
 | integration | formulier_logica | 1 | 1 |
 | integration | formulier_login | 4 | 3 |
 | integration | formulier_mail | 2 | 2 |
 | integration | formulier_medeondertekening | 1 | 1 |
+| integration | formulier_objecten | 1 | 1 |
 | integration | formulier_opschonen | 1 | 1 |
 | integration | formulier_pauzeren | 2 | 2 |
 | integration | formulier_prefill | 5 | 2 |
@@ -101,7 +103,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | draaiboek | 91 |
 | external | 242 |
 | podiumd-tests | 514 |
-| upstream | 219 |
+| upstream | 221 |
 
 ## Expected failures per known issue
 

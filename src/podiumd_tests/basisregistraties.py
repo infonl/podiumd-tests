@@ -28,6 +28,9 @@ EREBOS = "999990019"
 # Kierkegaard, born 1931-07-06, another person of the BRP test set; only the ontvangstbevestiging test of an
 # initiator gives it an Open Klant partij.
 KIERKEGAARD = "999990020"
+# Merel Kooyman, a person of the BRP test set; only the Open Formulieren klantprofiel test gives it an Open Klant
+# partij.
+KOOYMAN = "999993847"
 # Lukas Klamer, a person of the BRP test set that only the ZAC e-mail test gives an Open Klant partij.
 KLAMER = "999991723"
 # Persons of the BRP test set with one edge case each.

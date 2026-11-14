@@ -18,6 +18,7 @@ from podiumd_tests.zac import notificatie
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from collections.abc import Sequence
 
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
@@ -74,6 +75,25 @@ def make_objecttype(env: Environment, objecttypen: ApiClient, registry: Resource
     objecttype = objecttypen.post("objecttypes", {"name": name, "namePlural": name})
     OBJECTTYPES.forget(env, registry, name)
     return objecttypen.post(f"{objecttype['url']}/versions", {"jsonSchema": ANY_OBJECT, "status": status})
+
+
+def make_granted_objecttype(
+    env: Environment, registry: ResourceRegistry, schema: Mapping[str, object], tokens: Sequence[str]
+) -> str:
+    """Create a run-tagged objecttype with a published version 1 whose Objecten tokens may write it; its name.
+
+    Through Django: only there Open Object grants a token rights on an objecttype.
+    """
+    name = registry.tagged(f"objecttype-{secrets.token_hex(3)}")
+    OBJECTTYPES.forget(env, registry, name)
+    grants = dict.fromkeys(tokens, "read_and_write")
+    params: dict[str, object] = {"action": "apply", "name": name, "schema": dict(schema), "grants": grants}
+    found = run_snippet(env.kube, env.deployment_for("objecttypen"), "objecttypen_published", params)
+    notes = cast("dict[str, list[str]]", found).get("notes")
+    if notes:
+        msg = f"objecttype {name}: {'; '.join(notes)}"
+        raise AssertionError(msg)
+    return name
 
 
 def make_object(

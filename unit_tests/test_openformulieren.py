@@ -11,6 +11,7 @@ import requests
 
 from podiumd_tests import openformulieren
 from podiumd_tests import wait
+from podiumd_tests.bootstrap.steps import OF_PREFILL
 from podiumd_tests.bootstrap.steps import OF_REDACTEUR
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.credentials import env_var_name
@@ -276,3 +277,79 @@ def test_log_in_starts_the_forms_login_method_and_fails_on_a_refused_callback(fa
     assert started == [(f"{OF}/auth/klacht/digid_oidc/start?next={OF}/klacht/", "u", "p")]
     with pytest.raises(AssertionError, match="form klacht has no login method eherkenning_oidc"):
         openformulieren.login_url(requests.Session(), OF, "klacht", "eherkenning_oidc")
+
+
+def test_make_form_sends_its_user_defined_variables(env, fake_runner):
+    snippet_answers(fake_runner, None)
+    variable = {"key": "v", "data_type": "array", "prefill_plugin": "communication_preferences"}
+    make_form(env, ResourceRegistry("ptest-abc", keep=True), "ptest-form", [], {}, variables=[variable])
+    params = fake_runner.stdins[-1] or ""
+    assert '"registration": {}' in params
+    assert json.dumps([variable]) in params
+
+
+def test_communication_preferences_and_email_verification(fake_http):
+    submission = {"id": "s1", "url": f"{OF}/api/v2/submissions/s1"}
+    preferences = [{"type": "email", "options": [{"address": "a@x.invalid", "is_verified": True}], "preferred": None}]
+    sent = fake_http(
+        {
+            "GET /api/v2/prefill/plugins/customer-interactions/communication-preferences/s1/component/p": (
+                200,
+                preferences,
+            ),
+            "POST /api/v2/submissions/email-verifications": (201, {}),
+            "POST /api/v2/submissions/email-verifications/verify": (204, {}),
+        }
+    )
+    http = requests.Session()
+    assert openformulieren.communication_preferences(http, OF, submission, {}, "p") == preferences
+    mails = {"b@x.invalid": "<p><strong> AB23CD </strong></p>", "c@x.invalid": "<p>no code</p>"}
+    openformulieren.verify_email(http, submission, {}, ("p", "b@x.invalid"), mails.get)  # pyright: ignore[reportArgumentType]
+    assert json.loads(sent[-1].body) == {
+        "submission": submission["url"],
+        "componentKey": "p",
+        "email": "b@x.invalid",
+        "code": "AB23CD",
+    }
+    with pytest.raises(AssertionError, match=r"no verification code in Open Formulieren's mail to c@x\.invalid"):
+        openformulieren.verify_email(http, submission, {}, ("p", "c@x.invalid"), mails.get)  # pyright: ignore[reportArgumentType]
+
+
+def test_logged_in_submission_logs_a_new_user_in_and_cleanup_deletes_both(fake_http, env, fake_runner, monkeypatch):
+    snippet_answers(fake_runner, None)
+    sent = fake_http(answers({}))
+    deleted = []
+    admin = SimpleNamespace(
+        new_password=lambda: "pw",
+        create_user=lambda username, password, attributes: f"{username}|{password}|{attributes['bsn'][0]}",
+        delete_user=deleted.append,
+    )
+    monkeypatch.setattr(openformulieren, "for_environment", lambda _env: admin)
+    logins = []
+    monkeypatch.setattr(
+        openformulieren, "log_in", lambda _http, base, slug, method, _user: logins.append((base, slug, method))
+    )
+    registry = ResourceRegistry("ptest-abc")
+    _, submission, _ = openformulieren.logged_in_submission(
+        env, registry, "klacht", "digid_oidc", {"bsn": ["1"]}, initialDataReference="o1"
+    )
+    assert (submission["id"], logins) == ("s1", [(OF, "klacht", "digid_oidc")])
+    assert json.loads(sent[-1].body)["initialDataReference"] == "o1"
+    assert registry.cleanup() == []
+    assert len(deleted) == 1
+    assert re.fullmatch(r"klacht-login-[0-9a-f]{6}\|pw\|1", deleted[0])
+
+
+def test_need_opt_in_skips_unless_the_profile_allows_the_step(env_factory, profile_factory):
+    needed = []
+    allowed = env_factory(profile_factory(settings={"of_prefill": True}))
+    openformulieren.need_opt_in(allowed, lambda *steps: needed.extend(steps), OF_PREFILL, "openformulieren-form")
+    assert needed == ["openformulieren-prefill", "openformulieren-form"]
+    with pytest.raises(pytest.skip.Exception, match="profile setting of_prefill is off on test-env"):
+        openformulieren.need_opt_in(env_factory(profile_factory()), needed.append, OF_PREFILL)
+
+
+def test_objects_token_is_what_the_snippet_finds(env_factory, profile_factory, fake_runner):
+    snippet_answers(fake_runner, {"token": "t0ken"})
+    env = env_factory(profile_factory(urls={"openformulieren": OF}))
+    assert openformulieren.objects_token(env, "https://objecten.test/api/v2/") == "t0ken"
