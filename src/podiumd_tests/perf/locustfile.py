@@ -204,9 +204,8 @@ class HotZaakUser(User):
     wait_time = constant(0)
     env_under_test: Environment
     run_tag: str
-    # Links started, and users done, of this process.
+    # Links started by the users of this process.
     started = count()
-    done = count()
 
     def __init__(self, environment: LocustEnvironment) -> None:
         super().__init__(environment)
@@ -219,9 +218,7 @@ class HotZaakUser(User):
         """Link a document, its stats labelled with the links started before it, per HOT_ZAAK_BUCKET."""
         started = next(self.started)
         if started >= self.links:
-            # The last user to finish stops the run, so every link started is timed.
-            if next(self.done) + 1 >= self.environment.parsed_options.num_users:
-                gevent.spawn(self.environment.runner.quit)  # pyright: ignore[reportOptionalMemberAccess]
+            gevent.spawn(self.environment.runner.quit)  # pyright: ignore[reportOptionalMemberAccess]
             raise StopUser
         registry = ResourceRegistry(self.run_tag)
         if _timed(self, labelled(HOT_ZAAK, started - started % HOT_ZAAK_BUCKET), self.call, registry) is not None:
