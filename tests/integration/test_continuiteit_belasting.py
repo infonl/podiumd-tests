@@ -117,7 +117,7 @@ def test_no_notificatie_is_lost_while_open_notificaties_is_down(  # fixtures
         with component_down(podiumd_env, http, "opennotificaties"):
             down = time.time()
             load.run_for(OUTAGE)
-        record_property("outage_seconds", round(time.time() - down))
+        back = time.time()
         load.run_for(CALM)
     record_property("load", summary(load.attempts))
     assert failures(load.attempts, start) == []
@@ -129,6 +129,8 @@ def test_no_notificatie_is_lost_while_open_notificaties_is_down(  # fixtures
 
     with suppress(WaitTimeoutError):
         wait_until(lambda: not undelivered(), timeout=DELIVERY_TIMEOUT, interval=10, description="every notificatie")
+    record_property("outage_seconds", round(back - down))
+    record_property("delivered_seconds_after_restart", round(time.time() - back))
     lost = undelivered()
     assert lost == [], f"{len(lost)} of {len(zaken)} notificaties lost"
     deployment = podiumd_env.deployment_for("opennotificaties")
@@ -205,10 +207,12 @@ def test_no_submission_is_lost_while_the_open_formulieren_worker_is_down(
         load.run_for(CALM)
         with scaled(podiumd_env.kube, worker, 0):
             load.run_for(OUTAGE)
+        back = time.time()
         load.run_for(CALM)
     record_property("load", summary(load.attempts))
     assert failures(load.attempts, start) == []
     lost = unregistered(podiumd_env, openzaak, registry, load.attempts, start)
+    record_property("registered_seconds_after_restart", round(time.time() - back))
     assert lost == [], f"{len(lost)} of {len(load.attempts)} submissions not registered"
     assert disruptions(before, cluster_state(podiumd_env), {worker}) == []
 
