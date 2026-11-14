@@ -6,16 +6,30 @@ import threading
 import time
 
 from collections import Counter
+from contextlib import contextmanager
 from dataclasses import dataclass
 from itertools import cycle
 from itertools import islice
 from typing import TYPE_CHECKING
-from typing import Self
+
+from podiumd_tests.background import running
+from podiumd_tests.config import REPO_ROOT
+from podiumd_tests.perf.availability import availability_limits
+from podiumd_tests.perf.availability import watched
+from podiumd_tests.perf.availability_report import report
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from collections.abc import Generator
     from collections.abc import Mapping
     from collections.abc import Sequence
+
+    from podiumd_tests.environment import Environment
+    from podiumd_tests.perf.availability import Watch
+
+
+# The load's calls by name.
+type Calls = Mapping[str, Callable[[], object]]
 
 
 @dataclass(frozen=True)
@@ -35,30 +49,14 @@ class Attempt:
 
 
 class Load:
-    """Call each of `calls` in turn on `workers` threads, `pause` seconds apart, while the block runs."""
+    """Calls made in turn on worker threads, `pause` seconds apart, and what each of them saw."""
 
-    def __init__(self, calls: Mapping[str, Callable[[], object]], *, workers: int, pause: float) -> None:
-        self.calls: Mapping[str, Callable[[], object]] = calls
+    def __init__(self, calls: Calls, pause: float) -> None:
+        self.calls: Calls = calls
         self.pause: float = pause
-        self._stop: threading.Event = threading.Event()
+        self.stopped: threading.Event = threading.Event()
         self._lock: threading.Lock = threading.Lock()
         self._attempts: list[Attempt] = []
-        self._threads: list[threading.Thread] = [
-            threading.Thread(target=self._work, args=(index,), name=f"load-{index}", daemon=True)
-            for index in range(workers)
-        ]
-
-    def __enter__(self) -> Self:
-        """Start the workers."""
-        for thread in self._threads:
-            thread.start()
-        return self
-
-    def __exit__(self, *_exc_info: object) -> None:
-        """Let each worker finish its call, then stop."""
-        self._stop.set()
-        for thread in self._threads:
-            thread.join()
 
     @property
     def attempts(self) -> list[Attempt]:
@@ -68,12 +66,12 @@ class Load:
 
     def run_for(self, seconds: float) -> None:
         """Let the load run for this long."""
-        self._stop.wait(seconds)
+        self.stopped.wait(seconds)
 
-    def _work(self, index: int) -> None:
-        # Each worker starts at another call, so all calls run from the start.
+    def work(self, index: int) -> None:
+        """Make the calls until stopped, starting at call `index`."""
         for name in islice(cycle(self.calls), index, None):
-            if self._stop.is_set():
+            if self.stopped.is_set():
                 return
             started, clock = time.time(), time.monotonic()
             result: object = None
@@ -84,7 +82,41 @@ class Load:
                 error = f"{type(exc).__name__}: {exc}"
             with self._lock:
                 self._attempts.append(Attempt(name, started, time.monotonic() - clock, result, error))
-            self._stop.wait(self.pause)
+            self.stopped.wait(self.pause)
+
+
+@contextmanager
+def loaded(calls: Calls, *, workers: int, pause: float) -> Generator[Load]:
+    """Run the calls on `workers` threads while the block runs; each worker starts at another call."""
+    load = Load(calls, pause)
+    threads = [threading.Thread(target=load.work, args=(index,), daemon=True) for index in range(workers)]
+
+    def stop() -> None:
+        load.stopped.set()
+        for thread in threads:
+            thread.join()
+
+    with running(threads, stop):
+        yield load
+
+
+@contextmanager
+def watched_load(
+    env: Environment, served: Sequence[str], calls: Calls, *, workers: int, pause: float
+) -> Generator[tuple[Load, Watch]]:
+    """Run the calls as `loaded` does while perf.yaml's availability gate watches the components that serve them."""
+    limits = availability_limits(REPO_ROOT / "perf.yaml")
+    # watched measures the recovery after its block; a block that raises needs no recovery measured.
+    gate = watched(env, served, limits)
+    with gate as watch, loaded(calls, workers=workers, pause=pause) as load:  # pylint: disable=contextmanager-generator-missing-cleanup
+        yield load, watch
+
+
+def load_report(load: Load, watch: Watch, since: float) -> str:
+    """Return the Markdown report of the load: its calls, each failed call, and the availability gate's report."""
+    failed = "\n".join(f"- {line}" for line in failures(load.attempts, since))
+    calls = f"Calls: {summary(load.attempts)}."
+    return "\n\n".join(part for part in (calls, failed, report(watch, "")) if part)
 
 
 def failures(attempts: Sequence[Attempt], since: float) -> list[str]:

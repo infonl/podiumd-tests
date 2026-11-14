@@ -23,10 +23,10 @@ from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.bootstrap.steps import NAW_DATA
-from podiumd_tests.chaos_load import Load
 from podiumd_tests.chaos_load import failures
+from podiumd_tests.chaos_load import load_report
 from podiumd_tests.chaos_load import recovery_seconds
-from podiumd_tests.chaos_load import summary
+from podiumd_tests.chaos_load import watched_load
 from podiumd_tests.clients.api import per_thread
 from podiumd_tests.clients.platform import openzaak_client
 from podiumd_tests.components import COMPONENTS
@@ -38,6 +38,7 @@ from podiumd_tests.openformulieren import send_submission
 from podiumd_tests.openformulieren import start_submission
 from podiumd_tests.openformulieren import submission_result
 from podiumd_tests.openformulieren import wait_for_registration
+from podiumd_tests.perf.availability_report import problems
 from podiumd_tests.seed.opennotificaties import make_abonnement
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.wait import WaitTimeoutError
@@ -112,15 +113,16 @@ def test_no_notificatie_is_lost_while_open_notificaties_is_down(  # fixtures
     zaaktype = str(test_zaaktype["url"])
     before = cluster_state(podiumd_env)
     start = time.time()
-    with Load({"oz_zaak_create": lambda: make_zaak(openzaak(), registry, zaaktype)}, workers=2, pause=1) as load:
+    calls = {"oz_zaak_create": lambda: make_zaak(openzaak(), registry, zaaktype)}
+    with watched_load(podiumd_env, ["openzaak"], calls, workers=2, pause=1) as (load, watch):
         load.run_for(CALM)
         with component_down(podiumd_env, http, "opennotificaties"):
             down = time.time()
             load.run_for(OUTAGE)
         back = time.time()
         load.run_for(CALM)
-    record_property("load", summary(load.attempts))
-    assert failures(load.attempts, start) == []
+    record_property("report", load_report(load, watch, start))
+    assert [*failures(load.attempts, start), *problems(watch)] == []
     zaken = [str(cast("JsonObject", a.result)["url"]) for a in load.attempts]
 
     def undelivered() -> list[str]:
@@ -203,14 +205,15 @@ def test_no_submission_is_lost_while_the_open_formulieren_worker_is_down(
         pytest.skip(f"no worker Deployment of openformulieren on {podiumd_env.profile.name}")
     before = cluster_state(podiumd_env)
     start = time.time()
-    with Load({"of_submit": sender(podiumd_env, registry)}, workers=2, pause=2) as load:
+    calls = {"of_submit": sender(podiumd_env, registry)}
+    with watched_load(podiumd_env, ["openzaak"], calls, workers=2, pause=2) as (load, watch):
         load.run_for(CALM)
         with scaled(podiumd_env.kube, worker, 0):
             load.run_for(OUTAGE)
         back = time.time()
         load.run_for(CALM)
-    record_property("load", summary(load.attempts))
-    assert failures(load.attempts, start) == []
+    record_property("report", load_report(load, watch, start))
+    assert [*failures(load.attempts, start), *problems(watch)] == []
     lost = unregistered(podiumd_env, openzaak, registry, load.attempts, start)
     record_property("registered_seconds_after_restart", round(time.time() - back))
     assert lost == [], f"{len(lost)} of {len(load.attempts)} submissions not registered"
@@ -259,17 +262,17 @@ def test_logins_recover_after_a_keycloak_pod_is_deleted(
     workload = str(pod_workload(pods[0]))
     record_property("keycloak_pods", len(pods))
     before = cluster_state(podiumd_env)
-    with Load(calls, workers=2, pause=1) as load:
+    with watched_load(podiumd_env, ["kiss"], calls, workers=2, pause=1) as (load, watch):
         load.run_for(CALM)
         deleted = time.time()
         replace_pod(podiumd_env, pods[0], KEYCLOAK_RECOVERY)
         load.run_for(CALM)
-    record_property("load", summary(load.attempts))
-    record_property("failures", "; ".join(failures(load.attempts, deleted)))
+    record_property("report", load_report(load, watch, deleted))
     recovered = {
         name: recovery_seconds([attempt for attempt in load.attempts if attempt.name == name], deleted)
         for name in calls
     }
     record_property("recovery_seconds", recovered)
     assert None not in recovered.values(), f"not recovered: {recovered}"
+    assert problems(watch) == []
     assert disruptions(before, cluster_state(podiumd_env), {workload}) == []

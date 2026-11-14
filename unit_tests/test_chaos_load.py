@@ -3,10 +3,13 @@
 import threading
 
 from podiumd_tests.chaos_load import Attempt
-from podiumd_tests.chaos_load import Load
 from podiumd_tests.chaos_load import failures
+from podiumd_tests.chaos_load import load_report
+from podiumd_tests.chaos_load import loaded
 from podiumd_tests.chaos_load import recovery_seconds
 from podiumd_tests.chaos_load import summary
+from podiumd_tests.perf.availability import Limits
+from podiumd_tests.perf.availability import Watch
 
 
 def test_load_records_results_and_errors_of_every_call():
@@ -23,7 +26,7 @@ def test_load_records_results_and_errors_of_every_call():
         msg = "refused"
         raise ConnectionError(msg)
 
-    with Load({"ok": ok, "broken": broken}, workers=2, pause=0) as load:
+    with loaded({"ok": ok, "broken": broken}, workers=2, pause=0) as load:
         assert done.wait(5)
     names = {a.name for a in load.attempts}
     assert names == {"ok", "broken"}
@@ -50,3 +53,20 @@ def test_failures_and_summary_name_each_call():
     attempts = [attempt(12, failed=True), attempt(20)]
     assert failures(attempts, since=10) == ["kc_token at +2s: TokenError: 503"]
     assert summary(attempts) == "kc_token 2 (1 failed)"
+
+
+def test_load_report_names_the_calls_the_failures_and_the_gate():
+    done = threading.Event()
+
+    def broken():
+        done.set()
+        msg = "refused"
+        raise ConnectionError(msg)
+
+    with loaded({"broken": broken}, workers=1, pause=0) as load:
+        assert done.wait(5)
+    watch = Watch(frozenset(("openzaak",)), Limits(5, 60, 0.99, 0.9), started=1_800_000_000, ended=1_800_000_060)
+    lines = load_report(load, watch, since=load.attempts[0].start).splitlines()
+    assert lines[0].startswith("Calls: broken ")
+    assert lines[2] == "- broken at +0s: ConnectionError: refused"
+    assert "Load 08:00:00-08:01:00 UTC; not all Ready again." in lines
