@@ -167,7 +167,9 @@ def objecten_calls(env: Environment) -> dict[str, Call]:
     objecten = objecten_client(env)
     vac = objecttype_url(env, "VAC")
     query = {"type": vac, "data_attr": f"vraag__icontains__{SEARCH_TERM}", "pageSize": "20"}
+    ordered = {"type": vac, "pageSize": "500", "ordering": "-record__data__vraag"}
     return {
         "obj_vac_create": lambda registry: make_object(objecten, registry, vac, vac_data(registry.tagged("perf-vac"))),
         "obj_vac_search": lambda _registry: objecten.request("GET", "objects", 200, params=query),
+        "obj_vac_ordered": lambda _registry: objecten.request("GET", "objects", 200, params=ordered),
     }

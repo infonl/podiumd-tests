@@ -91,6 +91,8 @@ ENDPOINTS = {
     # Lists with related objects inlined (expand): memory growth in Open Klant #636 and Open Zaak #1837.
     "oz_zaken_expand": "openzaak",
     "ok2_klantcontacten_expand": "openklant",
+    # Objecten's performance_test (maykinmedia/open-object): a page of 500 objects ordered on a data attribute.
+    "obj_vac_ordered": "objecten",
 }
 
 # Keycloak's sizing guide: what one vCPU serves per second (keycloak.org high-availability, CPU and memory sizing).

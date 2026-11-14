@@ -154,6 +154,7 @@ with curl or WebFetch. "verify" marks a fact not confirmed.
 | Reference numbers | `benchmark_assertions(mean=1, max=1)`: ≤ 1 s per call on CI |
 | Port value | large pages and ordering on a JSON attribute, which `obj_vac_search` (pageSize 20, `icontains`) does not cover; the 1 s bound is a usable threshold. Stress-test plan in open-object #149 (100k imports and updates, page sizes 100–5,000, geo and date filters) |
 | How | one extra call in `_objecten_calls` on the `ptest-volume` objecttype (seed-volume 1,000 objects) |
+| Ported | `obj_vac_ordered`, on the VAC objecttype (seed-volume `vac`): the suite's Objecten token has no rights on `ptest-volume` |
 
 #### M3. Open Zaak performance index, #1647, #2161
 

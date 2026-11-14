@@ -110,6 +110,10 @@ SOURCES = {
         "upstream maykinmedia/open-klant issue 636",
         "Open Klant 2.17.1 grew 30 MiB per klantcontacten list with expand.",
     ),
+    "obj_vac_ordered": pytest.mark.source(
+        "upstream maykinmedia/open-object performance_test/",
+        "Objecten's own benchmark: a page of 500 objects ordered on a data attribute, within 1 s.",
+    ),
     **dict.fromkeys(("oz_zaken", "oz_zaaktypen", "ok2_partijen", "brp_persoon", "kc_discovery"), TA_K6),
     **dict.fromkeys(("oz_documenten_ordered", "oz_zaken_one_zaaktype"), OZ_BENCHMARK),
     **dict.fromkeys(KEYCLOAK_PER_VCPU, KC_BENCHMARK),
