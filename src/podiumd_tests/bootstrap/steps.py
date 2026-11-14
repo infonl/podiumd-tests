@@ -438,12 +438,23 @@ OF_REDACTEUR = django_user_step("openformulieren", "redacteur", ("Redacteurs",),
 OF_PREFILL = SnippetStep(
     "openformulieren-prefill",
     ("openformulieren",),
-    "openformulieren_prefill",
+    "openformulieren_service_links",
     "ptest_bootstrap_of_prefill_record",
     {"links": {"brp_personen_service": "brp-api", "profile_service": "kvk-api"}},
     record=True,
     wiring=True,
     opt_in="of_prefill",
+)
+# The postcode and huisnummer lookup through the BAG service the environment registered, where the profile allows it.
+OF_BAG = SnippetStep(
+    "openformulieren-bag",
+    ("openformulieren",),
+    "openformulieren_service_links",
+    "ptest_bootstrap_of_bag_record",
+    {"links": {"bag_service": "bag-api"}},
+    record=True,
+    wiring=True,
+    opt_in="of_bag",
 )
 
 
@@ -814,6 +825,7 @@ STEPS: tuple[Step, ...] = (
         opt_in="of_wait_for_payment",
     ),
     OF_PREFILL,
+    OF_BAG,
     OF_REFERENTIELIJSTEN,
     SnippetStep(
         "opennotificaties-kanalen",

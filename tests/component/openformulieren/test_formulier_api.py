@@ -14,10 +14,13 @@ from typing import cast
 
 import pytest
 
+from podiumd_tests.basisregistraties import BAG_DAM_ADRES
 from podiumd_tests.bootstrap.names import TEST_FORM
+from podiumd_tests.bootstrap.steps import OF_BAG
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.openformulieren import forget_submission
+from podiumd_tests.openformulieren import need_opt_in
 from podiumd_tests.openformulieren import start_submission
 from podiumd_tests.responses import expect_status
 
@@ -213,3 +216,29 @@ def test_address_search_reaches_pdok(
     )
     labels = [str(a.get("label")) for a in entries(expect_status(found, HTTPStatus.OK).json())]
     assert any("1015CJ Amsterdam" in label for label in labels), labels
+
+
+@pytest.mark.requires("cluster")
+@pytest.mark.source(
+    "external Dimpact-Samenwerking/testscripts testopzet release 1.2",
+    "Open Formulieren completes an address from the BAG.",
+)
+@pytest.mark.scenario("""
+    Given a visitor filling in a form in Open Formulieren
+    When the visitor enters postcode 1012JS and huisnummer 1
+    Then the form fills in street Dam and woonplaats Amsterdam from the BAG
+""")
+def test_postcode_and_huisnummer_complete_the_address_from_the_bag(
+    http: requests.Session,
+    urls: dict[str, str],
+    podiumd_env: Environment,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """Open Formulieren's address-autocomplete finds the street and woonplaats of a postcode and huisnummer in the BAG."""
+    need_opt_in(podiumd_env, need_bootstrap, OF_BAG, "openformulieren-form")
+    submission, headers = start_submission(http, urls["openformulieren"], TEST_FORM)
+    forget_submission(podiumd_env, registry, str(submission["id"]))
+    autocomplete = f"{urls['openformulieren']}/api/v2/geo/address-autocomplete"
+    adres = expect_status(http.get(autocomplete, params=BAG_DAM_ADRES, headers=headers), HTTPStatus.OK).json()
+    assert (adres.get("streetName"), adres.get("city")) == ("Dam", "Amsterdam"), adres

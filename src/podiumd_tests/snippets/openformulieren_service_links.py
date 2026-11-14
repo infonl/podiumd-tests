@@ -1,4 +1,4 @@
-"""Open Formulieren's prefill services: BRP Personen in HaalCentraalConfig, the KvK basisprofiel in KVKConfig.
+"""Open Formulieren's config fields that name a service: BRP Personen, KvK basisprofiel, BAG address lookup.
 
 Params: links ({config field: zgw_consumers Service slug}). Record mode: apply links each field and
 records its old service id; remove puts that back where the field still holds the linked service.
@@ -7,6 +7,7 @@ records its old service id; remove puts that back where the field still holds th
 CONFIGS = {
     "brp_personen_service": ("openforms.contrib.haal_centraal.models", "HaalCentraalConfig"),
     "profile_service": ("openforms.contrib.kvk.models", "KVKConfig"),
+    "bag_service": ("openforms.contrib.kadaster.models", "KadasterApiConfig"),
 }
 
 

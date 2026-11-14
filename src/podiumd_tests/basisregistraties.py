@@ -20,6 +20,8 @@ BRP_PERSONEN = "/haalcentraal/api/brp/personen"
 BAG_ADRESSEN = "/lvbag/individuelebevragingen/v2/adressen"
 # The nummeraanduiding of Dam 1, Amsterdam: in the BAG and in podiumd-minikube's BAG mock.
 BAG_DAM = "0363200003761447"
+# Postcode and huisnummer of BAG_DAM, as Open Formulieren's address lookup takes them.
+BAG_DAM_ADRES = {"postcode": "1012JS", "house_number": "1"}
 KVK_ZOEKEN = "/api/v2/zoeken"
 KVK_BASISPROFIELEN = "/api/v1/basisprofielen"
 KVK_VESTIGINGSPROFIELEN = "/api/v1/vestigingsprofielen"
