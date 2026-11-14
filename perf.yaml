@@ -8,7 +8,11 @@ defaults:
   max_failure_ratio: 0.01
   max_slowdown: 1.5
   min_slowdown_ms: 200
-endpoints: {}
+endpoints:
+  # Starting a zaak in ZAC creates the zaak, its status and rol in Open Zaak and its CMMN case, and indexes it.
+  zac_zaak_create: {p95_ms: 5000}
+  # Two requests: the zaak's documenttypen, and the upload that creates the document and its link in Open Zaak.
+  zac_document_upload: {p95_ms: 3000}
 # What a Locust run may do to the components it loads (podiumd_tests.perf.availability): their roots answer
 # without a 5xx in at least min_available of the samples taken every health_interval_s; no container restarts;
 # their pods are Ready again within recovery_s after the run; no container's RSS passes max_memory_ratio of its

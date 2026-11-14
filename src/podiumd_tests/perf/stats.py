@@ -33,6 +33,7 @@ class EndpointStats:
     requests: int
     failures: int
     p95_ms: float
+    per_second: float = 0
 
 
 def perf_settings(path: Path) -> dict[str, object]:
@@ -59,7 +60,8 @@ def read_stats(csv_text: str) -> dict[str, EndpointStats]:
     for row in csv.DictReader(io.StringIO(csv_text)):
         if row["Name"] != "Aggregated":
             requests, failures = int(row["Request Count"]), int(row["Failure Count"])
-            found[row["Name"]] = EndpointStats(requests, failures, float(row["95%"]))
+            per_second = float(row.get("Requests/s") or 0)
+            found[row["Name"]] = EndpointStats(requests, failures, float(row["95%"]), per_second)
     return found
 
 

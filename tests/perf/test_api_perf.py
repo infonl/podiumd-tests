@@ -22,9 +22,12 @@ from podiumd_tests.config import REPO_ROOT
 from podiumd_tests.perf.availability import Watch
 from podiumd_tests.perf.availability import availability_limits
 from podiumd_tests.perf.availability import watched
+from podiumd_tests.perf.availability_report import capacity
 from podiumd_tests.perf.availability_report import problems
 from podiumd_tests.perf.availability_report import report
 from podiumd_tests.perf.runs import ENDPOINTS
+from podiumd_tests.perf.runs import KEYCLOAK_PER_VCPU
+from podiumd_tests.perf.runs import LOGIN_USERS
 from podiumd_tests.perf.runs import locust_command
 from podiumd_tests.perf.stats import HISTORY
 from podiumd_tests.perf.stats import SETTINGS
@@ -66,7 +69,7 @@ def fixture_load(
     """The stats of one Locust run against the environment, and the availability of the components it loads."""
     need_bootstrap("openzaak-client", "openklant-token", "objecten-token", "openzaak-zaaktype", ADMIN.name, KCC.name)
     if "zac" in podiumd_env.profile.urls:
-        need_bootstrap("openzaak-client-productaanvraag")
+        need_bootstrap("openzaak-client-productaanvraag", *(user.name for user in LOGIN_USERS))
     directory = perf_dir
     users = str(request.config.getoption("--perf-users"))
     duration = str(request.config.getoption("--perf-duration"))
@@ -99,9 +102,19 @@ OZ_BENCHMARK = pytest.mark.source(
 MADE_HERE = pytest.mark.source(
     "podiumd-tests", "Writes and the searches users type in ZAC, KISS and the portal, under the same load."
 )
+KC_BENCHMARK = pytest.mark.source(
+    "upstream keycloak/keycloak-benchmark scenarios authentication.AuthorizationCode and ClientSecret",
+    "Keycloak's password logins and client-credentials grants, against its sizing guide's rates per vCPU.",
+)
+ZAC_LOAD = pytest.mark.source(
+    "upstream infonl/dimpact-zaakafhandelcomponent scripts/test-data/create-load.py",
+    "ZAC's own load script: zaken started in ZAC and documents uploaded to them.",
+)
 SOURCES = {
     **dict.fromkeys(("oz_zaken", "oz_zaaktypen", "ok2_partijen", "brp_persoon", "kc_discovery"), TA_K6),
     **dict.fromkeys(("oz_documenten_ordered", "oz_zaken_one_zaaktype"), OZ_BENCHMARK),
+    **dict.fromkeys(KEYCLOAK_PER_VCPU, KC_BENCHMARK),
+    **dict.fromkeys(("zac_zaak_create", "zac_document_upload"), ZAC_LOAD),
 }
 
 
@@ -121,9 +134,14 @@ def endpoint_params() -> list[ParameterSet]:
     Then the endpoint's 95th percentile response time stays within its threshold
     And so does its ratio of failed requests
 """)
-def test_endpoint_meets_its_threshold(stats: dict[str, EndpointStats], endpoint: str) -> None:
-    """The endpoint's p95 and failure ratio stay within perf.yaml."""
+def test_endpoint_meets_its_threshold(
+    load: tuple[dict[str, EndpointStats], Watch], record_property: Callable[[str, object], None], endpoint: str
+) -> None:
+    """The endpoint's p95 and failure ratio stay within perf.yaml; Keycloak's against its sizing guide in the report."""
+    stats, watch = load
     assert endpoint in stats, f"Locust made no {endpoint} requests"
+    if endpoint in KEYCLOAK_PER_VCPU:
+        record_property("report", capacity(watch, "keycloak", KEYCLOAK_PER_VCPU[endpoint], stats[endpoint]))
     assert violations(stats[endpoint], thresholds(REPO_ROOT / "perf.yaml", endpoint)) == []
 
 

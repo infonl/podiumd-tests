@@ -42,8 +42,8 @@ from podiumd_tests.workloads import skip_older_than
 from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import is_confirmation_on
+from podiumd_tests.zac import productaanvraag_parameters
 from podiumd_tests.zac import user_groups
-from podiumd_tests.zac import zaakafhandelparameters
 from podiumd_tests.zac import zac_session
 
 if TYPE_CHECKING:
@@ -480,13 +480,11 @@ def fixture_zac_group(zac: requests.Session, urls: dict[str, str]) -> str:
 @pytest.fixture(name="zac_parameters")
 def fixture_zac_parameters(zac: requests.Session, urls: dict[str, str], podiumd_env: Environment) -> JsonObject:
     """ZAC's zaakafhandelparameters of the zaaktype ZAC starts zaken of (profile setting productaanvraag_zaaktype)."""
-    identificatie = podiumd_env.profile.settings.get("productaanvraag_zaaktype")
-    if not identificatie:
-        pytest.skip(f"profile {podiumd_env.profile.name} has no settings.productaanvraag_zaaktype")
-    found = zaakafhandelparameters(zac, urls["zac"], identificatie)
-    if not found:
-        pytest.skip(f"ZAC has no zaakafhandelparameters for {identificatie}")
-    return found[0]
+    try:
+        parameters = productaanvraag_parameters(zac, urls["zac"], podiumd_env.profile)
+    except LookupError as missing:
+        pytest.skip(str(missing))
+    return parameters
 
 
 @pytest.fixture(name="zac_zaak")

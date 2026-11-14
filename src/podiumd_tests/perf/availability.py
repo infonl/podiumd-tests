@@ -29,6 +29,7 @@ from podiumd_tests.kubelet import ContainerKey
 from podiumd_tests.kubelet import container_values
 from podiumd_tests.kubelet import node_metrics
 from podiumd_tests.kubelet import quantity_bytes
+from podiumd_tests.kubelet import quantity_cores
 from podiumd_tests.perf.stats import perf_settings
 from podiumd_tests.responses import root_problem
 from podiumd_tests.wait import WaitTimeoutError
@@ -41,6 +42,7 @@ from podiumd_tests.workloads import disruptions
 from podiumd_tests.workloads import unhealthy_pods
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from collections.abc import Generator
     from collections.abc import Iterable
     from collections.abc import Mapping
@@ -106,6 +108,8 @@ class Watch:  # pylint: disable=too-many-instance-attributes  # one field per me
     rss: Values = field(default_factory=dict[ContainerKey, float])
     working_set: Values = field(default_factory=dict[ContainerKey, float])
     memory_limits: dict[ContainerKey, float | None] = field(default_factory=dict[ContainerKey, float | None])
+    # In cores; None: no limit.
+    cpu_limits: dict[ContainerKey, float | None] = field(default_factory=dict[ContainerKey, float | None])
     # Share of CFS periods in which the container was throttled, for containers with a CPU limit.
     throttled: Values = field(default_factory=dict[ContainerKey, float])
     disruptions: list[Disruption] = field(default_factory=list[Disruption])
@@ -133,14 +137,16 @@ def throttled_shares(before: Sequence[Values], after: Sequence[Values]) -> Value
     return found
 
 
-def memory_limits(pods: Iterable[JsonObject]) -> dict[ContainerKey, float | None]:
-    """Return the memory limit of each container of the pods in bytes; None for a container without one."""
+def resource_limits(
+    pods: Iterable[JsonObject], resource: str, parse: Callable[[str], float]
+) -> dict[ContainerKey, float | None]:
+    """Return each container's limit of the resource ("memory", "cpu") in the pods, parsed; None without one."""
     found: dict[ContainerKey, float | None] = {}
     for pod in pods:
         for container in entries(section(pod, "spec").get("containers")):
-            limit = section(section(container, "resources"), "limits").get("memory")
+            limit = section(section(container, "resources"), "limits").get(resource)
             key = (metadata_namespace(pod), metadata_name(pod), str(container.get("name")))
-            found[key] = quantity_bytes(str(limit)) if limit else None
+            found[key] = parse(str(limit)) if limit else None
     return found
 
 
@@ -220,7 +226,8 @@ class _Cluster:
             watch.recovered_s = time.time() - watch.ended
         after = self.loaded_state()
         watch.disruptions = disruptions(self.before, after)
-        watch.memory_limits = memory_limits(after.pods.values())
+        watch.memory_limits = resource_limits(after.pods.values(), "memory", quantity_bytes)
+        watch.cpu_limits = resource_limits(after.pods.values(), "cpu", quantity_cores)
         cpu_after = None if self.cpu_before is None else self.cpu_counters()
         if self.cpu_before is not None and cpu_after is not None:
             watch.throttled = throttled_shares(self.cpu_before, cpu_after)

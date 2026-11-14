@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     import requests
 
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.config import Profile
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
@@ -96,6 +97,19 @@ def zaakafhandelparameters(http: requests.Session, zac_url: str, identificatie: 
         if parameters.get("id") is not None
         and identificatie in {None, section(parameters, "zaaktype").get("identificatie")}
     ]
+
+
+def productaanvraag_parameters(http: requests.Session, zac_url: str, profile: Profile) -> JsonObject:
+    """ZAC's zaakafhandelparameters of the profile's productaanvraag_zaaktype; LookupError naming what is missing."""
+    identificatie = profile.settings.get("productaanvraag_zaaktype")
+    if not identificatie:
+        msg = f"profile {profile.name} has no settings.productaanvraag_zaaktype"
+        raise LookupError(msg)
+    found = zaakafhandelparameters(http, zac_url, identificatie)
+    if not found:
+        msg = f"ZAC has no zaakafhandelparameters for {identificatie}"
+        raise LookupError(msg)
+    return found[0]
 
 
 def read_zaakafhandelparameters(http: requests.Session, zac_url: str, zaaktype_uuid: str) -> JsonObject:

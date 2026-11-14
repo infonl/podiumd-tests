@@ -94,12 +94,23 @@ def password_grant(session: requests.Session, keycloak_url: str, realm: str, log
         data["client_secret"] = login.client_secret
     with one_login_at_a_time(login.username):
         response = session.post(realm_url(keycloak_url, realm, "/protocol/openid-connect/token"), data=data)
+    return _access_token(response, f"{login.username!r} in realm {realm!r}")
+
+
+def client_credentials_grant(session: requests.Session, keycloak_url: str, realm: str, client: tuple[str, str]) -> str:
+    """Access token for a client (client id, secret), through the client-credentials grant."""
+    data = {"grant_type": "client_credentials", "client_id": client[0], "client_secret": client[1]}
+    response = session.post(realm_url(keycloak_url, realm, "/protocol/openid-connect/token"), data=data)
+    return _access_token(response, f"client {client[0]!r} in realm {realm!r}")
+
+
+def _access_token(response: requests.Response, who: str) -> str:
     if response.status_code != HTTPStatus.OK:
-        msg = f"token request for {login.username!r} in realm {realm!r} failed: {describe(response)}"
+        msg = f"token request for {who} failed: {describe(response)}"
         raise TokenError(msg)
     token: object = response.json().get("access_token")
     if not isinstance(token, str):
-        msg = f"token response for {login.username!r} has no access_token"
+        msg = f"token response for {who} has no access_token"
         raise TokenError(msg)
     return token
 
@@ -111,21 +122,34 @@ def login_form_action(page_text: str) -> str | None:
     return html.unescape(action[1]) if action else None
 
 
-def form_login(http: requests.Session, start_url: str, username: str, password: str) -> requests.Response:
-    """Log in through Keycloak's login form without a browser; start_url redirects there. The app's final response.
-
-    For apps that accept only their own session (code flow), such as ZAC's REST API and KISS.
-    """
+def login_page_action(http: requests.Session, start_url: str) -> str:
+    """Return the URL of the Keycloak login form that start_url redirects to; TokenError without one."""
     page = http.get(start_url)
     action = login_form_action(page.text)
     if action is None:
         msg = f"no Keycloak login form at {page.url}"
         raise TokenError(msg)
+    return action
+
+
+def submit_login(
+    http: requests.Session, action: str, username: str, password: str, *, allow_redirects: bool = True
+) -> requests.Response:
+    """Post the user's password to Keycloak's login form at action; TokenError when Keycloak shows the form again."""
     with one_login_at_a_time(username):
-        response = http.post(action, data={"username": username, "password": password})
+        response = http.post(action, data={"username": username, "password": password}, allow_redirects=allow_redirects)
     if 'id="kc-form-login"' in response.text:
         msg = f"Keycloak refused the login of {username!r}"
         raise TokenError(msg)
+    return response
+
+
+def form_login(http: requests.Session, start_url: str, username: str, password: str) -> requests.Response:
+    """Log in through Keycloak's login form without a browser; start_url redirects there. The app's final response.
+
+    For apps that accept only their own session (code flow), such as ZAC's REST API and KISS.
+    """
+    response = submit_login(http, login_page_action(http, start_url), username, password)
     # An app with response_mode form_post (KISS, ITA) gets the code through a form the browser submits.
     form_post = re.search(
         r'<FORM METHOD="POST" ACTION="([^"]+)">(.*?)</FORM>', response.text, re.IGNORECASE | re.DOTALL

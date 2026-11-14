@@ -14,14 +14,14 @@ from podiumd_tests.perf.stats import slowdown_limit
 from podiumd_tests.perf.stats import thresholds
 from podiumd_tests.perf.stats import violations
 
-CSV = """Type,Name,Request Count,Failure Count,95%
-API,oz_zaken,100,2,1600
-,Aggregated,100,2,1600
+CSV = """Type,Name,Request Count,Failure Count,95%,Requests/s
+API,oz_zaken,100,2,1600,1.5
+,Aggregated,100,2,1600,1.5
 """
 
 
 def test_read_stats_skips_the_aggregated_row():
-    assert read_stats(CSV) == {"oz_zaken": EndpointStats(requests=100, failures=2, p95_ms=1600.0)}
+    assert read_stats(CSV) == {"oz_zaken": EndpointStats(requests=100, failures=2, p95_ms=1600.0, per_second=1.5)}
 
 
 def test_endpoint_entry_overrides_the_defaults(tmp_path):

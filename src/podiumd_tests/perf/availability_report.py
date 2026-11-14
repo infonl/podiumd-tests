@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from podiumd_tests.kubelet import ContainerKey
     from podiumd_tests.perf.availability import Sample
     from podiumd_tests.perf.availability import Watch
+    from podiumd_tests.perf.stats import EndpointStats
 
 MIB = 1024 * 1024
 # Seconds without failed requests that end a burst.
@@ -55,6 +56,17 @@ def memory_ratios(watch: Watch) -> dict[ContainerKey, float]:
 
 def _container(key: ContainerKey) -> str:
     return f"{key[1]}/{key[2]}"
+
+
+def capacity(watch: Watch, component: str, per_vcpu: float, measured: EndpointStats) -> str:
+    """Return the measured rate and p95 against per_vcpu requests per second per vCPU of the component's CPU limits."""
+    rate = f"{measured.per_second:.1f}/s at p95 {measured.p95_ms:.0f} ms; reference {per_vcpu:g}/s per vCPU"
+    mine = frozenset((component,))
+    limits = [limit for key, limit in watch.cpu_limits.items() if is_loaded(key[1], mine)]
+    if not limits or None in limits:
+        return f"{rate}; {component} has no CPU limit"
+    cores = sum(limit for limit in limits if limit is not None)
+    return f"{rate}, {per_vcpu * cores:.0f}/s for the {cores:g} vCPU of {component}'s CPU limits"
 
 
 def problems(watch: Watch) -> list[str]:

@@ -12,6 +12,7 @@ import sys
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from podiumd_tests.bootstrap.steps import ZAC_ROLE_USERS
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
@@ -75,7 +76,18 @@ ENDPOINTS = {
     "oz_oio_list": "openzaak",
     "oz_zio_create": "openzaak",
     "onrc_notificatie": "opennotificaties",
+    # Keycloak's password login and client-credentials grant, with ZAC's test users and its zac-admin-client.
+    "kc_login": "zac",
+    "kc_client_credentials": "zac",
+    # ZAC's create-load.py: a zaak started in ZAC, and a document uploaded to it.
+    "zac_zaak_create": "zac",
+    "zac_document_upload": "zac",
 }
+
+# Keycloak's sizing guide: what one vCPU serves per second (keycloak.org high-availability, CPU and memory sizing).
+KEYCLOAK_PER_VCPU = {"kc_login": 15, "kc_client_credentials": 120}
+# The accounts of kc_login. Not the test admin: every Locust user logs in as the admin when it starts.
+LOGIN_USERS = tuple(ZAC_ROLE_USERS.values())
 
 # Anonymous requests through the public gateway, one Locust run each (tests/perf/test_gateway_perf.py), to compare
 # gateway settings such as upstream keep-alive. Name -> (component, path, expected status); kiss_page also loads

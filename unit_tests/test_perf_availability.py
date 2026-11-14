@@ -10,21 +10,25 @@ import pytest
 from podiumd_tests.capabilities import Capabilities
 from podiumd_tests.config import REPO_ROOT
 from podiumd_tests.kubelet import ContainerKey
+from podiumd_tests.kubelet import quantity_bytes
+from podiumd_tests.kubelet import quantity_cores
 from podiumd_tests.perf.availability import Limits
 from podiumd_tests.perf.availability import Sample
 from podiumd_tests.perf.availability import Values
 from podiumd_tests.perf.availability import Watch
 from podiumd_tests.perf.availability import availability_limits
-from podiumd_tests.perf.availability import memory_limits
+from podiumd_tests.perf.availability import resource_limits
 from podiumd_tests.perf.availability import throttled_shares
 from podiumd_tests.perf.availability import watched
 from podiumd_tests.perf.availability_report import Event
 from podiumd_tests.perf.availability_report import availability
+from podiumd_tests.perf.availability_report import capacity
 from podiumd_tests.perf.availability_report import failure_bursts
 from podiumd_tests.perf.availability_report import problems
 from podiumd_tests.perf.availability_report import report
 from podiumd_tests.perf.availability_report import timeline
 from podiumd_tests.perf.availability_report import unhealthy_runs
+from podiumd_tests.perf.stats import EndpointStats
 from podiumd_tests.workloads import Disruption
 
 LIMITS = Limits(health_interval_s=0.01, recovery_s=1, min_available=0.9, max_memory_ratio=0.9)
@@ -84,17 +88,19 @@ def test_throttled_shares_count_the_periods_between_two_readings():
     assert throttled_shares(before, after) == {KEY: 0.3}
 
 
-def test_memory_limits_per_container():
+def test_resource_limits_per_container():
     pod = {
         "metadata": {"name": "openzaak-1", "namespace": "podiumd"},
         "spec": {
             "containers": [
-                {"name": "openzaak", "resources": {"limits": {"memory": "1Gi"}}},
+                {"name": "openzaak", "resources": {"limits": {"memory": "1Gi", "cpu": "500m"}}},
                 {"name": "nginx", "resources": {}},
             ]
         },
     }
-    assert memory_limits([pod]) == {KEY: 1024**3, ("podiumd", "openzaak-1", "nginx"): None}
+    nginx = ("podiumd", "openzaak-1", "nginx")
+    assert resource_limits([pod], "memory", quantity_bytes) == {KEY: 1024**3, nginx: None}
+    assert resource_limits([pod], "cpu", quantity_cores) == {KEY: 0.5, nginx: None}
 
 
 def watch(**fields):
@@ -102,6 +108,21 @@ def watch(**fields):
     for name, value in fields.items():
         setattr(found, name, value)
     return found
+
+
+@pytest.mark.parametrize(
+    ("limits", "expected"),
+    [
+        ({KEY: 1.0, ("podiumd", "openzaak-2", "openzaak"): 0.5}, "180/s for the 1.5 vCPU of openzaak's CPU limits"),
+        ({KEY: None}, "openzaak has no CPU limit"),
+        ({("podiumd", "zac-1", "zac"): 1.0}, "openzaak has no CPU limit"),
+    ],
+)
+def test_capacity_of_the_cpu_limits_per_vcpu(limits, expected):
+    measured = EndpointStats(requests=12, failures=0, p95_ms=67, per_second=0.2)
+    line = capacity(watch(cpu_limits=limits), "openzaak", 120, measured)
+    assert line.startswith("0.2/s at p95 67 ms; reference 120/s per vCPU")
+    assert line.endswith(expected)
 
 
 def test_problems_name_restarts_unready_pods_unavailability_and_memory():

@@ -59,3 +59,9 @@ def quantity_bytes(quantity: str) -> float:
         msg = f"memory quantity {quantity!r}: expected a number with an optional unit such as Mi or G"
         raise ValueError(msg)
     return float(match.group(1)) * _FACTORS[match.group(2) or ""]
+
+
+def quantity_cores(quantity: str) -> float:
+    """Return a Kubernetes CPU quantity ("500m", "2", "1.5") in cores; ValueError otherwise."""
+    text = quantity.strip()
+    return float(text.removesuffix("m")) / 1000 if text.endswith("m") else float(text)

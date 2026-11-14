@@ -320,7 +320,6 @@ def _fake_zac_and_open_zaak(monkeypatch):
     monkeypatch.setattr(runner, "check", lambda _env, steps: [Outcome(s.name, "present") for s in steps])
     fakes = {
         "zac_session": lambda _env, user, password: f"{user}:{password}",
-        "zaakafhandelparameters": lambda _zac, _url, zaaktype: [{"zaaktype": zaaktype}],
         "is_confirmation_on": lambda _zac, _url, _zaaktype: False,
         "objecttype_url": lambda _env, name: f"objecttype {name}",
         "zaaktype_parts": lambda _client, zaaktype: f"parts of {zaaktype['url']}",
@@ -337,6 +336,9 @@ def _fake_zac_and_open_zaak(monkeypatch):
     for name, fake in fakes.items():
         monkeypatch.setattr(pytest_plugin, name, fake)
     monkeypatch.setattr(zac_zaaktype, "zac_session", fakes["zac_session"])
+    monkeypatch.setattr(
+        "podiumd_tests.zac.zaakafhandelparameters", lambda _zac, _url, zaaktype: [{"zaaktype": zaaktype}]
+    )
     return deleted
 
 
@@ -378,7 +380,7 @@ def test_kiss(kiss_session):
 def test_zac_parameters_skip_without_parameters_in_zac(pytester, monkeypatch):
     monkeypatch.setattr(runner, "check", lambda _env, steps: [Outcome(s.name, "present") for s in steps])
     monkeypatch.setattr(zac_zaaktype, "zac_session", lambda _env, _user, _password: None)
-    monkeypatch.setattr(pytest_plugin, "zaakafhandelparameters", lambda _zac, _url, _zaaktype: [])
+    monkeypatch.setattr("podiumd_tests.zac.zaakafhandelparameters", lambda _zac, _url, _zaaktype: [])
     pytester.makeconftest(WRITABLE_CONFTEST)
     pytester.makepyfile("def test_parameters(zac_parameters):\n    pass\n")
     result = pytester.runpytest_inprocess(*INNER_ARGS, "-rs")

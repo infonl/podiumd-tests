@@ -11,6 +11,7 @@ import time
 
 from functools import partial
 from typing import TYPE_CHECKING
+from typing import cast
 
 from locust import User
 from locust import constant
@@ -21,12 +22,17 @@ from podiumd_tests.auth.keycloak import discovery_url
 from podiumd_tests.auth.keycloak_admin import realm_of
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import brp_personen
+from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_CLIENT_ID
+from podiumd_tests.bootstrap.names import ZGW_PRODUCTAANVRAAG_STORE_KEY
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.clients.platform import openklant_client
+from podiumd_tests.clients.platform import openzaak_client
 from podiumd_tests.kcc import vac_data
 from podiumd_tests.oidc import challenge_session
+from podiumd_tests.perf.keycloak_calls import keycloak_calls
+from podiumd_tests.perf.keycloak_calls import login_accounts
 from podiumd_tests.perf.runs import add_environment_arguments
 from podiumd_tests.perf.runs import locust_environment
 from podiumd_tests.perf.zgw_calls import Call
@@ -39,7 +45,11 @@ from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openklant import make_klantcontact
 from podiumd_tests.seed.openklant import random_bsn
 from podiumd_tests.seed.registry import ResourceRegistry
+from podiumd_tests.zac import clean_up_zaak
+from podiumd_tests.zac import create_zaak
+from podiumd_tests.zac import productaanvraag_parameters
 from podiumd_tests.zac import zac_session
+from podiumd_tests.zac_documents import uploaded_document
 
 if TYPE_CHECKING:
     from argparse import ArgumentParser
@@ -48,6 +58,8 @@ if TYPE_CHECKING:
     from locust.env import Environment as LocustEnvironment
 
     from podiumd_tests.environment import Environment
+    from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.perf.keycloak_calls import Accounts
 
 
 # A word the volume corpus, KISS's kennisbank and the portal's products all use.
@@ -65,6 +77,8 @@ def _on_init(environment: LocustEnvironment, **_kwargs: object) -> None:
     options = environment.parsed_options
     ApiUser.env_under_test = locust_environment(options.podiumd_env, options.podiumd_urls)
     ApiUser.run_tag = environment.parsed_options.podiumd_run_tag
+    if "zac" in ApiUser.env_under_test.profile.urls:
+        ApiUser.accounts = login_accounts(ApiUser.env_under_test)
 
 
 def _openklant_calls(env: Environment) -> dict[str, Call]:
@@ -90,16 +104,34 @@ def _objecten_calls(env: Environment) -> dict[str, Call]:
     }
 
 
+def _zac_calls(env: Environment) -> dict[str, Call | Prepared]:
+    """ZAC as its users load it (ZAC's scripts/test-data/create-load.py): a new zaak, an upload to one, a search."""
+    zac_url = env.profile.urls["zac"]
+    zac = zac_session(env, ADMIN.username, env.credentials.get(ADMIN.store_key))
+    openzaak = openzaak_client(env, ZGW_PRODUCTAANVRAAG_CLIENT_ID, ZGW_PRODUCTAANVRAAG_STORE_KEY, "perf")
+    parameters = productaanvraag_parameters(zac, zac_url, env.profile)
+
+    def new_zaak(registry: ResourceRegistry) -> JsonObject:
+        zaak = create_zaak(zac, zac_url, parameters, omschrijving=registry.tagged("perf-zaak"))
+        clean_up_zaak(zac, zac_url, openzaak, registry, zaak)
+        return zaak
+
+    query = {"page": 0, "rows": 10, "type": "ZAAK", "zoeken": {"ALLE": SEARCH_TERM}}
+    return {
+        "zac_zaak_create": new_zaak,
+        # The zaak's cleanup deletes the document.
+        "zac_document_upload": (
+            lambda registry: (new_zaak(registry), registry),
+            lambda prepared: uploaded_document(zac, zac_url, *cast("tuple[JsonObject, ResourceRegistry]", prepared)),
+        ),
+        "zac_search": lambda _registry: expect_status(zac.put(f"{zac_url}/rest/zoeken/list", json=query), 200),
+    }
+
+
 def _search_calls(env: Environment) -> dict[str, Call]:
-    """Return the searches users do: ZAC's (Solr) and KISS's (Elasticsearch) logged in, the portal's anonymous."""
+    """Return the searches users do in KISS (Elasticsearch) logged in, and in the portal anonymous."""
     urls = env.profile.urls
     calls: dict[str, Call] = {}
-    if "zac" in urls:
-        zac = zac_session(env, ADMIN.username, env.credentials.get(ADMIN.store_key))
-        query = {"page": 0, "rows": 10, "type": "ZAAK", "zoeken": {"ALLE": SEARCH_TERM}}
-        calls["zac_search"] = lambda _registry: expect_status(
-            zac.put(f"{urls['zac']}/rest/zoeken/list", json=query), 200
-        )
     if "kiss" in urls:
         kiss = challenge_session(env, urls["kiss"], KCC.username, env.credentials.get(KCC.store_key))
         body = {"query": SEARCH_TERM, "page": 1, "filters": []}
@@ -117,6 +149,7 @@ class ApiUser(User):
     wait_time = constant(1)
     env_under_test: Environment
     run_tag: str
+    accounts: Accounts
 
     def __init__(self, environment: LocustEnvironment) -> None:
         super().__init__(environment)
@@ -179,4 +212,6 @@ class ApiUser(User):
         if "keycloak" in urls:
             discovery = discovery_url(urls["keycloak"], realm_of(env))
             calls["kc_discovery"] = lambda _registry: expect_status(http.get(discovery), 200)
+        if "zac" in urls:
+            calls |= _zac_calls(env) | keycloak_calls(env, self.accounts)
         return calls | _search_calls(env)

@@ -6,6 +6,7 @@ from podiumd_tests.kube import Kube
 from podiumd_tests.kubelet import container_values
 from podiumd_tests.kubelet import node_metrics
 from podiumd_tests.kubelet import quantity_bytes
+from podiumd_tests.kubelet import quantity_cores
 
 TEXT = """# HELP container_memory_working_set_bytes [STABLE] Current working set of the container in bytes
 # TYPE container_memory_working_set_bytes gauge
@@ -26,6 +27,11 @@ def test_container_values_leave_out_pod_series_and_other_metrics():
 )
 def test_quantity_bytes(quantity, expected):
     assert quantity_bytes(quantity) == expected
+
+
+@pytest.mark.parametrize(("quantity", "expected"), [("500m", 0.5), ("2", 2.0), ("1.5", 1.5)])
+def test_quantity_cores(quantity, expected):
+    assert quantity_cores(quantity) == expected
 
 
 def test_an_unknown_quantity_is_an_error():

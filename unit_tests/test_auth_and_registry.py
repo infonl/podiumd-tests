@@ -10,6 +10,7 @@ import requests
 
 from podiumd_tests.auth.keycloak import PasswordLogin
 from podiumd_tests.auth.keycloak import TokenError
+from podiumd_tests.auth.keycloak import client_credentials_grant
 from podiumd_tests.auth.keycloak import discovery_url
 from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.auth.keycloak import password_grant
@@ -154,6 +155,12 @@ def test_password_grant_sends_the_client_secret(fake_http):
     assert "client_secret=s3cret" in str(sent[0].body)
 
 
+def test_client_credentials_grant_sends_the_client(fake_http):
+    sent = fake_http({"POST /realms/podiumd/protocol/openid-connect/token": (200, {"access_token": "t"})})
+    assert client_credentials_grant(requests.Session(), KC, "podiumd", ("c", "s3cret")) == "t"
+    assert "grant_type=client_credentials&client_id=c&client_secret=s3cret" in str(sent[0].body)
+
+
 LOGIN_PAGE = '<form id="kc-form-login" action="https://kc.test/login?a=1&amp;b=2" method="post">'
 
 
@@ -172,7 +179,7 @@ class FakeBrowser:
     def get(self, _url):
         return self.pages.pop(0)
 
-    def post(self, url, data):
+    def post(self, url, data, **_options):
         self.posts.append((url, data))
         return self.pages.pop(0)
 
