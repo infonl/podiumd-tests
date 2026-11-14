@@ -20,6 +20,9 @@ The podiumd-minikube agent works on the same live minikube at the same time: it 
   - podiumd-minikube provides: the components, their links to each other, ingress, the Keycloak clients and client roles of the podiumd chart's realm config (`charts/podiumd/templates/keycloak-podiumd-realm-config.yaml` in helm-charts), the Open Notificaties kanalen and filters of ExternalsPodiumD and podiumd-infra (`notifications_kanalen_config`, re-applied on every deploy), and Frank!Gateway with OpenBao (opt-in profile `frankgateway`).
   - podiumd-tests' bootstrap adds and removes: test users, test clients and tokens, realm roles, the DigiD/eHerkenning OIDC configuration, OI CMS pages and contact form, Open Formulieren test forms, KISS kanalen. It may add Open Notificaties kanalen beyond podiumd-minikube's, and never removes those. podiumd-tests deploys the mock server (webhook callbacks, NotifyNL, Worldline) from its own `infra/`.
   - Neither: eSuite (external), Alertmanager routes.
+- A new opt-in bootstrap step that changes a component's configuration on minikube (e.g. linking a service in an app's
+  admin settings) gets podiumd-minikube's yes before it is first applied, even when it records and restores (podiumd-minikube,
+  2026-11-14).
 - Findings in podiumd-minikube go into the handoff file, never as direct changes to that repository or its live configuration.
 
 Related: [[feedback-handoff-docs]], [[reuse-existing-logic]].
