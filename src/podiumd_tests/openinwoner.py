@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import re
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
+from urllib.parse import urljoin
 
+from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.bootstrap.steps import OI_BEGELEIDER
@@ -15,19 +18,32 @@ from podiumd_tests.browser import keycloak_login
 from podiumd_tests.browser import leave_login_callback
 from podiumd_tests.browser import refuse_cookies
 from podiumd_tests.django_snippets import run_snippet
+from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openzaak import make_rol
+from podiumd_tests.seed.openzaak import make_status
+from podiumd_tests.seed.openzaak import make_zaak
 
 if TYPE_CHECKING:
+    import requests
+
     from playwright.sync_api import Locator
     from playwright.sync_api import Page
 
     from podiumd_tests.bootstrap.keycloak import KeycloakUser
+    from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.openzaak import ZaaktypeParts
     from podiumd_tests.seed.registry import ResourceRegistry
 
 INWONER, _, BEDRIJF = IDENTITIES
 # The portal's kinds of user: their test identity and login method.
 LOGINS = {"inwoner": (INWONER, "digid"), "bedrijf": (BEDRIJF, "eherkenning")}
+# Bootstrap steps of Mijn zaken: the logins (wiring W1), pages (W5) and zaken (W4).
+MIJN_ZAKEN_WIRING = ("openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-zgw-group")
+MIJN_ZAKEN = "/mijn-zaken/"
+# Mijn zaken loads its list and a zaak's status as htmx fragments; the list answers 400 without this header.
+HTMX = {"HX-Request": "true"}
 
 
 def portal_login_url(env: Environment, method: str, next_path: str = "/") -> str:
@@ -49,6 +65,54 @@ def portal_login(page: Page, env: Environment, method: str, user: KeycloakUser, 
         page.wait_for_url(lambda url: "/register/necessary/" not in url)
         # Open Inwoner ignores `next` after the registration.
         page.goto(portal + next_path)
+
+
+def portal_session(env: Environment, method: str, user: KeycloakUser) -> requests.Session:
+    """Return a session logged in to the portal with "digid" or "eherkenning", without a browser.
+
+    A first eHerkenning login needs portal_login: it completes a registration form.
+    """
+    http = env.session()
+    login = portal_login_url(env, method, MIJN_ZAKEN)
+    expect_status(form_login(http, login, user.username, env.credentials.get(user.store_key)), HTTPStatus.OK)
+    return http
+
+
+def portal_zaak(  # noqa: PLR0913, PLR0917  # the zaak's initiator
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    parts: ZaaktypeParts,
+    identity: KeycloakUser = INWONER,
+    generiek: str = "initiator",
+    machtiging: str = "",
+) -> JsonObject:
+    """Create an openbaar zaak with its first status (Open Inwoner hides zaken without one) and the identity's rol.
+
+    generiek and machtiging: the omschrijvingGeneriek of the identity's roltype and its indicatieMachtiging.
+    """
+    zaak = make_zaak(openzaak, registry, parts.zaaktype)
+    attributes = identity.attributes
+    roltype = parts.roltypen[generiek]
+    if "bsn" in attributes:
+        make_rol(openzaak, registry, zaak, roltype, "natuurlijk_persoon", machtiging, inpBsn=attributes["bsn"][0])
+    else:
+        # The login carries the vestiging, and Open Inwoner filters on it too.
+        vestiging = {"kvkNummer": attributes["kvk"][0], "vestigingsNummer": attributes["vestigingsnummer"][0]}
+        make_rol(openzaak, registry, zaak, roltype, "niet_natuurlijk_persoon", machtiging, **vestiging)
+    make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
+    return zaak
+
+
+def zaak_status_url(fragment: str, list_url: str, zaak: JsonObject) -> str:
+    """Return the URL of the zaak's status page that the Mijn zaken fragment from list_url links to.
+
+    LookupError when the fragment does not list the zaak.
+    """
+    match = re.search(rf'href="([^"]*/{re.escape(str(zaak["uuid"]))}/status/)"', fragment)
+    if not match:
+        msg = f"Mijn zaken at {list_url} does not list zaak {zaak['identificatie']}"
+        raise LookupError(msg)
+    return urljoin(list_url, match[1])
 
 
 def ask_anonymously(page: Page, env: Environment, subject: str, vraag: str, email: str) -> None:

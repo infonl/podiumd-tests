@@ -57,10 +57,15 @@ def _deep_page(openzaak: ApiClient, path: str) -> str:
     return str(max(1, min(DEEP_PAGE, -(-count // PAGE_SIZE))))
 
 
+def suite_openzaak(env: Environment) -> tuple[ApiClient, JsonObject]:
+    """Return the suite's Open Zaak client and the test zaaktype."""
+    openzaak = openzaak_client(env, ZGW_CLIENT_ID, ZGW_STORE_KEY, "perf")
+    return openzaak, published_zaaktype(openzaak, TEST_ZAAKTYPE, "openzaak-zaaktype")
+
+
 def _test_zaaktype(env: Environment) -> tuple[ApiClient, str, str]:
     """Return the suite's Open Zaak client, the test zaaktype and its first informatieobjecttype."""
-    openzaak = openzaak_client(env, ZGW_CLIENT_ID, ZGW_STORE_KEY, "perf")
-    test_zaaktype = published_zaaktype(openzaak, TEST_ZAAKTYPE, "openzaak-zaaktype")
+    openzaak, test_zaaktype = suite_openzaak(env)
     return openzaak, str(test_zaaktype["url"]), strings(test_zaaktype.get("informatieobjecttypen"))[0]
 
 

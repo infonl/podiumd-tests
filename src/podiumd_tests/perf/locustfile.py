@@ -32,14 +32,13 @@ from podiumd_tests.clients.platform import openklant_client
 from podiumd_tests.oidc import challenge_session
 from podiumd_tests.perf.keycloak_calls import keycloak_calls
 from podiumd_tests.perf.keycloak_calls import login_accounts
+from podiumd_tests.perf.portal_calls import portal_calls
 from podiumd_tests.perf.runs import ENDPOINTS
-from podiumd_tests.perf.runs import HOT_ZAAK
-from podiumd_tests.perf.runs import HOT_ZAAK_BUCKET
 from podiumd_tests.perf.runs import HOT_ZAAK_LINKS
 from podiumd_tests.perf.runs import SEARCH_TERM
 from podiumd_tests.perf.runs import add_environment_arguments
+from podiumd_tests.perf.runs import hot_zaak_label
 from podiumd_tests.perf.runs import locust_environment
-from podiumd_tests.perf.stats import labelled
 from podiumd_tests.perf.zaakbrug_calls import zaakbrug_calls
 from podiumd_tests.perf.zac_calls import zac_calls
 from podiumd_tests.perf.zgw_calls import Call
@@ -159,7 +158,13 @@ class ApiUser(User):
 
     def __init__(self, environment: LocustEnvironment) -> None:
         super().__init__(environment)
+        # What the user's calls need while it runs: its portal zaak.
+        self.registry = ResourceRegistry(self.run_tag)
         self.calls = {name: call for name, call in self._calls().items() if name in self.selected}
+
+    def on_stop(self) -> None:
+        """Delete what the user's calls needed."""
+        self.registry.cleanup()
 
     @task
     def round_of_calls(self) -> None:
@@ -201,7 +206,7 @@ class ApiUser(User):
         # Only when selected: its setup makes a call.
         if "zaakbrug" in urls and "zaakbrug_genereer" in self.selected:
             calls |= zaakbrug_calls(env, self.identificaties)
-        return calls | _search_calls(env)
+        return calls | portal_calls(env, self.registry, self.selected) | _search_calls(env)
 
 
 class HotZaakUser(User):
@@ -221,13 +226,13 @@ class HotZaakUser(User):
 
     @task
     def link(self) -> None:
-        """Link a document, its stats labelled with the links started before it, per HOT_ZAAK_BUCKET."""
+        """Link a document, its stats labelled with the links started before it (hot_zaak_label)."""
         started = next(self.started)
         if started >= self.links:
             gevent.spawn(self.environment.runner.quit)  # pyright: ignore[reportOptionalMemberAccess]
             raise StopUser
         registry = ResourceRegistry(self.run_tag)
-        if _timed(self, labelled(HOT_ZAAK, started - started % HOT_ZAAK_BUCKET), self.call, registry) is not None:
+        if _timed(self, hot_zaak_label(started), self.call, registry) is not None:
             # The document no link refers to; a link Open Zaak made after all goes with the zaak.
             with suppress(CleanupError):
                 registry.cleanup()

@@ -3,12 +3,15 @@
 from contextlib import nullcontext
 
 import pytest
+import requests
 
 from podiumd_tests import browser
 from podiumd_tests import openinwoner
 from podiumd_tests.auth.keycloak_admin import user_email
 from podiumd_tests.bootstrap.steps import OI_ZAAKTYPE_CONFIG
+from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.openinwoner import LOGINS
+from podiumd_tests.openinwoner import MIJN_ZAKEN
 from podiumd_tests.openinwoner import ask_anonymously
 from podiumd_tests.openinwoner import begeleider_login
 from podiumd_tests.openinwoner import configure_zaaktype
@@ -18,12 +21,17 @@ from podiumd_tests.openinwoner import kvk_api_root
 from podiumd_tests.openinwoner import make_account
 from podiumd_tests.openinwoner import notification_outcome
 from podiumd_tests.openinwoner import portal_login
+from podiumd_tests.openinwoner import portal_session
+from podiumd_tests.openinwoner import portal_zaak
 from podiumd_tests.openinwoner import reset_begeleider
 from podiumd_tests.openinwoner import search_data
 from podiumd_tests.openinwoner import set_account
 from podiumd_tests.openinwoner import set_site_configuration
 from podiumd_tests.openinwoner import solve_captcha
 from podiumd_tests.openinwoner import upload_document
+from podiumd_tests.openinwoner import zaak_status_url
+from podiumd_tests.responses import UnexpectedStatusError
+from podiumd_tests.seed.openzaak import ZaaktypeParts
 from podiumd_tests.seed.registry import ResourceRegistry
 
 PORTAL = "https://openinwoner.example.test"
@@ -148,3 +156,53 @@ def test_notification_outcome_asks_for_the_resource(env):
     env.snippet_result = {"status": "success", "output": "processed"}
     assert notification_outcome(env, "https://oz/statussen/1") == {"status": "success", "output": "processed"}
     assert env.snippets[-1][1:] == ("oi_notification_record", {"resource_url": "https://oz/statussen/1"})
+
+
+@pytest.mark.parametrize(("status", "error"), [(200, None), (400, UnexpectedStatusError)])
+def test_portal_session_logs_in_through_the_portal_login(monkeypatch, env, response_factory, status, error):
+    logins = []
+
+    def form_login(_http, url, user, password):
+        logins.append((url, user, password))
+        return response_factory(status=status)
+
+    monkeypatch.setattr(openinwoner, "form_login", form_login)
+    user = LOGINS["inwoner"][0]
+    with pytest.raises(error) if error else nullcontext():
+        portal_session(env, "digid", user)
+    assert logins == [(f"{PORTAL}/digid-oidc/authenticate/?next={MIJN_ZAKEN}", user.username, f"pw-{user.store_key}")]
+
+
+INWONER_ATTRIBUTES = LOGINS["inwoner"][0].attributes
+BEDRIJF_ATTRIBUTES = LOGINS["bedrijf"][0].attributes
+
+
+@pytest.mark.parametrize(
+    ("who", "betrokkene_type", "identificatie"),
+    [
+        ("inwoner", "natuurlijk_persoon", {"inpBsn": INWONER_ATTRIBUTES["bsn"][0]}),
+        (
+            "bedrijf",
+            "niet_natuurlijk_persoon",
+            {"kvkNummer": BEDRIJF_ATTRIBUTES["kvk"][0], "vestigingsNummer": BEDRIJF_ATTRIBUTES["vestigingsnummer"][0]},
+        ),
+    ],
+)
+def test_portal_zaak_has_a_status_and_the_identity_as_initiator(monkeypatch, who, betrokkene_type, identificatie):
+    calls = []
+    monkeypatch.setattr(openinwoner, "make_zaak", lambda _oz, _registry, zaaktype: {"zaaktype": zaaktype})
+    monkeypatch.setattr(openinwoner, "make_rol", lambda *args, **kwargs: calls.append(("rol", args[3:], kwargs)))
+    monkeypatch.setattr(openinwoner, "make_status", lambda _oz, _zaak, statustype: calls.append(("status", statustype)))
+    parts = ZaaktypeParts("zt", [{"url": "st1"}, {"url": "st2"}], {"initiator": "rt"}, "iot", {}, "", [])
+    client = ApiClient(requests.Session(), "https://openzaak.example.test", {})
+    assert portal_zaak(client, ResourceRegistry("ptest-x"), parts, LOGINS[who][0]) == {"zaaktype": "zt"}
+    assert calls == [("rol", ("rt", betrokkene_type, ""), identificatie), ("status", "st1")]
+
+
+def test_zaak_status_url_finds_the_zaaks_link_in_mijn_zaken():
+    zaak = {"uuid": "u-1", "identificatie": "ZAAK-1"}
+    fragment = '<a class="cases__link" href="/mijn-zaken/2/u-0/status/"></a><a href="/mijn-zaken/2/u-1/status/">'
+    listed = f"{PORTAL}/mijn-zaken/content/"
+    assert zaak_status_url(fragment, listed, zaak) == f"{PORTAL}/mijn-zaken/2/u-1/status/"
+    with pytest.raises(LookupError, match="does not list zaak ZAAK-1"):
+        zaak_status_url("<p>Geen zaken</p>", listed, zaak)

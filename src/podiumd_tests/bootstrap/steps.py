@@ -360,6 +360,7 @@ IDENTITIES = (
     KeycloakUser("inwoner2", attributes={"bsn": ["999993653"]}),
     KeycloakUser("bedrijf", attributes={"kvk": [KVK_TEST_NUMMER], "vestigingsnummer": [KVK_TEST_VESTIGING]}),
 )
+DIGID_IDENTITIES = tuple(user for user in IDENTITIES if "bsn" in user.attributes)
 # Open Inwoner's portal pages; the contact form is a plugin on a page with its template.
 OI_PAGES = [
     {"slug": "welkom", "title": "Welkom bij PodiumD", "template": "cms/fullwidth.html", "home": True},
@@ -870,7 +871,7 @@ STEPS: tuple[Step, ...] = (
                 },
             },
             "eherkenning_site": True,
-            "accounts": [openinwoner_account(user) for user in IDENTITIES if "bsn" in user.attributes],
+            "accounts": [openinwoner_account(user) for user in DIGID_IDENTITIES],
             "identities": [openinwoner_number(user) for user in IDENTITIES],
         },
         record=True,

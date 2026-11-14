@@ -13,11 +13,14 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from podiumd_tests.bootstrap.steps import ADMIN
+from podiumd_tests.bootstrap.steps import DIGID_IDENTITIES
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.bootstrap.steps import ZAC_ROLE_USERS
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
+from podiumd_tests.openinwoner import MIJN_ZAKEN_WIRING
+from podiumd_tests.perf.stats import labelled
 
 if TYPE_CHECKING:
     from argparse import ArgumentParser
@@ -54,6 +57,8 @@ def locust_environment(env: str, urls: str) -> Environment:
 # A word the volume corpus, KISS's kennisbank and the portal's products all use.
 SEARCH_TERM = "aanvraag"
 
+# Each Locust user that makes these gets a zaak and a DigiD login of its own (perf.portal_calls).
+PORTAL_CALLS = ("oi_mijn_zaken", "oi_zaak_status")
 # Endpoint name -> the component it needs. Reads are TA's k6 api-perf.js; writes create and delete
 # their own objects; searches are what users type in ZAC, KISS and the portal.
 ENDPOINTS = {
@@ -95,6 +100,8 @@ ENDPOINTS = {
     "obj_vac_ordered": "objecten",
     # ZaakBrug #714: genereerZaakIdentificatie answered Fo03 faults under concurrent load.
     "zaakbrug_genereer": "zaakbrug",
+    # Open Inwoner's performance-tests: a DigiD inwoner's Mijn zaken and a zaak's status.
+    **dict.fromkeys(PORTAL_CALLS, "openinwoner"),
 }
 
 # Keycloak's sizing guide: what one vCPU serves per second (keycloak.org high-availability, CPU and memory sizing).
@@ -108,6 +115,8 @@ def api_user_steps(env: Environment) -> list[str]:
     steps = ["openzaak-client", "openklant-token", "objecten-token", "openzaak-zaaktype", ADMIN.name, KCC.name]
     if "zac" in env.profile.urls:
         steps += ["openzaak-client-productaanvraag", *(user.name for user in LOGIN_USERS)]
+    if "openinwoner" in env.profile.urls:
+        steps += [*(user.name for user in DIGID_IDENTITIES), *MIJN_ZAKEN_WIRING]
     return steps
 
 
@@ -170,6 +179,12 @@ def ramp_users(steps: Sequence[int], step_s: float, run_time_s: float) -> int | 
 HOT_ZAAK = "oz_hot_zio_create"
 HOT_ZAAK_LINKS = 400
 HOT_ZAAK_BUCKET = 100
+
+
+def hot_zaak_label(started: int) -> str:
+    """Return the stats name of a link with `started` links before it: HOT_ZAAK labelled with its bucket."""
+    return labelled(HOT_ZAAK, started - started % HOT_ZAAK_BUCKET)
+
 
 # Anonymous requests through the public gateway, one Locust run each (tests/perf/test_gateway_perf.py), to compare
 # gateway settings such as upstream keep-alive. Name -> (component, path, expected status); kiss_page also loads

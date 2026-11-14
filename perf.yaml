@@ -15,6 +15,9 @@ endpoints:
   zac_document_upload: {p95_ms: 3000}
   # Objecten's own benchmark allows 1 s for a page of 500 objects ordered on a data attribute.
   obj_vac_ordered: {p95_ms: 1000}
+  # Open Inwoner reads the zaak, its statussen, rollen and documenten without cache (no zaken cache in the API group);
+  # its own Locust test measured 1.5 to 4.5 s uncached.
+  oi_zaak_status: {p95_ms: 3000}
 # What a Locust run may do to the components it loads (podiumd_tests.perf.availability): their roots answer
 # without a 5xx in at least min_available of the samples taken every health_interval_s; no container restarts;
 # their pods are Ready again within recovery_s after the run; no container's RSS passes max_memory_ratio of its

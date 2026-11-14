@@ -1,4 +1,4 @@
-"""Response times under load: TA's k6 api-perf.js reads, plus writes and the users' searches, in Locust.
+"""Response times under load: TA's k6 api-perf.js reads, writes, searches and the portal's Mijn zaken, in Locust.
 
 One Locust run (src/podiumd_tests/perf/locustfile.py, headless, --perf-users users for
 --perf-duration) serves every test; each endpoint must meet its p95 and failure-ratio threshold
@@ -24,6 +24,7 @@ from podiumd_tests.perf.availability_report import problems
 from podiumd_tests.perf.availability_report import report
 from podiumd_tests.perf.runs import ENDPOINTS
 from podiumd_tests.perf.runs import KEYCLOAK_PER_VCPU
+from podiumd_tests.perf.runs import PORTAL_CALLS
 from podiumd_tests.perf.runs import api_user_steps
 from podiumd_tests.perf.runs import locust_command
 from podiumd_tests.perf.runs import mix_arguments
@@ -102,6 +103,10 @@ ZAC_LOAD = pytest.mark.source(
     "upstream infonl/dimpact-zaakafhandelcomponent scripts/test-data/create-load.py",
     "ZAC's own load script: zaken started in ZAC and documents uploaded to them.",
 )
+OI_LOCUST = pytest.mark.source(
+    "upstream maykinmedia/open-inwoner performance-tests/",
+    "Open Inwoner's own Locust test: a DigiD inwoner's Mijn zaken list and a zaak's status, as htmx loads them.",
+)
 SOURCES = {
     "oz_zaken_expand": pytest.mark.source(
         "upstream open-zaak/open-zaak issue 1837", "Open Zaak 1.15 kept the memory of each zaken list with expand."
@@ -122,6 +127,7 @@ SOURCES = {
     **dict.fromkeys(("oz_documenten_ordered", "oz_zaken_one_zaaktype"), OZ_BENCHMARK),
     **dict.fromkeys(KEYCLOAK_PER_VCPU, KC_BENCHMARK),
     **dict.fromkeys(("zac_zaak_create", "zac_document_upload"), ZAC_LOAD),
+    **dict.fromkeys(PORTAL_CALLS, OI_LOCUST),
 }
 
 

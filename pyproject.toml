@@ -85,7 +85,14 @@ markers = [
 [tool.coverage.run]
 source = ["src/podiumd_tests"]
 # Same excludes as the static checks: snippets run inside the components, the locustfiles under Locust.
-omit = ["*/snippets/*.py", "*/perf/*locustfile.py", "*/perf/zgw_calls.py", "*/perf/keycloak_calls.py", "*/perf/zac_calls.py"]
+omit = [
+    "*/snippets/*.py",
+    "*/perf/*locustfile.py",
+    "*/perf/zgw_calls.py",
+    "*/perf/keycloak_calls.py",
+    "*/perf/zac_calls.py",
+    "*/perf/portal_calls.py",
+]
 branch = true
 
 [tool.coverage.report]
@@ -310,7 +317,7 @@ sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
 #   - pytest_* hooks, test_* functions, pytestmark and @pytest.fixture functions: used by pytest.
 #   - __call__ of a callable Protocol (process.Runner): called through the protocol.
 #   - wait_until, tagged: library API without a caller in tests/.
-#   - Locust's hooks in perf/*locustfile.py (wait_time, tick, @task, @events listeners) and its User and
+#   - Locust's hooks in perf/*locustfile.py (wait_time, tick, on_stop, @task, @events listeners) and its User and
 #     LoadTestShape classes: called by Locust.
 [tool.deptry]
 known_first_party = ["podiumd_tests"]
@@ -325,7 +332,7 @@ DEP002 = ["pytest-playwright", "pytest-xdist", "pytest-html", "axe-playwright-py
 [tool.vulture]
 # Django snippets: run() is called inside the component, not from here.
 exclude = ["*/snippets/*.py"]
-ignore_names = ["pytest_*", "test_*", "pytestmark", "__call__", "wait_until", "tagged", "wait_time", "tick", "*User", "*Shape"]
+ignore_names = ["pytest_*", "test_*", "pytestmark", "__call__", "wait_until", "tagged", "wait_time", "tick", "on_stop", "*User", "*Shape"]
 ignore_decorators = ["@pytest.fixture", "@task", "@events.*.add_listener"]
 
 [tool.bandit]

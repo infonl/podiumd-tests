@@ -144,6 +144,7 @@ with curl or WebFetch. "verify" marks a fact not confirmed.
 | Reference numbers | (1 user, local, test.openzaak.nl) list: median 600–670 ms, uncached 8.2–9.1 s; status: median 480–500 ms, uncached 1.5–4.5 s; DigiD POST 2–4 s |
 | Port value | the logged-in portal path under load; the suite's `oi_search` is anonymous. Mijn aanvragen fans out to Open Zaak, Open Klant and Objecten, and OI's earlier hang (NO MERCY) lives in this area |
 | How | port to the suite's Locust with `portal_login` (DigiD mock via Keycloak), one inwoner per user from the identities seed; thresholds from the CSVs only as an order of magnitude |
+| Ported | `oi_mijn_zaken` and `oi_zaak_status` (`perf/portal_calls.py`): each Locust user logs in with DigiD as the next of the two DigiD identities and reads a zaak of its own. No cached and uncached pair: the suite's API group has no zaken cache, so every call fetches the zaken |
 
 #### M2. Objecten `performance_test/` (Locust + pytest-benchmark)
 

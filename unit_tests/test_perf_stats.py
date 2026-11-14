@@ -2,9 +2,13 @@
 
 import pytest
 
+from podiumd_tests.bootstrap.steps import DIGID_IDENTITIES
+from podiumd_tests.openinwoner import MIJN_ZAKEN_WIRING
 from podiumd_tests.perf import runs
+from podiumd_tests.perf.runs import HOT_ZAAK
 from podiumd_tests.perf.runs import LOGIN_USERS
 from podiumd_tests.perf.runs import api_user_steps
+from podiumd_tests.perf.runs import hot_zaak_label
 from podiumd_tests.perf.runs import locust_command
 from podiumd_tests.perf.runs import locust_environment
 from podiumd_tests.perf.runs import mix_arguments
@@ -145,6 +149,11 @@ def test_ramp_users_follow_the_step_at_the_run_time():
     assert [ramp_users((2, 4), 60, second) for second in (0, 59.9, 60, 119, 120)] == [2, 2, 4, 4, None]
 
 
+def test_hot_zaak_label_names_the_bucket_of_the_link():
+    labels = [hot_zaak_label(started) for started in (0, 99, 100, 250)]
+    assert labels == [labelled(HOT_ZAAK, bucket) for bucket in (0, 0, 100, 200)]
+
+
 THRESHOLD = Threshold(1000, 0.01, 1.5, 200)
 STEPS = {
     2: {"zac_search": EndpointStats(50, 0, 300), "kc_login": EndpointStats(50, 0, 200)},
@@ -176,3 +185,10 @@ def test_api_user_steps_add_zacs_when_the_environment_has_zac(env_factory, profi
     without_zac = api_user_steps(env_factory())
     with_zac = api_user_steps(env_factory(profile_factory(urls={"zac": "https://zac.example.test"})))
     assert set(with_zac) - set(without_zac) == {"openzaak-client-productaanvraag", *(user.name for user in LOGIN_USERS)}
+
+
+def test_api_user_steps_add_the_digid_identities_when_the_environment_has_open_inwoner(env_factory, profile_factory):
+    without_portal = api_user_steps(env_factory())
+    with_portal = api_user_steps(env_factory(profile_factory(urls={"openinwoner": "https://oi.example.test"})))
+    added = {*(user.name for user in DIGID_IDENTITIES), *MIJN_ZAKEN_WIRING}
+    assert set(with_portal) - set(without_portal) == added

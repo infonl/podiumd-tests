@@ -24,9 +24,12 @@ from podiumd_tests.browser import browser_session
 from podiumd_tests.json_data import section
 from podiumd_tests.mailpit import received_message
 from podiumd_tests.openinwoner import LOGINS
+from podiumd_tests.openinwoner import MIJN_ZAKEN
+from podiumd_tests.openinwoner import MIJN_ZAKEN_WIRING
 from podiumd_tests.openinwoner import choose_document
 from podiumd_tests.openinwoner import is_virus_scan_enabled
 from podiumd_tests.openinwoner import portal_login
+from podiumd_tests.openinwoner import portal_zaak
 from podiumd_tests.openinwoner import upload_document
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openklant import delete_klantcontact_tree
@@ -37,7 +40,6 @@ from podiumd_tests.seed.openzaak import link_document
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
-from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import send_mail
 from podiumd_tests.zac_betrokkenen import make_person_initiator
@@ -67,7 +69,6 @@ INWONER, _, BEDRIJF = IDENTITIES
 EICAR = rb"X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
 LIST_TIMEOUT_MS = 30_000
 MAIL_TIMEOUT = 60
-WIRING = ("openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-zgw-group")
 
 
 # The company parameter of tests that open a zaak's detail.
@@ -94,35 +95,10 @@ def fixture_virus_scan(podiumd_env: Environment) -> None:
         )
 
 
-def zaak_of(
-    openzaak: ApiClient,
-    registry: ResourceRegistry,
-    parts: ZaaktypeParts,
-    who: str = "inwoner",
-    generiek: str = "initiator",
-    machtiging: str = "",
-) -> JsonObject:
-    """An openbaar zaak with its first status (Open Inwoner hides zaken without one) and the identity as initiator.
-
-    generiek and machtiging: the omschrijvingGeneriek of the identity's roltype and its indicatieMachtiging.
-    """
-    zaak = make_zaak(openzaak, registry, parts.zaaktype)
-    attributes = LOGINS[who][0].attributes
-    roltype = parts.roltypen[generiek]
-    if who == "inwoner":
-        make_rol(openzaak, registry, zaak, roltype, "natuurlijk_persoon", machtiging, inpBsn=attributes["bsn"][0])
-    else:
-        # The login carries the vestiging, and Open Inwoner filters on it too.
-        vestiging = {"kvkNummer": attributes["kvk"][0], "vestigingsNummer": attributes["vestigingsnummer"][0]}
-        make_rol(openzaak, registry, zaak, roltype, "niet_natuurlijk_persoon", machtiging, **vestiging)
-    make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
-    return zaak
-
-
 def log_in(page: Page, podiumd_env: Environment, who: str = "inwoner") -> None:
     """Log the identity in; the page ends on Mijn zaken."""
     identity, method = LOGINS[who]
-    portal_login(page, podiumd_env, method, identity, "/mijn-zaken/")
+    portal_login(page, podiumd_env, method, identity, MIJN_ZAKEN)
 
 
 # Search can be switched off by test_portaal_zoeken; it runs on the same worker.
@@ -143,8 +119,8 @@ def test_search_on_a_zaaknummer_opens_the_zaak(
     need_bootstrap: Callable[..., None],
 ) -> None:
     """A logged-in inwoner who searches on the number of one of their zaken lands on that zaak."""
-    need_bootstrap(INWONER.name, *WIRING, "openinwoner-cms-pages")
-    zaak = zaak_of(openzaak, registry, parts)
+    need_bootstrap(INWONER.name, *MIJN_ZAKEN_WIRING, "openinwoner-cms-pages")
+    zaak = portal_zaak(openzaak, registry, parts)
     log_in(page, podiumd_env)
     page.goto(f"{podiumd_env.profile.urls['openinwoner']}/search/?query={zaak['identificatie']}")
     expect(page).to_have_url(re.compile(str(zaak["uuid"])))
@@ -213,8 +189,8 @@ def test_inwoners_zaak_is_in_mijn_zaken(
     screen: str,
 ) -> None:
     """Mijn zaken lists a zaak with the inwoner as initiator and fits the screen width (TA int-21, reg-95, 61)."""
-    need_bootstrap(INWONER.name, *WIRING)
-    zaak = zaak_of(openzaak, registry, parts)
+    need_bootstrap(INWONER.name, *MIJN_ZAKEN_WIRING)
+    zaak = portal_zaak(openzaak, registry, parts)
     log_in(page, podiumd_env)
     expect_listed(page, zaak)
     overflow = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
@@ -239,8 +215,8 @@ def test_bedrijfs_zaak_is_in_mijn_zaken(
     need_bootstrap: Callable[..., None],
 ) -> None:
     """A zaak of the company's vestiging is listed after an eHerkenning login (TA int-141)."""
-    need_bootstrap(BEDRIJF.name, *WIRING)
-    zaak = zaak_of(openzaak, registry, parts, "bedrijf")
+    need_bootstrap(BEDRIJF.name, *MIJN_ZAKEN_WIRING)
+    zaak = portal_zaak(openzaak, registry, parts, BEDRIJF)
     log_in(page, podiumd_env, "bedrijf")
     expect_listed(page, zaak)
 
@@ -270,8 +246,8 @@ def test_gemachtigde_sees_the_zaak_in_mijn_zaken(
     Open Inwoner 2.5.0 has no DigiD Machtigen login; it lists every zaak with a rol of the logged-in identity.
     Open Zaak allows one initiator per zaak.
     """
-    need_bootstrap(LOGINS[who][0].name, *WIRING)
-    zaak = zaak_of(openzaak, registry, parts, who, "belanghebbende", "gemachtigde")
+    need_bootstrap(LOGINS[who][0].name, *MIJN_ZAKEN_WIRING)
+    zaak = portal_zaak(openzaak, registry, parts, LOGINS[who][0], "belanghebbende", "gemachtigde")
     initiator = parts.roltypen["initiator"]
     make_rol(openzaak, registry, zaak, initiator, "natuurlijk_persoon", "machtiginggever", inpBsn=random_bsn())
     log_in(page, podiumd_env, who)
@@ -299,8 +275,8 @@ def test_zaak_shows_its_current_status(
     who: str,
 ) -> None:
     """The zaak's status page shows the status Open Zaak (and so ZAC) has now, not an earlier one."""
-    need_bootstrap(LOGINS[who][0].name, *WIRING)
-    zaak = zaak_of(openzaak, registry, parts, who)
+    need_bootstrap(LOGINS[who][0].name, *MIJN_ZAKEN_WIRING)
+    zaak = portal_zaak(openzaak, registry, parts, LOGINS[who][0])
     current = parts.statustypen[1]
     make_status(openzaak, zaak, str(current["url"]))
     open_zaak_status(page, podiumd_env, zaak, who)
@@ -331,8 +307,8 @@ def test_zaak_document_can_be_downloaded(
     need_bootstrap: Callable[..., None],
 ) -> None:
     """A definitief document of the zaak is on its status page and downloads with its content (TA int-31, reg-143)."""
-    need_bootstrap(INWONER.name, *WIRING)
-    zaak = zaak_of(openzaak, registry, parts)
+    need_bootstrap(INWONER.name, *MIJN_ZAKEN_WIRING)
+    zaak = portal_zaak(openzaak, registry, parts)
     inhoud = registry.tagged("documentinhoud")
     document = make_document(openzaak, registry, parts.informatieobjecttype, inhoud, status="definitief")
     link_document(openzaak, registry, zaak, document)
@@ -371,8 +347,8 @@ def test_uploaded_document_reaches_the_zaak(
     need_bootstrap: Callable[..., None],
 ) -> None:
     """A file uploaded on the zaak's status page becomes a document of the zaak (TA int-111, int-162)."""
-    need_bootstrap(INWONER.name, *WIRING, "openinwoner-zaaktype-config")
-    zaak = zaak_of(openzaak, registry, parts)
+    need_bootstrap(INWONER.name, *MIJN_ZAKEN_WIRING, "openinwoner-zaaktype-config")
+    zaak = portal_zaak(openzaak, registry, parts)
     clean_up_new_documents(openzaak, registry, zaak)
     bestand = f"{registry.tagged('upload')}.txt"
     open_zaak_status(page, podiumd_env, zaak)
@@ -405,8 +381,8 @@ def test_infected_upload_is_refused(
     who: str,
 ) -> None:
     """With ClamAV on, an upload of the EICAR test file does not reach the zaak (TA reg-123)."""
-    need_bootstrap(LOGINS[who][0].name, *WIRING, "openinwoner-zaaktype-config")
-    zaak = zaak_of(openzaak, registry, parts, who)
+    need_bootstrap(LOGINS[who][0].name, *MIJN_ZAKEN_WIRING, "openinwoner-zaaktype-config")
+    zaak = portal_zaak(openzaak, registry, parts, LOGINS[who][0])
     clean_up_new_documents(openzaak, registry, zaak)
     open_zaak_status(page, podiumd_env, zaak, who)
     upload_document(page, f"{registry.tagged('eicar')}.txt", EICAR)
@@ -432,8 +408,8 @@ def test_refused_file_type_cannot_be_uploaded(
     need_bootstrap: Callable[..., None],
 ) -> None:
     """The upload form keeps its button disabled for a file type outside the allowed list, such as .html (TA reg-178)."""
-    need_bootstrap(INWONER.name, *WIRING, "openinwoner-zaaktype-config")
-    zaak = zaak_of(openzaak, registry, parts)
+    need_bootstrap(INWONER.name, *MIJN_ZAKEN_WIRING, "openinwoner-zaaktype-config")
+    zaak = portal_zaak(openzaak, registry, parts)
     open_zaak_status(page, podiumd_env, zaak)
     expect(choose_document(page, f"{registry.tagged('pagina')}.html", b"<html></html>")).to_be_disabled()
 
@@ -476,8 +452,8 @@ def test_question_about_a_zaak_reaches_open_klant(
     need_bootstrap: Callable[..., None],
 ) -> None:
     """A question asked on the zaak's status page becomes a klantcontact about the zaak (TA int-164)."""
-    need_bootstrap(INWONER.name, *WIRING, "openinwoner-zaaktype-config", "openinwoner-openklant")
-    zaak = zaak_of(openzaak, registry, parts)
+    need_bootstrap(INWONER.name, *MIJN_ZAKEN_WIRING, "openinwoner-zaaktype-config", "openinwoner-openklant")
+    zaak = portal_zaak(openzaak, registry, parts)
     about = {"onderwerpobjectidentificatorObjectId": str(zaak["uuid"])}
 
     def klantcontacten() -> list[str]:
@@ -528,7 +504,7 @@ def test_zaak_started_in_zac_shows_in_mijn_zaken(
 
     The BPMN zaaktype is extern, which Open Inwoner requires; the intake gives the zaak a status.
     """
-    need_bootstrap(INWONER.name, *WIRING)
+    need_bootstrap(INWONER.name, *MIJN_ZAKEN_WIRING)
     complete_intake(zac, urls["zac"], bpmn_zaak, (zac_group, ADMIN.username))
     make_person_initiator(zac, urls["zac"], bpmn_zaak, EREBOS)
     log_in(page, podiumd_env)
@@ -565,7 +541,7 @@ def test_only_openbaar_zac_mail_shows_in_the_portal(  # the zaak, its mails and 
 
     The intake gives the BPMN zaak the status that Open Inwoner needs to list it.
     """
-    need_bootstrap(INWONER.name, *WIRING)
+    need_bootstrap(INWONER.name, *MIJN_ZAKEN_WIRING)
     complete_intake(zac, urls["zac"], bpmn_zaak, (zac_group, ADMIN.username))
     make_person_initiator(zac, urls["zac"], bpmn_zaak, EREBOS)
     subjects = {}

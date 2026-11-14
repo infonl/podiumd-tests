@@ -14,9 +14,9 @@ import pytest
 from playwright.sync_api import expect
 
 from podiumd_tests import ita as ita_calls
+from podiumd_tests import openinwoner as portal
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.bootstrap.names import TEST_FORM
-from podiumd_tests.bootstrap.steps import IDENTITIES
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.components import COMPONENTS
 from podiumd_tests.kcc import kcc_login
@@ -27,8 +27,6 @@ from podiumd_tests.openformulieren import forget_submission
 from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import start_submission
 from podiumd_tests.openformulieren import submit
-from podiumd_tests.openinwoner import ask_anonymously
-from podiumd_tests.openinwoner import portal_login
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
@@ -66,9 +64,6 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.integration, pytest.mark.destructive, pytest.mark.requires("cluster")]
 
-INWONER, _, _ = IDENTITIES
-# Open Inwoner's logins (W1), pages (W5) and zaken (W4).
-WIRING = ("openinwoner-oidc-mock", "openinwoner-cms-pages", "openinwoner-zgw-group")
 REGISTRATION_TIMEOUT = 90
 # ZAC's call to a down Open Klant: on Cilium the zero-endpoint Service black-holes the connection, so ZAC
 # answers 500 only after its own upstream timeout, longer than the session's default 15 s.
@@ -172,8 +167,8 @@ def test_without_open_zaak_the_apps_say_so(
     need_bootstrap: Callable[..., None],
 ) -> None:
     """Without Open Zaak: forms still start, Mijn zaken says the zaken could not be fetched, ZAC refuses a new zaak."""
-    need_bootstrap("openformulieren-form", INWONER.name, *WIRING)
-    portal_login(page, podiumd_env, "digid", INWONER, "/")
+    need_bootstrap("openformulieren-form", portal.INWONER.name, *portal.MIJN_ZAKEN_WIRING)
+    portal.portal_login(page, podiumd_env, "digid", portal.INWONER, "/")
     with component_down(podiumd_env, http, "openzaak"):
         form_starts(podiumd_env, http, registry)
         response = page.goto(f"{podiumd_env.profile.urls['openinwoner']}/mijn-zaken/")
@@ -242,9 +237,9 @@ def test_without_objecten_the_portal_kiss_and_zac_work(
     need_bootstrap: Callable[..., None],
 ) -> None:
     """Without Objecten: Mijn zaken and KISS answer, and ZAC starts a zaak."""
-    need_bootstrap(INWONER.name, *WIRING)
+    need_bootstrap(portal.INWONER.name, *portal.MIJN_ZAKEN_WIRING)
     with component_down(podiumd_env, http, "objecten"):
-        portal_login(page, podiumd_env, "digid", INWONER, "/mijn-zaken/")
+        portal.portal_login(page, podiumd_env, "digid", portal.INWONER, portal.MIJN_ZAKEN)
         assert not is_server_error(http.get(f"{urls['kiss']}/", timeout=ROOT_TIMEOUT)), "KISS fails without Objecten"
         assert zac_zaak()["identificatie"]
 
@@ -400,7 +395,7 @@ def test_portal_mail_waits_in_the_queue_during_a_mail_outage(
     about_vraag = f'"{vraag}"'  # noqa: B907  # Mailpit search phrase
     forget_mails(podiumd_env, registry, about_vraag)
     with component_down(podiumd_env, http, "mailpit"):
-        ask_anonymously(page, podiumd_env, QUESTION_SUBJECT, vraag, f"{vraag}@example.invalid")
+        portal.ask_anonymously(page, podiumd_env, QUESTION_SUBJECT, vraag, f"{vraag}@example.invalid")
         expect(
             page.get_by_text("Vraag verstuurd", exact=False).or_(page.locator(".notification")).first
         ).to_be_visible()
