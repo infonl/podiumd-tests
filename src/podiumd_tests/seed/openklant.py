@@ -231,6 +231,8 @@ def close_internetaak(openklant: ApiClient, taak: JsonObject) -> JsonObject:
 # (codeObjecttype, codeRegister, codeSoortObjectId) of what an onderwerpobject points at; ZAAK as KISS records it.
 ZAAK = ("zgw-Zaak", "openzaak", "uuid")
 FORMULIERINZENDING = ("formulierinzending", "Open Formulieren", "public_registration_reference")
+# A zaak as ZAC looks up the zaak-specific contactgegevens (KlantClientService.findZaakSpecificContactDetails).
+ZAC_ZAAK = ("zaak", "open-zaak", "uuid")
 
 
 def onderwerpobject_body(
@@ -325,16 +327,23 @@ def delete_partij(openklant: ApiClient, partij: str) -> None:
     openklant.delete(partij)
 
 
-def make_submission_contact(openklant: ApiClient, registry: ResourceRegistry, kenmerk: str, *adressen: str) -> None:
+def make_submission_contact(
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    kenmerk: str,
+    *adressen: str,
+    codes: tuple[str, str, str] = FORMULIERINZENDING,
+) -> None:
     """Create the e-mail addresses and telefoonnummers a form's submitter left, as Open Formulieren registers them.
 
     A klantcontact about the submission (onderwerpobject with its kenmerk) with a betrokkene and the
     addresses; ZAC finds them for the productaanvraag with that kenmerk. Cleanup deletes the whole tree,
-    also the onderwerpobject ZAC adds for the zaak.
+    also the onderwerpobject ZAC adds for the zaak. With codes ZAC_ZAAK and a zaak's uuid as kenmerk, they are
+    the zaak's own contactgegevens.
     """
     klantcontact = make_klantcontact(openklant, registry, onderwerp=kenmerk)
     betrokkene = make_betrokkene(openklant, registry, klantcontact, None)
     for adres in adressen:
         make_digitaal_adres(openklant, registry, None, adres, betrokkene)
-    make_onderwerpobject(openklant, registry, klantcontact, kenmerk, FORMULIERINZENDING)
+    make_onderwerpobject(openklant, registry, klantcontact, kenmerk, codes)
     clean_up_klantcontacten(openklant, registry, kenmerk)

@@ -1,4 +1,4 @@
-"""A BPMN process that mails: SendEmailDelegate after the intake of podiumd-tests' process."""
+"""A BPMN process that mails: SendEmailDelegate after the intake, SendConfirmationEmailDelegate from task Keuze."""
 
 from __future__ import annotations
 
@@ -7,20 +7,26 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.bootstrap.bpmn import INTAKE
+from podiumd_tests.bootstrap.bpmn import KEUZE
 from podiumd_tests.bootstrap.bpmn import MAIL_TO
 from podiumd_tests.bootstrap.bpmn import MAIL_VERTROUWELIJKHEID
 from podiumd_tests.bootstrap.bpmn import SELECT
 from podiumd_tests.bootstrap.bpmn import complete_intake
+from podiumd_tests.bootstrap.bpmn import complete_keuze
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.mailpit import own_address
 from podiumd_tests.mailpit import received_message
 from podiumd_tests.responses import UnexpectedStatusError
+from podiumd_tests.seed.openklant import ZAC_ZAAK
+from podiumd_tests.seed.openklant import make_submission_contact
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import zaaktype_parts
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import NOTIFICATION_TIMEOUT
+from podiumd_tests.zac_documents import OPENBAAR_MAIL
 from podiumd_tests.zac_documents import inbox_document
 from podiumd_tests.zac_documents import inbox_documenten
+from podiumd_tests.zac_documents import kept_mail
 from podiumd_tests.zac_documents import uploaded_document
 from podiumd_tests.zac_documents import zaak_documents
 from podiumd_tests.zac_taken import is_task_open
@@ -144,3 +150,38 @@ def test_bpmn_zaak_documents_are_not_in_inbox_documenten(
     assert len(documents) == len(uploaded) + 1, documents  # and the mail
     listed = inbox_documenten(zac, zac_url, registry.run_tag) + inbox_documenten(zac, zac_url, subject)
     assert not documents & {str(entry.get("enkelvoudiginformatieobjectUUID")) for entry in listed}
+
+
+@pytest.mark.requires("openklant")
+@pytest.mark.source(
+    "external Dimpact-Samenwerking/zaakafhandelcomponent-configuratie end-to-end-testproces (E2E)",
+    "Automatisch verzenden ontvangstbevestiging, reimplemented on podiumd-tests' process (the source has no licence).",
+)
+@pytest.mark.scenario("""
+    Given a BPMN zaak in ZAC at its Keuze taak, without contactgegevens in Open Klant
+    When the behandelaar chooses the ontvangstbevestiging
+    Then no mail is sent, and the process goes on to a new Keuze taak
+    When Open Klant gets a klantcontact about the zaak whose klant left an e-mail address
+    And the behandelaar chooses the ontvangstbevestiging again
+    Then the ontvangstbevestiging with the zaak's number arrives at that address
+    And the zaak keeps the mail as a definitive PDF/A, openbaar
+""")
+def test_bpmn_ontvangstbevestiging_goes_to_the_zaaks_contactgegevens(
+    zac: requests.Session,
+    urls: dict[str, str],
+    keuze_zaak: JsonObject,
+    openklant: ApiClient,
+    mailpit: ApiClient,
+    registry: ResourceRegistry,
+) -> None:
+    """SendConfirmationEmailDelegate mails the zaak-specific contactgegevens in Open Klant, else skips the mail."""
+    zac_url, uuid = urls["zac"], str(keuze_zaak["uuid"])
+    complete_keuze(zac, zac_url, keuze_zaak, "bevestiging")
+    open_task(zac, zac_url, uuid, KEUZE)
+    assert zaak_documents(zac, zac_url, keuze_zaak) == []
+    adres = own_address(registry)
+    make_submission_contact(openklant, registry, uuid, adres, codes=ZAC_ZAAK)
+    complete_keuze(zac, zac_url, keuze_zaak, "bevestiging")
+    message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=adres)
+    assert str(keuze_zaak["identificatie"]) in str(message.get("Subject")), message.get("Subject")
+    assert kept_mail(zac, zac_url, keuze_zaak, message) == OPENBAAR_MAIL

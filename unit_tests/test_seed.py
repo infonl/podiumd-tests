@@ -342,6 +342,16 @@ def test_delete_partij_deletes_sub_identificators_before_their_parent(fake_http)
     assert [p for m, p in calls(sent) if m == "DELETE"] == ["/da", "/id-vestiging", "/id-kvk", "/partijen/p"]
 
 
+def test_submission_contact_of_a_zaak_is_about_the_zaak_as_zac_looks_it_up(fake_http):
+    paths = ("klantcontacten", "betrokkenen", "digitaleadressen", "onderwerpobjecten")
+    sent = fake_http({k: v for p in paths for k, v in created(p).items()})
+    registry = ResourceRegistry("run1")
+    openklant.make_submission_contact(api(), registry, "z1", "a@example.invalid", codes=openklant.ZAC_ZAAK)
+    identificator = section(body(sent[-1]), "onderwerpobjectidentificator")
+    codes = (identificator["objectId"], identificator["codeObjecttype"], identificator["codeRegister"])
+    assert codes == ("z1", "zaak", "open-zaak")
+
+
 def test_submission_contact_cleanup_deletes_the_tree_by_onderwerp(fake_http):
     paths = ("klantcontacten", "betrokkenen", "digitaleadressen", "onderwerpobjecten")
     answers = {k: v for p in paths for k, v in created(p).items()}
