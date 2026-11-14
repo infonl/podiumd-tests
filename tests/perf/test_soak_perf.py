@@ -45,7 +45,9 @@ PREFIX = "soak"
     Given a few simulated users list zaken and klantcontacten with their related objects, write, search and log in
     When they keep doing so at a steady pace for a long time
     Then no container's memory keeps growing after the warm-up
-    And the components they load stay available: no restart, ready again and healthy during the load
+    And no pod of a loaded component restarted or was replaced
+    And their pods are ready again within the recovery time
+    And each loaded component answered its health check in nearly all samples during the load
 """)
 def test_soak_memory_levels_off(
     request: pytest.FixtureRequest,

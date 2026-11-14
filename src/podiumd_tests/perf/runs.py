@@ -88,7 +88,7 @@ ENDPOINTS = {
     # ZAC's create-load.py: a zaak started in ZAC, and a document uploaded to it.
     "zac_zaak_create": "zac",
     "zac_document_upload": "zac",
-    # Lists with their related objects inlined (expand), whose memory Open Klant #636 and Open Zaak #1837 kept.
+    # Lists with related objects inlined (expand): memory growth in Open Klant #636 and Open Zaak #1837.
     "oz_zaken_expand": "openzaak",
     "ok2_klantcontacten_expand": "openklant",
 }

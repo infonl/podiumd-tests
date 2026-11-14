@@ -112,8 +112,8 @@ class Watch:  # pylint: disable=too-many-instance-attributes  # one field per me
     started: float = 0
     ended: float = 0
     samples: list[Sample] = field(default_factory=list[Sample])
-    # RSS readings and highest working set per container, in bytes, and its memory limit (None: no limit). Only RSS
-    # (anonymous memory) counts against the limit: the kernel reclaims the page cache in the working set first.
+    # Per container, in bytes: RSS readings, the highest working set, and the memory limit (None: no limit). Only
+    # RSS (anonymous memory) counts against the limit: the kernel reclaims the page cache in the working set first.
     rss_series: dict[ContainerKey, Series] = field(default_factory=dict[ContainerKey, Series])
     working_set: Values = field(default_factory=dict[ContainerKey, float])
     memory_limits: dict[ContainerKey, float | None] = field(default_factory=dict[ContainerKey, float | None])
@@ -215,17 +215,22 @@ class _Cluster:
         """Record the RSS and keep the highest working set per loaded container until stop is set."""
         while True:
             try:
-                rss, working_set = self.metrics(CADVISOR, (RSS, WORKING_SET))
+                self.read_memory()
             except KubeError as error:
-                self.watch.notes.append(f"memory: kubelet cAdvisor metrics unreadable (needs get nodes/proxy): {error}")
-                return
-            now = time.time()
-            for key, value in rss.items():
-                self.watch.rss_series.setdefault(key, []).append((now, value))
-            for key, value in working_set.items():
-                self.watch.working_set[key] = max(value, self.watch.working_set.get(key, 0))
+                note = f"memory: kubelet cAdvisor metrics unreadable (needs get nodes/proxy): {error}"
+                if note not in self.watch.notes:
+                    self.watch.notes.append(note)
             if stop.wait(self.watch.limits.health_interval_s):
                 return
+
+    def read_memory(self) -> None:
+        """Add a reading of the RSS to its series, and keep the highest working set, per loaded container."""
+        rss, working_set = self.metrics(CADVISOR, (RSS, WORKING_SET))
+        now = time.time()
+        for key, value in rss.items():
+            self.watch.rss_series.setdefault(key, []).append((now, value))
+        for key, value in working_set.items():
+            self.watch.working_set[key] = max(value, self.watch.working_set.get(key, 0))
 
     def unready(self) -> list[str]:
         """Return the loaded pods that are not Running and Ready."""
@@ -283,7 +288,7 @@ def watched(env: Environment, urls: Mapping[str, str], components: Iterable[str]
 def watched_run(
     env: Environment, urls: Mapping[str, str], components: Iterable[str], command: Sequence[str], timeout: int
 ) -> Watch:
-    """Run the command, a Locust run, while `watched` measures the components against perf.yaml; return the watch."""
+    """Run the command while `watched` measures the components against perf.yaml; return the watch."""
     with watched(env, urls, components, availability_limits(REPO_ROOT / "perf.yaml")) as watch:
         run_checked(run_process, command, timeout=timeout)
     return watch

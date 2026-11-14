@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 # Open Zaak's performance_test reads documents and zaken at page 34 of 100.
 PAGE_SIZE = 100
 DEEP_PAGE = 34
-# A portal's "mijn zaken": each zaak with its zaaktype, status, rollen, resultaat and documents.
+# Each zaak of a list with its zaaktype, status, rollen, resultaat and zaakinformatieobjecten inlined.
 ZAAK_EXPAND = "zaaktype,status,status.statustype,rollen,resultaat,zaakinformatieobjecten"
 type Call = Callable[[ResourceRegistry], object]
 # A call whose setup is not timed: prepare(registry) makes what the timed part needs and gets its cleanup.

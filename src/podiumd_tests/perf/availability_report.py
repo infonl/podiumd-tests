@@ -75,12 +75,12 @@ class Trend:
     # The first reading at or after each TREND_STEP_S since the start of the load.
     steps: tuple[float, ...]
     growth: float
-    # Growth in the last half of the readings after the warm-up: whether it still grows at the end.
+    # Growth in the last half of the time after the warm-up: whether it still grows at the end.
     late_growth: float
 
 
 def growth_per_min(series: Series) -> float:
-    """Return the least-squares slope of the readings, bytes over seconds, in MiB per minute."""
+    """Return the least-squares growth of the readings in MiB per minute."""
     times, values = zip(*series, strict=True)
     return linear_regression(times, values).slope * 60 / MIB
 
@@ -98,14 +98,18 @@ def _steps(series: Series, started: float) -> tuple[float, ...]:
 def memory_trend(series: Series, started: float, warmup_s: float) -> Trend | None:
     """Return the trend of the RSS readings of a load that started at `started` (Unix seconds).
 
-    None when the readings after the warm-up are fewer than MIN_READINGS or span less than the warm-up itself.
+    The warm-up starts with the load, or with the first reading of a container that started later. None when the
+    readings after the warm-up span less than the warm-up itself, or either half of that time has too few readings.
     """
-    window = [reading for reading in series if reading[0] >= started + warmup_s]
-    span = window[-1][0] - window[0][0] if window else 0
-    if len(window) < MIN_READINGS or span <= 0 or span < warmup_s:
+    warm = max(started, series[0][0]) + warmup_s
+    window = [reading for reading in series if reading[0] >= warm]
+    if len(window) < MIN_READINGS:
         return None
-    middle = window[0][0] + span / 2
-    late = [reading for reading in window if reading[0] >= middle]
+    first, last = window[0][0], window[-1][0]
+    span = last - first
+    late = [reading for reading in window if reading[0] >= first + span / 2]
+    if span < max(warmup_s, 1) or len(late) < MIN_READINGS // 2:
+        return None
     values = [value / MIB for _at, value in series]
     rss = (values[0], values[-1], max(values))
     return Trend(*rss, _steps(series, started), growth_per_min(window), growth_per_min(late))
@@ -288,10 +292,9 @@ def _trend_rows(watch: Watch) -> list[str]:
     if not trends:
         return []
     warmup = f"after a warm-up of {watch.limits.memory_warmup_s:g} s"
-    rows = ["", f"RSS in MiB; growth {warmup}, least squares.", ""]
     every = f"Every {TREND_STEP_S // 60} min"
-    rows += [f"| Container | Start | End | Peak | Growth MiB/min | In its last half | {every} |"]
-    rows.append("|---|---|---|---|---|---|---|")
+    header = f"| Container | Start | End | Peak | Growth MiB/min | In its last half | {every} |"
+    rows = ["", f"RSS in MiB; growth {warmup}, least squares.", "", header, "|---|---|---|---|---|---|---|"]
     for key, trend in trends:
         rss = f"{trend.first:.0f} | {trend.last:.0f} | {trend.peak:.0f}"
         growth = f"{trend.growth:+.2f} | {trend.late_growth:+.2f}"
