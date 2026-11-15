@@ -83,6 +83,7 @@ def created(path: str) -> dict[str, _Answer]:
         (lambda c, r: openklant.make_onderwerpobject(c, r, {"uuid": "k"}, "z"), "onderwerpobjecten"),
         (lambda c, r: objecten_module.make_object(c, r, "ot", {"a": 1}), "objects"),
         (lambda c, r: make_abonnement(c, r, "https://cb.test/", "zaken", {}), "abonnement"),
+        (lambda c, r: openvtb.make_taak(c, r, "betaaltaken"), "betaaltaken"),
     ],
 )
 def test_factories_post_and_delete_at_cleanup(fake_http, factory, path):
@@ -210,6 +211,19 @@ def test_bericht_is_deleted_in_the_django_shell_before_its_berichttype(fake_http
     assert shell[0][0] == "openvtb-deploy"
     assert "uuid='b1'" in shell[0][1]
     assert calls(sent)[-1] == ("DELETE", "/berichttypen/new")
+
+
+def test_taak_body_has_the_required_fields_and_drops_none():
+    registry = ResourceRegistry("run1")
+    taak = openvtb.taak_body(registry, "urltaken", titel=None, toelichting="t")
+    assert set(taak) == {"einddatumHandelingsTermijn", "details", "toelichting"}
+    assert "toelichting" not in openvtb.without(taak, "toelichting")
+    assert openvtb.without(taak, "uitvraagLink")["details"] == {}
+
+
+def test_zaak_urn_names_the_zaaknummer_of_the_bronorganisatie():
+    zaak = {"bronorganisatie": "002220647", "identificatie": "ZAAK-1"}
+    assert openvtb.zaak_urn(zaak) == "urn:nld:rsin:002220647:zaak:zaaknummer:ZAAK-1"
 
 
 def test_tagged_fields_carry_the_run_tag(fake_http):
