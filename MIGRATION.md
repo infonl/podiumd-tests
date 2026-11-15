@@ -47,7 +47,7 @@ Sources:
 | `interaction/78-ita-add-klantcontact.spec.ts` | component or integration, marker `core` | 3/4/5 | drop | Superseded by 180 (outdated body). |
 | `maintenance/cleanup-test-zaken.spec.ts` | `podiumd-tests sweep` (CLI, not a test) | 2 | replace | |
 | `perf/api-perf.js` | perf (Locust) | 6 | port | `tests/perf/test_api_perf.py` with `src/podiumd_tests/perf/locustfile.py`; thresholds in `perf.yaml`. |
-| `perf/fg-compare.js` | perf (Locust) | 6 | todo | Needs an environment with both a Frank!Gateway and a direct route to Open Zaak (TA used a temporary `openzaak-direct` host); minikube's outway is in-cluster only. |
+| `perf/fg-compare.js` | perf (Locust) | 6 | drop | No estate has a direct route to Open Zaak beside Frank!Gateway (TA used a temporary `openzaak-direct` host). `test_gateway_perf.py` covers the gateway route. |
 | `perf/hairpin-compare.js` (only in TA 4.8.2) | perf | 6 | drop | Compares the public hostname with the in-cluster Frank!Gateway route: network-path cost, not availability; needs an in-cluster runner. `test_gateway_perf.py` covers the gateway route. |
 | `perf/lib.js` | perf (Locust) | 6 | merge | Its auth helpers are the suite's own clients (`clients/platform.py`). |
 | `regression/07-brp-persoon-zoeken.spec.ts` | component or integration | 3/4/5 | port | `tests/component/basisregistraties/test_brp.py`, through the api-proxy. |
