@@ -363,7 +363,10 @@ def test_zaak_suspended_with_a_blank_reden_is_not_suspended_again(
 ) -> None:
     """A second opschorten is refused; a refused blank reden at the first opschorten also passes."""
     zaak = zac_zaak()
-    if opschorten(zac, urls["zac"], zaak, SUSPENSION_DAYS, " ").status_code != HTTPStatus.OK:
+    first = expect_status(
+        opschorten(zac, urls["zac"], zaak, SUSPENSION_DAYS, " "), HTTPStatus.OK, HTTPStatus.BAD_REQUEST
+    )
+    if first.status_code == HTTPStatus.BAD_REQUEST:
         return
     expect_status(hervatten(zac, urls["zac"], zaak, ""), HTTPStatus.OK)
     again = opschorten(zac, urls["zac"], zaak, SUSPENSION_DAYS, "nogmaals")

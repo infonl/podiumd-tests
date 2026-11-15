@@ -33,7 +33,7 @@ from podiumd_tests.seed.openklant import make_submission_contact
 from podiumd_tests.seed.openklant import partijen_of
 from podiumd_tests.seed.zac_zaaktype import make_zac_zaaktype
 from podiumd_tests.seed.zac_zaaktype import zac_as_admin
-from podiumd_tests.wait import WaitTimeoutError
+from podiumd_tests.wait import is_never
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import BEVESTIGING_NIET_VERSTUURD
 from podiumd_tests.zac import E_FORMULIER
@@ -232,23 +232,27 @@ def test_ontvangstbevestiging_goes_to_the_initiators_voorkeur_address_else_the_f
 BEVESTIGING_WAIT = 15
 
 
+def is_confirmed(zac: requests.Session, zac_url: str, zaak: JsonObject) -> bool:
+    """Return True when the zaak no longer has the indicatie that no bevestiging was sent."""
+    return BEVESTIGING_NIET_VERSTUURD not in strings(read_zaak(zac, zac_url, str(zaak["uuid"])).get("indicaties"))
+
+
 def is_left_unconfirmed(zac: requests.Session, zac_url: str, zaak: JsonObject) -> bool:
     """Whether the zaak keeps the indicatie that no bevestiging was sent, BEVESTIGING_WAIT seconds after ZAC linked
     the aanvraag's contactgegevens.
     """
     zaak_with_contactgegevens(zac, zac_url, str(zaak["uuid"]))
-    try:
-        wait_for_bevestiging(zac, zac_url, zaak)
-    except WaitTimeoutError:
-        return True
-    return False
+    return is_never(
+        lambda: is_confirmed(zac, zac_url, zaak),
+        timeout=BEVESTIGING_WAIT,
+        description=f"bevestiging of zaak {zaak['identificatie']}",
+    )
 
 
 def wait_for_bevestiging(zac: requests.Session, zac_url: str, zaak: JsonObject) -> None:
     """Wait BEVESTIGING_WAIT seconds at most until the zaak no longer has the indicatie that no bevestiging was sent."""
-    uuid = str(zaak["uuid"])
     wait_until(
-        lambda: BEVESTIGING_NIET_VERSTUURD not in strings(read_zaak(zac, zac_url, uuid).get("indicaties")),
+        lambda: is_confirmed(zac, zac_url, zaak),
         timeout=BEVESTIGING_WAIT,
         description=f"bevestiging of zaak {zaak['identificatie']}",
     )
@@ -352,4 +356,6 @@ def test_zaak_from_the_inbox_productaanvragen_gets_no_ontvangstbevestiging(
     zaak = start_zaak(zac, urls["zac"], {**body, "inboxProductaanvraag": entry})
     clean_up_zaak(zac, urls["zac"], openzaak_productaanvraag, registry, zaak)
     assert BEVESTIGING_NIET_VERSTUURD in strings(zaak.get("indicaties"))
-    assert search(mailpit, f"to:{quoted(adres)}") == []
+    assert is_never(
+        lambda: search(mailpit, f"to:{quoted(adres)}"), timeout=BEVESTIGING_WAIT, description=f"mail to {adres}"
+    )

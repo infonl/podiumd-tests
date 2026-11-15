@@ -6,6 +6,7 @@ import pytest
 
 from podiumd_tests.wait import Clock
 from podiumd_tests.wait import WaitTimeoutError
+from podiumd_tests.wait import is_never
 from podiumd_tests.wait import parse_duration
 from podiumd_tests.wait import wait_until
 
@@ -57,6 +58,13 @@ def test_exceptions_count_as_not_yet_and_are_reported():
 
 def test_is_an_assertion_error_for_pytest():
     assert issubclass(WaitTimeoutError, AssertionError)
+
+
+def test_is_never_is_true_only_when_the_probe_stays_falsy():
+    clock = FakeClock()
+    assert is_never(list, timeout=4, description="a mail", clock=Clock(clock, clock.sleep))
+    values = iter([[], ["mail"]])
+    assert not is_never(lambda: next(values), timeout=4, description="a mail", clock=Clock(clock, clock.sleep))
 
 
 @pytest.mark.parametrize(

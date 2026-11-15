@@ -497,8 +497,11 @@ def test_document_with_empty_vertrouwelijkheidaanduiding_is_no_server_error(
     path = f"{DOCUMENTEN}/enkelvoudiginformatieobjecten"
     response = openzaak.request("POST", path, HTTPStatus.BAD_REQUEST, HTTPStatus.CREATED, json=body)
     if response.status_code == HTTPStatus.CREATED:
-        url = str(response.json()["url"])
+        document = response.json()
+        url = str(document["url"])
         registry.add(f"document {url}", lambda: openzaak.delete(url))
+        expected = openzaak.get(parts.informatieobjecttype)["vertrouwelijkheidaanduiding"]
+        assert document["vertrouwelijkheidaanduiding"] == expected
 
 
 @pytest.mark.source(

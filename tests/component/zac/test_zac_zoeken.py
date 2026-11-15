@@ -278,6 +278,7 @@ def test_saved_zoekopdracht_is_offered_until_deleted(
     strict=True,
     reason="[zac-22] ZAC 5.9.1 deletes another user's saved zoekopdracht (DELETE "
     "/rest/gebruikersvoorkeuren/zoekopdracht/{id} checks no owner); not yet reported upstream",
+    raises=AssertionError,
 )
 @pytest.mark.requires("pabc")
 @pytest.mark.scenario("""
@@ -295,6 +296,8 @@ def test_zoekopdracht_of_another_user_is_not_deleted(
     """The raadpleger's DELETE of the admin's zoekopdracht answers 403 and leaves it."""
     saved = save_zoekopdracht(zac, urls["zac"], registry, WERKVOORRAAD_ZAKEN, {"filters": {}})
     response = zac_as("raadpleger").delete(f"{urls['zac']}{ZOEKOPDRACHT}/{saved['id']}")
+    if response.status_code == HTTPStatus.UNAUTHORIZED:
+        pytest.fail(f"the raadpleger is not logged in: {describe(response)}")  # no sign of zac-22
     offered = {item.get("id") for item in zoekopdrachten(zac, urls["zac"], WERKVOORRAAD_ZAKEN)}
     assert saved["id"] in offered, describe(response)
     assert response.status_code == HTTPStatus.FORBIDDEN, describe(response)

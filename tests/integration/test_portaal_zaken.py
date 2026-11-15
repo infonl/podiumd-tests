@@ -40,6 +40,7 @@ from podiumd_tests.seed.openzaak import link_document
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
+from podiumd_tests.wait import is_never
 from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import scaled
 from podiumd_tests.workloads import workload_ref
@@ -71,6 +72,8 @@ INWONER, _, BEDRIJF = IDENTITIES
 EICAR = rb"X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"
 LIST_TIMEOUT_MS = 30_000
 MAIL_TIMEOUT = 60
+# An accepted upload reaches the zaak in Open Zaak within this time.
+UPLOAD_TIMEOUT = 30
 
 
 # The company parameter of tests that open a zaak's detail.
@@ -282,8 +285,10 @@ def test_zaak_shows_its_current_status(
     current = parts.statustypen[1]
     make_status(openzaak, zaak, str(current["url"]))
     open_zaak_status(page, podiumd_env, zaak, who)
-    # The status page loads the zaak's data after the page itself, like the list.
-    expect(page.locator("main")).to_contain_text(str(current["omschrijving"]), timeout=LIST_TIMEOUT_MS)
+    # The status page loads the zaak's data after the page itself, like the list. The timeline names every
+    # statustype; only the current one has class status--current.
+    current_item = page.locator(".status-list__list-item.status--current")
+    expect(current_item).to_contain_text(str(current["omschrijving"]), timeout=LIST_TIMEOUT_MS)
 
 
 @pytest.mark.source(
@@ -355,7 +360,9 @@ def test_uploaded_document_reaches_the_zaak(
     bestand = f"{registry.tagged('upload')}.txt"
     open_zaak_status(page, podiumd_env, zaak)
     upload_document(page, bestand, bestand.encode())
-    found = wait_until(lambda: documents_of(openzaak, zaak), timeout=30, description=f"document {bestand} on the zaak")
+    found = wait_until(
+        lambda: documents_of(openzaak, zaak), timeout=UPLOAD_TIMEOUT, description=f"document {bestand} on the zaak"
+    )
     assert bestand in found
 
 
@@ -388,7 +395,7 @@ def test_infected_upload_is_refused(
     clean_up_new_documents(openzaak, registry, zaak)
     open_zaak_status(page, podiumd_env, zaak, who)
     upload_document(page, f"{registry.tagged('eicar')}.txt", EICAR)
-    assert documents_of(openzaak, zaak) == []
+    assert is_never(lambda: documents_of(openzaak, zaak), timeout=UPLOAD_TIMEOUT, description="a document on the zaak")
 
 
 @pytest.mark.requires("cluster")
@@ -422,7 +429,7 @@ def test_upload_is_refused_while_clamav_is_down(  # fixtures
     with scaled(podiumd_env.kube, clamav, 0):
         open_zaak_status(page, podiumd_env, zaak)
         upload_document(page, f"{registry.tagged('ongescand')}.txt", b"geen virus")
-    assert documents_of(openzaak, zaak) == []
+    assert is_never(lambda: documents_of(openzaak, zaak), timeout=UPLOAD_TIMEOUT, description="a document on the zaak")
 
 
 @pytest.mark.tc("INT-018")

@@ -24,7 +24,9 @@ if TYPE_CHECKING:
 
 def productaanvraag_zaken(openzaak: ApiClient, kenmerk: str) -> list[JsonObject]:
     """Return the zaken started since yesterday with the productaanvraag's kenmerk in the toelichting."""
-    return [zaak for zaak in recent_zaken(openzaak) if kenmerk in str(zaak.get("toelichting") or "")]
+    # ZAC quotes it ("met kenmerk '<kenmerk>'"), so a kenmerk that is a prefix of another one does not match it.
+    quoted = f"'{kenmerk}'"  # noqa: B907  # ZAC's quotes, not Python's repr
+    return [zaak for zaak in recent_zaken(openzaak) if quoted in str(zaak.get("toelichting") or "")]
 
 
 def productaanvraag_zaak(

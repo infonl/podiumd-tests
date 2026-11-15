@@ -182,13 +182,16 @@ def test_delivery_receipt_becomes_a_klantcontact(
         pytest.skip(reason)
     adres = own_address(registry)
     zaak = inwoner_zaak(adres)
-    about = {"onderwerpobjectidentificatorObjectId": str(zaak["uuid"])}
+    uuid = str(zaak["uuid"])
+
+    def about_zaak() -> list[JsonObject]:
+        # Checked here too: a filter the server ignored would match every onderwerpobject.
+        found = openklant.list("onderwerpobjecten", {"onderwerpobjectidentificatorObjectId": uuid})
+        return [o for o in found if section(o, "onderwerpobjectidentificator").get("objectId") == uuid]
+
     registry.add(
-        f"klantcontacten about {zaak['uuid']}",
-        lambda: [
-            delete_klantcontact_tree(openklant, str(section(o, "klantcontact").get("url")))
-            for o in openklant.list("onderwerpobjecten", about)
-        ],
+        f"klantcontacten about {uuid}",
+        lambda: [delete_klantcontact_tree(openklant, str(section(o, "klantcontact").get("url"))) for o in about_zaak()],
     )
     make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
     sent = notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_ZAAKCREATE")
@@ -212,7 +215,7 @@ def test_delivery_receipt_becomes_a_klantcontact(
     )
     expect_status(confirm, HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.ACCEPTED)
     wait_until(
-        lambda: openklant.list("onderwerpobjecten", about),
+        about_zaak,
         timeout=MAIL_TIMEOUT,
         description=f"klantcontact about zaak {zaak['identificatie']} in Open Klant",
     )

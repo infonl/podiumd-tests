@@ -65,6 +65,15 @@ def wait_until[ResultT](
         clock.sleep(interval() if callable(interval) else interval)
 
 
+def is_never(probe: Callable[[], object], *, timeout: float, description: str, clock: Clock | None = None) -> bool:
+    """Return True when probe stays falsy for timeout seconds, False as soon as it is truthy."""
+    try:
+        wait_until(probe, timeout=timeout, description=description, clock=clock)
+    except WaitTimeoutError:
+        return True
+    return False
+
+
 def _attempt[ResultT](probe: Callable[[], ResultT | None]) -> tuple[ResultT | None, str]:
     """Return the probe's value and how the attempt ended."""
     try:

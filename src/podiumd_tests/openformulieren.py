@@ -353,17 +353,18 @@ def _processed(http: requests.Session, status_url: str, submission: str, *, time
     return status
 
 
-def registered_zaak(
+def registered_zaken(
     env: Environment, openzaak: ApiClient, registry: ResourceRegistry, status: JsonObject
-) -> JsonObject:
-    """Return the zaak a submission registered; cleanup deletes the submission, then the zaak.
+) -> list[JsonObject]:
+    """Return the zaken a submission registered, none without public reference; cleanup deletes them after it.
 
     Open Zaak reissues a deleted zaak's identificatie, and Open Formulieren refuses to register a
     zaak whose identificatie a remaining submission holds as public reference: in the reverse
     order a parallel registration fails.
     """
     submission = str(status["submission"])
-    zaken = openzaak.list(f"{ZAKEN}/zaken", {"identificatie": str(status["publicReference"])})
+    reference = str(status.get("publicReference") or "")
+    zaken = openzaak.list(f"{ZAKEN}/zaken", {"identificatie": reference}) if reference else []
 
     def delete() -> None:
         for zaak in zaken:
@@ -371,8 +372,17 @@ def registered_zaak(
 
     registry.add(f"zaken of submission {submission}", delete)
     forget_submission(env, registry, submission)  # LIFO: before the zaken
+    return zaken
+
+
+def registered_zaak(
+    env: Environment, openzaak: ApiClient, registry: ResourceRegistry, status: JsonObject
+) -> JsonObject:
+    """Return the one zaak a submission registered; cleanup deletes the submission, then the zaak."""
+    zaken = registered_zaken(env, openzaak, registry, status)
     if len(zaken) != 1:
-        msg = f"submission {submission}: {len(zaken)} zaken with identificatie {status['publicReference']}"
+        reference = status.get("publicReference")
+        msg = f"submission {status['submission']}: {len(zaken)} zaken with identificatie {reference}"
         raise AssertionError(msg)
     return zaken[0]
 

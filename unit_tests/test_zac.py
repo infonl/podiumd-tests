@@ -146,7 +146,7 @@ def test_person_key_retries_once_with_a_fresh_lookup_on_410(fake_http, response_
 
 
 def test_productaanvraag_zaak_finds_the_zaak_by_kenmerk_and_cleanup_deletes_it(fake_http):
-    zaken = [{"url": "https://oz.test/zaken/api/v1/zaken/1", "toelichting": "kenmerk OF-42"}, {"url": "z/2"}]
+    zaken = [{"url": "https://oz.test/zaken/api/v1/zaken/1", "toelichting": "met kenmerk 'OF-42'."}, {"url": "z/2"}]
     sent = fake_http(
         {
             "GET /zaken/api/v1/zaken": (200, zaken),
@@ -739,7 +739,12 @@ def test_rights_of_gives_a_role_the_rights_of_the_roles_before_it():
 
 
 def test_productaanvraag_zaken_are_all_zaken_with_the_kenmerk(fake_http):
-    zaken = [{"url": "z/1", "toelichting": "kenmerk OF-42"}, {"url": "z/2"}, {"url": "z/3", "toelichting": "OF-42"}]
+    zaken = [
+        {"url": "z/1", "toelichting": "met kenmerk 'OF-42'."},
+        {"url": "z/2"},
+        {"url": "z/3", "toelichting": "'OF-42'"},
+        {"url": "z/4", "toelichting": "met kenmerk 'OF-42-b'."},
+    ]
     fake_http({"GET /zaken/api/v1/zaken": (200, zaken)})
     openzaak = ApiClient(requests.Session(), "https://oz.test", {})
     assert [zaak["url"] for zaak in zac_productaanvraag.productaanvraag_zaken(openzaak, "OF-42")] == ["z/1", "z/3"]

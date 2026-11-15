@@ -106,6 +106,11 @@ def test_taken_from_the_list_are_released_and_assigned(
     def is_(wanted: tuple[object, object]) -> bool:
         return assignment(read_taak(zac, zac_url, str(taak["id"]))) == wanted
 
+    wait_until(
+        lambda: is_taak_listed(zac, zac_url, taak, alleenMijnTaken=True),
+        timeout=LIST_TIMEOUT,
+        description=f"task {taak['id']} in Mijn taken of {ADMIN.username}",
+    )
     expect_status(vrijgeven_taken(zac, zac_url, [taak]), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     wait_until(lambda: is_((zac_group, None)), timeout=LIST_TIMEOUT, description=f"task {taak['id']} vrijgegeven")
     wait_until(

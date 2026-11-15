@@ -9,7 +9,6 @@ from __future__ import annotations
 import itertools
 import re
 
-from datetime import UTC
 from datetime import datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING
@@ -351,15 +350,16 @@ def test_question_from_the_portal_shows_in_zac(
     need_bootstrap(INWONER.name, *PORTAL_WIRING)
     vraag = registry.tagged("zac-vraag")
     clean_up_question(podiumd_env, openklant, registry, vraag)
-    asked = datetime.now(tz=UTC)
     ask_in_mijn_vragen(page, podiumd_env, vraag)
+    # ZAC shows no inhoud: the question's klantcontact is the one with its plaatsgevondenOp.
+    asked = datetime.fromisoformat(str(question_in_open_klant(openklant, vraag)["plaatsgevondenOp"]))
     query = {"bsn": INWONER.attributes["bsn"][0], "page": 0}
     found = zac.put(f"{podiumd_env.profile.urls['zac']}/rest/klanten/contactmomenten", json=query)
     contactmomenten = entries(expect_status(found, HTTPStatus.OK).json()["resultaten"])
     assert any(
-        c.get("tekst") == SUBJECT and datetime.fromisoformat(str(c["registratiedatum"])) >= asked
+        c.get("tekst") == SUBJECT and datetime.fromisoformat(str(c["registratiedatum"])) == asked
         for c in contactmomenten
-    ), f"no question asked after {asked:%H:%M:%S} among {contactmomenten}"
+    ), f"no question of {asked:%H:%M:%S.%f} among {contactmomenten}"
 
 
 @pytest.mark.tc("ITA-030")

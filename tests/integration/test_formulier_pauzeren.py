@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
+    from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [
@@ -74,8 +75,16 @@ def test_paused_submission_mails_its_resume_link(
     address = f"{registry.tagged('pauze')}@example.invalid"
     suspend = submission_action(http, submission, "_suspend", {"email": address}, headers, timeout=SUSPEND_TIMEOUT)
     expect_status(suspend, HTTPStatus.CREATED)
-    html = received(mailpit, registry, timeout=60, to=address)
-    assert url_host(urls["openformulieren"]) in html, "no link to Open Formulieren in the mail"
+    link = resume_link(received(mailpit, registry, timeout=60, to=address), submission)
+    assert url_host(link) == url_host(urls["openformulieren"]), f"resume link {link} is not on Open Formulieren"
+
+
+def resume_link(mail: str, submission: JsonObject) -> str:
+    """Return the mail's link that names the submission."""
+    links = [html.unescape(link) for link in re.findall(r'href="([^"]+)"', mail)]
+    found = [link for link in links if str(submission["id"]) in link]
+    assert found, f"no link to submission {submission['id']} in the mail"
+    return found[0]
 
 
 # Open Formulieren registers in a Celery task after _complete.
@@ -114,8 +123,7 @@ def test_resume_link_continues_and_completes_the_submission(
     address = f"{registry.tagged('hervat')}@example.invalid"
     suspend = submission_action(http, submission, "_suspend", {"email": address}, headers, timeout=SUSPEND_TIMEOUT)
     expect_status(suspend, HTTPStatus.CREATED)
-    links = re.findall(r'href="([^"]+)"', received(mailpit, registry, timeout=60, to=address))
-    resume = next(html.unescape(link) for link in links if str(submission["id"]) in link)
+    resume = resume_link(received(mailpit, registry, timeout=60, to=address), submission)
     resumed = podiumd_env.session()
     expect_status(resumed.get(resume), HTTPStatus.OK)
     _, resumed_headers = form_and_headers(resumed, base_url, TEST_FORM)

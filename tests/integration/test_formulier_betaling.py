@@ -23,7 +23,7 @@ from podiumd_tests.bootstrap.steps import NAW_DATA
 from podiumd_tests.bootstrap.steps import ZGW_REGISTRATION
 from podiumd_tests.openformulieren import form_and_headers
 from podiumd_tests.openformulieren import make_form
-from podiumd_tests.openformulieren import registered_zaak
+from podiumd_tests.openformulieren import registered_zaken
 from podiumd_tests.openformulieren import registration_state
 from podiumd_tests.openformulieren import submit
 from podiumd_tests.openformulieren import wait_for_registration
@@ -95,14 +95,20 @@ class Payer:
         self.status: JsonObject = submit(
             env, self.http, registry, slug, data, timeout=REGISTRATION_TIMEOUT, registers=False
         )
-        # The zaak of the pre-registration, deleted with the submission.
-        self.zaak: JsonObject = registered_zaak(env, openzaak, registry, self.status)
+        # The zaken of the pre-registration, deleted with the submission.
+        self.zaken: list[JsonObject] = registered_zaken(env, openzaak, registry, self.status)
         self._headers: dict[str, str] = form_and_headers(self.http, env.profile.urls["openformulieren"], slug)[1]
 
     @property
     def secret(self) -> str:
         """The test merchant's passphrase or secret."""
         return self.env.credentials.get(OGONE_STORE_KEY if self.backend == OGONE else WORLDLINE_STORE_KEY)
+
+    @property
+    def zaak(self) -> JsonObject:
+        """The one zaak of the pre-registration."""
+        assert len(self.zaken) == 1, f"submission {self.submission}: {len(self.zaken)} zaken"
+        return self.zaken[0]
 
     @property
     def submission(self) -> str:
@@ -337,7 +343,7 @@ def test_unpaid_form_leaves_no_zaak(
 ) -> None:
     """A completed form that is not paid creates no zaak, so ZAC shows none."""
     payer = Payer(podiumd_env, openzaak, registry, payment_form)
-    assert not payer.zaak, f"zaak {payer.zaak['identificatie']} exists"
+    assert [zaak["identificatie"] for zaak in payer.zaken] == []
 
 
 @pytest.mark.xfail(
