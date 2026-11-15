@@ -254,3 +254,13 @@ def search_data(env: Environment, action: str, tag: str, products: list[dict[str
     """Seed, read or remove the search test data whose slugs and remarks start with the tag (snippet oi_search_data)."""
     params: dict[str, object] = {"action": action, "tag": tag, "products": products or []}
     return cast("JsonObject", run_snippet(env.kube, env.deployment_for("openinwoner"), "oi_search_data", params))
+
+
+def search_page(http: requests.Session, oi_url: str, **params: str) -> str:
+    """Return the HTML of Open Inwoner's search results page; fails when Open Inwoner says its search is down."""
+    html = expect_status(http.get(f"{oi_url}/search/", params=params), HTTPStatus.OK).text
+    # Shown when Elasticsearch refuses or cannot answer the query.
+    if "zoekfunctie is tijdelijk niet beschikbaar" in html:
+        msg = "Open Inwoner's search failed (search error)"
+        raise AssertionError(msg)
+    return html

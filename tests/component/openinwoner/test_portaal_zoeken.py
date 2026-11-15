@@ -19,6 +19,7 @@ import pytest
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.openinwoner import search_data
+from podiumd_tests.openinwoner import search_page
 from podiumd_tests.openinwoner import set_site_configuration
 from podiumd_tests.responses import expect_status
 from podiumd_tests.wait import wait_until
@@ -64,9 +65,7 @@ def fixture_categories(
 
 def hits(http: requests.Session, urls: dict[str, str], **params: str) -> list[str]:
     """The names of the test's products on the results page of a search."""
-    html = expect_status(http.get(f"{urls['openinwoner']}/search/", params=params), HTTPStatus.OK).text
-    # Shown when Elasticsearch refuses the query, e.g. an index created without Open Inwoner's mapping.
-    assert "zoekfunctie is tijdelijk niet beschikbaar" not in html, "Open Inwoner's search failed (search error)"
+    html = search_page(http, urls["openinwoner"], **params)
     return sorted(set(re.findall(rf"(?:Paspoort|Grofvuil) \w+{SUFFIX}", html)))
 
 

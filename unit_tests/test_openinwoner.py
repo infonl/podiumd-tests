@@ -206,3 +206,13 @@ def test_zaak_status_url_finds_the_zaaks_link_in_mijn_zaken():
     assert zaak_status_url(fragment, listed, zaak) == f"{PORTAL}/mijn-zaken/2/u-1/status/"
     with pytest.raises(LookupError, match="does not list zaak ZAAK-1"):
         zaak_status_url("<p>Geen zaken</p>", listed, zaak)
+
+
+@pytest.mark.parametrize(
+    ("page", "error"),
+    [(b"<form><input name='query'></form>", None), (b"De zoekfunctie is tijdelijk niet beschikbaar.", AssertionError)],
+)
+def test_search_page_fails_when_open_inwoner_says_search_is_down(fake_http, page, error):
+    fake_http({"/search/": (200, page)})
+    with pytest.raises(error) if error else nullcontext():
+        assert openinwoner.search_page(requests.Session(), PORTAL, query="x") == page.decode()
