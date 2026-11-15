@@ -206,6 +206,7 @@ with curl or WebFetch. "verify" marks a fact not confirmed.
 | Findings (#496) | Open Zaak JWT expired after 1 h during a long sync (403), zaken fetches needed retries, a timed-out delete task left the list "processing" (#655) |
 | Port value | a large background job; the check is whether the OAB worker survives it (memory, restarts) and the list reaches a final state. Destroying 10,000 zaken fits only a throwaway seed |
 | How | adapt `test_vernietigingslijst.py` to a volume list from `seed-volume` (own zaaktype), chaos/perf tier only; observe with `cluster_state`/`disruptions` |
+| Ported | `test_vernietiging_volume.py`, chaos tier: `--oab-destruction-zaken` (default 200) zaken of the test's own, open, without resultaat and with their own selectielijstklasse (open-archiefbeheer-4, open-archiefbeheer-10), watched with `perf.availability.watched` |
 
 #### M7. Resource-sizing method for the Maykin components (open)
 
