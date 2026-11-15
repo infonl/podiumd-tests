@@ -12,7 +12,7 @@ versions is not counted.
 | --- | --- | --- | --- |
 | smoke | 256 | 41 | 10 |
 | component | 1011 | 598 | 78 |
-| integration | 205 | 141 | 18 |
+| integration | 206 | 142 | 19 |
 | perf | 80 | 9 | 0 |
 | **full tier** | **1415** | **733** |  |
 
@@ -54,7 +54,7 @@ Unit tests (`unit_tests/`, functions): 936. Perf endpoints (`perf/runs.py`): 32.
 | component | zac | 354 | 263 |
 | component | zgw_office_addin | 4 | 3 |
 | integration | continuiteit | 19 | 10 |
-| integration | continuiteit_belasting | 4 | 4 |
+| integration | continuiteit_belasting | 5 | 5 |
 | integration | continuiteit_opslag | 10 | 10 |
 | integration | continuiteit_zoekindex | 3 | 3 |
 | integration | formulier_betaling | 19 | 6 |
@@ -108,7 +108,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | ZAC | 19 |
 | draaiboek | 91 |
 | external | 254 |
-| podiumd-tests | 539 |
+| podiumd-tests | 540 |
 | upstream | 243 |
 
 ## Expected failures per known issue
@@ -143,6 +143,7 @@ Ids of infonl/podiumd-known-issues.
 | open-formulieren-4 | 2 |
 | open-formulieren-5 | 2 |
 | open-formulieren-7 | 1 |
+| open-formulieren-8 | 1 |
 | open-inwoner-1 | 1 |
 | open-inwoner-2 | 2 |
 | open-inwoner-3 | 1 |

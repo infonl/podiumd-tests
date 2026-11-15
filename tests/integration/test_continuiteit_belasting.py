@@ -14,6 +14,7 @@ from typing import cast
 
 import pytest
 
+from podiumd_tests import openformulieren as forms
 from podiumd_tests.auth.keycloak import PasswordLogin
 from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.auth.keycloak import password_grant
@@ -31,12 +32,6 @@ from podiumd_tests.chaos_load import watched_load
 from podiumd_tests.clients.api import per_thread
 from podiumd_tests.components import COMPONENTS
 from podiumd_tests.oidc import LOGIN_PATHS
-from podiumd_tests.openformulieren import forget_submission
-from podiumd_tests.openformulieren import registered_zaak
-from podiumd_tests.openformulieren import send_submission
-from podiumd_tests.openformulieren import start_submission
-from podiumd_tests.openformulieren import submission_result
-from podiumd_tests.openformulieren import wait_for_registration
 from podiumd_tests.perf.availability_report import problems
 from podiumd_tests.seed.opennotificaties import delivery_attempts
 from podiumd_tests.seed.opennotificaties import make_abonnement
@@ -46,6 +41,7 @@ from podiumd_tests.wait import WaitTimeoutError
 from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import cluster_state
 from podiumd_tests.workloads import component_down
+from podiumd_tests.workloads import database_pod
 from podiumd_tests.workloads import disruptions
 from podiumd_tests.workloads import pod_workload
 from podiumd_tests.workloads import replace_pod
@@ -216,10 +212,10 @@ def sender(env: Environment, registry: ResourceRegistry) -> Callable[[], Sent]:
 
     def send() -> Sent:
         session = env.session()
-        submission, headers = start_submission(session, base_url, TEST_FORM)
-        forget_submission(env, registry, str(submission["id"]))
+        submission, headers = forms.start_submission(session, base_url, TEST_FORM)
+        forms.forget_submission(env, registry, str(submission["id"]))
         data = {"klacht_omschrijving": registry.tagged("klacht"), **NAW_DATA}
-        status_url = send_submission(session, submission, headers, data, timeout=COMPLETE_TIMEOUT)
+        status_url = forms.send_submission(session, submission, headers, data, timeout=COMPLETE_TIMEOUT)
         return session, str(submission["id"]), status_url
 
     return send
@@ -234,9 +230,9 @@ def unregistered(
     def register(sent: Sent) -> None:
         session, submission, status_url = sent
         timeout = max(deadline - time.monotonic(), CALM)
-        status = submission_result(session, status_url, submission, timeout=timeout)
-        wait_for_registration(env, submission, timeout=timeout)
-        registered_zaak(env, openzaak, registry, status)
+        status = forms.submission_result(session, status_url, submission, timeout=timeout)
+        forms.wait_for_registration(env, submission, timeout=timeout)
+        forms.registered_zaak(env, openzaak, registry, status)
 
     lost: list[str] = []
     for attempt in attempts:
@@ -287,6 +283,47 @@ def test_no_submission_is_lost_while_the_open_formulieren_worker_is_down(
     record_property("registered_seconds_after_restart", round(time.time() - back))
     assert lost == [], f"{len(lost)} of {len(load.attempts)} submissions not registered"
     assert disruptions(before, cluster_state(podiumd_env), {worker}) == []
+
+
+@pytest.mark.requires("openformulieren", "openzaak")
+@pytest.mark.source(
+    "podiumd-tests",
+    "The apps share one Postgres server; no source test restarts it while forms are submitted.",
+)
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="[open-formulieren-8] Open Formulieren 4.0.7 leaves a submission whose processing task failed on the"
+    " unreachable database pending without needs_on_completion_retry, so it is never registered; not yet reported upstream",
+)
+@pytest.mark.scenario("""
+    Given anonymous inwoners submit the test form one after another
+    When the database server is restarted
+    Then every submission Open Formulieren accepted is registered as a zaak in Open Zaak
+""")
+def test_no_accepted_submission_is_lost_when_postgres_restarts(
+    podiumd_env: Environment,
+    urls: dict[str, str],
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+    record_property: Callable[[str, object], None],
+) -> None:
+    """Every form Open Formulieren accepted around a Postgres restart is registered as a zaak."""
+    database = database_pod(podiumd_env)
+    if database is None:
+        pytest.skip(f"Open Zaak's database runs outside the cluster on {podiumd_env.profile.name}")
+    need_bootstrap("openformulieren-form", "openformulieren-zgw-group", "openzaak-of-autorisatie")
+    start = time.time()
+    calls = {"of_submit": sender(podiumd_env, registry)}
+    with watched_load(podiumd_env, urls, ["openformulieren"], calls, workers=2, pause=2) as (load, watch):
+        load.run_for(CALM)
+        replace_pod(podiumd_env, database, OUTAGE * 5)
+        load.run_for(OUTAGE)
+    record_property("report", load_report(load, watch, start))
+    accepted = [attempt for attempt in load.attempts if attempt.error is None]
+    lost = unregistered(podiumd_env, openzaak, registry, accepted, start)
+    assert lost == [], f"{len(lost)} of {len(accepted)} accepted submissions not registered"
 
 
 def login_calls(env: Environment) -> dict[str, Callable[[], object]]:
