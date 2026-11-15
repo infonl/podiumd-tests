@@ -7,11 +7,6 @@ these tests are destructive (tier chaos) and run on one worker.
 
 from __future__ import annotations
 
-import io
-import zipfile
-
-from datetime import date
-from datetime import timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -24,25 +19,25 @@ from podiumd_tests.bootstrap.bpmn import SUMMARY
 from podiumd_tests.bootstrap.bpmn import complete_intake
 from podiumd_tests.bootstrap.names import PREFIX
 from podiumd_tests.bootstrap.names import PRODUCTAANVRAAG_OBJECTTYPE
-from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.bootstrap.names import TEST_ZAAKTYPE
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.mailpit import received
-from podiumd_tests.oab import cache_zaken
+from podiumd_tests.oab import cache_for_test
+from podiumd_tests.oab import destroy
+from podiumd_tests.oab import due_date
 from podiumd_tests.oab import list_status
 from podiumd_tests.oab import new_list
 from podiumd_tests.oab import queue
 from podiumd_tests.oab import ready_to_delete
+from podiumd_tests.oab import report_config
 from podiumd_tests.oab import review
 from podiumd_tests.oab import run_destruction
-from podiumd_tests.oab import set_config
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import make_productaanvraag
 from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
-from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.openzaak import link_besluit_document
 from podiumd_tests.seed.openzaak import make_besluit
 from podiumd_tests.seed.openzaak import make_document
@@ -54,7 +49,6 @@ from podiumd_tests.zac_taken import open_task
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from collections.abc import Iterator
 
     import requests
 
@@ -102,20 +96,6 @@ def test_destruction_waits_and_can_be_aborted(
     assert list_status(oab, api, lijst) == "new"
 
 
-@pytest.fixture(name="oab_config")
-def fixture_oab_config(podiumd_env: Environment) -> Iterator[Callable[..., None]]:
-    """set(model, **fields): change OAB's global ArchiveConfig or EmailConfig for this test; the old values come back."""
-    old: dict[str, dict[str, object]] = {}
-
-    def change(model: str, **fields: object) -> None:
-        for field, value in set_config(podiumd_env, model, fields).items():
-            old.setdefault(model, {}).setdefault(field, value)
-
-    yield change
-    for model, fields in old.items():
-        set_config(podiumd_env, model, fields)
-
-
 # The destruction never completes on Open Zaak 1.29.3.
 DESTRUCTION_FAILS = pytest.mark.xfail(
     strict=True,
@@ -125,48 +105,6 @@ DESTRUCTION_FAILS = pytest.mark.xfail(
 )
 # Columns of the report's sheet "Deleted zaken": the metadata OAB keeps of a destroyed zaak.
 REPORT_COLUMNS = ("Zaak Identificatie", "Zaaktype Identificatie", "Resultaat", "Zaak Startdatum", "Zaak Einddatum")
-
-
-def destroy(
-    podiumd_env: Environment,
-    oab: Callable[[str], requests.Session],
-    api: str,
-    openzaak: ApiClient,
-    parts: ZaaktypeParts,
-    registry: ResourceRegistry,
-    lijst: str,
-) -> str:
-    """Destroy the list now; once it is deleted, the text of the report the record manager downloads.
-
-    The report goes to a zaak of the test zaaktype (ArchiveConfig, set back after the test).
-    """
-    naam = str(
-        expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/"), HTTPStatus.OK).json()["name"]
-    )
-
-    def delete_report() -> None:
-        for rapport in openzaak.list(f"{ZAKEN}/zaken", {"zaaktype": parts.zaaktype}):
-            if naam in str(rapport.get("toelichting") or ""):
-                delete_zaak(openzaak, str(rapport["url"]), with_documents=True)
-
-    registry.add(f"destruction report of {naam}", delete_report)
-    assert run_destruction(podiumd_env, oab, api, lijst) == "succeeded"
-    assert list_status(oab, api, lijst) == "deleted"
-    report = oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/download_report/")
-    # An xlsx: its cell texts are in the shared strings.
-    with zipfile.ZipFile(io.BytesIO(expect_status(report, HTTPStatus.OK).content)) as workbook:
-        return workbook.read("xl/sharedStrings.xml").decode()
-
-
-def report_config(parts: ZaaktypeParts) -> dict[str, object]:
-    """ArchiveConfig fields that file the destruction report as a zaak of the test zaaktype."""
-    return {
-        "bronorganisatie": TEST_CATALOGUS_RSIN,
-        "zaaktype": parts.zaaktype,
-        "statustype": str(parts.statustypen[-1]["url"]),
-        "resultaattype": parts.resultaattypen[0],
-        "informatieobjecttype": parts.informatieobjecttype,
-    }
 
 
 @pytest.mark.destructive
@@ -193,7 +131,8 @@ def test_destruction_deletes_the_zaak_and_leaves_a_report(
 ) -> None:
     """The destruction deletes the zaak in Open Zaak; the report keeps its metadata (TA reg-170)."""
     oab_config("ArchiveConfig", **report_config(parts))
-    report = destroy(podiumd_env, oab, api, openzaak, parts, registry, ready_to_delete(oab, api, zaak, registry))
+    lijst = ready_to_delete(oab, api, zaak, registry)
+    report = destroy(podiumd_env, oab, api, lijst, openzaak=openzaak, parts=parts, registry=registry)
     openzaak.request("GET", str(zaak["url"]), HTTPStatus.NOT_FOUND)
     assert str(zaak["identificatie"]) in report
     assert [c for c in REPORT_COLUMNS if c not in report] == []
@@ -383,7 +322,7 @@ def test_short_procedure_destruction_leaves_a_report(
     oab_config("ArchiveConfig", zaaktypes_short_process=[TEST_ZAAKTYPE], **report_config(parts))
     lijst = new_list(oab, api, zaak, registry)
     review(oab, api, "reviewer", lijst, decision="accepted")
-    report = destroy(podiumd_env, oab, api, openzaak, parts, registry, lijst)
+    report = destroy(podiumd_env, oab, api, lijst, openzaak=openzaak, parts=parts, registry=registry)
     assert str(zaak["identificatie"]) in report
     assert [c for c in REPORT_COLUMNS if c not in report] == []
 
@@ -421,14 +360,12 @@ def fixture_zac_zaak_on_list(
         complete_task(zac, zac_url, open_task(zac, zac_url, uuid, task), {field: []})
     complete_task(zac, zac_url, open_task(zac, zac_url, uuid, SUMMARY), {})
     url = openzaak.url(f"{ZAKEN}/zaken/{uuid}")
-    yesterday = (date.today() - timedelta(days=1)).isoformat()  # noqa: DTZ011  # Open Zaak's local date
-    zaak = openzaak.request("PATCH", url, HTTPStatus.OK, json={"archiefactiedatum": yesterday}).json()
+    zaak = openzaak.request("PATCH", url, HTTPStatus.OK, json={"archiefactiedatum": due_date()}).json()
     if zaak.get("archiefnominatie") != "vernietigen":
         pytest.skip(
             f"zaak {zaak.get('identificatie')} has archiefnominatie {zaak.get('archiefnominatie')!r}, not vernietigen"
         )
-    registry.add(f"OAB cache of {url}", lambda: cache_zaken(podiumd_env, [url], cached=False))
-    cache_zaken(podiumd_env, [url], cached=True)
+    cache_for_test(podiumd_env, registry, [url])
     lijst = ready_to_delete(oab, api, zaak, registry)
     return zaak, openzaak.url(f"{DOCUMENTEN}/enkelvoudiginformatieobjecten/{document['uuid']}"), lijst
 

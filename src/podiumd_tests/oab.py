@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import io
 import secrets
+import zipfile
 
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date
+from datetime import timedelta
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
@@ -11,10 +16,14 @@ from typing import cast
 from playwright.sync_api import expect
 
 from podiumd_tests.bootstrap.names import PREFIX
+from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.bootstrap.steps import django_secret_key
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openzaak import ZAKEN
+from podiumd_tests.seed.openzaak import delete_zaak
+from podiumd_tests.seed.openzaak import zaak_maker
 from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import expect_defect
 
@@ -26,8 +35,10 @@ if TYPE_CHECKING:
 
     from playwright.sync_api import Page
 
+    from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.openzaak import ZaaktypeParts
     from podiumd_tests.seed.registry import ResourceRegistry
 
     # A logged-in session per role (login).
@@ -36,6 +47,10 @@ if TYPE_CHECKING:
 API = "/api/v1"
 # Open Archiefbeheer from 2.1 runs on Django 5.2, whose admin logout accepts only POST.
 ADMIN_LOGOUT_POST_ONLY = (2, 1)
+# Zaken per Django shell: caching GETs each zaak from Open Zaak within run_snippet's timeout.
+CACHE_CHUNK = 200
+# Zaken created at a time.
+PARALLEL = 8
 
 
 def _credentials(env: Environment, role: str) -> dict[str, str]:
@@ -82,8 +97,42 @@ def login(env: Environment, role: str) -> requests.Session:
 
 def cache_zaken(env: Environment, urls: list[str], *, cached: bool) -> None:
     """Put zaken in OAB's zaken cache, or take them out with every destruction list holding one."""
-    params: dict[str, object] = {"action": "cache" if cached else "uncache", "urls": urls}
-    run_snippet(env.kube, env.deployment_for("openarchiefbeheer"), "oab_zaken", params)
+    for start in range(0, len(urls), CACHE_CHUNK):
+        chunk = urls[start : start + CACHE_CHUNK]
+        params: dict[str, object] = {"action": "cache" if cached else "uncache", "urls": chunk}
+        run_snippet(env.kube, env.deployment_for("openarchiefbeheer"), "oab_zaken", params)
+
+
+def cache_for_test(env: Environment, registry: ResourceRegistry, urls: list[str]) -> None:
+    """Put the test's zaken in OAB's zaken cache; cleanup takes them out with the lists that hold one."""
+    registry.add(f"OAB cache of {len(urls)} zaken", lambda: cache_zaken(env, urls, cached=False))
+    cache_zaken(env, urls, cached=True)
+
+
+def due_date() -> str:
+    """Return yesterday in Open Zaak's local date: an archiefactiedatum that queue_destruction accepts."""
+    return (date.today() - timedelta(days=1)).isoformat()  # noqa: DTZ011  # Open Zaak's local date
+
+
+def due_zaken(
+    env: Environment, openzaak: ApiClient, parts: ZaaktypeParts, registry: ResourceRegistry, count: int
+) -> list[JsonObject]:
+    """Create open zaken of the test zaaktype that are due for destruction, in OAB's zaken cache.
+
+    Without a resultaat: Open Zaak 1.29.3 answers 500 to the DELETE of a zaak with one (open-archiefbeheer-4).
+    OAB 2.0.0 then needs the zaak's own selectielijstklasse: it fails the item with KeyError 'resultaat' without one.
+    """
+    fields = {
+        "archiefnominatie": "vernietigen",
+        "archiefactiedatum": due_date(),
+        "selectielijstklasse": openzaak.get(parts.resultaattypen[0])["selectielijstklasse"],
+    }
+    make = zaak_maker(env, registry.run_tag, registry, parts.zaaktype, **fields)
+    with ThreadPoolExecutor(max_workers=PARALLEL) as pool:
+        futures = [pool.submit(make) for _ in range(count)]
+    zaken = [future.result() for future in futures]
+    cache_for_test(env, registry, [str(zaak["url"]) for zaak in zaken])
+    return zaken
 
 
 def forget_zaken(env: Environment, urls: list[str]) -> None:
@@ -188,8 +237,8 @@ def review(oab: Sessions, api: str, role: str, lijst: str, **fields: object) -> 
     return expect_status(oab(role).post(f"{api}/destruction-list-reviews/", json=body), HTTPStatus.CREATED).json()
 
 
-def ready_to_delete(oab: Sessions, api: str, zaak: JsonObject, registry: ResourceRegistry) -> str:
-    """Create a list of the zaak that the reviewer and the archivist accepted; its uuid."""
+def ready_to_delete(oab: Sessions, api: str, zaak: JsonObject | list[JsonObject], registry: ResourceRegistry) -> str:
+    """Create a list of the zaken that the reviewer and the archivist accepted; its uuid."""
     lijst = new_list(oab, api, zaak, registry)
     review(oab, api, "reviewer", lijst, decision="accepted")
     expect_status(make_final(oab, api, lijst), HTTPStatus.CREATED, HTTPStatus.OK)
@@ -207,7 +256,7 @@ def queue(oab: Sessions, api: str, lijst: str) -> JsonObject:
     return expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/"), HTTPStatus.OK).json()
 
 
-def run_destruction(env: Environment, oab: Sessions, api: str, lijst: str) -> str:
+def run_destruction(env: Environment, oab: Sessions, api: str, lijst: str, timeout: float = 120) -> str:
     """Queue the list and destroy it now; its processingStatus once OAB has finished (succeeded, failed)."""
     queue(oab, api, lijst)
     destroy_now(env, lijst)
@@ -216,4 +265,51 @@ def run_destruction(env: Environment, oab: Sessions, api: str, lijst: str) -> st
         found = expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/"), HTTPStatus.OK).json()
         return None if found["processingStatus"] in {"new", "queued", "processing"} else str(found["processingStatus"])
 
-    return wait_until(processed, timeout=120, description=f"destruction of list {lijst}")
+    return wait_until(processed, timeout=timeout, description=f"destruction of list {lijst}")
+
+
+def report_config(parts: ZaaktypeParts) -> dict[str, object]:
+    """ArchiveConfig fields that file the destruction report as a zaak of the test zaaktype."""
+    return {
+        "bronorganisatie": TEST_CATALOGUS_RSIN,
+        "zaaktype": parts.zaaktype,
+        "statustype": str(parts.statustypen[-1]["url"]),
+        "resultaattype": parts.resultaattypen[0],
+        "informatieobjecttype": parts.informatieobjecttype,
+    }
+
+
+def destroy(  # noqa: PLR0913  # the list, OAB, and Open Zaak that gets its report
+    env: Environment,
+    oab: Sessions,
+    api: str,
+    lijst: str,
+    *,
+    openzaak: ApiClient,
+    parts: ZaaktypeParts,
+    registry: ResourceRegistry,
+    timeout: float = 120,
+) -> str:
+    """Destroy the list now; once it is deleted, the text of the report the record manager downloads.
+
+    The report goes to a zaak of the test zaaktype (ArchiveConfig fields of report_config).
+    """
+    naam = str(
+        expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/"), HTTPStatus.OK).json()["name"]
+    )
+
+    def delete_report() -> None:
+        for rapport in openzaak.list(f"{ZAKEN}/zaken", {"zaaktype": parts.zaaktype}):
+            if naam in str(rapport.get("toelichting") or ""):
+                delete_zaak(openzaak, str(rapport["url"]), with_documents=True)
+
+    registry.add(f"destruction report of {naam}", delete_report)
+    processed = run_destruction(env, oab, api, lijst, timeout)
+    status = list_status(oab, api, lijst)
+    if (processed, status) != ("succeeded", "deleted"):
+        msg = f"destruction of list {lijst} ended {processed} with status {status}, not succeeded and deleted"
+        raise AssertionError(msg)
+    report = oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/download_report/")
+    # An xlsx: its cell texts are in the shared strings.
+    with zipfile.ZipFile(io.BytesIO(expect_status(report, HTTPStatus.OK).content)) as workbook:
+        return workbook.read("xl/sharedStrings.xml").decode()

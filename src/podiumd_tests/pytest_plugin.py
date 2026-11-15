@@ -81,6 +81,12 @@ def _add_perf_options(group: pytest.OptionGroup) -> None:
     group.addoption("--perf-duration", default="60s", help="duration of the perf tier's Locust run (default 60s)")
     group.addoption("--perf-ramp", help="user counts of the perf tier's ramp, such as 2,4,8,16 (default: no ramp)")
     group.addoption("--perf-soak", help="duration of the perf tier's soak, such as 60m (default: no soak)")
+    group.addoption(
+        "--oab-destruction-zaken",
+        type=int,
+        default=200,
+        help="zaken on the chaos tier's large Open Archiefbeheer destruction list (default 200)",
+    )
 
 
 ENVIRONMENT_KEY = pytest.StashKey[Environment]()

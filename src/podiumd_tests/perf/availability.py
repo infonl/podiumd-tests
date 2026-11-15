@@ -262,11 +262,14 @@ def _stop(threads: list[threading.Thread], stop: threading.Event, watch: Watch) 
 
 
 @contextmanager
-def watched(env: Environment, urls: Mapping[str, str], components: Iterable[str], limits: Limits) -> Generator[Watch]:
+def watched(
+    env: Environment, urls: Mapping[str, str], components: Iterable[str], limits: Limits | None = None
+) -> Generator[Watch]:
     """Measure the components' availability while the block runs a load, and their recovery after it.
 
-    urls: the component URLs as this console reaches them (the `urls` fixture).
+    urls: the component URLs as this console reaches them (the `urls` fixture). limits: perf.yaml's by default.
     """
+    limits = limits or availability_limits(REPO_ROOT / "perf.yaml")
     watch = Watch(frozenset(component for component in components if component in urls), limits)
     stop = threading.Event()
     threads = [
@@ -289,6 +292,6 @@ def watched_run(
     env: Environment, urls: Mapping[str, str], components: Iterable[str], command: Sequence[str], timeout: int
 ) -> Watch:
     """Run the command while `watched` measures the components against perf.yaml; return the watch."""
-    with watched(env, urls, components, availability_limits(REPO_ROOT / "perf.yaml")) as watch:
+    with watched(env, urls, components) as watch:
         run_checked(run_process, command, timeout=timeout)
     return watch

@@ -1,7 +1,11 @@
 """Unit tests for the Open Archiefbeheer helpers."""
 
+import io
 import json
+import zipfile
 
+from datetime import date
+from datetime import timedelta
 from types import SimpleNamespace
 
 import pytest
@@ -11,6 +15,7 @@ from podiumd_tests import oab
 from podiumd_tests import workloads
 from podiumd_tests.bootstrap.names import PREFIX
 from podiumd_tests.bootstrap.steps import django_secret_key
+from podiumd_tests.seed.registry import ResourceRegistry
 
 OAB = "https://openarchiefbeheer.example.test"
 
@@ -112,3 +117,73 @@ def test_new_list_stays_new_unless_ready(fake_http):
     assert oab.new_list(lambda _role: http, API, zaken, registry, ready=False) == "l-2"  # pyright: ignore[reportArgumentType]
     assert all(not request.url.endswith("/mark_ready_review/") for request in sent)
     assert oab.user_pk(lambda _role: http, API, "archivist") == 9
+
+
+def test_cache_for_test_runs_one_shell_per_chunk_and_uncaches_at_cleanup(page_env, monkeypatch):
+    monkeypatch.setattr(oab, "CACHE_CHUNK", 2)
+    env = page_env(oab)
+    registry = ResourceRegistry("run")
+    oab.cache_for_test(env, registry, ["z1", "z2", "z3"])
+    registry.cleanup()
+    assert [(p["action"], p["urls"]) for _, _, p in env.snippets] == [
+        ("cache", ["z1", "z2"]),
+        ("cache", ["z3"]),
+        ("uncache", ["z1", "z2"]),
+        ("uncache", ["z3"]),
+    ]
+
+
+def test_due_zaken_are_open_zaken_due_yesterday_in_the_cache(page_env, monkeypatch):
+    made = []
+
+    def maker(_env, _run_tag, _registry, zaaktype, **fields):
+        def make():
+            made.append((zaaktype, fields))
+            return {"url": f"z{len(made)}"}
+
+        return make
+
+    monkeypatch.setattr(oab, "zaak_maker", maker)
+    monkeypatch.setattr(oab, "PARALLEL", 1)
+    env = page_env(oab)
+    openzaak = SimpleNamespace(get=lambda url: {"selectielijstklasse": f"slk-of-{url}"})
+    parts = SimpleNamespace(zaaktype="zt", resultaattypen=["rt"])
+    zaken = oab.due_zaken(env, openzaak, parts, ResourceRegistry("run"), 2)  # pyright: ignore[reportArgumentType]
+    yesterday = (date.today() - timedelta(days=1)).isoformat()  # noqa: DTZ011  # as due_date
+    fields = {"archiefnominatie": "vernietigen", "archiefactiedatum": yesterday, "selectielijstklasse": "slk-of-rt"}
+    due = ("zt", fields)
+    assert made == [due, due]
+    assert [zaak["url"] for zaak in zaken] == ["z1", "z2"]
+    assert env.snippets == [("openarchiefbeheer", "oab_zaken", {"action": "cache", "urls": ["z1", "z2"]})]
+
+
+def _xlsx(text):
+    body = io.BytesIO()
+    with zipfile.ZipFile(body, "w") as workbook:
+        workbook.writestr("xl/sharedStrings.xml", text)
+    return body.getvalue()
+
+
+def _destroy(fake_http, page_env, registry, lijst):
+    fake_http(
+        {
+            "/api/v1/destruction-lists/l-1/queue_destruction/": (200, {}),
+            "GET /api/v1/destruction-lists/l-1/": (200, {"name": "lijst", **lijst}),
+            "/api/v1/destruction-lists/l-1/download_report/": (200, _xlsx("ZAAK-1")),
+        }
+    )
+    http = requests.Session()
+    parts = SimpleNamespace(zaaktype="zt")
+    return oab.destroy(page_env(oab), lambda _role: http, API, "l-1", openzaak=None, parts=parts, registry=registry)  # pyright: ignore[reportArgumentType]
+
+
+def test_destroy_returns_the_report_text_and_registers_the_report_zaak(fake_http, page_env):
+    registry = ResourceRegistry("run")
+    text = _destroy(fake_http, page_env, registry, {"processingStatus": "succeeded", "status": "deleted"})
+    assert (text, len(registry)) == ("ZAAK-1", 1)
+
+
+def test_destroy_fails_when_the_list_is_not_deleted(fake_http, page_env):
+    failed = {"processingStatus": "failed", "status": "ready_to_delete"}
+    with pytest.raises(AssertionError, match="ended failed with status ready_to_delete"):
+        _destroy(fake_http, page_env, ResourceRegistry("run"), failed)

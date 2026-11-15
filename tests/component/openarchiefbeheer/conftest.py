@@ -11,13 +11,16 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.oab import API
-from podiumd_tests.oab import cache_zaken
+from podiumd_tests.oab import cache_for_test
+from podiumd_tests.oab import due_date
 from podiumd_tests.oab import login
+from podiumd_tests.oab import set_config
 from podiumd_tests.seed.openzaak import close_zaak
 from podiumd_tests.seed.openzaak import make_zaak
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from collections.abc import Iterator
 
     import requests
 
@@ -72,9 +75,20 @@ def _closed_zaak(
 ) -> JsonObject:
     gezet = datetime.now(UTC) - timedelta(days=2)
     zaak = close_zaak(openzaak, make_zaak(openzaak, registry, parts.zaaktype), parts, gezet)
-    yesterday = (datetime.now(UTC) - timedelta(days=1)).date().isoformat()
-    zaak = openzaak.request("PATCH", str(zaak["url"]), HTTPStatus.OK, json={"archiefactiedatum": yesterday}).json()
-    url = str(zaak["url"])
-    registry.add(f"OAB cache of {url}", lambda: cache_zaken(podiumd_env, [url], cached=False))
-    cache_zaken(podiumd_env, [url], cached=True)
+    zaak = openzaak.request("PATCH", str(zaak["url"]), HTTPStatus.OK, json={"archiefactiedatum": due_date()}).json()
+    cache_for_test(podiumd_env, registry, [str(zaak["url"])])
     return zaak
+
+
+@pytest.fixture(name="oab_config")
+def fixture_oab_config(podiumd_env: Environment) -> Iterator[Callable[..., None]]:
+    """set(model, **fields): change OAB's global ArchiveConfig or EmailConfig for this test; the old values come back."""
+    old: dict[str, dict[str, object]] = {}
+
+    def change(model: str, **fields: object) -> None:
+        for field, value in set_config(podiumd_env, model, fields).items():
+            old.setdefault(model, {}).setdefault(field, value)
+
+    yield change
+    for model, fields in old.items():
+        set_config(podiumd_env, model, fields)

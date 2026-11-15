@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING
 
 from podiumd_tests.background import running
 from podiumd_tests.config import REPO_ROOT
-from podiumd_tests.perf.availability import availability_limits
 from podiumd_tests.perf.availability import watched
 from podiumd_tests.perf.availability_report import report
 from podiumd_tests.perf.stats import slowdown_limit
@@ -117,9 +116,8 @@ def watched_load(  # noqa: PLR0913  # the load and what watches it
 
     urls: the component URLs as this console reaches them (the `urls` fixture).
     """
-    limits = availability_limits(REPO_ROOT / "perf.yaml")
     # watched measures the recovery after its block; a block that raises needs no recovery measured.
-    gate = watched(env, urls, served, limits)
+    gate = watched(env, urls, served)
     with gate as watch, loaded(calls, workers=workers, pause=pause) as load:  # pylint: disable=contextmanager-generator-missing-cleanup
         yield load, watch
 
