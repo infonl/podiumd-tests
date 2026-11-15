@@ -86,4 +86,10 @@ settings:
   # Open Formulieren's wait_for_payment_to_register is runtime data no environment sets; podiumd-infra allows
   # bootstrap to switch it on (2026-11-13).
   of_wait_for_payment: true
+  # The owner allows run-tagged zaaktypen in ZAC's catalogus; cleanup deletes them (2026-11-15).
+  zac_catalogus_writes: true
+  # podiumd-infra sets OMC's taak and message objecttypes to the ones bootstrap creates; bootstrap grants OMC's
+  # Objecten token on them (2026-11-16).
+  omc_taak_objecttype: true
+  omc_bericht_objecttype: true
   zgw_client_id: formulier
