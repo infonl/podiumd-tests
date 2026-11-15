@@ -43,6 +43,8 @@ pytestmark = [
 SUFFIX = secrets.token_hex(3)
 PASPOORT, GROFVUIL = f"paspoort{SUFFIX}", f"grofvuil{SUFFIX}"
 KEYWORD, BOTH = f"reisdocument{SUFFIX}", f"beide{SUFFIX}"
+# A typo within the first three letters: a query sharing a word's first three letters finds it by prefix.
+MISSPELT = "Paaspoort"
 # Each Open Inwoner process caches SiteConfiguration for SOLO_CACHE_TIMEOUT (5 s) in local memory.
 SOLO_TIMEOUT = 30
 
@@ -157,15 +159,16 @@ def test_feedback_on_a_search_is_stored(
 @pytest.mark.source("draaiboek OI-097", "Without results for a search, the portal suggests what was probably meant.")
 @pytest.mark.scenario("""
     Given a published product in Open Inwoner
-    When a visitor searches for a misspelt name of the product
+    When a visitor searches for the product's name with a typo in its first letters
     Then the results page says nothing was found
     And it suggests the product that was probably meant
 """)
 def test_no_results_suggest_what_was_meant(http: requests.Session, urls: dict[str, str]) -> None:
     """A misspelt search without hits suggests the product that was probably meant."""
-    html = expect_status(http.get(f"{urls['openinwoner']}/search/", params={"query": "Pasport"}), HTTPStatus.OK).text
-    assert "We konden geen zoekresultaten vinden" in html
-    assert PASPOORT in html
+    html = expect_status(http.get(f"{urls['openinwoner']}/search/", params={"query": MISSPELT}), HTTPStatus.OK).text
+    content = html.split('<main id="content"')[1].split("</main>")[0]
+    assert "We konden geen zoekresultaten vinden" in content
+    assert PASPOORT in content
 
 
 def _restore_search(podiumd_env: Environment, old: dict[str, object], search_on: Callable[[], bool]) -> None:
