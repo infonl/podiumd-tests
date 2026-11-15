@@ -86,7 +86,7 @@ Sources:
 | `regression/152-of-retention-en-pdf.spec.ts` | component or integration | 3/4/5 | merge | With 76 into `tests/integration/test_formulier_zaak.py`: the PDF report downloads through reportDownloadUrl. |
 | `regression/153-of-features-direct.spec.ts` | component or integration | 3/4/5 | merge | Cosign → `test_formulier_api.py`. Demo payment: as 185. NotifyNL mock (fixme in TA) and form variables (need a login): drop. |
 | `regression/154-omc-cosign-direct.spec.ts` | component or integration | 3/4/5 | merge | OMC part (Events/Listen with a JWT is not 401): `test_notification_is_recognized`. Open Formulieren: the paused submission's resume mail → `tests/integration/test_formulier_pauzeren.py`; cosign options and submission start: `test_formulier_api.py`. |
-| `regression/156-esuite-ui-navigatie.spec.ts` | component or integration | 3/4/5 | todo | Blocked with smoke 155: eSuite is outside PodiumD and no profile has an `esuite` URL. |
+| `regression/156-esuite-ui-navigatie.spec.ts` | component or integration | 3/4/5 | drop | No estate has an eSuite. |
 | `regression/157-contact-haalcentraal-validatie.spec.ts` | component or integration | 3/4/5 | merge | KI-060 → `tests/component/openklant/` test_internetaken.py; KvK parts: phase 3, external services. |
 | `regression/158-of-eherkenning-vestiging.spec.ts` | component or integration | 3/4/5 | port | `tests/integration/test_formulier_login.py`: eHerkenning through Keycloak's mock (W1), the vestiging is the zaak's initiator. |
 | `regression/159-of-zaak-keten.spec.ts` | component or integration | 3/4/5 | merge | With 158 into `tests/integration/test_formulier_login.py`. |
@@ -190,7 +190,7 @@ Sources:
 | `smoke/05-portaal-digid-login.spec.ts` | smoke | 1 | port | 5a and the first leg of 5b → `test_oidc.py`; the DigiD login → `tests/component/openinwoner/test_portaal_login.py`. |
 | `smoke/06-kiss-bff-healthz.spec.ts` | smoke | 1 | port | `/healthz` and `/api/healthcheck` → `test_api_health.py`; the rendered app → `test_kiss_renders_for_the_kcc_user` (`tests/component/kiss/test_kcc_session.py`). |
 | `smoke/113-kiss-kcc-login-flow.spec.ts` | smoke | 1 | port | `tests/component/kiss/test_kcc_session.py` (`ui`). |
-| `smoke/155-esuite-smoke-login.spec.ts` | smoke | 1 | todo | Blocked: eSuite is outside PodiumD and no profile has an `esuite` URL and credentials. |
+| `smoke/155-esuite-smoke-login.spec.ts` | smoke | 1 | drop | No estate has an eSuite. |
 | `smoke/192-frankgateway-health.spec.ts` | smoke | 1 | port | `test_frankgateway.py`; skips unless the profile has a `frankgateway` (outway) URL. Not in EX. |
 | `smoke/66-pabc-health.spec.ts` | smoke | 1 | port | API-key checks → `test_api_health.py`; the app version after login → `test_app_version_is_shown_after_login` (`tests/component/pabc/test_management.py`). |
 | `smoke/72-ita-health-kanalen.spec.ts` | smoke | 1 | port | Anonymous → `test_api_health.py`; logged in → `test_kanalen_answer_the_kcc_user` (`tests/component/ita/test_ita_internetaken.py`). |
