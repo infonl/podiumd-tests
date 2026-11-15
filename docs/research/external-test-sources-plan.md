@@ -244,18 +244,19 @@ per round, 1 s apart; `perf.yaml` holds the p95 and failure thresholds, per endp
 
 The adapter (chart `podiumd`, `kiss.adapter`, service `kiss-adapter`) translates KISS's ZGW and Klanten calls to
 the e-Suite; Smoelenboek reads the Objecten registration. podiumd-infra deploys it with `deploy-adapter.yml` to
-test00 to test02; minikube and kees00 do not run it. Its tests mock every upstream call.
+test00 to test02 and podiumd-minikube to minikube, only inside the cluster; kees00 does not run it. Its tests mock every
+upstream call. No environment of this suite has an e-Suite, so every test class is dropped.
 
 | Test class | Checks | Coverage | Decision | Reason | Target |
 | --- | --- | --- | --- | --- | --- |
-| `AuthTests` | `/healthz` 200; every route 401 without a token | covered: `tests/smoke/test_api_health.py` (`test_health_endpoint` and `test_anonymous_call_is_refused` for `kiss-adapter`) | port | needs only the adapter; capability `kiss-adapter` | `tests/smoke/test_kiss_adapter.py` (new) |
-| `SmoelenboekTests` | volledige naam mapped to achternaam | gap | port | reads Objecten, which PodiumD has; needs a Medewerker object, whose objecttype bootstrap already has (`ITA_OBJECTTYPES`); check it is the adapter's `SMOELENBOEK_OBJECT_TYPE_URL` | `tests/component/kiss/test_kiss_adapter.py` (new) |
-| `GetZakenTests` | forward to the e-Suite, intern zaaknummer as identificatie, ordering mapped | gap | port with a mock e-Suite, else skip | the e-Suite is external | same |
-| `ContactmomentenTests` | GET and POST forwarded, contactverzoek mapped | gap | as `GetZakenTests` | | same |
-| `PostZaakContactmomentenTests` | 204 | gap | as `GetZakenTests` | | same |
-| `KlantenTests` | forward | gap | as `GetZakenTests` | | same |
-| `InterneTaakTests` | POST answers the adapter's URL, mapping, filters, paging | gap | as `GetZakenTests` | | same |
-| `UrlRewriteIntegrationTest` | URLs in bodies rewritten both ways | gap | as `GetZakenTests` | | same |
+| `AuthTests` | `/healthz` 200; every route 401 without a token | gap | drop | the adapter serves only the e-Suite, which no environment of this suite has; it has no ingress on minikube or test00 | |
+| `SmoelenboekTests` | volledige naam mapped to achternaam | gap | drop | as `AuthTests` | |
+| `GetZakenTests` | forward to the e-Suite, intern zaaknummer as identificatie, ordering mapped | gap | drop | as `AuthTests` | |
+| `ContactmomentenTests` | GET and POST forwarded, contactverzoek mapped | gap | drop | as `AuthTests` | |
+| `PostZaakContactmomentenTests` | 204 | gap | drop | as `AuthTests` | |
+| `KlantenTests` | forward | gap | drop | as `AuthTests` | |
+| `InterneTaakTests` | POST answers the adapter's URL, mapping, filters, paging | gap | drop | as `AuthTests` | |
+| `UrlRewriteIntegrationTest` | URLs in bodies rewritten both ways | gap | drop | as `AuthTests` | |
 | `UrlRewritePipeWriterTest` | buffer splitting | n/a | skip | unit test | |
 
 Feasible: a smoke test (`/healthz`, 401 without a token, 200 with KISS's client token from the adapter's Secret)
@@ -372,13 +373,6 @@ kees00.
   with a maximum size.
 - Risks: changes to the shared test form reach every Open Formulieren test: add a second step instead of changing
   the first.
-
-### Batch 12: podiumd-adapter (1 day; 2 more with a mock e-Suite)
-
-- Cases: `AuthTests`, `SmoelenboekTests`; the rest only after the handoff.
-- Files: `tests/smoke/test_kiss_adapter.py`, `tests/component/kiss/test_kiss_adapter.py`; `COMPONENTS` and
-  `Capabilities` learn `kiss-adapter`.
-- Risks: no environment of this suite runs the adapter today: the tests skip until one does.
 
 ## Licence notes
 

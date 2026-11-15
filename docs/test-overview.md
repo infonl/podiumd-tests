@@ -11,11 +11,11 @@ component and integration, without and with the destructive tests.
 
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
-| smoke | 256 | 41 | 10 |
+| smoke | 241 | 41 | 10 |
 | component | 1012 | 599 | 78 |
 | integration | 213 | 145 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1415** | **733** | **93** |
+| **full tier** | **1400** | **733** | **93** |
 | **chaos tier** | **66** | **52** | **14** |
 
 Unit tests (`unit_tests/`, functions): 939. Perf endpoints (`perf/runs.py`): 32.
@@ -24,15 +24,15 @@ Unit tests (`unit_tests/`, functions): 939. Perf endpoints (`perf/runs.py`): 32.
 
 | Tier | Area | Tests | Scenarios |
 | --- | --- | --- | --- |
-| smoke | api_health | 38 | 5 |
+| smoke | api_health | 29 | 5 |
 | smoke | cilium | 2 | 2 |
 | smoke | cluster | 9 | 9 |
 | smoke | frankgateway | 6 | 2 |
 | smoke | mail_routes | 2 | 2 |
 | smoke | metrics | 6 | 6 |
 | smoke | oidc | 20 | 5 |
-| smoke | reachability | 35 | 2 |
-| smoke | web_security | 134 | 6 |
+| smoke | reachability | 34 | 2 |
+| smoke | web_security | 129 | 6 |
 | smoke | zgw_auth | 4 | 2 |
 | component | basisregistraties | 74 | 24 |
 | component | frankgateway | 8 | 2 |
@@ -105,12 +105,12 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | --- | --- |
 | EX | 19 |
 | MK | 47 |
-| PI | 57 |
+| PI | 56 |
 | TA | 283 |
 | ZAC | 19 |
 | draaiboek | 91 |
-| external | 254 |
-| podiumd-tests | 546 |
+| external | 224 |
+| podiumd-tests | 562 |
 | upstream | 245 |
 
 ## Expected failures per known issue
