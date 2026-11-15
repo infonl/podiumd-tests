@@ -6,6 +6,8 @@ component's main deployment to 0 and restores it afterwards.
 
 from __future__ import annotations
 
+import time
+
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -20,6 +22,8 @@ from podiumd_tests.bootstrap.names import TEST_FORM
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.components import COMPONENTS
 from podiumd_tests.kcc import kcc_login
+from podiumd_tests.kcc import kiss_klantcontact
+from podiumd_tests.kcc import post_kiss_klantcontact
 from podiumd_tests.mailpit import forget_mails
 from podiumd_tests.mailpit import mail_queue
 from podiumd_tests.mailpit import received
@@ -32,13 +36,10 @@ from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import is_root_answering
 from podiumd_tests.responses import is_server_error
+from podiumd_tests.seed import openklant as klanten
 from podiumd_tests.seed.objecten import clean_up_logboek
 from podiumd_tests.seed.objecten import make_productaanvraag
 from podiumd_tests.seed.objecten import objecttype_url
-from podiumd_tests.seed.openklant import clean_up_klantcontacten
-from podiumd_tests.seed.openklant import make_internetaak
-from podiumd_tests.seed.openklant import make_klantcontact
-from podiumd_tests.seed.openklant import make_submission_contact
 from podiumd_tests.wait import WaitTimeoutError
 from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import ROOT_TIMEOUT
@@ -310,7 +311,7 @@ def test_zac_mail_is_sent_after_a_mail_outage(
     """ZAC's ontvangstbevestiging for a zaak started while the mail server is down is mailed once it is back."""
     kenmerk = registry.tagged("zac-mailstoring")
     adres = f"{kenmerk}@example.invalid"
-    make_submission_contact(openklant, registry, kenmerk, adres)
+    klanten.make_submission_contact(openklant, registry, kenmerk, adres)
     zac = podiumd_env.deployment_for("zac")
     with component_down(podiumd_env, http, "mailpit"):
         make_productaanvraag(objecten, registry, productaanvraag_objecttype, productaanvraagtype, kenmerk)
@@ -361,6 +362,41 @@ def test_without_open_klant_a_zaak_with_a_person_cannot_be_opened(
     assert read_zaak(zac, zac_url, str(zaak["uuid"]))["identificatie"] == zaak["identificatie"]
 
 
+@pytest.mark.requires("openklant", "kiss", "keycloak")
+@pytest.mark.source(
+    "podiumd-tests",
+    "KISS saves every contactmoment in Open Klant; no source test stops Open Klant while a KCC medewerker saves one.",
+)
+@pytest.mark.scenario("""
+    Given the KCC medewerker is logged in to KISS
+    When Open Klant is stopped
+    Then KISS refuses to save a contactmoment, so the medewerker sees it was not saved
+    And KISS saves a contactmoment again once Open Klant is back
+""")
+def test_kiss_refuses_a_contactmoment_while_open_klant_is_down(  # fixtures
+    http: requests.Session,
+    page: Page,
+    podiumd_env: Environment,
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+    record_property: Callable[[str, object], None],
+) -> None:
+    """KISS answers an error, not success, to a contactmoment it cannot save in Open Klant; it saves one after."""
+    need_bootstrap(KCC.name)
+    kiss, kiss_url = kcc_login(page, podiumd_env, "kiss"), podiumd_env.profile.urls["kiss"]
+    unsaved = klanten.klantcontact_body(registry, onderwerp=registry.tagged("open-klant-down"))
+    klanten.clean_up_klantcontacten(openklant, registry, str(unsaved["onderwerp"]))
+    with component_down(podiumd_env, http, "openklant"):
+        asked = time.monotonic()
+        response = post_kiss_klantcontact(kiss, kiss_url, unsaved)
+        record_property("answer_seconds", round(time.monotonic() - asked, 1))
+        assert not response.ok, describe(response)
+    saved = kiss_klantcontact(kiss, kiss_url, openklant, registry, klanten.klantcontact_body(registry))
+    assert saved["uuid"]
+    assert klanten.klantcontacten_about(openklant, str(unsaved["onderwerp"])) == []
+
+
 @pytest.mark.requires("openinwoner", "openklant", "mailpit")
 @pytest.mark.tc("CONT-063")
 @pytest.mark.source(
@@ -389,7 +425,7 @@ def test_portal_mail_waits_in_the_queue_during_a_mail_outage(
     """
     need_bootstrap("openinwoner-cms-pages", "openinwoner-openklant")
     vraag = registry.tagged("portaal-mailstoring")
-    clean_up_klantcontacten(openklant, registry, QUESTION_SUBJECT, vraag)
+    klanten.clean_up_klantcontacten(openklant, registry, QUESTION_SUBJECT, vraag)
     registry.add(f"queued mails about {vraag}", lambda: mail_queue(podiumd_env, "openinwoner", "delete", vraag))
     # mailpit.quoted would be this module's 51st imported name (WPS203).
     about_vraag = f'"{vraag}"'  # noqa: B907  # Mailpit search phrase
@@ -450,8 +486,8 @@ def test_ita_mail_is_sent_after_a_mail_outage(
     ita_url = podiumd_env.profile.urls["ita"]
     groep = ita_calls.make_eenheid(podiumd_env, objecten, openklant, registry, "Groep", with_mailbox=True)
     adres = ita_calls.mailbox(groep)
-    klantcontact = make_klantcontact(openklant, registry)
-    taak = make_internetaak(openklant, registry, klantcontact, [])
+    klantcontact = klanten.make_klantcontact(openklant, registry)
+    taak = klanten.make_internetaak(openklant, registry, klantcontact, [])
     clean_up_logboek(objecten, registry, objecttype_url(podiumd_env, "Activiteitenlog"), str(taak["uuid"]))
     forget_mails(podiumd_env, registry, f'to:"{adres}"')  # noqa: B907  # Mailpit search; see about_vraag
     ita_calls.assign_to_me(ita, ita_url, taak)
