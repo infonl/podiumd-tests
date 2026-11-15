@@ -34,6 +34,7 @@ from podiumd_tests.seed.openzaak import BESLUIT_CREATE_LOCK
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_besluit
 from podiumd_tests.seed.openzaak import delete_zaak_at_cleanup
+from podiumd_tests.seed.openzaak import expect_utc_date_defect
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.wait import wait_until
 
@@ -589,6 +590,7 @@ def vastleggen_besluit(
     http: requests.Session, zac_url: str, zaak: JsonObject, besluittype: JsonObject, **fields: object
 ) -> requests.Response:
     """Record a besluit of the besluittype on the zaak, with these RestBesluitCreateData fields; ZAC's answer."""
+    expect_utc_date_defect()  # ZAC dates the besluit today
     body = {"zaakUuid": zaak["uuid"], "besluittypeUuid": besluittype["id"], **fields}
     with file_lock(BESLUIT_CREATE_LOCK):  # ZAC sends no identificatie
         return http.post(f"{zac_url}/rest/zaken/besluit", json=body)

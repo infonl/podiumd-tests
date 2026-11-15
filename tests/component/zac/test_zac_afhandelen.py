@@ -21,6 +21,7 @@ from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import after_period
+from podiumd_tests.seed.openzaak import expect_utc_date_defect
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import HEROPEND
@@ -82,6 +83,7 @@ def _assert_archief(openzaak: ApiClient, closed: JsonObject, in_open_zaak: JsonO
     bron = {"afgehandeld": in_open_zaak["einddatum"], "eigenschap": eigenschap}
     afleiding = str(section(archief, "brondatumArchiefprocedure").get("afleidingswijze"))
     if bron.get(afleiding):
+        expect_utc_date_defect()
         expected = after_period(str(bron[afleiding]), str(archief["archiefactietermijn"]))
         assert in_open_zaak["archiefactiedatum"] == expected
 

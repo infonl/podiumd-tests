@@ -6,6 +6,7 @@ delete a published version.
 
 from __future__ import annotations
 
+from datetime import date
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -14,7 +15,6 @@ import pytest
 from podiumd_tests.responses import invalid_codes
 from podiumd_tests.seed.objecten import ANY_OBJECT
 from podiumd_tests.seed.objecten import make_objecttype
-from podiumd_tests.seed.openzaak import today
 
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
@@ -44,7 +44,8 @@ def test_draft_version_publishes(podiumd_env: Environment, objecttypen: ApiClien
     refused = objecttypen.request("DELETE", str(version["objectType"]), HTTPStatus.BAD_REQUEST)
     assert invalid_codes(refused) == ["pending-versions"]
     published = objecttypen.patch(str(version["url"]), {"status": "published"})
-    assert (published["status"], published["publishedAt"]) == ("published", today())
+    # Objecttypen dates the publication in Europe/Amsterdam.
+    assert (published["status"], published["publishedAt"]) == ("published", date.today().isoformat())  # noqa: DTZ011
 
 
 @pytest.mark.scenario("""

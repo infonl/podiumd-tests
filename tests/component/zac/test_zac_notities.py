@@ -7,6 +7,7 @@ test zaaktype.
 from __future__ import annotations
 
 from datetime import date
+from datetime import datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -18,6 +19,7 @@ from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
+from podiumd_tests.seed.openzaak import expect_utc_date_defect
 from podiumd_tests.zac import can_open_zaak
 
 if TYPE_CHECKING:
@@ -105,8 +107,12 @@ def test_notitie_records_its_date_and_author(
     for http, auteur in ((zac, ADMIN.username), (behandelaar, naam)):
         expect_status(_add(http, urls["zac"], bpmn_zaak, registry.tagged(auteur), auteur), HTTPStatus.OK)
     listed = _notities(behandelaar, urls["zac"], bpmn_zaak)
-    today = date.today().isoformat()  # noqa: DTZ011  # ZAC's local date
-    assert {str(n["tijdstipLaatsteWijziging"])[:10] for n in listed} == {today}
+    expect_utc_date_defect(
+        "[zac-40] ZAC 5.9.1 stores a notitie's tijdstip in a date column, so the UTC date: from 00:00 to 01:00 CET "
+        "the previous day; not yet reported upstream"
+    )
+    days = {datetime.fromisoformat(str(n["tijdstipLaatsteWijziging"])).astimezone().date() for n in listed}
+    assert days == {date.today()}  # noqa: DTZ011  # ZAC's local date
     assert {(n["tekst"], n["gebruikersnaamMedewerker"]) for n in listed} == {
         (registry.tagged(auteur), auteur) for auteur in (ADMIN.username, naam)
     }

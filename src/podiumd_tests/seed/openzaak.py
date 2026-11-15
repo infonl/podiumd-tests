@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import cast
 
+import pytest
+
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
@@ -46,9 +48,22 @@ BESLUIT_CREATE_LOCK = Path(tempfile.gettempdir()) / "podiumd-tests-besluit-creat
 CATALOGI = "catalogi/api/v1"
 
 
+OPEN_ZAAK_UTC_DATE = (
+    "[open-zaak-18] Open Zaak 1.29.3 checks and derives dates with the UTC date and ZAC dates in Europe/Amsterdam: "
+    "from 00:00 to 01:00 CET a besluit of today is refused, the archiefactiedatum a day early; "
+    "not yet reported upstream"
+)
+
+
 def today() -> str:
     """Today's date as the ZGW APIs expect it."""
     return datetime.now(tz=UTC).date().isoformat()
+
+
+def expect_utc_date_defect(reason: str = OPEN_ZAAK_UTC_DATE) -> None:
+    """Mark the test as a known defect (open-zaak-18 by default) while the local date is ahead of the UTC date."""
+    if date.today() != datetime.now(tz=UTC).date():  # noqa: DTZ011  # the apps' local date
+        pytest.xfail(reason)
 
 
 # An ISO 8601 period as Open Zaak's archiefactietermijn holds it.

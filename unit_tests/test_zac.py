@@ -435,6 +435,13 @@ def test_koppel_zoekresultaat_matches_the_uuid_not_the_identificatie(fake_http):
     )
 
 
+@pytest.fixture(name="no_utc_date_defect")
+def fixture_no_utc_date_defect(monkeypatch):
+    """Record besluiten as at noon: open-zaak-18 shows only after local midnight."""
+    monkeypatch.setattr(zac, "expect_utc_date_defect", lambda: None)
+
+
+@pytest.mark.usefixtures("no_utc_date_defect")
 def test_besluit_calls_send_zacs_fields(fake_http):
     sent = fake_http(
         {
@@ -451,6 +458,7 @@ def test_besluit_calls_send_zacs_fields(fake_http):
     assert sent[-1].method == "DELETE"
 
 
+@pytest.mark.usefixtures("no_utc_date_defect")
 def test_recorded_besluit_is_deleted_at_cleanup(fake_http):
     url = "https://oz.test/besluiten/api/v1/besluiten/b1"
     sent = fake_http(
