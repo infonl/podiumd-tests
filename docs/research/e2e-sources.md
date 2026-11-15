@@ -276,6 +276,9 @@ PodiumD portal shows these taken yet. API level only for now: `test_openvtb.py` 
 taak with `isGerelateerdAan` the urn of a test zaak, and the betaaltaak and formuliertaak variants. Revisit when OI or
 OMC consumes Open VTB taken. OMC's Open VTB bericht is already in `test_omc_bericht.py`.
 
+Ported: `tests/component/openvtb/test_openvtb.py` (taak on a zaak found by `isGerelateerdAan` and completed,
+betaaltaak and formuliertaak, required fields refused with 400). Open VTB 0.2.0 matches the profile's v0.1 snapshot.
+
 ### 9. Frank!Gateway's own Bruno tests (low)
 
 | | |
