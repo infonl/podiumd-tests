@@ -15,11 +15,15 @@ from typing import cast
 import pytest
 
 from podiumd_tests import openformulieren as forms
+from podiumd_tests import workloads
+from podiumd_tests.auth import keycloak_admin
 from podiumd_tests.auth.keycloak import PasswordLogin
 from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.auth.keycloak import password_grant
+from podiumd_tests.bootstrap.names import BPMN_ZAAKTYPE
 from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.bootstrap.names import TEST_FORM
+from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.bootstrap.steps import NAW_DATA
 from podiumd_tests.chaos_load import CALM
@@ -35,18 +39,14 @@ from podiumd_tests.oidc import LOGIN_PATHS
 from podiumd_tests.perf.availability_report import problems
 from podiumd_tests.seed.opennotificaties import delivery_attempts
 from podiumd_tests.seed.opennotificaties import make_abonnement
+from podiumd_tests.seed.openzaak import published_zaaktype
 from podiumd_tests.seed.openzaak import zaak_maker
 from podiumd_tests.seed.registry import ResourceRegistry
+from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.wait import WaitTimeoutError
 from podiumd_tests.wait import wait_until
-from podiumd_tests.workloads import cluster_state
-from podiumd_tests.workloads import component_down
-from podiumd_tests.workloads import database_pod
-from podiumd_tests.workloads import disruptions
-from podiumd_tests.workloads import pod_workload
-from podiumd_tests.workloads import replace_pod
-from podiumd_tests.workloads import scaled
-from podiumd_tests.workloads import worker_deployment
+from podiumd_tests.zac import is_zaak_listed
+from podiumd_tests.zac import logged_in_user
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -78,6 +78,10 @@ REGISTRATION_TIMEOUT = 300
 COMPLETE_TIMEOUT = 120
 # A deleted Keycloak pod is replaced and serves logins again.
 KEYCLOAK_RECOVERY = 300
+# A deleted ZAC pod is replaced and ready: its readiness probe starts after 60 s and allows 20 x 10 s.
+ZAC_RECOVERY = 600
+# Seconds past an access token's expiry by which a session has refreshed it.
+REFRESH_MARGIN = 60
 
 
 @pytest.mark.requires("openzaak", "opennotificaties")
@@ -85,15 +89,16 @@ KEYCLOAK_RECOVERY = 300
     "upstream open-zaak/open-zaak docs/development/performance/notifications.rst",
     "With Open Notificaties down for up to 60 s under write load, the default autoretry loses no notificatie.",
 )
+@pytest.mark.parametrize("stopped", ["opennotificaties", "openzaak-worker"])
 @pytest.mark.scenario("""
     Given a subscriber on kanaal zaken in Open Notificaties
     And zaken are created in Open Zaak without pause
-    When Open Notificaties is stopped for a minute and started again
+    When Open Notificaties, or the worker that sends Open Zaak's notifications, is stopped for a minute
     Then Open Zaak created every zaak
-    And the subscriber gets the notification of every zaak
+    And the subscriber gets the notification of every zaak once it is started again
     And no other component restarted
 """)
-def test_no_notificatie_is_lost_while_open_notificaties_is_down(  # fixtures
+def test_no_notificatie_is_lost_while_the_notifier_is_down(  # fixtures
     podiumd_env: Environment,
     urls: dict[str, str],
     http: requests.Session,
@@ -103,16 +108,26 @@ def test_no_notificatie_is_lost_while_open_notificaties_is_down(  # fixtures
     registry: ResourceRegistry,
     new_callback: Callable[..., Callback],
     record_property: Callable[[str, object], None],
+    stopped: str,
 ) -> None:
-    """Every zaak created while Open Notificaties is down reaches the subscriber once it is back."""
+    """Every zaak created while Open Notificaties or Open Zaak's worker is down reaches the subscriber once it is back."""
+    if stopped == "opennotificaties":
+        deployment = podiumd_env.deployment_for(stopped)
+        outage = workloads.component_down(podiumd_env, http, stopped)
+    else:
+        deployment = workloads.worker_deployment(podiumd_env, "openzaak")
+        if deployment is None:
+            pytest.skip(f"no worker Deployment of openzaak on {podiumd_env.profile.name}")
+        outage = workloads.scaled(podiumd_env.kube, f"deployment/{deployment}", 0)
     callback = new_callback()
     make_abonnement(opennotificaties, registry, callback.url, "zaken", {"bronorganisatie": TEST_CATALOGUS_RSIN})
-    before = cluster_state(podiumd_env)
+    before = workloads.cluster_state(podiumd_env)
     start = time.time()
     calls = {"oz_zaak_create": zaak_maker(podiumd_env, run_tag, registry, str(test_zaaktype["url"]))}
-    with watched_load(podiumd_env, urls, ["openzaak"], calls, workers=2, pause=1) as (load, watch):
+    besides = {deployment}
+    with watched_load(podiumd_env, urls, ["openzaak"], calls, workers=2, pause=1, besides=besides) as (load, watch):
         load.run_for(CALM)
-        with component_down(podiumd_env, http, "opennotificaties"):
+        with outage:
             down = time.time()
             load.run_for(OUTAGE)
         back = time.time()
@@ -124,8 +139,7 @@ def test_no_notificatie_is_lost_while_open_notificaties_is_down(  # fixtures
     record_property("outage_seconds", round(back - down))
     record_property("delivered_seconds_after_restart", round(time.time() - back))
     assert lost == [], f"{len(lost)} of {len(zaken)} notificaties lost"
-    deployment = podiumd_env.deployment_for("opennotificaties")
-    assert disruptions(before, cluster_state(podiumd_env), {deployment}) == []
+    assert workloads.disruptions(before, workloads.cluster_state(podiumd_env), {deployment}) == []
 
 
 @pytest.mark.requires("openzaak", "opennotificaties")
@@ -162,7 +176,7 @@ def test_a_refusing_subscriber_does_not_slow_down_open_zaak(  # fixtures
     load_registry = ResourceRegistry(run_tag)
     registry.add("zaken of the load", load_registry.cleanup)
     vertrouwelijk = {"vertrouwelijkheidaanduiding": REFUSED_VERTROUWELIJKHEID}
-    before = cluster_state(podiumd_env)
+    before = workloads.cluster_state(podiumd_env)
     start = time.time()
     zaaktype = str(test_zaaktype["url"])
     calls = {"oz_zaak_create": zaak_maker(podiumd_env, run_tag, load_registry, zaaktype, **vertrouwelijk)}
@@ -193,7 +207,7 @@ def test_a_refusing_subscriber_does_not_slow_down_open_zaak(  # fixtures
     }
     record_property("measured", measured)
     assert [*failures(load.attempts, start), *problems(watch)] == []
-    assert disruptions(before, cluster_state(podiumd_env), set()) == []
+    assert workloads.disruptions(before, workloads.cluster_state(podiumd_env), set()) == []
     assert refusal <= limit, f"p95 while refusing {refusal:.0f} ms > {limit:.0f} ms (before {calm:.0f})"
     lost = healthy.missing(zaken)
     assert lost == [], f"{len(lost)} of {len(zaken)} notificaties lost"
@@ -201,6 +215,56 @@ def test_a_refusing_subscriber_does_not_slow_down_open_zaak(  # fixtures
     assert unbounded == {}, f"more than {deliveries} deliveries of a refused notificatie"
     unretried = {zaak: refused[zaak] for zaak in later if refused[zaak] < deliveries}
     assert unretried == {}, f"fewer than {deliveries} deliveries of a refused notificatie in {DELIVERY_TIMEOUT} s"
+
+
+@pytest.mark.requires("openzaak", "opennotificaties", "zac")
+@pytest.mark.source(
+    "podiumd-tests",
+    "ZAC learns of a new zaak only from Open Notificaties; no source test restarts ZAC while zaken arrive.",
+)
+@pytest.mark.scenario("""
+    Given zaken are created in Open Zaak without pause
+    When ZAC's pod is restarted
+    Then ZAC's search finds every zaak once ZAC is back
+    And no other component restarted
+""")
+def test_zac_finds_the_zaken_made_while_it_restarts(
+    podiumd_env: Environment,
+    urls: dict[str, str],
+    run_tag: str,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+    record_property: Callable[[str, object], None],
+) -> None:
+    """ZAC's search finds every zaak Open Zaak created while ZAC's pod was replaced."""
+    need_bootstrap(ADMIN.name, "openzaak-zaaktype-bpmn", "zac-bpmn-process")
+    deployment = podiumd_env.deployment_for("zac")
+    pods = [pod for pod in podiumd_env.items("pods") if workloads.pod_workload(pod) == deployment]
+    assert pods, f"no pod of {deployment}"
+    zaaktype = str(published_zaaktype(openzaak, BPMN_ZAAKTYPE, "openzaak-zaaktype-bpmn")["url"])
+    before = workloads.cluster_state(podiumd_env)
+    start = time.time()
+    calls = {"oz_zaak_create": zaak_maker(podiumd_env, run_tag, registry, zaaktype)}
+    with watched_load(podiumd_env, urls, ["openzaak"], calls, workers=1, pause=2) as (load, watch):
+        load.run_for(CALM)
+        workloads.replace_pod(podiumd_env, pods[0], ZAC_RECOVERY)
+        back = time.time()
+        load.run_for(CALM)
+    record_property("report", load_report(load, watch, start))
+    record_property("zac_back_seconds", round(back - start - CALM))
+    assert [*failures(load.attempts, start), *problems(watch)] == []
+    zac, zac_url = zac_as_admin(podiumd_env), urls["zac"]
+    zaken = [cast("JsonObject", attempt.result) for attempt in load.attempts if attempt.error is None]
+
+    def unlisted() -> list[str]:
+        return [str(zaak["identificatie"]) for zaak in zaken if not is_zaak_listed(zac, zac_url, zaak)]
+
+    with suppress(WaitTimeoutError):
+        wait_until(lambda: not unlisted(), timeout=DELIVERY_TIMEOUT, interval=10, description="every zaak in ZAC")
+    missing = unlisted()
+    assert missing == [], f"ZAC's search misses {len(missing)} of {len(zaken)} zaken: {missing}"
+    assert workloads.disruptions(before, workloads.cluster_state(podiumd_env), {deployment}) == []
 
 
 type Sent = tuple[requests.Session, str, str]
@@ -277,15 +341,15 @@ def test_no_submission_is_lost_while_the_open_formulieren_worker_is_down(
 ) -> None:
     """Every form submitted while Open Formulieren's worker is down is registered as a zaak once it is back."""
     need_bootstrap("openformulieren-form", "openformulieren-zgw-group", "openzaak-of-autorisatie")
-    worker = worker_deployment(podiumd_env, "openformulieren")
+    worker = workloads.worker_deployment(podiumd_env, "openformulieren")
     if worker is None:
         pytest.skip(f"no worker Deployment of openformulieren on {podiumd_env.profile.name}")
-    before = cluster_state(podiumd_env)
+    before = workloads.cluster_state(podiumd_env)
     start = time.time()
     calls = {"of_submit": sender(podiumd_env, registry)}
     with watched_load(podiumd_env, urls, ["openzaak"], calls, workers=2, pause=2) as (load, watch):
         load.run_for(CALM)
-        with scaled(podiumd_env.kube, f"deployment/{worker}", 0):
+        with workloads.scaled(podiumd_env.kube, f"deployment/{worker}", 0):
             load.run_for(OUTAGE)
         back = time.time()
         load.run_for(CALM)
@@ -294,7 +358,7 @@ def test_no_submission_is_lost_while_the_open_formulieren_worker_is_down(
     lost = unregistered(podiumd_env, openzaak, registry, load.attempts, start)
     record_property("registered_seconds_after_restart", round(time.time() - back))
     assert lost == [], f"{len(lost)} of {len(load.attempts)} submissions not registered"
-    assert disruptions(before, cluster_state(podiumd_env), {worker}) == []
+    assert workloads.disruptions(before, workloads.cluster_state(podiumd_env), {worker}) == []
 
 
 @pytest.mark.requires("openformulieren", "openzaak")
@@ -322,7 +386,7 @@ def test_no_accepted_submission_is_lost_when_postgres_restarts(
     record_property: Callable[[str, object], None],
 ) -> None:
     """Every form Open Formulieren accepted around a Postgres restart is registered as a zaak."""
-    database = database_pod(podiumd_env)
+    database = workloads.database_pod(podiumd_env)
     if database is None:
         pytest.skip(f"Open Zaak's database runs outside the cluster on {podiumd_env.profile.name}")
     need_bootstrap("openformulieren-form", "openformulieren-zgw-group", "openzaak-of-autorisatie")
@@ -330,7 +394,7 @@ def test_no_accepted_submission_is_lost_when_postgres_restarts(
     calls = {"of_submit": sender(podiumd_env, registry)}
     with watched_load(podiumd_env, urls, ["openformulieren"], calls, workers=2, pause=2) as (load, watch):
         load.run_for(CALM)
-        replace_pod(podiumd_env, database, OUTAGE * 5)
+        workloads.replace_pod(podiumd_env, database, OUTAGE * 5)
         load.run_for(OUTAGE)
     record_property("report", load_report(load, watch, start))
     accepted = [attempt for attempt in load.attempts if attempt.error is None]
@@ -376,15 +440,15 @@ def test_logins_recover_after_a_keycloak_pod_is_deleted(
     need_bootstrap(KCC.name)
     calls = login_calls(podiumd_env)
     names = COMPONENTS["keycloak"].deployment_prefixes
-    pods = [pod for pod in podiumd_env.items("pods") if pod_workload(pod) in names]
+    pods = [pod for pod in podiumd_env.items("pods") if workloads.pod_workload(pod) in names]
     assert pods, "no Keycloak pod"
-    workload = str(pod_workload(pods[0]))
+    workload = str(workloads.pod_workload(pods[0]))
     record_property("keycloak_pods", len(pods))
-    before = cluster_state(podiumd_env)
+    before = workloads.cluster_state(podiumd_env)
     with watched_load(podiumd_env, urls, ["kiss"], calls, workers=2, pause=1) as (load, watch):
         load.run_for(CALM)
         deleted = time.time()
-        replace_pod(podiumd_env, pods[0], KEYCLOAK_RECOVERY)
+        workloads.replace_pod(podiumd_env, pods[0], KEYCLOAK_RECOVERY)
         load.run_for(CALM)
     record_property("report", load_report(load, watch, deleted))
     recovered = {
@@ -394,4 +458,39 @@ def test_logins_recover_after_a_keycloak_pod_is_deleted(
     record_property("recovery_seconds", recovered)
     assert None not in recovered.values(), f"not recovered: {recovered}"
     assert problems(watch) == []
-    assert disruptions(before, cluster_state(podiumd_env), {workload}) == []
+    assert workloads.disruptions(before, workloads.cluster_state(podiumd_env), {workload}) == []
+
+
+@pytest.mark.requires("keycloak", "zac")
+@pytest.mark.source(
+    "podiumd-tests",
+    "ZAC refreshes its users' tokens at Keycloak; no source test restarts Keycloak while a medewerker is logged in.",
+)
+@pytest.mark.scenario("""
+    Given the test admin is logged in to ZAC
+    When a Keycloak instance is stopped and replaced
+    Then the test admin keeps working in ZAC without logging in again
+    And still after ZAC had to refresh the admin's access token
+""")
+def test_zac_session_survives_a_keycloak_restart(
+    podiumd_env: Environment,
+    urls: dict[str, str],
+    need_bootstrap: Callable[..., None],
+    record_property: Callable[[str, object], None],
+) -> None:
+    """A ZAC session logged in before a Keycloak pod is deleted keeps working past its access token's lifespan."""
+    need_bootstrap(ADMIN.name)
+    lifespan = int(str(keycloak_admin.for_environment(podiumd_env).representation()["accessTokenLifespan"]))
+    names = COMPONENTS["keycloak"].deployment_prefixes
+    pods = [pod for pod in podiumd_env.items("pods") if workloads.pod_workload(pod) in names]
+    assert pods, "no Keycloak pod"
+    zac, zac_url = zac_as_admin(podiumd_env), urls["zac"]
+    logged_in = time.time()
+    calls = {"zac_logged_in_user": lambda: logged_in_user(zac, zac_url)}
+    with watched_load(podiumd_env, urls, ["zac"], calls, workers=1, pause=5) as (load, watch):
+        workloads.replace_pod(podiumd_env, pods[0], KEYCLOAK_RECOVERY)
+        # Past the access token's expiry, so ZAC refreshes it at the new Keycloak instance.
+        load.run_for(max(logged_in + lifespan + REFRESH_MARGIN - time.time(), CALM))
+    record_property("report", load_report(load, watch, logged_in))
+    record_property("access_token_lifespan", lifespan)
+    assert failures(load.attempts, logged_in) == [], "the ZAC session failed around the Keycloak restart"

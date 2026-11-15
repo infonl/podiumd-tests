@@ -109,6 +109,8 @@ class Watch:  # pylint: disable=too-many-instance-attributes  # one field per me
 
     components: frozenset[str]
     limits: Limits
+    # Workloads the test itself stops or replaces: their pod changes are no disruption.
+    besides: frozenset[str] = frozenset()
     started: float = 0
     ended: float = 0
     samples: list[Sample] = field(default_factory=list[Sample])
@@ -246,7 +248,7 @@ class _Cluster:
         else:
             watch.recovered_s = time.time() - watch.ended
         after = self.loaded_state()
-        watch.disruptions = disruptions(self.before, after)
+        watch.disruptions = disruptions(self.before, after, watch.besides)
         watch.memory_limits = resource_limits(after.pods.values(), "memory", quantity_bytes)
         watch.cpu_limits = resource_limits(after.pods.values(), "cpu", quantity_cores)
         cpu_after = None if self.cpu_before is None else self.cpu_counters()
@@ -263,14 +265,19 @@ def _stop(threads: list[threading.Thread], stop: threading.Event, watch: Watch) 
 
 @contextmanager
 def watched(
-    env: Environment, urls: Mapping[str, str], components: Iterable[str], limits: Limits | None = None
+    env: Environment,
+    urls: Mapping[str, str],
+    components: Iterable[str],
+    limits: Limits | None = None,
+    besides: Iterable[str] = (),
 ) -> Generator[Watch]:
     """Measure the components' availability while the block runs a load, and their recovery after it.
 
     urls: the component URLs as this console reaches them (the `urls` fixture). limits: perf.yaml's by default.
+    besides: workloads the block stops or replaces itself.
     """
     limits = limits or availability_limits(REPO_ROOT / "perf.yaml")
-    watch = Watch(frozenset(component for component in components if component in urls), limits)
+    watch = Watch(frozenset(component for component in components if component in urls), limits, frozenset(besides))
     stop = threading.Event()
     threads = [
         threading.Thread(target=_sample_root, args=(env.session(), urls[name], name, watch, stop), daemon=True)

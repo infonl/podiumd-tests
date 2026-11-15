@@ -11,12 +11,12 @@ versions is not counted.
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 256 | 41 | 10 |
-| component | 1011 | 598 | 78 |
-| integration | 206 | 142 | 19 |
+| component | 1012 | 599 | 78 |
+| integration | 213 | 145 | 19 |
 | perf | 80 | 9 | 0 |
 | **full tier** | **1415** | **733** |  |
 
-Unit tests (`unit_tests/`, functions): 936. Perf endpoints (`perf/runs.py`): 32.
+Unit tests (`unit_tests/`, functions): 939. Perf endpoints (`perf/runs.py`): 32.
 
 ## Per area
 
@@ -39,7 +39,7 @@ Unit tests (`unit_tests/`, functions): 936. Perf endpoints (`perf/runs.py`): 32.
 | component | kiss | 70 | 26 |
 | component | objecten | 18 | 8 |
 | component | omc | 3 | 2 |
-| component | openarchiefbeheer | 38 | 32 |
+| component | openarchiefbeheer | 39 | 33 |
 | component | openbeheer | 5 | 5 |
 | component | openformulieren | 13 | 10 |
 | component | openinwoner | 36 | 25 |
@@ -53,10 +53,10 @@ Unit tests (`unit_tests/`, functions): 936. Perf endpoints (`perf/runs.py`): 32.
 | component | zaakbrug | 20 | 16 |
 | component | zac | 354 | 263 |
 | component | zgw_office_addin | 4 | 3 |
-| integration | continuiteit | 19 | 10 |
-| integration | continuiteit_belasting | 5 | 5 |
+| integration | continuiteit | 20 | 11 |
+| integration | continuiteit_belasting | 8 | 7 |
 | integration | continuiteit_opslag | 10 | 10 |
-| integration | continuiteit_zoekindex | 3 | 3 |
+| integration | continuiteit_zoekindex | 6 | 3 |
 | integration | formulier_betaling | 19 | 6 |
 | integration | formulier_klantprofiel | 1 | 1 |
 | integration | formulier_logica | 1 | 1 |
@@ -108,8 +108,8 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | ZAC | 19 |
 | draaiboek | 91 |
 | external | 254 |
-| podiumd-tests | 540 |
-| upstream | 243 |
+| podiumd-tests | 546 |
+| upstream | 245 |
 
 ## Expected failures per known issue
 

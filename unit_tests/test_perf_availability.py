@@ -215,9 +215,10 @@ container_cpu_cfs_periods_total{container="openzaak",namespace="podiumd",pod="op
 """
 
 
-def cluster_pod(name, *, restarts=0):
+def cluster_pod(name, *, restarts=0, replicaset=None):
+    owner = {"kind": "ReplicaSet", **({"name": replicaset} if replicaset else {})}
     return {
-        "metadata": {"uid": name, "name": name, "namespace": "podiumd", "ownerReferences": [{"kind": "ReplicaSet"}]},
+        "metadata": {"uid": name, "name": name, "namespace": "podiumd", "ownerReferences": [owner]},
         "spec": {
             "nodeName": "n1",
             "containers": [{"name": name.split("-")[0], "resources": {"limits": {"memory": "1Gi"}}}],
@@ -248,6 +249,19 @@ def test_watched_samples_the_roots_and_memory_of_the_loaded_components(env_facto
     assert found.started > datetime(2026, 1, 1, tzinfo=UTC).timestamp()
     assert found.ended >= found.started
     assert problems(found) == []
+
+
+@pytest.mark.parametrize(("besides", "gone"), [((), 1), (("openzaak-worker",), 0)])
+def test_watched_leaves_out_the_workloads_the_block_stops(env_factory, fake_runner, fake_http, besides, gone):
+    worker = cluster_pod("openzaak-worker-5d-x1", replicaset="openzaak-worker-5d")
+    nodes = (0, json.dumps({"items": [{"metadata": {"name": "n1"}}]}))
+    fake_runner.answers = {"get pods": (0, json.dumps({"items": [worker]})), "get nodes": nodes, "get --raw": (0, "")}
+    fake_http({"/": (200, {})})
+    env = env_factory()
+    env.capabilities = Capabilities(frozenset(("cluster", "openzaak")), {})
+    with watched(env, env.profile.urls, ["openzaak"], LIMITS, besides=besides) as found:
+        fake_runner.answers["get pods"] = (0, json.dumps({"items": []}))
+    assert len(found.disruptions) == gone
 
 
 def test_watched_without_cluster_access_only_samples_the_roots(env_factory, fake_http):

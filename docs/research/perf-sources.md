@@ -71,7 +71,7 @@ with curl or WebFetch. "verify" marks a fact not confirmed.
 | Reference numbers | burst: 10/20/40 users → 1,430/1,479/1,429 requests per minute, ~24 req/s, 0 failures, median 390/740/1,200 ms, median notification 84–89 ms. Downtime (10 users, 1 min, default retry): 10 s and 60 s → 0 lost; 300 s → 1,276 lost. With max retries 7 and backoff max 192: 300 s → 0 lost, 600 s → 1,181 lost |
 | Port value | the missing "dependency down under load" case; the notification-delay median as a threshold for the time from a zaak create to its notificatie at the mock server; the retry schedule (3, 9, 21, 45, 93 s) as the window for "delivered after recovery" |
 | How | port to the suite's Locust (`oz_zaak_create` load) plus a chaos-tier wrapper that scales Open Notificaties to 0 (existing `test_continuiteit.py` scaling helpers) and counts deliveries on the `ptest-bootstrap-perf` kanaal's mock-server abonnement. Only on environments whose `allowed_tiers` include chaos |
-| Ported | `tests/integration/test_continuiteit_belasting.py::test_no_notificatie_is_lost_while_open_notificaties_is_down` |
+| Ported | `tests/integration/test_continuiteit_belasting.py::test_no_notificatie_is_lost_while_the_notifier_is_down` |
 
 #### H2. Objecten #534: back pressure and circuit breaker (notification storm)
 

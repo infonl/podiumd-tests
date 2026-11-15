@@ -95,8 +95,9 @@ def test_created_lists_the_urls_the_successful_calls_returned_since(monkeypatch)
         Attempt("create", 1, 1, {"url": "z/1"}),
         Attempt("create", 2, 1, error="ConnectionError: refused"),
         Attempt("create", 3, 1, {"url": "z/3"}),
+        Attempt("read", 4, 1, [{"url": "p/1"}]),
     ]
     monkeypatch.setattr(Load, "attempts", property(lambda _load: attempts))
     load = Load({}, pause=0)
-    assert load.created() == ["z/1", "z/3"]
-    assert load.created(since=2) == ["z/3"]
+    assert load.created(name="create") == ["z/1", "z/3"]
+    assert load.created(since=2, name="create") == ["z/3"]

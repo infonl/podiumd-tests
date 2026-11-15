@@ -23,6 +23,7 @@ from podiumd_tests.perf.stats import thresholds
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from collections.abc import Collection
     from collections.abc import Generator
     from collections.abc import Mapping
     from collections.abc import Sequence
@@ -73,9 +74,13 @@ class Load:
         with self._lock:
             return list(self._attempts)
 
-    def created(self, since: float = 0) -> list[str]:
-        """Return the URL of the object each successful call returned that started at or after `since`."""
-        found = (attempt for attempt in self.attempts if attempt.error is None and attempt.start >= since)
+    def created(self, since: float = 0, name: str | None = None) -> list[str]:
+        """Return the URL of the object each successful call (of `name`, if given) returned since `since`."""
+        found = (
+            attempt
+            for attempt in self.attempts
+            if attempt.error is None and attempt.start >= since and name in {None, attempt.name}
+        )
         return [str(cast("JsonObject", attempt.result)["url"]) for attempt in found]
 
     def run_for(self, seconds: float) -> None:
@@ -123,13 +128,14 @@ def watched_load(  # noqa: PLR0913  # the load and what watches it
     *,
     workers: int,
     pause: float,
+    besides: Collection[str] = (),
 ) -> Generator[tuple[Load, Watch]]:
     """Run the calls as `loaded` does while perf.yaml's availability gate watches the components that serve them.
 
-    urls: the component URLs as this console reaches them (the `urls` fixture).
+    urls: the component URLs as this console reaches them (the `urls` fixture). besides: workloads the block stops.
     """
     # watched measures the recovery after its block; a block that raises needs no recovery measured.
-    gate = watched(env, urls, served)
+    gate = watched(env, urls, served, besides=besides)
     with gate as watch, loaded(calls, workers=workers, pause=pause) as load:  # pylint: disable=contextmanager-generator-missing-cleanup
         yield load, watch
 
