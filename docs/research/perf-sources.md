@@ -226,6 +226,7 @@ with curl or WebFetch. "verify" marks a fact not confirmed.
 | Content | uWSGI 2 processes × 4 threads, `maxRequests: 1000`; pooling "explicitly experimental… only after verifying stability under load" |
 | Port value | the perf tier is the "verify under load" step: run with pooling on and off at 16 users, compare p95, failures, connection count and restarts |
 | How | run the perf tier twice on minikube with the two values (podiumd-minikube owns the values: handoff file) |
+| Result | minikube 2026-11-15, perf tier 16 users 5 min, uWSGI 2 × 4, one run each: with `dbPool` (min = max = 4) Open Zaak served 75 instead of 51 requests per endpoint, p95 of every Open Zaak call 20-50 % lower (`oz_zaken` 1300 to 760 ms, `oz_zaken_expand` 5700 to 4600 ms), 0 failures, no restarts, 12-16 instead of 11 Postgres connections. No instability in 5 minutes; a longer soak with pooling is still open |
 
 ### Low
 
