@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from typing import cast
 
 from podiumd_tests import redis
+from podiumd_tests import workloads
 from podiumd_tests.capabilities import Capabilities
 
 if TYPE_CHECKING:
@@ -53,7 +54,7 @@ def test_role_endpoints_and_master_check():
     assert redis.redis_pods(env) == [master]
     assert redis.is_master_role_checked(master)
     assert not redis.is_master_role_checked(other)
-    assert redis.ready_endpoints(env, "redis-ha-master") == ["redis-ha-0"]
+    assert workloads.ready_endpoints(env, "redis-ha-master") == ["redis-ha-0"]
     assert redis.reported_role(env, master) == "slave"
     args, kwargs = fake.kube.calls[0]
     assert args[:4] == ("exec", "pod/redis-ha-0", "-c", "redis-ha")

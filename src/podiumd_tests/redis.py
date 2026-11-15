@@ -15,8 +15,9 @@ from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import metadata_labels
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.wait import wait_until
-from podiumd_tests.workloads import pod_containers
+from podiumd_tests.workloads import ready_endpoints
 from podiumd_tests.workloads import replace_pod
+from podiumd_tests.workloads import variable_config_maps
 
 if TYPE_CHECKING:
     from collections.abc import Collection
@@ -36,23 +37,12 @@ MASTER_LABEL = "redis-role"
 REDIS_CLI = "redis-cli -h $(hostname) -p ${REDIS_PORT:-6379}"
 
 
-def _config_maps(deployment: JsonObject) -> set[str]:
-    """Return the ConfigMaps the deployment's containers read variables from."""
-    found: set[str] = set()
-    for container in pod_containers(deployment, with_init=True):
-        whole = [section(ref, "configMapRef") for ref in entries(container.get("envFrom"))]
-        values = [section(variable, "valueFrom") for variable in entries(container.get("env"))]
-        keys = [section(value, "configMapKeyRef") for value in values]
-        found |= {str(ref.get("name")) for ref in (*whole, *keys) if ref}
-    return found
-
-
 def redis_deployments(env: Environment) -> list[str]:
     """Return the Deployments that read MASTER_SERVICE from a ConfigMap (CACHE_*, CELERY_BROKER_URL)."""
     data = {metadata_name(item): section(item, "data") for item in env.kube.items("configmaps")}
 
     def is_redis_user(deployment: JsonObject) -> bool:
-        values = (value for name in _config_maps(deployment) for value in data.get(name, {}).values())
+        values = (value for name in variable_config_maps(deployment) for value in data.get(name, {}).values())
         return any(MASTER_SERVICE in str(value) for value in values)
 
     return sorted(metadata_name(item) for item in env.kube.items("deployments") if is_redis_user(item))
@@ -102,17 +92,6 @@ def is_master_role_checked(pod: JsonObject) -> bool:
     containers = entries(section(pod, "spec").get("containers"))
     probes = [section(container, "readinessProbe") for container in containers if container.get("name") == REDIS_HA]
     return any("role:" in str(section(probe, "exec").get("command")) for probe in probes)
-
-
-def ready_endpoints(env: Environment, service: str) -> list[str]:
-    """Return the names of the pods behind the Service's ready endpoint addresses."""
-    found = [endpoint for endpoint in env.items("endpoints") if metadata_name(endpoint) == service]
-    subsets = [subset for endpoint in found for subset in entries(endpoint.get("subsets"))]
-    return [
-        str(section(address, "targetRef").get("name"))
-        for subset in subsets
-        for address in entries(subset.get("addresses"))
-    ]
 
 
 def master_pod(env: Environment, replaced_uid: str | None = None) -> JsonObject | None:

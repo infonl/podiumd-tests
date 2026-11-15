@@ -433,3 +433,30 @@ def test_worker_deployment_is_the_main_deployment_with_worker(env_factory):
     env.__dict__["deployment_names"] = ["openformulieren", "openformulieren-worker", "openzaak"]
     assert workloads.worker_deployment(env, "openformulieren") == "openformulieren-worker"
     assert workloads.worker_deployment(env, "openzaak") is None
+
+
+def _database_env(env_factory, host, *, from_config_map=False):
+    env = env_factory()
+    variables = (
+        {"envFrom": [{"configMapRef": {"name": "openzaak"}}]}
+        if from_config_map
+        else {"env": [{"name": "DB_HOST", "value": host}]}
+    )
+    container = {"name": "openzaak", **variables}
+    deployment = {"metadata": {"name": "openzaak"}, "spec": {"template": {"spec": {"containers": [container]}}}}
+    endpoints = {"metadata": {"name": "postgres"}, "subsets": [{"addresses": [{"targetRef": {"name": "postgres-1"}}]}]}
+    objects = {
+        "deployments": [deployment],
+        "configmaps": [{"metadata": {"name": "openzaak"}, "data": {"DB_HOST": host}}],
+        "endpoints": [endpoints],
+        "pods": [{"metadata": {"name": "postgres-1"}}, {"metadata": {"name": "openzaak-1"}}],
+    }
+    env.__dict__["deployment_names"] = ["openzaak"]
+    env.__dict__["items"] = lambda kind: objects.get(kind, [])
+    return env
+
+
+def test_database_pod_is_the_pod_behind_open_zaaks_db_host(env_factory):
+    assert workloads.database_pod(_database_env(env_factory, "postgres")) == {"metadata": {"name": "postgres-1"}}
+    assert workloads.database_pod(_database_env(env_factory, "postgres", from_config_map=True)) is not None
+    assert workloads.database_pod(_database_env(env_factory, "db.postgres.database.azure.com")) is None

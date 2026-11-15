@@ -12,11 +12,11 @@ from podiumd_tests.redis import MASTER_LABEL
 from podiumd_tests.redis import MASTER_SERVICE
 from podiumd_tests.redis import is_master_role_checked
 from podiumd_tests.redis import master_pod
-from podiumd_tests.redis import ready_endpoints
 from podiumd_tests.redis import redis_cli
 from podiumd_tests.redis import redis_pods
 from podiumd_tests.redis import reported_role
 from podiumd_tests.wait import wait_until
+from podiumd_tests.workloads import ready_endpoints
 from podiumd_tests.workloads import unhealthy_pods
 
 if TYPE_CHECKING:

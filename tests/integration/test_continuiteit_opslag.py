@@ -1,4 +1,4 @@
-"""Continuity when a shared store stops: Redis, the cache and Celery broker of the Maykin apps, and ZAC's Solr.
+"""Continuity when a shared store stops: Postgres, Redis (cache and Celery broker of the Maykin apps) and ZAC's Solr.
 
 A module-scoped fixture breaks each store once; each test checks one consequence. The store's operator owns its
 StatefulSet; a stop takes the operator down before the StatefulSet and starts it again after.
@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests import redis as redis_ha
 from podiumd_tests.bootstrap import names
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.chaos_load import CALM
@@ -23,13 +24,8 @@ from podiumd_tests.chaos_load import failures
 from podiumd_tests.chaos_load import load_report
 from podiumd_tests.chaos_load import recovery_seconds
 from podiumd_tests.chaos_load import watched_load
+from podiumd_tests.components import COMPONENTS
 from podiumd_tests.mock_server import Callback
-from podiumd_tests.redis import OPERATOR
-from podiumd_tests.redis import OWNER_KIND
-from podiumd_tests.redis import master_pod
-from podiumd_tests.redis import redis_components
-from podiumd_tests.redis import redis_deployments
-from podiumd_tests.redis import restart_master
 from podiumd_tests.responses import is_root_answering
 from podiumd_tests.seed.opennotificaties import make_abonnement
 from podiumd_tests.seed.openzaak import make_zaak
@@ -41,9 +37,12 @@ from podiumd_tests.wait import WaitTimeoutError
 from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import ROOT_TIMEOUT
 from podiumd_tests.workloads import cluster_state
+from podiumd_tests.workloads import database_pod
 from podiumd_tests.workloads import disruptions
 from podiumd_tests.workloads import operated
 from podiumd_tests.workloads import operated_down
+from podiumd_tests.workloads import pod_workload
+from podiumd_tests.workloads import replace_pod
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import SOLR_OPERATOR
 from podiumd_tests.zac import SOLR_OWNER_KIND
@@ -70,10 +69,10 @@ pytestmark = [
     pytest.mark.requires("cluster"),
 ]
 
-# A deleted Redis pod is replaced and the operator labels it master.
-REDIS_RECOVERY = 300
-# Seconds of load after Redis is back: a Celery worker stuck since the restart fails its liveness probe 3 x 50 s.
-REDIS_AFTERMATH = 180
+# A deleted Redis or Postgres pod is replaced (and the Redis operator labels it master).
+STORE_RECOVERY = 300
+# Seconds of load after the store is back: a process stuck since the restart fails its liveness probe 3 x 50 s.
+AFTERMATH = 180
 # Seconds ZAC's Solr stays stopped: longer than ZAC's readiness probe tolerates a failing check (20 x 10 s).
 SOLR_OUTAGE = 240
 # The time Solr's nodes get to be ready again.
@@ -91,8 +90,8 @@ class Outage:
 
 
 @dataclass(frozen=True)
-class RedisRestart(Outage):
-    """What a Redis restart under load did to Open Zaak, its subscriber and Redis's users."""
+class StoreRestart(Outage):
+    """What a store's restart under load did to Open Zaak, its subscriber and the store's users."""
 
     lost: list[str]
     created: int
@@ -118,50 +117,106 @@ def own_registry(request: pytest.FixtureRequest, run_tag: str) -> Generator[Reso
         registry.cleanup()
 
 
+def restart_under_load(
+    request: pytest.FixtureRequest,
+    env: Environment,
+    urls: dict[str, str],
+    http: requests.Session,
+    opennotificaties: ApiClient,
+    zaaktype: str,
+    served: list[str],
+    restart: Callable[[], None],
+    stopped: set[str],
+) -> StoreRestart:
+    """Run `restart` while Open Zaak creates zaken that a subscriber is notified of, and keep the load on after it."""
+    run_tag = str(request.getfixturevalue("run_tag"))
+    callback = Callback.new(env, run_tag)
+    with own_registry(request, run_tag) as registry:
+        filters = {"bronorganisatie": names.TEST_CATALOGUS_RSIN}
+        make_abonnement(opennotificaties, registry, callback.url, "zaken", filters)
+        before = cluster_state(env)
+        start = time.time()
+        calls = {"oz_zaak_create": zaak_maker(env, run_tag, registry, zaaktype)}
+        with watched_load(env, urls, served, calls, workers=2, pause=1) as (load, watch):
+            load.run_for(CALM)
+            restarted = time.time()
+            restart()
+            back = time.time()
+            load.run_for(AFTERMATH)
+        zaken = load.created()
+        return StoreRestart(
+            failed=failures(load.attempts, restarted),
+            restarted=disruptions(before, cluster_state(env), stopped),
+            report=load_report(load, watch, start),
+            measured={"back_seconds": round(back - restarted)},
+            lost=callback.missing(zaken, DELIVERY_TIMEOUT),
+            created=len(zaken),
+            silent=[component for component in served if not is_root_answering(http, urls[component], ROOT_TIMEOUT)],
+            recovered=recovery_seconds(load.attempts, restarted),
+        )
+
+
 @pytest.fixture(scope="module", name="redis_restart")
 def fixture_redis_restart(  # fixtures
     request: pytest.FixtureRequest,
     podiumd_env: Environment,
     urls: dict[str, str],
     http: requests.Session,
-    run_tag: str,
     opennotificaties: ApiClient,
     test_zaaktype: JsonObject,
     need_bootstrap: Callable[..., None],
-) -> Iterator[RedisRestart]:
+) -> StoreRestart:
     """Restart the Redis master while Open Zaak creates zaken that a subscriber is notified of."""
-    redis = operated(podiumd_env, OWNER_KIND, OPERATOR)
-    master = master_pod(podiumd_env)
-    if redis is None or master is None:
-        pytest.skip(f"no Redis master of a {OWNER_KIND} with {OPERATOR} on {podiumd_env.profile.name}")
+    replication = operated(podiumd_env, redis_ha.OWNER_KIND, redis_ha.OPERATOR)
+    master = redis_ha.master_pod(podiumd_env)
+    if replication is None or master is None:
+        kind, operator = redis_ha.OWNER_KIND, redis_ha.OPERATOR
+        pytest.skip(f"no Redis master of a {kind} with {operator} on {podiumd_env.profile.name}")
     need_bootstrap("infra-mock-server")
-    users = redis_deployments(podiumd_env)
-    served = [component for component in redis_components(podiumd_env, users) if component in urls]
-    callback = Callback.new(podiumd_env, run_tag)
-    with own_registry(request, run_tag) as registry:
-        filters = {"bronorganisatie": names.TEST_CATALOGUS_RSIN}
-        make_abonnement(opennotificaties, registry, callback.url, "zaken", filters)
-        before = cluster_state(podiumd_env)
-        start = time.time()
-        calls = {"oz_zaak_create": zaak_maker(podiumd_env, run_tag, registry, str(test_zaaktype["url"]))}
-        with watched_load(podiumd_env, urls, served, calls, workers=2, pause=1) as (load, watch):
-            load.run_for(CALM)
-            restarted = time.time()
-            restart_master(podiumd_env, master, REDIS_RECOVERY)
-            back = time.time()
-            load.run_for(REDIS_AFTERMATH)
-        zaken = load.created()
-        recovered = recovery_seconds(load.attempts, restarted)
-        yield RedisRestart(
-            failed=failures(load.attempts, restarted),
-            restarted=disruptions(before, cluster_state(podiumd_env), {redis.statefulset}),
-            report=load_report(load, watch, start),
-            measured={"redis_deployments": users, "redis_back_seconds": round(back - restarted)},
-            lost=callback.missing(zaken, DELIVERY_TIMEOUT),
-            created=len(zaken),
-            silent=[component for component in served if not is_root_answering(http, urls[component], ROOT_TIMEOUT)],
-            recovered=recovered,
-        )
+    users = redis_ha.redis_deployments(podiumd_env)
+    served = [component for component in redis_ha.redis_components(podiumd_env, users) if component in urls]
+    outcome = restart_under_load(
+        request,
+        podiumd_env,
+        urls,
+        http,
+        opennotificaties,
+        str(test_zaaktype["url"]),
+        served,
+        lambda: redis_ha.restart_master(podiumd_env, master, STORE_RECOVERY),
+        {replication.statefulset},
+    )
+    outcome.measured["redis_deployments"] = users
+    return outcome
+
+
+@pytest.fixture(scope="module", name="postgres_restart")
+def fixture_postgres_restart(  # fixtures
+    request: pytest.FixtureRequest,
+    podiumd_env: Environment,
+    urls: dict[str, str],
+    http: requests.Session,
+    opennotificaties: ApiClient,
+    test_zaaktype: JsonObject,
+    need_bootstrap: Callable[..., None],
+) -> StoreRestart:
+    """Restart the in-cluster Postgres while Open Zaak creates zaken that a subscriber is notified of."""
+    database = database_pod(podiumd_env)
+    if database is None:
+        pytest.skip(f"Open Zaak's database runs outside the cluster on {podiumd_env.profile.name}")
+    need_bootstrap("infra-mock-server")
+    served = sorted(component for component in urls if component in COMPONENTS)
+    return restart_under_load(
+        request,
+        podiumd_env,
+        urls,
+        http,
+        opennotificaties,
+        str(test_zaaktype["url"]),
+        served,
+        lambda: replace_pod(podiumd_env, database, STORE_RECOVERY),
+        {str(pod_workload(database))},
+    )
 
 
 REDIS_REQUIRES = pytest.mark.requires("openzaak", "opennotificaties")
@@ -180,7 +235,7 @@ REDIS_SOURCE = pytest.mark.source(
     Then the subscriber gets the notification of every zaak Open Zaak created
 """)
 def test_no_notificatie_is_lost_when_redis_restarts(
-    redis_restart: RedisRestart, record_property: Callable[[str, object], None]
+    redis_restart: StoreRestart, record_property: Callable[[str, object], None]
 ) -> None:
     """Every zaak Open Zaak creates around a Redis restart reaches the subscriber."""
     record_property("measured", redis_restart.measured)
@@ -197,7 +252,7 @@ def test_no_notificatie_is_lost_when_redis_restarts(
     Then Open Zaak creates zaken again once Redis is back
     And every component that uses Redis answers again
 """)
-def test_redis_users_recover_after_a_restart(redis_restart: RedisRestart) -> None:
+def test_redis_users_recover_after_a_restart(redis_restart: StoreRestart) -> None:
     """Open Zaak creates zaken again and every component that uses Redis answers after the restart."""
     assert redis_restart.silent == [], f"not answering after the Redis restart: {redis_restart.silent}"
     assert redis_restart.recovered is not None, f"Open Zaak creates no zaken again: {redis_restart.failed}"
@@ -216,7 +271,7 @@ def test_redis_users_recover_after_a_restart(redis_restart: RedisRestart) -> Non
     When Redis is restarted
     Then no other container restarts
 """)
-def test_no_other_container_restarts_when_redis_restarts(redis_restart: RedisRestart) -> None:
+def test_no_other_container_restarts_when_redis_restarts(redis_restart: StoreRestart) -> None:
     """No container besides Redis's restarts around a Redis restart."""
     assert redis_restart.restarted == []
 
@@ -335,3 +390,60 @@ def test_a_zaak_made_while_solr_is_stopped_is_found(solr_outage: SolrOutage) -> 
 def test_no_other_container_restarts_when_solr_stops(solr_outage: SolrOutage) -> None:
     """No container besides Solr's and its operator's restarts around a Solr outage."""
     assert solr_outage.restarted == []
+
+
+POSTGRES_REQUIRES = pytest.mark.requires("openzaak", "opennotificaties")
+POSTGRES_SOURCE = pytest.mark.source(
+    "podiumd-tests",
+    "The apps share one Postgres server; no source test restarts it under load.",
+)
+
+
+@POSTGRES_REQUIRES
+@POSTGRES_SOURCE
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason="[open-zaak-17] Open Zaak 1.29.3 (notifications-api-common 0.10.1) does not retry a send_notification"
+    " that fails on its dead database connection after a Postgres restart; not yet reported upstream",
+)
+@pytest.mark.scenario("""
+    Given a subscriber on kanaal zaken in Open Notificaties
+    And zaken are created in Open Zaak without pause
+    When the database server is restarted
+    Then the subscriber gets the notification of every zaak Open Zaak created
+""")
+def test_no_notificatie_is_lost_when_postgres_restarts(
+    postgres_restart: StoreRestart, record_property: Callable[[str, object], None]
+) -> None:
+    """Every zaak Open Zaak creates around a Postgres restart reaches the subscriber."""
+    record_property("measured", postgres_restart.measured)
+    record_property("report", postgres_restart.report)
+    lost = postgres_restart.lost
+    assert lost == [], f"{len(lost)} of {postgres_restart.created} notificaties lost"
+
+
+@POSTGRES_REQUIRES
+@POSTGRES_SOURCE
+@pytest.mark.scenario("""
+    Given zaken are created in Open Zaak without pause
+    When the database server is restarted
+    Then Open Zaak creates zaken again once the database is back
+    And every component answers again
+""")
+def test_components_recover_when_postgres_restarts(postgres_restart: StoreRestart) -> None:
+    """Open Zaak creates zaken again and every component answers after the restart."""
+    assert postgres_restart.silent == [], f"not answering after the Postgres restart: {postgres_restart.silent}"
+    assert postgres_restart.recovered is not None, f"Open Zaak creates no zaken again: {postgres_restart.failed}"
+
+
+@POSTGRES_REQUIRES
+@POSTGRES_SOURCE
+@pytest.mark.scenario("""
+    Given the components of the environment run
+    When the database server is restarted
+    Then no other container restarts
+""")
+def test_no_other_container_restarts_when_postgres_restarts(postgres_restart: StoreRestart) -> None:
+    """No container besides Postgres's restarts around a Postgres restart."""
+    assert postgres_restart.restarted == []

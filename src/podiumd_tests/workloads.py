@@ -333,6 +333,50 @@ def replace_pod(env: Environment, pod: Item, timeout: float) -> None:
     wait_until(is_replaced, timeout=timeout, description=f"a ready replacement of pod {metadata_name(pod)}")
 
 
+def ready_endpoints(env: Environment, service: str) -> list[str]:
+    """Return the names of the pods behind the Service's ready endpoint addresses."""
+    found = [endpoint for endpoint in env.items("endpoints") if metadata_name(endpoint) == service]
+    subsets = [subset for endpoint in found for subset in entries(endpoint.get("subsets"))]
+    return [
+        str(section(address, "targetRef").get("name"))
+        for subset in subsets
+        for address in entries(subset.get("addresses"))
+    ]
+
+
+def variable_config_maps(deployment: JsonObject) -> set[str]:
+    """Return the ConfigMaps the deployment's containers read variables from."""
+    found: set[str] = set()
+    for container in pod_containers(deployment, with_init=True):
+        whole = [section(ref, "configMapRef") for ref in entries(container.get("envFrom"))]
+        values = [section(variable, "valueFrom") for variable in entries(container.get("env"))]
+        keys = [section(value, "configMapKeyRef") for value in values]
+        found |= {str(ref.get("name")) for ref in (*whole, *keys) if ref}
+    return found
+
+
+def database_pod(env: Environment) -> Item | None:
+    """Return the one pod behind the in-cluster Service named by Open Zaak's DB_HOST; None for an outside database."""
+    deployment = env.deployment_for("openzaak")
+    found = [item for item in env.items("deployments") if metadata_name(item) == deployment]
+    data = {metadata_name(item): section(item, "data") for item in env.items("configmaps")}
+    containers = [container for item in found for container in pod_containers(item, with_init=False)]
+    hosts = {
+        str(variable.get("value"))
+        for container in containers
+        for variable in entries(container.get("env"))
+        if variable.get("name") == "DB_HOST" and "value" in variable
+    }
+    names = {name for item in found for name in variable_config_maps(item)}
+    values = [data.get(name, {}) for name in names]
+    hosts |= {str(value["DB_HOST"]) for value in values if "DB_HOST" in value}
+    if len(hosts) != 1 or "." in next(iter(hosts)):
+        return None
+    behind = ready_endpoints(env, hosts.pop())
+    pods = [pod for pod in env.items("pods") if metadata_name(pod) in behind]
+    return pods[0] if len(pods) == 1 else None
+
+
 # Environment variables of a container: name -> value.
 type Variables = Mapping[str, str]
 
