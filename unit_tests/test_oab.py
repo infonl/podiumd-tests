@@ -164,7 +164,7 @@ def _xlsx(text):
     return body.getvalue()
 
 
-def _destroy(fake_http, page_env, registry, lijst):
+def _destroy(fake_http, page_env, registry, lijst, *, retry=False):
     fake_http(
         {
             "/api/v1/destruction-lists/l-1/queue_destruction/": (200, {}),
@@ -174,13 +174,22 @@ def _destroy(fake_http, page_env, registry, lijst):
     )
     http = requests.Session()
     parts = SimpleNamespace(zaaktype="zt")
-    return oab.destroy(page_env(oab), lambda _role: http, API, "l-1", openzaak=None, parts=parts, registry=registry)  # pyright: ignore[reportArgumentType]
+    env = page_env(oab)
+    text = oab.destroy(env, lambda _role: http, API, "l-1", openzaak=None, parts=parts, registry=registry, retry=retry)  # pyright: ignore[reportArgumentType]
+    return text, env.snippets
 
 
 def test_destroy_returns_the_report_text_and_registers_the_report_zaak(fake_http, page_env):
     registry = ResourceRegistry("run")
-    text = _destroy(fake_http, page_env, registry, {"processingStatus": "succeeded", "status": "deleted"})
+    text, snippets = _destroy(fake_http, page_env, registry, {"processingStatus": "succeeded", "status": "deleted"})
     assert (text, len(registry)) == ("ZAAK-1", 1)
+    assert snippets == [("openarchiefbeheer", "oab_destroy_now", {"uuid": "l-1"})]
+
+
+def test_a_retried_destruction_is_only_queued_again(fake_http, page_env):
+    deleted = {"processingStatus": "succeeded", "status": "deleted"}
+    text, snippets = _destroy(fake_http, page_env, ResourceRegistry("run"), deleted, retry=True)
+    assert (text, snippets) == ("ZAAK-1", [])
 
 
 def test_destroy_fails_when_the_list_is_not_deleted(fake_http, page_env):

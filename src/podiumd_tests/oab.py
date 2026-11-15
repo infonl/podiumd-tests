@@ -260,6 +260,11 @@ def run_destruction(env: Environment, oab: Sessions, api: str, lijst: str, timeo
     """Queue the list and destroy it now; its processingStatus once OAB has finished (succeeded, failed)."""
     queue(oab, api, lijst)
     destroy_now(env, lijst)
+    return processed_status(oab, api, lijst, timeout)
+
+
+def processed_status(oab: Sessions, api: str, lijst: str, timeout: float) -> str:
+    """Wait until OAB has finished processing the list; its processingStatus (succeeded, failed)."""
 
     def processed() -> str | None:
         found = expect_status(oab("recordmanager").get(f"{api}/destruction-lists/{lijst}/"), HTTPStatus.OK).json()
@@ -289,8 +294,9 @@ def destroy(  # noqa: PLR0913  # the list, OAB, and Open Zaak that gets its repo
     parts: ZaaktypeParts,
     registry: ResourceRegistry,
     timeout: float = 120,
+    retry: bool = False,
 ) -> str:
-    """Destroy the list now; once it is deleted, the text of the report the record manager downloads.
+    """Destroy the list now (retry: a failed list again); once it is deleted, the text of its report.
 
     The report goes to a zaak of the test zaaktype (ArchiveConfig fields of report_config).
     """
@@ -304,7 +310,11 @@ def destroy(  # noqa: PLR0913  # the list, OAB, and Open Zaak that gets its repo
                 delete_zaak(openzaak, str(rapport["url"]), with_documents=True)
 
     registry.add(f"destruction report of {naam}", delete_report)
-    processed = run_destruction(env, oab, api, lijst, timeout)
+    if retry:  # OAB processes a failed list at once when it is queued again
+        queue(oab, api, lijst)
+        processed = processed_status(oab, api, lijst, timeout)
+    else:
+        processed = run_destruction(env, oab, api, lijst, timeout)
     status = list_status(oab, api, lijst)
     if (processed, status) != ("succeeded", "deleted"):
         msg = f"destruction of list {lijst} ended {processed} with status {status}, not succeeded and deleted"
