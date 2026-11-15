@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests import redis as redis_ha
+from podiumd_tests import zac as zac_app
 from podiumd_tests.bootstrap import names
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.chaos_load import CALM
@@ -43,12 +44,6 @@ from podiumd_tests.workloads import operated
 from podiumd_tests.workloads import operated_down
 from podiumd_tests.workloads import pod_workload
 from podiumd_tests.workloads import replace_pod
-from podiumd_tests.zac import INDEX_TIMEOUT
-from podiumd_tests.zac import SOLR_OPERATOR
-from podiumd_tests.zac import SOLR_OWNER_KIND
-from podiumd_tests.zac import is_zaak_listed
-from podiumd_tests.zac import read_zaak
-from podiumd_tests.zac import search_failure
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -57,6 +52,7 @@ if TYPE_CHECKING:
 
     import requests
 
+    from podiumd_tests.chaos_load import Calls
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
@@ -96,7 +92,7 @@ class StoreRestart(Outage):
     lost: list[str]
     created: int
     silent: list[str]
-    recovered: float | None
+    recovered: dict[str, float | None]
 
 
 @dataclass(frozen=True)
@@ -127,8 +123,12 @@ def restart_under_load(
     served: list[str],
     restart: Callable[[], None],
     stopped: set[str],
+    extra: Calls,
 ) -> StoreRestart:
-    """Run `restart` while Open Zaak creates zaken that a subscriber is notified of, and keep the load on after it."""
+    """Run `restart` while Open Zaak creates zaken that a subscriber is notified of, and keep the load on after it.
+
+    The extra calls run in the same load; `recovered` holds the recovery of each call.
+    """
     run_tag = str(request.getfixturevalue("run_tag"))
     callback = Callback.new(env, run_tag)
     with own_registry(request, run_tag) as registry:
@@ -136,14 +136,14 @@ def restart_under_load(
         make_abonnement(opennotificaties, registry, callback.url, "zaken", filters)
         before = cluster_state(env)
         start = time.time()
-        calls = {"oz_zaak_create": zaak_maker(env, run_tag, registry, zaaktype)}
+        calls = {"oz_zaak_create": zaak_maker(env, run_tag, registry, zaaktype), **extra}
         with watched_load(env, urls, served, calls, workers=2, pause=1) as (load, watch):
             load.run_for(CALM)
             restarted = time.time()
             restart()
             back = time.time()
             load.run_for(AFTERMATH)
-        zaken = load.created()
+        zaken = load.created(name="oz_zaak_create")
         return StoreRestart(
             failed=failures(load.attempts, restarted),
             restarted=disruptions(before, cluster_state(env), stopped),
@@ -152,7 +152,10 @@ def restart_under_load(
             lost=callback.missing(zaken, DELIVERY_TIMEOUT),
             created=len(zaken),
             silent=[component for component in served if not is_root_answering(http, urls[component], ROOT_TIMEOUT)],
-            recovered=recovery_seconds(load.attempts, restarted),
+            recovered={
+                name: recovery_seconds([attempt for attempt in load.attempts if attempt.name == name], restarted)
+                for name in calls
+            },
         )
 
 
@@ -185,6 +188,7 @@ def fixture_redis_restart(  # fixtures
         served,
         lambda: redis_ha.restart_master(podiumd_env, master, STORE_RECOVERY),
         {replication.statefulset},
+        {},
     )
     outcome.measured["redis_deployments"] = users
     return outcome
@@ -206,6 +210,12 @@ def fixture_postgres_restart(  # fixtures
         pytest.skip(f"Open Zaak's database runs outside the cluster on {podiumd_env.profile.name}")
     need_bootstrap("infra-mock-server")
     served = sorted(component for component in urls if component in COMPONENTS)
+    extra: Calls = {}
+    if "zac" in urls:
+        need_bootstrap(ADMIN.name)
+        zac, zac_url = zac_as_admin(podiumd_env), urls["zac"]
+        # Read from ZAC's own database through its connection pool.
+        extra = {"zac_zaakafhandelparameters": lambda: zac_app.zaakafhandelparameters(zac, zac_url)}
     return restart_under_load(
         request,
         podiumd_env,
@@ -216,6 +226,7 @@ def fixture_postgres_restart(  # fixtures
         served,
         lambda: replace_pod(podiumd_env, database, STORE_RECOVERY),
         {str(pod_workload(database))},
+        extra,
     )
 
 
@@ -255,7 +266,9 @@ def test_no_notificatie_is_lost_when_redis_restarts(
 def test_redis_users_recover_after_a_restart(redis_restart: StoreRestart) -> None:
     """Open Zaak creates zaken again and every component that uses Redis answers after the restart."""
     assert redis_restart.silent == [], f"not answering after the Redis restart: {redis_restart.silent}"
-    assert redis_restart.recovered is not None, f"Open Zaak creates no zaken again: {redis_restart.failed}"
+    assert redis_restart.recovered["oz_zaak_create"] is not None, (
+        f"Open Zaak creates no zaken again: {redis_restart.failed}"
+    )
 
 
 @REDIS_REQUIRES
@@ -286,36 +299,50 @@ def fixture_solr_outage(
     need_bootstrap: Callable[..., None],
 ) -> Iterator[SolrOutage]:
     """Stop ZAC's Solr while the test admin opens a zaak, searches and a new zaak arrives."""
-    solr = operated(podiumd_env, SOLR_OWNER_KIND, SOLR_OPERATOR)
+    solr = operated(podiumd_env, zac_app.SOLR_OWNER_KIND, zac_app.SOLR_OPERATOR)
     if solr is None:
-        pytest.skip(f"no Solr of a {SOLR_OWNER_KIND} with {SOLR_OPERATOR} on {podiumd_env.profile.name}")
+        pytest.skip(
+            f"no Solr of a {zac_app.SOLR_OWNER_KIND} with {zac_app.SOLR_OPERATOR} on {podiumd_env.profile.name}"
+        )
     need_bootstrap(ADMIN.name, "openzaak-zaaktype-bpmn", "zac-bpmn-process")
     zac, zac_url = zac_as_admin(podiumd_env), urls["zac"]
     zaaktype = str(published_zaaktype(openzaak, names.BPMN_ZAAKTYPE, "openzaak-zaaktype-bpmn")["url"])
     with own_registry(request, run_tag) as registry:
         known = make_zaak(openzaak, registry, zaaktype)
-        wait_until(lambda: is_zaak_listed(zac, zac_url, known), timeout=INDEX_TIMEOUT, description="the zaak indexed")
+        wait_until(
+            lambda: zac_app.is_zaak_listed(zac, zac_url, known),
+            timeout=zac_app.INDEX_TIMEOUT,
+            description="the zaak indexed",
+        )
         before = cluster_state(podiumd_env)
         start = time.time()
-        calls = {"zac_zaak_page": lambda: read_zaak(zac, zac_url, str(known["uuid"]))}
+        calls = {"zac_zaak_page": lambda: zac_app.read_zaak(zac, zac_url, str(known["uuid"]))}
         with watched_load(podiumd_env, urls, ["zac"], calls, workers=1, pause=2) as (load, watch):
             with operated_down(podiumd_env.kube, solr, SOLR_RESTORE_TIMEOUT):
                 asked = time.monotonic()
-                search = search_failure(zac, zac_url)
+                search = zac_app.search_failure(zac, zac_url)
                 answered = round(time.monotonic() - asked, 1)
                 arrived = make_zaak(openzaak, registry, zaaktype)
                 load.run_for(SOLR_OUTAGE)
             down = round(time.time() - start)
-        wait_until(lambda: is_zaak_listed(zac, zac_url, known), timeout=INDEX_TIMEOUT, description="ZAC's search")
+        wait_until(
+            lambda: zac_app.is_zaak_listed(zac, zac_url, known),
+            timeout=zac_app.INDEX_TIMEOUT,
+            description="ZAC's search",
+        )
         with suppress(WaitTimeoutError):
-            wait_until(lambda: is_zaak_listed(zac, zac_url, arrived), timeout=INDEX_TIMEOUT, description="new zaak")
+            wait_until(
+                lambda: zac_app.is_zaak_listed(zac, zac_url, arrived),
+                timeout=zac_app.INDEX_TIMEOUT,
+                description="new zaak",
+            )
         yield SolrOutage(
             failed=failures(load.attempts, start),
             restarted=disruptions(before, cluster_state(podiumd_env), {solr.statefulset, solr.operator}),
             report=load_report(load, watch, start),
             measured={"search_seconds": answered, "search_answer": search, "solr_down_seconds": down},
             search=search,
-            found=is_zaak_listed(zac, zac_url, arrived),
+            found=zac_app.is_zaak_listed(zac, zac_url, arrived),
         )
 
 
@@ -377,7 +404,7 @@ def test_search_fails_fast_while_solr_is_stopped(solr_outage: SolrOutage) -> Non
 """)
 def test_a_zaak_made_while_solr_is_stopped_is_found(solr_outage: SolrOutage) -> None:
     """A zaak created while Solr is down is found by ZAC's search once Solr is back."""
-    assert solr_outage.found, f"ZAC's search does not find the zaak {INDEX_TIMEOUT} s after Solr is back"
+    assert solr_outage.found, f"ZAC's search does not find the zaak {zac_app.INDEX_TIMEOUT} s after Solr is back"
 
 
 @SOLR_REQUIRES
@@ -427,14 +454,16 @@ def test_no_notificatie_is_lost_when_postgres_restarts(
 @POSTGRES_SOURCE
 @pytest.mark.scenario("""
     Given zaken are created in Open Zaak without pause
+    And the test admin reads ZAC's zaakafhandelparameters without pause
     When the database server is restarted
-    Then Open Zaak creates zaken again once the database is back
+    Then Open Zaak creates zaken and ZAC reads its database again once the database is back
     And every component answers again
 """)
 def test_components_recover_when_postgres_restarts(postgres_restart: StoreRestart) -> None:
-    """Open Zaak creates zaken again and every component answers after the restart."""
+    """Open Zaak creates zaken, ZAC reads its database and every component answers after the restart."""
     assert postgres_restart.silent == [], f"not answering after the Postgres restart: {postgres_restart.silent}"
-    assert postgres_restart.recovered is not None, f"Open Zaak creates no zaken again: {postgres_restart.failed}"
+    unrecovered = [name for name, seconds in postgres_restart.recovered.items() if seconds is None]
+    assert unrecovered == [], f"failing again after the Postgres restart: {unrecovered}: {postgres_restart.failed}"
 
 
 @POSTGRES_REQUIRES
