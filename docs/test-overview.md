@@ -12,7 +12,7 @@ versions is not counted.
 | --- | --- | --- | --- |
 | smoke | 256 | 41 | 10 |
 | component | 1011 | 598 | 78 |
-| integration | 202 | 138 | 18 |
+| integration | 205 | 141 | 18 |
 | perf | 80 | 9 | 0 |
 | **full tier** | **1415** | **733** |  |
 
@@ -56,6 +56,7 @@ Unit tests (`unit_tests/`, functions): 936. Perf endpoints (`perf/runs.py`): 32.
 | integration | continuiteit | 19 | 10 |
 | integration | continuiteit_belasting | 4 | 4 |
 | integration | continuiteit_opslag | 10 | 10 |
+| integration | continuiteit_zoekindex | 3 | 3 |
 | integration | formulier_betaling | 19 | 6 |
 | integration | formulier_klantprofiel | 1 | 1 |
 | integration | formulier_logica | 1 | 1 |
@@ -107,7 +108,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | ZAC | 19 |
 | draaiboek | 91 |
 | external | 254 |
-| podiumd-tests | 536 |
+| podiumd-tests | 539 |
 | upstream | 243 |
 
 ## Expected failures per known issue
