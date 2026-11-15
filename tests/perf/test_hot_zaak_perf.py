@@ -35,6 +35,7 @@ from podiumd_tests.perf.stats import violations
 from podiumd_tests.seed.openzaak import delete_zaak_at_cleanup
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.registry import ResourceRegistry
+from podiumd_tests.workloads import expect_defect
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -60,6 +61,8 @@ RUN_TIME = "10m"
 PREFIX = "hot-zaak"
 # Open Zaak 1.29.3 took over 30 s to delete a zaak with 400 documents: requests time out, the delete completes.
 DELETE_TIMEOUT = 600
+# open-zaak#2577: writes invalidate ETags instead of recalculating them.
+ETAGS_INVALIDATED = (1, 31, 1)
 # The link stats per bucket of HOT_ZAAK_BUCKET, Locust's failures CSV and the availability of Open Zaak.
 type HotZaak = tuple[dict[int, EndpointStats], str, Watch]
 
@@ -98,6 +101,18 @@ def fixture_hot_zaak(
     return {number: found[HOT_ZAAK] for number, found in by_label(stats).items()}, failures, watch
 
 
+def _expect_slow_links(request: pytest.FixtureRequest, env: Environment) -> None:
+    expect_defect(
+        request,
+        env,
+        "openzaak",
+        lambda version: version < ETAGS_INVALIDATED,
+        raises=AssertionError,
+        reason="[open-zaak-16] Open Zaak before 1.31.1 recalculates the zaak's ETags on every link: link p95 about 3 s"
+        " at 100 documents, 7-9 s at 400; fixed in 1.31.1 (open-zaak#2577)",
+    )
+
+
 def _failures(failures_csv: str) -> str:
     return "\n".join(f"- {count}x {name}: {error}" for name, error, count in read_failures(failures_csv))
 
@@ -108,8 +123,14 @@ def _failures(failures_csv: str) -> str:
     Then nearly every addition succeeded, and none answered a server error
     And the 95th percentile time of an addition stays within its threshold
 """)
-def test_hot_zaak_links_succeed(hot_zaak: HotZaak, record_property: Callable[[str, object], None]) -> None:
+def test_hot_zaak_links_succeed(
+    request: pytest.FixtureRequest,
+    podiumd_env: Environment,
+    hot_zaak: HotZaak,
+    record_property: Callable[[str, object], None],
+) -> None:
     """The links' failure ratio and p95 stay within perf.yaml, without a 500; the failures by error go to the report."""
+    _expect_slow_links(request, podiumd_env)
     buckets, failures, _watch = hot_zaak
     record_property("report", _failures(failures) or "No failed links.")
     total = summed(buckets.values())
@@ -128,8 +149,14 @@ def test_hot_zaak_links_succeed(hot_zaak: HotZaak, record_property: Callable[[st
     When the zaak has hundreds of documents
     Then adding a document takes no longer than when the zaak had few
 """)
-def test_hot_zaak_links_do_not_slow_down(hot_zaak: HotZaak, record_property: Callable[[str, object], None]) -> None:
+def test_hot_zaak_links_do_not_slow_down(
+    request: pytest.FixtureRequest,
+    podiumd_env: Environment,
+    hot_zaak: HotZaak,
+    record_property: Callable[[str, object], None],
+) -> None:
     """The p95 of the last bucket of links is no slowdown (stats.slowdown_limit) against the first bucket's."""
+    _expect_slow_links(request, podiumd_env)
     buckets = hot_zaak[0]
     rows = [
         f"| {n + 1}-{n + HOT_ZAAK_BUCKET} | {s.requests} | {s.failures} | {s.p95_ms:.0f} |" for n, s in buckets.items()
