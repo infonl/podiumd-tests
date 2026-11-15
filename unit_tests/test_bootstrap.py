@@ -1053,7 +1053,9 @@ def test_a_failed_batch_checks_each_step_alone_and_names_the_broken_one(env, clu
     outcomes = {o.step: o for o in check(env, SNIPPET_STEPS)}
     assert outcomes["openklant-token"].action == "failed"
     assert {o.action for name, o in outcomes.items() if name != "openklant-token"} == {"present"}
-    assert cluster.shells.count("openklant") == 3
+    # One batch, then each of Open Klant's steps alone.
+    alone = sum(step.requires[0] == "openklant" for step in RUNNING)
+    assert cluster.shells.count("openklant") == 1 + alone
 
 
 def test_a_step_whose_params_fail_checks_itself(env, cluster):

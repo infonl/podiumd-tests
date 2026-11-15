@@ -32,7 +32,7 @@ Research notes:
    | App aliases | — | KISS=`contact`, OI=`portaal`, OAB=`abc` | KISS=`contact`, OI=`mijn`, Grafana=`podiumd-logs` |
    | Ingress | Traefik | Traefik or APISIX | Gateway API (NGF) |
    | Kube context | minikube | `podiumd-<env>-aks` | `aks-blue-<stage>-<g>` |
-   | Secrets | dev defaults | KV `podiumd-<env>-kv` | KV `kv-<stage>-<g>` (other tenant) |
+   | Secrets | cluster Secrets | KV `podiumd-<env>-kv` | KV `kv-<stage>-<g>` (other tenant) |
    | Chart versions | local or any | 4.7.5 – 4.9.0 | 4.6.6 – 4.9.1 |
 3. **Which components are deployed varies a lot per environment.** ZAC, KISS, ITA, OAB, OI, OMC and zaakbrug are each on or off depending on the environment. Keycloak comes in two flavours (operator vs legacy). Some names are changed with `fullnameOverride`.
 4. **Nobody cleans up.** TA has a separate cleanup spec, because leftover zaken push new ones off `/mijn-zaken` page 1.
@@ -50,7 +50,7 @@ Research notes:
 | R5 | **Self-sufficient repo.** Everything the tests need lives here: the env bootstrap, mocks, the mock server, mail sink manifests and test identities. The suite never depends on changes to the podiumd helm charts, podiumd-infra or ExternalsPodiumD. It only reads the deployed environment. |
 | R6 | **Console-first.** `podiumd-tests run --env kees00 smoke` works from a laptop with kubectl and az set up. CI-ready from day one: no interactive prompts, everything set through config or env vars, exit codes, JUnit output. Pipeline wiring comes later (phase 7). |
 | R7 | **Environment profiles.** One YAML per environment holds per-component base URLs, the kube context and namespace(s), the secret sources and any overrides. A `podiumd-tests env init` command generates a draft from the cluster's ingress and HTTPRoute objects. |
-| R8 | **Secrets are never stored in the repo.** Order of resolution: env var, then in-cluster lookup (k8s secret, pod env, `manage.py shell` such as OZ `JWTSecret`), then Azure Key Vault (`az`). The exception is the well-known minikube dev defaults. |
+| R8 | **Secrets are never stored in the repo.** Order of resolution: env var, then in-cluster lookup (k8s secret, pod env, `manage.py shell` such as OZ `JWTSecret`), then Azure Key Vault (`az`). No exception: Django admin tests use a bootstrapped superuser, not minikube's admin/admin. |
 | R9 | **Safe on shared environments.** Every created object is run-tagged (`ptest-<runid>`). Tests touch only their own data. Destructive and chaos tests are opt-in (`--destructive`). |
 | R10 | **Parallel-safe** (`pytest-xdist`), with no ordering dependencies between tests. |
 | R11 | **No fixed sleeps.** Use the `wait_until(predicate, timeout, interval)` helper. |

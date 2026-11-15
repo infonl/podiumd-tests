@@ -29,7 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 # Secret sources that read the cluster; without kube access they cannot resolve.
 CLUSTER_SECRET_SOURCES = ("k8s_secret", "pod_env", "zgw_jwt_secret")
 # keyvault: an Azure Key Vault secret ({vault, name}), read with the console's az login.
-SECRET_SOURCES = (*CLUSTER_SECRET_SOURCES, "dev_default", "keyvault")
+SECRET_SOURCES = (*CLUSTER_SECRET_SOURCES, "keyvault")
 
 AccessMode = Literal["direct", "host-header"]
 
@@ -224,8 +224,7 @@ def _parse_secrets(value: object, where: str) -> dict[str, SecretSpec]:
         if source not in SECRET_SOURCES:
             msg = f"{where}.{name}: unknown source {source!r}"
             raise ProfileError(msg)
-        option_map = {"value": str(options)} if source == "dev_default" else _mapping(options, f"{where}.{name}")
-        options = {key: str(option) for key, option in option_map.items()}
+        options = {key: str(option) for key, option in _mapping(options, f"{where}.{name}").items()}
         secrets[name] = SecretSpec(name, source, options)
     return secrets
 
@@ -291,9 +290,6 @@ def parse_profile(raw: object, *, name: str, path: Path | None = None) -> Profil
     )
     tiers = _parse_tiers(data.get("allowed_tiers"), where)
     secrets = _parse_secrets(data.get("secrets") or {}, f"{where}.secrets")
-    if estate != "minikube" and any(secret.source == "dev_default" for secret in secrets.values()):
-        msg = f"{where}.secrets: dev_default is only allowed for minikube"
-        raise ProfileError(msg)
     settings = _mapping(data.get("settings") or {}, f"{where}.settings")
     return Profile(
         name=name,

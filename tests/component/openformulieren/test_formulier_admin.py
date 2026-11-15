@@ -14,9 +14,10 @@ from podiumd_tests.browser import share_cookies
 from podiumd_tests.django_snippets import run_snippet
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from playwright.sync_api import Page
 
-    from podiumd_tests.credentials import SecretResolver
     from podiumd_tests.environment import Environment
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("openformulieren")]
@@ -38,10 +39,10 @@ MARKER = "e2e-test-id"
     Then the admin's JavaScript renders on the page
 """)
 def test_admin_page_renders_its_javascript_bundle(
-    page: Page, podiumd_env: Environment, credentials: SecretResolver, path: str
+    page: Page, podiumd_env: Environment, need_bootstrap: Callable[..., None], path: str
 ) -> None:
     """The superuser opens the page and the bundle's marker renders: static files, CSP and the bundle itself work."""
-    http, _ = superuser_login(podiumd_env, credentials, "openformulieren")
+    http, _, _ = superuser_login(podiumd_env, need_bootstrap, "openformulieren")
     share_cookies(http, page)
     page.goto(podiumd_env.profile.urls["openformulieren"] + path)
     expect(page.get_by_test_id(MARKER)).to_have_count(1)

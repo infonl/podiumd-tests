@@ -107,9 +107,7 @@ def cmd_env_show(args: argparse.Namespace) -> int:
         print(f"  {component:20} {url}")
     print("secrets (a missing one skips its tests; PODIUMD_TESTS_SECRET_<NAME> overrides):")
     for name, spec in sorted(profile.secrets.items()):
-        # dev_default's option is the value itself.
-        options = {} if spec.source == "dev_default" else spec.options
-        where = " ".join(f"{option}={value}" for option, value in sorted(options.items()))
+        where = " ".join(f"{option}={value}" for option, value in sorted(spec.options.items()))
         print(f"  {name:28} {spec.source} {where}".rstrip())
     return EXIT_OK
 

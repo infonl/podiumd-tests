@@ -63,19 +63,8 @@ def test_resolved_values_are_redacted(env_factory):
     assert env.redactor.redact("Bearer abcd-1234 sent") == "Bearer *** sent"
 
 
-def test_dev_defaults_are_not_redacted_but_overrides_are(profile_factory, env_factory):
-    profile = profile_factory(
-        estate="minikube", secrets={"user": {"dev_default": "admin"}, "pw": {"dev_default": "admin"}}
-    )
-    env = env_factory(profile, {env_var_name("pw"): "s3cret-override"})
-    assert env.credentials.get("user") == "admin"
-    assert env.credentials.get("pw") == "s3cret-override"
-    assert env.redactor.redact("keycloak-admin s3cret-override") == "keycloak-admin ***"
-
-
-def test_a_secret_equal_to_a_dev_default_is_not_redacted(profile_factory, env_factory):
-    profile = profile_factory(estate="minikube", secrets={"user": {"dev_default": "admin"}})
-    env = env_factory(profile, {env_var_name("keycloak_admin_password"): "admin"})
+def test_published_defaults_are_not_redacted(env_factory):
+    env = env_factory(environ={env_var_name("keycloak_admin_password"): "admin"})
     env.credentials.get("keycloak_admin_password")
     assert env.redactor.redact("test_admin_login") == "test_admin_login"
 

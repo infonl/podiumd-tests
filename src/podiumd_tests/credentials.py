@@ -27,6 +27,8 @@ ENV_PREFIX = "PODIUMD_TESTS_SECRET_"
 REDACTED = "***"
 # Shorter values would mask ordinary text.
 MIN_SECRET_LENGTH = 4
+# Published default passwords (minikube's Keycloak admin): no secret, and masking them garbles test ids.
+PUBLISHED_DEFAULTS = frozenset(("admin",))
 AZ_TIMEOUT = 60
 
 
@@ -83,9 +85,7 @@ class SecretResolver:
         """Value of a secret; SecretError if it cannot be resolved."""
         if name not in self._cache:
             value = self._resolve(name)
-            # Usernames and published dev defaults such as "admin" are no secret, also when another source
-            # returns that value (minikube's Keycloak admin password); masking them garbles test ids.
-            if not name.endswith("_username") and not self._is_dev_default(name) and value not in self._dev_defaults():
+            if not name.endswith("_username") and value not in PUBLISHED_DEFAULTS:
                 self._redactor.add(value)
             self._cache[name] = value
         return self._cache[name]
@@ -123,13 +123,6 @@ class SecretResolver:
                 self._stored = {}
         return self._stored
 
-    def _is_dev_default(self, name: str) -> bool:
-        spec = self._profile.secrets.get(name)
-        return spec is not None and spec.source == "dev_default" and not self._environ.get(env_var_name(name))
-
-    def _dev_defaults(self) -> set[str]:
-        return {spec.options["value"] for spec in self._profile.secrets.values() if spec.source == "dev_default"}
-
     def _resolve(self, name: str) -> str:
         override = self._environ.get(env_var_name(name))
         if override:
@@ -152,8 +145,6 @@ class SecretResolver:
     def _from_source(self, spec: SecretSpec) -> str:
         opts = spec.options
         match spec.source:
-            case "dev_default":
-                return opts["value"]
             case "k8s_secret":
                 return self._kube.secret_value(opts["name"], opts["key"], namespace=opts.get("namespace"))
             case "pod_env":

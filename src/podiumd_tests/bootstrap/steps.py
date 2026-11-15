@@ -30,6 +30,7 @@ from podiumd_tests.bootstrap.zac import ZacCatalogusStep
 from podiumd_tests.bootstrap.zac import ZacParameters
 from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.clients.platform import openklant_client
+from podiumd_tests.components import DJANGO_APPS
 from podiumd_tests.json_data import entries
 from podiumd_tests.mock_server import MockServer
 from podiumd_tests.mock_server import mock_server_root
@@ -219,8 +220,9 @@ def django_user_step(  # noqa: PLR0913  # mirrors the snippet's parameters
     groups: tuple[str, ...] = (),
     *,
     staff: bool = True,
-    fields: dict[str, str] | None = None,
+    fields: dict[str, object] | None = None,
     api_token: bool = False,
+    totp: bool = False,
 ) -> SnippetStep:
     """Return a component's local Django user ptest-bootstrap-<key>, with groups and a random password or API token."""
     username = f"{names.PREFIX}-{key}"
@@ -231,6 +233,7 @@ def django_user_step(  # noqa: PLR0913  # mirrors the snippet's parameters
         "staff": staff,
         "fields": fields or {},
         "api_token": api_token,
+        "totp": totp,
     }
     return SnippetStep(
         f"{component}-user-{key}",
@@ -433,6 +436,11 @@ OI_ZAAKTYPE_CONFIG = SnippetStep(
     record=True,
     wiring=True,
 )
+# A local superuser in each Maykin app, for the admin tests: estates log their own admins in through Keycloak.
+# Its key names the app: Objecten and Objecttypen can share one database (Open Object).
+DJANGO_ADMINS = {
+    app: django_user_step(app, f"{app}-admin", fields={"is_superuser": True}, totp=True) for app in DJANGO_APPS
+}
 # An Open Formulieren form editor (its own group Redacteurs) that changes test forms through the API.
 OF_REDACTEUR = django_user_step("openformulieren", "redacteur", ("Redacteurs",), api_token=True)
 # BRP and KvK prefill through the services the environment registered, where the profile allows it.
@@ -842,6 +850,7 @@ STEPS: tuple[Step, ...] = (
     # Open Archiefbeheer role users (TA seed-oab-users: recordmanager-test, reviewer-test, ...);
     # OAB logs them in locally, as in podiumd-minikube.
     *(django_user_step("openarchiefbeheer", key, (group,)) for key, group in OAB_ROLES.items()),
+    *DJANGO_ADMINS.values(),
     KeycloakRoles((KCC, ADMIN, ITA_BEHEERDER, *ZAC_ROLE_USERS.values())),
     KCC,
     ADMIN,

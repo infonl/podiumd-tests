@@ -24,7 +24,8 @@ from podiumd_tests.zgw_services import reference_problems
 from podiumd_tests.zgw_services import service_problems
 
 if TYPE_CHECKING:
-    from podiumd_tests.credentials import SecretResolver
+    from collections.abc import Callable
+
     from podiumd_tests.environment import Environment
 
 pytestmark = pytest.mark.component
@@ -102,8 +103,7 @@ def test_config_references_services(podiumd_env: Environment, component: str) ->
     When the superuser logs in to the Django admin
     Then the admin shows the superuser as logged in
 """)
-def test_django_admin_login(podiumd_env: Environment, credentials: SecretResolver, component: str) -> None:
-    """The app's superuser logs in to the admin (MK test_django_admin_login.py); environments with SSO only skip."""
-    _, response = superuser_login(podiumd_env, credentials, component)
-    username = str(credentials.optional("django_admin_username"))
-    assert is_logged_in(response, username), f"{component}: not logged in ({response.url})"
+def test_django_admin_login(podiumd_env: Environment, need_bootstrap: Callable[..., None], component: str) -> None:
+    """The test superuser logs in to the app's admin; apps whose admin logs in through Keycloak only skip."""
+    _, response, login = superuser_login(podiumd_env, need_bootstrap, component)
+    assert is_logged_in(response, login), f"{component}: not logged in ({response.url})"

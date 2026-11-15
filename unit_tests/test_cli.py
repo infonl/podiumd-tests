@@ -154,14 +154,13 @@ def test_a_path_outside_the_tier_is_refused(tmp_path, profile_factory):
 def test_env_show_lists_where_each_secret_comes_from_but_no_value(tmp_path, capsys):
     (tmp_path / "x.yaml").write_text(
         "estate: minikube\nallowed_tiers: [smoke]\nkube: {context: minikube, namespace: podiumd}\nurls: {openzaak: https://openzaak.local}\n"
-        "secrets:\n  a_password: {k8s_secret: {name: s, key: k}}\n  b_password: {dev_default: hunter2}\n",
+        "secrets:\n  a_password: {k8s_secret: {name: s, key: k}}\n  b_password: {keyvault: {vault: v, name: n}}\n",
         encoding="utf-8",
     )
     assert cli.main(["--envs-dir", str(tmp_path), "env", "show", "x"]) == 0
     out = capsys.readouterr().out
     assert "a_password                   k8s_secret key=k name=s\n" in out
-    assert "b_password                   dev_default\n" in out
-    assert "hunter2" not in out
+    assert "b_password                   keyvault name=n vault=v\n" in out
 
 
 PROFILE = (

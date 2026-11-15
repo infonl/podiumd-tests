@@ -1,8 +1,9 @@
 """Bootstrap step: a local Django user with groups, e.g. an Open Archiefbeheer role user.
 
 Actions: status, apply (recreates), remove. Params: action, username, email, groups, staff,
-fields (other user fields), api_token, secret (the password; with api_token the user's API token
-instead, and no password; apply only). Groups the app lacks are left
+fields (other user fields), api_token, totp, secret (the password; with api_token the user's API token
+instead, and no password; apply only). totp: a confirmed TOTP device whose key is the SHA-1 of the password, for
+admins that require two-factor login. Groups the app lacks are left
 out and reported. A user model without username (Open Inwoner) logs in with the email.
 """
 
@@ -31,6 +32,14 @@ def run(params):
         user.set_unusable_password()
         user.save()
         Token.objects.create(user=user, key=params["secret"])
+    if params["totp"] and find_spec("django_otp") is not None:
+        import hashlib
+
+        from django_otp.plugins.otp_totp.models import TOTPDevice
+
+        key = hashlib.sha1(params["secret"].encode(), usedforsecurity=False).hexdigest()
+        # two_factor logs in with the device named "default" only.
+        TOTPDevice.objects.create(user=user, name="default", key=key, confirmed=True)
     groups = list(Group.objects.filter(name__in=params["groups"]))
     user.groups.set(groups)
     if find_spec("axes") is not None:

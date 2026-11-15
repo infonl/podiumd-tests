@@ -36,7 +36,6 @@ def test_parses_a_valid_profile(profile_factory):
         ({"allowed_tiers": []}, "allowed_tiers must be a non-empty list"),
         ({"allowed_tiers": ["everything"]}, "unknown tier"),
         ({"estate": "elsewhere"}, "estate"),
-        ({"secrets": {"pw": {"dev_default": "admin"}}}, "dev_default is only allowed for minikube"),
         ({"secrets": {"pw": {"vault": {}}}}, "unknown source"),
         ({"kube": {"context": "ctx"}}, "missing namespace"),
         ({"access": {"mode": "magic"}}, "expected direct or host-header"),
@@ -47,11 +46,6 @@ def test_parses_a_valid_profile(profile_factory):
 def test_rejects_invalid_profiles(profile_factory, override, message):
     with pytest.raises(ProfileError, match=message):
         profile_factory(**override)
-
-
-def test_dev_default_is_allowed_for_minikube(profile_factory):
-    profile = profile_factory(estate="minikube", secrets={"pw": {"dev_default": "admin"}})
-    assert profile.secrets["pw"].options == {"value": "admin"}
 
 
 def test_duplicate_profile_names_are_an_error(tmp_path):
@@ -79,7 +73,7 @@ def test_every_committed_profile_loads(name):
 
 
 def test_only_cluster_sources_need_the_cluster(profile_factory):
-    secrets = {"a": {"dev_default": "x"}, "b": {"pod_env": {"deployment": "d", "var": "V"}}}
+    secrets = {"a": {"keyvault": {"vault": "v", "name": "n"}}, "b": {"pod_env": {"deployment": "d", "var": "V"}}}
     profile = profile_factory(estate="minikube", secrets=secrets)
     assert not profile.secrets["a"].is_in_cluster
     assert profile.secrets["b"].is_in_cluster
