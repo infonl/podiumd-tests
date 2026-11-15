@@ -41,6 +41,8 @@ from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
 from podiumd_tests.wait import wait_until
+from podiumd_tests.workloads import scaled
+from podiumd_tests.workloads import workload_ref
 from podiumd_tests.zac import send_mail
 from podiumd_tests.zac_betrokkenen import make_person_initiator
 from podiumd_tests.zac_documents import zaak_documents
@@ -386,6 +388,40 @@ def test_infected_upload_is_refused(
     clean_up_new_documents(openzaak, registry, zaak)
     open_zaak_status(page, podiumd_env, zaak, who)
     upload_document(page, f"{registry.tagged('eicar')}.txt", EICAR)
+    assert documents_of(openzaak, zaak) == []
+
+
+@pytest.mark.requires("cluster")
+@pytest.mark.destructive
+@pytest.mark.source(
+    "podiumd-tests",
+    "Open Inwoner refuses an upload it cannot scan; no source test stops ClamAV.",
+)
+@pytest.mark.usefixtures("virus_scan")
+@pytest.mark.scenario("""
+    Given Open Inwoner scans uploads for viruses
+    And ClamAV is stopped
+    When the inwoner uploads a clean file on a zaak in Mijn zaken
+    Then the zaak gets no document
+""")
+def test_upload_is_refused_while_clamav_is_down(  # fixtures
+    page: Page,
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    parts: ZaaktypeParts,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """Without ClamAV, Open Inwoner does not pass an unscanned upload to the zaak."""
+    clamav = workload_ref(podiumd_env, "clamav")
+    if clamav is None:
+        pytest.skip(f"no ClamAV workload on {podiumd_env.profile.name}")
+    need_bootstrap(INWONER.name, *MIJN_ZAKEN_WIRING, "openinwoner-zaaktype-config")
+    zaak = portal_zaak(openzaak, registry, parts)
+    clean_up_new_documents(openzaak, registry, zaak)
+    with scaled(podiumd_env.kube, clamav, 0):
+        open_zaak_status(page, podiumd_env, zaak)
+        upload_document(page, f"{registry.tagged('ongescand')}.txt", b"geen virus")
     assert documents_of(openzaak, zaak) == []
 
 

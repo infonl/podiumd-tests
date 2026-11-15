@@ -460,3 +460,10 @@ def test_database_pod_is_the_pod_behind_open_zaaks_db_host(env_factory):
     assert workloads.database_pod(_database_env(env_factory, "postgres")) == {"metadata": {"name": "postgres-1"}}
     assert workloads.database_pod(_database_env(env_factory, "postgres", from_config_map=True)) is not None
     assert workloads.database_pod(_database_env(env_factory, "db.postgres.database.azure.com")) is None
+
+
+def test_workload_ref_names_the_kind(env_factory):
+    env = env_factory()
+    env.__dict__["workloads"] = lambda: [{"kind": "StatefulSet", "metadata": {"name": "clamav"}}]
+    assert workloads.workload_ref(env, "clamav") == "statefulset/clamav"
+    assert workloads.workload_ref(env, "redis") is None

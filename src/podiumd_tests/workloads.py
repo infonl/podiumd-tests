@@ -267,6 +267,12 @@ def scaled(kube: Kube, workload: str, replicas: int, timeout: int = 300, *, read
         yield
 
 
+def workload_ref(env: Environment, name: str) -> str | None:
+    """Return "kind/name" of the Deployment or StatefulSet called `name` ("statefulset/clamav"), None if absent."""
+    found = [item for item in env.workloads() if metadata_name(item) == name]
+    return f"{str(found[0].get('kind')).lower()}/{name}" if found else None
+
+
 def scaled_leftovers(env: Environment) -> list[tuple[str, str, int]]:
     """Return each workload that carries SCALED_FROM: ("statefulset/redis-ha", its tag, the replicas to restore).
 
