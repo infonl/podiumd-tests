@@ -40,6 +40,7 @@ LOGIN = re.compile(r"login|auth|signin|oidc", re.IGNORECASE)
     "Admin functionality is not available anonymously: Django and Keycloak admin refuse an anonymous request.",
 )
 @pytest.mark.parametrize("component", [requiring(c, c) for c in DJANGO_APPS])
+@pytest.mark.tc("INT-016")
 @pytest.mark.scenario("""
     Given an anonymous user
     When the user opens the Django admin of each deployed Maykin app
@@ -62,6 +63,7 @@ def test_django_admin_is_not_public(http: requests.Session, urls: dict[str, str]
     "Admin functionality is not available anonymously: Django and Keycloak admin refuse an anonymous request.",
 )
 @pytest.mark.requires("keycloak")
+@pytest.mark.tc("INT-016")
 @pytest.mark.scenario("""
     Given an anonymous user
     When the user asks the Keycloak admin API for the realm the applications log in to
