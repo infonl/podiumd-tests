@@ -28,6 +28,7 @@ from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import load_profile
 from podiumd_tests.environment import Environment
 from podiumd_tests.kube import cluster_service
+from podiumd_tests.lock import file_lock
 from podiumd_tests.mock_server import Callback
 from podiumd_tests.oidc import challenge_session
 from podiumd_tests.seed.objecten import objecttype_url
@@ -197,10 +198,15 @@ def fixture_need_bootstrap(
 
     def need(*step_names: str) -> None:
         named = [step for step in steps.STEPS if step.name in step_names]
-        wanted = [step for step in named if not (present / step.name).exists()]
         unknown = set(step_names) - {step.name for step in named}
         if unknown:
             pytest.fail(f"unknown bootstrap steps: {', '.join(sorted(unknown))}")
+        # One worker checks at a time: a Django shell per worker at once got Open VTB (768Mi) OOM-killed.
+        with file_lock(present / ".lock"):
+            check(named)
+
+    def check(named: list[runner.Step]) -> None:
+        wanted = [step for step in named if not (present / step.name).exists()]
         missing = _missing(podiumd_env, wanted)
         name = podiumd_env.profile.name
         if missing and not auto:
