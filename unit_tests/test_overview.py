@@ -41,7 +41,8 @@ def test_render_counts_cases_scenarios_and_expected_failures():
     text = overview.render(cases, unit_tests=7, perf_endpoints=3)
     assert "| smoke | 1 | 1 | 0 |" in text
     assert "| component | 4 | 3 | 1 |" in text
-    assert "| **full tier** | **4** | **3** |  |" in text
+    assert "| **full tier** | **4** | **3** | **1** |" in text
+    assert "| **chaos tier** | **1** | **1** | **0** |" in text
     assert "| zac-10 | 1 |" in text
     assert "| - | 1 |" in text
     assert "Unit tests (`unit_tests/`, functions): 7. Perf endpoints (`perf/runs.py`): 3." in text
