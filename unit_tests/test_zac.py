@@ -958,3 +958,11 @@ def test_bag_object_is_linked_and_unlinked_with_a_reden_and_the_locatie_set(fake
 
 def test_zoned_brondatum_is_the_day_at_midnight_utc():
     assert zac.zoned_brondatum("2026-11-12") == "2026-11-12T00:00:00Z"
+
+
+def test_search_failure_names_the_status_or_none(fake_http):
+    fake_http({"PUT /rest/zoeken/list": (200, {"resultaten": [], "totaal": 0})})
+    assert zac.search_failure(requests.Session(), ZAC) is None
+    fake_http({"PUT /rest/zoeken/list": (500, {"message": "Solr"})})
+    failure = str(zac.search_failure(requests.Session(), ZAC))
+    assert failure.startswith(f"UnexpectedStatusError: PUT {ZAC}/rest/zoeken/list: HTTP 500")

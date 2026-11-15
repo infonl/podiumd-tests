@@ -1,7 +1,8 @@
 """Find and delete what test runs left behind: objects carrying a run tag older than a cutoff.
 
 Tests clean up after themselves; this catches what an interrupted run or a failed cleanup
-left. Bootstrap objects (ptest-bootstrap-*) are never touched. Finders run in
+left. Bootstrap objects (ptest-bootstrap-*) are never touched. Workloads a test left scaled
+are restored first, so the components the finders call answer. Finders run in
 order: objects that refer to others go first.
 """
 
@@ -30,6 +31,7 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.mailpit import delete_message
 from podiumd_tests.openformulieren import remove_form
 from podiumd_tests.openformulieren import tagged_forms
+from podiumd_tests.process import ProcessError
 from podiumd_tests.results import RUN_TAG
 from podiumd_tests.results import run_started
 from podiumd_tests.seed.catalogi import CATALOGUS_TYPES
@@ -41,6 +43,8 @@ from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_besluit
 from podiumd_tests.seed.openzaak import delete_zaak
+from podiumd_tests.workloads import restore
+from podiumd_tests.workloads import scaled_leftovers
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -203,7 +207,8 @@ class Swept:
 
     kind: str
     name: str
-    action: str  # "deleted", "found" (dry run), "failed", "skipped" or "kept" (run after the cutoff)
+    # "deleted", "restored" (a scaled workload), "found" (dry run), "failed", "skipped" or "kept" (run after the cutoff)
+    action: str
     detail: str = ""
 
 
@@ -211,18 +216,30 @@ def _name(item: JsonObject) -> str:
     return str(next((item[key] for key in _NAME_KEYS if item.get(key)), "?"))
 
 
-_DELETE_ERRORS = (AssertionError, OSError, ValueError)
+_DELETE_ERRORS = (AssertionError, OSError, ValueError, ProcessError)
 
 
-def _sweep_items(
-    kind: str, items: list[JsonObject], delete: Callable[[JsonObject], None], cutoff: datetime, *, dry_run: bool
+def _sweep_items(  # noqa: PLR0913  # the objects and what to do with them
+    kind: str,
+    items: list[JsonObject],
+    delete: Callable[[JsonObject], None],
+    cutoff: datetime,
+    *,
+    dry_run: bool,
+    done: str = "deleted",
 ) -> list[Swept]:
-    swept = [_swept(kind, item, delete, cutoff, dry_run=dry_run) for item in items]
+    swept = [_swept(kind, item, delete, cutoff, dry_run=dry_run, done=done) for item in items]
     return [entry for entry in swept if entry is not None]
 
 
-def _swept(
-    kind: str, item: JsonObject, delete: Callable[[JsonObject], None], cutoff: datetime, *, dry_run: bool
+def _swept(  # noqa: PLR0913  # the object and what to do with it
+    kind: str,
+    item: JsonObject,
+    delete: Callable[[JsonObject], None],
+    cutoff: datetime,
+    *,
+    dry_run: bool,
+    done: str,
 ) -> Swept | None:
     """Return what happened to one object; None for a fresh one without the run tag."""
     if not is_stale(item, cutoff):
@@ -233,7 +250,26 @@ def _swept(
         delete(item)
     except _DELETE_ERRORS as exc:
         return Swept(kind, _name(item), "failed", f"{type(exc).__name__}: {exc}")
-    return Swept(kind, _name(item), "deleted")
+    return Swept(kind, _name(item), done)
+
+
+# A restored StatefulSet starts all its pods, e.g. three Solr nodes.
+RESTORE_TIMEOUT = 600
+
+
+def _sweep_scaled(env: Environment, cutoff: datetime, *, dry_run: bool) -> list[Swept]:
+    """Give each workload a test left scaled its replicas back."""
+    leftovers = scaled_leftovers(env)
+    items: list[JsonObject] = [{"name": workload, "tag": tag} for workload, tag, _ in leftovers]
+    replicas = {workload: count for workload, _, count in leftovers}
+
+    def restore_one(item: JsonObject) -> None:
+        # An operator's readiness gate keeps its StatefulSet's pods unready until the operator is restored after it.
+        workload = str(item["name"])
+        ready = not workload.startswith("statefulset/")
+        restore(env.kube, workload, replicas[workload], RESTORE_TIMEOUT, ready=ready)
+
+    return _sweep_items("scaled workload", items, restore_one, cutoff, dry_run=dry_run, done="restored")
 
 
 def _skip_reason(env: Environment, finder: Finder, present: set[str]) -> str | None:
@@ -261,9 +297,13 @@ def _sweep_by_snippet(env: Environment, kind: str, cutoff: datetime, *, dry_run:
 
 
 def sweep(env: Environment, cutoff: datetime, *, dry_run: bool) -> list[Swept]:
-    """Delete (or with dry_run, list) the stale run-tagged objects of every finder, then the snippet kinds."""
+    """Restore (or with dry_run, list) the stale scaled workloads, then delete the stale run-tagged objects.
+
+    The objects of every finder, then the snippet kinds.
+    """
+    reason = env.capabilities.skip_reason("cluster")
+    swept = [Swept("scaled workload", "", "skipped", reason)] if reason else _sweep_scaled(env, cutoff, dry_run=dry_run)
     present = {outcome.step for outcome in check(env, STEPS) if outcome.action == "present"}
-    swept: list[Swept] = []
     for finder in FINDERS:
         reason = _skip_reason(env, finder, present)
         if reason:

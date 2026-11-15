@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from itertools import cycle
 from itertools import islice
 from typing import TYPE_CHECKING
+from typing import cast
 
 from podiumd_tests.background import running
 from podiumd_tests.config import REPO_ROOT
@@ -27,8 +28,14 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from podiumd_tests.environment import Environment
+    from podiumd_tests.json_data import JsonObject
     from podiumd_tests.perf.availability import Watch
 
+
+# Seconds of load before and after a component breaks.
+CALM = 15
+# Open Zaak retries a failed notificatie 5 times, at most 48 s apart (NotificationsConfig defaults).
+DELIVERY_TIMEOUT = 300
 
 # The load's calls by name.
 type Calls = Mapping[str, Callable[[], object]]
@@ -65,6 +72,11 @@ class Load:
         """Return the calls made so far, in the order they ended."""
         with self._lock:
             return list(self._attempts)
+
+    def created(self, since: float = 0) -> list[str]:
+        """Return the URL of the object each successful call returned that started at or after `since`."""
+        found = (attempt for attempt in self.attempts if attempt.error is None and attempt.start >= since)
+        return [str(cast("JsonObject", attempt.result)["url"]) for attempt in found]
 
     def run_for(self, seconds: float) -> None:
         """Let the load run for this long."""

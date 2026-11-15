@@ -132,7 +132,7 @@ def test_frankgateway_outage_does_not_cascade(
         for c in sorted(urls)
         if c in COMPONENTS and c != "frankgateway" and is_root_answering(http, urls[c], ROOT_TIMEOUT)
     ]
-    with scaled(podiumd_env.kube, podiumd_env.deployment_for("frankgateway"), 0):
+    with scaled(podiumd_env.kube, f"deployment/{podiumd_env.deployment_for('frankgateway')}", 0):
         assert [c for c in apps if not is_root_answering(http, urls[c], ROOT_TIMEOUT)] == []
 
 

@@ -3,6 +3,7 @@
 import threading
 
 from podiumd_tests.chaos_load import Attempt
+from podiumd_tests.chaos_load import Load
 from podiumd_tests.chaos_load import failures
 from podiumd_tests.chaos_load import load_report
 from podiumd_tests.chaos_load import loaded
@@ -87,3 +88,15 @@ def test_slowdown_compares_the_p95_after_with_perf_yamls_limit_against_the_p95_b
     assert (round(before), round(after)) == (100, 500)
     # perf.yaml's defaults: 1.5 times, and at least 200 ms more.
     assert limit == 300
+
+
+def test_created_lists_the_urls_the_successful_calls_returned_since(monkeypatch):
+    attempts = [
+        Attempt("create", 1, 1, {"url": "z/1"}),
+        Attempt("create", 2, 1, error="ConnectionError: refused"),
+        Attempt("create", 3, 1, {"url": "z/3"}),
+    ]
+    monkeypatch.setattr(Load, "attempts", property(lambda _load: attempts))
+    load = Load({}, pause=0)
+    assert load.created() == ["z/1", "z/3"]
+    assert load.created(since=2) == ["z/3"]

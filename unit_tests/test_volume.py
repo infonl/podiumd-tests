@@ -292,13 +292,15 @@ def test_counts_are_none_where_skipped_or_failing(monkeypatch, profile_factory):
     assert counts(env) == {"zaken": 4, "users": None, "partijen": None}
 
 
-@pytest.mark.parametrize(("replicas", "expected"), [(3, [("openzaak", 3), ("openzaak-worker", 3)]), (0, [])])
+@pytest.mark.parametrize(
+    ("replicas", "expected"), [(3, [("deployment/openzaak", 3), ("deployment/openzaak-worker", 3)]), (0, [])]
+)
 def test_faster_scales_present_components_and_their_workers(monkeypatch, profile_factory, replicas, expected):
     scaled_to = []
 
     @contextmanager
-    def scaled(_kube, deployment, count):
-        scaled_to.append((deployment, count))
+    def scaled(_kube, workload, count):
+        scaled_to.append((workload, count))
         yield
 
     monkeypatch.setattr(volume, "scaled", scaled)

@@ -95,9 +95,42 @@ def swept_env(env_factory, profile_factory, monkeypatch):
         env = env_factory(profile_factory(urls={"mailpit": "https://mailpit.example.test"}))
         env.__dict__["capabilities"] = Capabilities(frozenset(present), {})
         monkeypatch.setattr(sweep_module, "check", lambda *_: [Outcome("openklant-token", "present")])
+        monkeypatch.setattr(sweep_module, "scaled_leftovers", lambda _env: [])
         return env
 
     return build
+
+
+@pytest.mark.parametrize(
+    ("dry_run", "action", "calls"), [(True, "found", 0), (False, "restored", 2)], ids=["dry-run", "restore"]
+)
+def test_sweep_restores_stale_scaled_workloads_first(swept_env, monkeypatch, dry_run, action, calls):
+    restored = []
+    monkeypatch.setattr(sweep_module, "FINDERS", ())
+    monkeypatch.setattr(sweep_module, "SNIPPET_KINDS", ())
+    env = swept_env({"cluster"})
+    leftovers = [("statefulset/zac-solr-solrcloud", OLD, 3), ("deployment/solr-operator", OLD, 1)]
+    monkeypatch.setattr(sweep_module, "scaled_leftovers", lambda _env: [*leftovers, ("deployment/zac", FRESH, 1)])
+    monkeypatch.setattr(
+        sweep_module,
+        "restore",
+        lambda _kube, workload, count, _timeout, *, ready: restored.append((workload, count, ready)),
+    )
+    swept = sweep_module.sweep(env, NOW - timedelta(hours=24), dry_run=dry_run)
+    assert [(s.action, s.name) for s in swept] == [
+        (action, "statefulset/zac-solr-solrcloud"),
+        (action, "deployment/solr-operator"),
+        ("kept", "deployment/zac"),
+    ]
+    expected = [("statefulset/zac-solr-solrcloud", 3, False), ("deployment/solr-operator", 1, True)]
+    assert restored == expected[:calls]
+
+
+def test_sweep_skips_scaled_workloads_without_cluster(swept_env, monkeypatch):
+    monkeypatch.setattr(sweep_module, "FINDERS", ())
+    monkeypatch.setattr(sweep_module, "SNIPPET_KINDS", ())
+    swept = sweep_module.sweep(swept_env(set()), NOW, dry_run=True)
+    assert [(s.kind, s.action) for s in swept] == [("scaled workload", "skipped")]
 
 
 def test_sweep_deletes_stale_mails_and_forms_and_skips_what_it_cannot_reach(swept_env, fake_http, monkeypatch):

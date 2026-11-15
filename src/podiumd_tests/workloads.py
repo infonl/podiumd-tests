@@ -13,6 +13,7 @@ import gzip
 import json
 import re
 
+from contextlib import ExitStack
 from contextlib import contextmanager
 from contextlib import suppress
 from dataclasses import dataclass
@@ -34,6 +35,8 @@ from podiumd_tests.kube import metadata_labels
 from podiumd_tests.kube import metadata_name
 from podiumd_tests.kube import metadata_namespace
 from podiumd_tests.responses import is_root_answering
+from podiumd_tests.results import new_run_id
+from podiumd_tests.results import run_tag
 from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
@@ -219,20 +222,96 @@ def _int(value: object) -> int:
     return value if isinstance(value, int) else 0
 
 
+# Set on a workload while a test has it scaled: "<tag> <replicas before>"; sweep restores it once the tag is stale.
+SCALED_FROM = "podiumd-tests/scaled-from"
+
+
+def is_scaled_to(workload: Item, count: int, *, ready: bool = True) -> bool:
+    """Whether the workload's controller has seen its spec and runs `count` pods, all ready unless `ready` is False."""
+    metadata, status = section(workload, "metadata"), section(workload, "status")
+    seen = _int(status.get("observedGeneration")) >= _int(metadata.get("generation"))
+    pods = _int(status.get("replicas"))
+    counted = _int(status.get("readyReplicas" if ready else "replicas"))
+    return seen and {pods, counted} == {count}
+
+
+def wait_scaled(kube: Kube, workload: str, count: int, timeout: int, *, ready: bool = True) -> None:
+    """Wait until the workload ("deployment/openzaak") runs `count` pods, all ready unless `ready` is False."""
+    wait_until(
+        lambda: is_scaled_to(kube.get_json(workload), count, ready=ready),
+        timeout=timeout,
+        interval=5,
+        description=f"{workload} at {count} {'ready ' if ready else ''}pods",
+    )
+
+
+def restore(kube: Kube, workload: str, replicas: int, timeout: int, *, ready: bool = True) -> None:
+    """Scale the workload back to `replicas` and wait for its pods, then remove SCALED_FROM."""
+    kube.run("scale", workload, f"--replicas={replicas}")
+    wait_scaled(kube, workload, replicas, timeout, ready=ready)
+    kube.run("annotate", workload, f"{SCALED_FROM}-")
+
+
 @contextmanager
-def scaled(kube: Kube, deployment: str, replicas: int, timeout: int = 300) -> Generator[None]:
-    """Run the block with the deployment at `replicas`; afterwards restore its replicas. Both wait for the rollout."""
-    before = _int(section(kube.get_json("deployment", deployment), "spec").get("replicas"))
+def scaled(kube: Kube, workload: str, replicas: int, timeout: int = 300, *, ready: bool = True) -> Generator[None]:
+    """Run the block with the workload ("deployment/openzaak") at `replicas`; afterwards restore its replicas.
 
-    def scale(count: int) -> None:
-        kube.run("scale", f"deployment/{deployment}", f"--replicas={count}")
-        kube.run("rollout", "status", f"deployment/{deployment}", f"--timeout={timeout}s", timeout=timeout + 10)
-
-    scale(replicas)
-    try:
+    Both wait for the pods, ready unless `ready` is False. SCALED_FROM records the replicas until they are restored.
+    """
+    before = _int(section(kube.get_json(workload), "spec").get("replicas"))
+    kube.run("annotate", "--overwrite", workload, f"{SCALED_FROM}={run_tag(new_run_id())} {before}")
+    with ExitStack() as stack:
+        stack.callback(restore, kube, workload, before, timeout, ready=ready)
+        kube.run("scale", workload, f"--replicas={replicas}")
+        wait_scaled(kube, workload, replicas, timeout, ready=ready)
         yield
-    finally:
-        scale(before)
+
+
+def scaled_leftovers(env: Environment) -> list[tuple[str, str, int]]:
+    """Return each workload that carries SCALED_FROM: ("statefulset/redis-ha", its tag, the replicas to restore).
+
+    StatefulSets come first, so an operator is restored after the StatefulSet it manages.
+    """
+    workloads = env.workloads([env.profile.kube.namespace])
+    items = sorted(workloads, key=lambda item: item.get("kind") != "StatefulSet")
+    found: list[tuple[str, str, int]] = []
+    for item in items:
+        annotations = section(section(item, "metadata"), "annotations")
+        tag, _, replicas = str(annotations.get(SCALED_FROM, "")).rpartition(" ")
+        workload = f"{str(item.get('kind')).lower()}/{metadata_name(item)}"
+        if replicas.isdigit():
+            found.append((workload, tag, int(replicas)))
+    return found
+
+
+@dataclass(frozen=True)
+class Operated:
+    """A StatefulSet that an operator's custom resource owns, and the operator's Deployment."""
+
+    statefulset: str
+    operator: str
+
+
+def operated(env: Environment, owner_kind: str, operator: str) -> Operated | None:
+    """Return the StatefulSet a custom resource of `owner_kind` owns, with the operator; None without either."""
+    owned = (item for item in env.kube.items("statefulsets") if owner_kind in _owner_kinds(item))
+    statefulset = next(map(metadata_name, owned), None)
+    deployments = set(map(metadata_name, env.kube.items("deployments")))
+    return Operated(statefulset, operator) if statefulset and operator in deployments else None
+
+
+@contextmanager
+def operated_down(kube: Kube, target: Operated, timeout: int) -> Generator[None]:
+    """Run the block with the operator, then its StatefulSet, at 0; afterwards wait until all its pods are ready.
+
+    The operator stops first: it would scale its StatefulSet back. It starts after the StatefulSet's pods are back,
+    before they are ready: a readiness gate of the operator (Solr's isNotStopped) keeps them unready until then.
+    """
+    statefulset = f"statefulset/{target.statefulset}"
+    with scaled(kube, f"deployment/{target.operator}", 0), scaled(kube, statefulset, 0, timeout, ready=False):
+        yield
+    replicas = _int(section(kube.get_json(statefulset), "spec").get("replicas"))
+    wait_scaled(kube, statefulset, replicas, timeout)
 
 
 def replace_pod(env: Environment, pod: Item, timeout: float) -> None:
@@ -535,7 +614,7 @@ def component_down(env: Environment, http: requests.Session, component: str) -> 
     Afterwards the deployment is restored and the block returns once the root answers again.
     """
     url = env.profile.urls[component]
-    with scaled(env.kube, env.deployment_for(component), 0):
+    with scaled(env.kube, f"deployment/{env.deployment_for(component)}", 0):
         wait_until(
             lambda: not is_root_answering(http, url, ROOT_TIMEOUT), timeout=120, description=f"{component} stopped"
         )

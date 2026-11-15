@@ -439,7 +439,7 @@ def faster(env: Environment, replicas: int) -> Generator[None]:
             if replicas and not env.capabilities.skip_reason(component):
                 present = (env.deployment_for(component), worker_deployment(env, component))
                 for deployment in filter(None, present):
-                    stack.enter_context(scaled(env.kube, deployment, replicas))
+                    stack.enter_context(scaled(env.kube, f"deployment/{deployment}", replicas))
         yield
 
 

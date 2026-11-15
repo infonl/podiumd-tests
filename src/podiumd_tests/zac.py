@@ -17,6 +17,8 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
+import requests
+
 from podiumd_tests.auth.keycloak import form_login
 from podiumd_tests.bootstrap.names import ZAC_BASE_ROLES
 from podiumd_tests.json_data import entries
@@ -25,6 +27,7 @@ from podiumd_tests.json_data import strings
 from podiumd_tests.lock import file_lock
 from podiumd_tests.oidc import LOGIN_PATHS
 from podiumd_tests.responses import REFUSED
+from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import BESLUIT_CREATE_LOCK
@@ -37,8 +40,6 @@ from podiumd_tests.wait import wait_until
 if TYPE_CHECKING:
     from collections.abc import Callable
     from collections.abc import Mapping
-
-    import requests
 
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.config import Profile
@@ -66,6 +67,9 @@ NOTIFICATION_TIMEOUT = 60
 TASK_TIMEOUT = 30
 # ZAC assigns and releases list selections in a background job, and indexes taken in Solr; both lag under load.
 LIST_TIMEOUT = 120
+# The custom resource that owns the StatefulSet of ZAC's Solr, and the operator's Deployment.
+SOLR_OWNER_KIND = "SolrCloud"
+SOLR_OPERATOR = "solr-operator"
 
 
 def zac_session(env: Environment, username: str, password: str) -> requests.Session:
@@ -772,6 +776,15 @@ def search(http: requests.Session, zac_url: str, **query: object) -> JsonObject:
     """Return page 1 of ZAC's search (rows 10 unless given) with these RestZoekParameters, as the session's user."""
     body = {"page": 0, "rows": 10, **query}
     return cast("JsonObject", expect_status(http.put(f"{zac_url}/rest/zoeken/list", json=body), HTTPStatus.OK).json())
+
+
+def search_failure(http: requests.Session, zac_url: str) -> str | None:
+    """Return why ZAC's search for zaken fails (its status and body, or the exception); None when it answers."""
+    try:
+        search(http, zac_url, type="ZAAK", rows=1)
+    except (UnexpectedStatusError, requests.RequestException) as exc:
+        return f"{type(exc).__name__}: {exc}"
+    return None
 
 
 def search_all(http: requests.Session, zac_url: str, rows: int, **query: object) -> list[JsonObject]:

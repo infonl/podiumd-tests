@@ -157,7 +157,7 @@ def _workloads(env: Environment, namespace: str) -> Check:
     except KubeError as exc:
         return Check(f"workloads {namespace}", "warn", f"{len(items)} ready; Helm releases unreadable: {exc}")
     if drift:
-        hint = "a test left it scaled? `kubectl scale` back, or redeploy"
+        hint = f"a test left it scaled? `podiumd-tests sweep --env {env.profile.name}`, or redeploy"
         return Check(f"workloads {namespace}", "warn", f"replicas differ from Helm: {', '.join(drift)}", hint)
     return Check(f"workloads {namespace}", "ok", f"{len(items)} ready")
 

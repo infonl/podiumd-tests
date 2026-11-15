@@ -1,9 +1,12 @@
 """Unit tests for the Redis HA helpers."""
 
+import json
+
 from typing import TYPE_CHECKING
 from typing import cast
 
 from podiumd_tests import redis
+from podiumd_tests.capabilities import Capabilities
 
 if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
@@ -70,3 +73,32 @@ def test_master_pod_is_the_reporting_master_behind_the_service():
     slave = cast("Environment", FakeEnv({"pods": [master], "endpoints": [endpoints]}, out="role:slave\r\n"))
     assert redis.master_pod(slave) is None
     assert redis.master_pod(cast("Environment", FakeEnv({"pods": [master]}))) is None
+
+
+def deployment(name, *containers):
+    return {"metadata": {"name": name}, "spec": {"template": {"spec": {"containers": list(containers)}}}}
+
+
+def test_redis_deployments_and_components_read_the_master_service_from_a_config_map(env_factory, fake_runner):
+    from_map = {"envFrom": [{"configMapRef": {"name": "openzaak"}}]}
+    from_key = {"env": [{"name": "BROKER", "valueFrom": {"configMapKeyRef": {"name": "celery", "key": "url"}}}]}
+    deployments = [
+        deployment("openzaak", from_map),
+        deployment("openzaak-worker", from_key),
+        deployment("zac", {"envFrom": [{"configMapRef": {"name": "zac"}}]}),
+        deployment("kiss", {"env": [{"name": "X", "value": "redis-ha-master"}]}),
+    ]
+    config_maps = [
+        {"metadata": {"name": "openzaak"}, "data": {"CACHE_DEFAULT": "redis-ha-master:6379/4"}},
+        {"metadata": {"name": "celery"}, "data": {"url": "redis://redis-ha-master:6379/5"}},
+        {"metadata": {"name": "zac"}, "data": {"SOLR_URL": "http://solr"}},
+    ]
+    fake_runner.answers = {
+        "get deployments": (0, json.dumps({"items": deployments})),
+        "get configmaps": (0, json.dumps({"items": config_maps})),
+    }
+    env = env_factory()
+    env.__dict__["capabilities"] = Capabilities(frozenset(("openzaak", "zac")), {})
+    users = redis.redis_deployments(env)
+    assert users == ["openzaak", "openzaak-worker"]
+    assert redis.redis_components(env, users) == ["openzaak"]

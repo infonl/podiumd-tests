@@ -21,6 +21,8 @@ from podiumd_tests.bootstrap.names import TEST_CATALOGUS_RSIN
 from podiumd_tests.bootstrap.names import TEST_FORM
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.bootstrap.steps import NAW_DATA
+from podiumd_tests.chaos_load import CALM
+from podiumd_tests.chaos_load import DELIVERY_TIMEOUT
 from podiumd_tests.chaos_load import failures
 from podiumd_tests.chaos_load import load_report
 from podiumd_tests.chaos_load import recovery_seconds
@@ -52,7 +54,6 @@ from podiumd_tests.workloads import worker_deployment
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from collections.abc import Sequence
 
     import requests
 
@@ -69,11 +70,8 @@ pytestmark = [
     pytest.mark.requires("cluster"),
 ]
 
-# Seconds a component stays broken, and seconds of load before and after.
+# Seconds a component stays broken.
 OUTAGE = 60
-CALM = 15
-# Open Zaak retries a failed notificatie 5 times, at most 48 s apart (NotificationsConfig defaults).
-DELIVERY_TIMEOUT = 300
 # Seconds of load while a subscriber refuses: Open Notificaties' default retries of one notificatie span about 160 s.
 REFUSING = 180
 # Only this test's zaken carry it, so the refusing subscriber gets no other test's notificaties.
@@ -125,31 +123,13 @@ def test_no_notificatie_is_lost_while_open_notificaties_is_down(  # fixtures
         load.run_for(CALM)
     record_property("report", load_report(load, watch, start))
     assert [*failures(load.attempts, start), *problems(watch)] == []
-    zaken = created_zaken(load.attempts)
-    with suppress(WaitTimeoutError):
-        wait_until(
-            lambda: not undelivered(callback, zaken),
-            timeout=DELIVERY_TIMEOUT,
-            interval=10,
-            description="every notificatie",
-        )
+    zaken = load.created()
+    lost = callback.missing(zaken, DELIVERY_TIMEOUT)
     record_property("outage_seconds", round(back - down))
     record_property("delivered_seconds_after_restart", round(time.time() - back))
-    lost = undelivered(callback, zaken)
     assert lost == [], f"{len(lost)} of {len(zaken)} notificaties lost"
     deployment = podiumd_env.deployment_for("opennotificaties")
     assert disruptions(before, cluster_state(podiumd_env), {deployment}) == []
-
-
-def created_zaken(attempts: Sequence[Attempt]) -> list[str]:
-    """Return the URLs of the zaken the load created."""
-    return [str(cast("JsonObject", attempt.result)["url"]) for attempt in attempts if attempt.error is None]
-
-
-def undelivered(callback: Callback, zaken: Sequence[str]) -> list[str]:
-    """Return the zaken whose create notificatie the callback did not receive."""
-    received = callback.notified("zaken", "zaak", "create")
-    return [zaak for zaak in zaken if not received[zaak]]
 
 
 @pytest.mark.requires("openzaak", "opennotificaties")
@@ -198,12 +178,12 @@ def test_a_refusing_subscriber_does_not_slow_down_open_zaak(  # fixtures
         refused_since = time.time()
         load.run_for(REFUSING)
     ended = time.time()
-    zaken = created_zaken(load.attempts)
-    later = created_zaken([attempt for attempt in load.attempts if attempt.start >= refused_since])
+    zaken = load.created()
+    later = load.created(refused_since)
 
     def is_settled() -> bool:
         refused = refusing.notified("zaken", "zaak", "create")
-        return not undelivered(healthy, zaken) and all(refused[zaak] >= deliveries for zaak in later)
+        return not healthy.missing(zaken) and all(refused[zaak] >= deliveries for zaak in later)
 
     with suppress(WaitTimeoutError):
         wait_until(is_settled, timeout=DELIVERY_TIMEOUT, interval=10, description="every delivery and retry")
@@ -219,7 +199,7 @@ def test_a_refusing_subscriber_does_not_slow_down_open_zaak(  # fixtures
     assert [*failures(load.attempts, start), *problems(watch)] == []
     assert disruptions(before, cluster_state(podiumd_env), set()) == []
     assert refusal <= limit, f"p95 while refusing {refusal:.0f} ms > {limit:.0f} ms (before {calm:.0f})"
-    lost = undelivered(healthy, zaken)
+    lost = healthy.missing(zaken)
     assert lost == [], f"{len(lost)} of {len(zaken)} notificaties lost"
     unbounded = {zaak: refused[zaak] for zaak in zaken if refused[zaak] > deliveries}
     assert unbounded == {}, f"more than {deliveries} deliveries of a refused notificatie"
@@ -297,7 +277,7 @@ def test_no_submission_is_lost_while_the_open_formulieren_worker_is_down(
     calls = {"of_submit": sender(podiumd_env, registry)}
     with watched_load(podiumd_env, urls, ["openzaak"], calls, workers=2, pause=2) as (load, watch):
         load.run_for(CALM)
-        with scaled(podiumd_env.kube, worker, 0):
+        with scaled(podiumd_env.kube, f"deployment/{worker}", 0):
             load.run_for(OUTAGE)
         back = time.time()
         load.run_for(CALM)

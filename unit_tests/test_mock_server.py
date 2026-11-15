@@ -125,9 +125,11 @@ def test_callback_counts_notifications_of_a_kind_per_hoofd_object(env_factory, f
         {"path": "/run1/other", "body": zaak},
     ]
     fake_runner.answers[f"exec deploy/{NAME}"] = (0, "".join(f"{json.dumps(line)}\n" for line in lines))
-    notified = Callback(env_factory(), "/run1/abc").notified("zaken", "zaak", "create")
+    callback = Callback(env_factory(), "/run1/abc")
+    notified = callback.notified("zaken", "zaak", "create")
     assert notified == {"z1": 2}
     assert notified["z2"] == 0
+    assert callback.missing(["z1", "z2"]) == ["z2"]
 
 
 def test_mock_server_refuses_without_authorization_and_answers_notify():

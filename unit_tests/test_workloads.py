@@ -3,6 +3,7 @@
 import base64
 import gzip
 import json
+import subprocess
 
 from types import SimpleNamespace
 
@@ -13,7 +14,9 @@ from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
+from podiumd_tests.workloads import SCALED_FROM
 from podiumd_tests.workloads import ClusterState
+from podiumd_tests.workloads import Operated
 from podiumd_tests.workloads import chart_version
 from podiumd_tests.workloads import component_versions
 from podiumd_tests.workloads import cronjob_ending
@@ -21,10 +24,14 @@ from podiumd_tests.workloads import deployed_build
 from podiumd_tests.workloads import disruptions
 from podiumd_tests.workloads import failed_jobs
 from podiumd_tests.workloads import is_chart_older_than
+from podiumd_tests.workloads import is_scaled_to
+from podiumd_tests.workloads import operated
+from podiumd_tests.workloads import operated_down
 from podiumd_tests.workloads import recreate_update_jobs
 from podiumd_tests.workloads import replica_drift
 from podiumd_tests.workloads import run_cronjob
 from podiumd_tests.workloads import scaled
+from podiumd_tests.workloads import scaled_leftovers
 from podiumd_tests.workloads import skip_older_than
 from podiumd_tests.workloads import unhealthy_pods
 from podiumd_tests.workloads import unready_workloads
@@ -96,16 +103,108 @@ def test_failed_jobs_skips_an_update_job_that_asked_for_a_recreate():
     assert failed_jobs(jobs, keycloaks) == ["other-update-job"]
 
 
-def test_scaled_restores_the_replicas_also_when_the_block_fails(fake_runner):
-    fake_runner.answers = {"get deployment openzaak": (0, json.dumps({"spec": {"replicas": 2}})), "": (0, "")}
-    with pytest.raises(RuntimeError), scaled(Kube("ctx", "podiumd", fake_runner), "openzaak", 0):
+class ScalingRunner:
+    """kubectl on workloads that run the replicas they were last scaled to, all ready; lists `items` per kind."""
+
+    def __init__(self, replicas, items=None):
+        self.replicas: dict[str, int] = dict(replicas)
+        self.items: dict[str, list[object]] = items or {}
+        self.calls: list[list[str]] = []
+
+    def __call__(self, args, _timeout, _stdin=None):
+        self.calls.append(list(args))
+        verb, target = args[5], args[6]
+        out = ""
+        if verb == "scale":
+            self.replicas[target] = int(args[7].removeprefix("--replicas="))
+        elif verb == "get" and target in self.replicas:
+            count = self.replicas[target]
+            status = {"replicas": count, "readyReplicas": count}
+            out = json.dumps({"spec": {"replicas": count}, "status": status})
+        elif verb == "get":
+            out = json.dumps({"items": self.items.get(target, [])})
+        return subprocess.CompletedProcess(list(args), 0, out, "")
+
+
+def test_scaled_records_and_restores_the_replicas_also_when_the_block_fails(monkeypatch):
+    monkeypatch.setattr(workloads, "new_run_id", lambda: "2610071230abcd")
+    runner = ScalingRunner({"deployment/openzaak": 2})
+    with pytest.raises(RuntimeError), scaled(Kube("ctx", "podiumd", runner), "deployment/openzaak", 0):
         raise RuntimeError
-    rollout = ["rollout", "status", "deployment/openzaak", "--timeout=300s"]
-    assert [c[5:] for c in fake_runner.calls[1:]] == [
+    changes = [c[5:] for c in runner.calls if c[5] != "get"]
+    assert changes == [
+        ["annotate", "--overwrite", "deployment/openzaak", f"{SCALED_FROM}=ptest-2610071230abcd 2"],
         ["scale", "deployment/openzaak", "--replicas=0"],
-        rollout,
         ["scale", "deployment/openzaak", "--replicas=2"],
-        rollout,
+        ["annotate", "deployment/openzaak", f"{SCALED_FROM}-"],
+    ]
+
+
+@pytest.mark.parametrize(
+    ("status", "metadata", "expected"),
+    [
+        ({"replicas": 3, "readyReplicas": 3, "observedGeneration": 2}, {"generation": 2}, True),
+        ({"replicas": 3, "readyReplicas": 2, "observedGeneration": 2}, {"generation": 2}, False),
+        ({"replicas": 3, "readyReplicas": 3, "observedGeneration": 1}, {"generation": 2}, False),
+        ({}, {}, False),
+    ],
+    ids=["ready", "one-unready", "spec-unseen", "no-status"],
+)
+def test_is_scaled_to_needs_the_seen_spec_and_every_pod_ready(status, metadata, expected):
+    assert is_scaled_to({"metadata": metadata, "status": status}, 3) is expected
+    assert is_scaled_to({"metadata": {}, "status": {}}, 0)
+
+
+def workload(kind, name, *, owner=None, scaled_from=None):
+    metadata = {"name": name, "namespace": "podiumd"}
+    if owner:
+        metadata["ownerReferences"] = [{"kind": owner, "name": name}]
+    if scaled_from:
+        metadata["annotations"] = {SCALED_FROM: scaled_from}
+    return {"kind": kind, "metadata": metadata}
+
+
+def test_scaled_leftovers_lists_statefulsets_first(env_factory, fake_runner):
+    fake_runner.answers = {
+        "get deployments": (
+            0,
+            json.dumps({"items": [workload("Deployment", "solr-operator", scaled_from="ptest-x 1")]}),
+        ),
+        "get statefulsets": (
+            0,
+            json.dumps(
+                {"items": [workload("StatefulSet", "solr", scaled_from="ptest-x 3"), workload("StatefulSet", "kc")]}
+            ),
+        ),
+    }
+    assert scaled_leftovers(env_factory()) == [
+        ("statefulset/solr", "ptest-x", 3),
+        ("deployment/solr-operator", "ptest-x", 1),
+    ]
+
+
+def test_operated_down_stops_the_operator_first_and_starts_it_last(env_factory):
+    items = {
+        "statefulsets": [
+            workload("StatefulSet", "zac-solr-solrcloud", owner="SolrCloud"),
+            workload("StatefulSet", "kc"),
+        ],
+        "deployments": [workload("Deployment", "solr-operator")],
+    }
+    runner = ScalingRunner({"deployment/solr-operator": 1, "statefulset/zac-solr-solrcloud": 3}, items)
+    env = env_factory(runner=runner)
+    assert operated(env, "RedisReplication", "redis-operator") is None
+    target = operated(env, "SolrCloud", "solr-operator")
+    assert target == Operated("zac-solr-solrcloud", "solr-operator")
+    assert target is not None
+    with operated_down(env.kube, target, 60):
+        assert set(runner.replicas.values()) == {0}
+    scales = [c[6:8] for c in runner.calls if c[5] == "scale"]
+    assert scales == [
+        ["deployment/solr-operator", "--replicas=0"],
+        ["statefulset/zac-solr-solrcloud", "--replicas=0"],
+        ["statefulset/zac-solr-solrcloud", "--replicas=3"],
+        ["deployment/solr-operator", "--replicas=1"],
     ]
 
 

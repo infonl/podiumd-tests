@@ -11,6 +11,7 @@ import json
 import secrets
 
 from collections import Counter
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from typing import cast
@@ -20,10 +21,12 @@ import yaml
 from podiumd_tests.config import REPO_ROOT
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.wait import WaitTimeoutError
 from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from collections.abc import Sequence
 
     from podiumd_tests.bootstrap.runner import Context
     from podiumd_tests.environment import Environment
@@ -39,6 +42,8 @@ CHECKOUTS_DIR = "/data/worldline"
 NOTIFY_EMAIL = "/v2/notifications/email"
 NOTIFY_SMS = "/v2/notifications/sms"
 ROLLOUT_TIMEOUT = 180
+# Kanaal, resource and actie of the notification of a new zaak.
+ZAAK_CREATE = ("zaken", "zaak", "create")
 
 
 def manifests(image: str = "") -> list[dict[str, object]]:
@@ -124,6 +129,22 @@ class Callback:
         kind = (kanaal, resource, actie)
         found = [_about(entry) for entry in self.received()]
         return Counter(about[-1] for about in found if about[:3] == kind)
+
+    def missing(
+        self, hoofden: Sequence[str], timeout: float = 0, kind: tuple[str, str, str] = ZAAK_CREATE
+    ) -> list[str]:
+        """Return the hoofdObjecten among `hoofden` that no notification of this (kanaal, resource, actie) reached.
+
+        Waits up to `timeout` seconds for all of them.
+        """
+
+        def lacking() -> list[str]:
+            received = self.notified(*kind)
+            return [hoofd for hoofd in hoofden if not received[hoofd]]
+
+        with suppress(WaitTimeoutError):
+            wait_until(lambda: not lacking(), timeout=timeout, interval=10, description=f"every {' '.join(kind)}")
+        return lacking()
 
     def wait_for(self, match: Callable[[JsonObject], bool], *, timeout: float, description: str) -> JsonObject:
         """Return the first received entry that matches; WaitTimeoutError when none arrives in time."""
