@@ -328,7 +328,7 @@ def _report_state(env: Environment, status: JsonObject) -> object:
 
 
 def registration_state(env: Environment, submission: str) -> dict[str, str]:
-    """Open Formulieren's registration status of the submission (pending, in_progress, success, failed) and error."""
+    """Open Formulieren's registration status (pending, in_progress, success, failed), error and public reference."""
     params: dict[str, object] = {"uuid": submission, "action": "registration"}
     deployment = env.deployment_for("openformulieren")
     return cast("dict[str, str]", run_snippet(env.kube, deployment, "openformulieren_submission", params))

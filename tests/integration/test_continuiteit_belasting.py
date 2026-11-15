@@ -240,7 +240,19 @@ def unregistered(
             register(cast("Sent", attempt.result))
         except AssertionError as exc:
             lost.append(f"sent at +{attempt.start - since:.0f}s: {exc}")
+            forget_preregistered_zaak(env, openzaak, registry, cast("Sent", attempt.result)[1])
     return lost
+
+
+def forget_preregistered_zaak(
+    env: Environment, openzaak: ApiClient, registry: ResourceRegistry, submission: str
+) -> None:
+    """Cleanup deletes the zaak an unregistered submission's pre-registration made, if there is one."""
+    reference = forms.registration_state(env, submission)["reference"]
+    if not reference:  # an empty identificatie filter would match every zaak
+        return
+    with suppress(AssertionError):  # no zaak: the pre-registration did not run
+        forms.registered_zaak(env, openzaak, registry, {"submission": submission, "publicReference": reference})
 
 
 @pytest.mark.requires("openformulieren", "openzaak")

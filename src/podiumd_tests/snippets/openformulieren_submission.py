@@ -1,7 +1,7 @@
 """One Open Formulieren submission. Params: uuid, action.
 
 Actions: delete; registration (its registration_status, failed also when a component's pre-registration failed,
-and then the first error line of the traceback: the root cause, before the RegistrationFailed it raised); report (whether its
+the first error line of the traceback: the root cause, before the RegistrationFailed it raised, and its public reference); report (whether its
 report row exists, its file name, whether this pod sees the file and its modification time,
 the pod, and the other submissions whose report has the same file name). Open Zaak numbers zaken from the highest identificatie, so after a test deletes its zaak
 the number comes back; a submission kept with that public reference then blocks a new registration.
@@ -43,4 +43,5 @@ def run(params):
     traceback = "\n".join(str((result or {}).get("traceback") or "") for result in results)
     errors = [line for line in traceback.splitlines() if re.match(r"[\w.]+(Error|Exception|Failed)\b", line)]
     status = "failed" if failed.exists() else submission.registration_status
-    return {"status": status, "error": errors[0] if errors else ""}
+    reference = submission.public_registration_reference
+    return {"status": status, "error": errors[0] if errors else "", "reference": reference}
