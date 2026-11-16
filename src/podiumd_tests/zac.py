@@ -37,6 +37,9 @@ from podiumd_tests.seed.openzaak import delete_zaak_at_cleanup
 from podiumd_tests.seed.openzaak import expect_utc_date_defect
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac_api import PROCESS_DEFINITIONS
+from podiumd_tests.zac_api import bridge_names
+from podiumd_tests.zac_api import has_process_definitions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -74,9 +77,10 @@ SOLR_OPERATOR = "solr-operator"
 
 
 def zac_session(env: Environment, username: str, password: str) -> requests.Session:
-    """Return a session on ZAC's REST API, logged in through Keycloak's form."""
+    """Return a session on ZAC's REST API, logged in through Keycloak's form, that speaks ZAC 5.9's field names."""
     http = env.session()
     form_login(http, env.profile.urls["zac"] + LOGIN_PATHS["zac"], username, password)
+    bridge_names(http, env.profile.urls["zac"])
     return http
 
 
@@ -115,25 +119,6 @@ def productaanvraag_parameters(http: requests.Session, zac_url: str, profile: Pr
         msg = f"ZAC has no zaakafhandelparameters for {identificatie}"
         raise LookupError(msg)
     return found[0]
-
-
-# From ZAC 5.12 one zaaktype configuration holds a CMMN or BPMN processDefinition, saved with
-# PUT /rest/zaakafhandelparameters/{zaaktype uuid}; ZAC 5.9 saves CMMN ones with PUT /rest/zaakafhandelparameters and
-# links BPMN processes in /rest/zaaktype-bpmn-configuration.
-PROCESS_DEFINITIONS = "/rest/zaakafhandelparameters/process-definitions"
-_process_definitions: dict[str, bool] = {}
-
-
-def has_process_definitions(http: requests.Session, zac_url: str) -> bool:
-    """Return whether ZAC configures zaaktypen with a processDefinition (ZAC 5.12 and later); asked once per URL."""
-    if zac_url not in _process_definitions:
-        _process_definitions[zac_url] = http.get(zac_url + PROCESS_DEFINITIONS).status_code == HTTPStatus.OK
-    return _process_definitions[zac_url]
-
-
-def is_valide(parameters: JsonObject) -> bool:
-    """Return ZAC's verdict valide of zaakafhandelparameters: isValide from ZAC 5.12, valide before."""
-    return bool(parameters.get("isValide", parameters.get("valide")))
 
 
 def read_zaakafhandelparameters(http: requests.Session, zac_url: str, zaaktype_uuid: str) -> JsonObject:
@@ -250,7 +235,6 @@ def group_members(http: requests.Session, zac_url: str, groep: str) -> set[str]:
 # Fields of ZAC's inrichtingscheck that its verdict valide does not require.
 NOT_REQUIRED_FOR_VALIDE = {
     "valide",
-    "isValide",
     "heeftWaarschuwingen",
     "besluittypeAanwezig",
     "isZaakspecifiekeAutorisatieEigenschapAanwezig",
@@ -267,7 +251,7 @@ def inrichtingscheck_problems(check: JsonObject) -> list[str]:
         problems.append("besluittypeAanwezig")
     if check.get("heeftWaarschuwingen"):
         problems.append("heeftWaarschuwingen")
-    if not problems and not is_valide(check):
+    if not problems and not check.get("valide"):
         problems.append("valide")
     return sorted(problems)
 
@@ -604,8 +588,8 @@ def rights_of(role: str, least_roles: Mapping[str, str | None]) -> dict[str, boo
 
 
 def clear_ztc_cache(http: requests.Session, zac_url: str) -> None:
-    """Clear ZAC's cache of Open Zaak's catalogus types, as ZAC's beheerder."""
-    expect_status(http.delete(f"{zac_url}/rest/health-check/ztc-cache"), HTTPStatus.OK)
+    """Clear ZAC's cache of Open Zaak's catalogus types, as ZAC's beheerder; ZAC 5.12 has no health-check/ztc-cache."""
+    expect_status(http.get(f"{zac_url}/rest/admin/util/cache/ztc/clear"), HTTPStatus.OK)
 
 
 def besluittypen(http: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:

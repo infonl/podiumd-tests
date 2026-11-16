@@ -17,7 +17,7 @@ import requests
 from playwright.sync_api import Error as PlaywrightError
 from requests.adapters import HTTPAdapter
 
-from podiumd_tests import zac
+from podiumd_tests import zac_api
 from podiumd_tests.config import parse_profile
 from podiumd_tests.environment import Environment
 
@@ -295,5 +295,5 @@ class _KnownZac(defaultdict[str, bool]):
 def zac_5_9(monkeypatch):
     """ZAC fakes answer as ZAC 5.9: no process definitions, without asking; a test sets a URL to True for 5.12."""
     known = _KnownZac(bool)
-    monkeypatch.setattr(zac, "_process_definitions", known)
+    monkeypatch.setattr(zac_api, "_process_definitions", known)
     return known

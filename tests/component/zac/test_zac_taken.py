@@ -65,7 +65,8 @@ if TYPE_CHECKING:
 # ZAC's statustype omschrijving while a task Aanvullende informatie is open (ConfigurationService).
 WAITING = "Wacht op aanvullende informatie"
 
-pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "keycloak")]
+# ZAC 5.12 mails when the taak Aanvullende informatie or Advies extern starts (zac_taken.MAIL_TASKS).
+pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "keycloak", "mailpit")]
 
 ZAC_TEAM = pytest.mark.source(
     "podiumd-tests",

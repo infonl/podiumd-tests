@@ -52,7 +52,8 @@ if TYPE_CHECKING:
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
-pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "keycloak")]
+# ZAC 5.12 mails when the taak Aanvullende informatie or Advies extern starts (zac_taken.MAIL_TASKS).
+pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "keycloak", "mailpit")]
 
 # More zaken than one page of ZAC's werklijsten (WERKLIJST_ROWS).
 BULK = 100

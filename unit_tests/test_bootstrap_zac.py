@@ -137,7 +137,7 @@ def test_store_key_keeps_the_name_of_the_email_confirmation_record():
 
 
 def test_zac_catalogus_step_clears_zacs_cache_after_apply_and_remove(ctx, fake_runner, fake_http, monkeypatch):
-    sent = fake_http({"DELETE /rest/health-check/ztc-cache": (200, "2026-11-11T12:00:00Z")})
+    sent = fake_http({"GET /rest/admin/util/cache/ztc/clear": (200, "<p>cleared</p>")})
     ran = []
     monkeypatch.setattr(
         "podiumd_tests.bootstrap.snippet_step.run_snippet",
@@ -149,7 +149,7 @@ def test_zac_catalogus_step_clears_zacs_cache_after_apply_and_remove(ctx, fake_r
     step.apply(context)
     step.remove(context)
     assert ran == ["apply", "remove"]
-    assert [request.method for request in sent] == ["DELETE", "DELETE"]
+    assert [request.method for request in sent] == ["GET", "GET"]
 
 
 def test_zac_catalogus_step_skips_the_cache_without_the_admin(ctx, fake_runner, fake_http, monkeypatch):

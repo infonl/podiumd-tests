@@ -43,10 +43,11 @@ if TYPE_CHECKING:
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
+# ZAC 5.12 mails when the taak Aanvullende informatie or Advies extern starts (zac_taken.MAIL_TASKS).
 pytestmark = [
     pytest.mark.component,
     # pabc and cluster: fixture zac_taken_zaak's throwaway zaaktype.
-    pytest.mark.requires("zac", "openzaak", "keycloak", "pabc", "cluster"),
+    pytest.mark.requires("zac", "openzaak", "keycloak", "pabc", "cluster", "mailpit"),
     pytest.mark.xdist_group("zac-taken-zaaktype"),
     pytest.mark.source(
         "podiumd-tests",

@@ -8,6 +8,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
+from podiumd_tests.bootstrap.names import PREFIX
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
@@ -18,6 +19,7 @@ from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import TASK_TIMEOUT
 from podiumd_tests.zac import read_zaakafhandelparameters
 from podiumd_tests.zac import save_zaakafhandelparameters
+from podiumd_tests.zac_api import has_process_definitions
 
 if TYPE_CHECKING:
     import requests
@@ -107,6 +109,9 @@ GOEDKEUREN = "Goedkeuren"
 ADVIES_INTERN = "Advies intern"
 ADVIES_EXTERN = "Advies extern"
 DOCUMENT_VERZENDEN = "Document verzenden"
+# Tasks ZAC 5.12 always mails about when they start; a test that starts one needs Mailpit.
+MAIL_TASKS = frozenset((AANVULLENDE_INFORMATIE, ADVIES_EXTERN))
+TAAK_MAIL_TO = f"{PREFIX}-taak@example.invalid"
 
 
 def human_tasks_offered(http: requests.Session, zac_url: str, zaak: JsonObject) -> list[JsonObject]:
@@ -121,16 +126,20 @@ def start_human_task(
 
     ZAC starts a zaak's case, and the stage after the intake, in the background. fields: more of ZAC's
     RESTHumanTaskData (medewerker, fataledatum, toelichting, taakdata, taakStuurGegevens: no mail unless given).
+    From ZAC 5.12 a MAIL_TASKS task always mails: it goes to TAAK_MAIL_TO unless taakdata names an emailadres.
     """
 
     def offered() -> JsonObject | None:
         return next((item for item in human_tasks_offered(http, zac_url, zaak) if item.get("naam") == name), None)
 
     plan_item = wait_until(offered, timeout=INDEX_TIMEOUT, description=f"{name!r} offered on {zaak['identificatie']}")
+    taakdata = cast("dict[str, object]", fields.pop("taakdata", None) or {})
+    if name in MAIL_TASKS and has_process_definitions(http, zac_url):
+        taakdata = {"emailadres": TAAK_MAIL_TO, "body": "podiumd-tests", **taakdata}
     body = {
         "planItemInstanceId": plan_item["id"],
         "groep": {"id": groep, "naam": groep} if groep else None,
-        "taakdata": {},
+        "taakdata": taakdata,
         "taakStuurGegevens": {"sendMail": False},
         **fields,
     }

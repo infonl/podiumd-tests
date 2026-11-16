@@ -447,7 +447,7 @@ def test_besluit_calls_send_zacs_fields(fake_http):
         {
             "GET /rest/zaken/besluittypes/zt1": (200, [{"id": "bt1"}]),
             "POST /rest/zaken/besluit": (200, {"uuid": "b1"}),
-            "DELETE /rest/health-check/ztc-cache": (200, "2026-11-11T12:00:00Z"),
+            "GET /rest/admin/util/cache/ztc/clear": (200, "<p>cleared</p>"),
         }
     )
     http, zaak = requests.Session(), {"uuid": "z1", "zaaktype": {"uuid": "zt1"}}
@@ -455,7 +455,7 @@ def test_besluit_calls_send_zacs_fields(fake_http):
     zac.vastleggen_besluit(http, ZAC, zaak, besluittype, ingangsdatum="2026-11-11")
     assert json.loads(sent[-1].body) == {"zaakUuid": "z1", "besluittypeUuid": "bt1", "ingangsdatum": "2026-11-11"}
     zac.clear_ztc_cache(http, ZAC)
-    assert sent[-1].method == "DELETE"
+    assert sent[-1].method == "GET"
 
 
 @pytest.mark.usefixtures("no_utc_date_defect")

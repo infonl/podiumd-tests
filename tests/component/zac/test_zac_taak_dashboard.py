@@ -39,9 +39,10 @@ if TYPE_CHECKING:
 # ZAC no longer indexes the taken afbreken ends from this release on (zac-41).
 AFGEBROKEN_TAKEN_UNLISTED = (5, 11, 0)
 
+# ZAC 5.12 mails when the taak Aanvullende informatie or Advies extern starts (zac_taken.MAIL_TASKS).
 pytestmark = [
     pytest.mark.component,
-    pytest.mark.requires("zac", "openzaak", "keycloak", "pabc", "cluster"),
+    pytest.mark.requires("zac", "openzaak", "keycloak", "pabc", "cluster", "mailpit"),
     pytest.mark.source(
         "podiumd-tests",
         "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, taken-cmmn).",
