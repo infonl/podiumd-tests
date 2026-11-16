@@ -15,9 +15,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests import zac_documents
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import IDENTITIES
+from podiumd_tests.defects import symptom
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.pdf import pdfa_problems
@@ -27,6 +29,7 @@ from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.wait import wait_until
+from podiumd_tests.workloads import expect_defect
 from podiumd_tests.zac import BEVESTIGING_NIET_VERSTUURD
 from podiumd_tests.zac import DUE_DATES
 from podiumd_tests.zac import INDEX_TIMEOUT
@@ -46,12 +49,6 @@ from podiumd_tests.zac_betrokkenen import add_betrokkene
 from podiumd_tests.zac_betrokkenen import betrokkene_roltype
 from podiumd_tests.zac_betrokkenen import betrokkenen
 from podiumd_tests.zac_betrokkenen import wijzig_initiator
-from podiumd_tests.zac_documents import convert_to_pdf
-from podiumd_tests.zac_documents import document_content
-from podiumd_tests.zac_documents import document_historie
-from podiumd_tests.zac_documents import document_url
-from podiumd_tests.zac_documents import uploaded_document
-from podiumd_tests.zac_documents import zaak_documents
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -59,8 +56,14 @@ if TYPE_CHECKING:
     import requests
 
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
+
+# ZAC starts a zaak without startdatum today from this release on (zac-2, #7529).
+ZAAK_WITHOUT_STARTDATUM_STARTS_TODAY = (5, 11, 0)
+# ZAC refuses a second opschorting by the zaak's eerdere opschorting from this release on (zac-19, #7564).
+SUSPENDED_ONCE_BY_EERDERE_OPSCHORTING = (5, 11, 0)
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "keycloak")]
 
@@ -209,11 +212,6 @@ def test_zaakgegevens_change_with_one_save(
     assert {field: moved.get(field) for field in later} == later
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="[zac-2] ZAC 5.4.5 and 5.9.1 answer 500 to a zaak without startdatum (NullPointerException in"
-    " calculateDoorlooptijden); PZ-13090",
-)
 @pytest.mark.source(
     "podiumd-tests", "Found while porting ZAC-010: ZAC's UI always sends a startdatum, its API answers 500 without one."
 )
@@ -222,17 +220,28 @@ def test_zaakgegevens_change_with_one_save(
     When the behandelaar starts a zaak without a startdatum
     Then ZAC refuses the zaak as a bad request, or starts it today
 """)
-def test_zaak_without_startdatum_is_refused_or_starts_today(zac_zaak: Callable[..., JsonObject]) -> None:
+def test_zaak_without_startdatum_is_refused_or_starts_today(
+    request: pytest.FixtureRequest, podiumd_env: Environment, zac_zaak: Callable[..., JsonObject]
+) -> None:
     """ZAC refuses a zaak without startdatum with 400, or starts it today."""
+    expect_defect(
+        request,
+        podiumd_env,
+        "zac",
+        lambda version: version < ZAAK_WITHOUT_STARTDATUM_STARTS_TODAY,
+        reason="[zac-2] ZAC before 5.11.0 answers 500 to a zaak without startdatum (NullPointerException in"
+        " calculateDoorlooptijden); PZ-13090, fixed in ZAC 5.11.0 (#7529)",
+    )
     refused, zaak = "", {}
     try:
         zaak = zac_zaak(startdatum=None)
     except UnexpectedStatusError as error:
         refused = str(error)
-    if refused:
-        assert ": HTTP 400," in refused, refused
-    else:
-        assert zaak.get("startdatum") == date.today().isoformat()  # noqa: DTZ011  # ZAC's dates are local dates
+    with symptom():
+        if refused:
+            assert ": HTTP 400," in refused, refused
+        else:
+            assert zaak.get("startdatum") == date.today().isoformat()  # noqa: DTZ011  # ZAC's dates are local dates
 
 
 @pytest.mark.requires("opennotificaties")
@@ -349,20 +358,27 @@ def test_zaak_is_not_suspended_or_extended_without_a_reden(
 @pytest.mark.source(
     "podiumd-tests", "ZAC team's regression scenarios: a zaak is opgeschort only once, whatever the reden."
 )
-@pytest.mark.xfail(
-    strict=True,
-    reason="[zac-19] ZAC 5.9.1 tells an earlier opschorting by its stored reden and accepts a blank reden, so a zaak "
-    "suspended and resumed with blank redenen can be suspended again; not yet reported upstream",
-)
 @pytest.mark.scenario("""
     Given a zaak in ZAC
     When the behandelaar suspends it with a reden of only a space and resumes it with an empty reden
     Then ZAC refuses to suspend it a second time
 """)
 def test_zaak_suspended_with_a_blank_reden_is_not_suspended_again(
-    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
+    request: pytest.FixtureRequest,
+    podiumd_env: Environment,
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
 ) -> None:
     """A second opschorten is refused; a refused blank reden at the first opschorten also passes."""
+    expect_defect(
+        request,
+        podiumd_env,
+        "zac",
+        lambda version: version < SUSPENDED_ONCE_BY_EERDERE_OPSCHORTING,
+        reason="[zac-19] ZAC before 5.11.0 tells an earlier opschorting by its stored reden and accepts a blank reden,"
+        " so a zaak suspended and resumed with blank redenen can be suspended again; fixed in ZAC 5.11.0 (#7564)",
+    )
     zaak = zac_zaak()
     first = expect_status(
         opschorten(zac, urls["zac"], zaak, SUSPENSION_DAYS, " "), HTTPStatus.OK, HTTPStatus.BAD_REQUEST
@@ -371,8 +387,9 @@ def test_zaak_suspended_with_a_blank_reden_is_not_suspended_again(
         return
     expect_status(hervatten(zac, urls["zac"], zaak, ""), HTTPStatus.OK)
     again = opschorten(zac, urls["zac"], zaak, SUSPENSION_DAYS, "nogmaals")
-    # ZAC 5.12 answers 409 msg.error.zaak.cannot.be.suspended.again.
-    expect_status(again, HTTPStatus.FORBIDDEN, HTTPStatus.BAD_REQUEST, HTTPStatus.CONFLICT)
+    with symptom():
+        # ZAC 5.11 answers 409 msg.error.zaak.cannot.be.suspended.again.
+        expect_status(again, HTTPStatus.FORBIDDEN, HTTPStatus.BAD_REQUEST, HTTPStatus.CONFLICT)
 
 
 @pytest.mark.tc("ZAC-044")
@@ -507,14 +524,14 @@ def test_document_can_be_deleted(
 ) -> None:
     """A document uploaded to the zaak in ZAC is gone from the zaak after ZAC deletes it."""
     zaak = zac_zaak()
-    document = uploaded_document(zac, urls["zac"], zaak, registry)
-    assert document["uuid"] in [d.get("uuid") for d in zaak_documents(zac, urls["zac"], zaak)]
+    document = zac_documents.uploaded_document(zac, urls["zac"], zaak, registry)
+    assert document["uuid"] in [d.get("uuid") for d in zac_documents.zaak_documents(zac, urls["zac"], zaak)]
     deleted = zac.delete(
-        document_url(urls["zac"], document),
+        zac_documents.document_url(urls["zac"], document),
         json={"zaakUuid": zaak["uuid"], "reden": "test"},
     )
     expect_status(deleted, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    assert document["uuid"] not in [d.get("uuid") for d in zaak_documents(zac, urls["zac"], zaak)]
+    assert document["uuid"] not in [d.get("uuid") for d in zac_documents.zaak_documents(zac, urls["zac"], zaak)]
 
 
 @pytest.mark.tc("ZAC-056")
@@ -545,8 +562,8 @@ def test_word_saves_an_edited_document_as_a_new_version(
     The link's token alone gives access; ZAC keeps it in the memory of the pod that handed it out.
     """
     zaak = zac_zaak()
-    document = uploaded_document(zac, urls["zac"], zaak, registry, suffix=suffix, status="in_bewerking")
-    documents = document_url(urls["zac"], document)
+    document = zac_documents.uploaded_document(zac, urls["zac"], zaak, registry, suffix=suffix, status="in_bewerking")
+    documents = zac_documents.document_url(urls["zac"], document)
     of_zaak = {"zaak": str(zaak["uuid"])}
     link = str(expect_status(zac.get(f"{documents}/edit", params=of_zaak), HTTPStatus.OK).json())
     scheme, _, url = link.partition(":")
@@ -555,7 +572,7 @@ def test_word_saves_an_edited_document_as_a_new_version(
     expect_status(http.put(url, data=b"versie 2"), HTTPStatus.CREATED, HTTPStatus.NO_CONTENT)
     current = expect_status(zac.get(documents, params=of_zaak), HTTPStatus.OK).json()
     assert current["versie"] == int(str(document["versie"])) + 1
-    assert document_content(zac, urls["zac"], document) == b"versie 2"
+    assert zac_documents.document_content(zac, urls["zac"], document) == b"versie 2"
 
 
 @pytest.mark.tc("ZAC-039")
@@ -575,7 +592,7 @@ def test_sent_document_is_marked_verzonden(
     ZAC lets only definitief, not confidential PDFs be sent.
     """
     zaak = zac_zaak()
-    document = uploaded_document(zac, urls["zac"], zaak, registry, suffix="pdf")
+    document = zac_documents.uploaded_document(zac, urls["zac"], zaak, registry, suffix="pdf")
     body = {
         "zaakUuid": zaak["uuid"],
         "verzenddatum": date.today().isoformat(),  # noqa: DTZ011  # a local date
@@ -583,7 +600,7 @@ def test_sent_document_is_marked_verzonden(
         "toelichting": "per post",
     }
     expect_status(zac.post(f"{urls['zac']}/rest/informatieobjecten/informatieobjecten/verzenden", json=body), 200, 204)
-    listed = {str(d.get("uuid")): d for d in zaak_documents(zac, urls["zac"], zaak)}
+    listed = {str(d.get("uuid")): d for d in zac_documents.zaak_documents(zac, urls["zac"], zaak)}
     assert "VERZONDEN" in strings(listed[str(document["uuid"])].get("indicaties"))
 
 
@@ -607,17 +624,17 @@ def test_word_document_is_converted_to_pdf(
 ) -> None:
     """A definitief Office document converted in ZAC becomes a PDF/A-2b, PDF/UA with embedded fonts, as ZAC requests."""
     zaak = zac_zaak()
-    document = uploaded_document(zac, urls["zac"], zaak, registry, suffix=suffix)
-    documents = document_url(urls["zac"], document)
-    expect_status(convert_to_pdf(zac, urls["zac"], zaak, document), HTTPStatus.NO_CONTENT, HTTPStatus.OK)
+    document = zac_documents.uploaded_document(zac, urls["zac"], zaak, registry, suffix=suffix)
+    documents = zac_documents.document_url(urls["zac"], document)
+    expect_status(zac_documents.convert_to_pdf(zac, urls["zac"], zaak, document), HTTPStatus.NO_CONTENT, HTTPStatus.OK)
     current = expect_status(zac.get(documents, params={"zaak": str(zaak["uuid"])}), HTTPStatus.OK).json()
     assert current["formaat"] == "application/pdf", current.get("formaat")
-    content = document_content(zac, urls["zac"], document)
+    content = zac_documents.document_content(zac, urls["zac"], document)
     assert content.startswith(b"%PDF")
     assert pdfa_problems(content) == []
     renamed = [
         (line.get("oudeWaarde"), line.get("nieuweWaarde"))
-        for line in document_historie(zac, urls["zac"], document)
+        for line in zac_documents.document_historie(zac, urls["zac"], document)
         if line.get("attribuutLabel") == "bestandsnaam"
     ]
     name = str(document["bestandsnaam"])
@@ -649,6 +666,6 @@ def test_converted_document_passes_verapdf(
 ) -> None:
     """veraPDF finds an Office document ZAC converted compliant with the PDF/A-2b and PDF/UA-1 it claims."""
     zaak = zac_zaak()
-    document = uploaded_document(zac, urls["zac"], zaak, registry, suffix=suffix)
-    expect_status(convert_to_pdf(zac, urls["zac"], zaak, document), HTTPStatus.NO_CONTENT, HTTPStatus.OK)
-    assert verapdf_report(document_content(zac, urls["zac"], document)) == {"2b": [], "ua1": []}
+    document = zac_documents.uploaded_document(zac, urls["zac"], zaak, registry, suffix=suffix)
+    expect_status(zac_documents.convert_to_pdf(zac, urls["zac"], zaak, document), HTTPStatus.NO_CONTENT, HTTPStatus.OK)
+    assert verapdf_report(zac_documents.document_content(zac, urls["zac"], document)) == {"2b": [], "ua1": []}

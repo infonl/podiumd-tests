@@ -12,12 +12,12 @@ component and integration, without and with the destructive tests; the test suit
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 241 | 41 | 10 |
-| component | 1013 | 600 | 78 |
+| component | 1013 | 600 | 71 |
 | integration | 213 | 145 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1401** | **734** | **93** |
+| **full tier** | **1401** | **734** | **86** |
 | **chaos tier** | **66** | **52** | **14** |
-| **test suite** | **1547** | **795** | **107** |
+| **test suite** | **1547** | **795** | **100** |
 
 Unit tests (`unit_tests/`, functions): 948. Perf endpoints (`perf/runs.py`): 32.
 
@@ -177,21 +177,17 @@ Ids of infonl/podiumd-known-issues.
 | podiumd-chart-43 | 1 |
 | podiumd-chart-44 | 1 |
 | zaakbrug-5 | 2 |
-| zac-2 | 1 |
 | zac-3 | 1 |
 | zac-7 | 2 |
 | zac-10 | 1 |
 | zac-11 | 1 |
 | zac-12 | 1 |
 | zac-13 | 2 |
-| zac-14 | 1 |
 | zac-15 | 1 |
 | zac-16 | 1 |
 | zac-17 | 1 |
 | zac-18 | 1 |
-| zac-19 | 1 |
 | zac-20 | 1 |
-| zac-21 | 4 |
 | zac-22 | 1 |
 | zac-23 | 1 |
 | zac-24 | 1 |

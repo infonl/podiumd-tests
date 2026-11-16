@@ -15,11 +15,13 @@ import pytest
 
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import ZAC_ROLE_USERS
+from podiumd_tests.defects import symptom
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import expect_utc_date_defect
+from podiumd_tests.workloads import expect_defect
 from podiumd_tests.zac import can_open_zaak
 
 if TYPE_CHECKING:
@@ -27,6 +29,7 @@ if TYPE_CHECKING:
 
     import requests
 
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -37,11 +40,19 @@ ZAC_TEAM = pytest.mark.source(
     "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md, zaak-lifecycle).",
 )
 BEHANDELAAR = "behandelaar"
-ZAC_21 = pytest.mark.xfail(
-    strict=True,
-    reason="[zac-21] ZAC 5.9.1 checks only notitie_rechten on notities (NoteRestService), not their author or zaak; not "
-    "yet reported upstream",
-)
+# ZAC checks the author and the zaak of a notitie from this release on (zac-21, #7621).
+NOTITIE_RIGHTS_CHECKED = (5, 11, 0)
+
+
+def _expect_zac_21(request: pytest.FixtureRequest, env: Environment) -> None:
+    expect_defect(
+        request,
+        env,
+        "zac",
+        lambda version: version < NOTITIE_RIGHTS_CHECKED,
+        reason="[zac-21] ZAC before 5.11.0 checks only notitie_rechten on notities (NoteRestService), not their author"
+        " or zaak; fixed in ZAC 5.11.0 (#7621)",
+    )
 
 
 def _notities_url(zac_url: str) -> str:
@@ -122,7 +133,6 @@ def test_notitie_records_its_date_and_author(
     }
 
 
-@ZAC_21
 @ZAC_TEAM
 @pytest.mark.requires("pabc")
 @pytest.mark.scenario("""
@@ -131,7 +141,9 @@ def test_notitie_records_its_date_and_author(
     Then the test admin's notities are as before
 """)
 @pytest.mark.parametrize("actie", ["wijzigen", "verwijderen", "toevoegen"])
-def test_notitie_of_another_user_is_not_changed_or_deleted(
+def test_notitie_of_another_user_is_not_changed_or_deleted(  # the users, the zaak and the actie
+    request: pytest.FixtureRequest,
+    podiumd_env: Environment,
     zac: requests.Session,
     zac_as: Callable[[str], requests.Session],
     urls: dict[str, str],
@@ -140,6 +152,7 @@ def test_notitie_of_another_user_is_not_changed_or_deleted(
     actie: str,
 ) -> None:
     """After the behandelaar's PATCH, DELETE or POST naming the admin, the admin has only the one notitie, unchanged."""
+    _expect_zac_21(request, podiumd_env)
     tekst = registry.tagged("notitie")
     note = expect_status(_add(zac, urls["zac"], bpmn_zaak, tekst, ADMIN.username), HTTPStatus.OK).json()
     behandelaar, notities = zac_as(BEHANDELAAR), _notities_url(urls["zac"])
@@ -151,10 +164,10 @@ def test_notitie_of_another_user_is_not_changed_or_deleted(
         response = _add(behandelaar, urls["zac"], bpmn_zaak, registry.tagged("namens"), ADMIN.username)
     listed = _notities(zac, urls["zac"], bpmn_zaak)
     van_admin = [n["tekst"] for n in listed if n["gebruikersnaamMedewerker"] == ADMIN.username]
-    assert van_admin == [tekst], describe(response)
+    with symptom():
+        assert van_admin == [tekst], describe(response)
 
 
-@ZAC_21
 @ZAC_TEAM
 @pytest.mark.requires("pabc")
 @pytest.mark.scenario("""
@@ -162,7 +175,9 @@ def test_notitie_of_another_user_is_not_changed_or_deleted(
     When the behandelaar reads the zaak's notities
     Then ZAC refuses it, as it refuses to open the zaak
 """)
-def test_notities_of_a_zaak_the_user_may_not_open_are_refused(
+def test_notities_of_a_zaak_the_user_may_not_open_are_refused(  # the users and the zaak
+    request: pytest.FixtureRequest,
+    podiumd_env: Environment,
     zac: requests.Session,
     zac_as: Callable[[str], requests.Session],
     urls: dict[str, str],
@@ -170,9 +185,11 @@ def test_notities_of_a_zaak_the_user_may_not_open_are_refused(
     registry: ResourceRegistry,
 ) -> None:
     """The behandelaar, who cannot open the zaak, gets 401 or 403 for its notities."""
+    _expect_zac_21(request, podiumd_env)
     zaak = zac_zaak()
     expect_status(_add(zac, urls["zac"], zaak, registry.tagged("notitie"), ADMIN.username), HTTPStatus.OK)
     behandelaar = zac_as(BEHANDELAAR)
     assert not can_open_zaak(behandelaar, urls["zac"], zaak)
     response = behandelaar.get(f"{_notities_url(urls['zac'])}/zaken/{zaak['uuid']}")
-    assert response.status_code in REFUSED, describe(response)
+    with symptom():
+        assert response.status_code in REFUSED, describe(response)
