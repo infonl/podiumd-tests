@@ -418,7 +418,9 @@ def koppelbare_zaken(
     """Search the zaken to move or koppel a document of the informatieobjecttype to; ZAC's answer."""
     body = {
         "zaakIdentificator": zoekterm,
+        # ZAC 5.9 reads one informatieobjecttype, ZAC 5.12 a list; each ignores the other's field.
         "informationObjectTypeUuid": informatieobjecttype_uuid,
+        "informationObjectTypeUuids": [informatieobjecttype_uuid],
         "page": 0,
         "rows": 10,
     }

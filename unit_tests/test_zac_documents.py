@@ -152,6 +152,7 @@ def test_koppelbare_zaken_sends_the_zoekterm_and_the_informatieobjecttype(fake_h
     assert json.loads(sent[-1].body) == {
         "zaakIdentificator": " ",
         "informationObjectTypeUuid": "iot1",
+        "informationObjectTypeUuids": ["iot1"],
         "page": 0,
         "rows": 10,
     }

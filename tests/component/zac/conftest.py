@@ -11,16 +11,15 @@ import pytest
 
 from podiumd_tests.bootstrap.bpmn import KEUZE_ROUTE
 from podiumd_tests.bootstrap.bpmn import complete_intake
-from podiumd_tests.bootstrap.names import EMAIL_IOT
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.catalogi import ZAC_CATALOGUS_WRITES
 from podiumd_tests.seed.catalogi import ZaaktypeTypes
 from podiumd_tests.seed.catalogi import make_concept_besluittype
-from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.seed.zac_zaaktype import ZAC_TYPES
+from podiumd_tests.seed.zac_zaaktype import email_informatieobjecttype
 from podiumd_tests.seed.zac_zaaktype import make_zac_zaaktype
 from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.seed.zac_zaaktype import zac_catalogus
@@ -105,8 +104,7 @@ def fixture_zac_taken_zaaktype(
     """
     need_bootstrap("zac-bpmn-process")
     need_bootstrap("openzaak-iot-email")
-    iots = openzaak.list(f"{CATALOGI}/informatieobjecttypen", {"catalogus": str(test_zaaktype["catalogus"])})
-    email = next(str(iot["url"]) for iot in iots if iot.get("omschrijving") == EMAIL_IOT and not iot.get("concept"))
+    email = email_informatieobjecttype(openzaak, str(test_zaaktype["catalogus"]))
     parameters = make_zac_zaaktype(
         podiumd_env,
         openzaak,

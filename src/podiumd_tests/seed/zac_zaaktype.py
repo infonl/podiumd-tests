@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from podiumd_tests.auth.keycloak_admin import for_environment
 from podiumd_tests.bootstrap.bpmn import ZAC_APPLICATION
 from podiumd_tests.bootstrap.bpmn import uuid_of
+from podiumd_tests.bootstrap.names import EMAIL_IOT
 from podiumd_tests.bootstrap.names import ZAC_DOMAIN
 from podiumd_tests.bootstrap.names import ZAC_FUNCTIONAL_ROLE
 from podiumd_tests.bootstrap.steps import ADMIN
@@ -209,6 +210,13 @@ def make_group_member(env: Environment, registry: ResourceRegistry, *groups: str
             raise LookupError(msg)
         admin.join_group(user_id, group_id)
     return username, password
+
+
+def email_informatieobjecttype(openzaak: ApiClient, catalogus: str) -> str:
+    """Return the URL of the catalogus' published informatieobjecttype e-mail, the type ZAC keeps mails as."""
+    iots = openzaak.list(f"{CATALOGI}/informatieobjecttypen", {"catalogus": catalogus})
+    published = (iot for iot in iots if not iot.get("concept"))
+    return next(str(iot["url"]) for iot in published if iot.get("omschrijving") == EMAIL_IOT)
 
 
 def make_zac_zaaktype(  # noqa: PLR0913  # the zaaktype's parts

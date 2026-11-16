@@ -314,7 +314,8 @@ def test_suspended_zaak_resumes_and_cannot_be_suspended_again(
     reasons = ("Opschorting: podiumd-tests op", "Hervatting: podiumd-tests her")
     assert {(field, reason) for field in DUE_DATES for reason in reasons} <= historie, historie
     again = opschorten(zac, urls["zac"], zaak, SUSPENSION_DAYS, "nogmaals")
-    expect_status(again, HTTPStatus.FORBIDDEN, HTTPStatus.BAD_REQUEST)
+    # ZAC 5.12 answers 409 msg.error.zaak.cannot.be.suspended.again.
+    expect_status(again, HTTPStatus.FORBIDDEN, HTTPStatus.BAD_REQUEST, HTTPStatus.CONFLICT)
 
 
 @pytest.mark.source("podiumd-tests", "ZAC team's regression scenarios: opschorten and verlengen require a reden.")
@@ -370,7 +371,8 @@ def test_zaak_suspended_with_a_blank_reden_is_not_suspended_again(
         return
     expect_status(hervatten(zac, urls["zac"], zaak, ""), HTTPStatus.OK)
     again = opschorten(zac, urls["zac"], zaak, SUSPENSION_DAYS, "nogmaals")
-    expect_status(again, HTTPStatus.FORBIDDEN, HTTPStatus.BAD_REQUEST)
+    # ZAC 5.12 answers 409 msg.error.zaak.cannot.be.suspended.again.
+    expect_status(again, HTTPStatus.FORBIDDEN, HTTPStatus.BAD_REQUEST, HTTPStatus.CONFLICT)
 
 
 @pytest.mark.tc("ZAC-044")

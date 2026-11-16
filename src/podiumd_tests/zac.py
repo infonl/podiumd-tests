@@ -569,8 +569,12 @@ def toekennen_mij(http: requests.Session, zac_url: str, zaak: JsonObject, groep:
 
 
 def taak_toekennen_mij(http: requests.Session, zac_url: str, taak: JsonObject) -> requests.Response:
-    """Assign the taak to the session's user from the werkvoorraad; ZAC's answer."""
-    body = {"taakId": taak["id"], "zaakUuid": taak["zaakUuid"], "groepId": "", "reden": "podiumd-tests"}
+    """Assign the taak to the session's user from the werkvoorraad, in the taak's group, as ZAC's UI does; ZAC's answer.
+
+    ZAC 5.12 sets the groepId it gets; ZAC 5.9 keeps the taak's group.
+    """
+    groep = section(taak, "groep").get("id", "")
+    body = {"taakId": taak["id"], "zaakUuid": taak["zaakUuid"], "groepId": groep, "reden": "podiumd-tests"}
     return http.patch(f"{zac_url}/rest/taken/lijst/toekennen/mij", json=body)
 
 

@@ -187,7 +187,8 @@ def test_aanvullende_informatie_with_opschorten_suspends_once_until_hervatten(
     again = start_human_task(
         zac, zac_url, zaak, AANVULLENDE_INFORMATIE, zac_group, fataledatum=fataledatum, taakdata=OPSCHORTEN
     )
-    expect_status(again, HTTPStatus.FORBIDDEN)
+    # ZAC 5.12 answers 409 msg.error.zaak.cannot.be.suspended.again.
+    expect_status(again, HTTPStatus.FORBIDDEN, HTTPStatus.CONFLICT)
     assert read_zaak(zac, zac_url, str(zaak["uuid"]))["isOpgeschort"] is False
 
 

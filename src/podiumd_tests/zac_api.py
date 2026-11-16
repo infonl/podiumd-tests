@@ -68,6 +68,7 @@ NEW_NAMES: dict[str, str] = {
     "brpKoppelen": "isBrpKoppelenEnabled",
     "dashboard": "isDashboardEnabled",
     "eerdereOpschorting": "hasEerdereOpschorting",
+    "gekoppeldeZaakDocumenten": "shouldIncludeGekoppeldeZaakDocumenten",
     "heeftOntvangstbevestigingVerstuurd": "isOntvangstbevestigingVerstuurd",
     "heeftWaarschuwingen": "hasWaarschuwingen",
     "indicatieGebruiksrecht": "hasGebruiksrecht",

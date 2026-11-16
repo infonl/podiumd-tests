@@ -16,10 +16,12 @@ from podiumd_tests.json_data import section
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.zac_zaaktype import ZAAKSPECIFIEK_TYPES
+from podiumd_tests.seed.zac_zaaktype import email_informatieobjecttype
 from podiumd_tests.seed.zac_zaaktype import make_group_member
 from podiumd_tests.seed.zac_zaaktype import make_role_group
 from podiumd_tests.seed.zac_zaaktype import make_zac_zaaktype
 from podiumd_tests.wait import wait_until
+from podiumd_tests.workloads import is_older_than
 from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import can_open_zaak
 from podiumd_tests.zac import clean_up_zaak
@@ -60,6 +62,8 @@ NOT_AUTORISEERBAAR = "msg.error.zaaktype.not.zaakspecifiek-autoriseerbaar"
 WITHOUT_BEHANDELAAR = "msg.error.zaak.without.behandelaar.cannot.be.marked"
 NOT_ALLOWED = "msg.error.zaakspecifieke.autorisatie.not.allowed"
 CANNOT_BE_LIFTED = "msg.error.zaakspecifieke.autorisatie.cannot.be.lifted"
+# ZAC lifts a zaak's zaakspecifieke autorisatie on request from this release on (#7442).
+LIFTABLE = (5, 11, 0)
 CANNOT_BE_RELEASED = "msg.error.zaakspecifiek.geautoriseerde.zaak.cannot.be.released"
 
 
@@ -80,14 +84,18 @@ def fixture_zaakspecifiek_zaaktype(
     zaaktype_registry: ResourceRegistry,
     need_bootstrap: Callable[..., None],
 ) -> JsonObject:
-    """ZAC's zaakafhandelparameters of a throwaway zaaktype that allows zaakspecifieke autorisatie."""
-    need_bootstrap("zac-bpmn-process")
+    """ZAC's zaakafhandelparameters of a throwaway zaaktype that allows zaakspecifieke autorisatie.
+
+    It has the informatieobjecttype e-mail: ZAC 5.12 keeps the mail of Aanvullende informatie as a document.
+    """
+    need_bootstrap("zac-bpmn-process", "openzaak-iot-email")
+    email = email_informatieobjecttype(openzaak, str(test_zaaktype["catalogus"]))
     return make_zac_zaaktype(
         podiumd_env,
         openzaak,
         zaaktype_registry,
         test_zaaktype,
-        informatieobjecttypen=(parts.informatieobjecttype,),
+        informatieobjecttypen=(parts.informatieobjecttype, email),
         types=ZAAKSPECIFIEK_TYPES,
     )
 
@@ -136,9 +144,10 @@ def _refused_with(response: requests.Response, code: str) -> None:
     Then the behandelaar still opens the zaak and its document, and finds the zaak
     And a colleague in the same group, a recordmanager, a raadpleger and a beheerder cannot open them
     And the colleague no longer finds the zaak
-    And the marking cannot be lifted
+    And before ZAC 5.11 the marking cannot be lifted; from 5.11 the behandelaar lifts it and the colleague opens the zaak
 """)
-def test_marked_zaak_is_reached_only_by_its_behandelaar(
+def test_marked_zaak_is_reached_only_by_its_behandelaar(  # the zaak, its document and five users
+    podiumd_env: Environment,
     urls: dict[str, str],
     team: Team,
     team_zaak: JsonObject,
@@ -163,7 +172,12 @@ def test_marked_zaak_is_reached_only_by_its_behandelaar(
         timeout=LIST_TIMEOUT,
         description="the behandelaar finds the marked zaak and the colleague does not",
     )
-    _refused_with(_mark(behandelaar, zac_url, team_zaak, marked=False), CANNOT_BE_LIFTED)
+    lift = _mark(behandelaar, zac_url, team_zaak, marked=False)
+    if is_older_than(podiumd_env, "zac", LIFTABLE):
+        _refused_with(lift, CANNOT_BE_LIFTED)
+    else:
+        assert expect_status(lift, HTTPStatus.OK).json()["isZaakspecifiekGeautoriseerd"] is False
+        assert can_open_zaak(collega, zac_url, team_zaak)
 
 
 @pytest.mark.source("ZAC ZaakspecifiekeAutorisatieService", "Who may mark a zaak, and when it is refused.")

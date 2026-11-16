@@ -5,6 +5,8 @@ ZAC mails a signalering to the user's e-mail address in Keycloak, which bootstra
 
 from __future__ import annotations
 
+import re
+
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -201,7 +203,9 @@ def test_taak_on_my_name_gives_a_signalering_mail(
     taak = open_task(behandelaar, urls["zac"], str(bpmn_zaak["uuid"]), INTAKE)
     toekennen_taak(behandelaar, urls["zac"], taak, zac_group, ADMIN.username)
     mail = signalering_mail(mailpit, registry, ADMIN.username, f"/taken/{taak['id']}", timeout=MAIL_TIMEOUT)
-    assert f'href="{urls["zac"]}/taken/{taak["id"]}"' in str(mail.get("HTML"))
+    # ZAC 5.12 adds ?bron=email to the link.
+    link = re.compile(rf'href="{re.escape(urls["zac"])}/taken/{taak["id"]}(\?[^"]*)?"')
+    assert link.search(str(mail.get("HTML"))), mail.get("HTML")
 
 
 @pytest.mark.requires("mailpit")
@@ -265,7 +269,7 @@ def test_taak_on_my_name_shows_on_the_dashboard_until_opened(
     When the test admin assigns a zaak of the BPMN test zaaktype to the user
     Then the user's dashboard lists the zaak among Mijn zaken and among the zaken on their name
     When the user loses the role on the BPMN test zaaktype and logs in again
-    Then Mijn zaken no longer lists the zaak, and the zaken on their name show its zaaknummer without omschrijving
+    Then Mijn zaken no longer lists the zaak, and the zaken on their name show at most its zaaknummer, no omschrijving
 """)
 def test_dashboard_hides_the_zaak_after_a_lost_role(
     zac: requests.Session,
@@ -274,7 +278,7 @@ def test_dashboard_hides_the_zaak_after_a_lost_role(
     registry: ResourceRegistry,
     bpmn_zaak: JsonObject,
 ) -> None:
-    """The dashboard's Mijn zaken is a search; ZAAK_OP_NAAM lists the zaak but shows its details only with lezen."""
+    """The dashboard's Mijn zaken is a search; ZAAK_OP_NAAM shows the zaak's details only with lezen."""
     zac_url = urls["zac"]
     group = make_role_group(podiumd_env, registry, "behandelaar")
     other = make_other_domain_group(podiumd_env, registry, "raadpleger")
@@ -297,4 +301,5 @@ def test_dashboard_hides_the_zaak_after_a_lost_role(
         for item in signalering_overzichten(after, zac_url, ZAAK_OP_NAAM)
         if item.get("identificatie") == bpmn_zaak["identificatie"]
     ]
-    assert [item.get("omschrijving") for item in shown] == [None], shown
+    # ZAC 5.9 lists the zaak without its details, ZAC 5.12 leaves it out.
+    assert [item.get("omschrijving") for item in shown] in ([None], []), shown

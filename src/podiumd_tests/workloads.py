@@ -196,6 +196,12 @@ def expect_defect(  # noqa: PLR0913  # one marker
         request.applymarker(pytest.mark.xfail(strict=strict, raises=raises, reason=reason))
 
 
+def is_older_than(env: Environment, component: str, version: tuple[int, ...]) -> bool:
+    """Return whether the deployed component is older than `version`; False when its version is unknown."""
+    found = component_versions(env, [component]).get(component)
+    return found is not None and found < version
+
+
 def skip_older_than(env: Environment, component: str, version: tuple[int, ...], behaviour: str) -> None:
     """Skip the test when the deployed component is older than `version`; an unknown version runs it."""
     found = component_versions(env, [component]).get(component)
