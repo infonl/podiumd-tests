@@ -20,6 +20,8 @@ Rules for marking a test as a known defect (user, 2026-10-26).
 - Reason: `[id] fact, versions or conditions, upstream ticket` in one line, e.g. `[zac-2] ZAC 5.4.5 and 5.9.1 answer 500 to a zaak without startdatum (...); PZ-13090`. No ticket yet: "not yet reported upstream".
 - When the fixed component version is known, the xfail applies only below it (`expect_ita_group_access_bug`).
 - Add the marker in the same change as the write-up, and name the id in the commit message.
+- `raises=` names the symptom. Every check error is an `AssertionError`, so where setup can fail too, wrap only
+  the symptom's check in `defects.symptom()` and set `raises=DefectSymptomError`.
 
 ## XPASS
 

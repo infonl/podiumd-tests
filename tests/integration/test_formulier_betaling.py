@@ -21,6 +21,8 @@ from podiumd_tests.bootstrap.names import WORLDLINE_STORE_KEY
 from podiumd_tests.bootstrap.steps import NAW
 from podiumd_tests.bootstrap.steps import NAW_DATA
 from podiumd_tests.bootstrap.steps import ZGW_REGISTRATION
+from podiumd_tests.defects import DefectSymptomError
+from podiumd_tests.defects import symptom
 from podiumd_tests.openformulieren import form_and_headers
 from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import registered_zaken
@@ -327,6 +329,7 @@ def test_uncertain_payment_registers_once_the_provider_confirms_it(
 
 @pytest.mark.xfail(
     strict=True,
+    raises=DefectSymptomError,
     reason="[open-formulieren-5] Open Formulieren's (3.5.5, 3.5.8, 4.0.2) ZGW registration creates the zaak when the form is completed, before the"
     " payment (pre-registration), also with wait_for_payment_to_register; the draaiboek expects no zaak",
 )
@@ -343,11 +346,13 @@ def test_unpaid_form_leaves_no_zaak(
 ) -> None:
     """A completed form that is not paid creates no zaak, so ZAC shows none."""
     payer = Payer(podiumd_env, openzaak, registry, payment_form)
-    assert [zaak["identificatie"] for zaak in payer.zaken] == []
+    with symptom():
+        assert [zaak["identificatie"] for zaak in payer.zaken] == []
 
 
 @pytest.mark.xfail(
     strict=True,
+    raises=DefectSymptomError,
     reason="[open-formulieren-4] with wait_for_payment_to_register on, Open Formulieren (3.5.5, 3.5.8, 4.0.2) skips its payment status update"
     " (update_submission_payment_status), so the pre-registered zaak stays betalingsindicatie nog_niet after"
     " the payment; not yet reported upstream",
@@ -370,8 +375,9 @@ def test_zaak_of_a_paid_form_is_marked_paid(
     payer = Payer(podiumd_env, openzaak, registry, payment_form)
     payer.pay("paid")
     zaak = payer.registered()
-    wait_until(
-        lambda: openzaak.get(str(zaak["url"]))["betalingsindicatie"] == "geheel",
-        timeout=REGISTRATION_TIMEOUT,
-        description=f"zaak {zaak['identificatie']} marked fully paid",
-    )
+    with symptom():
+        wait_until(
+            lambda: openzaak.get(str(zaak["url"]))["betalingsindicatie"] == "geheel",
+            timeout=REGISTRATION_TIMEOUT,
+            description=f"zaak {zaak['identificatie']} marked fully paid",
+        )
