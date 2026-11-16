@@ -23,6 +23,7 @@ from podiumd_tests.seed.catalogi import ARCHIEF_PROCESTERMIJN
 from podiumd_tests.seed.openzaak import BESLUITEN
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import after_period
+from podiumd_tests.seed.openzaak import expect_utc_date_defect
 from podiumd_tests.zac import DEELZAAK
 from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import afhandelen
@@ -164,6 +165,8 @@ def test_brondatum_follows_the_afleidingswijze_of_the_resultaat(  # the fixtures
         "ingangsdatum_besluit": _day(INGANGSDATUM_DAYS),
         "vervaldatum_besluit": _day(VERVALDATUM_DAYS),
     }[afleidingswijze]
+    if afleidingswijze == "termijn":  # derived from the einddatum
+        expect_utc_date_defect()
     assert closed["startdatumBewaartermijn"] == expected
     assert closed["archiefactiedatum"] == _archiefactiedatum(openzaak, closed, expected)
 

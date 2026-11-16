@@ -132,7 +132,8 @@ def test_answering_an_internetaak_registers_a_klantcontact(
     gelukt: bool,  # noqa: FBT001  # a parameter
 ) -> None:
     """A contactmoment on an internetaak is a klantcontact in Open Klant; the internetaak stays open (TA int-180)."""
-    onderwerp = registry.tagged("ita-antwoord")
+    # Each case its own onderwerp: both cases run in the same run, at the same time.
+    onderwerp = registry.tagged(f"ita-antwoord-{'gelukt' if gelukt else 'niet-gelukt'}")
     clean_up_klantcontacten(openklant, registry, onderwerp)
     antwoord = klantcontact_body(registry, onderwerp=onderwerp, indicatieContactGelukt=gelukt)
     add_klantcontact(ita, urls["ita"], answer_body(internetaak, antwoord))
