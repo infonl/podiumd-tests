@@ -21,6 +21,8 @@ if TYPE_CHECKING:
 
     import requests
 
+    from requests.cookies import RequestsCookieJar
+
     from podiumd_tests.json_data import JsonObject
 
 # Longest access token podiumd's templates allow (their default is 60 s).
@@ -41,6 +43,10 @@ PASSWORD_CLASSES = {
 # A certificate that expires sooner needs renewing now.
 MIN_CERT_DAYS = 14
 SESSION_COOKIE = re.compile(r"session|auth|token", re.IGNORECASE)
+# A frontend reads the CSRF cookie (Django's CSRF_COOKIE_HTTPONLY is off), so it needs only Secure.
+CSRF_COOKIE = re.compile(r"csrf", re.IGNORECASE)
+# http.cookiejar keeps the HttpOnly attribute in the case the server sent.
+HTTPONLY_SPELLINGS = ("HttpOnly", "httponly")
 # TLS 1.2 cipher suites NCSC's TLS guidelines 2.1 rate good or sufficient, as the ADR validator's security-tls ruleset
 # lists them, by OpenSSL name (OpenSSL has no Camellia-GCM suites). Every TLS 1.3 suite OpenSSL offers is good.
 NCSC_TLS12_CIPHERS = (
@@ -164,10 +170,28 @@ def insecure_session_cookies(response: requests.Response) -> list[str]:
     found: list[str] = []
     for cookie in cast("list[str]", response.raw.headers.getlist("Set-Cookie")):
         name, _, rest = cookie.partition("=")
-        flags = {flag.strip().lower() for flag in rest.split(";")[1:]}
-        if SESSION_COOKIE.search(name) and not {"secure", "httponly"} <= flags:
+        if _is_insecure(name, {flag.strip().lower() for flag in rest.split(";")[1:]}):
             found.append(name)
     return found
+
+
+def insecure_jar_cookies(jar: RequestsCookieJar) -> list[str]:
+    """Session, auth or token cookies in jar without Secure or HttpOnly."""
+    found: list[str] = []
+    for cookie in jar:
+        flags: set[str] = {"secure"} if cookie.secure else set()
+        if any(cookie.has_nonstandard_attr(spelling) for spelling in HTTPONLY_SPELLINGS):
+            flags.add("httponly")
+        if _is_insecure(cookie.name, flags):
+            found.append(cookie.name)
+    return found
+
+
+def _is_insecure(name: str, flags: set[str]) -> bool:
+    """Return whether a cookie with lower-case flags lacks the ones its name needs."""
+    if CSRF_COOKIE.search(name):
+        return "secure" not in flags
+    return bool(SESSION_COOKIE.search(name)) and not {"secure", "httponly"} <= flags
 
 
 def is_foreign_origin_allowed(response: requests.Response, origin: str) -> bool:

@@ -18,7 +18,7 @@ component and integration, without and with the destructive tests.
 | **full tier** | **1400** | **733** | **93** |
 | **chaos tier** | **66** | **52** | **14** |
 
-Unit tests (`unit_tests/`, functions): 940. Perf endpoints (`perf/runs.py`): 32.
+Unit tests (`unit_tests/`, functions): 941. Perf endpoints (`perf/runs.py`): 32.
 
 ## Per area
 

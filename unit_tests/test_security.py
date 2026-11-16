@@ -5,12 +5,14 @@ import ssl
 
 import pytest
 
+from requests.cookies import RequestsCookieJar
 from urllib3 import HTTPHeaderDict
 from urllib3 import HTTPResponse
 
 from podiumd_tests.security import conforming_password
 from podiumd_tests.security import days_valid
 from podiumd_tests.security import has_api_version
+from podiumd_tests.security import insecure_jar_cookies
 from podiumd_tests.security import insecure_session_cookies
 from podiumd_tests.security import is_foreign_origin_allowed
 from podiumd_tests.security import missing_security_headers
@@ -110,10 +112,21 @@ def test_only_session_cookies_need_secure_and_httponly(response_factory):
         "csrftoken=b; Path=/; Secure",
         "django_language=nl; Path=/",
         "AUTH_SESSION_ID=c; Path=/; secure; httponly",
+        "auth_token=d; Path=/; Secure",
+        "XSRF-TOKEN=e; Path=/",
     ):
         headers.add("Set-Cookie", cookie)
     response.raw = HTTPResponse(headers=headers)
-    assert insecure_session_cookies(response) == ["csrftoken"]
+    assert insecure_session_cookies(response) == ["auth_token", "XSRF-TOKEN"]
+
+
+def test_jar_cookies_need_the_same_flags():
+    jar = RequestsCookieJar()
+    jar.set("app_sessionid", "a", secure=True, rest={"HttpOnly": None})
+    jar.set("csrftoken", "b", secure=True, rest={})
+    jar.set("other_session", "c", secure=True, rest={})
+    jar.set("csrf_plain", "d", rest={})
+    assert insecure_jar_cookies(jar) == ["other_session", "csrf_plain"]
 
 
 @pytest.mark.parametrize(

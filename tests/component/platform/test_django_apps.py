@@ -19,6 +19,7 @@ from podiumd_tests.components import DJANGO_APPS
 from podiumd_tests.components import ZGW_CONSUMER_APPS
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.pytest_plugin import requiring
+from podiumd_tests.security import insecure_jar_cookies
 from podiumd_tests.zgw_services import SERVICE_REFERENCES
 from podiumd_tests.zgw_services import reference_problems
 from podiumd_tests.zgw_services import service_problems
@@ -102,8 +103,10 @@ def test_config_references_services(podiumd_env: Environment, component: str) ->
     Given each deployed Maykin app with a local admin login
     When the superuser logs in to the Django admin
     Then the admin shows the superuser as logged in
+    And its session cookies are Secure and HttpOnly, and its CSRF cookie is Secure
 """)
 def test_django_admin_login(podiumd_env: Environment, need_bootstrap: Callable[..., None], component: str) -> None:
-    """The test superuser logs in to the app's admin; apps whose admin logs in through Keycloak only skip."""
-    _, response, login = superuser_login(podiumd_env, need_bootstrap, component)
+    """The test superuser logs in to the app's admin with secure cookies; Keycloak-only admins skip."""
+    http, response, login = superuser_login(podiumd_env, need_bootstrap, component)
     assert is_logged_in(response, login), f"{component}: not logged in ({response.url})"
+    assert insecure_jar_cookies(http.cookies) == []
