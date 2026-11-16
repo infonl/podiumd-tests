@@ -18,6 +18,7 @@ from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.wait import wait_until
+from podiumd_tests.workloads import skip_older_than
 from podiumd_tests.zac import DEELZAAK
 from podiumd_tests.zac import GERELATEERD
 from podiumd_tests.zac import HOOFDZAAK
@@ -34,8 +35,10 @@ from podiumd_tests.zac import koppel
 from podiumd_tests.zac import koppel_zoekresultaat
 from podiumd_tests.zac import ontkoppel
 from podiumd_tests.zac import read_zaak
+from podiumd_tests.zac import start_zaak
 from podiumd_tests.zac import wait_for_indicatie
 from podiumd_tests.zac import wait_in_werkvoorraad
+from podiumd_tests.zac import zaak_body
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -43,6 +46,7 @@ if TYPE_CHECKING:
     import requests
 
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -385,3 +389,41 @@ def test_closed_zaken_are_gerelateerd_by_a_recordmanager_only(
     expect_status(linked, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     assert _relaties(zac, urls["zac"], bpmn_zaak) == [(ander["identificatie"], GERELATEERD)]
     assert _relaties(zac, urls["zac"], ander) == [(bpmn_zaak["identificatie"], GERELATEERD)]
+
+
+# ZAC creates a zaak linked to another in one request from this release on (#7556).
+CREATES_LINKED_ZAAK = (5, 12, 0)
+
+
+@EIGEN_ZAAKTYPE
+@pytest.mark.source(
+    "PZW Sprint 83 PZ-9841",
+    "From a zaak, the behandelaar creates a new zaak linked to it as deelzaak or gerelateerde zaak.",
+)
+@pytest.mark.parametrize(("relatie", "terug"), [(DEELZAAK, HOOFDZAAK), (GERELATEERD, GERELATEERD)])
+@pytest.mark.scenario("""
+    Given a zaak in ZAC
+    When the behandelaar creates a new zaak from it, as its deelzaak or as a gerelateerde zaak
+    Then the zaak lists the new zaak as deelzaak or gerelateerde zaak
+    And the new zaak lists the zaak as its hoofdzaak or gerelateerde zaak
+""")
+def test_new_zaak_is_created_linked_to_the_zaak(  # the zaaktype, the cleanup and the relatie
+    podiumd_env: Environment,
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_eigen_zaaktype: JsonObject,
+    zac_eigen_zaak: Callable[[], JsonObject],
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    relatie: str,
+    terug: str,
+) -> None:
+    """POST /rest/zaken/zaak with a koppeling creates the zaak and links it with that relatieType."""
+    skip_older_than(podiumd_env, "zac", CREATES_LINKED_ZAAK, "no koppeling when a zaak is created")
+    zac_url = urls["zac"]
+    zaak = zac_eigen_zaak()
+    body = zaak_body(zac_eigen_zaaktype, omschrijving=registry.tagged("zac-gekoppeld"))
+    nieuw = start_zaak(zac, zac_url, {**body, "koppeling": {"zaakUuid": zaak["uuid"], "relatieType": relatie}})
+    clean_up_zaak(zac, zac_url, openzaak, registry, nieuw)
+    assert _relaties(zac, zac_url, zaak) == [(nieuw["identificatie"], relatie)]
+    assert _relaties(zac, zac_url, nieuw) == [(zaak["identificatie"], terug)]
