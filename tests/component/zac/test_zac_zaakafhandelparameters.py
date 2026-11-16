@@ -19,6 +19,7 @@ from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
 from podiumd_tests.bootstrap.bpmn import uuid_of
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.zac import EMAIL_CONFIRMATION
+from podiumd_tests.defects import symptom
 from podiumd_tests.json_data import differences
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
@@ -32,6 +33,7 @@ from podiumd_tests.seed.zac_zaaktype import publish_new_version
 from podiumd_tests.seed.zac_zaaktype import publish_zac_zaaktype
 from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.seed.zac_zaaktype import zac_catalogus
+from podiumd_tests.workloads import expect_defect
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import behandelaar_groups
 from podiumd_tests.zac import clean_up_zaak
@@ -80,27 +82,70 @@ THROWAWAY = pytest.mark.requires("pabc", "cluster")
 EIGEN_ZAAKTYPE = pytest.mark.xdist_group("zac-eigen-zaaktype")
 # Tests that read every zaaktype of ZAC's catalogus, where test_zac_catalogus.py publishes some.
 ZAC_CATALOGUS = pytest.mark.xdist_group("zac-catalogus")
+# The ZAC release whose migrations drop the resultaattypen of existing configurations (zac-42).
+ZAC_42_FROM = (5, 10, 0)
 # A bedrijf from the KvK as BetrokkeneIdentificatie.
 BEDRIJF = {"type": "RSIN", "kvkNummer": KVK_TEST_NUMMER}
+
+
+def _productaanvraag_zaaktypen(openzaak: ApiClient, env: Environment) -> list[JsonObject]:
+    """The published versions of the profile's productaanvraag zaaktype; skips without the setting."""
+    identificatie = env.profile.settings.get("productaanvraag_zaaktype")
+    if not identificatie:
+        pytest.skip(f"profile {env.profile.name} has no settings.productaanvraag_zaaktype")
+    zaaktypen = openzaak.list(f"{CATALOGI}/zaaktypen", {"identificatie": identificatie, "status": "definitief"})
+    assert zaaktypen, f"no published zaaktype {identificatie} in Open Zaak"
+    return zaaktypen
 
 
 @PI
 @pytest.mark.scenario("""
     Given the zaaktype for productaanvragen is published in Open Zaak
-    When the beheerder opens its zaakafhandelparameters in ZAC
+    When the beheerder opens the zaakafhandelparameters of its current version in ZAC
     Then ZAC reports them as valide
 """)
 def test_zaakafhandelparameters_are_valide(
     zac: requests.Session, urls: dict[str, str], openzaak: ApiClient, podiumd_env: Environment
 ) -> None:
-    """ZAC reports its zaakafhandelparameters for the productaanvraag zaaktype as valide (PI)."""
-    identificatie = podiumd_env.profile.settings.get("productaanvraag_zaaktype")
-    if not identificatie:
-        pytest.skip(f"profile {podiumd_env.profile.name} has no settings.productaanvraag_zaaktype")
-    zaaktypen = openzaak.list(f"{CATALOGI}/zaaktypen", {"identificatie": identificatie, "status": "definitief"})
-    assert zaaktypen, f"no published zaaktype {identificatie} in Open Zaak"
-    for zaaktype in zaaktypen:
+    """ZAC reports the zaakafhandelparameters of the productaanvraag zaaktype's current version as valide (PI)."""
+    current = [z for z in _productaanvraag_zaaktypen(openzaak, podiumd_env) if not z.get("eindeGeldigheid")]
+    assert current, "the productaanvraag zaaktype has no version without eindeGeldigheid"
+    for zaaktype in current:
         assert read_zaakafhandelparameters(zac, urls["zac"], uuid_of(zaaktype["url"]))["valide"], zaaktype["url"]
+
+
+@PI
+@pytest.mark.scenario("""
+    Given the zaaktype for productaanvragen has ended versions in Open Zaak
+    When the beheerder opens their zaakafhandelparameters in ZAC
+    Then ZAC reports them as valide
+""")
+def test_zaakafhandelparameters_of_ended_versions_are_valide(
+    request: pytest.FixtureRequest,
+    zac: requests.Session,
+    urls: dict[str, str],
+    openzaak: ApiClient,
+    podiumd_env: Environment,
+) -> None:
+    """The zaakafhandelparameters of the productaanvraag zaaktype's ended versions stay valide."""
+    ended = [z for z in _productaanvraag_zaaktypen(openzaak, podiumd_env) if z.get("eindeGeldigheid")]
+    if not ended:
+        pytest.skip("the productaanvraag zaaktype has no ended version")
+    expect_defect(
+        request,
+        podiumd_env,
+        "zac",
+        lambda version: version >= ZAC_42_FROM,
+        # Not strict: only a configuration made before an upgrade from ZAC 5.9 lost its resultaattype; a later
+        # configuration of that version, or a fresh install, is valide.
+        strict=False,
+        reason="[zac-42] an upgrade from ZAC 5.9 to 5.10 or later drops the niet-ontvankelijk resultaattype of every "
+        "zaaktype configuration (Flyway V103-V105 without backfill); setup jobs repair only current versions",
+    )
+    with symptom():
+        for zaaktype in ended:
+            parameters = read_zaakafhandelparameters(zac, urls["zac"], uuid_of(zaaktype["url"]))
+            assert parameters["valide"], zaaktype["url"]
 
 
 @PI
