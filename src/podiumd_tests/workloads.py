@@ -361,21 +361,25 @@ def variable_config_maps(deployment: JsonObject) -> set[str]:
     return found
 
 
-def database_pod(env: Environment) -> Item | None:
-    """Return the one pod behind the in-cluster Service named by Open Zaak's DB_HOST; None for an outside database."""
-    deployment = env.deployment_for("openzaak")
+def variable_values(env: Environment, component: str, name: str) -> set[str]:
+    """Return the values the component's main deployment sets for variable name, inline or from its ConfigMaps."""
+    deployment = env.deployment_for(component)
     found = [item for item in env.items("deployments") if metadata_name(item) == deployment]
     data = {metadata_name(item): section(item, "data") for item in env.items("configmaps")}
     containers = [container for item in found for container in pod_containers(item, with_init=False)]
-    hosts = {
+    values = {
         str(variable.get("value"))
         for container in containers
         for variable in entries(container.get("env"))
-        if variable.get("name") == "DB_HOST" and "value" in variable
+        if variable.get("name") == name and "value" in variable
     }
-    names = {name for item in found for name in variable_config_maps(item)}
-    values = [data.get(name, {}) for name in names]
-    hosts |= {str(value["DB_HOST"]) for value in values if "DB_HOST" in value}
+    maps = [data.get(config_map, {}) for item in found for config_map in variable_config_maps(item)]
+    return values | {str(config_map[name]) for config_map in maps if name in config_map}
+
+
+def database_pod(env: Environment) -> Item | None:
+    """Return the one pod behind the in-cluster Service named by Open Zaak's DB_HOST; None for an outside database."""
+    hosts = variable_values(env, "openzaak", "DB_HOST")
     if len(hosts) != 1 or "." in next(iter(hosts)):
         return None
     behind = ready_endpoints(env, hosts.pop())

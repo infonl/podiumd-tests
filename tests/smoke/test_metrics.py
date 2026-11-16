@@ -35,6 +35,7 @@ from podiumd_tests.kube import metadata_name
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.workloads import is_chart_older_than
+from podiumd_tests.workloads import variable_values
 
 if TYPE_CHECKING:
     import requests
@@ -68,10 +69,8 @@ METRICS_GAPS_BEFORE_4_10 = {
     "zac": "[podiumd-chart-20] podiumd before 4.10.0: ZAC exports no OTEL metrics without"
     " -Dotel.metrics.exporter=otlp in its javaOptions (helm-charts #625)",
 }
-OTEL_OFF = (
-    "no app sends OTEL metrics: settings.otel is disabled for all Maykin apps"
-    " (minikube: `podiumd-minikube deploy --full --otel`)"
-)
+# An app sends OpenTelemetry only where its chart sets this to false: ZAC's chart leaves it out when off.
+OTEL_SDK_DISABLED = "OTEL_SDK_DISABLED"
 
 
 @pytest.fixture(scope="module", name="grafana")
@@ -219,19 +218,17 @@ def test_every_component_reports_metrics(grafana: Grafana, podiumd_env: Environm
     otel_apps = [c for c in deployed if COMPONENTS[c].otel_services]
     otel = grafana.proxy("prometheus", "/api/v1/query", {"query": otel_jobs_query(otel_apps)}) if otel_apps else {}
     no_monitor, no_otel = without_metrics(deployed, grafana.proxy("prometheus", "/api/v1/targets"), otel)
-    otel_off = bool(otel_apps) and len(no_otel) == len(otel_apps)
-    missing = no_monitor if otel_off else no_monitor + no_otel
+    switches = {c: {v.lower() for v in variable_values(podiumd_env, c, OTEL_SDK_DISABLED)} for c in otel_apps}
+    otel_off = sorted(c for c, values in switches.items() if values != {"false"})
+    missing = no_monitor + [c for c in no_otel if c not in otel_off]
     gaps = METRICS_GAPS_BEFORE_4_10 if is_chart_older_than(podiumd_env, (4, 10, 0)) else {}
     unknown = [c for c in missing if c not in gaps]
     assert not unknown, f"components without metrics in Prometheus: {unknown}"
     if missing:
-        reasons = sorted({gaps[c] for c in missing})
-        if otel_off:
-            reasons.append(OTEL_OFF)
-        pytest.xfail("; ".join(reasons))
+        pytest.xfail("; ".join(sorted({gaps[c] for c in missing})))
     assert not missing, f"components without metrics in Prometheus: {missing}"
     if otel_off:
-        pytest.skip(OTEL_OFF)
+        pytest.skip(f"OpenTelemetry is off ({OTEL_SDK_DISABLED} not false) for {', '.join(otel_off)}: not checked")
 
 
 # Long enough for a quiet pod to log once, short enough to show that shipping stopped.
