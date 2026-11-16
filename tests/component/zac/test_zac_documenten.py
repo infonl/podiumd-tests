@@ -43,7 +43,7 @@ from podiumd_tests.zac_documents import lock_document
 from podiumd_tests.zac_documents import max_file_size_mb
 from podiumd_tests.zac_documents import nieuwe_versie
 from podiumd_tests.zac_documents import ontkoppel_document
-from podiumd_tests.zac_documents import ontkoppelde_documenten
+from podiumd_tests.zac_documents import ontkoppeld_entry
 from podiumd_tests.zac_documents import taal
 from podiumd_tests.zac_documents import unlock_document
 from podiumd_tests.zac_documents import upload
@@ -76,12 +76,6 @@ REDEN = "podiumd-tests ontkoppelen"
 def _uuids(zac: requests.Session, zac_url: str, zaak: JsonObject) -> list[object]:
     """The uuids of the zaak's documents in ZAC."""
     return [document.get("uuid") for document in zaak_documents(zac, zac_url, zaak)]
-
-
-def _ontkoppeld(zac: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject) -> JsonObject | None:
-    """The document's entry in ZAC's ontkoppelde documenten of the zaak, or None."""
-    found = ontkoppelde_documenten(zac, zac_url, zaak)
-    return next((item for item in found if item.get("documentUUID") == document["uuid"]), None)
 
 
 def _toelichtingen(zac: requests.Session, zac_url: str, zaak: JsonObject, actie: str) -> list[str]:
@@ -159,14 +153,14 @@ def test_ontkoppeld_document_is_gekoppeld_to_another_zaak(
     expect_status(ontkoppel_document(zac, urls["zac"], zaak, document, REDEN, registry), HTTPStatus.NO_CONTENT)
     assert document["uuid"] not in _uuids(zac, urls["zac"], zaak)
     assert f"Ontkoppeld: {REDEN}" in _toelichtingen(zac, urls["zac"], zaak, "ONTKOPPELD")
-    listed = _ontkoppeld(zac, urls["zac"], zaak, document)
+    listed = ontkoppeld_entry(zac, urls["zac"], zaak, document)
     assert listed, f"{document['uuid']} not in the ontkoppelde documenten of {zaak['identificatie']}"
     assert listed.get("reden") == REDEN
 
     moved = verplaats_document(zac, urls["zac"], document, ONTKOPPELDE_DOCUMENTEN, ander)
     expect_status(moved, HTTPStatus.NO_CONTENT, HTTPStatus.OK)
     assert document["uuid"] in _uuids(zac, urls["zac"], ander)
-    assert _ontkoppeld(zac, urls["zac"], zaak, document) is None
+    assert ontkoppeld_entry(zac, urls["zac"], zaak, document) is None
 
 
 @pytest.mark.scenario("""
@@ -341,13 +335,13 @@ def test_ontkoppeld_document_deleted_is_gone_from_open_zaak(
         timeout=INDEX_TIMEOUT,
         description=f"{document['titel']} gone from ZAC's search",
     )
-    listed = _ontkoppeld(zac, urls["zac"], zaak, document)
+    listed = ontkoppeld_entry(zac, urls["zac"], zaak, document)
     assert listed, f"{document['uuid']} not in the ontkoppelde documenten of {zaak['identificatie']}"
     in_openzaak = f"{urls['openzaak']}/{DOCUMENTEN}/enkelvoudiginformatieobjecten/{document['uuid']}"
     openzaak_productaanvraag.request("GET", in_openzaak, HTTPStatus.OK)
 
     expect_status(delete_ontkoppeld_document(zac, urls["zac"], listed), HTTPStatus.NO_CONTENT)
-    assert _ontkoppeld(zac, urls["zac"], zaak, document) is None
+    assert ontkoppeld_entry(zac, urls["zac"], zaak, document) is None
     openzaak_productaanvraag.request("GET", in_openzaak, HTTPStatus.NOT_FOUND)
 
 
@@ -370,14 +364,14 @@ def test_locked_ontkoppeld_document_cannot_be_deleted_until_unlocked(
     expect_status(ontkoppel_document(zac, urls["zac"], zaak, document, REDEN, registry), HTTPStatus.NO_CONTENT)
     # Unlocked before the cleanup of ontkoppel_document deletes it.
     registry.add(f"lock of document {document['uuid']}", lambda: zac.post(f"{url}/unlock"))
-    listed = _ontkoppeld(zac, urls["zac"], zaak, document)
+    listed = ontkoppeld_entry(zac, urls["zac"], zaak, document)
     assert listed, f"{document['uuid']} not in the ontkoppelde documenten of {zaak['identificatie']}"
     assert listed.get("vergrendeld") is True
     expect_status(delete_ontkoppeld_document(zac, urls["zac"], listed), HTTPStatus.BAD_REQUEST)
 
     expect_status(zac.post(f"{url}/unlock"), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     expect_status(delete_ontkoppeld_document(zac, urls["zac"], listed), HTTPStatus.NO_CONTENT)
-    assert _ontkoppeld(zac, urls["zac"], zaak, document) is None
+    assert ontkoppeld_entry(zac, urls["zac"], zaak, document) is None
 
 
 @pytest.mark.scenario("""

@@ -12,6 +12,7 @@ from datetime import date
 from datetime import datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING
+from typing import cast
 
 import pytest
 
@@ -462,6 +463,24 @@ def ontkoppelde_documenten_page(
 ) -> JsonObject:
     """Return one page of ZAC's ontkoppelde documenten detached from the zaak, with its totaal."""
     return list_page(zac, f"{zac_url}/rest/ontkoppeldedocumenten", {"zaakID": zaak["identificatie"]}, page, max_results)
+
+
+def ontkoppeld_entry(zac: requests.Session, zac_url: str, zaak: JsonObject, document: JsonObject) -> JsonObject | None:
+    """Return the document's entry in ZAC's ontkoppelde documenten of the zaak, or None."""
+    found = ontkoppelde_documenten(zac, zac_url, zaak)
+    return next((item for item in found if item.get("documentUUID") == document["uuid"]), None)
+
+
+def bulk_ontkoppelde_documenten(
+    zac: requests.Session, zac_url: str, actie: str, ontkoppeld: list[JsonObject], **fields: object
+) -> JsonObject:
+    """Delete (actie verwijderen) or link (koppelen, with nieuweZaakID) ontkoppelde documenten at once (ZAC 5.12).
+
+    ZAC's answer: the ids it verwerkt, and per mislukt one its id, titel and foutcode.
+    """
+    body = {"ids": [entry["id"] for entry in ontkoppeld], **fields}
+    response = zac.put(f"{zac_url}/rest/ontkoppeldedocumenten/lijst/{actie}", json=body)
+    return cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
 
 
 def delete_ontkoppeld_document(zac: requests.Session, zac_url: str, ontkoppeld: JsonObject) -> requests.Response:
