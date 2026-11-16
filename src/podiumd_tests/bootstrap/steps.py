@@ -294,7 +294,8 @@ def productaanvraag_zaaktypen(ctx: Context) -> dict[str, object]:
             # geforceerd-bijwerken: Open Zaak refuses to delete a besluit of a closed zaak without it.
             "scopes": ["zaken.lezen", "zaken.verwijderen", "zaken.geforceerd-bijwerken"],
             # ZAC adds documents, e.g. the ontvangstbevestiging it sent; Open Zaak keeps them when the zaak goes.
-            "document_scopes": ["documenten.lezen", "documenten.verwijderen"],
+            # geforceerd-unlock: a document a failed ZAC action left locked (zac-44) is deleted only once unlocked.
+            "document_scopes": ["documenten.lezen", "documenten.verwijderen", "documenten.geforceerd-unlock"],
             # A zaak with a besluit cannot be deleted before the besluit.
             "besluit_scopes": ["besluiten.lezen", "besluiten.verwijderen"],
             "max_va": "zeer_geheim",

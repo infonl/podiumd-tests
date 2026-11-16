@@ -448,6 +448,11 @@ def make_besluit(openzaak: ApiClient, registry: ResourceRegistry, besluittype: s
     return besluit
 
 
+def force_unlock(openzaak: ApiClient, document_url: str) -> None:
+    """Unlock a document without its lock id (scope documenten.geforceerd-unlock), e.g. after a failed ZAC action."""
+    openzaak.request("POST", f"{document_url}/unlock", HTTPStatus.NO_CONTENT, json={})
+
+
 def delete_besluit(openzaak: ApiClient, url: str) -> None:
     """DELETE a besluit after its besluitinformatieobjecten: Open Zaak 1.29.3 answers 500 otherwise (open-zaak-7)."""
     for link in openzaak.list(f"{BESLUITEN}/besluitinformatieobjecten", {"besluit": url}):

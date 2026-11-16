@@ -27,7 +27,9 @@ from podiumd_tests.pdf import verapdf_report
 from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import CATALOGI
+from podiumd_tests.seed.openzaak import DOCUMENTEN
 from podiumd_tests.seed.openzaak import ZAKEN
+from podiumd_tests.seed.openzaak import force_unlock
 from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import expect_defect
 from podiumd_tests.zac import BEVESTIGING_NIET_VERSTUURD
@@ -64,6 +66,9 @@ if TYPE_CHECKING:
 ZAAK_WITHOUT_STARTDATUM_STARTS_TODAY = (5, 11, 0)
 # ZAC refuses a second opschorting by the zaak's eerdere opschorting from this release on (zac-19, #7564).
 SUSPENDED_ONCE_BY_EERDERE_OPSCHORTING = (5, 11, 0)
+
+# ZAC asks its converter for native PDF/A and PDF/UA (Gotenberg 9) from this release on; zac-44 shows with it.
+NATIVE_PDFA = (5, 12, 0)
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "keycloak")]
 
@@ -615,18 +620,35 @@ def test_sent_document_is_marked_verzonden(
     Then the document's current version is a PDF/A-2b and PDF/UA with embedded fonts
     And the document's historie shows the Office file name changed to the PDF file name
 """)
-def test_word_document_is_converted_to_pdf(
+def test_word_document_is_converted_to_pdf(  # the zaak, Open Zaak and the suffix
+    request: pytest.FixtureRequest,
+    podiumd_env: Environment,
     zac: requests.Session,
     urls: dict[str, str],
     zac_zaak: Callable[..., JsonObject],
+    openzaak_productaanvraag: ApiClient,
     registry: ResourceRegistry,
     suffix: str,
 ) -> None:
     """A definitief Office document converted in ZAC becomes a PDF/A-2b, PDF/UA with embedded fonts, as ZAC requests."""
+    if suffix == "large-word":
+        expect_defect(
+            request,
+            podiumd_env,
+            "zac",
+            lambda version: version >= NATIVE_PDFA,
+            reason="[zac-44] ZAC 5.12.0 sends the converted PDF inline; Gotenberg 9's 2.9 MB PDF of this document exceeds"
+            " Open Zaak 1.31.1's 2.5 MiB request limit (RequestDataTooBig); not yet reported upstream",
+        )
     zaak = zac_zaak()
     document = zac_documents.uploaded_document(zac, urls["zac"], zaak, registry, suffix=suffix)
     documents = zac_documents.document_url(urls["zac"], document)
-    expect_status(zac_documents.convert_to_pdf(zac, urls["zac"], zaak, document), HTTPStatus.NO_CONTENT, HTTPStatus.OK)
+    # A failed conversion leaves ZAC's lock on the document; unlocked before the zaak's cleanup deletes it.
+    in_openzaak = f"{urls['openzaak']}/{DOCUMENTEN}/enkelvoudiginformatieobjecten/{document['uuid']}"
+    registry.add(f"lock of document {document['uuid']}", lambda: force_unlock(openzaak_productaanvraag, in_openzaak))
+    with symptom():
+        converted = zac_documents.convert_to_pdf(zac, urls["zac"], zaak, document)
+        expect_status(converted, HTTPStatus.NO_CONTENT, HTTPStatus.OK)
     current = expect_status(zac.get(documents, params={"zaak": str(zaak["uuid"])}), HTTPStatus.OK).json()
     assert current["formaat"] == "application/pdf", current.get("formaat")
     content = zac_documents.document_content(zac, urls["zac"], document)
