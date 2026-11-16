@@ -257,23 +257,41 @@ def test_csv_export_header_names_each_column_once(
     assert len(set(header)) == len(header), header
 
 
+@pytest.mark.source(
+    "PZW Sprint 83 PZ-13421",
+    "A saved zoekopdracht of Inbox documenten keeps its filters; the UI part (ZAC #7826) is in ZAC's frontend.",
+)
+@pytest.mark.parametrize(
+    ("werklijst", "query"),
+    [
+        pytest.param(
+            WERKVOORRAAD_ZAKEN,
+            {"filters": {"ZAAK_VERTROUWELIJKHEIDAANDUIDING": {"values": ["OPENBAAR"]}}},
+            id="werkvoorraad-zaken",
+        ),
+        pytest.param(
+            "INBOX_DOCUMENTEN",
+            {"filtersType": "InboxDocumentListParameters", "titel": "podiumd-tests", "sort": "creatiedatum"},
+            id="inbox-documenten",
+        ),
+    ],
+)
 @pytest.mark.scenario("""
-    Given the behandelaar's werkvoorraad of zaken
+    Given the behandelaar's werkvoorraad of zaken, or the Inbox documenten filtered on a titel
     When the behandelaar saves its search as a zoekopdracht
-    Then the werkvoorraad offers the zoekopdracht with its search
+    Then the list offers the zoekopdracht with its search and filters
     When the behandelaar deletes it
-    Then the werkvoorraad no longer offers it
+    Then the list no longer offers it
 """)
 def test_saved_zoekopdracht_is_offered_until_deleted(
-    zac: requests.Session, urls: dict[str, str], registry: ResourceRegistry
+    zac: requests.Session, urls: dict[str, str], registry: ResourceRegistry, werklijst: str, query: JsonObject
 ) -> None:
     """ZAC stores the zoekopdracht per user and werklijst, and gives its search back unchanged."""
-    query = {"filters": {"ZAAK_VERTROUWELIJKHEIDAANDUIDING": {"values": ["OPENBAAR"]}}}
-    saved = save_zoekopdracht(zac, urls["zac"], registry, WERKVOORRAAD_ZAKEN, query)
-    offered = [item for item in zoekopdrachten(zac, urls["zac"], WERKVOORRAAD_ZAKEN) if item.get("id") == saved["id"]]
+    saved = save_zoekopdracht(zac, urls["zac"], registry, werklijst, query)
+    offered = [item for item in zoekopdrachten(zac, urls["zac"], werklijst) if item.get("id") == saved["id"]]
     assert [(item.get("naam"), json.loads(str(item.get("json")))) for item in offered] == [(saved["naam"], query)]
     delete_zoekopdracht(zac, urls["zac"], saved)
-    assert saved["id"] not in {item.get("id") for item in zoekopdrachten(zac, urls["zac"], WERKVOORRAAD_ZAKEN)}
+    assert saved["id"] not in {item.get("id") for item in zoekopdrachten(zac, urls["zac"], werklijst)}
 
 
 @pytest.mark.xfail(
@@ -329,6 +347,10 @@ def test_ontkoppelde_documenten_are_paged_with_their_creatiedatum(
     assert all(found[0].get("creatiedatum") for found in shown), shown
 
 
+@pytest.mark.source(
+    "PZW Sprint 83 PZ-13017",
+    "The inbox lists filter on their columns; ZAC's API filters Inbox documenten on titel (the UI fix #7746 is frontend).",
+)
 @pytest.mark.requires("opennotificaties")
 @pytest.mark.scenario("""
     Given two documents with the same titel in Open Zaak on no zaak
