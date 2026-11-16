@@ -75,8 +75,9 @@ class ZaaktypeTypes:  # pylint: disable=too-many-instance-attributes  # one fiel
     informeren: the initiator is to be informed of each status. informatieobjecttypen: URLs of published ones.
 
     afleidingswijzen: a resultaattype per brondatum afleidingswijze, named after it; eigenschap takes the first
-    eigenschap as datumkenmerk, termijn the procestermijn ARCHIEF_PROCESTERMIJN. besluittypen: URLs of concept ones,
-    linked: Open Zaak links a concept zaaktype only to concept besluittypen; publish them before the zaaktype.
+    eigenschap as datumkenmerk, termijn the procestermijn ARCHIEF_PROCESTERMIJN, the object ones OBJECT_DATUM.
+    besluittypen: URLs of concept ones, linked: Open Zaak links a concept zaaktype only to concept besluittypen;
+    publish them before the zaaktype.
     archiefactietermijn: False gives resultaattype Afgehandeld none. The defaults are what publishing needs.
     """
 
@@ -168,12 +169,20 @@ def eigenschap_body(zaaktype: str, naam: str) -> dict[str, object]:
     return {"zaaktype": zaaktype, "naam": naam, "definitie": naam, "specificatie": specificatie}
 
 
+# What Open Zaak requires of an afleidingswijze that reads a date from an object.
+OBJECT_DATUM = {
+    "ander_datumkenmerk": {"datumkenmerk": "ptest-datum", "objecttype": "overige", "registratie": "ptest"},
+    "zaakobject": {"datumkenmerk": "ptest-datum", "objecttype": "overige"},
+}
+
+
 def _procedure(afleidingswijze: str, types: ZaaktypeTypes) -> dict[str, object]:
     """Return the brondatumArchiefprocedure of the afleidingswijze, as ZaaktypeTypes describes it."""
     return {
         "afleidingswijze": afleidingswijze,
         "datumkenmerk": types.eigenschappen[0] if afleidingswijze == "eigenschap" else "",
         "procestermijn": ARCHIEF_PROCESTERMIJN if afleidingswijze == "termijn" else None,
+        **OBJECT_DATUM.get(afleidingswijze, {}),
     }
 
 

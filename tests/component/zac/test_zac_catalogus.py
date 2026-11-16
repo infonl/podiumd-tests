@@ -16,12 +16,14 @@ import pytest
 from podiumd_tests.bootstrap.bpmn import uuid_of
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
+from podiumd_tests.json_data import strings
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.seed.zac_zaaktype import ZAC_TYPES
 from podiumd_tests.seed.zac_zaaktype import publish_zac_zaaktype
 from podiumd_tests.wait import wait_until
+from podiumd_tests.workloads import skip_older_than
 from podiumd_tests.zac import clear_ztc_cache
 from podiumd_tests.zac import configure_zaaktype
 from podiumd_tests.zac import inrichtingscheck_problems
@@ -139,3 +141,42 @@ def test_inrichtingscheck_rejects_a_zaaktype_without_behandelaar_initiator_or_aa
     }
     eformulier = zac.get(f"{urls['zac']}/rest/health-check/bestaat-communicatiekanaal-eformulier")
     assert expect_status(eformulier, HTTPStatus.OK).json() is True
+
+
+# ZAC reports a resultaattype whose brondatum it cannot derive from this release on (PZ-13306).
+REPORTS_UNSUPPORTED_BRONDATUM = (5, 12, 0)
+
+
+@pytest.mark.source(
+    "PZW Sprint 83 PZ-13306",
+    "The inrichtingscheck shows an error for a zaaktype with afhandelwijze 'Zaakobject' or 'Ander datumkenmerk'.",
+)
+@pytest.mark.scenario("""
+    Given ZAC's own catalogus has a zaaktype with resultaattypen whose brondatum comes from a zaakobject
+    And one from another datumkenmerk, and one from the afhandeling of the zaak
+    When the beheerder runs ZAC's inrichtingscheck
+    Then it names the zaakobject and ander datumkenmerk resultaattypen as an afhandelwijze ZAC does not support
+""")
+def test_inrichtingscheck_names_resultaattypen_with_an_unsupported_brondatum(  # the catalogus
+    podiumd_env: Environment,
+    zac: requests.Session,
+    urls: dict[str, str],
+    openzaak: ApiClient,
+    test_zaaktype: JsonObject,
+    eigen_catalogus: JsonObject,
+    registry: ResourceRegistry,
+) -> None:
+    """resultaattypesMetNietOndersteundeBrondatum lists the resultaattypen with afleidingswijze zaakobject or
+    ander_datumkenmerk."""
+    skip_older_than(podiumd_env, "zac", REPORTS_UNSUPPORTED_BRONDATUM, "no check of the brondatum afleidingswijze")
+    types = dataclasses.replace(ZAC_TYPES, afleidingswijzen=("zaakobject", "ander_datumkenmerk", "afgehandeld"))
+    zaaktype = publish_zac_zaaktype(
+        podiumd_env, openzaak, registry, test_zaaktype, types=types, catalogus=eigen_catalogus["url"]
+    )
+    clear_ztc_cache(zac, urls["zac"])
+    checks = get_entries(zac, f"{urls['zac']}/rest/health-check/zaaktypes")
+    mine = [c for c in checks if section(c, "zaaktype").get("omschrijving") == zaaktype["omschrijving"]]
+    assert [sorted(strings(c.get("resultaattypesMetNietOndersteundeBrondatum"))) for c in mine] == [
+        ["ander_datumkenmerk", "zaakobject"]
+    ]
+    assert [c.get("valide") for c in mine] == [False]
