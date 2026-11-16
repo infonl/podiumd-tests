@@ -12,12 +12,12 @@ component and integration, without and with the destructive tests; the test suit
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 241 | 41 | 10 |
-| component | 1014 | 600 | 71 |
+| component | 1017 | 603 | 71 |
 | integration | 213 | 145 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1402** | **734** | **86** |
+| **full tier** | **1405** | **737** | **86** |
 | **chaos tier** | **66** | **52** | **14** |
-| **test suite** | **1548** | **795** | **100** |
+| **test suite** | **1551** | **798** | **100** |
 
 Unit tests (`unit_tests/`, functions): 948. Perf endpoints (`perf/runs.py`): 32.
 
@@ -54,7 +54,7 @@ Unit tests (`unit_tests/`, functions): 948. Perf endpoints (`perf/runs.py`): 32.
 | component | platform | 69 | 18 |
 | component | referentielijsten | 2 | 2 |
 | component | zaakbrug | 20 | 16 |
-| component | zac | 356 | 264 |
+| component | zac | 359 | 267 |
 | component | zgw_office_addin | 4 | 3 |
 | integration | continuiteit | 20 | 11 |
 | integration | continuiteit_belasting | 8 | 7 |
@@ -107,7 +107,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | EX | 19 |
 | MK | 47 |
 | PI | 56 |
-| PZW | 7 |
+| PZW | 10 |
 | TA | 282 |
 | ZAC | 19 |
 | draaiboek | 91 |
