@@ -21,6 +21,7 @@ from podiumd_tests.basisregistraties import KLAMER
 from podiumd_tests.basisregistraties import KVK_RECHTSVORMEN
 from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
 from podiumd_tests.basisregistraties import KVK_TEST_VESTIGING
+from podiumd_tests.defects import symptom
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
@@ -35,6 +36,7 @@ from podiumd_tests.seed.openklant import partijen_of
 from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.wait import wait_until
+from podiumd_tests.workloads import expect_defect
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import person_key
 from podiumd_tests.zac import person_lookup
@@ -57,6 +59,7 @@ if TYPE_CHECKING:
 
     from podiumd_tests.basisregistraties import KvkBedrijf
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -448,3 +451,34 @@ def test_person_contactgegevens_are_the_voorkeur_else_the_first(
     for adressen in soorten.values():
         openklant.patch(str(adressen[1]["url"]), {"isStandaardAdres": True})
     assert shown() == {veld: adressen[1]["adres"] for veld, adressen in soorten.items()}
+
+
+# ZAC masks a BSN in every log record to its last three digits from this release on (#7753).
+MASKS_PERSONAL_DATA = (5, 12, 0)
+
+
+@pytest.mark.requires("cluster")
+@pytest.mark.source(
+    "PZW Sprint 83 PZ-13151",
+    "Personal data such as a BSN must not be in ZAC's logging, or only masked.",
+)
+@pytest.mark.scenario("""
+    Given a behandelaar is logged in to ZAC
+    When the behandelaar looks up a person by BSN
+    Then ZAC's log of that time holds the BSN at most masked, never whole
+""")
+def test_person_lookup_logs_no_bsn(
+    request: pytest.FixtureRequest, podiumd_env: Environment, zac: requests.Session, urls: dict[str, str]
+) -> None:
+    """After a person lookup by BSN, ZAC's container log has no unmasked BSN."""
+    expect_defect(
+        request,
+        podiumd_env,
+        "zac",
+        lambda version: version < MASKS_PERSONAL_DATA,
+        reason="[zac-43] ZAC before 5.12.0 logs the whole BSN of a person lookup; fixed in ZAC 5.12.0 (#7753)",
+    )
+    assert [p["bsn"] for p in person_lookup(zac, urls["zac"], EREBOS)] == [EREBOS]
+    log = podiumd_env.kube.logs(podiumd_env.deployment_for("zac"), since="2m", container="zac")
+    with symptom():
+        assert EREBOS not in log, "ZAC logged the whole BSN"
