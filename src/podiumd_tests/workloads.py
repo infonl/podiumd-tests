@@ -188,11 +188,12 @@ def expect_defect(  # noqa: PLR0913  # one marker
     *,
     raises: type[BaseException] = DefectSymptomError,
     reason: str,
+    strict: bool = True,
 ) -> None:
-    """Mark the test a strict xfail when the deployed component's version is affected; an unknown version is not."""
+    """Mark the test an xfail when the deployed component's version is affected; an unknown version is not."""
     version = component_versions(env, [component]).get(component)
     if version is not None and affected(version):
-        request.applymarker(pytest.mark.xfail(strict=True, raises=raises, reason=reason))
+        request.applymarker(pytest.mark.xfail(strict=strict, raises=raises, reason=reason))
 
 
 def skip_older_than(env: Environment, component: str, version: tuple[int, ...], behaviour: str) -> None:

@@ -430,6 +430,8 @@ def test_concurrent_taken_reach_their_own_inwoner(
         podiumd_env,
         "omc",
         lambda version: version < OMC_REQUEST_SCOPED_QUERIES,
+        # A race: the mix-up showed in 15 of 16 runs (minikube and kees00, OMC 2.3.1, 2026-11-13 to 16).
+        strict=False,
         reason="[omc-8] OMC before 2.4.1 keeps the notification in a singleton QueryBase, so concurrent requests are "
         "processed with each other's object, zaak and inwoner (privacy); fixed in OMC v.2.4.1",
     )
