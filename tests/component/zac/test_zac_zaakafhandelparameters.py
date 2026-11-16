@@ -155,6 +155,10 @@ def _uuid(parameters: JsonObject) -> str:
 @ZAC_TEAM
 @THROWAWAY
 @EIGEN_ZAAKTYPE
+@pytest.mark.source(
+    "PZW Sprint 83 PZ-13072",
+    "ZAC's new cache refresh: the zaakafhandelparameters still work, no regression.",
+)
 @pytest.mark.scenario("""
     Given a zaaktype configured in ZAC
     When the beheerder saves a default behandelaar, waarschuwingsvensters of 0 and 31 days and a zaakbeeindig reden

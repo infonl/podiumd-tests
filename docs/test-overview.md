@@ -107,13 +107,13 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | EX | 19 |
 | MK | 47 |
 | PI | 56 |
-| PZW | 1 |
-| TA | 283 |
+| PZW | 4 |
+| TA | 282 |
 | ZAC | 19 |
 | draaiboek | 91 |
 | external | 224 |
-| podiumd-tests | 562 |
-| upstream | 245 |
+| podiumd-tests | 561 |
+| upstream | 244 |
 
 ## Expected failures per known issue
 

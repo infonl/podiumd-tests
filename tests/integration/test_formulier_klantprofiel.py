@@ -114,6 +114,10 @@ def zac_contactgegevens(zac: requests.Session, zac_url: str, bsn: str) -> tuple[
     "upstream open-formulieren/open-forms src/openforms/contrib/customer_interactions/tests",
     "A logged-in burger's new preferred addresses go to Open Klant; a new e-mail address only once verified.",
 )
+@pytest.mark.source(
+    "PZW Sprint 83 PZ-13401",
+    "Open Klant 2.19.2: a form's e-mail address and telefoonnummer are stored in Open Klant, with a klantcontact.",
+)
 @pytest.mark.scenario("""
     Given a person in Open Klant with a verified e-mail address and a telefoonnummer as voorkeur
     When the person logs in with DigiD on a form with a klantprofiel

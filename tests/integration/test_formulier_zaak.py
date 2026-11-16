@@ -81,6 +81,10 @@ def _anonymous_submission(
 
 @pytest.mark.core
 @pytest.mark.tc("OF-007", "OF-020")
+@pytest.mark.source(
+    "PZW Sprint 83 PZ-13316",
+    "Open Formulieren 4.0.x: the test forms behave as before, a submission becomes a zaak.",
+)
 @pytest.mark.scenario("""
     Given the test form in Open Formulieren
     When an anonymous inwoner submits it
