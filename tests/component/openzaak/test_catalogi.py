@@ -13,7 +13,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.responses import UnexpectedStatusError
+from podiumd_tests.defects import DefectSymptomError
+from podiumd_tests.defects import symptom
 from podiumd_tests.responses import expect_status
 from podiumd_tests.responses import invalid_codes
 from podiumd_tests.responses import invalid_names
@@ -214,7 +215,7 @@ def _selectielijst_concept(openzaak: ApiClient, registry: ResourceRegistry, temp
 
 @pytest.mark.xfail(
     strict=True,
-    raises=UnexpectedStatusError,
+    raises=DefectSymptomError,
     reason="[open-zaak-12] Open Zaak 1.29.3 answers 500 (IntegrityError) to a statustype with a volgnummer the "
     "zaaktype already has; not yet reported upstream",
 )
@@ -235,6 +236,7 @@ def test_duplicate_statustype_volgnummer_is_refused(
     concept = make_concept_zaaktype(openzaak, registry, str(test_zaaktype["catalogus"]))
     body = {"omschrijving": "podiumd-tests", "zaaktype": concept["url"], "volgnummer": 1}
     openzaak.request("POST", f"{CATALOGI}/statustypen", HTTPStatus.CREATED, json=body)
-    refused = openzaak.request("POST", f"{CATALOGI}/statustypen", HTTPStatus.BAD_REQUEST, json=body).json()
-    assert refused.get("invalidParams")
+    with symptom():
+        refused = openzaak.request("POST", f"{CATALOGI}/statustypen", HTTPStatus.BAD_REQUEST, json=body).json()
+        assert refused.get("invalidParams")
     assert len(openzaak.list(f"{CATALOGI}/statustypen", {"zaaktype": str(concept["url"]), "status": "alles"})) == 1

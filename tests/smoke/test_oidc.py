@@ -17,6 +17,8 @@ import pytest
 from podiumd_tests.auth.keycloak import discovery_url
 from podiumd_tests.auth.keycloak import realm_url
 from podiumd_tests.components import DJANGO_APPS
+from podiumd_tests.defects import DefectSymptomError
+from podiumd_tests.defects import symptom
 from podiumd_tests.oidc import LOGIN_PATHS
 from podiumd_tests.oidc import NAVIGATE
 from podiumd_tests.oidc import has_keycloak_login
@@ -94,7 +96,7 @@ def test_login_ends_on_the_keycloak_form(
 # Not strict: an edge may redirect the login to the objecten host (podiumd-infra loginRedirectHost).
 @pytest.mark.xfail(
     strict=False,
-    raises=AssertionError,
+    raises=DefectSymptomError,
     reason="[podiumd-chart-5] podiumd 4.10.0: Keycloak client objecten accepts only the objecten host as redirect URI,"
     " so the admin login on the objecttypen host answers 400; not yet reported upstream",
 )
@@ -110,7 +112,8 @@ def test_admin_login_on_the_objecttypen_host_ends_on_the_keycloak_form(
     if podiumd_env.admin_of("objecttypen") == "objecttypen":
         pytest.skip("objecttypen has its own admin")
     start = urls["objecttypen"] + LOGIN_PATHS["objecttypen"]
-    keycloak_login_realm(http.get(start, headers=NAVIGATE), keycloak_hosts(urls))
+    with symptom():
+        keycloak_login_realm(http.get(start, headers=NAVIGATE), keycloak_hosts(urls))
 
 
 @pytest.mark.source(

@@ -21,6 +21,8 @@ from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.bootstrap.names import TEST_FORM
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.components import COMPONENTS
+from podiumd_tests.defects import DefectSymptomError
+from podiumd_tests.defects import symptom
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.kcc import kiss_klantcontact
 from podiumd_tests.kcc import post_kiss_klantcontact
@@ -40,7 +42,6 @@ from podiumd_tests.seed import openklant as klanten
 from podiumd_tests.seed.objecten import clean_up_logboek
 from podiumd_tests.seed.objecten import make_productaanvraag
 from podiumd_tests.seed.objecten import objecttype_url
-from podiumd_tests.wait import WaitTimeoutError
 from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import ROOT_TIMEOUT
 from podiumd_tests.workloads import component_down
@@ -249,7 +250,7 @@ def test_without_objecten_the_portal_kiss_and_zac_work(
 @pytest.mark.tc("CONT-062")
 @pytest.mark.xfail(
     strict=True,
-    raises=WaitTimeoutError,
+    raises=DefectSymptomError,
     reason="[open-formulieren-2] Open Formulieren 3.5.5 and 4.0.2 queue mail with django_yubin but schedule no retry_emails: a mail that fails"
     " during an SMTP outage stays failed and is never sent; not yet reported upstream",
 )
@@ -275,7 +276,8 @@ def test_form_mail_is_sent_after_a_mail_outage(
     registry.add(f"queued mails to {address}", lambda: mail_queue(podiumd_env, "openformulieren", "delete", address))
     with component_down(podiumd_env, http, "mailpit"):
         submit(podiumd_env, http, registry, slug, {"omschrijving": slug}, timeout=REGISTRATION_TIMEOUT, registers=False)
-    assert slug in received(mailpit, registry, timeout=RETRY_TIMEOUT, to=address)
+    with symptom():
+        assert slug in received(mailpit, registry, timeout=RETRY_TIMEOUT, to=address)
 
 
 @pytest.mark.requires("zac", "objecten", "openklant", "mailpit", "keycloak")
@@ -283,7 +285,7 @@ def test_form_mail_is_sent_after_a_mail_outage(
 @pytest.mark.usefixtures("ontvangstbevestiging")
 @pytest.mark.xfail(
     strict=True,
-    raises=WaitTimeoutError,
+    raises=DefectSymptomError,
     reason="[zac-3] ZAC 5.4.5 and 5.9.1 send mail directly over SMTP: during an outage it logs 'Failed to send mail' and drops it,"
     " without a queue or a retry; PZ-13091",
 )
@@ -323,7 +325,8 @@ def test_zac_mail_is_sent_after_a_mail_outage(
             timeout=PRODUCTAANVRAAG_TIMEOUT,
             description=f"ZAC's failed mail for {zaak['identificatie']}",
         )
-    assert str(zaak["identificatie"]) in received(mailpit, registry, timeout=RETRY_TIMEOUT, to=adres)
+    with symptom():
+        assert str(zaak["identificatie"]) in received(mailpit, registry, timeout=RETRY_TIMEOUT, to=adres)
 
 
 @pytest.mark.requires("openklant", "zac", "keycloak")
@@ -455,7 +458,7 @@ def test_portal_mail_waits_in_the_queue_during_a_mail_outage(
 @pytest.mark.tc("CONT-064")
 @pytest.mark.xfail(
     strict=True,
-    raises=WaitTimeoutError,
+    raises=DefectSymptomError,
     reason="[ita-1] ITA 3.3.2 and 3.3.4 send mail straight over SMTP: during an outage it logs the SmtpException, still answers 200"
     " and drops the mail, without a queue or a retry; not yet reported upstream",
 )
@@ -496,4 +499,5 @@ def test_ita_mail_is_sent_after_a_mail_outage(
         expect_status(forward, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     # CronJob ita-nieuw-cv-notify mails the same address and body as "Nieuw contactverzoek - <nummer>".
     subject = f"Contactverzoek Doorgestuurd - {klantcontact['nummer']}"
-    assert received(mailpit, registry, timeout=RETRY_TIMEOUT, to=adres, subject=subject)
+    with symptom():
+        assert received(mailpit, registry, timeout=RETRY_TIMEOUT, to=adres, subject=subject)

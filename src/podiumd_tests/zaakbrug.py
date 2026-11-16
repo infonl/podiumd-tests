@@ -427,7 +427,6 @@ def expect_expired_version_bug(request: pytest.FixtureRequest, env: Environment)
         env,
         "zaakbrug",
         lambda version: version < EXPIRED_VERSION_FIXED,
-        raises=AssertionError,
         reason="[zaakbrug-3] ZaakBrug before 1.27.0 takes the statustype from the zaaktype version valid today:"
         " a status on a zaak of an expired version fails ('Adding a new status is failed'); fixed in 1.27.0",
     )

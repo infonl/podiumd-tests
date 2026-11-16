@@ -14,6 +14,8 @@ import pytest
 from podiumd_tests.bootstrap.names import ZAAKBRUG_IOT
 from podiumd_tests.bootstrap.names import ZAAKBRUG_VERSIES_ZAAKTYPE
 from podiumd_tests.bootstrap.names import ZAAKBRUG_ZAAKTYPE
+from podiumd_tests.defects import DefectSymptomError
+from podiumd_tests.defects import symptom
 from podiumd_tests.json_data import strings
 from podiumd_tests.seed.openklant import random_bsn
 from podiumd_tests.seed.openzaak import CATALOGI
@@ -139,7 +141,7 @@ def test_geef_zaak_details_reads_a_created_zaak(
 @pytest.mark.parametrize("message", ["geefZaakdetails_Lv01", "zakLv01"])
 @pytest.mark.xfail(
     strict=True,
-    raises=AssertionError,
+    raises=DefectSymptomError,
     reason="[zaakbrug-5] ZaakBrug 1.27.1 strips one character of the initiator's 11 prefix and answers an empty La01;"
     " the zakLv01 SOAPAction gets Fo03; not yet reported upstream",
 )
@@ -155,8 +157,9 @@ def test_zaken_of_an_initiator_are_listed(
     bsn = random_bsn()
     zaak = zaakbrug_zaak(bsn=bsn)
     vraag = geef_zaken_van_initiator(datetime.now(UTC), bsn)
-    answer = send(http, f"{urls['zaakbrug']}{ZDS}/BeantwoordVraag", vraag, message)
-    assert zaak_identificaties(answer) == [zaak.identificatie]
+    with symptom():
+        answer = send(http, f"{urls['zaakbrug']}{ZDS}/BeantwoordVraag", vraag, message)
+        assert zaak_identificaties(answer) == [zaak.identificatie]
 
 
 @pytest.mark.requires("openzaak")
@@ -399,10 +402,11 @@ def test_status_on_an_expired_zaaktype_version_uses_that_versions_statustype(
         omschrijving="Ingediend v1",
         gezet=datetime.now(UTC).replace(microsecond=0),
     )
-    assert is_bevestiging(
-        send(http, f"{urls['zaakbrug']}{ZDS}/OntvangAsynchroon", envelope, "actualiseerZaakstatus_Lk01")
-    )
-    statussen = openzaak.list(f"{ZAKEN}/statussen", {"zaak": str(zaak["url"])})
-    of_version = strings(expired.get("statustypen"))
-    assert [s["statustype"] for s in statussen if s["statustype"] not in of_version] == []
+    with symptom():
+        assert is_bevestiging(
+            send(http, f"{urls['zaakbrug']}{ZDS}/OntvangAsynchroon", envelope, "actualiseerZaakstatus_Lk01")
+        )
+        statussen = openzaak.list(f"{ZAKEN}/statussen", {"zaak": str(zaak["url"])})
+        of_version = strings(expired.get("statustypen"))
+        assert [s["statustype"] for s in statussen if s["statustype"] not in of_version] == []
     assert statussen, f"no status on {zaak['identificatie']}"

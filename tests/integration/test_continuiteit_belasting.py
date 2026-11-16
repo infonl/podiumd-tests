@@ -35,6 +35,8 @@ from podiumd_tests.chaos_load import slowdown
 from podiumd_tests.chaos_load import watched_load
 from podiumd_tests.clients.api import per_thread
 from podiumd_tests.components import COMPONENTS
+from podiumd_tests.defects import DefectSymptomError
+from podiumd_tests.defects import symptom
 from podiumd_tests.oidc import LOGIN_PATHS
 from podiumd_tests.perf.availability_report import problems
 from podiumd_tests.seed.opennotificaties import delivery_attempts
@@ -368,7 +370,7 @@ def test_no_submission_is_lost_while_the_open_formulieren_worker_is_down(
 )
 @pytest.mark.xfail(
     strict=True,
-    raises=AssertionError,
+    raises=DefectSymptomError,
     reason="[open-formulieren-8] Open Formulieren 4.0.7 leaves a submission whose processing task failed on the"
     " unreachable database pending without needs_on_completion_retry, so it is never registered; not yet reported upstream",
 )
@@ -399,7 +401,8 @@ def test_no_accepted_submission_is_lost_when_postgres_restarts(
     record_property("report", load_report(load, watch, start))
     accepted = [attempt for attempt in load.attempts if attempt.error is None]
     lost = unregistered(podiumd_env, openzaak, registry, accepted, start)
-    assert lost == [], f"{len(lost)} of {len(accepted)} accepted submissions not registered"
+    with symptom():
+        assert lost == [], f"{len(lost)} of {len(accepted)} accepted submissions not registered"
 
 
 def login_calls(env: Environment) -> dict[str, Callable[[], object]]:

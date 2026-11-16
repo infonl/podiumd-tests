@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.auth.zgw_jwt import unsigned_jwt
+from podiumd_tests.defects import DefectSymptomError
+from podiumd_tests.defects import symptom
 from podiumd_tests.office_addin import BACKEND
 from podiumd_tests.office_addin import MANIFESTS
 from podiumd_tests.office_addin import UNREPLACED_URL
@@ -52,7 +54,7 @@ def test_manifest_points_to_an_https_host(http: requests.Session, urls: dict[str
 
 
 @pytest.mark.source("podiumd-tests", "Checks that the Office add-in backend refuses a token without a signature.")
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="[zgw-office-addin-1] reported privately")
+@pytest.mark.xfail(strict=True, raises=DefectSymptomError, reason="[zgw-office-addin-1] reported privately")
 @pytest.mark.scenario("""
     Given a token without a signature
     When a client looks up a zaak in the ZGW Office add-in backend with it
@@ -64,14 +66,15 @@ def test_backend_refuses_an_unsigned_token(http: requests.Session, urls: dict[st
         f"{urls['zgw-office-addin']}{BACKEND}/zaken/ptest-unknown",
         headers={"Authorization": f"Bearer {unsigned_jwt({'preferred_username': 'ptest-forged', 'name': 'ptest'})}"},
     )
-    assert response.status_code in REFUSED, describe(response)
+    with symptom():
+        assert response.status_code in REFUSED, describe(response)
 
 
 @pytest.mark.source(
     "podiumd-tests", "Checks that the Office add-in backend refuses a document upload with a token without a signature."
 )
 @pytest.mark.requires("openzaak")
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="[zgw-office-addin-1] reported privately")
+@pytest.mark.xfail(strict=True, raises=DefectSymptomError, reason="[zgw-office-addin-1] reported privately")
 @pytest.mark.scenario("""
     Given a zaak in Open Zaak
     And a token without a signature
@@ -104,4 +107,5 @@ def test_backend_refuses_a_document_upload_with_an_unsigned_token(
         headers={"Authorization": f"Bearer {token}"},
     )
     registry.add(f"documents of {zaak['identificatie']}", lambda: delete_documents_of(openzaak, str(zaak["url"])))
-    assert response.status_code in REFUSED, describe(response)
+    with symptom():
+        assert response.status_code in REFUSED, describe(response)

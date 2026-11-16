@@ -26,6 +26,7 @@ from typing import cast
 import pytest
 import yaml
 
+from podiumd_tests.defects import DefectSymptomError
 from podiumd_tests.json_data import JsonObject
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
@@ -185,7 +186,7 @@ def expect_defect(  # noqa: PLR0913  # one marker
     component: str,
     affected: Callable[[tuple[int, ...]], bool],
     *,
-    raises: type[BaseException],
+    raises: type[BaseException] = DefectSymptomError,
     reason: str,
 ) -> None:
     """Mark the test a strict xfail when the deployed component's version is affected; an unknown version is not."""

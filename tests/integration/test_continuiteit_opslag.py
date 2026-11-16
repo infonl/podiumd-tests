@@ -26,6 +26,8 @@ from podiumd_tests.chaos_load import load_report
 from podiumd_tests.chaos_load import recovery_seconds
 from podiumd_tests.chaos_load import watched_load
 from podiumd_tests.components import COMPONENTS
+from podiumd_tests.defects import DefectSymptomError
+from podiumd_tests.defects import symptom
 from podiumd_tests.mock_server import Callback
 from podiumd_tests.responses import is_root_answering
 from podiumd_tests.seed.opennotificaties import make_abonnement
@@ -275,7 +277,7 @@ def test_redis_users_recover_after_a_restart(redis_restart: StoreRestart) -> Non
 @REDIS_SOURCE
 @pytest.mark.xfail(
     strict=True,
-    raises=AssertionError,
+    raises=DefectSymptomError,
     reason="[open-inwoner-7] Open Inwoner 2.5.0's celery-monitor exits on a Redis restart and its worker stalls"
     " until the liveness probe kills it; neither reconnects; not yet reported upstream",
 )
@@ -286,7 +288,8 @@ def test_redis_users_recover_after_a_restart(redis_restart: StoreRestart) -> Non
 """)
 def test_no_other_container_restarts_when_redis_restarts(redis_restart: StoreRestart) -> None:
     """No container besides Redis's restarts around a Redis restart."""
-    assert redis_restart.restarted == []
+    with symptom():
+        assert redis_restart.restarted == []
 
 
 @pytest.fixture(scope="module", name="solr_outage")
@@ -357,7 +360,7 @@ SOLR_SOURCE = pytest.mark.source(
 @SOLR_SOURCE
 @pytest.mark.xfail(
     strict=True,
-    raises=AssertionError,
+    raises=DefectSymptomError,
     reason="[zac-38] ZAC 5.9.1's readiness check includes Solr: after 20 failed probes the pod leaves its"
     " Service and every page answers 502; not yet reported upstream",
 )
@@ -372,7 +375,8 @@ def test_zaak_pages_keep_opening_while_solr_is_stopped(
     """The zaak page answers throughout a Solr outage."""
     record_property("measured", solr_outage.measured)
     record_property("report", solr_outage.report)
-    assert solr_outage.failed == [], "the zaak page failed while Solr was down"
+    with symptom():
+        assert solr_outage.failed == [], "the zaak page failed while Solr was down"
 
 
 @SOLR_REQUIRES
@@ -392,7 +396,7 @@ def test_search_fails_fast_while_solr_is_stopped(solr_outage: SolrOutage) -> Non
 @SOLR_SOURCE
 @pytest.mark.xfail(
     strict=True,
-    raises=AssertionError,
+    raises=DefectSymptomError,
     reason="[zac-39] ZAC 5.9.1 logs and drops the indexing of a notification it gets while Solr is down;"
     " no retry; not yet reported upstream",
 )
@@ -404,7 +408,8 @@ def test_search_fails_fast_while_solr_is_stopped(solr_outage: SolrOutage) -> Non
 """)
 def test_a_zaak_made_while_solr_is_stopped_is_found(solr_outage: SolrOutage) -> None:
     """A zaak created while Solr is down is found by ZAC's search once Solr is back."""
-    assert solr_outage.found, f"ZAC's search does not find the zaak {zac_app.INDEX_TIMEOUT} s after Solr is back"
+    with symptom():
+        assert solr_outage.found, f"ZAC's search does not find the zaak {zac_app.INDEX_TIMEOUT} s after Solr is back"
 
 
 @SOLR_REQUIRES
@@ -430,7 +435,7 @@ POSTGRES_SOURCE = pytest.mark.source(
 @POSTGRES_SOURCE
 @pytest.mark.xfail(
     strict=True,
-    raises=AssertionError,
+    raises=DefectSymptomError,
     reason="[open-zaak-17] Open Zaak 1.29.3 (notifications-api-common 0.10.1) does not retry a send_notification"
     " that fails on its dead database connection after a Postgres restart; not yet reported upstream",
 )
@@ -447,7 +452,8 @@ def test_no_notificatie_is_lost_when_postgres_restarts(
     record_property("measured", postgres_restart.measured)
     record_property("report", postgres_restart.report)
     lost = postgres_restart.lost
-    assert lost == [], f"{len(lost)} of {postgres_restart.created} notificaties lost"
+    with symptom():
+        assert lost == [], f"{len(lost)} of {postgres_restart.created} notificaties lost"
 
 
 @POSTGRES_REQUIRES

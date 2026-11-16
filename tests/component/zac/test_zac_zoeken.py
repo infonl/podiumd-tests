@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.bootstrap.bpmn import uuid_of
+from podiumd_tests.defects import DefectSymptomError
+from podiumd_tests.defects import symptom
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import describe
@@ -278,7 +280,7 @@ def test_saved_zoekopdracht_is_offered_until_deleted(
     strict=True,
     reason="[zac-22] ZAC 5.9.1 deletes another user's saved zoekopdracht (DELETE "
     "/rest/gebruikersvoorkeuren/zoekopdracht/{id} checks no owner); not yet reported upstream",
-    raises=AssertionError,
+    raises=DefectSymptomError,
 )
 @pytest.mark.requires("pabc")
 @pytest.mark.scenario("""
@@ -299,8 +301,9 @@ def test_zoekopdracht_of_another_user_is_not_deleted(
     if response.status_code == HTTPStatus.UNAUTHORIZED:
         pytest.fail(f"the raadpleger is not logged in: {describe(response)}")  # no sign of zac-22
     offered = {item.get("id") for item in zoekopdrachten(zac, urls["zac"], WERKVOORRAAD_ZAKEN)}
-    assert saved["id"] in offered, describe(response)
-    assert response.status_code == HTTPStatus.FORBIDDEN, describe(response)
+    with symptom():
+        assert saved["id"] in offered, describe(response)
+        assert response.status_code == HTTPStatus.FORBIDDEN, describe(response)
 
 
 @pytest.mark.scenario("""

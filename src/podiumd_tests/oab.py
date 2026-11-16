@@ -172,7 +172,6 @@ def expect_admin_logout_bug(request: pytest.FixtureRequest, env: Environment) ->
         env,
         "openarchiefbeheer",
         lambda version: version >= ADMIN_LOGOUT_POST_ONLY,
-        raises=AssertionError,
         reason="[open-archiefbeheer-7] Open Archiefbeheer 2.1.2: the admin's 'Log out' link sends a GET,"
         " which Django 5.2's logout answers with 405; not yet reported upstream",
     )

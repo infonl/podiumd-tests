@@ -23,10 +23,11 @@ from podiumd_tests.basisregistraties import KVK_TEST_VESTIGING
 from podiumd_tests.bootstrap.bpmn import bpmn_link
 from podiumd_tests.bootstrap.bpmn import uuid_of
 from podiumd_tests.bootstrap.names import BPMN_PRODUCTAANVRAAGTYPE
+from podiumd_tests.defects import DefectSymptomError
+from podiumd_tests.defects import symptom
 from podiumd_tests.json_data import section
 from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import submit
-from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import created_notificatie
 from podiumd_tests.seed.objecten import make_productaanvraag
@@ -238,7 +239,7 @@ def test_betrokkenen_of_a_productaanvraag_become_rollen(
 
 @pytest.mark.xfail(
     strict=True,
-    raises=UnexpectedStatusError,
+    raises=DefectSymptomError,
     reason="[podiumd-chart-42] the podiumd chart's Productaanvraag-Dimpact objecttype (4.10.0, 4.10.1) refuses a "
     "betrokkene with kvkNummer and vestigingsNummer (oneOf matches two branches); not reported upstream",
 )
@@ -264,9 +265,10 @@ def test_company_betrokkene_at_vestiging_level_becomes_a_rol(
         "vestigingsNummer": KVK_TEST_VESTIGING,
         "rolOmschrijvingGeneriek": "belanghebbende",
     }
-    make_productaanvraag(
-        objecten, registry, productaanvraag_objecttype, bpmn_productaanvraagtype, kenmerk, betrokkenen=[betrokkene]
-    )
+    with symptom():
+        make_productaanvraag(
+            objecten, registry, productaanvraag_objecttype, bpmn_productaanvraagtype, kenmerk, betrokkenen=[betrokkene]
+        )
     zaak = handled_zaak(zac, urls["zac"], openzaak, registry, kenmerk)
     rollen = openzaak.list(f"{ZAKEN}/rollen", {"zaak": str(zaak["url"])})
     vestigingen = [section(rol, "betrokkeneIdentificatie").get("vestigingsNummer") for rol in rollen]

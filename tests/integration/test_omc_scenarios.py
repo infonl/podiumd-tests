@@ -22,6 +22,7 @@ from podiumd_tests.bootstrap.names import TAAK_OBJECTTYPE
 from podiumd_tests.bootstrap.names import TAAK_OBJECTTYPE_UUID
 from podiumd_tests.bootstrap.names import TEST_ZAAKTYPE
 from podiumd_tests.bootstrap.omc import notify_mock_missing
+from podiumd_tests.defects import symptom
 from podiumd_tests.json_data import section
 from podiumd_tests.mailpit import own_address
 from podiumd_tests.omc import EMAIL
@@ -429,7 +430,6 @@ def test_concurrent_taken_reach_their_own_inwoner(
         podiumd_env,
         "omc",
         lambda version: version < OMC_REQUEST_SCOPED_QUERIES,
-        raises=AssertionError,
         reason="[omc-8] OMC before 2.4.1 keeps the notification in a singleton QueryBase, so concurrent requests are "
         "processed with each other's object, zaak and inwoner (privacy); fixed in OMC v.2.4.1",
     )
@@ -452,4 +452,5 @@ def test_concurrent_taken_reach_their_own_inwoner(
         )
         for adres in expected
     }
-    assert found == expected
+    with symptom():
+        assert found == expected

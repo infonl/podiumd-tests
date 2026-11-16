@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.bootstrap.omc import notify_mock_missing
+from podiumd_tests.defects import symptom
 from podiumd_tests.mailpit import own_address
 from podiumd_tests.omc import EMAIL
 from podiumd_tests.omc import OMC_LISTEN
@@ -24,7 +25,6 @@ from podiumd_tests.omc import listen
 from podiumd_tests.omc import make_inwoner
 from podiumd_tests.omc import notify_request
 from podiumd_tests.omc import setting_skip
-from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.seed.openvtb import make_bericht
 from podiumd_tests.workloads import expect_defect
 
@@ -57,7 +57,6 @@ def expect_omc_5(request: pytest.FixtureRequest, env: Environment) -> None:
         env,
         "omc",
         lambda version: version < OMC_READS_NEW_OPENVTB,
-        raises=UnexpectedStatusError,
         reason="[omc-5] OMC before 2.3.2 requires mijnOverheidBerichtenbox on an Open VTB 0.2.0 bericht, where it lives "
         "on the berichttype, and cannot read any bericht (206); fixed in OMC v.2.3.2",
     )
@@ -90,7 +89,8 @@ def test_bericht_to_a_non_citizen_is_dropped(
     expect_omc_5(request, podiumd_env)
     bericht = make_bericht(podiumd_env, openvtb_berichten, registry, "urn:ptest:ontvanger:1")
     event = bericht_event(PUBLISHED, str(bericht["uuid"]))
-    expect_outcome(listen(http, podiumd_env, event), HTTPStatus.ACCEPTED, "Dropped: recipient is not a citizen")
+    with symptom():
+        expect_outcome(listen(http, podiumd_env, event), HTTPStatus.ACCEPTED, "Dropped: recipient is not a citizen")
 
 
 @pytest.mark.requires("openklant")
@@ -124,5 +124,6 @@ def test_bericht_is_mailed_to_the_inwoner(
         pytest.skip(reason)
     expect_omc_5(request, podiumd_env)
     event = bericht_event(PUBLISHED, str(bericht["uuid"]))
-    expect_outcome(listen(http, podiumd_env, event), HTTPStatus.ACCEPTED, "Digitale post (email) notification sent")
+    with symptom():
+        expect_outcome(listen(http, podiumd_env, event), HTTPStatus.ACCEPTED, "Digitale post (email) notification sent")
     notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_MESSAGEBOX")

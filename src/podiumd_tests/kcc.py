@@ -440,6 +440,7 @@ def expect_ita_group_access_bug(request: pytest.FixtureRequest, env: Environment
         env,
         "ita",
         lambda version: version < ITA_GROUP_ACCESS_FIXED,
+        # The 403 comes from any ITA call of the test or its fixtures, so no symptom() block can hold it.
         raises=UnexpectedStatusError,
         reason="ITA before 3.3.4 refuses a groep member a contactverzoek assigned to the groep first"
         " (403: its guard reads the deprecated toegewezenAanActor reference; ITA#582)",

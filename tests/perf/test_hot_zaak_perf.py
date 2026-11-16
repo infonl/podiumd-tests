@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.config import REPO_ROOT
+from podiumd_tests.defects import symptom
 from podiumd_tests.perf.availability import Watch
 from podiumd_tests.perf.availability import watched_run
 from podiumd_tests.perf.availability_report import problems
@@ -107,7 +108,6 @@ def _expect_slow_links(request: pytest.FixtureRequest, env: Environment) -> None
         env,
         "openzaak",
         lambda version: version < ETAGS_INVALIDATED,
-        raises=AssertionError,
         reason="[open-zaak-16] Open Zaak before 1.31.1 recalculates the zaak's ETags on every link: link p95 about 3 s"
         " at 100 documents, 7-9 s at 400; fixed in 1.31.1 (open-zaak#2577)",
     )
@@ -141,7 +141,8 @@ def test_hot_zaak_links_succeed(
     server_errors = sum(count for _name, error, count in read_failures(failures) if "HTTP 500" in error)
     if server_errors:
         found.append(f"{server_errors} links answered 500")
-    assert found == []
+    with symptom():
+        assert found == []
 
 
 @pytest.mark.scenario("""
@@ -165,9 +166,10 @@ def test_hot_zaak_links_do_not_slow_down(
     assert len(buckets) > 1, f"links in {len(buckets)} bucket: too few to compare"
     first, last = buckets[min(buckets)], buckets[max(buckets)]
     limit = slowdown_limit(thresholds(REPO_ROOT / "perf.yaml", HOT_ZAAK), first.p95_ms)
-    assert last.p95_ms <= limit, (
-        f"p95 of the last links {last.p95_ms:.0f} ms > {limit:.0f} ms (first {first.p95_ms:.0f})"
-    )
+    with symptom():
+        assert last.p95_ms <= limit, (
+            f"p95 of the last links {last.p95_ms:.0f} ms > {limit:.0f} ms (first {first.p95_ms:.0f})"
+        )
 
 
 @pytest.mark.scenario("""

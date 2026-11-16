@@ -20,6 +20,7 @@ from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.browser import keycloak_login
 from podiumd_tests.browser import redirect_login
 from podiumd_tests.components import DJANGO_APPS
+from podiumd_tests.defects import symptom
 from podiumd_tests.oab import expect_admin_logout_bug
 from podiumd_tests.oidc import LOGIN_PATHS
 from podiumd_tests.oidc import has_keycloak_login
@@ -166,5 +167,8 @@ def test_admin_logout_returns_to_the_login(
     keycloak_login(page, ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
     page.wait_for_url(lambda url: is_in_admin(url, admin))
     page.get_by_role("button", name=LOGOUT).or_(page.get_by_role("link", name=LOGOUT)).first.click()
-    page.goto(f"{admin}/admin/")
-    assert "login" in page.url or url_host(page.url) == url_host(urls["keycloak"]), f"still in the admin: {page.url}"
+    with symptom():
+        page.goto(f"{admin}/admin/")
+        assert "login" in page.url or url_host(page.url) == url_host(urls["keycloak"]), (
+            f"still in the admin: {page.url}"
+        )
