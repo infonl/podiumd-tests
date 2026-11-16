@@ -36,6 +36,8 @@ from podiumd_tests.seed.openzaak import CATALOGI
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.zac import clear_ztc_cache
 from podiumd_tests.zac import configure_zaaktype
+from podiumd_tests.zac import read_zaakafhandelparameters
+from podiumd_tests.zac import save_zaakafhandelparameters
 from podiumd_tests.zac import user_groups
 from podiumd_tests.zac import zac_session
 
@@ -227,15 +229,21 @@ def make_zac_zaaktype(  # noqa: PLR0913  # the zaaktype's parts
     *,
     informatieobjecttypen: Sequence[str] = (),
     types: ZaaktypeTypes = ZAC_TYPES,
+    bpmn_process: str | None = None,
     **fields: object,
 ) -> JsonObject:
     """Publish a throwaway zaaktype, grant it and configure it in the admin's first group; its zaakafhandelparameters.
 
-    Cleanup deletes it and then clears ZAC's ZTC cache.
+    It runs ZAC's CMMN model, or the BPMN process with key bpmn_process (ZAC 5.12: ZAC binds a configuration to one
+    engine for good). Cleanup deletes it and then clears ZAC's ZTC cache.
     """
     zaaktype = publish_zac_zaaktype(
         env, openzaak, registry, template, informatieobjecttypen=informatieobjecttypen, types=types, **fields
     )
     grant_zaaktype(env, registry, str(zaaktype["omschrijving"]))
     admin, zac_url = zac_as_admin(env), env.profile.urls["zac"]
-    return configure_zaaktype(admin, zac_url, uuid_of(zaaktype["url"]), user_groups(admin, zac_url)[0])
+    uuid, groep = uuid_of(zaaktype["url"]), user_groups(admin, zac_url)[0]
+    if bpmn_process is None:
+        return configure_zaaktype(admin, zac_url, uuid, groep)
+    process = {"processDefinition": {"processEngine": "BPMN", "key": bpmn_process}, "defaultGroepId": groep}
+    return save_zaakafhandelparameters(admin, zac_url, {**read_zaakafhandelparameters(admin, zac_url, uuid), **process})

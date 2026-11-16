@@ -12,6 +12,11 @@ from typing import NamedTuple
 
 import pytest
 
+from podiumd_tests.bootstrap.bpmn import HARDCODED
+from podiumd_tests.bootstrap.bpmn import HARDCODED_TO
+from podiumd_tests.bootstrap.bpmn import PROCESS_KEY
+from podiumd_tests.bootstrap.bpmn import TOEWIJZING
+from podiumd_tests.bootstrap.bpmn import complete_intake
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
@@ -20,9 +25,12 @@ from podiumd_tests.seed.zac_zaaktype import email_informatieobjecttype
 from podiumd_tests.seed.zac_zaaktype import make_group_member
 from podiumd_tests.seed.zac_zaaktype import make_role_group
 from podiumd_tests.seed.zac_zaaktype import make_zac_zaaktype
+from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import is_older_than
+from podiumd_tests.workloads import skip_older_than
 from podiumd_tests.zac import LIST_TIMEOUT
+from podiumd_tests.zac import assignment
 from podiumd_tests.zac import can_open_zaak
 from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
@@ -264,3 +272,57 @@ def test_taak_of_a_marked_zaak_is_read_only_by_its_behandelaar(  # the zaak, its
         timeout=LIST_TIMEOUT,
         description="the behandelaar finds the taak of the marked zaak and the colleague does not",
     )
+
+
+# ZAC grants a BPMN user task's assignee the zaakspecifieke autorisatie of the zaak from this release on (#7693).
+GRANTS_BPMN_TAAKBEHANDELAAR = (5, 12, 0)
+
+
+@pytest.mark.requires("cluster")
+@pytest.mark.source(
+    "PZW Sprint 83 PZ-13199",
+    "A behandelaar that the BPMN process assigns a taak to gets the zaak's zaakspecifieke autorisatie automatically.",
+)
+@pytest.mark.scenario("""
+    Given a zaak of a zaakspecifiek autoriseerbaar zaaktype that runs podiumd-tests' BPMN process
+    And its behandelaar, a member of a new group, has marked it zaakspecifiek geautoriseerd
+    And so the test admin cannot open it
+    When the behandelaar completes the intake on the route whose next taak the process assigns to the test admin
+    Then the test admin can open the zaak
+""")
+def test_bpmn_taak_behandelaar_gets_the_zaakspecifieke_autorisatie(  # the zaaktype's parts
+    podiumd_env: Environment,
+    urls: dict[str, str],
+    openzaak: ApiClient,
+    test_zaaktype: JsonObject,
+    parts: ZaaktypeParts,
+    registry: ResourceRegistry,
+) -> None:
+    """ZacCreateUserTaskInterceptor grants the HARDCODED taak's behandelaar access to the marked zaak.
+
+    ZAC reads a user's zaaktypen at login: the sessions start after the zaaktype exists.
+    """
+    skip_older_than(podiumd_env, "zac", GRANTS_BPMN_TAAKBEHANDELAAR, "no grant to a BPMN taak's behandelaar")
+    zac_url = urls["zac"]
+    parameters = make_zac_zaaktype(
+        podiumd_env,
+        openzaak,
+        registry,
+        test_zaaktype,
+        informatieobjecttypen=(parts.informatieobjecttype,),
+        types=ZAAKSPECIFIEK_TYPES,
+        bpmn_process=PROCESS_KEY,
+    )
+    group = make_role_group(podiumd_env, registry, "behandelaar")
+    naam, password = make_group_member(podiumd_env, registry, group)
+    admin, behandelaar = zac_as_admin(podiumd_env), zac_session(podiumd_env, naam, password)
+    zaak = create_zaak(admin, zac_url, parameters, omschrijving=registry.tagged("zac-bpmn-zsa"))
+    # The behandelaar reads the zaak at cleanup: the admin cannot once it is marked.
+    clean_up_zaak(behandelaar, zac_url, openzaak, registry, zaak)
+    expect_status(toekennen(admin, zac_url, zaak, group, naam), HTTPStatus.OK)
+    expect_status(_mark(behandelaar, zac_url, zaak), HTTPStatus.OK)
+    assert not can_open_zaak(admin, zac_url, zaak)
+
+    complete_intake(behandelaar, zac_url, zaak, (group, naam), **{TOEWIJZING: True})
+    assert assignment(open_task(behandelaar, zac_url, str(zaak["uuid"]), HARDCODED)) == HARDCODED_TO
+    assert can_open_zaak(admin, zac_url, zaak)
