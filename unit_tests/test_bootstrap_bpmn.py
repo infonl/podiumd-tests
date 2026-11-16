@@ -57,9 +57,9 @@ def test_published_zaaktype_skips_concepts_and_names_the_step():
     assert uuid_of(ZAAKTYPE["url"]) == "zt-1"
 
 
-def test_configuration_links_the_process_to_the_zaaktype(monkeypatch):
+def test_link_names_the_process_and_the_zaaktype(monkeypatch):
     monkeypatch.setattr(bpmn, "user_groups", lambda _http, _zac: ["beheerders"])
-    body = ZacBpmnProcess(ADMIN).configuration(None, "https://zac", ZAAKTYPE)  # pyright: ignore[reportArgumentType]
+    body = ZacBpmnProcess(ADMIN).link(None, "https://zac", ZAAKTYPE)  # pyright: ignore[reportArgumentType]
     assert (body["zaaktypeUuid"], body["bpmnProcessDefinitionKey"], body["groepNaam"]) == (
         "zt-1",
         PROCESS_KEY,
@@ -68,6 +68,16 @@ def test_configuration_links_the_process_to_the_zaaktype(monkeypatch):
     # A link left for a deleted zaaktype must neither block the next one nor break ZAC's list of links.
     assert "productaanvraagtype" not in body
     assert "zaakNietOntvankelijkResultaattype" not in body
+
+
+def test_link_from_zac_5_12_is_a_bpmn_process_definition(monkeypatch, zac_5_9):
+    monkeypatch.setattr(bpmn, "user_groups", lambda _http, _zac: ["beheerders"])
+    zac_5_9["https://zac"] = True
+    body = ZacBpmnProcess(ADMIN).link(None, "https://zac", ZAAKTYPE)  # pyright: ignore[reportArgumentType]
+    assert (body["processDefinition"], body["defaultGroepId"]) == (
+        {"processEngine": "BPMN", "key": PROCESS_KEY},
+        "beheerders",
+    )
 
 
 LINK = {"bpmnProcessDefinitionKey": PROCESS_KEY, "zaaktypeUuid": "zt-1"}

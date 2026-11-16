@@ -4,10 +4,12 @@ import io
 import json
 import subprocess
 
+from collections import defaultdict
 from collections.abc import Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from types import SimpleNamespace
+from typing import override
 
 import pytest
 import requests
@@ -15,6 +17,7 @@ import requests
 from playwright.sync_api import Error as PlaywrightError
 from requests.adapters import HTTPAdapter
 
+from podiumd_tests import zac
 from podiumd_tests.config import parse_profile
 from podiumd_tests.environment import Environment
 
@@ -278,3 +281,19 @@ def page_env(monkeypatch, profile_factory):
         return env
 
     return build
+
+
+class _KnownZac(defaultdict[str, bool]):
+    """Every ZAC URL is known: False (ZAC 5.9) unless a test sets it."""
+
+    @override
+    def __contains__(self, key: object) -> bool:
+        return True
+
+
+@pytest.fixture(autouse=True)
+def zac_5_9(monkeypatch):
+    """ZAC fakes answer as ZAC 5.9: no process definitions, without asking; a test sets a URL to True for 5.12."""
+    known = _KnownZac(bool)
+    monkeypatch.setattr(zac, "_process_definitions", known)
+    return known

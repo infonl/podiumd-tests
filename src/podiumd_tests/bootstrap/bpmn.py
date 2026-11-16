@@ -26,6 +26,7 @@ from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.clients.platform import openzaak_client
 from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
 from podiumd_tests.pabc import add_entity_type
 from podiumd_tests.pabc import admin_session
 from podiumd_tests.pabc import application_roles
@@ -37,6 +38,9 @@ from podiumd_tests.pabc import ensure_functional_role
 from podiumd_tests.pabc import find_entity_type
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import published_zaaktype
+from podiumd_tests.zac import has_process_definitions
+from podiumd_tests.zac import read_zaakafhandelparameters
+from podiumd_tests.zac import save_zaakafhandelparameters
 from podiumd_tests.zac import user_groups
 from podiumd_tests.zac import zac_session
 from podiumd_tests.zac_taken import complete_task
@@ -143,7 +147,13 @@ def uuid_of(url: object) -> str:
 
 
 def bpmn_link(http: requests.Session, zac: str, zaaktype: str) -> JsonObject | None:
-    """ZAC's link of process PROCESS_KEY to the zaaktype (uuid), its zaaktype-bpmn-configuration; None without one."""
+    """ZAC's link of process PROCESS_KEY to the zaaktype (uuid): its configuration; None without one.
+
+    From ZAC 5.12 the zaakafhandelparameters with that processDefinition, before its zaaktype-bpmn-configuration.
+    """
+    if has_process_definitions(http, zac):
+        found = read_zaakafhandelparameters(http, zac, zaaktype)
+        return found if section(found, "processDefinition").get("key") == PROCESS_KEY else None
     links = entries(expect_status(http.get(zac + CONFIGURATION), HTTPStatus.OK).json())
     mine = (link for link in links if link.get("bpmnProcessDefinitionKey") == PROCESS_KEY)
     return next((link for link in mine if link.get("zaaktypeUuid") == zaaktype), None)
@@ -194,18 +204,26 @@ class ZacBpmnProcess:
         self._map_roles(ctx, str(zaaktype["omschrijving"]))
         http, zac = self._zac(ctx)
         deploy_process(http, zac, PROCESS_KEY, process_files())
-        existing = bpmn_link(http, zac, uuid_of(zaaktype["url"])) or {}
-        link = {**existing, **self.configuration(http, zac, zaaktype)}
-        expect_status(http.post(zac + CONFIGURATION, json=link), HTTPStatus.OK)
+        uuid = uuid_of(zaaktype["url"])
+        unified = has_process_definitions(http, zac)
+        existing = read_zaakafhandelparameters(http, zac, uuid) if unified else bpmn_link(http, zac, uuid) or {}
+        store_link(http, zac, {**existing, **self.link(http, zac, zaaktype)})
         return {}
 
-    def configuration(self, http: requests.Session, zac: str, zaaktype: JsonObject) -> JsonObject:
-        """ZAC's zaaktype-bpmn-configuration request for the zaaktype."""
+    def link(self, http: requests.Session, zac: str, zaaktype: JsonObject) -> JsonObject:
+        """Return the link's fields: zaakafhandelparameters from ZAC 5.12, else a zaaktype-bpmn-configuration."""
+        groep = user_groups(http, zac)[0]
+        if has_process_definitions(http, zac):
+            process = {"processDefinition": {"processEngine": "BPMN", "key": PROCESS_KEY}, "defaultGroepId": groep}
+        else:
+            process = {
+                "zaaktypeUuid": uuid_of(zaaktype["url"]),
+                "zaaktypeOmschrijving": zaaktype["omschrijving"],
+                "bpmnProcessDefinitionKey": PROCESS_KEY,
+                "groepNaam": groep,
+            }
         return {
-            "zaaktypeUuid": uuid_of(zaaktype["url"]),
-            "zaaktypeOmschrijving": zaaktype["omschrijving"],
-            "bpmnProcessDefinitionKey": PROCESS_KEY,
-            "groepNaam": user_groups(http, zac)[0],
+            **process,
             "defaultBehandelaarId": self.admin.username,
             "betrokkeneKoppelingen": {"brpKoppelen": True, "kvkKoppelen": True},
             "brpDoelbindingen": {
@@ -298,6 +316,14 @@ class ZacBpmnProductaanvraag:
 
     def _store(self, ctx: Context, link: JsonObject) -> None:
         http, zac = _zac_login(ctx, self.admin)
+        store_link(http, zac, link)
+
+
+def store_link(http: requests.Session, zac: str, link: JsonObject) -> None:
+    """Save the BPMN process's link to its zaaktype, as zaakafhandelparameters from ZAC 5.12."""
+    if has_process_definitions(http, zac):
+        save_zaakafhandelparameters(http, zac, link)
+    else:
         expect_status(http.post(zac + CONFIGURATION, json=link), HTTPStatus.OK)
 
 

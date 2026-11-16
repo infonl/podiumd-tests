@@ -117,6 +117,25 @@ def productaanvraag_parameters(http: requests.Session, zac_url: str, profile: Pr
     return found[0]
 
 
+# From ZAC 5.12 one zaaktype configuration holds a CMMN or BPMN processDefinition, saved with
+# PUT /rest/zaakafhandelparameters/{zaaktype uuid}; ZAC 5.9 saves CMMN ones with PUT /rest/zaakafhandelparameters and
+# links BPMN processes in /rest/zaaktype-bpmn-configuration.
+PROCESS_DEFINITIONS = "/rest/zaakafhandelparameters/process-definitions"
+_process_definitions: dict[str, bool] = {}
+
+
+def has_process_definitions(http: requests.Session, zac_url: str) -> bool:
+    """Return whether ZAC configures zaaktypen with a processDefinition (ZAC 5.12 and later); asked once per URL."""
+    if zac_url not in _process_definitions:
+        _process_definitions[zac_url] = http.get(zac_url + PROCESS_DEFINITIONS).status_code == HTTPStatus.OK
+    return _process_definitions[zac_url]
+
+
+def is_valide(parameters: JsonObject) -> bool:
+    """Return ZAC's verdict valide of zaakafhandelparameters: isValide from ZAC 5.12, valide before."""
+    return bool(parameters.get("isValide", parameters.get("valide")))
+
+
 def read_zaakafhandelparameters(http: requests.Session, zac_url: str, zaaktype_uuid: str) -> JsonObject:
     """Return ZAC's zaakafhandelparameters of one zaaktype version, complete for a save; id None when it has none."""
     response = http.get(f"{zac_url}/rest/zaakafhandelparameters/{zaaktype_uuid}")
@@ -132,6 +151,9 @@ def save_zaakafhandelparameters(http: requests.Session, zac_url: str, parameters
 
 def put_zaakafhandelparameters(http: requests.Session, zac_url: str, parameters: JsonObject) -> requests.Response:
     """Send zaakafhandelparameters to save; ZAC's answer."""
+    if has_process_definitions(http, zac_url):
+        uuid = section(parameters, "zaaktype").get("uuid")
+        return http.put(f"{zac_url}/rest/zaakafhandelparameters/{uuid}", json=parameters)
     return http.put(f"{zac_url}/rest/zaakafhandelparameters", json=parameters)
 
 
@@ -160,15 +182,21 @@ def configure_zaaktype(
 
     The niet-ontvankelijk resultaattype is the zaaktype's first; ZAC runs a user event only with a parameter for it.
     """
-    response = http.get(f"{zac_url}/rest/zaakafhandelparameters/case-definitions/{CASE_DEFINITION}")
-    definition = cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
+    if has_process_definitions(http, zac_url):
+        definitions = get_entries(http, zac_url + PROCESS_DEFINITIONS)
+        definition = next(found for found in definitions if found.get("key") == CASE_DEFINITION)
+        process = {"processDefinition": definition}
+    else:
+        response = http.get(f"{zac_url}/rest/zaakafhandelparameters/case-definitions/{CASE_DEFINITION}")
+        definition = cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
+        process = {"caseDefinition": {"key": CASE_DEFINITION, "naam": definition["naam"]}}
     events = [
         {"id": event["id"], "naam": event["naam"]} for event in entries(definition["userEventListenerDefinitions"])
     ]
     first = get_entries(http, f"{zac_url}/rest/zaakafhandelparameters/resultaattypes/{zaaktype_uuid}")[0]
     parameters = {
         **read_zaakafhandelparameters(http, zac_url, zaaktype_uuid),
-        "caseDefinition": {"key": CASE_DEFINITION, "naam": definition["naam"]},
+        **process,
         "defaultGroepId": groep,
         "zaakNietOntvankelijkResultaattype": first,
         "userEventListenerParameters": events,
@@ -222,6 +250,7 @@ def group_members(http: requests.Session, zac_url: str, groep: str) -> set[str]:
 # Fields of ZAC's inrichtingscheck that its verdict valide does not require.
 NOT_REQUIRED_FOR_VALIDE = {
     "valide",
+    "isValide",
     "heeftWaarschuwingen",
     "besluittypeAanwezig",
     "isZaakspecifiekeAutorisatieEigenschapAanwezig",
@@ -238,7 +267,7 @@ def inrichtingscheck_problems(check: JsonObject) -> list[str]:
         problems.append("besluittypeAanwezig")
     if check.get("heeftWaarschuwingen"):
         problems.append("heeftWaarschuwingen")
-    if not problems and not check.get("valide"):
+    if not problems and not is_valide(check):
         problems.append("valide")
     return sorted(problems)
 
