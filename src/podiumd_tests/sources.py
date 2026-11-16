@@ -23,6 +23,8 @@ ORIGINS = {
     # Another project's test suite: "external <owner>/<repo> <case>".
     "external": "a test suite of another project (docs/research/external-test-sources-plan.md)",
     "draaiboek": "TA test-catalog/cases.yaml",
+    # A ZAC sprint's acceptance scenarios: "PZW Sprint <n> <Jira key>".
+    "PZW": "Dimpact Confluence space PZW (PodiumD Zaak-ZAC wiki), Sprint <n> - Test Scenarios and Results",
     "podiumd-tests": "made in this suite",
 }
 

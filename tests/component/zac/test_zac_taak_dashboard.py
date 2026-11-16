@@ -9,12 +9,16 @@ import pytest
 
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import ZAC_ROLE_USERS
+from podiumd_tests.defects import symptom
 from podiumd_tests.responses import expect_status
 from podiumd_tests.wait import wait_until
+from podiumd_tests.workloads import expect_defect
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import LIST_TIMEOUT
+from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import is_taak_listed
+from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac_signaleringen import signalering_taken
 from podiumd_tests.zac_signaleringen import turn_signaleringen
 from podiumd_tests.zac_taken import ADVIES_INTERN
@@ -28,8 +32,12 @@ if TYPE_CHECKING:
 
     import requests
 
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
+
+# ZAC no longer indexes the taken afbreken ends from this release on (zac-41).
+AFGEBROKEN_TAKEN_UNLISTED = (5, 11, 0)
 
 pytestmark = [
     pytest.mark.component,
@@ -125,3 +133,43 @@ def test_taken_from_the_list_are_released_and_assigned(
         timeout=LIST_TIMEOUT,
         description=f"task {taak['id']} in Mijn taken of {naam}",
     )
+
+
+@pytest.mark.source(
+    "PZW Sprint 83 PZ-13190",
+    "Open taken of an afgebroken zaak no longer show in the werklijst Mijn taken on the dashboard.",
+)
+@pytest.mark.scenario("""
+    Given a zaak in ZAC with an open taak in the behandelaar's Mijn taken
+    When the behandelaar breaks the zaak off
+    Then the taak leaves Mijn taken
+""")
+def test_taak_of_an_afgebroken_zaak_leaves_mijn_taken(
+    request: pytest.FixtureRequest,
+    podiumd_env: Environment,
+    zac: requests.Session,
+    urls: dict[str, str],
+    taak: JsonObject,
+) -> None:
+    """Afbreken ends the zaak's open taak, and Mijn taken no longer lists it."""
+    expect_defect(
+        request,
+        podiumd_env,
+        "zac",
+        lambda version: version < AFGEBROKEN_TAKEN_UNLISTED,
+        reason="[zac-41] ZAC before 5.11.0 indexes the taken that afbreken ends again, so they stay in Mijn taken and on"
+        " the dashboard; fixed in ZAC 5.11.0 (#7595)",
+    )
+    zac_url = urls["zac"]
+    wait_until(
+        lambda: is_taak_listed(zac, zac_url, taak, alleenMijnTaken=True),
+        timeout=LIST_TIMEOUT,
+        description=f"task {taak['id']} in Mijn taken",
+    )
+    expect_status(afbreken(zac, zac_url, read_zaak(zac, zac_url, str(taak["zaakUuid"]))), HTTPStatus.OK)
+    with symptom():
+        wait_until(
+            lambda: not is_taak_listed(zac, zac_url, taak, alleenMijnTaken=True),
+            timeout=LIST_TIMEOUT,
+            description=f"task {taak['id']} gone from Mijn taken",
+        )
