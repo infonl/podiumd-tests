@@ -43,6 +43,7 @@ def test_render_counts_cases_scenarios_and_expected_failures():
     assert "| component | 4 | 3 | 1 |" in text
     assert "| **full tier** | **4** | **3** | **1** |" in text
     assert "| **chaos tier** | **1** | **1** | **0** |" in text
+    assert "| **test suite** | **5** | **4** | **1** |" in text
     assert "| zac-10 | 1 |" in text
     assert "| - | 1 |" in text
     assert "Unit tests (`unit_tests/`, functions): 7. Perf endpoints (`perf/runs.py`): 3." in text

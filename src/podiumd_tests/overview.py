@@ -46,7 +46,7 @@ out of date. Scenarios: test functions, each with one scenario. Tests: the runs 
 parameters (one run per role, say) counts once per parameter, so Tests is at least Scenarios.
 Expected failures: cases with an xfail marker naming a known issue; a fixture that marks a test only on some
 versions is not counted. Per tier: one row per test directory; the full and chaos tiers select from smoke,
-component and integration, without and with the destructive tests.
+component and integration, without and with the destructive tests; the test suite row counts every test once.
 """
 
 
@@ -151,6 +151,8 @@ def _tier_rows(cases: list[Case], tiers: list[str]) -> list[tuple[object, ...]]:
         expected = sum(bool(case.known_issues) for case in of_tier)
         counts = (len(of_tier), _scenarios(of_tier), expected)
         rows.append((f"**{name} tier**", *(f"**{count}**" for count in counts)))
+    total = (len(cases), _scenarios(cases), sum(bool(case.known_issues) for case in cases))
+    rows.append(("**test suite**", *(f"**{count}**" for count in total)))
     return rows
 
 

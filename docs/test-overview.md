@@ -5,7 +5,7 @@ out of date. Scenarios: test functions, each with one scenario. Tests: the runs 
 parameters (one run per role, say) counts once per parameter, so Tests is at least Scenarios.
 Expected failures: cases with an xfail marker naming a known issue; a fixture that marks a test only on some
 versions is not counted. Per tier: one row per test directory; the full and chaos tiers select from smoke,
-component and integration, without and with the destructive tests.
+component and integration, without and with the destructive tests; the test suite row counts every test once.
 
 ## Per tier
 
@@ -17,6 +17,7 @@ component and integration, without and with the destructive tests.
 | perf | 80 | 9 | 0 |
 | **full tier** | **1400** | **733** | **93** |
 | **chaos tier** | **66** | **52** | **14** |
+| **test suite** | **1546** | **794** | **107** |
 
 Unit tests (`unit_tests/`, functions): 944. Perf endpoints (`perf/runs.py`): 32.
 
