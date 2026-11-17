@@ -104,38 +104,14 @@ def fixture_grafana(http: requests.Session, urls: dict[str, str], credentials: S
 @pytest.mark.scenario("""
     When Grafana's datasources are read
     Then there is a Prometheus datasource
-""")
-def test_prometheus_datasource_provisioned(grafana: Grafana) -> None:
-    """Grafana has a Prometheus datasource."""
-    kinds = sorted({str(d.get("type")) for d in grafana.datasources})
-    assert grafana.uid("prometheus"), f"no prometheus datasource; types: {kinds}"
-
-
-@pytest.mark.source(
-    "MK test_metrics.py",
-    "Metrics profile: Grafana's provisioned datasources and Prometheus' scrape targets are healthy, not just Running.",
-)
-@pytest.mark.source(
-    "MK test_monitoring_logging.py",
-    "monitoring-logging stack: Grafana datasources, healthy Prometheus scrape targets and Loki pod logs.",
-)
-@pytest.mark.source(
-    "PI test_metrics.py",
-    "Metrics checks adapted from podiumd-minikube: Grafana datasources provisioned, Prometheus scrape targets healthy.",
-)
-@pytest.mark.source(
-    "PI test_monitoring_logging.py",
-    "monitoring-logging checks adapted from podiumd-minikube: Grafana datasources, scrape targets and Loki pod logs.",
-)
-@pytest.mark.scenario("""
     When Prometheus' scrape targets are read through Grafana
     Then there are scrape targets
     And all of them are up
 """)
 def test_prometheus_scrape_targets_up(grafana: Grafana) -> None:
-    """Prometheus has scrape targets, and all of them are up."""
-    if not grafana.uid("prometheus"):
-        pytest.skip("no prometheus datasource")
+    """Grafana has a Prometheus datasource; Prometheus has scrape targets, and all of them are up."""
+    kinds = sorted({str(d.get("type")) for d in grafana.datasources})
+    assert grafana.uid("prometheus"), f"no prometheus datasource; types: {kinds}"
     body = grafana.proxy("prometheus", "/api/v1/targets")
     assert target_count(body), "no active scrape targets"
     started = section(grafana.proxy("prometheus", "/api/v1/status/runtimeinfo"), "data").get("startTime")
