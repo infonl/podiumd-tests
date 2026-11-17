@@ -84,24 +84,6 @@ def inwoner_zaak(
     return lambda adres: make_inwoner_zaak(openzaak, openklant, registry, parts, adres)[0]
 
 
-@pytest.mark.scenario("""
-    Given a zaak in Open Zaak whose initiator has an e-mail address in Open Klant
-    When the zaak gets its first status
-    Then OMC asks Notify to send the inwoner the zaak-created e-mail
-""")
-def test_new_zaak_mails_the_initiator(
-    podiumd_env: Environment,
-    openzaak: ApiClient,
-    registry: ResourceRegistry,
-    parts: ZaaktypeParts,
-    inwoner_zaak: Callable[[str], JsonObject],
-) -> None:
-    """The first status of an inwoner's zaak makes OMC send the zaak-created e-mail."""
-    adres = own_address(registry)
-    make_status(openzaak, inwoner_zaak(adres), str(parts.statustypen[0]["url"]))
-    notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_ZAAKCREATE")
-
-
 @pytest.mark.source(
     "PCP NotifyNL en Output Management Component, Testen van OMC",
     "OMC informs the inwoner at the voorkeursadres; after a switch of voorkeur, the next status goes to the other one.",

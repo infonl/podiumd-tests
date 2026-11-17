@@ -13,11 +13,11 @@ component and integration, without and with the destructive tests; the test suit
 | --- | --- | --- | --- |
 | smoke | 241 | 41 | 10 |
 | component | 1027 | 611 | 69 |
-| integration | 212 | 144 | 19 |
+| integration | 211 | 143 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1414** | **744** | **84** |
+| **full tier** | **1413** | **743** | **84** |
 | **chaos tier** | **66** | **52** | **14** |
-| **test suite** | **1560** | **805** | **98** |
+| **test suite** | **1559** | **804** | **98** |
 
 Unit tests (`unit_tests/`, functions): 948. Perf endpoints (`perf/runs.py`): 32.
 
@@ -81,7 +81,7 @@ Unit tests (`unit_tests/`, functions): 948. Perf endpoints (`perf/runs.py`): 32.
 | integration | klantcontact_zaak | 3 | 3 |
 | integration | mail | 9 | 2 |
 | integration | notificaties | 9 | 9 |
-| integration | omc | 6 | 6 |
+| integration | omc | 5 | 5 |
 | integration | omc_bericht | 3 | 3 |
 | integration | omc_scenarios | 12 | 11 |
 | integration | portaal_notificaties | 3 | 3 |
@@ -113,7 +113,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | ZAC | 16 |
 | draaiboek | 91 |
 | external | 224 |
-| podiumd-tests | 554 |
+| podiumd-tests | 553 |
 | upstream | 244 |
 
 ## Expected failures per known issue
