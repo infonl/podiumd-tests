@@ -6,19 +6,30 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 from podiumd_tests.json_data import entries
+from podiumd_tests.json_data import section
+from podiumd_tests.openformulieren import complete_submission
+from podiumd_tests.openformulieren import logged_in_submission
+from podiumd_tests.openformulieren import make_form
+from podiumd_tests.openformulieren import productaanvraag_registration
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.objecten import forget_productaanvraag
 from podiumd_tests.seed.openzaak import delete_zaak
+from podiumd_tests.seed.zac_zaaktype import make_zac_zaaktype
+from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import PRODUCTAANVRAAG_TIMEOUT
 from podiumd_tests.zac import list_page
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import recent_zaken
+from podiumd_tests.zac import save_zaakafhandelparameters
 
 if TYPE_CHECKING:
     import requests
 
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
+    from podiumd_tests.seed.catalogi import ZaaktypeTypes
     from podiumd_tests.seed.registry import ResourceRegistry
 
 
@@ -95,3 +106,54 @@ def clean_up_inbox_entries(
             expect_status(http.delete(f"{zac_url}/rest/inbox-productaanvragen/{entry['id']}"), HTTPStatus.NO_CONTENT)
 
     registry.add(f"Inbox productaanvragen of type {productaanvraagtype}", delete)
+
+
+def productaanvraag_zaaktype(  # noqa: PLR0913  # the zaaktype's parts
+    env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    template: JsonObject,
+    *,
+    aanvraagtype: str,
+    types: ZaaktypeTypes,
+) -> requests.Session:
+    """Configure a throwaway zaaktype in ZAC for productaanvragen of aanvraagtype; a ZAC admin session that may use it.
+
+    The BRP koppeling is on: without it ZAC adds no initiator from the productaanvraag.
+    """
+    parameters = make_zac_zaaktype(env, openzaak, registry, template, types=types)
+    # A login after make_zac_zaaktype: ZAC reads the rights on the zaaktype at login.
+    zac = zac_as_admin(env)
+    koppelingen = {"brpKoppelen": True, "kvkKoppelen": True}
+    changed = {"productaanvraagtype": aanvraagtype, "betrokkeneKoppelingen": koppelingen}
+    save_zaakafhandelparameters(zac, env.profile.urls["zac"], {**parameters, **changed})
+    return zac
+
+
+def submit_digid_aanvraag(  # noqa: PLR0913  # the form's parts
+    env: Environment,
+    objecten: ApiClient,
+    registry: ResourceRegistry,
+    *,
+    objecttype: str,
+    aanvraagtype: str,
+    bsn: str,
+) -> JsonObject:
+    """Submit a new DigiD form as an inwoner with this BSN; the data of the productaanvraag it registered in Objecten.
+
+    The form registers the logged-in BSN as initiator (productaanvraag_registration). Cleanup deletes form and object.
+    """
+    slug = registry.tagged("digid-aanvraag")
+    registration = productaanvraag_registration(env, objecttype, aanvraagtype, auth_initiator=True)
+    field = {"type": "textfield", "key": "omschrijving", "label": "Omschrijving", "showInSummary": True}
+    make_form(env, registry, slug, [field], registration, ("digid_oidc",))
+    http, submission, headers = logged_in_submission(env, registry, slug, "digid_oidc", {"bsn": [bsn]})
+    data = {"omschrijving": slug}
+    status = complete_submission(env, http, submission, headers, data, timeout=PRODUCTAANVRAAG_TIMEOUT)
+    kenmerk = str(status["publicReference"])
+    forget_productaanvraag(objecten, registry, kenmerk)
+    found = objecten.list("objects", {"data_attr": f"bron__kenmerk__exact__{kenmerk}"})
+    if len(found) != 1:
+        msg = f"{len(found)} productaanvraag objects with kenmerk {kenmerk}"
+        raise AssertionError(msg)
+    return section(section(found[0], "record"), "data")

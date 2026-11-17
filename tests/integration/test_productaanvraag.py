@@ -9,8 +9,6 @@ documents of its informatieobjecttypen.
 
 from __future__ import annotations
 
-import json
-
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -28,9 +26,11 @@ from podiumd_tests.defects import DefectSymptomError
 from podiumd_tests.defects import symptom
 from podiumd_tests.json_data import section
 from podiumd_tests.openformulieren import make_form
+from podiumd_tests.openformulieren import productaanvraag_registration
 from podiumd_tests.openformulieren import submit
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import created_notificatie
+from podiumd_tests.seed.objecten import forget_productaanvraag
 from podiumd_tests.seed.objecten import make_productaanvraag
 from podiumd_tests.seed.openklant import make_submission_contact
 from podiumd_tests.seed.openzaak import ZAKEN
@@ -120,38 +120,12 @@ def test_new_form_becomes_a_zac_zaak(
 ) -> None:
     """A new form registered as a productaanvraag in Objecten, as the gemeente sets it up, makes ZAC start a zaak."""
     slug = registry.tagged("zac-formulier")
-    # Open Formulieren's productaanvraag template, as the environments configure it.
-    content = (
-        '{"bron": {"naam": "Open Formulieren", "kenmerk": "{{ submission.public_reference }}"},'
-        f' "type": {json.dumps(productaanvraagtype)}, "aanvraaggegevens": {{% json_summary %}}, "taal": "nld"}}'
-    )
-    registration = {
-        "backend": "objects_api",
-        "objects_api": f"{podiumd_env.profile.urls['objecten']}/api/v2/",
-        "options": {
-            "version": 1,
-            "objecttype": productaanvraag_objecttype.rstrip("/").rsplit("/", 1)[-1],
-            "objecttype_version": 1,
-            "content_json": content,
-            "update_existing_object": False,
-            "upload_submission_csv": False,
-            "auth_attribute_path": [],
-            "iot_submission_report": "",
-            "iot_submission_csv": "",
-            "iot_attachment": "",
-        },
-    }
+    registration = productaanvraag_registration(podiumd_env, productaanvraag_objecttype, productaanvraagtype)
     field = {"type": "textfield", "key": "omschrijving", "label": "Omschrijving", "showInSummary": True}
     make_form(podiumd_env, registry, slug, [field], registration)
     status = submit(podiumd_env, http, registry, slug, {"omschrijving": slug}, timeout=PRODUCTAANVRAAG_TIMEOUT)
     kenmerk = str(status["publicReference"])
-    registry.add(
-        f"productaanvraag {kenmerk}",
-        lambda: [
-            objecten.delete(str(o["url"]))
-            for o in objecten.list("objects", {"data_attr": f"bron__kenmerk__exact__{kenmerk}"})
-        ],
-    )
+    forget_productaanvraag(objecten, registry, kenmerk)
     zaak = productaanvraag_zaak(openzaak_productaanvraag, registry, kenmerk)
     wait_in_werkvoorraad(zac, podiumd_env.profile.urls["zac"], zaak)
 

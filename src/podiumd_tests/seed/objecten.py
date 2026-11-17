@@ -134,6 +134,17 @@ def make_productaanvraag(
     return make_object(objecten, registry, objecttype, data)
 
 
+def forget_productaanvraag(objecten: ApiClient, registry: ResourceRegistry, kenmerk: str) -> None:
+    """Register the deletion of the productaanvraag objects a form registered with this kenmerk."""
+    registry.add(
+        f"productaanvraag {kenmerk}",
+        lambda: [
+            objecten.delete(str(found["url"]))
+            for found in objecten.list("objects", {"data_attr": f"bron__kenmerk__exact__{kenmerk}"})
+        ],
+    )
+
+
 def created_notificatie(created: JsonObject) -> JsonObject:
     """Return the notificatie Objecten sends for the new object."""
     return notificatie("objecten", "object", str(created["url"]), "create", objectType=created["type"])

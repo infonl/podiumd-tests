@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import secrets
 
@@ -414,6 +415,41 @@ def make_form(  # noqa: PLR0913, PLR0917  # mirrors the snippet's parameters
     }
     run_snippet(env.kube, deployment, "openformulieren_form", {**params, "settings": settings, "action": "apply"})
     registry.add_snippet(f"form {slug}", env.kube, deployment, "openformulieren_form", _removal(slug))
+
+
+# The authenticated BSN in Open Formulieren's registration templates.
+AUTH_BSN = "{{ variables.auth_bsn }}"
+
+
+def productaanvraag_registration(
+    env: Environment, objecttype: str, aanvraagtype: str, *, auth_initiator: bool = False
+) -> dict[str, object]:
+    """Return a registration of a productaanvraag in Objecten, with Open Formulieren's productaanvraag template.
+
+    auth_initiator: the logged-in inwoner's BSN as initiator in betrokkenen, which ZAC 5.12 reads it from.
+    """
+    initiator = [{"inpBsn": AUTH_BSN, "rolOmschrijvingGeneriek": "initiator"}]
+    betrokkenen = f', "betrokkenen": {json.dumps(initiator)}' if auth_initiator else ""
+    content = (
+        '{"bron": {"naam": "Open Formulieren", "kenmerk": "{{ submission.public_reference }}"},'
+        f' "type": {json.dumps(aanvraagtype)}, "aanvraaggegevens": {{% json_summary %}}, "taal": "nld"{betrokkenen}}}'
+    )
+    return {
+        "backend": "objects_api",
+        "objects_api": f"{env.profile.urls['objecten']}/api/v2/",
+        "options": {
+            "version": 1,
+            "objecttype": objecttype.rstrip("/").rsplit("/", 1)[-1],
+            "objecttype_version": 1,
+            "content_json": content,
+            "update_existing_object": False,
+            "upload_submission_csv": False,
+            "auth_attribute_path": [],
+            "iot_submission_report": "",
+            "iot_submission_csv": "",
+            "iot_attachment": "",
+        },
+    }
 
 
 def remove_form(env: Environment, slug: str) -> None:

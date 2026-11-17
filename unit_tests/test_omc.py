@@ -12,6 +12,7 @@ from podiumd_tests.mock_server import NOTIFY_EMAIL
 from podiumd_tests.omc import EMAIL
 from podiumd_tests.omc import make_inwoner_zaak
 from podiumd_tests.omc import notify_request
+from podiumd_tests.seed.openklant import random_phone_number
 from podiumd_tests.seed.openzaak import ZaaktypeParts
 from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -47,6 +48,7 @@ def test_make_inwoner_zaak_gives_the_partij_and_the_initiator_one_bsn(monkeypatc
 
     for name in ("make_partij", "make_partij_identificator", "make_digitaal_adres", "make_zaak", "make_rol"):
         monkeypatch.setattr(omc, name, recorder(name))
+    monkeypatch.setattr(omc, "partijen_of", lambda *_: [])
     parts = ZaaktypeParts("zt", [], {"initiator": "rt"}, "iot", {}, "", [])
     client = ApiClient(requests.Session(), "https://api.example.test", {})
     _, bsn = make_inwoner_zaak(client, client, ResourceRegistry("ptest-x"), parts, "a@example.invalid")
@@ -123,3 +125,37 @@ def test_besluit_notificatie_is_about_the_besluit_and_its_document_link():
 def test_bericht_event_is_a_cloudevent_about_the_bericht():
     event = omc.bericht_event("bericht-gepubliceerd", "b1")
     assert (event["type"], event["subject"]) == ("nl.overheid.berichten.bericht-gepubliceerd", "b1")
+
+
+API = "https://api.example.test"
+PARTIJ = f"{API}/partijen/p1"
+IDENTIFICATOREN = {"results": [{"identificeerdePartij": {"url": PARTIJ}}], "next": None}
+
+
+def test_make_inwoner_gives_an_existing_partij_the_addresses_and_restores_its_voorkeur(fake_http):
+    sent = fake_http(
+        {
+            "GET /partij-identificatoren": (200, IDENTIFICATOREN),
+            "GET /partijen/p1": (200, {"url": PARTIJ, "uuid": "p1", "voorkeursDigitaalAdres": {"uuid": "oud"}}),
+            "POST /digitaleadressen": (201, {"url": f"{API}/digitaleadressen/d1", "uuid": "d1"}),
+            "GET /digitaleadressen": (200, {"results": [{"adres": "a@example.invalid", "uuid": "d1"}], "next": None}),
+            "PATCH /partijen/p1": (200, {}),
+            "DELETE /digitaleadressen/d1": (204, None),
+        }
+    )
+    client = ApiClient(requests.Session(), API, {})
+    registry = ResourceRegistry("ptest-x")
+    assert omc.make_inwoner(client, registry, "a@example.invalid", "+31612345678", bsn="999990019") == "999990019"
+    assert [s.method for s in sent].count("POST") == 2
+    patches = [json.loads(s.body) for s in sent if s.method == "PATCH"]
+    assert patches == [{"voorkeursDigitaalAdres": {"uuid": "d1"}}]
+    registry.cleanup()
+    patches = [json.loads(s.body) for s in sent if s.method == "PATCH"]
+    assert patches[-1] == {"voorkeursDigitaalAdres": {"uuid": "oud"}}
+
+
+def test_random_phone_number_is_a_dutch_mobile_number_in_international_form():
+    number = random_phone_number()
+    assert number.startswith("+316")
+    assert len(number) == 12
+    assert number[1:].isdigit()

@@ -8,6 +8,7 @@ They run only where OMC's Notify base URL is the mock server.
 
 from __future__ import annotations
 
+import dataclasses
 import time
 
 from datetime import UTC
@@ -17,9 +18,11 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.bootstrap.omc import notify_mock_missing
 from podiumd_tests.bootstrap.omc import omc_actor_missing
 from podiumd_tests.bootstrap.omc import omc_token
+from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.mailpit import own_address
 from podiumd_tests.omc import EMAIL
@@ -38,7 +41,14 @@ from podiumd_tests.seed.openzaak import close_zaak
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
 from podiumd_tests.seed.openzaak import make_zaak
+from podiumd_tests.seed.zac_zaaktype import ZAC_TYPES
 from podiumd_tests.wait import wait_until
+from podiumd_tests.zac import afhandelen
+from podiumd_tests.zac import afronden_intake
+from podiumd_tests.zac import read_zaak
+from podiumd_tests.zac_productaanvraag import productaanvraag_zaak
+from podiumd_tests.zac_productaanvraag import productaanvraag_zaaktype
+from podiumd_tests.zac_productaanvraag import submit_digid_aanvraag
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -60,11 +70,13 @@ pytestmark = [
         "TA's OMC specs check only OMC's API; these cover the chain from a zaak status through OMC and Notify back to Open Klant.",
     ),
 ]
+# ZAC_TYPES whose statussen inform the initiator: OMC sends nothing for a status without informeren.
+INFORMING_TYPES = dataclasses.replace(ZAC_TYPES, informeren=True)
 
 
-def need_chain(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> None:
-    """Skip unless Open Notificaties delivers zaak events to OMC and OMC's Notify is the mock server."""
-    need_bootstrap("omc-abonnement", "infra-mock-server")
+def need_chain(podiumd_env: Environment, need_bootstrap: Callable[..., None], *steps: str) -> None:
+    """Skip unless Open Notificaties delivers zaak events to OMC, OMC's Notify is the mock server, and steps are done."""
+    need_bootstrap("omc-abonnement", "infra-mock-server", *steps)
     reason = notify_mock_missing(podiumd_env)
     if reason:
         pytest.skip(reason)
@@ -84,36 +96,50 @@ def inwoner_zaak(
     return lambda adres: make_inwoner_zaak(openzaak, openklant, registry, parts, adres)[0]
 
 
+@pytest.mark.requires("zac", "objecten", "openformulieren")
 @pytest.mark.source(
     "PCP NotifyNL en Output Management Component, Testen van OMC",
-    "OMC informs the inwoner at the voorkeursadres; after a switch of voorkeur, the next status goes to the other one.",
+    "A DigiD form's productaanvraag becomes a zaak that informs the inwoner at the voorkeursadres; after a switch "
+    "of voorkeur, Intake afronden in ZAC informs at the other address.",
 )
 @pytest.mark.scenario("""
-    Given a zaak in Open Zaak whose initiator has an e-mail address and a phone number in Open Klant
-    And the e-mail address is the initiator's voorkeursadres
-    When the zaak gets its first status
-    Then OMC asks Notify to send the zaak-created e-mail to the e-mail address
-    When the initiator prefers the phone number and the zaak gets a status that does not close it
-    Then OMC asks Notify to send the zaak-updated SMS to the phone number
+    Given an inwoner logged in with DigiD submits a form that registers a productaanvraag, e-mail preferred over phone
+    When ZAC makes it a zaak of a zaaktype whose statussen inform, OMC sends the zaak-created e-mail to the e-mail
+    When the inwoner prefers the phone and the behandelaar finishes the intake in ZAC
+    Then OMC sends the zaak-updated SMS to the phone
+    When the behandelaar closes the zaak in ZAC
+    Then OMC sends the zaak-closed SMS to the phone
 """)
-def test_next_status_informs_at_the_voorkeursadres(  # the chain's clients
+def test_productaanvraag_zaak_informs_the_inwoner_at_the_voorkeursadres(  # the chain's clients
     podiumd_env: Environment,
     need_bootstrap: Callable[..., None],
     openzaak: ApiClient,
     openklant: ApiClient,
+    objecten: ApiClient,
     registry: ResourceRegistry,
-    parts: ZaaktypeParts,
+    test_zaaktype: JsonObject,
+    productaanvraag_objecttype: str,
 ) -> None:
-    """OMC informs the initiator at the voorkeursDigitaalAdres the partij has when each status arrives."""
-    assert len(parts.statustypen) >= 3, "the test zaaktype needs a status between the first and the eindstatus"
-    need_chain(podiumd_env, need_bootstrap)
+    """OMC informs the productaanvraag's initiator at the voorkeursDigitaalAdres the partij has at each status."""
+    need_chain(podiumd_env, need_bootstrap, "openformulieren-oidc-mock")
+    zac_url, aanvraagtype = podiumd_env.profile.urls["zac"], registry.tagged("omc-aanvraag")
+    zac = productaanvraag_zaaktype(
+        podiumd_env, openzaak, registry, test_zaaktype, aanvraagtype=aanvraagtype, types=INFORMING_TYPES
+    )
     email, phone = own_address(registry), random_phone_number()
-    zaak, bsn = make_inwoner_zaak(openzaak, openklant, registry, parts, email, phone)
-    make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
+    make_inwoner(openklant, registry, email, phone, bsn=EREBOS)
+    aanvraag = submit_digid_aanvraag(
+        podiumd_env, objecten, registry, objecttype=productaanvraag_objecttype, aanvraagtype=aanvraagtype, bsn=EREBOS
+    )
+    assert [betrokkene.get("inpBsn") for betrokkene in entries(aanvraag.get("betrokkenen"))] == [EREBOS]
+    zaak = productaanvraag_zaak(openzaak, registry, str(section(aanvraag, "bron")["kenmerk"]))
     notify_request(podiumd_env, EMAIL, email, "NOTIFY_TEMPLATEID_EMAIL_ZAAKCREATE")
-    set_voorkeursadres(openklant, bsn, phone)
-    make_status(openzaak, zaak, str(parts.statustypen[1]["url"]))
+    set_voorkeursadres(openklant, EREBOS, phone)
+    afronden_intake(zac, zac_url, zaak)
     notify_request(podiumd_env, SMS, phone, "NOTIFY_TEMPLATEID_SMS_ZAAKUPDATE")
+    in_zac = read_zaak(zac, zac_url, str(zaak["uuid"]))
+    expect_status(afhandelen(zac, zac_url, in_zac), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    notify_request(podiumd_env, SMS, phone, "NOTIFY_TEMPLATEID_SMS_ZAAKCLOSE")
 
 
 @pytest.mark.scenario("""

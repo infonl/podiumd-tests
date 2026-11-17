@@ -19,6 +19,7 @@ from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openklant import make_digitaal_adres
 from podiumd_tests.seed.openklant import make_partij
 from podiumd_tests.seed.openklant import make_partij_identificator
+from podiumd_tests.seed.openklant import partijen_of
 from podiumd_tests.seed.openklant import random_bsn
 from podiumd_tests.seed.openklant import set_voorkeursadres
 from podiumd_tests.seed.openzaak import make_rol
@@ -51,20 +52,37 @@ OMC_REQUEST_SCOPED_QUERIES = (2, 4, 1)
 OMC_LISTEN = "omc-listen"
 
 
-def make_inwoner(openklant: ApiClient, registry: ResourceRegistry, adres: str, *andere: str) -> str:
-    """Create a partij with a new BSN and these digitale adressen (e-mail addresses or phones); the BSN.
+def make_inwoner(
+    openklant: ApiClient, registry: ResourceRegistry, adres: str, *andere: str, bsn: str | None = None
+) -> str:
+    """Give a partij with this BSN (default a new one) these digitale adressen (e-mail addresses or phones); the BSN.
 
-    With andere, adres is the voorkeursDigitaalAdres.
+    With andere, adres is the voorkeursDigitaalAdres. Open Klant allows one partij per BSN: a partij of a BRP person
+    that exists already gets the addresses, and cleanup restores its voorkeursDigitaalAdres.
     """
-    bsn = random_bsn()
-    partij = make_partij(openklant, registry)
-    make_partij_identificator(openklant, registry, partij, "bsn", bsn)
+    bsn = bsn or random_bsn()
+    partij = _partij_of(openklant, registry, bsn)
     make_digitaal_adres(openklant, registry, partij, adres)
     for ander in andere:
         make_digitaal_adres(openklant, registry, partij, ander, standaard=False)
     if andere:
         set_voorkeursadres(openklant, bsn, adres)
     return bsn
+
+
+def _partij_of(openklant: ApiClient, registry: ResourceRegistry, bsn: str) -> JsonObject:
+    """Return the partij with this BSN; a new one when Open Klant has none."""
+    found = partijen_of(openklant, bsn)
+    if not found:
+        partij = make_partij(openklant, registry)
+        make_partij_identificator(openklant, registry, partij, "bsn", bsn)
+        return partij
+    partij = openklant.get(found[0])
+    voorkeur = partij.get("voorkeursDigitaalAdres")
+    registry.add(
+        f"voorkeursDigitaalAdres of {found[0]}", lambda: openklant.patch(found[0], {"voorkeursDigitaalAdres": voorkeur})
+    )
+    return partij
 
 
 def make_inwoner_zaak(  # the zaak's clients and the addresses
