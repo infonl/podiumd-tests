@@ -13,6 +13,7 @@ import pytest
 
 from podiumd_tests.basisregistraties import KVK_RECHTSVORMEN
 from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
+from podiumd_tests.defects import DefectSymptomError
 from podiumd_tests.defects import symptom
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
@@ -258,13 +259,26 @@ def _intake_mail(  # the zaak, its mail and Mailpit
 
 @pytest.mark.parametrize(
     ("ontvankelijk", "mailtemplate"),
-    [(True, "ZAAK_ONTVANKELIJK"), (False, "ZAAK_NIET_ONTVANKELIJK")],
-    ids=["ontvankelijk", "niet-ontvankelijk"],
+    [
+        pytest.param(
+            True,
+            "ZAAK_ONTVANKELIJK",
+            id="ontvankelijk",
+            # Not strict: an estate that edited its ZAAK_ONTVANKELIJK mailtemplate hides the defect.
+            marks=pytest.mark.xfail(
+                strict=False,
+                raises=DefectSymptomError,
+                reason="[zac-18] ZAC 5.9.1's default ZAAK_ONTVANKELIJK mailtemplate uses {zaaknummer} and "
+                "{zaaktypenaam}, which ZAC does not fill in; not yet reported upstream",
+            ),
+        ),
+        pytest.param(False, "ZAAK_NIET_ONTVANKELIJK", id="niet-ontvankelijk"),
+    ],
 )
 @pytest.mark.scenario("""
     Given a new zaak in ZAC, in the intake
     When the behandelaar finishes the intake, ontvankelijk or not, with the mail of its mailtemplate
-    Then the mail arrives
+    Then the mail arrives, with the zaak's data filled in and no variable names
     And the zaak has the mail as a definitief, openbaar PDF/A
     And the zaak stays open only when ontvankelijk
 """)
@@ -284,31 +298,8 @@ def test_intake_mail_arrives_and_is_kept_as_a_definitief_pdf(  # the zaak, its m
     stored = _stored_mail(zac, urls["zac"], zaak, message)
     assert (stored["status"], stored["vertrouwelijkheidaanduiding"]) == ("definitief", "OPENBAAR")
     assert read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpen"] is ontvankelijk
-
-
-# Not strict: an estate that edited its ZAAK_ONTVANKELIJK mailtemplate hides the defect.
-@pytest.mark.xfail(
-    strict=False,
-    reason="[zac-18] ZAC 5.9.1's default ZAAK_ONTVANKELIJK mailtemplate uses {zaaknummer} and {zaaktypenaam}, which ZAC "
-    "does not fill in; not yet reported upstream",
-)
-@pytest.mark.scenario("""
-    Given a new zaak in ZAC, in the intake
-    When the behandelaar finishes the intake as ontvankelijk with the mail of its mailtemplate
-    Then the mail has the zaak's data filled in, no variable names
-""")
-def test_ontvankelijk_mail_fills_in_its_variables(
-    zac: requests.Session,
-    urls: dict[str, str],
-    zac_zaak: Callable[..., JsonObject],
-    zac_mail: Callable[..., JsonObject],
-    mailpit: ApiClient,
-    registry: ResourceRegistry,
-) -> None:
-    """The ontvankelijk mail's subject and body contain no {variable}."""
-    zaak = zac_zaak()
-    message = _intake_mail(zac, urls["zac"], zaak, zac_mail, mailpit, registry, "ZAAK_ONTVANKELIJK", ontvankelijk=True)
-    assert "{" not in f"{message.get('Subject')}{message.get('HTML')}"
+    with symptom():
+        assert "{" not in f"{message.get('Subject')}{message.get('HTML')}"
 
 
 @pytest.mark.scenario("""
