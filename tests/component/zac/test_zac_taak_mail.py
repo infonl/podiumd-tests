@@ -90,6 +90,10 @@ def test_advies_extern_mails_the_adviseur(
     assert (afgerond.get("status"), section(afgerond, "taakdata").get("externAdvies")) == ("AFGEROND", VRAAG)
 
 
+@pytest.mark.source(
+    "ZAC features/5-taken-toevoegen.feature",
+    "When Intake lacks information, a task Aanvullende informatie gives the zaak status 'Wacht op aanvullende informatie'.",
+)
 @ZAC_TEAM
 @THROWAWAY
 @TAKEN_ZAAKTYPE

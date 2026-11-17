@@ -129,29 +129,6 @@ def test_started_task_is_in_mijn_taken(
     )
 
 
-@pytest.mark.source(
-    "ZAC features/5-taken-toevoegen.feature",
-    "When Intake lacks information, a task Aanvullende informatie gives the zaak status 'Wacht op aanvullende informatie'.",
-)
-@THROWAWAY
-@TAKEN_ZAAKTYPE
-@pytest.mark.scenario("""
-    Given a zaak in ZAC
-    When the behandelaar starts the taak Aanvullende informatie on it
-    Then the zaak has the status Wacht op aanvullende informatie
-""")
-def test_aanvullende_informatie_gives_the_zaak_its_waiting_status(
-    zac: requests.Session, urls: dict[str, str], taak: JsonObject
-) -> None:
-    """ZAC sets the zaak's status when the task Aanvullende informatie starts (AanvullendeInformatieTaskListener)."""
-
-    def status() -> str | None:
-        naam = section(read_zaak(zac, urls["zac"], str(taak["zaakUuid"])), "status").get("naam")
-        return str(naam) if naam == WAITING else None
-
-    wait_until(status, timeout=LIST_TIMEOUT, description=f"status {WAITING!r} on {taak['zaakIdentificatie']}")
-
-
 @ZAAK_LIFECYCLE
 @THROWAWAY
 @TAKEN_ZAAKTYPE
