@@ -13,6 +13,7 @@ import pytest
 
 from podiumd_tests.bootstrap.bpmn import INTAKE
 from podiumd_tests.bootstrap.steps import ADMIN
+from podiumd_tests.defects import symptom
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import CATALOGI
@@ -20,12 +21,14 @@ from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.zac_zaaktype import make_other_domain_group
 from podiumd_tests.seed.zac_zaaktype import make_role_group
 from podiumd_tests.wait import wait_until
+from podiumd_tests.workloads import expect_defect
 from podiumd_tests.zac import AFGEROND
 from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import afhandelen
 from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import behandelaar_groups
+from podiumd_tests.zac import behandelaar_vrijgeven
 from podiumd_tests.zac import listed_assignment
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import search_all
@@ -55,6 +58,8 @@ if TYPE_CHECKING:
 # ZAC 5.12 mails when the taak Aanvullende informatie or Advies extern starts (zac_taken.MAIL_TASKS).
 pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "keycloak", "mailpit")]
 
+# ZAC releases the behandelaar Zaak bewerken leaves out from this release on (zac-46).
+RELEASES_IN_ZAAK_BEWERKEN = (5, 11, 0)
 # More zaken than one page of ZAC's werklijsten (WERKLIJST_ROWS).
 BULK = 100
 WERKLIJST_ROWS = 25
@@ -65,6 +70,36 @@ ZAC_TEAM = pytest.mark.source(
     "ZAC team's regression scenarios before PodiumD 4.10 (docs/research/zac-scenario-gaps.md,"
     " zoeken-werklijsten-dashboard).",
 )
+
+
+@pytest.mark.source("PZW Sprint 82 PZ-13101", "Releasing the behandelaar through 'Zaak bewerken' works.")
+@pytest.mark.scenario("""
+    Given a zaak of a group and a behandelaar
+    When the behandelaar saves the zaak in Zaak bewerken with its group and without a behandelaar
+    Then the zaak keeps its group and has no behandelaar
+""")
+def test_zaak_bewerken_without_a_behandelaar_releases_it(  # fixtures
+    request: pytest.FixtureRequest,
+    podiumd_env: Environment,
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    zac_group: str,
+) -> None:
+    """Zaak bewerken with the groep and without a behandelaar releases the behandelaar (ZAC #7536)."""
+    expect_defect(
+        request,
+        podiumd_env,
+        "zac",
+        lambda version: version < RELEASES_IN_ZAAK_BEWERKEN,
+        reason="[zac-46] ZAC before 5.11.0 keeps the behandelaar a zaak update leaves out, so Zaak bewerken cannot"
+        " release it; PZ-13101, fixed in ZAC 5.11.0 (#7536)",
+    )
+    zaak = zac_zaak()
+    expect_status(toekennen(zac, urls["zac"], zaak, zac_group, ADMIN.username), HTTPStatus.OK)
+    expect_status(behandelaar_vrijgeven(zac, urls["zac"], zaak, zac_group), HTTPStatus.OK)
+    with symptom():
+        assert assignment(read_zaak(zac, urls["zac"], str(zaak["uuid"]))) == (zac_group, None)
 
 
 @pytest.mark.source("ZAC features/9-bpmn.feature", "Bob changes the group and user a zaak is assigned to.")

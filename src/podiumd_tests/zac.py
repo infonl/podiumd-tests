@@ -534,8 +534,20 @@ WIJZIG_TIMEOUT = 60
 
 def wijzig_zaak(http: requests.Session, zac_url: str, zaak: JsonObject, **fields: object) -> requests.Response:
     """Change these fields (RestZaakCreateData) of the zaak, with a reden; ZAC's answer."""
+    return _patch_zaak(http, zac_url, zaak, fields)
+
+
+def behandelaar_vrijgeven(http: requests.Session, zac_url: str, zaak: JsonObject, groep: str) -> requests.Response:
+    """Release the behandelaar, keeping groep, with isBehandelaarVrijgegeven as Zaak bewerken (ZAC 5.12); the answer."""
+    return _patch_zaak(http, zac_url, zaak, {"groep": {"id": groep, "naam": groep}}, isBehandelaarVrijgegeven=True)
+
+
+def _patch_zaak(
+    http: requests.Session, zac_url: str, zaak: JsonObject, fields: Mapping[str, object], **extra: object
+) -> requests.Response:
+    """PATCH the zaak with these fields and a reden, plus extra top-level fields; ZAC's answer."""
     data = {"omschrijving": zaak["omschrijving"], "zaaktype": zaak["zaaktype"], **fields}
-    body = {"zaak": data, "reden": "podiumd-tests"}
+    body = {"zaak": data, "reden": "podiumd-tests", **extra}
     return http.patch(f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}", json=body, timeout=WIJZIG_TIMEOUT)
 
 
