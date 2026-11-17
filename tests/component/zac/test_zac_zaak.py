@@ -525,28 +525,6 @@ def test_betrokkenen_with_the_same_and_different_roles_are_listed(
     assert sorted(str(b.get("roltype")) for b in listed) == sorted(str(roltypen[r]["naam"]) for r, _ in wanted)
 
 
-@pytest.mark.tc("ZAC-058")
-@pytest.mark.source("draaiboek ZAC-058", "A document can be deleted.")
-@pytest.mark.scenario("""
-    Given a document uploaded to a zaak in ZAC
-    When the behandelaar deletes the document
-    Then the zaak no longer lists the document
-""")
-def test_document_can_be_deleted(
-    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
-) -> None:
-    """A document uploaded to the zaak in ZAC is gone from the zaak after ZAC deletes it."""
-    zaak = zac_zaak()
-    document = zac_documents.uploaded_document(zac, urls["zac"], zaak, registry)
-    assert document["uuid"] in [d.get("uuid") for d in zac_documents.zaak_documents(zac, urls["zac"], zaak)]
-    deleted = zac.delete(
-        zac_documents.document_url(urls["zac"], document),
-        json={"zaakUuid": zaak["uuid"], "reden": "test"},
-    )
-    expect_status(deleted, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    assert document["uuid"] not in [d.get("uuid") for d in zac_documents.zaak_documents(zac, urls["zac"], zaak)]
-
-
 @pytest.mark.tc("ZAC-056")
 @pytest.mark.source(
     "draaiboek ZAC-056", "A document can be edited directly; Word saves it automatically as the new version."

@@ -374,12 +374,15 @@ def test_locked_ontkoppeld_document_cannot_be_deleted_until_unlocked(
     assert ontkoppeld_entry(zac, urls["zac"], zaak, document) is None
 
 
+@pytest.mark.tc("ZAC-058")
+@pytest.mark.source("draaiboek ZAC-058", "A document can be deleted.")
 @pytest.mark.scenario("""
     Given a document on a zaak in ZAC
     When the behandelaar vergrendelt it
     Then the document shows as vergrendeld and cannot be deleted
     When the behandelaar ontgrendelt it
     Then the document can be deleted
+    And the zaak no longer lists it
 """)
 def test_locked_document_cannot_be_deleted_until_unlocked(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
