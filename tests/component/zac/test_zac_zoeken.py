@@ -214,47 +214,38 @@ def test_vertrouwelijkheidaanduiding_filter_counts_each_value(
     assert [item.get("id") for item in entries(filtered["resultaten"])] == [vertrouwelijk["uuid"]]
 
 
-@pytest.mark.scenario("""
-    Given two zaken in ZAC that a search lists
-    When the beheerder exports that search to CSV
-    Then the export holds the listed zaken in the same order, with their omschrijving
-""")
-def test_csv_export_holds_the_listed_zaken(
-    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
-) -> None:
-    """ZAC's CSV export of a search has a row per listed zaak, in the list's order."""
-    kenmerk = f"PT-{secrets.token_hex(4).upper()}"
-    zac_zaak(toelichting=kenmerk)
-    zac_zaak(toelichting=kenmerk)
-    order = {"sorteerVeld": "ZAAK_IDENTIFICATIE", "sorteerRichting": "desc"}
-    found = _found_by_kenmerk(zac, urls["zac"], kenmerk, 2, **order)
-    listed = [(item.get("identificatie"), item.get("omschrijving")) for item in entries(found["resultaten"])]
-    rows = csv_export(zac, urls["zac"], type="ZAAK", zoeken={"ZAAK_TOELICHTING": kenmerk}, **order)
-    assert [(row.get("identificatie"), row.get("omschrijving")) for row in rows] == listed
-
-
 @pytest.mark.xfail(
     strict=True,
+    raises=DefectSymptomError,
     reason="[zac-23] ZAC 5.9.1's CSV export header has more names than its rows have values, some twice "
     "(CsvService.exportToCsv counts excluded properties); not yet reported upstream",
 )
 @pytest.mark.scenario("""
     Given two zaken in ZAC that a search lists
     When the beheerder exports that search to CSV
-    Then the export's header names each column of its rows once
+    Then the export holds the listed zaken in the same order, with their omschrijving
+    And the export's header names each column of its rows once
 """)
-def test_csv_export_header_names_each_column_once(
+def test_csv_export_holds_the_listed_zaken(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
 ) -> None:
-    """The CSV export's header has one name per value of a row, none twice."""
+    """ZAC's CSV export of a search has a row per listed zaak, in the list's order, under one name per column.
+
+    Two zaken: the header of an export of one zaak fits its row.
+    """
     kenmerk = f"PT-{secrets.token_hex(4).upper()}"
-    # Two: the header of an export of one zaak fits its row.
-    for _ in range(2):
-        zac_zaak(toelichting=kenmerk)
-    _found_by_kenmerk(zac, urls["zac"], kenmerk, 2)
-    header, *rows = csv_export_lines(zac, urls["zac"], type="ZAAK", zoeken={"ZAAK_TOELICHTING": kenmerk})
-    assert [len(row) for row in rows] == [len(header), len(header)], header
-    assert len(set(header)) == len(header), header
+    zac_zaak(toelichting=kenmerk)
+    zac_zaak(toelichting=kenmerk)
+    order = {"sorteerVeld": "ZAAK_IDENTIFICATIE", "sorteerRichting": "desc"}
+    found = _found_by_kenmerk(zac, urls["zac"], kenmerk, 2, **order)
+    listed = [(item.get("identificatie"), item.get("omschrijving")) for item in entries(found["resultaten"])]
+    zoeken = {"ZAAK_TOELICHTING": kenmerk}
+    rows = csv_export(zac, urls["zac"], type="ZAAK", zoeken=zoeken, **order)
+    assert [(row.get("identificatie"), row.get("omschrijving")) for row in rows] == listed
+    header, *lines = csv_export_lines(zac, urls["zac"], type="ZAAK", zoeken=zoeken)
+    with symptom():
+        assert [len(line) for line in lines] == [len(header), len(header)], header
+        assert len(set(header)) == len(header), header
 
 
 @pytest.mark.source(
