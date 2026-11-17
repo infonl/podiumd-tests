@@ -11,6 +11,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.basisregistraties import KVK_RECHTSVORMEN
+from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
+from podiumd_tests.defects import symptom
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
@@ -20,6 +23,7 @@ from podiumd_tests.pdf import verapdf_report
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import CATALOGI
+from podiumd_tests.workloads import expect_defect
 from podiumd_tests.zac import BEVESTIGING_NIET_VERSTUURD
 from podiumd_tests.zac import afhandelen
 from podiumd_tests.zac import afronden_intake
@@ -30,6 +34,7 @@ from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac import zaak_mailtemplate
 from podiumd_tests.zac_beheer import create_mailtemplate
 from podiumd_tests.zac_beheer import link_mailtemplate
+from podiumd_tests.zac_betrokkenen import wijzig_initiator
 from podiumd_tests.zac_documents import stored_mail
 from podiumd_tests.zac_documents import uploaded_document
 from podiumd_tests.zac_documents import zaak_documents
@@ -40,6 +45,7 @@ if TYPE_CHECKING:
     import requests
 
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -54,6 +60,8 @@ pytestmark = [
 
 MAIL_TIMEOUT = 60
 REPLY_TO = "antwoord@example.invalid"
+# ZAC names an initiator that has only a KVK-nummer in mail templates from this release on (zac-47).
+NAMES_KVK_ONLY_INITIATOR = (5, 11, 0)
 
 
 def _titles(zac: requests.Session, zac_url: str, zaak: JsonObject) -> dict[str, object]:
@@ -354,6 +362,44 @@ def test_mail_fills_in_the_zaak_variables(
         zaaktype["uuid"],
     )
     assert f"<p>Beste ,</p><p>{'|'.join(map(str, values))}</p>" in str(message.get("HTML"))
+
+
+@pytest.mark.source(
+    "PZW Sprint 82 PZ-13037",
+    "A rechtspersoon initiator with only a KVK-nummer is recognised in a mailsjabloon (ZAC #7406).",
+)
+@pytest.mark.scenario("""
+    Given a zaak whose initiator is a bedrijf known only by its KVK-nummer
+    When the behandelaar sends a mail that names the initiator
+    Then the mail names the bedrijf
+""")
+def test_mail_names_an_initiator_with_only_a_kvk_nummer(  # fixtures
+    request: pytest.FixtureRequest,
+    podiumd_env: Environment,
+    zac: requests.Session,
+    urls: dict[str, str],
+    zac_zaak: Callable[..., JsonObject],
+    zac_mail: Callable[..., JsonObject],
+    mailpit: ApiClient,
+    registry: ResourceRegistry,
+) -> None:
+    """{ZAAK_INITIATOR} is the name of a rechtspersoon initiator that has only a KVK-nummer."""
+    expect_defect(
+        request,
+        podiumd_env,
+        "zac",
+        lambda version: version < NAMES_KVK_ONLY_INITIATOR,
+        reason="[zac-47] ZAC before 5.11.0 leaves {ZAAK_INITIATOR} empty for a rechtspersoon with only a KVK-nummer;"
+        " PZ-13037, fixed in ZAC 5.11.0 (#7406)",
+    )
+    zaak = zac_zaak()
+    initiator = {"type": "RSIN", "kvkNummer": KVK_TEST_NUMMER}
+    expect_status(wijzig_initiator(zac, urls["zac"], zaak, initiator, None), HTTPStatus.OK)
+    body = zac_mail(zaak, body="<p>Beste {ZAAK_INITIATOR},</p>")
+    expect_status(send_mail(zac, urls["zac"], zaak, body), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    message = received_message(mailpit, registry, timeout=MAIL_TIMEOUT, to=str(body["ontvanger"]))
+    with symptom():
+        assert f"<p>Beste {KVK_RECHTSVORMEN['bv'].naam},</p>" in str(message.get("HTML"))
 
 
 @pytest.mark.requires("pabc", "cluster")
