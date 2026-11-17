@@ -220,6 +220,10 @@ def test_zaakgegevens_change_with_one_save(
 @pytest.mark.source(
     "podiumd-tests", "Found while porting ZAC-010: ZAC's UI always sends a startdatum, its API answers 500 without one."
 )
+@pytest.mark.source(
+    "PZW Sprint 82 PZ-13090",
+    "A zaak without startdatum no longer answers 500 (ZAC 5.11).",
+)
 @pytest.mark.scenario("""
     Given a behandelaar is logged in to ZAC
     When the behandelaar starts a zaak without a startdatum
@@ -291,6 +295,10 @@ def test_zaak_with_an_initiator_is_in_the_werkvoorraad(
 @pytest.mark.source(
     "podiumd-tests",
     "ZAC team's regression scenarios: opschorten shifts the dates and records the opschorting in Open Zaak.",
+)
+@pytest.mark.source(
+    "PZW Sprint 82 PZ-12907",
+    "The backend allows only one opschorting of a zaak.",
 )
 @pytest.mark.scenario("""
     Given a zaak in ZAC

@@ -42,6 +42,7 @@ ZAC_TEAM = pytest.mark.source(
 BEHANDELAAR = "behandelaar"
 # ZAC checks the author and the zaak of a notitie from this release on (zac-21, #7621).
 NOTITIE_RIGHTS_CHECKED = (5, 11, 0)
+PZ_12906 = pytest.mark.source("PZW Sprint 82 PZ-12906", "The server checks the author and the zaak of notities.")
 
 
 def _expect_zac_21(request: pytest.FixtureRequest, env: Environment) -> None:
@@ -134,6 +135,7 @@ def test_notitie_records_its_date_and_author(
 
 
 @ZAC_TEAM
+@PZ_12906
 @pytest.mark.requires("pabc")
 @pytest.mark.scenario("""
     Given a zaak of the BPMN test zaaktype with a notitie of the test admin
@@ -169,6 +171,7 @@ def test_notitie_of_another_user_is_not_changed_or_deleted(  # the users, the za
 
 
 @ZAC_TEAM
+@PZ_12906
 @pytest.mark.requires("pabc")
 @pytest.mark.scenario("""
     Given a zaak of a zaaktype outside the behandelaar's domain, with a notitie

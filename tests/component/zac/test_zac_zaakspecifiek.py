@@ -146,6 +146,7 @@ def _refused_with(response: requests.Response, code: str) -> None:
 
 
 @pytest.mark.source("ZAC ZaakRestServiceTest", "Activating zaakspecifieke autorisatie on a zaak.")
+@pytest.mark.source("PZW Sprint 82 PZ-12022", "Lifting the zaakspecifieke autorisatie of a zaak (ZAC 5.11).")
 @pytest.mark.scenario("""
     Given a zaak assigned to a behandelaar, with a document
     When the behandelaar marks the zaak as zaakspecifiek geautoriseerd
