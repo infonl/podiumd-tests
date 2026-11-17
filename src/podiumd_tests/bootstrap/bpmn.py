@@ -159,6 +159,11 @@ def bpmn_link(http: requests.Session, zac: str, zaaktype: str) -> JsonObject | N
     return next((link for link in mine if link.get("zaaktypeUuid") == zaaktype), None)
 
 
+def link_assignment(link: JsonObject) -> tuple[object, object]:
+    """(group, behandelaar) a BPMN link assigns new zaken to: defaultGroepId from ZAC 5.12, else groepNaam."""
+    return link.get("defaultGroepId") or link.get("groepNaam"), link.get("defaultBehandelaarId")
+
+
 @dataclass(frozen=True)
 class ZacBpmnProcess:
     """The process ptestBpmnProcess with its forms, linked to the BPMN test zaaktype, which PABC knows.

@@ -21,6 +21,7 @@ from podiumd_tests.basisregistraties import KIERKEGAARD
 from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
 from podiumd_tests.basisregistraties import KVK_TEST_VESTIGING
 from podiumd_tests.bootstrap.bpmn import bpmn_link
+from podiumd_tests.bootstrap.bpmn import link_assignment
 from podiumd_tests.bootstrap.bpmn import uuid_of
 from podiumd_tests.bootstrap.names import BPMN_PRODUCTAANVRAAGTYPE
 from podiumd_tests.defects import DefectSymptomError
@@ -329,7 +330,7 @@ def test_productaanvraag_zaak_takes_the_details_and_documents(
     link = bpmn_link(zac, urls["zac"], uuid_of(bpmn_zaaktype["url"]))
     assert link is not None
     assigned = assignment(read_zaak(zac, urls["zac"], str(zaak["uuid"])))
-    assert assigned == (link["groepNaam"], link["defaultBehandelaarId"])
+    assert assigned == link_assignment(link)
     documents = openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": str(zaak["url"])})
     assert sorted(str(found["informatieobject"]) for found in documents) == sorted(
         [str(pdf["url"]), str(bijlage["url"])]
