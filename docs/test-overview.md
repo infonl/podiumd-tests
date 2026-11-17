@@ -13,11 +13,11 @@ component and integration, without and with the destructive tests; the test suit
 | --- | --- | --- | --- |
 | smoke | 241 | 41 | 10 |
 | component | 1027 | 611 | 69 |
-| integration | 213 | 145 | 19 |
+| integration | 212 | 144 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1415** | **745** | **84** |
+| **full tier** | **1414** | **744** | **84** |
 | **chaos tier** | **66** | **52** | **14** |
-| **test suite** | **1561** | **806** | **98** |
+| **test suite** | **1560** | **805** | **98** |
 
 Unit tests (`unit_tests/`, functions): 948. Perf endpoints (`perf/runs.py`): 32.
 
@@ -68,7 +68,7 @@ Unit tests (`unit_tests/`, functions): 948. Perf endpoints (`perf/runs.py`): 32.
 | integration | formulier_medeondertekening | 1 | 1 |
 | integration | formulier_objecten | 1 | 1 |
 | integration | formulier_opschonen | 1 | 1 |
-| integration | formulier_pauzeren | 2 | 2 |
+| integration | formulier_pauzeren | 1 | 1 |
 | integration | formulier_prefill | 5 | 2 |
 | integration | formulier_referentielijsten | 1 | 1 |
 | integration | formulier_wijzigen | 1 | 1 |
@@ -109,7 +109,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | PCP | 1 |
 | PI | 55 |
 | PZW | 28 |
-| TA | 282 |
+| TA | 281 |
 | ZAC | 16 |
 | draaiboek | 91 |
 | external | 224 |

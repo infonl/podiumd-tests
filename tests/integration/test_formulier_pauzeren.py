@@ -52,33 +52,6 @@ pytestmark = [
 SUSPEND_TIMEOUT = 90
 
 
-@pytest.mark.tc("INT-009")
-@pytest.mark.scenario("""
-    Given an inwoner has filled in a step of the test form in Open Formulieren
-    When the inwoner pauses the form and gives an e-mail address
-    Then that address receives a mail with a link to Open Formulieren
-""")
-def test_paused_submission_mails_its_resume_link(
-    http: requests.Session,
-    urls: dict[str, str],
-    podiumd_env: Environment,
-    mailpit: ApiClient,
-    registry: ResourceRegistry,
-    need_bootstrap: Callable[..., None],
-) -> None:
-    """Pausing a half-filled form sends the given address a mail with a link back to Open Formulieren (TA reg-154)."""
-    need_bootstrap("openformulieren-form")
-    submission, headers = start_submission(http, urls["openformulieren"], TEST_FORM)
-    forget_submission(podiumd_env, registry, str(submission["id"]))
-    data = {"klacht_omschrijving": registry.tagged("gepauzeerd")}
-    expect_status(save_step(http, submission, headers, data), HTTPStatus.CREATED, HTTPStatus.OK)
-    address = f"{registry.tagged('pauze')}@example.invalid"
-    suspend = submission_action(http, submission, "_suspend", {"email": address}, headers, timeout=SUSPEND_TIMEOUT)
-    expect_status(suspend, HTTPStatus.CREATED)
-    link = resume_link(received(mailpit, registry, timeout=60, to=address), submission)
-    assert url_host(link) == url_host(urls["openformulieren"]), f"resume link {link} is not on Open Formulieren"
-
-
 def resume_link(mail: str, submission: JsonObject) -> str:
     """Return the mail's link that names the submission."""
     links = [html.unescape(link) for link in re.findall(r'href="([^"]+)"', mail)]
@@ -91,14 +64,17 @@ def resume_link(mail: str, submission: JsonObject) -> str:
 REGISTRATION_TIMEOUT = 90
 
 
+@pytest.mark.tc("INT-009")
 @pytest.mark.requires("openzaak")
 @pytest.mark.source(
     "upstream open-formulieren/open-forms src/openforms/tests/e2e/test_resume_form.py",
     "Resuming a paused form through its resume URL shows the saved step, so the user can finish the form.",
 )
 @pytest.mark.scenario("""
-    Given an inwoner paused a half-filled test form in Open Formulieren
-    When the inwoner opens the mailed link in a new browser session
+    Given an inwoner has filled in a step of the test form in Open Formulieren
+    When the inwoner pauses the form and gives an e-mail address
+    Then that address receives a mail with a link to Open Formulieren
+    When the inwoner opens the link in a new browser session
     Then the form shows the saved data
     And completing the form registers a zaak in Open Zaak
 """)
@@ -116,20 +92,19 @@ def test_resume_link_continues_and_completes_the_submission(
     submission, headers = start_submission(http, base_url, TEST_FORM)
     forget_submission(podiumd_env, registry, str(submission["id"]))
     omschrijving = registry.tagged("hervat")
-    step = entries(submission["steps"])[0]
-    expect_status(
-        http.put(str(step["url"]), json={"data": {"klacht_omschrijving": omschrijving}}, headers=headers), 201, 200
-    )
+    data = {"klacht_omschrijving": omschrijving}
+    expect_status(save_step(http, submission, headers, data), HTTPStatus.CREATED, HTTPStatus.OK)
     address = f"{registry.tagged('hervat')}@example.invalid"
     suspend = submission_action(http, submission, "_suspend", {"email": address}, headers, timeout=SUSPEND_TIMEOUT)
     expect_status(suspend, HTTPStatus.CREATED)
     resume = resume_link(received(mailpit, registry, timeout=60, to=address), submission)
+    assert url_host(resume) == url_host(base_url), f"resume link {resume} is not on Open Formulieren"
     resumed = podiumd_env.session()
     expect_status(resumed.get(resume), HTTPStatus.OK)
     _, resumed_headers = form_and_headers(resumed, base_url, TEST_FORM)
     again = expect_status(resumed.get(str(submission["url"])), HTTPStatus.OK).json()
     saved = expect_status(resumed.get(str(entries(again["steps"])[0]["url"])), HTTPStatus.OK).json()
     assert section(saved, "data").get("klacht_omschrijving") == omschrijving
-    data = {"klacht_omschrijving": omschrijving, **NAW_DATA}
+    data = {**data, **NAW_DATA}
     status = complete_submission(podiumd_env, resumed, again, resumed_headers, data, timeout=REGISTRATION_TIMEOUT)
     assert registered_zaak(podiumd_env, openzaak, registry, status)["url"]
