@@ -47,10 +47,11 @@ def ctx(env_factory, profile_factory, fake_runner):
     [
         (None, 200, False),
         ({"url": ABONNEMENT, "expires": time.time() + 60}, 200, False),
-        ({"url": ABONNEMENT, "expires": time.time() + VALIDITY}, 200, True),
-        ({"url": ABONNEMENT, "expires": time.time() + VALIDITY}, 404, False),
+        ({"url": ABONNEMENT, "expires": time.time() + VALIDITY, "issuer_audience": "issuer audience"}, 200, True),
+        ({"url": ABONNEMENT, "expires": time.time() + VALIDITY, "issuer_audience": "OMC audience"}, 200, False),
+        ({"url": ABONNEMENT, "expires": time.time() + VALIDITY, "issuer_audience": "issuer audience"}, 404, False),
     ],
-    ids=["unrecorded", "about-to-expire", "valid", "deleted"],
+    ids=["unrecorded", "about-to-expire", "valid", "other-issuer", "deleted"],
 )
 def test_is_present(ctx, fake_http, record, status, present):
     fake_http({"GET /api/v1/abonnement/a1": (status, {})})
@@ -71,6 +72,7 @@ def test_apply_replaces_the_recorded_abonnement_with_a_fresh_token(ctx, fake_htt
     claims = b64url_json(body["auth"].removeprefix("Bearer ").split(".")[1])
     assert (claims["iss"], claims["aud"], claims["exp"] - claims["iat"]) == ("issuer", "audience", VALIDITY)
     assert json.loads(stored[STORE_KEY])["url"] == ABONNEMENT
+    assert json.loads(stored[STORE_KEY])["issuer_audience"] == "issuer audience"
 
 
 def test_remove_without_record_only_drops_the_key(ctx, fake_http):

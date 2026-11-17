@@ -150,6 +150,11 @@ def omc_token(env: Environment, now: float) -> str:
     return hs256_jwt(payload, env.credentials.get("omc_jwt_secret"))
 
 
+def _issuer_and_audience(env: Environment) -> str:
+    """Return OMC's issuer and audience, which its token carries: a change makes OMC refuse the abonnement."""
+    return f"{env.variable('omc', 'OMC_AUTH_JWT_ISSUER')} {env.variable('omc', 'OMC_AUTH_JWT_AUDIENCE')}"
+
+
 @dataclass(frozen=True)
 class OmcAbonnement:
     """An abonnement of OMC's Events/Listen on kanaal zaken, made with the suite's Open Notificaties client."""
@@ -159,9 +164,11 @@ class OmcAbonnement:
     wiring: bool = True
 
     def is_present(self, ctx: Context, /) -> bool:  # noqa: PLR6301  # a Step method
-        """Return whether the recorded abonnement exists and its token is not about to expire."""
+        """Return whether the recorded abonnement exists and its token is not about to expire and has OMC's claims."""
         record = ctx.record(STORE_KEY)
         if not record or float(cast("float", record["expires"])) < time.time() + RENEW_BEFORE:
+            return False
+        if record.get("issuer_audience") != _issuer_and_audience(ctx.env):
             return False
         response = opennotificaties_client(ctx.env).request(
             "GET", str(record["url"]), HTTPStatus.OK, HTTPStatus.NOT_FOUND
@@ -175,7 +182,8 @@ class OmcAbonnement:
         callback = ctx.env.profile.urls["omc"] + LISTEN_PATH
         body = abonnement_body(callback, "zaken", {}, auth=f"Bearer {omc_token(ctx.env, now)}")
         created = opennotificaties_client(ctx.env).post("abonnement", body)
-        return {STORE_KEY: json.dumps({"url": created["url"], "expires": now + VALIDITY})}
+        record = {"url": created["url"], "expires": now + VALIDITY, "issuer_audience": _issuer_and_audience(ctx.env)}
+        return {STORE_KEY: json.dumps(record)}
 
     def remove(self, ctx: Context, /) -> tuple[str, ...]:  # noqa: PLR6301  # a Step method
         """Delete the recorded abonnement."""
