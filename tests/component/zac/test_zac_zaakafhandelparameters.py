@@ -84,6 +84,8 @@ EIGEN_ZAAKTYPE = pytest.mark.xdist_group("zac-eigen-zaaktype")
 ZAC_CATALOGUS = pytest.mark.xdist_group("zac-catalogus")
 # The ZAC release whose migrations drop the resultaattypen of existing configurations (zac-42).
 ZAC_42_FROM = (5, 10, 0)
+# The ZAC release that evicts the configuration cache inside the store transaction (zac-45).
+ZAC_45_FROM = (5, 10, 0)
 # A bedrijf from the KvK as BetrokkeneIdentificatie.
 BEDRIJF = {"type": "RSIN", "kvkNummer": KVK_TEST_NUMMER}
 
@@ -239,6 +241,7 @@ def _zaak(
     And the zaak of the old version keeps its groep
 """)
 def test_new_zaaktype_version_keeps_the_zaakafhandelparameters(
+    request: pytest.FixtureRequest,
     podiumd_env: Environment,
     urls: dict[str, str],
     openzaak: ApiClient,
@@ -263,8 +266,19 @@ def test_new_zaaktype_version_keeps_the_zaakafhandelparameters(
     oude_zaak = _zaak(zac, urls, openzaak, registry, oud)
 
     zaaktype = openzaak.get(f"{urls['openzaak']}/{CATALOGI}/zaaktypen/{_uuid(oud)}")
+    expect_defect(
+        request,
+        podiumd_env,
+        "zac",
+        lambda version: version >= ZAC_45_FROM,
+        # Not strict: 4 in 10 runs on ZAC 5.12.0.
+        strict=False,
+        reason="[zac-45] ZAC 5.10 and later deadlock on parallel notifications of a new zaaktype version (cache lock "
+        "held during a query against an uncommitted insert) until the 300 s transaction timeout; not yet reported upstream",
+    )
     nieuw = publish_new_version(podiumd_env, openzaak, registry, test_zaaktype, zaaktype)
-    copied = copied_zaakafhandelparameters(zac, zac_url, uuid_of(nieuw["url"]))
+    with symptom():
+        copied = copied_zaakafhandelparameters(zac, zac_url, uuid_of(nieuw["url"]))
     assert comparable(copied) == comparable(oud)
 
     groep = str(oud["defaultGroepId"])
