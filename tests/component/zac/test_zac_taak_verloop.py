@@ -15,7 +15,6 @@ import pytest
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import ZAC_ROLE_USERS
 from podiumd_tests.json_data import entries
-from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.responses import expect_status
 from podiumd_tests.wait import wait_until
@@ -26,7 +25,6 @@ from podiumd_tests.zac import koppel
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac_documents import delete_document
-from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import taak_documents
 from podiumd_tests.zac_documents import uploaded_document
 from podiumd_tests.zac_taken import ADVIES_INTERN
@@ -36,7 +34,6 @@ from podiumd_tests.zac_taken import read_taak
 from podiumd_tests.zac_taken import started_taak
 from podiumd_tests.zac_taken import taak_historie
 from podiumd_tests.zac_taken import toekennen_taak
-from podiumd_tests.zac_taken import wijzig_taak
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -67,28 +64,6 @@ EARLIER_DAYS = 5
 def _advies_intern(zac: requests.Session, zac_url: str, zaak: JsonObject, groep: str) -> JsonObject:
     """Start Advies intern with a vraag for the test admin in the group; the open taak."""
     return started_taak(zac, zac_url, zaak, ADVIES_INTERN, (groep, ADMIN.username), taakdata={"vraag": VRAAG})
-
-
-@pytest.mark.scenario("""
-    Given a zaak in behandeling in ZAC with a document
-    When the behandelaar fills in Goedkeuren akkoord, to sign the document, and saves without afronden
-    Then the taak keeps the choice and the document
-    And the document is not yet ondertekend
-""")
-def test_saved_goedkeuren_keeps_its_taakdata_until_afronden(
-    zac: requests.Session, urls: dict[str, str], behandeling: JsonObject, zac_group: str, registry: ResourceRegistry
-) -> None:
-    """Opslaan (PUT taakdata) stores the form's taakdata; only afronden signs the documents in ondertekenen."""
-    zac_url = urls["zac"]
-    document = uploaded_document(zac, zac_url, behandeling, registry, suffix="pdf")
-    vraag = {"vraag": VRAAG, "relevanteDocumenten": str(document["uuid"])}
-    taak = started_taak(zac, zac_url, behandeling, GOEDKEUREN, (zac_group, ADMIN.username), taakdata=vraag)
-    akkoord = {"ondertekenen": str(document["uuid"]), "goedkeuren": "goedkeuren.AKKOORD"}
-    wijzig_taak(zac, zac_url, str(taak["id"]), taakdata={**section(taak, "taakdata"), **akkoord})
-    opgeslagen = section(read_taak(zac, zac_url, str(taak["id"])), "taakdata")
-    assert {key: opgeslagen.get(key) for key in akkoord} == akkoord
-    gelezen = expect_status(zac.get(document_url(zac_url, document)), HTTPStatus.OK).json()
-    assert "ONDERTEKEND" not in strings(gelezen.get("indicaties"))
 
 
 @pytest.mark.scenario("""

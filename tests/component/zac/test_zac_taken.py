@@ -53,6 +53,7 @@ from podiumd_tests.zac_taken import open_task
 from podiumd_tests.zac_taken import read_taak
 from podiumd_tests.zac_taken import start_human_task
 from podiumd_tests.zac_taken import started_taak
+from podiumd_tests.zac_taken import wijzig_taak
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -387,8 +388,9 @@ def test_advies_intern_offers_the_advies_referentietabel(
 @TAKEN_ZAAKTYPE
 @pytest.mark.scenario("""
     Given a zaak in behandeling in ZAC with a document
-    When the behandelaar starts Goedkeuren with a vraag about the document
-    And completes it akkoord, ondertekenen the document
+    When the behandelaar starts Goedkeuren with a vraag about the document, and saves it akkoord without afronden
+    Then the taak keeps the choice, and the document is not yet ondertekend
+    When the behandelaar completes it, ondertekenen the document
     Then the taak is afgerond and the document is ondertekend
     And a second Goedkeuren that ondertekent the same document cannot be completed
 """)
@@ -399,12 +401,16 @@ def test_goedkeuren_signs_the_selected_document(
     zac_group: str,
     registry: ResourceRegistry,
 ) -> None:
-    """Completing Goedkeuren signs the documents in taakdata ondertekenen; ZAC refuses to sign one twice."""
+    """Opslaan keeps Goedkeuren's taakdata unsigned; afronden signs the documents in ondertekenen, once only."""
     zac_url = urls["zac"]
     document = uploaded_document(zac, zac_url, behandeling, registry, suffix="pdf")
     vraag = {"vraag": VRAAG, "relevanteDocumenten": str(document["uuid"])}
     akkoord = {"ondertekenen": str(document["uuid"]), "goedkeuren": "goedkeuren.AKKOORD"}
     taak = started_taak(zac, zac_url, behandeling, GOEDKEUREN, (zac_group, ADMIN.username), taakdata=vraag)
+    wijzig_taak(zac, zac_url, str(taak["id"]), taakdata={**section(taak, "taakdata"), **akkoord})
+    taak = read_taak(zac, zac_url, str(taak["id"]))
+    assert {key: section(taak, "taakdata").get(key) for key in akkoord} == akkoord
+    assert "ONDERTEKEND" not in strings(_document(zac, zac_url, behandeling, document).get("indicaties"))
     assert complete_task(zac, zac_url, taak, akkoord).get("status") == "AFGEROND"
     assert "ONDERTEKEND" in strings(_document(zac, zac_url, behandeling, document).get("indicaties"))
 
