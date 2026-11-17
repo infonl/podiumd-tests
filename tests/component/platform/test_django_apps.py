@@ -17,9 +17,11 @@ from podiumd_tests.auth.django_admin import is_logged_in
 from podiumd_tests.auth.django_admin import superuser_login
 from podiumd_tests.components import DJANGO_APPS
 from podiumd_tests.components import ZGW_CONSUMER_APPS
+from podiumd_tests.defects import symptom
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.security import insecure_jar_cookies
+from podiumd_tests.workloads import expect_defect
 from podiumd_tests.zgw_services import SERVICE_REFERENCES
 from podiumd_tests.zgw_services import reference_problems
 from podiumd_tests.zgw_services import service_problems
@@ -33,6 +35,9 @@ pytestmark = pytest.mark.component
 
 # Apps that store geometry; their database needs PostGIS.
 SPATIAL = frozenset(("openzaak", "objecten"))
+# The Service Open Zaak's authorizations migration 0016 makes from the old default api_root (open-zaak-20).
+VNG_AUTORISATIES = "authorization-api-service https://autorisaties-api.vng.cloud/api/v1 "
+OPEN_ZAAK_20_FROM = (1, 31, 0)
 
 
 @pytest.mark.source("MK test_database.py", "The shared Postgres has the databases and extensions the apps need.")
@@ -75,9 +80,24 @@ def test_database(podiumd_env: Environment, component: str) -> None:
     When the app calls each service its configuration references with that service's credentials
     Then every service lists its API without a problem
 """)
-def test_zgw_services_authenticate(podiumd_env: Environment, component: str) -> None:
+def test_zgw_services_authenticate(request: pytest.FixtureRequest, podiumd_env: Environment, component: str) -> None:
     """Every zgw_consumers Service the app's config references lists its API with the Service's own credentials (PI)."""
-    assert service_problems(podiumd_env, component) == []
+    problems = service_problems(podiumd_env, component)
+    leftover = [problem for problem in problems if component == "openzaak" and problem.startswith(VNG_AUTORISATIES)]
+    if component == "openzaak":
+        expect_defect(
+            request,
+            podiumd_env,
+            "openzaak",
+            lambda version: version >= OPEN_ZAAK_20_FROM,
+            # Not strict: an estate that removed the leftover Service by hand passes.
+            strict=False,
+            reason="[open-zaak-20] Open Zaak 1.31.0 and later: vng-api-common authorizations migration 0016 leaves "
+            "Service authorization-api-service at autorisaties-api.vng.cloud with dummy credentials; not reported",
+        )
+    assert [problem for problem in problems if problem not in leftover] == []
+    with symptom():
+        assert leftover == []
 
 
 @pytest.mark.source(
