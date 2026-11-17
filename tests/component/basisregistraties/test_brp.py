@@ -20,6 +20,7 @@ from podiumd_tests.basisregistraties import brp_personen
 from podiumd_tests.basisregistraties import brp_persoon
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openklant import random_bsn
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -99,7 +100,7 @@ def test_person_by_bsn(http: requests.Session, urls: dict[str, str]) -> None:
 """)
 def test_unknown_bsn_finds_no_one(http: requests.Session, urls: dict[str, str]) -> None:
     """A BSN outside the test set gives an empty list, not an error (TA reg-07)."""
-    query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": ["123456789"], "fields": NAAM[:1]}
+    query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": [random_bsn()], "fields": NAAM[:1]}
     assert brp_gevonden(http, urls["api-proxy"], query) == []
 
 
