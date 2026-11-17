@@ -462,6 +462,7 @@ def test_only_a_coordinator_verdeelt_and_vrijgeeft_taken(
     When the behandelaar opens the zaak
     Then the related zaak shows only its zaaknummer, and cannot be unlinked
     And ZAC refuses the behandelaar's unlinking of it, and relating another zaak of the estate's zaaktype
+    And the zaak keeps only its first related zaak
 """)
 def test_relating_zaken_needs_read_rights_on_the_other_zaak(
     zac: requests.Session,
@@ -485,3 +486,5 @@ def test_relating_zaken_needs_read_rights_on_the_other_zaak(
     assert {call: answer.status_code for call, answer in answers.items()} == dict.fromkeys(
         answers, HTTPStatus.FORBIDDEN
     ), {call: describe(answer) for call, answer in answers.items()}
+    relaties = entries(read_zaak(zac, zac_url, str(bpmn_zaak["uuid"])).get("gerelateerdeZaken"))
+    assert [item.get("identificatie") for item in relaties] == [other["identificatie"]]

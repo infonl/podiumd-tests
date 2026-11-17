@@ -28,7 +28,6 @@ from podiumd_tests.zac import afhandelen
 from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import afsluiten
 from podiumd_tests.zac import attribuut_historie
-from podiumd_tests.zac import can_open_zaak
 from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import koppel
@@ -336,28 +335,6 @@ def test_deelzaak_cannot_become_deel_or_hoofdzaak_again(
     expect_status(linked, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     _wait_for_reden(zac, urls["zac"], zaken[van], zaken[naar], DEELZAAK, reden)
     expect_status(koppel(zac, urls["zac"], zaken[van], zaken[naar], DEELZAAK), *REFUSED)
-
-
-@pytest.mark.requires("pabc")
-@pytest.mark.scenario("""
-    Given a zaak of the BPMN test zaaktype, and a zaak of a zaaktype outside the behandelaar's domain
-    When a behandelaar of the BPMN test zaaktype links the second zaak to the first as gerelateerd
-    Then ZAC refuses it
-    And the first zaak shows no gerelateerde zaak
-""")
-def test_zaak_the_user_may_not_read_is_not_gerelateerd(
-    zac: requests.Session,
-    zac_as: Callable[[str], requests.Session],
-    urls: dict[str, str],
-    bpmn_zaak: JsonObject,
-    zac_zaak: Callable[..., JsonObject],
-) -> None:
-    """GERELATEERD to a zaak the behandelaar cannot open answers 401 or 403."""
-    onleesbaar = zac_zaak()
-    behandelaar = zac_as("behandelaar")
-    assert not can_open_zaak(behandelaar, urls["zac"], onleesbaar)
-    expect_status(koppel(behandelaar, urls["zac"], bpmn_zaak, onleesbaar, GERELATEERD), *REFUSED)
-    assert _relaties(zac, urls["zac"], bpmn_zaak) == []
 
 
 @pytest.mark.requires("pabc")
