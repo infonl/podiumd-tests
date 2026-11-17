@@ -1,9 +1,8 @@
 """PKCE on the OIDC logins. Ported from podiumd-minikube and podiumd-infra test_pkce.py.
 
-PABC always sends a PKCE code challenge (UsePkce is hard-coded in its source); every test in
-component/pabc logs in through it, so Keycloak accepts the verifier. The Django apps' clients must
-not require PKCE (mozilla-django-oidc does not send it), nor ita's and kiss's: they send it, but the
-podiumd chart does not require it.
+PABC, ITA and KISS always send a PKCE code challenge; every test in component/pabc, ita and kiss logs in through
+them, so Keycloak accepts the verifier. From helm-charts #723 their clients require S256. The Django apps' clients
+must not require PKCE (mozilla-django-oidc does not send it).
 ZAC sends a challenge when zac.auth.enablePkce is on (default from podiumd 4.10.0, helm-charts #629); the
 same key sets pkce.code.challenge.method S256 on the zac client, so the two must agree.
 """
@@ -16,8 +15,12 @@ from urllib.parse import urlsplit
 
 import pytest
 
+from podiumd_tests.auth.keycloak import realm_url
 from podiumd_tests.auth.keycloak_admin import for_environment
+from podiumd_tests.auth.keycloak_admin import realm_of
 from podiumd_tests.json_data import section
+from podiumd_tests.json_data import strings
+from podiumd_tests.responses import describe
 from podiumd_tests.responses import url_host
 from podiumd_tests.workloads import is_chart_older_than
 
@@ -40,9 +43,10 @@ NO_PKCE_REQUIRED = (
     "opennotificaties",
     "openformulieren",
     "abc",
-    "ita",
-    "kiss",
 )
+# Clients whose apps send an S256 challenge: the chart may require it (zac from helm-charts #629; kiss, ita and pabc
+# from #723).
+SENDS_PKCE = ("zac", "pabc", "kiss", "ita")
 
 
 @pytest.fixture(scope="module", name="keycloak_admin")
@@ -150,3 +154,32 @@ def test_zac_client_and_zac_agree_on_pkce(
     method = section(client, "attributes").get("pkce.code.challenge.method") or ""
     required = "S256" if sends else ""
     assert method == required, f"ZAC sends a challenge: {sends}; client zac requires: {method!r}"
+
+
+@pytest.mark.parametrize("client_id", SENDS_PKCE)
+@pytest.mark.source("podiumd-tests", "helm-charts #723 makes kiss, ita and pabc require PKCE, as #629 did for zac.")
+@pytest.mark.scenario("""
+    Given a Keycloak client that requires an S256 code challenge
+    When a login starts at Keycloak without a code challenge
+    Then Keycloak refuses it with "Missing parameter: code_challenge_method"
+""")
+def test_client_requiring_pkce_refuses_a_login_without_challenge(
+    http: requests.Session,
+    urls: dict[str, str],
+    podiumd_env: Environment,
+    keycloak_admin: KeycloakAdmin,
+    client_id: str,
+) -> None:
+    """A client with pkce.code.challenge.method S256 refuses an authorization request without code_challenge."""
+    client = keycloak_admin.client(client_id)
+    if client is None:
+        pytest.skip(f"no Keycloak client {client_id} in this realm")
+    if section(client, "attributes").get("pkce.code.challenge.method") != "S256":
+        pytest.skip(f"Keycloak client {client_id} does not require PKCE")
+    # A registered redirect URI; Keycloak matches a trailing * as a prefix.
+    redirect = strings(client.get("redirectUris"))[0].rstrip("*")
+    query = {"client_id": client_id, "response_type": "code", "scope": "openid", "redirect_uri": redirect}
+    auth = realm_url(urls["keycloak"], realm_of(podiumd_env), "/protocol/openid-connect/auth")
+    response = http.get(auth, params=query, allow_redirects=False)
+    answer = parse_qs(urlsplit(response.headers.get("Location", "")).query)
+    assert answer.get("error_description") == ["Missing parameter: code_challenge_method"], describe(response)

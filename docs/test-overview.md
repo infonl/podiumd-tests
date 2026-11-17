@@ -12,12 +12,12 @@ component and integration, without and with the destructive tests; the test suit
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 241 | 41 | 10 |
-| component | 1029 | 614 | 70 |
+| component | 1031 | 615 | 70 |
 | integration | 213 | 145 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1417** | **748** | **85** |
+| **full tier** | **1419** | **749** | **85** |
 | **chaos tier** | **66** | **52** | **14** |
-| **test suite** | **1563** | **809** | **99** |
+| **test suite** | **1565** | **810** | **99** |
 
 Unit tests (`unit_tests/`, functions): 948. Perf endpoints (`perf/runs.py`): 32.
 
@@ -38,7 +38,7 @@ Unit tests (`unit_tests/`, functions): 948. Perf endpoints (`perf/runs.py`): 32.
 | component | basisregistraties | 74 | 24 |
 | component | frankgateway | 8 | 2 |
 | component | ita | 46 | 31 |
-| component | keycloak | 22 | 13 |
+| component | keycloak | 24 | 14 |
 | component | kiss | 70 | 26 |
 | component | objecten | 18 | 8 |
 | component | omc | 3 | 2 |
@@ -107,13 +107,13 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | EX | 19 |
 | MK | 47 |
 | PCP | 1 |
-| PI | 57 |
+| PI | 55 |
 | PZW | 28 |
 | TA | 282 |
 | ZAC | 18 |
 | draaiboek | 91 |
 | external | 224 |
-| podiumd-tests | 552 |
+| podiumd-tests | 556 |
 | upstream | 244 |
 
 ## Expected failures per known issue
