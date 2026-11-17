@@ -346,6 +346,10 @@ spec: {replicas: 2}
 ---
 kind: Deployment
 metadata: {name: objecten}
+spec: {replicas: 1}
+---
+kind: Deployment
+metadata: {name: opentelemetry-collector}
 ---
 kind: StatefulSet
 metadata: {name: clamav, namespace: podiumd}
@@ -362,7 +366,8 @@ def test_replica_drift_names_workloads_that_differ_from_their_helm_release(env_f
 
     fake_runner.answers["get secrets"] = (0, json.dumps({"items": [_release_secret(MANIFEST)]}))
     deployments = [workload("Deployment", "openzaak", 2), workload("Deployment", "objecten", 0)]
-    deployments.append(workload("Deployment", "keycloak-operator", 0))  # not in a release: an operator's own
+    # keycloak-operator is in no release (an operator's own); opentelemetry-collector's release sets no replicas.
+    deployments.extend(workload("Deployment", name, 0) for name in ("keycloak-operator", "opentelemetry-collector"))
     fake_runner.answers["get deployments"] = (0, json.dumps({"items": deployments}))
     fake_runner.answers["get statefulsets"] = (0, json.dumps({"items": [workload("StatefulSet", "clamav", 0)]}))
     hpa = {"metadata": {"namespace": "podiumd"}, "spec": {"scaleTargetRef": {"kind": "StatefulSet", "name": "clamav"}}}

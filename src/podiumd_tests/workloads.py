@@ -467,8 +467,8 @@ def unready_workloads(items: Sequence[Item]) -> list[str]:
 def helm_replicas(env: Environment, namespaces: Sequence[str] | None = None) -> dict[str, int]:
     """Replicas of each Deployment and StatefulSet in the deployed Helm releases, by "namespace/Kind/name".
 
-    Helm keeps a release as base64 of gzipped JSON inside the Secret's base64 data; a manifest without
-    replicas means 1.
+    Helm keeps a release as base64 of gzipped JSON inside the Secret's base64 data. A manifest without
+    replicas is left out: Helm then keeps whatever the cluster has, so the release sets no number.
     """
     found: dict[str, int] = {}
     for namespace in env.namespaces if namespaces is None else namespaces:
@@ -487,7 +487,9 @@ def _release_replicas(secret: Item, namespace: str) -> dict[str, int]:
         if doc.get("kind") in {"Deployment", "StatefulSet"}:
             where = section(doc, "metadata").get("namespace") or release.get("namespace") or namespace
             key = f"{where}/{doc['kind']}/{metadata_name(doc)}"
-            found[key] = _int(section(doc, "spec").get("replicas", 1))
+            replicas = section(doc, "spec").get("replicas")
+            if replicas is not None:
+                found[key] = _int(replicas)
     return found
 
 
@@ -495,7 +497,7 @@ def replica_drift(env: Environment, namespaces: Sequence[str] | None = None) -> 
     """Workloads whose replicas differ from their Helm release, as "Kind/name live (Helm n)".
 
     Catches a component a test scaled to 0 and never restored, which unready_workloads counts as 0/0 ready.
-    Workloads an autoscaler drives are left out.
+    Workloads an autoscaler drives are left out, and so are those whose release sets no replicas.
     """
     wanted = helm_replicas(env, namespaces)
     autoscalers = env.items("horizontalpodautoscalers", namespaces)
