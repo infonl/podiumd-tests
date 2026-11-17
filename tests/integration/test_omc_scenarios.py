@@ -409,7 +409,7 @@ def taak_mail_skip(env: Environment) -> None:
 @pytest.mark.scenario("""
     Given inwoners with an e-mail address, each with a taak on their own zaak, some open and some closed
     When OMC gets the notifications of all these taken at the same time
-    Then each inwoner with an open taak gets one taak e-mail, about their own zaak
+    Then each inwoner with an open taak gets taak e-mail only about their own zaak
     And the inwoners with a closed taak get none
 """)
 def test_concurrent_taken_reach_their_own_inwoner(
@@ -423,7 +423,7 @@ def test_concurrent_taken_reach_their_own_inwoner(
     parts: ZaaktypeParts,
     taak_objecttype: str,
 ) -> None:
-    """Concurrent taak notifications: one mail per open taak, to its own inwoner about its own zaak; none if closed."""
+    """Concurrent taak notifications: mails per open taak only to its own inwoner about its own zaak; none if closed."""
     taak_mail_skip(podiumd_env)
     expect_defect(
         request,
@@ -435,14 +435,14 @@ def test_concurrent_taken_reach_their_own_inwoner(
         reason="[omc-8] OMC before 2.4.1 keeps the notification in a singleton QueryBase, so concurrent requests are "
         "processed with each other's object, zaak and inwoner (privacy); fixed in OMC v.2.4.1",
     )
-    expected: dict[str, Counter[str]] = {}
+    expected: dict[str, set[str]] = {}
     notifications = []
     for status in CONCURRENT_TAKEN:
         adres = own_address(registry)
         zaak, bsn = make_inwoner_zaak(openzaak, openklant, registry, parts, adres)
         make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
         notifications.append(make_taak(objecten, registry, taak_objecttype, zaak, status, bsn))
-        expected[adres] = Counter({str(zaak["identificatie"]): ROUNDS if status == "open" else 0})
+        expected[adres] = {str(zaak["identificatie"])} if status == "open" else set()
     with ThreadPoolExecutor(POSTERS) as pool:
         list(pool.map(lambda notification: listen(http, podiumd_env, notification), notifications * ROUNDS))
     mails = notify_bodies(podiumd_env, EMAIL, TAAK_MAIL)
@@ -455,4 +455,6 @@ def test_concurrent_taken_reach_their_own_inwoner(
         for adres in expected
     }
     with symptom():
-        assert found == expected
+        assert {adres: set(+zaken) for adres, zaken in found.items()} == expected
+    # OMC 2.4 sends a repeated delivery of a notification once; before, every delivery got its mail.
+    assert all(sum(zaken.values()) <= ROUNDS for zaken in found.values()), found

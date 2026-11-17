@@ -40,6 +40,9 @@ PROFILE_FIELDS = (
     "url",
     "taakSoort",
 )
+# The berichtenbox type of make_bericht's berichttypen: OMC drops a bericht whose type is empty, even when its
+# whitelist is "*" (Open VTB allows 8 characters).
+BERICHTENBOX_TYPE = "ptest"
 
 
 def zaak_urn(zaak: JsonObject) -> str:
@@ -80,7 +83,12 @@ def make_bericht(
     """Create a bericht to ontvanger (a URN) of a new berichttype, onderwerp run-tagged; fields override defaults."""
     berichttype = berichten.post(
         "berichttypen",
-        {"verantwoordelijkeOrganisatie": "urn:ptest:org", "mijnOverheidBerichtenbox": False, "bijlageTypen": []},
+        {
+            "verantwoordelijkeOrganisatie": "urn:ptest:org",
+            "mijnOverheidBerichtenbox": False,
+            "mijnOverheidBerichtenboxType": BERICHTENBOX_TYPE,
+            "bijlageTypen": [],
+        },
     )
     berichttype_url = str(berichttype["url"])
     registry.add(f"openvtb berichttype {berichttype_url}", lambda: berichten.delete(berichttype_url))

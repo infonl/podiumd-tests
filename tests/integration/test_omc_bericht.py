@@ -25,6 +25,7 @@ from podiumd_tests.omc import listen
 from podiumd_tests.omc import make_inwoner
 from podiumd_tests.omc import notify_request
 from podiumd_tests.omc import setting_skip
+from podiumd_tests.seed.openvtb import BERICHTENBOX_TYPE
 from podiumd_tests.seed.openvtb import make_bericht
 from podiumd_tests.workloads import expect_defect
 
@@ -119,7 +120,7 @@ def test_bericht_is_mailed_to_the_inwoner(
     adres = own_address(registry)
     bsn = make_inwoner(openklant, registry, adres)
     bericht = make_bericht(podiumd_env, openvtb_berichten, registry, f"urn:nld:brp:bsn:{bsn}")
-    reason = setting_skip(podiumd_env, "ZGW_WHITELIST_VTBMESSAGE_TYPES", str(bericht["berichtType"]), listed=True)
+    reason = setting_skip(podiumd_env, "ZGW_WHITELIST_VTBMESSAGE_TYPES", BERICHTENBOX_TYPE, listed=True)
     if reason:
         pytest.skip(reason)
     expect_omc_5(request, podiumd_env)
