@@ -68,6 +68,9 @@ def test_keycloak_discovery(http: requests.Session, urls: dict[str, str]) -> Non
     "podiumd-tests",
     "Every app's login: a Keycloak scope fault in KISS and ITA passed while only ZAC and Open Inwoner were checked.",
 )
+@pytest.mark.source(
+    "TA regression/100-kiss-frontend-basis.spec.ts", "KISS's login challenge redirects to Keycloak's login endpoint."
+)
 @pytest.mark.requires("keycloak")
 @pytest.mark.parametrize("component", [requiring(c, c) for c in LOGIN_PATHS])
 @pytest.mark.scenario("""

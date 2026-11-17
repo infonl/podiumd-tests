@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.oidc import AUTH_PATH
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import describe
 from podiumd_tests.responses import is_server_error
@@ -20,24 +19,6 @@ if TYPE_CHECKING:
     import requests
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("kiss")]
-
-
-@pytest.mark.source(
-    "TA regression/100-kiss-frontend-basis.spec.ts",
-    "Checks KISS's frontend and the BFF routes a KCC employee meets, such as /api/me, without a login.",
-)
-@pytest.mark.scenario("""
-    Given a user who is not logged in to KISS
-    When the user starts KISS's login
-    Then KISS redirects to Keycloak's login endpoint
-""")
-def test_challenge_redirects_to_keycloak(http: requests.Session, urls: dict[str, str]) -> None:
-    """The login challenge redirects to the Keycloak auth endpoint (TA reg-100)."""
-    response = http.get(f"{urls['kiss']}/api/challenge", params={"returnUrl": "/"}, allow_redirects=False)
-    assert response.is_redirect, describe(response)
-    location = response.headers["Location"]
-    assert url_host(location) == url_host(urls["keycloak"])
-    assert AUTH_PATH.match(location.split(url_host(location), 1)[1].split("?")[0])
 
 
 @pytest.mark.parametrize("path", ["/api/me", "/contactmomenten", "/contactverzoeken"])
