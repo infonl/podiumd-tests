@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.defects import symptom
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import invalid_names
 from podiumd_tests.seed.openklant import random_bsn
@@ -26,14 +27,19 @@ from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.openzaak import rol_body
+from podiumd_tests.workloads import expect_defect
 
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.openzaak import ZaaktypeParts
     from podiumd_tests.seed.registry import ResourceRegistry
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("openzaak")]
+
+# Open Zaak answers 204 to the DELETE of a zaak with a resultaat from this release on (open-zaak-1).
+DELETE_WITH_RESULTAAT_ANSWERS_204 = (1, 31, 0)
 
 
 def urls(objects: list[JsonObject]) -> set[str]:
@@ -93,23 +99,33 @@ def test_zaak_closes_with_resultaat_and_eindstatus(
 
 
 @pytest.mark.source("podiumd-tests", "Deleting a zaak with a resultaat must answer 204; Open Zaak 1.29.3 answers 500.")
-@pytest.mark.xfail(
-    strict=True,
-    reason="[open-zaak-1] Open Zaak 1.29.3: DELETE of a zaak with a resultaat answers 500 although it deletes the zaak "
-    "(vng_api_common etag recalculated for the deleted resultaat); open-zaak#2484, fixed in 1.31.0",
-)
 @pytest.mark.scenario("""
     Given a zaak with a resultaat in Open Zaak
     When the zaak is deleted
     Then Open Zaak reports the delete as successful
 """)
-def test_closed_zaak_delete_answers_204(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
+def test_closed_zaak_delete_answers_204(
+    request: pytest.FixtureRequest,
+    podiumd_env: Environment,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    parts: ZaaktypeParts,
+) -> None:
     """Deleting a zaak with a resultaat answers 204."""
+    expect_defect(
+        request,
+        podiumd_env,
+        "openzaak",
+        lambda version: version < DELETE_WITH_RESULTAAT_ANSWERS_204,
+        reason="[open-zaak-1] Open Zaak before 1.31.0: DELETE of a zaak with a resultaat answers 500 although it deletes"
+        " the zaak (vng_api_common etag recalculated for the deleted resultaat); open-zaak#2484, fixed in 1.31.0",
+    )
     if not parts.resultaattypen:
         pytest.skip("test zaaktype has no resultaattype (Selectielijst API was unreachable at bootstrap)")
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
     openzaak.post(f"{ZAKEN}/resultaten", {"zaak": zaak["url"], "resultaattype": parts.resultaattypen[0]})
-    openzaak.request("DELETE", str(zaak["url"]), 204)
+    with symptom():
+        openzaak.request("DELETE", str(zaak["url"]), 204)
 
 
 @pytest.mark.source(
