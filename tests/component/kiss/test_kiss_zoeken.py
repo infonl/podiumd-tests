@@ -55,7 +55,19 @@ GOEDMUT = "999992995"  # Jan Goedmut, at 1074HK 1 B with one other of the 4 pers
 @pytest.mark.parametrize(
     ("query", "expected", "count"),
     [
-        pytest.param({"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": [EREBOS]}, EREBOS, 1, id="bsn"),
+        pytest.param(
+            {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": [EREBOS]},
+            EREBOS,
+            1,
+            id="bsn",
+            marks=[
+                pytest.mark.core,
+                pytest.mark.tc("KI-007"),
+                pytest.mark.source(
+                    "draaiboek KI-007", "A person not known in Contact can be found through Haal Centraal."
+                ),
+            ],
+        ),
         pytest.param(
             {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": ["123456789"]},
             None,
@@ -196,7 +208,17 @@ KVK_SEVERAL_ADRES = {"postcode": "2352SZ", "huisnummer": "37"}
 @pytest.mark.parametrize(
     ("query", "kvk_nummer", "minimum"),
     [
-        pytest.param({"kvkNummer": KVK_TEST_NUMMER}, KVK_TEST_NUMMER, 2, id="kvknummer-several"),
+        pytest.param(
+            {"kvkNummer": KVK_TEST_NUMMER},
+            KVK_TEST_NUMMER,
+            2,
+            id="kvknummer-several",
+            marks=[
+                pytest.mark.core,
+                pytest.mark.tc("KI-013"),
+                pytest.mark.source("draaiboek KI-013", "A company not known in Contact can be found through KvK."),
+            ],
+        ),
         pytest.param({"kvkNummer": "12345678"}, None, 0, id="kvknummer-unknown"),
         *(pytest.param({"kvkNummer": n}, None, 0, id=f"kvknummer-foutmelding-{n}") for n in KVK_FOUTMELDINGEN),
         pytest.param({"naam": "Test"}, KVK_TEST_NUMMER, 1, id="naam"),

@@ -16,8 +16,6 @@ import pytest
 from playwright.sync_api import expect
 
 from podiumd_tests.auth.keycloak_admin import user_email
-from podiumd_tests.basisregistraties import EREBOS
-from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
 from podiumd_tests.bootstrap.kiss import KANALEN
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.json_data import entries
@@ -25,7 +23,6 @@ from podiumd_tests.json_data import section
 from podiumd_tests.kcc import KENNIS_URL
 from podiumd_tests.kcc import kcc_login
 from podiumd_tests.kcc import kiss_betrokkene
-from podiumd_tests.kcc import kiss_brp_personen
 from podiumd_tests.kcc import kiss_contactmomentdetails
 from podiumd_tests.kcc import kiss_contactmomenten
 from podiumd_tests.kcc import kiss_klant
@@ -128,27 +125,14 @@ def test_kiss_knows_the_medewerker_by_email(kiss: requests.Session, urls: dict[s
     assert me["email"] == user_email(KCC.username)
 
 
-@pytest.mark.source(
-    "TA regression/12-kiss-bff-kcc-flow.spec.ts",
-    "A KCC employee logs in through Keycloak and registers a klantcontact in Open Klant through KISS's BFF.",
-)
-@pytest.mark.scenario("""
-    Given the KCC medewerker is logged in to KISS
-    When the medewerker registers a klantcontact through KISS
-    Then the klantcontact is in Open Klant with its onderwerp
-""")
-def test_klantcontact_through_kiss(  # noqa: FNE008  # the name is the test id
-    kiss: requests.Session, urls: dict[str, str], openklant: ApiClient, registry: ResourceRegistry
-) -> None:
-    """A klantcontact registered through KISS lands in Open Klant (TA reg-12)."""
-    body = klantcontact_body(registry, onderwerp=registry.tagged("kiss-klantcontact"))
-    assert kiss_klantcontact(kiss, urls["kiss"], openklant, registry, body)["onderwerp"] == body["onderwerp"]
-
-
 # KISS's frontend cuts the onderwerp (VAC title and specifieke vraag) to this length, ending in "...".
 ONDERWERP_MAX = 200
 
 
+@pytest.mark.source(
+    "TA regression/12-kiss-bff-kcc-flow.spec.ts",
+    "A KCC employee logs in through Keycloak and registers a klantcontact in Open Klant through KISS's BFF.",
+)
 @pytest.mark.source(
     "upstream KISS-frontend Kiss.Bff.EndToEndTest VraagScenarios",
     "A long VAC title and specifieke vraag are cut to fit the onderwerp of the saved klantcontact.",
@@ -301,33 +285,6 @@ def test_kiss_reports_the_bronnen_of_a_contactmoment(
     kiss_contactmomentdetails(kiss, urls["kiss"], saved, vraag="podiumd-tests", bronnen=bronnen)
     report = kiss_rapportage(http, urls["kiss"], key, start, datetime.now(UTC) + timedelta(minutes=1))
     assert next(r for r in report if r["id"] == saved["url"])["bronnen"] == bronnen
-
-
-@pytest.mark.tc("KI-007")
-@pytest.mark.source("draaiboek KI-007", "A person not known in Contact can be found through Haal Centraal.")
-@pytest.mark.scenario("""
-    Given the KCC medewerker is logged in to KISS
-    When the medewerker searches a person in the BRP test set by BSN
-    Then KISS finds exactly that person, by name
-""")
-def test_person_unknown_to_kiss_is_found_in_the_brp(kiss: requests.Session, urls: dict[str, str]) -> None:
-    """KISS finds a person by BSN through its Haal Centraal BRP proxy."""
-    query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": [EREBOS], "fields": ["naam"]}
-    personen = kiss_brp_personen(kiss, urls["kiss"], query)
-    assert [section(p, "naam").get("voornamen") for p in personen] == ["Erebos"]
-
-
-@pytest.mark.tc("KI-013")
-@pytest.mark.source("draaiboek KI-013", "A company not known in Contact can be found through KvK.")
-@pytest.mark.scenario("""
-    Given the KCC medewerker is logged in to KISS
-    When the medewerker searches the KvK test company by its KvK number
-    Then KISS finds the company
-""")
-def test_company_unknown_to_kiss_is_found_in_the_kvk(kiss: requests.Session, urls: dict[str, str]) -> None:
-    """KISS finds a company by KvK number through its KvK proxy."""
-    found = expect_status(kiss.get(f"{urls['kiss']}/api/kvk/v2/zoeken", params={"kvkNummer": KVK_TEST_NUMMER}), 200)
-    assert KVK_TEST_NUMMER in {str(r.get("kvkNummer")) for r in entries(found.json()["resultaten"])}
 
 
 @pytest.mark.tc("KI-053", "KI-054", "KI-055")
