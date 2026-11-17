@@ -11,13 +11,13 @@ component and integration, without and with the destructive tests; the test suit
 
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
-| smoke | 241 | 41 | 10 |
+| smoke | 240 | 41 | 10 |
 | component | 1020 | 603 | 69 |
 | integration | 211 | 143 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1407** | **736** | **84** |
+| **full tier** | **1406** | **736** | **84** |
 | **chaos tier** | **65** | **51** | **14** |
-| **test suite** | **1552** | **796** | **98** |
+| **test suite** | **1551** | **796** | **98** |
 
 Unit tests (`unit_tests/`, functions): 948. Perf endpoints (`perf/runs.py`): 32.
 
@@ -28,7 +28,7 @@ Unit tests (`unit_tests/`, functions): 948. Perf endpoints (`perf/runs.py`): 32.
 | smoke | api_health | 29 | 5 |
 | smoke | cilium | 2 | 2 |
 | smoke | cluster | 9 | 9 |
-| smoke | frankgateway | 6 | 2 |
+| smoke | frankgateway | 5 | 2 |
 | smoke | mail_routes | 2 | 2 |
 | smoke | metrics | 6 | 6 |
 | smoke | oidc | 20 | 5 |
@@ -105,7 +105,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | Origin | Tests |
 | --- | --- |
 | EX | 19 |
-| MK | 47 |
+| MK | 46 |
 | PCP | 1 |
 | PI | 55 |
 | PZW | 28 |

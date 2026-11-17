@@ -19,10 +19,11 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.smoke, pytest.mark.requires("frankgateway")]
 
+# The KvK basisprofiel route is checked with its answer by test_outway_key_is_accepted_by_the_kvk_upstream.
+KVK_BASISPROFIEL = "/api/v1/basisprofielen/68750110"
 ROUTES = {
     "brp": "/haalcentraal/api/brp/personen",
     "bag": "/lvbag/individuelebevragingen/v2/adressen",
-    "kvk-basisprofiel": "/api/v1/basisprofielen/68750110",
     "kvk-vestiging": "/api/v1/vestigingsprofielen/000037178598",
     "kvk-zoeken": "/api/v2/zoeken?naam=test",
 }
@@ -69,6 +70,6 @@ def test_outway_key_is_accepted_by_the_kvk_upstream(http: requests.Session, urls
 
     A missing or wrong key would get 401/403 from KvK, not the profile; on minikube the KvK mock answers.
     """
-    response = http.get(urls["frankgateway"] + ROUTES["kvk-basisprofiel"], headers={"Accept": "application/json"})
+    response = http.get(urls["frankgateway"] + KVK_BASISPROFIEL, headers={"Accept": "application/json"})
     body = expect_status(response, HTTPStatus.OK).json()
     assert str(body.get("kvkNummer")) == "68750110", f"no basisprofiel in the answer: {body}"
