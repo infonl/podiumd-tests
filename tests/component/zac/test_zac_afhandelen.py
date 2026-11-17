@@ -25,6 +25,7 @@ from podiumd_tests.seed.openzaak import expect_utc_date_defect
 from podiumd_tests.seed.openzaak import today
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import HEROPEND
+from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import NIET_ONTVANKELIJK_REDEN
 from podiumd_tests.zac import afbreken
@@ -32,6 +33,7 @@ from podiumd_tests.zac import afhandelen
 from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import afsluiten
 from podiumd_tests.zac import heropenen
+from podiumd_tests.zac import is_zaak_listed
 from podiumd_tests.zac import logged_in_user
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import resultaattypen
@@ -211,12 +213,19 @@ def test_afhandelen_needs_a_resultaat(
     assert read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpen"] is True
 
 
+@pytest.mark.tc("ZAC-045", "ZAC-062")
+# ZAC updates its search index from Open Notificaties' notifications.
+@pytest.mark.requires("opennotificaties")
+@pytest.mark.source(
+    "draaiboek ZAC-045", "A zaak can be aborted, and then shows in the werkvoorraad of closed zaken (ZAC-045, -062)."
+)
 @pytest.mark.scenario("""
     Given an open zaak in ZAC
     When the behandelaar breaks it off as niet ontvankelijk
     Then the zaak is Afgerond and closed, with the reden as toelichting of its status
     And it has the niet-ontvankelijk resultaat of its zaakafhandelparameters
     And ZAC shows the archiefnominatie of that resultaat and the archiefactiedatum Open Zaak derived
+    And the zaak appears among the closed zaken
 """)
 def test_afgebroken_zaak_is_afgerond_with_its_archiefactiedatum(
     zac: requests.Session,
@@ -237,6 +246,11 @@ def test_afgebroken_zaak_is_afgerond_with_its_archiefactiedatum(
     assert section(section(closed, "resultaat"), "resultaattype")["id"] == _niet_ontvankelijk(zac, urls["zac"], closed)
     in_open_zaak = openzaak_productaanvraag.get(f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}")
     _assert_archief(openzaak, closed, in_open_zaak, None)
+    wait_until(
+        lambda: is_zaak_listed(zac, urls["zac"], zaak, alleenAfgeslotenZaken=True),
+        timeout=INDEX_TIMEOUT,
+        description=f"zaak {zaak['identificatie']} among the closed zaken",
+    )
 
 
 @pytest.mark.xfail(

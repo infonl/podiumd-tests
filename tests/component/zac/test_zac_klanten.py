@@ -334,25 +334,43 @@ def test_ontkoppelen_of_the_initiator_needs_a_reden(
     expect_status(response, HTTPStatus.BAD_REQUEST)
 
 
+@pytest.mark.tc("ZAC-047", "ZAC-048")
+@pytest.mark.source(
+    "draaiboek ZAC-047",
+    "Several betrokkenen with the same and different roles are linked to the zaak and shown with their role (ZAC-047, -048).",
+)
 @REGRESSIE
 @pytest.mark.requires("openzaak")
 @pytest.mark.scenario("""
     Given a zaak in ZAC
-    When the behandelaar adds a vestiging of a bedrijf as belanghebbende
-    Then Open Zaak has the belanghebbende as a niet-natuurlijk persoon with only the KvK-nummer and vestigingsnummer
+    When the behandelaar adds a person as belanghebbende and as contactpersoon
+    And adds a vestiging of a bedrijf as belanghebbende
+    Then the zaak lists all three betrokkenen with their roles
+    And Open Zaak has the bedrijf as a niet-natuurlijk persoon with only the KvK-nummer and vestigingsnummer
 """)
-def test_bedrijf_betrokkene_is_stored_with_its_kvk_and_vestigingsnummer(
+def test_betrokkenen_with_the_same_and_different_roles_are_listed(
     zac: requests.Session,
     urls: dict[str, str],
     zac_zaak: Callable[..., JsonObject],
     openzaak_productaanvraag: ApiClient,
 ) -> None:
-    """ZAC stores a vestiging betrokkene as niet_natuurlijk_persoon with kvkNummer and vestigingsNummer, no name."""
+    """A person in two roles and a bedrijf in one are listed; Open Zaak stores the bedrijf by kvk and vestiging only."""
     zaak = zac_zaak()
-    roltype = betrokkene_roltype(zac, urls["zac"], zaak, "belanghebbende")
-    expect_status(add_betrokkene(zac, urls["zac"], zaak, roltype, BEDRIJF), HTTPStatus.OK)
-    rol = _rol(openzaak_productaanvraag, urls, zaak, "belanghebbende")
-    assert _bedrijf_identificatie(rol) == VESTIGING
+    roltypen = {rol: betrokkene_roltype(zac, urls["zac"], zaak, rol) for rol in ("belanghebbende", "contactpersoon")}
+    wanted = [("belanghebbende", "persoon"), ("contactpersoon", "persoon"), ("belanghebbende", "bedrijf")]
+    for rol, who in wanted:
+
+        def add(identificatie: JsonObject, rol: str = rol) -> requests.Response:
+            return add_betrokkene(zac, urls["zac"], zaak, roltypen[rol], identificatie)
+
+        response = send_with_person(zac, urls["zac"], EREBOS, add) if who == "persoon" else add(BEDRIJF)
+        expect_status(response, HTTPStatus.OK)
+    listed = betrokkenen(zac, urls["zac"], zaak)
+    assert sorted(str(b.get("roltype")) for b in listed) == sorted(str(roltypen[r]["naam"]) for r, _ in wanted)
+    zaak_url = f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}"
+    rollen = openzaak_productaanvraag.list(f"{ZAKEN}/rollen", {"zaak": zaak_url})
+    bedrijven = [rol for rol in rollen if rol.get("betrokkeneType") == "niet_natuurlijk_persoon"]
+    assert [_bedrijf_identificatie(rol) for rol in bedrijven] == [VESTIGING]
 
 
 @REGRESSIE

@@ -35,7 +35,6 @@ from podiumd_tests.workloads import expect_defect
 from podiumd_tests.zac import BEVESTIGING_NIET_VERSTUURD
 from podiumd_tests.zac import DUE_DATES
 from podiumd_tests.zac import INDEX_TIMEOUT
-from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import hervatten
 from podiumd_tests.zac import is_zaak_listed
@@ -47,9 +46,6 @@ from podiumd_tests.zac import wait_in_werkvoorraad
 from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac_beheer import communicatiekanalen
-from podiumd_tests.zac_betrokkenen import add_betrokkene
-from podiumd_tests.zac_betrokkenen import betrokkene_roltype
-from podiumd_tests.zac_betrokkenen import betrokkenen
 from podiumd_tests.zac_betrokkenen import wijzig_initiator
 
 if TYPE_CHECKING:
@@ -460,69 +456,6 @@ def test_new_zaak_dates_come_from_the_zaaktype(
     start = date.fromisoformat(str(openzaak_productaanvraag.get(_zaak_url(urls, zaak))["startdatum"]))
     planned = start + timedelta(days=servicenorm)
     assert _dates(openzaak_productaanvraag, urls, zaak) == (planned, start + timedelta(days=doorlooptijd))
-
-
-@pytest.mark.tc("ZAC-045", "ZAC-062")
-# ZAC updates its search index from Open Notificaties' notifications.
-@pytest.mark.requires("opennotificaties")
-@pytest.mark.source(
-    "draaiboek ZAC-045", "A zaak can be aborted, and then shows in the werkvoorraad of closed zaken (ZAC-045, -062)."
-)
-@pytest.mark.scenario("""
-    Given an open zaak in ZAC
-    When the behandelaar aborts the zaak as niet ontvankelijk
-    Then the zaak is closed
-    And the zaak appears among the closed zaken
-""")
-def test_aborted_zaak_is_closed_and_listed_among_the_closed_zaken(
-    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
-) -> None:
-    """Aborting a zaak (niet ontvankelijk) closes it; ZAC's search for closed zaken then lists it.
-
-    ZAC indexes the zaak on Open Notificaties' zaken kanaal.
-    """
-    zaak = zac_zaak()
-    expect_status(afbreken(zac, urls["zac"], zaak), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    assert not read_zaak(zac, urls["zac"], str(zaak["uuid"]))["isOpen"]
-
-    def is_listed() -> bool:
-        return is_zaak_listed(zac, urls["zac"], zaak, alleenAfgeslotenZaken=True)
-
-    wait_until(is_listed, timeout=INDEX_TIMEOUT, description=f"zaak {zaak['identificatie']} among the closed zaken")
-
-
-@pytest.mark.tc("ZAC-047", "ZAC-048")
-@pytest.mark.source(
-    "draaiboek ZAC-047",
-    "Several betrokkenen with the same and different roles are linked to the zaak and shown with their role (ZAC-047, -048).",
-)
-@pytest.mark.scenario("""
-    Given a zaak in ZAC
-    When the behandelaar adds a person as belanghebbende and as contactpersoon
-    And adds a company as belanghebbende
-    Then the zaak lists all three betrokkenen with their roles
-""")
-def test_betrokkenen_with_the_same_and_different_roles_are_listed(
-    zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject]
-) -> None:
-    """A person in two roles and a company in one of them are all listed with the zaak."""
-    zaak = zac_zaak()
-    roltypen = {rol: betrokkene_roltype(zac, urls["zac"], zaak, rol) for rol in ("belanghebbende", "contactpersoon")}
-    company = {
-        "type": "VN",
-        "kvkNummer": BEDRIJF.attributes["kvk"][0],
-        "vestigingsnummer": BEDRIJF.attributes["vestigingsnummer"][0],
-    }
-    wanted = [("belanghebbende", "persoon"), ("contactpersoon", "persoon"), ("belanghebbende", "bedrijf")]
-    for rol, who in wanted:
-
-        def add(identificatie: JsonObject, rol: str = rol) -> requests.Response:
-            return add_betrokkene(zac, urls["zac"], zaak, roltypen[rol], identificatie)
-
-        response = send_with_person(zac, urls["zac"], EREBOS, add) if who == "persoon" else add(company)
-        expect_status(response, HTTPStatus.OK)
-    listed = betrokkenen(zac, urls["zac"], zaak)
-    assert sorted(str(b.get("roltype")) for b in listed) == sorted(str(roltypen[r]["naam"]) for r, _ in wanted)
 
 
 @pytest.mark.tc("ZAC-056")
