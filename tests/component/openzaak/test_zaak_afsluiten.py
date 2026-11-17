@@ -48,18 +48,26 @@ def _closed(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypePart
     "external OneGround/ZGW-APIs-postman-tests ZGW business rule zrc-007a",
     "The eindstatus sets the zaak's einddatum to the date the status was set.",
 )
+@pytest.mark.source(
+    "TA regression/39-zaak-lifecycle-close.spec.ts", "A zaak closes with an einddatum and an archiefnominatie."
+)
 @pytest.mark.scenario("""
     Given a zaak in Open Zaak
     When it gets a resultaat and an eindstatus set two days ago
     Then the zaak's einddatum is the date of two days ago
+    And its archiefnominatie is vernietigen
+    And its archiefactiedatum is 3650 days after the einddatum
 """)
 def test_einddatum_is_the_date_of_the_eindstatus(
     openzaak: ApiClient, registry: ResourceRegistry, closable: ZaaktypeParts
 ) -> None:
-    """The einddatum of a closed zaak is the date of its eindstatus's datumStatusGezet."""
+    """The einddatum of a closed zaak is the date of its eindstatus's datumStatusGezet; the archive fields follow."""
     gezet = datetime.now(tz=UTC).replace(hour=12, minute=0, second=0, microsecond=0) - timedelta(days=2)
     closed = close_zaak(openzaak, make_zaak(openzaak, registry, closable.zaaktype), closable, gezet)
     assert closed["einddatum"] == gezet.date().isoformat()
+    assert closed["archiefnominatie"] == "vernietigen"
+    # The test zaaktype's resultaattype: afleidingswijze afgehandeld, archiefactietermijn 3650 days.
+    assert closed["archiefactiedatum"] == (gezet.date() + timedelta(days=3650)).isoformat()
 
 
 @pytest.mark.source(

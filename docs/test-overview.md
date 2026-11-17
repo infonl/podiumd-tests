@@ -12,12 +12,12 @@ component and integration, without and with the destructive tests; the test suit
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 241 | 41 | 10 |
-| component | 1027 | 611 | 69 |
+| component | 1026 | 609 | 69 |
 | integration | 211 | 143 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1413** | **743** | **84** |
+| **full tier** | **1412** | **741** | **84** |
 | **chaos tier** | **66** | **52** | **14** |
-| **test suite** | **1559** | **804** | **98** |
+| **test suite** | **1558** | **802** | **98** |
 
 Unit tests (`unit_tests/`, functions): 948. Perf endpoints (`perf/runs.py`): 32.
 
@@ -49,7 +49,7 @@ Unit tests (`unit_tests/`, functions): 948. Perf endpoints (`perf/runs.py`): 32.
 | component | openklant | 19 | 15 |
 | component | opennotificaties | 8 | 6 |
 | component | openvtb | 13 | 6 |
-| component | openzaak | 179 | 81 |
+| component | openzaak | 178 | 79 |
 | component | pabc | 10 | 10 |
 | component | platform | 69 | 18 |
 | component | referentielijsten | 2 | 2 |
@@ -109,10 +109,10 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | PCP | 1 |
 | PI | 55 |
 | PZW | 28 |
-| TA | 281 |
+| TA | 284 |
 | ZAC | 16 |
 | draaiboek | 91 |
-| external | 224 |
+| external | 220 |
 | podiumd-tests | 553 |
 | upstream | 244 |
 

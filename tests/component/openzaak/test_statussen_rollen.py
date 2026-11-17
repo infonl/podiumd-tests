@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import secrets
 
-from datetime import date
-from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -22,7 +20,6 @@ from podiumd_tests.seed.openklant import random_kvk_nummer
 from podiumd_tests.seed.openklant import random_vestigingsnummer
 from podiumd_tests.seed.openzaak import BSN_FILTER
 from podiumd_tests.seed.openzaak import ZAKEN
-from podiumd_tests.seed.openzaak import close_zaak
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
 from podiumd_tests.seed.openzaak import make_zaak
@@ -72,30 +69,6 @@ def test_statussen_in_order(openzaak: ApiClient, registry: ResourceRegistry, par
     assert laatst == {str(eerste["url"]): False, str(tweede["url"]): True}
     filtered = {"zaak": str(zaak["url"]), "indicatieLaatstGezetteStatus": "true"}
     assert urls(openzaak.list(f"{ZAKEN}/statussen", filtered)) == {str(tweede["url"])}
-
-
-@pytest.mark.source(
-    "TA regression/39-zaak-lifecycle-close.spec.ts", "A zaak closes with an einddatum and an archiefnominatie."
-)
-@pytest.mark.scenario("""
-    Given a zaak in Open Zaak
-    When it gets a resultaat and the eindstatus
-    Then the zaak has an einddatum
-    And its archiefnominatie is vernietigen
-    And its archiefactiedatum is 3650 days after the einddatum
-""")
-def test_zaak_closes_with_resultaat_and_eindstatus(
-    openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
-) -> None:
-    """With a resultaat and the eindstatus the zaak gets an einddatum and an archiefnominatie (TA reg-39, extended)."""
-    if not parts.resultaattypen:
-        pytest.skip("test zaaktype has no resultaattype (Selectielijst API was unreachable at bootstrap)")
-    closed = close_zaak(openzaak, make_zaak(openzaak, registry, parts.zaaktype), parts)
-    assert closed["einddatum"]
-    assert closed["archiefnominatie"] == "vernietigen"
-    # The test zaaktype's resultaattype: afleidingswijze afgehandeld, archiefactietermijn 3650 days.
-    einddatum = date.fromisoformat(str(closed["einddatum"]))
-    assert closed["archiefactiedatum"] == (einddatum + timedelta(days=3650)).isoformat()
 
 
 @pytest.mark.source("podiumd-tests", "Deleting a zaak with a resultaat must answer 204; Open Zaak 1.29.3 answers 500.")
@@ -213,7 +186,7 @@ def test_zoek_refuses_an_unknown_filter(openzaak: ApiClient) -> None:
     And a search by the employee's identificatie finds only this zaak
 """)
 def test_rollen_of_two_kinds(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
-    """A burger initiator and a medewerker belanghebbende: both listed, both filters find the zaak (TA reg-41)."""
+    """A burger initiator and a medewerker belanghebbende are both listed; the medewerker filter finds the zaak (TA reg-41)."""
     bsn = random_bsn()
     medewerker = registry.tagged("mdw")
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
@@ -234,32 +207,6 @@ def test_rollen_of_two_kinds(openzaak: ApiClient, registry: ResourceRegistry, pa
         f"{ZAKEN}/zaken", {"rol__betrokkeneIdentificatie__medewerker__identificatie": medewerker}
     )
     assert urls(by_medewerker) == {str(zaak["url"])}
-
-
-@pytest.mark.source(
-    "TA regression/16-bedrijf-aanvraag-kvk.spec.ts",
-    "A company files a request: the zaak with a niet-natuurlijk persoon rol is found by its KvK number.",
-)
-@pytest.mark.scenario("""
-    Given a zaak in Open Zaak
-    When a company with a KvK number is added as initiator
-    Then a search by that KvK number finds only this zaak
-""")
-def test_rol_of_a_company(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
-    """A niet-natuurlijk persoon with a KvK number finds the zaak (TA reg-16)."""
-    kvk = random_kvk_nummer()
-    zaak = make_zaak(openzaak, registry, parts.zaaktype)
-    make_rol(
-        openzaak,
-        registry,
-        zaak,
-        parts.roltypen["initiator"],
-        "niet_natuurlijk_persoon",
-        kvkNummer=kvk,
-        statutaireNaam=registry.tagged("bv"),
-    )
-    found = openzaak.list(f"{ZAKEN}/zaken", {"rol__betrokkeneIdentificatie__nietNatuurlijkPersoon__kvkNummer": kvk})
-    assert urls(found) == {str(zaak["url"])}
 
 
 @pytest.mark.source(
@@ -289,9 +236,21 @@ def test_rol_indicatie_machtiging(
     "external OneGround/ZGW-APIs-postman-tests ZGW features, ZRC 1.7 rol met medewerker",
     "A medewerker's identificatie may be longer than the 24 characters of Zaken API 1.5, at least a GUID.",
 )
+@pytest.mark.source(
+    "TA regression/16-bedrijf-aanvraag-kvk.spec.ts",
+    "A company files a request: the zaak with a niet-natuurlijk persoon rol is found by its KvK number.",
+)
 @pytest.mark.parametrize(
     ("betrokkene_type", "generiek", "filter_key", "key", "extra", "size"),
     [
+        (
+            "niet_natuurlijk_persoon",
+            "initiator",
+            "nietNatuurlijkPersoon__kvkNummer",
+            "kvkNummer",
+            {"statutaireNaam": "ptest"},
+            8,
+        ),
         ("vestiging", "initiator", "vestiging__vestigingsNummer", "vestigingsNummer", {"handelsnaam": ["ptest"]}, 8),
         ("medewerker", "behandelaar", "medewerker__identificatie", "identificatie", {"achternaam": "Test"}, 64),
         (
@@ -306,7 +265,7 @@ def test_rol_indicatie_machtiging(
 )
 @pytest.mark.scenario("""
     Given a zaak in Open Zaak
-    When a vestiging, a medewerker or an organisatorische eenheid is added to it as a rol
+    When a company with a KvK number, a vestiging, a medewerker or an organisatorische eenheid is added to it as a rol
     And the medewerker's identificatie is 64 characters long
     Then the zaak is found by that betrokkene's identificatie
 """)
@@ -324,7 +283,7 @@ def test_rol_of_each_betrokkene_type_finds_the_zaak(  # parametrized rol kind
     """A rol of this betrokkeneType stores its identificatie of size characters; the zaken filter finds only the zaak."""
     unique = (
         random_kvk_nummer()
-        if betrokkene_type == "vestiging"
+        if betrokkene_type in {"vestiging", "niet_natuurlijk_persoon"}
         else f"{registry.tagged(betrokkene_type)}-{secrets.token_hex(32)}"
     )
     nummer = unique[:size]
