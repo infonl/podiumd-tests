@@ -67,31 +67,19 @@ def test_login_shows_the_dashboard(
 @pytest.mark.source(
     "ZAC features/1-login.feature", "Bob logs out through the user profile menu and sees the sign-in page."
 )
+@pytest.mark.source("ZAC features/1-login.feature", "Bob logs back in after logging out and sees the dashboard.")
 @ZAC_7
 @pytest.mark.scenario("""
     Given the test admin is logged in to ZAC
     When the admin chooses Uitloggen in the account menu
     Then the browser shows Keycloak's login form
-""")
-def test_logout_ends_the_session(
-    page: Page, podiumd_env: Environment, urls: dict[str, str], need_bootstrap: Callable[..., None]
-) -> None:
-    """Uitloggen in the account menu ends the session: the browser ends on Keycloak's login form."""
-    need_bootstrap(ADMIN.name)
-    log_in_and_out(page, podiumd_env, urls["zac"])
-
-
-@pytest.mark.source("ZAC features/1-login.feature", "Bob logs back in after logging out and sees the dashboard.")
-@ZAC_7
-@pytest.mark.scenario("""
-    Given the test admin logged in to ZAC and logged out again
     When the admin logs in once more through Keycloak
     Then ZAC shows its dashboard
 """)
 def test_login_after_logout_shows_the_dashboard(
     page: Page, podiumd_env: Environment, urls: dict[str, str], need_bootstrap: Callable[..., None]
 ) -> None:
-    """A second login after Uitloggen reaches the dashboard: ZAC does not refuse the new session (zac-7)."""
+    """Uitloggen ends on Keycloak's login form; a second login reaches the dashboard (zac-7)."""
     need_bootstrap(ADMIN.name)
     log_in_and_out(page, podiumd_env, urls["zac"])
     redirect_login(page, podiumd_env, urls["zac"], ADMIN.username, podiumd_env.credentials.get(ADMIN.store_key))
