@@ -60,25 +60,6 @@ def new_version(openzaak: ApiClient, document: JsonObject, inhoud: str, **fields
 
 
 @pytest.mark.source(
-    "TA interaction/03-document-koppeling.spec.ts",
-    "A document is linked to a zaak in two steps, EnkelvoudigInformatieObject and ZaakInformatieObject, as ZGW prescribes.",
-)
-@pytest.mark.core
-@pytest.mark.scenario("""
-    Given a zaak and an informatieobject in Open Zaak
-    When the informatieobject is linked to the zaak
-    Then the zaak's zaakinformatieobjecten hold only that informatieobject
-""")
-def test_document_linked_to_zaak(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
-    """A document linked to a zaak shows in the zaak's zaakinformatieobjecten (TA int-03)."""
-    zaak = make_zaak(openzaak, registry, parts.zaaktype)
-    document = make_document(openzaak, registry, parts.informatieobjecttype)
-    link_document(openzaak, registry, zaak, document)
-    linked = openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": str(zaak["url"])})
-    assert [z["informatieobject"] for z in entries(linked)] == [document["url"]]
-
-
-@pytest.mark.source(
     "TA regression/64-document-lifecycle.spec.ts",
     "Document lifecycle: upload, sign, make definitief, add version 2 and unlock.",
 )
@@ -221,10 +202,16 @@ NOWHERE = "http://openzaak.invalid/documenten/api/v1/enkelvoudiginformatieobject
     "A zaakinformatieobject gets aardRelatie hoort_bij and a registratiedatum; Documenten API mirrors it as an "
     "objectinformatieobject, created and deleted with it; its zaak and informatieobject cannot change.",
 )
+@pytest.mark.source(
+    "TA interaction/03-document-koppeling.spec.ts",
+    "A document is linked to a zaak in two steps, EnkelvoudigInformatieObject and ZaakInformatieObject, as ZGW prescribes.",
+)
+@pytest.mark.core
 @pytest.mark.scenario("""
     Given a zaak and a document in Open Zaak
     When the document is linked to the zaak
-    Then the link is registered now, as "hoort bij"
+    Then the zaak's zaakinformatieobjecten hold only that document
+    And the link is registered now, as "hoort bij"
     And the document's record in Documenten names the zaak
     And the link cannot be moved to another zaak or document
     And deleting the link removes the record in Documenten
@@ -238,6 +225,8 @@ def test_zaak_document_link_is_mirrored_and_fixed(
     document = make_document(openzaak, registry, parts.informatieobjecttype)
     other_document = make_document(openzaak, registry, parts.informatieobjecttype)
     link = link_document(openzaak, registry, zaak, document)
+    linked = openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": str(zaak["url"])})
+    assert [z["informatieobject"] for z in entries(linked)] == [document["url"]]
     assert str(link["aardRelatieWeergave"]).lower().startswith("hoort bij"), link["aardRelatieWeergave"]
     assert str(link["registratiedatum"]).startswith(today()), link["registratiedatum"]
     mirrored = objectinformatieobjecten(openzaak, document)
