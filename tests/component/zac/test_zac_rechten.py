@@ -167,19 +167,19 @@ def test_closed_zaak_rights_follow_the_role(
 
 @pytest.mark.requires("pabc")
 @pytest.mark.source(POLICIES, "A closed zaak is changed and heropend only by a recordmanager or beheerder.")
+@pytest.mark.source(POLICIES, "A recordmanager may heropenen a closed zaak; ZAC gives it the status Heropend.")
 @pytest.mark.scenario("""
     Given an afgehandelde zaak of the BPMN test zaaktype
-    When a behandelaar or a coordinator changes its omschrijving
-    Then ZAC refuses it
-    When a recordmanager changes its omschrijving
-    Then the zaak has the new omschrijving
-    But ZAC refuses the recordmanager a new uiterlijke einddatum afdoening
-    And ZAC refuses the behandelaar to heropenen the zaak
+    When a behandelaar or a coordinator changes it or heropent it, ZAC refuses it
+    When a recordmanager changes its omschrijving, the zaak has it; a new uiterlijke einddatum is refused
+    When the recordmanager heropent the zaak with a reden
+    Then ZAC shows it open with status Heropend
+    And Open Zaak has it without einddatum and with status Heropend
 """)
 def test_closed_zaak_is_changed_only_by_a_recordmanager(
-    zac_as: Callable[[str], requests.Session], urls: dict[str, str], closed_bpmn_zaak: JsonObject
+    zac_as: Callable[[str], requests.Session], urls: dict[str, str], openzaak: ApiClient, closed_bpmn_zaak: JsonObject
 ) -> None:
-    """Behandelaar and coordinator get 403 for an edit and heropenen; the recordmanager edits, but gets 403 for a date."""
+    """Behandelaar and coordinator get 403 for an edit and heropenen; the recordmanager edits and heropent, no date."""
     zaak, zac_url = closed_bpmn_zaak, urls["zac"]
     omschrijving = f"{zaak['omschrijving']}-gewijzigd"
     for role in ("behandelaar", "coordinator"):
@@ -193,24 +193,9 @@ def test_closed_zaak_is_changed_only_by_a_recordmanager(
     assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
     refused = heropenen(zac_as("behandelaar"), zac_url, zaak)
     assert refused.status_code == HTTPStatus.FORBIDDEN, describe(refused)
-
-
-@pytest.mark.requires("pabc")
-@pytest.mark.source(POLICIES, "A recordmanager may heropenen a closed zaak; ZAC gives it the status Heropend.")
-@pytest.mark.scenario("""
-    Given an afgehandelde zaak of the BPMN test zaaktype
-    When a recordmanager heropent it with a reden
-    Then ZAC shows the zaak open with status Heropend
-    And Open Zaak has the zaak without einddatum and with status Heropend
-""")
-def test_recordmanager_heropent_a_closed_zaak(
-    zac_as: Callable[[str], requests.Session], urls: dict[str, str], openzaak: ApiClient, closed_bpmn_zaak: JsonObject
-) -> None:
-    """The recordmanager's heropenen answers 200; ZAC and Open Zaak have the zaak open with statustype Heropend."""
-    response = heropenen(zac_as("recordmanager"), urls["zac"], closed_bpmn_zaak)
-    reopened = expect_status(response, HTTPStatus.OK).json()
+    reopened = expect_status(heropenen(recordmanager, zac_url, zaak), HTTPStatus.OK).json()
     assert (section(reopened, "status").get("naam"), reopened["isOpen"]) == (HEROPEND, True)
-    in_open_zaak = openzaak.get(f"{urls['openzaak']}/{ZAKEN}/zaken/{closed_bpmn_zaak['uuid']}")
+    in_open_zaak = openzaak.get(f"{urls['openzaak']}/{ZAKEN}/zaken/{zaak['uuid']}")
     statustype = openzaak.get(str(openzaak.get(str(in_open_zaak["status"]))["statustype"]))
     assert (in_open_zaak["einddatum"], statustype["omschrijving"]) == (None, HEROPEND)
 

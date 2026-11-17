@@ -12,12 +12,12 @@ component and integration, without and with the destructive tests; the test suit
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 239 | 40 | 10 |
-| component | 1019 | 602 | 69 |
+| component | 1018 | 601 | 69 |
 | integration | 211 | 143 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1404** | **734** | **84** |
+| **full tier** | **1403** | **733** | **84** |
 | **chaos tier** | **65** | **51** | **14** |
-| **test suite** | **1549** | **794** | **98** |
+| **test suite** | **1548** | **793** | **98** |
 
 Unit tests (`unit_tests/`, functions): 955. Perf endpoints (`perf/runs.py`): 32.
 
@@ -54,7 +54,7 @@ Unit tests (`unit_tests/`, functions): 955. Perf endpoints (`perf/runs.py`): 32.
 | component | platform | 69 | 18 |
 | component | referentielijsten | 2 | 2 |
 | component | zaakbrug | 20 | 16 |
-| component | zac | 366 | 273 |
+| component | zac | 365 | 272 |
 | component | zgw_office_addin | 4 | 3 |
 | integration | continuiteit | 20 | 11 |
 | integration | continuiteit_belasting | 8 | 7 |
@@ -114,7 +114,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | draaiboek | 89 |
 | external | 219 |
 | podiumd-tests | 537 |
-| upstream | 244 |
+| upstream | 243 |
 
 ## Expected failures per known issue
 
