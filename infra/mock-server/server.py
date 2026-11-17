@@ -4,7 +4,8 @@ A POST with an Authorization header gets 204; one without gets 403. Open Notific
 both when an abonnement is created: it refuses a callback that accepts requests without auth.
 It also stands in for Notify (NotifyNL): a POST to .../v2/notifications/email or /sms gets
 the 201 and notification JSON a Notify client expects, and the entry records the notification's
-"id"; GET .../v2/notifications/<id> answers with that notification. POST .../v2/template/<id>/preview gets
+"id"; GET .../v2/notifications/<id> answers with that notification, and GET .../v2/notifications lists the ones
+matching its reference and template_type (OMC 2.4 checks for an earlier send). POST .../v2/template/<id>/preview gets
 200 and a preview, whose subject and body are "ptest preview <id>". On a path with /fail-first/ the first
 notification (not Open Notificaties' kanaal "test" check) gets 500, to test redelivery; on a path with /refuse/
 every notification gets 403, to test the retries to a subscriber that refuses.
@@ -29,6 +30,8 @@ from http.server import BaseHTTPRequestHandler
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from threading import Lock
+from urllib.parse import parse_qs
+from urllib.parse import urlsplit
 
 WRITE_LOCK = Lock()
 FAILED_ONCE: set[str] = set()
@@ -36,6 +39,7 @@ RECEIVED = Path(os.environ.get("RECEIVED_FILE", "/data/received.jsonl"))
 CHECKOUTS = Path(os.environ.get("CHECKOUTS_DIR", "/data/worldline"))
 HOSTED_CHECKOUT = re.compile(r"^/v2/[^/]+/hostedcheckouts(?:/([0-9a-f]+))?$")
 NOTIFICATION = re.compile(r"/v2/notifications/([0-9a-f-]{36})$")
+NOTIFICATION_LIST = re.compile(r"/v2/notifications$")
 PREVIEW = re.compile(r"/v2/template/([0-9a-f-]{36})/preview$")
 NOTIFICATIONS: dict[str, dict] = {}
 
@@ -77,6 +81,10 @@ class Handler(BaseHTTPRequestHandler):
         notification = NOTIFICATION.search(self.path)
         if notification and notification[1] in NOTIFICATIONS:
             self.send_json(200, NOTIFICATIONS[notification[1]])
+            return
+        url = urlsplit(self.path)
+        if NOTIFICATION_LIST.search(url.path):
+            self.send_json(200, {"notifications": _matching(parse_qs(url.query)), "links": {"current": self.path}})
             return
         found = HOSTED_CHECKOUT.match(self.path)
         if found and found[1] and (CHECKOUTS / f"{found[1]}.json").exists():
@@ -172,6 +180,17 @@ def _checkout_status(checkout_id) -> dict[str, object]:
         return {"status": status}
     payment = {"id": f"{checkout_id}_0", "status": status}
     return {"status": "PAYMENT_CREATED", "createdPaymentOutput": {"payment": payment}}
+
+
+def _matching(query: dict[str, list[str]]) -> list[dict]:
+    """Return the notifications whose reference and type match the query's reference and template_type."""
+    wanted = {"reference": query.get("reference") or [], "type": query.get("template_type") or []}
+    return [notification for notification in NOTIFICATIONS.values() if _is_match(notification, wanted)]
+
+
+def _is_match(notification: dict, wanted: dict[str, list[str]]) -> bool:
+    """Return whether every field with wanted values has one of them."""
+    return all(notification.get(field) in values for field, values in wanted.items() if values)
 
 
 if __name__ == "__main__":
