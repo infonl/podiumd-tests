@@ -61,6 +61,14 @@ older suites that each had their own copy of the same helpers (PLAN.md R22).
    When porting a source test, first reuse the helpers of MK, PI, TA or EX
    (R22), ported once into `src/`.
 
+## Tests: extend, do not add a near-copy
+
+- Before writing a test for a new source (a PZW story, a Confluence test procedure, an upstream case), search the
+  suite for a test of the same behaviour (index the docstrings and scenarios, grep the helpers it would call). When
+  one exists, add the source marker and extend that test with the missing step or assertion (user, 2026-11-17:
+  "extend existing tests whenever possible instead of creating duplicates or near duplicates").
+- A new test only for a behaviour no test checks yet; its scenario names what is new.
+
 ## doctor and the tests
 
 - When `doctor` and a test check the same thing (a deployment ready, a URL
