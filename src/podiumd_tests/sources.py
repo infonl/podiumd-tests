@@ -25,6 +25,8 @@ ORIGINS = {
     "draaiboek": "TA test-catalog/cases.yaml",
     # A ZAC sprint's acceptance scenarios: "PZW Sprint <n> <Jira key>".
     "PZW": "Dimpact Confluence space PZW (PodiumD Zaak-ZAC wiki), Sprint <n> - Test Scenarios and Results",
+    # A test procedure on a page of PodiumD Cloud Platform: "PCP <page title>, <section>".
+    "PCP": "Dimpact Confluence space PCP (PodiumD Cloud Platform)",
     "podiumd-tests": "made in this suite",
 }
 

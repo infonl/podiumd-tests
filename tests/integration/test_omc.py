@@ -9,7 +9,6 @@ They run only where OMC's Notify base URL is the mock server.
 from __future__ import annotations
 
 import time
-import uuid
 
 from datetime import UTC
 from datetime import datetime
@@ -33,6 +32,8 @@ from podiumd_tests.omc import make_inwoner_zaak
 from podiumd_tests.omc import notify_request
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openklant import delete_klantcontact_tree
+from podiumd_tests.seed.openklant import random_phone_number
+from podiumd_tests.seed.openklant import set_voorkeursadres
 from podiumd_tests.seed.openzaak import close_zaak
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_status
@@ -101,26 +102,36 @@ def test_new_zaak_mails_the_initiator(
     notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_ZAAKCREATE")
 
 
+@pytest.mark.source(
+    "PCP NotifyNL en Output Management Component, Testen van OMC",
+    "OMC informs the inwoner at the voorkeursadres; after a switch of voorkeur, the next status goes to the other one.",
+)
 @pytest.mark.scenario("""
-    Given a zaak in Open Zaak whose initiator has an e-mail address in Open Klant
-    When the zaak gets its first status and then a status that does not close it
-    Then OMC asks Notify to send the zaak-created and then the zaak-updated e-mail
+    Given a zaak in Open Zaak whose initiator has an e-mail address and a phone number in Open Klant
+    And the e-mail address is the initiator's voorkeursadres
+    When the zaak gets its first status
+    Then OMC asks Notify to send the zaak-created e-mail to the e-mail address
+    When the initiator prefers the phone number and the zaak gets a status that does not close it
+    Then OMC asks Notify to send the zaak-updated SMS to the phone number
 """)
-def test_next_status_mails_a_zaak_update(
+def test_next_status_informs_at_the_voorkeursadres(  # the chain's clients
     podiumd_env: Environment,
+    need_bootstrap: Callable[..., None],
     openzaak: ApiClient,
+    openklant: ApiClient,
     registry: ResourceRegistry,
     parts: ZaaktypeParts,
-    inwoner_zaak: Callable[[str], JsonObject],
 ) -> None:
-    """A later status that does not close the zaak makes OMC send the zaak-updated e-mail."""
+    """OMC informs the initiator at the voorkeursDigitaalAdres the partij has when each status arrives."""
     assert len(parts.statustypen) >= 3, "the test zaaktype needs a status between the first and the eindstatus"
-    adres = own_address(registry)
-    zaak = inwoner_zaak(adres)
+    need_chain(podiumd_env, need_bootstrap)
+    email, phone = own_address(registry), random_phone_number()
+    zaak, bsn = make_inwoner_zaak(openzaak, openklant, registry, parts, email, phone)
     make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
-    notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_ZAAKCREATE")
+    notify_request(podiumd_env, EMAIL, email, "NOTIFY_TEMPLATEID_EMAIL_ZAAKCREATE")
+    set_voorkeursadres(openklant, bsn, phone)
     make_status(openzaak, zaak, str(parts.statustypen[1]["url"]))
-    notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_ZAAKUPDATE")
+    notify_request(podiumd_env, SMS, phone, "NOTIFY_TEMPLATEID_SMS_ZAAKUPDATE")
 
 
 @pytest.mark.scenario("""
@@ -156,8 +167,7 @@ def test_initiator_with_only_a_phone_number_gets_an_sms(
     inwoner_zaak: Callable[[str], JsonObject],
 ) -> None:
     """An initiator whose only digitaal adres is a telefoonnummer gets the zaak-created SMS."""
-    # In international form: OMC sends a national 06 number as +316.
-    adres = f"+316{uuid.uuid4().int % 10**8:08d}"
+    adres = random_phone_number()
     make_status(openzaak, inwoner_zaak(adres), str(parts.statustypen[0]["url"]))
     notify_request(podiumd_env, SMS, adres, "NOTIFY_TEMPLATEID_SMS_ZAAKCREATE")
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+import secrets
 
 from datetime import UTC
 from datetime import datetime
@@ -34,6 +35,11 @@ def random_bsn() -> str:
         last = total % 11
         if last != _NO_CHECK_DIGIT and digits[0] != 0:  # the check digit is weighted -1
             return "".join(map(str, [*digits, last]))
+
+
+def random_phone_number() -> str:
+    """Return a random Dutch mobile number in international form, as OMC sends a national 06 number (+316)."""
+    return f"+316{secrets.randbelow(10**8):08d}"
 
 
 def random_kvk_nummer() -> str:
@@ -147,6 +153,14 @@ def make_digitaal_adres(  # noqa: PLR0913  # the address and its owner
         **fields,
     }
     return _create(openklant, registry, "digitaleadressen", body)
+
+
+def set_voorkeursadres(openklant: ApiClient, bsn: str, adres: str) -> None:
+    """Make the digitaal adres with this value the voorkeursDigitaalAdres of the partij with this BSN."""
+    partij = partijen_of(openklant, bsn)[0]
+    adressen = openklant.list("digitaleadressen", {"verstrektDoorPartij__url": partij})
+    found = next(digitaal for digitaal in adressen if digitaal["adres"] == adres)
+    openklant.patch(partij, {"voorkeursDigitaalAdres": {"uuid": found["uuid"]}})
 
 
 def klantcontact_body(registry: ResourceRegistry, **fields: object) -> dict[str, object]:

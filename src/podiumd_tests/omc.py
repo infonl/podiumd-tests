@@ -20,6 +20,7 @@ from podiumd_tests.seed.openklant import make_digitaal_adres
 from podiumd_tests.seed.openklant import make_partij
 from podiumd_tests.seed.openklant import make_partij_identificator
 from podiumd_tests.seed.openklant import random_bsn
+from podiumd_tests.seed.openklant import set_voorkeursadres
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.zac import notificatie
@@ -50,23 +51,35 @@ OMC_REQUEST_SCOPED_QUERIES = (2, 4, 1)
 OMC_LISTEN = "omc-listen"
 
 
-def make_inwoner(openklant: ApiClient, registry: ResourceRegistry, adres: str) -> str:
-    """Create a partij with a new BSN and only this digitaal adres (an e-mail address or phone); the BSN."""
+def make_inwoner(openklant: ApiClient, registry: ResourceRegistry, adres: str, *andere: str) -> str:
+    """Create a partij with a new BSN and these digitale adressen (e-mail addresses or phones); the BSN.
+
+    With andere, adres is the voorkeursDigitaalAdres.
+    """
     bsn = random_bsn()
     partij = make_partij(openklant, registry)
     make_partij_identificator(openklant, registry, partij, "bsn", bsn)
     make_digitaal_adres(openklant, registry, partij, adres)
+    for ander in andere:
+        make_digitaal_adres(openklant, registry, partij, ander, standaard=False)
+    if andere:
+        set_voorkeursadres(openklant, bsn, adres)
     return bsn
 
 
-def make_inwoner_zaak(
-    openzaak: ApiClient, openklant: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts, adres: str
+def make_inwoner_zaak(  # the zaak's clients and the addresses
+    openzaak: ApiClient,
+    openklant: ApiClient,
+    registry: ResourceRegistry,
+    parts: ZaaktypeParts,
+    adres: str,
+    *andere: str,
 ) -> tuple[JsonObject, str]:
-    """Create a zaak whose initiator is a new partij with only this digitaal adres (an e-mail address or phone).
+    """Create a zaak whose initiator is a new partij with these digitale adressen, as make_inwoner.
 
     Returns the zaak and the initiator's BSN.
     """
-    bsn = make_inwoner(openklant, registry, adres)
+    bsn = make_inwoner(openklant, registry, adres, *andere)
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
     make_rol(openzaak, registry, zaak, parts.roltypen["initiator"], inpBsn=bsn)
     return zaak, bsn
