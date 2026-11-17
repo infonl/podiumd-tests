@@ -212,29 +212,6 @@ def test_destruction_deletes_the_besluit_and_its_document(
 
 
 @pytest.mark.destructive
-@pytest.mark.tc("ABC-038")
-@REG_171
-@pytest.mark.scenario("""
-    Given the test zaaktype takes the short procedure
-    And a vernietigingslijst of a closed zaak of that zaaktype, ready for review
-    When the reviewer accepts the list
-    Then the list is ready to delete
-""")
-def test_short_procedure_skips_the_archivist(
-    oab: Callable[[str], requests.Session],
-    api: str,
-    zaak: JsonObject,
-    registry: ResourceRegistry,
-    oab_config: Callable[..., None],
-) -> None:
-    """For a zaaktype with the short procedure, the reviewer's acceptance makes the list ready to delete (TA reg-171)."""
-    oab_config("ArchiveConfig", zaaktypes_short_process=[TEST_ZAAKTYPE])
-    lijst = new_list(oab, api, zaak, registry)
-    review(oab, api, "reviewer", lijst, decision="accepted")
-    assert list_status(oab, api, lijst) == "ready_to_delete"
-
-
-@pytest.mark.destructive
 @pytest.mark.tc("ABC-034", "ABC-035")
 @pytest.mark.source(
     "draaiboek ABC-034", "A functioneel beheerder chooses in OAB's settings which zaaktypen take the short procedure."
@@ -264,14 +241,17 @@ def test_beheerder_sets_the_short_procedure_zaaktypen(
 
 
 @pytest.mark.destructive
-@pytest.mark.tc("ABC-036")
+@pytest.mark.tc("ABC-036", "ABC-038")
+@REG_171
 @pytest.mark.source(
     "draaiboek ABC-036",
     "Zaaktypen with the short procedure can only follow it; the route through the archivist is closed.",
 )
 @pytest.mark.scenario("""
     Given the test zaaktype takes the short procedure
-    And the reviewer accepted a vernietigingslijst of a closed zaak of that zaaktype
+    And a vernietigingslijst of a closed zaak of that zaaktype, ready for review
+    When the reviewer accepts the list
+    Then the list is ready to delete
     When the archivist reviews the list
     Then Open Archiefbeheer refuses the review
     And the list stays ready to delete
@@ -283,10 +263,11 @@ def test_short_procedure_list_cannot_go_to_the_archivist(
     registry: ResourceRegistry,
     oab_config: Callable[..., None],
 ) -> None:
-    """For a zaaktype with the short procedure, the archivist cannot review the accepted list."""
+    """With the short procedure, the reviewer's acceptance makes the list ready to delete; the archivist cannot review it."""
     oab_config("ArchiveConfig", zaaktypes_short_process=[TEST_ZAAKTYPE])
     lijst = new_list(oab, api, zaak, registry)
     review(oab, api, "reviewer", lijst, decision="accepted")
+    assert list_status(oab, api, lijst) == "ready_to_delete"
     body = {"destructionList": lijst, "listFeedback": "podiumd-tests", "decision": "accepted"}
     response = oab("archivist").post(f"{api}/destruction-list-reviews/", json=body)
     expect_status(response, HTTPStatus.FORBIDDEN, HTTPStatus.BAD_REQUEST)
