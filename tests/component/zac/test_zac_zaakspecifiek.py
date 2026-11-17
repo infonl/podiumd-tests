@@ -36,7 +36,9 @@ from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import is_taak_listed
 from podiumd_tests.zac import is_zaak_listed
+from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import toekennen
+from podiumd_tests.zac import verdelen
 from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zac_session
 from podiumd_tests.zac_documents import document_url
@@ -217,6 +219,42 @@ def test_marking_is_refused_without_its_conditions(
 
     expect_status(_mark(behandelaar, zac_url, team_zaak), HTTPStatus.OK)
     _refused_with(toekennen(behandelaar, zac_url, team_zaak, team.group, None), CANNOT_BE_RELEASED)
+
+
+@pytest.mark.source(
+    "PZW Sprint 82 PZ-12793", "A zaakspecifiek geautoriseerde zaak is not verdeeld to a group without a behandelaar."
+)
+@pytest.mark.scenario("""
+    Given two zaken of the team's group with the same behandelaar, one marked zaakspecifiek geautoriseerd
+    When the beheerder verdeelt both to the group without a behandelaar
+    Then the unmarked zaak has no behandelaar
+    And the marked zaak keeps its behandelaar
+""")
+def test_marked_zaak_is_skipped_when_verdeeld_without_a_behandelaar(  # the zaaktype, the team and the zaak
+    zac: requests.Session,
+    urls: dict[str, str],
+    zaakspecifiek_zaaktype: JsonObject,
+    openzaak: ApiClient,
+    registry: ResourceRegistry,
+    team: Team,
+    team_zaak: JsonObject,
+) -> None:
+    """Verdelen to a group alone skips a marked zaak and releases the others (ZaakService.assignZaakFromBatch)."""
+    zac_url = urls["zac"]
+    behandelaar = team.sessions[0]
+    gewoon = create_zaak(zac, zac_url, zaakspecifiek_zaaktype, omschrijving=registry.tagged("zac-zaakspecifiek"))
+    clean_up_zaak(zac, zac_url, openzaak, registry, gewoon)
+    expect_status(toekennen(zac, zac_url, gewoon, team.group, team.names[0]), HTTPStatus.OK)
+    expect_status(_mark(behandelaar, zac_url, team_zaak), HTTPStatus.OK)
+
+    uuids = [str(gewoon["uuid"]), str(team_zaak["uuid"])]
+    expect_status(verdelen(zac, zac_url, uuids, team.group, None), HTTPStatus.NO_CONTENT)
+    wait_until(
+        lambda: assignment(read_zaak(behandelaar, zac_url, str(gewoon["uuid"]))) == (team.group, None),
+        timeout=LIST_TIMEOUT,
+        description=f"zaak {gewoon['identificatie']} verdeeld to {team.group}",
+    )
+    assert assignment(read_zaak(behandelaar, zac_url, str(team_zaak["uuid"]))) == (team.group, team.names[0])
 
 
 @pytest.mark.source("ZAC ZaakService.assignZaak", "The replaced behandelaar keeps access to the zaak.")

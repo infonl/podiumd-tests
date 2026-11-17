@@ -204,11 +204,15 @@ class ZacBpmnProcess:
         self._map_roles(ctx, str(zaaktype["omschrijving"]))
         http, zac = self._zac(ctx)
         deploy_process(http, zac, PROCESS_KEY, process_files())
+        self.link_zaaktype(http, zac, zaaktype)
+        return {}
+
+    def link_zaaktype(self, http: requests.Session, zac: str, zaaktype: JsonObject) -> None:
+        """Link the process to the zaaktype; the link it has keeps its other fields."""
         uuid = uuid_of(zaaktype["url"])
         unified = has_process_definitions(http, zac)
         existing = read_zaakafhandelparameters(http, zac, uuid) if unified else bpmn_link(http, zac, uuid) or {}
         store_link(http, zac, {**existing, **self.link(http, zac, zaaktype)})
-        return {}
 
     def link(self, http: requests.Session, zac: str, zaaktype: JsonObject) -> JsonObject:
         """Return the link's fields: zaakafhandelparameters from ZAC 5.12, else a zaaktype-bpmn-configuration."""

@@ -13,7 +13,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.bpmn import ZacBpmnProcess
 from podiumd_tests.bootstrap.bpmn import uuid_of
+from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
@@ -23,6 +25,7 @@ from podiumd_tests.seed.openzaak import today
 from podiumd_tests.seed.zac_zaaktype import ZAC_TYPES
 from podiumd_tests.seed.zac_zaaktype import publish_zac_zaaktype
 from podiumd_tests.wait import wait_until
+from podiumd_tests.workloads import is_older_than
 from podiumd_tests.workloads import skip_older_than
 from podiumd_tests.zac import clear_ztc_cache
 from podiumd_tests.zac import configure_zaaktype
@@ -31,6 +34,8 @@ from podiumd_tests.zac import read_zaakafhandelparameters
 from podiumd_tests.zac import user_groups
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     import requests
 
     from podiumd_tests.clients.api import ApiClient
@@ -180,3 +185,35 @@ def test_inrichtingscheck_names_resultaattypen_with_an_unsupported_brondatum(  #
         ["ander_datumkenmerk", "zaakobject"]
     ]
     assert [c.get("valide") for c in mine] == [False]
+
+
+# ZAC leaves zaaktypen bound to BPMN out of its inrichtingscheck from this release on (PZ-11837).
+SKIPS_BPMN_ZAAKTYPEN = (5, 11, 0)
+
+
+@pytest.mark.source(
+    "PZW Sprint 82 PZ-11837", "BPMN zaaktypen are no longer shown in or checked by the inrichtingscheck."
+)
+@pytest.mark.scenario("""
+    Given ZAC's own catalogus has a zaaktype whose zaken ZAC handles with a BPMN process
+    When the beheerder runs ZAC's inrichtingscheck
+    Then from ZAC 5.11 the BPMN zaaktype is not in it, before 5.11 it is
+""")
+def test_inrichtingscheck_leaves_out_bpmn_zaaktypen(  # the catalogus and the BPMN process
+    podiumd_env: Environment,
+    zac: requests.Session,
+    urls: dict[str, str],
+    openzaak: ApiClient,
+    test_zaaktype: JsonObject,
+    eigen_catalogus: JsonObject,
+    registry: ResourceRegistry,
+    need_bootstrap: Callable[..., None],
+) -> None:
+    """ZAC's inrichtingscheck has no entry for a zaaktype bound to BPMN from ZAC 5.11 on."""
+    need_bootstrap("zac-bpmn-process")
+    zaaktype = publish_zac_zaaktype(podiumd_env, openzaak, registry, test_zaaktype, catalogus=eigen_catalogus["url"])
+    ZacBpmnProcess(ADMIN).link_zaaktype(zac, urls["zac"], zaaktype)
+    clear_ztc_cache(zac, urls["zac"])
+    checks = get_entries(zac, f"{urls['zac']}/rest/health-check/zaaktypes")
+    listed = {section(c, "zaaktype").get("uuid") for c in checks}
+    assert (uuid_of(zaaktype["url"]) in listed) is is_older_than(podiumd_env, "zac", SKIPS_BPMN_ZAAKTYPEN)
