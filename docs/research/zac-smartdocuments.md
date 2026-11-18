@@ -14,6 +14,9 @@ the podiumd chart. For draaiboek ZAC-035, ZAC-036, INT-010 and CONT-045, which a
   ZAC's repository (minikube removed its unused copy on 2026-10-10).
 - On an estate with the real SmartDocuments, a test can check the connection and the start of a document. The
   document only exists after a user fills in SmartDocuments' own wizard.
+- PZW Sprint 82 PZ-13068 (ZAC 5.10 saved a zaaktype's SmartDocuments koppeling as off when the beheerder had not
+  opened the Koppelingen step) is a fault of ZAC's admin screen: the API stores what the screen sends. Its test needs
+  SmartDocuments on and a browser test of that screen.
 
 ## Configuration (`zac/smartdocuments/SmartDocumentsService.kt`)
 
