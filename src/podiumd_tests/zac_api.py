@@ -85,7 +85,10 @@ SENT_NAMES = {old: new for old, new in NEW_NAMES.items() if old not in _SENT_AS_
 
 # ZAC 5.12 names a user's id username (RestUser); the fields that hold a user, and the calls that answer users.
 USER_FIELDS = frozenset(("behandelaar", "medewerker", "gelockedDoor", "ontkoppeldDoor", "filterOntkoppeldDoor"))
-USER_CALLS = re.compile(r"/rest/identity/(users|groups/[^/]+/users|loggedInUser)$")
+USER_CALLS = re.compile(
+    r"/rest/identity/(users|groups/[^/]+/users|loggedInUser)$"
+    r"|/rest/zaken/zaak/[^/]+/zaakspecifiek-geautoriseerde-medewerkers(/kandidaten)?$"
+)
 
 
 @dataclass(frozen=True)

@@ -80,7 +80,9 @@ CANNOT_BE_RELEASED = "msg.error.zaakspecifiek.geautoriseerde.zaak.cannot.be.rele
 CANNOT_BE_DETACHED = "msg.error.medewerker.cannot.be.detached"
 # ZAC marks the zaak of a taak or document in its search results from this release on (#7457); a zaak earlier.
 MARKS_TAKEN_AND_DOCUMENTS = (5, 11, 0)
-# ZAC lists a marked zaak's medewerkers and detaches one from this release on (#7413).
+# ZAC adds a medewerker to a marked zaak and lists its medewerkers from this release on (#7348, #7381).
+ADDS_MEDEWERKERS = (5, 10, 0)
+# ZAC detaches a medewerker from a marked zaak from this release on (#7413).
 DETACHES_MEDEWERKERS = (5, 11, 0)
 # Before this release ZAC indexes a zaak's completed taken again when it reindexes the zaak's taken (#7595).
 DROPS_COMPLETED_TAKEN = (5, 11, 0)
@@ -162,6 +164,38 @@ def _refused_with(response: requests.Response, code: str) -> None:
     assert response.json().get("message") == code
 
 
+def _medewerkers(http: requests.Session, zac_url: str, zaak: JsonObject) -> dict[str, bool]:
+    """The zaak's zaakspecifiek geautoriseerde medewerkers as ZAC's medewerkers tab lists them, and if each detaches."""
+    url = f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/zaakspecifiek-geautoriseerde-medewerkers"
+    return {str(m["id"]): bool(m["isDetachable"]) for m in get_entries(http, url)}
+
+
+def _ontkoppel(
+    http: requests.Session, zac_url: str, zaak: JsonObject, medewerker: str, reden: str
+) -> requests.Response:
+    """Ask ZAC to take the medewerker's access to the marked zaak away, with a reden; ZAC's answer."""
+    url = f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/zaakspecifiek-geautoriseerde-medewerkers/{medewerker}"
+    return http.delete(url, json={"reden": reden})
+
+
+def _add_colleague(
+    behandelaar: requests.Session, collega: requests.Session, zac_url: str, team: Team, zaak: JsonObject
+) -> None:
+    """The behandelaar adds the colleague, a candidate of the group, to the marked zaak; the colleague then reaches it."""
+    url = f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/zaakspecifiek-geautoriseerde-medewerkers"
+    kandidaten = {str(u["id"]) for u in get_entries(behandelaar, f"{url}/kandidaten?groepId={team.group}")}
+    assert (team.names[1] in kandidaten, team.names[0] in kandidaten) == (True, False), kandidaten
+    added = behandelaar.post(url, json={"groepId": team.group, "medewerkerId": team.names[1]})
+    assert expect_status(added, HTTPStatus.OK).json()["id"] == team.names[1]
+    assert team.names[1] in _medewerkers(behandelaar, zac_url, zaak)
+    assert can_open_zaak(collega, zac_url, zaak)
+    wait_until(
+        lambda: is_zaak_listed(collega, zac_url, zaak),
+        timeout=LIST_TIMEOUT,
+        description="the added colleague finds the marked zaak",
+    )
+
+
 @pytest.mark.source("ZAC ZaakRestServiceTest", "Activating zaakspecifieke autorisatie on a zaak.")
 @pytest.mark.source("PZW Sprint 82 PZ-12022", "Lifting the zaakspecifieke autorisatie of a zaak (ZAC 5.11).")
 @pytest.mark.source(
@@ -173,7 +207,7 @@ def _refused_with(response: requests.Response, code: str) -> None:
     When the behandelaar marks the zaak as zaakspecifiek geautoriseerd
     Then the behandelaar still opens the zaak and its document, and finds both marked with a lock (document from 5.11)
     And a colleague in the same group, a recordmanager, a raadpleger and a beheerder cannot open them
-    And the colleague no longer finds the zaak
+    And the colleague no longer finds the zaak, until the behandelaar adds the colleague to it (from ZAC 5.10)
     And before ZAC 5.11 the marking cannot be lifted; from 5.11 the behandelaar lifts it and the colleague opens the zaak
 """)
 def test_marked_zaak_is_reached_only_by_its_behandelaar(  # the zaak, its document and five users
@@ -211,6 +245,8 @@ def test_marked_zaak_is_reached_only_by_its_behandelaar(  # the zaak, its docume
             timeout=LIST_TIMEOUT,
             description="the behandelaar finds the document of the marked zaak, marked",
         )
+    if not is_older_than(podiumd_env, "zac", ADDS_MEDEWERKERS):
+        _add_colleague(behandelaar, collega, zac_url, team, team_zaak)
     lift = _mark(behandelaar, zac_url, team_zaak, marked=False)
     if is_older_than(podiumd_env, "zac", LIFTABLE):
         _refused_with(lift, CANNOT_BE_LIFTED)
@@ -283,20 +319,6 @@ def test_marked_zaak_is_skipped_when_verdeeld_without_a_behandelaar(  # the zaak
         description=f"zaak {gewoon['identificatie']} verdeeld to {team.group}",
     )
     assert assignment(read_zaak(behandelaar, zac_url, str(team_zaak["uuid"]))) == (team.group, team.names[0])
-
-
-def _medewerkers(http: requests.Session, zac_url: str, zaak: JsonObject) -> dict[str, bool]:
-    """The zaak's zaakspecifiek geautoriseerde medewerkers as ZAC's medewerkers tab lists them, and if each detaches."""
-    url = f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/zaakspecifiek-geautoriseerde-medewerkers"
-    return {str(m["id"]): bool(m["isDetachable"]) for m in get_entries(http, url)}
-
-
-def _ontkoppel(
-    http: requests.Session, zac_url: str, zaak: JsonObject, medewerker: str, reden: str
-) -> requests.Response:
-    """Ask ZAC to take the medewerker's access to the marked zaak away, with a reden; ZAC's answer."""
-    url = f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/zaakspecifiek-geautoriseerde-medewerkers/{medewerker}"
-    return http.delete(url, json={"reden": reden})
 
 
 @pytest.mark.source("ZAC ZaakService.assignZaak", "The replaced behandelaar keeps access to the zaak.")

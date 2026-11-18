@@ -4,6 +4,7 @@ from podiumd_tests.zac_api import NEW_NAMES
 from podiumd_tests.zac_api import OLD_NAMES
 from podiumd_tests.zac_api import READ
 from podiumd_tests.zac_api import SENT
+from podiumd_tests.zac_api import USER_CALLS
 
 
 def test_booleans_get_zac_5_12_names_and_back():
@@ -27,3 +28,9 @@ def test_a_users_id_is_its_username_from_zac_5_12():
     sent = {"groep": groep, "behandelaar": {"id": "ptest-admin", "naam": "Admin"}}
     assert SENT.apply(sent) == {"groep": groep, "behandelaar": {"username": "ptest-admin", "naam": "Admin"}}
     assert READ.apply([{"username": "u1", "naam": "U"}], is_user=True) == [{"id": "u1", "naam": "U"}]
+
+
+def test_the_calls_that_answer_users():
+    paths = ("/rest/identity/users", "/rest/zaken/zaak/z1/zaakspecifiek-geautoriseerde-medewerkers/kandidaten")
+    assert all(USER_CALLS.search(path) for path in paths)
+    assert not USER_CALLS.search("/rest/zaken/zaak/z1")
