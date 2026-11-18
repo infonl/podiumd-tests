@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+import re
+
 from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.defects import DefectSymptomError
+from podiumd_tests.defects import symptom
 from podiumd_tests.hygiene import baseline_violations
+from podiumd_tests.hygiene import hosting_scope
+from podiumd_tests.hygiene import is_hosted_component
+from podiumd_tests.hygiene import literal_secrets
+from podiumd_tests.hygiene import missing_probes
 from podiumd_tests.hygiene import missing_requests
 from podiumd_tests.hygiene import unpinned_images
 from podiumd_tests.hygiene import without_disruption_budget
@@ -196,3 +204,53 @@ def test_redis_ha_replicas_have_a_disruption_budget(request: pytest.FixtureReque
     if not redis or all(section(w, "spec").get("replicas", 1) == 1 for w in redis):
         pytest.skip("redis-ha runs one replica")
     assert not without_disruption_budget(redis, podiumd_env.items("poddisruptionbudgets"))
+
+
+# Containers the podiumd chart ships without probes (podiumd-chart-48): the Maykin apps' and ZAC's nginx and
+# ZAC's office converter.
+UNPROBED = re.compile(
+    r"^(\w+-)?(openarchiefbeheer|openbeheer|openformulieren|openinwoner|openklant|openzaak|zac)-nginx/|^zac-office-converter/"
+)
+
+
+@pytest.mark.source(
+    "hosting COMP014.2-probe-config", "Applications MUST implement liveness, readiness and startup probes."
+)
+@pytest.mark.xfail(
+    strict=True,
+    raises=DefectSymptomError,
+    reason="[podiumd-chart-48] podiumd 4.11.0: the nginx of Open Archiefbeheer, Open Beheer, Open Formulieren, Open"
+    " Inwoner, Open Klant, Open Zaak and ZAC has no readiness probe, and ZAC's office converter no probe at all;"
+    " not reported upstream",
+)
+@pytest.mark.scenario("""
+    When the PodiumD workloads that a Service sends traffic to are read
+    Then each serving container has a liveness and a readiness probe
+""")
+def test_serving_containers_have_liveness_and_readiness_probes(podiumd_env: Environment) -> None:
+    """Every serving container of a PodiumD component has both probes; operators and test doubles are left out."""
+    workloads, objects = hosting_scope(podiumd_env, [podiumd_env.profile.kube.namespace])
+    found = [m for w in workloads if is_hosted_component(w) for m in missing_probes(w, objects["services"])]
+    assert [m for m in found if not UNPROBED.search(m)] == []
+    with symptom():
+        assert found == []
+
+
+@pytest.mark.source("hosting COMP012-secrets", "Secret/sensitive information MUST be written to the K8s secrets store.")
+@pytest.mark.xfail(
+    strict=True,
+    raises=DefectSymptomError,
+    reason="[zgw-office-addin-2] the zgw-office-addin chart (podiumd 4.11.0) puts JWT_SECRET and MSAL_SECRET in the"
+    " backend Deployment by value, readable by anyone who may get Deployments; not reported upstream",
+)
+@pytest.mark.scenario("""
+    When the environment variables of the PodiumD workloads are read
+    Then none sets a password, secret, token or key by value
+""")
+def test_credentials_come_from_secrets(podiumd_env: Environment) -> None:
+    """No env var of a PodiumD component that holds a credential has a literal value instead of a secretKeyRef."""
+    workloads, _ = hosting_scope(podiumd_env, [podiumd_env.profile.kube.namespace])
+    found = [s for w in workloads if is_hosted_component(w) for s in literal_secrets(w)]
+    assert [s for s in found if not s.startswith("zgw-office-addin-backend/")] == []
+    with symptom():
+        assert found == []

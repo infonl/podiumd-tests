@@ -24,6 +24,7 @@ import yaml
 
 from podiumd_tests import config
 from podiumd_tests import doctor
+from podiumd_tests import hygiene
 from podiumd_tests import lock
 from podiumd_tests import results
 from podiumd_tests import workloads
@@ -205,6 +206,19 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         report = json.dumps([asdict(check) for check in checks], indent=2)
         Path(args.json).write_text(f"{report}\n", encoding="utf-8")
     return EXIT_CONFIG if doctor.has_failure(checks) else EXIT_OK
+
+
+def cmd_standards(args: argparse.Namespace) -> int:
+    """Print, or write to --output, the matrix of the environment's workloads against the hosting standards."""
+    env = Environment(_load(args))
+    found, objects = hygiene.hosting_scope(env)
+    report = hygiene.standards_report(found, objects, f"PodiumD hosting standards on {env.profile.name}")
+    if args.output:
+        Path(args.output).write_text(report, encoding="utf-8")
+        print(f"written: {args.output}")
+    else:
+        print(report)
+    return EXIT_OK
 
 
 def _is_defined(node_id: str) -> bool:
@@ -503,6 +517,13 @@ def _add_doctor_command(add_parser: _AddParser) -> None:
     doc.set_defaults(func=cmd_doctor)
 
 
+def _add_standards_command(add_parser: _AddParser) -> None:
+    """Add the standards subcommand."""
+    standards = _env_command(add_parser, "standards", "report each workload against the PodiumD hosting standards")
+    standards.add_argument("--output", help="Markdown file to write the report to (default: print it)")
+    standards.set_defaults(func=cmd_standards)
+
+
 def _add_lock_command(add_parser: _AddParser) -> None:
     """Add the lock subcommand."""
     locking = _env_command(add_parser, "lock", "show the environment's lock holders, or break a podiumd-tests hold")
@@ -584,6 +605,7 @@ def build_parser() -> argparse.ArgumentParser:
     for add_commands in (
         _add_profile_commands,
         _add_doctor_command,
+        _add_standards_command,
         _add_lock_command,
         _add_bootstrap_commands,
         _add_volume_commands,

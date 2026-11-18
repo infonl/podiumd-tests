@@ -1,9 +1,20 @@
 """Unit tests for the deployment hygiene checks."""
 
+import json
+
 from podiumd_tests.hygiene import baseline_violations
+from podiumd_tests.hygiene import clock_offset
+from podiumd_tests.hygiene import conformance
+from podiumd_tests.hygiene import database_time_zone
+from podiumd_tests.hygiene import hosting_scope
+from podiumd_tests.hygiene import is_hosted_component
+from podiumd_tests.hygiene import literal_secrets
+from podiumd_tests.hygiene import missing_probes
 from podiumd_tests.hygiene import missing_requests
+from podiumd_tests.hygiene import standards_report
 from podiumd_tests.hygiene import unpinned_images
 from podiumd_tests.hygiene import without_disruption_budget
+from podiumd_tests.kube import metadata_name
 
 REQUESTS = {"requests": {"cpu": "100m", "memory": "128Mi"}}
 
@@ -82,3 +93,127 @@ def test_replicated_workloads_without_a_selecting_budget_are_named():
     ]
     budgets = [budget({"app": "solr"}), budget({"app": "elsewhere"}), budget({"app": "keycloak", "tier": "db"})]
     assert without_disruption_budget(workloads, budgets) == ["keycloak", "elsewhere"]
+
+
+def test_literal_secrets_name_credentials_set_by_value():
+    env = [
+        {"name": "DB_PASSWORD", "value": "s3cr3t"},
+        {"name": "JWT_SECRET", "valueFrom": {"secretKeyRef": {"name": "s", "key": "k"}}},
+        {"name": "API_KEY_FILE", "value": "/run/key"},
+        {"name": "TOKEN_LIFETIME", "value": "3600"},
+        {"name": "AUTH_TOKEN_ENABLED", "value": "true"},
+        {"name": "ETCD_INITIAL_CLUSTER_TOKEN", "value": "etcd-cluster"},
+        {"name": "OIDC_CLIENT_SECRET", "value": ""},
+    ]
+    found = literal_secrets(workload(containers=[{"name": "app", "image": "a:1", "env": env}]))
+    assert found == ["w/app: DB_PASSWORD"]
+
+
+def service(selector, target, namespace="podiumd"):
+    return {
+        "metadata": {"namespace": namespace},
+        "spec": {"selector": selector, "ports": [{"port": 80, "targetPort": target}]},
+    }
+
+
+def probed_workload(containers):
+    return {
+        "metadata": {"name": "w", "namespace": "podiumd"},
+        "spec": {"template": {"metadata": {"labels": {"app": "w"}}, "spec": {"containers": containers}}},
+    }
+
+
+def test_missing_probes_concern_only_containers_a_service_serves():
+    probes = {"livenessProbe": {}, "readinessProbe": {}}
+    containers = [
+        {"name": "web", "ports": [{"containerPort": 8000}], "livenessProbe": {}},
+        {"name": "nginx", "ports": [{"containerPort": 80, "name": "http"}], **probes},
+        {"name": "exporter", "ports": [{"containerPort": 9121}]},
+    ]
+    services = [service({"app": "w"}, 8000), service({"app": "w"}, "http"), service({"app": "w"}, 9121, "other")]
+    assert missing_probes(probed_workload(containers), services) == ["w/web: no readinessProbe"]
+
+
+def test_conformance_reads_each_standard_and_the_report_counts_them():
+    secure = {"runAsNonRoot": True, "readOnlyRootFilesystem": True, "capabilities": {"drop": ["ALL"]}}
+    container = {
+        "name": "app",
+        "image": "a:1",
+        "resources": {**REQUESTS, "limits": {"memory": "1Gi"}},
+        "securityContext": secure,
+        "startupProbe": {},
+    }
+    good = {
+        "kind": "Deployment",
+        "metadata": {"name": "good", "namespace": "podiumd"},
+        "spec": {
+            "replicas": 2,
+            "template": {
+                "metadata": {"labels": {"app": "good"}},
+                "spec": {"containers": [container], "topologySpreadConstraints": [{}]},
+            },
+        },
+    }
+    plain = {**workload(), "kind": "StatefulSet"}
+    objects = {
+        "services": [],
+        "budgets": [budget({"app": "good"})],
+        "autoscalers": [{"spec": {"scaleTargetRef": {"name": "good"}}}],
+    }
+    assert all(conformance(good, objects).values())
+    assert conformance(plain, objects) == {
+        "secrets": True,
+        "probes": True,
+        "startup": False,
+        "limits": False,
+        "non-root": False,
+        "drop ALL": False,
+        "read-only fs": False,
+        "2+ replicas": False,
+        "PDB": False,
+        "spread": False,
+        "HPA": False,
+    }
+    report = standards_report([good, plain], objects, "Standards")
+    assert "| limits | COMP020 | 1 / 2 |" in report
+    assert "| StatefulSet w | yes | yes | **no** |" in report
+
+
+def test_hosted_components_leave_out_stand_ins_and_operator_workloads():
+    operated = {"metadata": {"name": "es", "ownerReferences": [{"kind": "Elasticsearch"}]}}
+    assert [is_hosted_component(w) for w in (workload(), operated, {"metadata": {"name": "mailpit"}})] == [
+        True,
+        False,
+        False,
+    ]
+
+
+def test_clock_offset_runs_date_in_the_first_container(env_factory, fake_runner):
+    fake_runner.answers["exec sts/db -c main -- date +%z"] = (0, "+0100\n")
+    fake_runner.answers["exec deploy/quiet"] = (1, "executable file not found")
+    env = env_factory()
+    db = {
+        "kind": "StatefulSet",
+        "metadata": {"name": "db"},
+        "spec": {"template": {"spec": {"containers": [{"name": "main"}]}}},
+    }
+    quiet = {**db, "kind": "Deployment", "metadata": {"name": "quiet"}}
+    assert [clock_offset(env, w) for w in (db, quiet, {**db, "kind": "Job"})] == ["+0100", None, None]
+
+
+def test_database_time_zone_reads_the_reset_value(env_factory, fake_runner):
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "openzaak"}}]}))
+    fake_runner.answers["exec -i deploy/openzaak"] = (0, "12 objects imported\nPTEST_VALUE=Etc/UTC\n")
+    assert database_time_zone(env_factory()) == "Etc/UTC"
+    assert "reset_val" in str(fake_runner.stdins[-1])
+
+
+def test_hosting_scope_reads_workloads_and_their_objects(env_factory, fake_runner):
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "a"}}]}))
+    for kind in ("statefulsets", "services", "poddisruptionbudgets", "horizontalpodautoscalers"):
+        fake_runner.answers[f"get {kind}"] = (0, json.dumps({"items": []}))
+    workloads, objects = hosting_scope(env_factory(), ["podiumd"])
+    assert ([metadata_name(w) for w in workloads], sorted(objects)) == (
+        ["a"],
+        ["autoscalers", "budgets", "services"],
+    )

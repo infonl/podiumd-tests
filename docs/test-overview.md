@@ -11,15 +11,15 @@ component and integration, without and with the destructive tests; the test suit
 
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
-| smoke | 240 | 40 | 10 |
-| component | 1002 | 584 | 69 |
+| smoke | 242 | 42 | 12 |
+| component | 1004 | 586 | 70 |
 | integration | 210 | 142 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1387** | **715** | **84** |
+| **full tier** | **1391** | **719** | **87** |
 | **chaos tier** | **65** | **51** | **14** |
-| **test suite** | **1532** | **775** | **98** |
+| **test suite** | **1536** | **779** | **101** |
 
-Unit tests (`unit_tests/`, functions): 959. Perf endpoints (`perf/runs.py`): 32.
+Unit tests (`unit_tests/`, functions): 967. Perf endpoints (`perf/runs.py`): 32.
 
 ## Per area
 
@@ -27,7 +27,7 @@ Unit tests (`unit_tests/`, functions): 959. Perf endpoints (`perf/runs.py`): 32.
 | --- | --- | --- | --- |
 | smoke | api_health | 30 | 5 |
 | smoke | cilium | 2 | 2 |
-| smoke | cluster | 9 | 9 |
+| smoke | cluster | 11 | 11 |
 | smoke | frankgateway | 5 | 2 |
 | smoke | mail_routes | 2 | 2 |
 | smoke | metrics | 5 | 5 |
@@ -51,7 +51,7 @@ Unit tests (`unit_tests/`, functions): 959. Perf endpoints (`perf/runs.py`): 32.
 | component | openvtb | 13 | 6 |
 | component | openzaak | 177 | 78 |
 | component | pabc | 10 | 10 |
-| component | platform | 68 | 17 |
+| component | platform | 70 | 19 |
 | component | referentielijsten | 2 | 2 |
 | component | zaakbrug | 16 | 12 |
 | component | zac | 362 | 268 |
@@ -113,6 +113,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | ZAC | 13 |
 | draaiboek | 87 |
 | external | 216 |
+| hosting | 4 |
 | podiumd-tests | 524 |
 | upstream | 242 |
 
@@ -176,6 +177,7 @@ Ids of infonl/podiumd-known-issues.
 | podiumd-chart-42 | 1 |
 | podiumd-chart-43 | 1 |
 | podiumd-chart-44 | 1 |
+| podiumd-chart-48 | 1 |
 | zaakbrug-5 | 2 |
 | zac-3 | 1 |
 | zac-7 | 1 |
@@ -206,7 +208,9 @@ Ids of infonl/podiumd-known-issues.
 | zac-37 | 3 |
 | zac-38 | 1 |
 | zac-39 | 1 |
+| zac-48 | 1 |
 | zgw-office-addin-1 | 2 |
+| zgw-office-addin-2 | 1 |
 
 Tests without a scenario: 0.
 

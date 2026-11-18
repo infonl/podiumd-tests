@@ -258,6 +258,17 @@ def test_doctor_writes_the_checks_as_json_and_fails_on_a_failed_check(envs, offl
 
 
 @pytest.mark.usefixtures("offline")
+def test_standards_prints_or_writes_the_report(envs, fake_runner, tmp_path, capsys):
+    for kind in ("deployments", "statefulsets", "services", "poddisruptionbudgets", "horizontalpodautoscalers"):
+        fake_runner.answers[f"get {kind}"] = (0, json.dumps({"items": []}))
+    assert cli.main([*envs(), "standards", "--env", "e"]) == cli.EXIT_OK
+    assert "# PodiumD hosting standards on e" in capsys.readouterr().out
+    target = tmp_path / "standards.md"
+    assert cli.main([*envs(), "standards", "--env", "e", "--output", str(target)]) == cli.EXIT_OK
+    assert "| secrets | COMP012 | 0 / 0 |" in target.read_text(encoding="utf-8")
+
+
+@pytest.mark.usefixtures("offline")
 def test_bootstrap_refuses_a_smoke_only_environment(envs, capsys):
     assert cli.main([*envs("smoke"), "bootstrap", "--env", "e"]) == cli.EXIT_NOT_ALLOWED
     assert "refused: e is smoke-only" in capsys.readouterr().err
