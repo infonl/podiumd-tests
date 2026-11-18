@@ -12,8 +12,6 @@ from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.openbeheer import openbeheer_session
-from podiumd_tests.responses import REFUSED
-from podiumd_tests.responses import describe
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openzaak import CATALOGI
 
@@ -39,22 +37,7 @@ def fixture_openbeheer(podiumd_env: Environment, need_bootstrap: Callable[..., N
 
 @pytest.mark.source(
     "podiumd-tests",
-    "Covers Open Beheer: it refuses anonymous API calls, knows the Keycloak user and manages Open Zaak's catalogi.",
-)
-@pytest.mark.scenario("""
-    Given nobody is logged in to Open Beheer
-    When a client asks Open Beheer who is logged in
-    Then Open Beheer refuses the request
-""")
-def test_api_needs_a_login(http: requests.Session, urls: dict[str, str]) -> None:
-    """Without a session the API refuses to say who is logged in."""
-    response = http.get(f"{urls['openbeheer']}/api/v1/whoami/")
-    assert response.status_code in REFUSED, describe(response)
-
-
-@pytest.mark.source(
-    "podiumd-tests",
-    "Covers Open Beheer: it refuses anonymous API calls, knows the Keycloak user and manages Open Zaak's catalogi.",
+    "Covers Open Beheer: it knows the Keycloak user and manages Open Zaak's catalogi.",
 )
 @pytest.mark.scenario("""
     Given the test admin is logged in to Open Beheer through Keycloak
@@ -84,7 +67,7 @@ def zaaktype_ids(openbeheer: requests.Session, catalogi_service: str, **query: s
 @pytest.mark.requires("openzaak")
 @pytest.mark.source(
     "podiumd-tests",
-    "Covers Open Beheer: it refuses anonymous API calls, knows the Keycloak user and manages Open Zaak's catalogi.",
+    "Covers Open Beheer: it knows the Keycloak user and manages Open Zaak's catalogi.",
 )
 @pytest.mark.scenario("""
     Given the test admin is logged in to Open Beheer

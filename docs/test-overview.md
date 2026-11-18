@@ -11,13 +11,13 @@ component and integration, without and with the destructive tests; the test suit
 
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
-| smoke | 239 | 40 | 10 |
-| component | 1002 | 585 | 69 |
+| smoke | 240 | 40 | 10 |
+| component | 1001 | 584 | 69 |
 | integration | 210 | 142 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1386** | **716** | **84** |
+| **full tier** | **1386** | **715** | **84** |
 | **chaos tier** | **65** | **51** | **14** |
-| **test suite** | **1531** | **776** | **98** |
+| **test suite** | **1531** | **775** | **98** |
 
 Unit tests (`unit_tests/`, functions): 955. Perf endpoints (`perf/runs.py`): 32.
 
@@ -25,7 +25,7 @@ Unit tests (`unit_tests/`, functions): 955. Perf endpoints (`perf/runs.py`): 32.
 
 | Tier | Area | Tests | Scenarios |
 | --- | --- | --- | --- |
-| smoke | api_health | 29 | 5 |
+| smoke | api_health | 30 | 5 |
 | smoke | cilium | 2 | 2 |
 | smoke | cluster | 9 | 9 |
 | smoke | frankgateway | 5 | 2 |
@@ -43,7 +43,7 @@ Unit tests (`unit_tests/`, functions): 955. Perf endpoints (`perf/runs.py`): 32.
 | component | objecten | 17 | 7 |
 | component | omc | 3 | 2 |
 | component | openarchiefbeheer | 38 | 32 |
-| component | openbeheer | 5 | 5 |
+| component | openbeheer | 4 | 4 |
 | component | openformulieren | 12 | 9 |
 | component | openinwoner | 36 | 25 |
 | component | openklant | 15 | 11 |

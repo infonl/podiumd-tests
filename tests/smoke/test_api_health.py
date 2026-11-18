@@ -47,6 +47,7 @@ ANONYMOUS = [
     ("objecttypen", "GET", "/api/v2/objecttypes", {}),
     ("opennotificaties", "GET", "/api/v1/kanaal", {}),
     ("ita", "GET", "/api/kanalen", {}),
+    ("openbeheer", "GET", "/api/v1/whoami/", {}),
     ("omc", "POST", "/Events/Listen", {}),
     ("openvtb", "GET", "/verzoeken/api/v1/verzoeken", {}),
     ("openvtb", "GET", "/taken/api/v1/externetaken", {}),
@@ -159,7 +160,7 @@ def test_view_config_checks_pass(http: requests.Session, urls: dict[str, str], c
 )
 @pytest.mark.source(
     "podiumd-tests",
-    "PodiumD 4.10 adds Open VTB and the ZGW Office add-in, whose APIs must refuse anonymous calls.",
+    "Open Beheer and PodiumD 4.10's Open VTB and ZGW Office add-in hold zaak data; their APIs must refuse anonymous calls.",
 )
 @pytest.mark.parametrize(
     ("component", "method", "path", "headers"),
