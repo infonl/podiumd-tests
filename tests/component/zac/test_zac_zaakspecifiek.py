@@ -379,12 +379,8 @@ def _link_person_and_bag(admin: requests.Session, zac_url: str, zaak: JsonObject
     expect_status(zac_app.koppel_bag_object(admin, zac_url, zaak, adres), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
 
 
-def _lock_in_the_lists(http: requests.Session, zac_url: str, zaak: JsonObject) -> None:
-    """Zaken op mijn naam and the zaken of the person and of the BAG object show the zaak's lock.
-
-    Ontkoppelde documenten needs the right inbox (coordinator, recordmanager, beheerder), and none of them reaches a
-    marked zaak without the role zaakspecifiek_geautoriseerd, which PodiumD's PABC dataset lacks (podiumd-chart-43).
-    """
+def _lock_on_my_name(http: requests.Session, zac_url: str, zaak: JsonObject) -> None:
+    """Zaken op mijn naam shows the zaak's lock; check it before the user opens the zaak, which clears that signal."""
 
     def op_naam() -> JsonObject | None:
         overzichten = zac_signaleringen.signalering_overzichten(http, zac_url, "ZAAK_OP_NAAM")
@@ -395,6 +391,14 @@ def _lock_in_the_lists(http: requests.Session, zac_url: str, zaak: JsonObject) -
         timeout=zac_app.LIST_TIMEOUT,
         description="the zaak on Zaken op mijn naam",
     )
+
+
+def _lock_on_the_pages(http: requests.Session, zac_url: str, zaak: JsonObject) -> None:
+    """The zaken of the person and of the BAG object show the zaak's lock.
+
+    Ontkoppelde documenten needs the right inbox (coordinator, recordmanager, beheerder), and none of them reaches a
+    marked zaak without the role zaakspecifiek_geautoriseerd, which PodiumD's PABC dataset lacks (podiumd-chart-43).
+    """
     pagina = {"ZAAK_BETROKKENEN": f"P-{EREBOS}", "ZAAK_BAGOBJECTEN": BAG_DAM}
     wait_until(
         lambda: all(
@@ -418,11 +422,12 @@ def _lock_in_the_lists(http: requests.Session, zac_url: str, zaak: JsonObject) -
 @pytest.mark.scenario("""
     Given a zaak with a person as initiator and a BAG adres, which its behandelaar marked as zaakspecifiek geautoriseerd
     When the behandelaar hands it over to a colleague
-    Then the colleague and the former behandelaar open the zaak, and a recordmanager still cannot
+    Then the colleague sees the zaak's lock on Zaken op mijn naam
+    And the colleague and the former behandelaar open the zaak, and a recordmanager still cannot
     And the colleague cannot take the access of the current behandelaar away
     When the former behandelaar detaches themselves with a reden
     Then the former behandelaar neither opens nor finds the zaak, and the zaak's historie shows the reden
-    And the colleague sees the zaak's lock on Zaken op mijn naam and on the person's and the BAG object's zaken
+    And the colleague sees the zaak's lock on the person's and the BAG object's zaken
 """)
 def test_handed_over_zaak_stays_open_to_the_former_behandelaar(  # the zaak and four users
     podiumd_env: Environment,
@@ -439,17 +444,20 @@ def test_handed_over_zaak_stays_open_to_the_former_behandelaar(  # the zaak and 
     _link_person_and_bag(zac, zac_url, team_zaak)
     expect_status(_mark(behandelaar, zac_url, team_zaak), HTTPStatus.OK)
     _hand_over(behandelaar, collega, zac_url, team, team_zaak)
+    older = is_older_than(podiumd_env, "zac", DETACHES_MEDEWERKERS)
+    if not older:
+        _lock_on_my_name(collega, zac_url, team_zaak)
     assert (
         zac_app.can_open_zaak(collega, zac_url, team_zaak),
         zac_app.can_open_zaak(behandelaar, zac_url, team_zaak),
     ) == (True, True)
     assert not zac_app.can_open_zaak(zac_as("recordmanager"), zac_url, team_zaak)
-    if is_older_than(podiumd_env, "zac", DETACHES_MEDEWERKERS):
+    if older:
         return
     assert _medewerkers(collega, zac_url, team_zaak) == {team.names[0]: True, team.names[1]: False}
     _refused_with(_ontkoppel(collega, zac_url, team_zaak, team.names[1], "ptest"), CANNOT_BE_DETACHED)
     _detach(behandelaar, (team.names[0], behandelaar), collega, zac_url, team_zaak, registry.tagged("ontkoppeld"))
-    _lock_in_the_lists(collega, zac_url, team_zaak)
+    _lock_on_the_pages(collega, zac_url, team_zaak)
 
 
 def _complete_and_reindex(
