@@ -35,31 +35,23 @@ pytestmark = [
     Given an objecttype in Objecttypen with a draft version
     When a client deletes the objecttype
     Then Objecttypen refuses it while the objecttype has versions
-    And publishing the version makes it published as of today
-""")
-def test_draft_version_publishes(podiumd_env: Environment, objecttypen: ApiClient, registry: ResourceRegistry) -> None:
-    """An objecttype with a version is not deleted; publishing a draft version sets its publishedAt."""
-    version = make_objecttype(podiumd_env, objecttypen, registry, "draft")
-    assert version["publishedAt"] is None
-    refused = objecttypen.request("DELETE", str(version["objectType"]), HTTPStatus.BAD_REQUEST)
-    assert invalid_codes(refused) == ["pending-versions"]
-    published = objecttypen.patch(str(version["url"]), {"status": "published"})
-    # Objecttypen dates the publication in Europe/Amsterdam.
-    assert (published["status"], published["publishedAt"]) == ("published", date.today().isoformat())  # noqa: DTZ011
-
-
-@pytest.mark.scenario("""
-    Given an objecttype in Objecttypen with a published version
-    When a client replaces or changes the version's JSON schema
-    Then Objecttypen refuses it
-    And it refuses to delete the version
+    When the version is published
+    Then it is published as of today
+    And Objecttypen refuses to replace or change its JSON schema, or to delete it
     And the version keeps its JSON schema
 """)
 def test_published_version_neither_changes_nor_goes(
     podiumd_env: Environment, objecttypen: ApiClient, registry: ResourceRegistry
 ) -> None:
-    """PUT, PATCH and DELETE of a published version answer 400."""
-    url = str(make_objecttype(podiumd_env, objecttypen, registry, "published")["url"])
+    """An objecttype with a version is not deleted; a draft version publishes, then PUT, PATCH and DELETE answer 400."""
+    version = make_objecttype(podiumd_env, objecttypen, registry)
+    assert version["publishedAt"] is None
+    refused = objecttypen.request("DELETE", str(version["objectType"]), HTTPStatus.BAD_REQUEST)
+    assert invalid_codes(refused) == ["pending-versions"]
+    url = str(version["url"])
+    published = objecttypen.patch(url, {"status": "published"})
+    # Objecttypen dates the publication in Europe/Amsterdam.
+    assert (published["status"], published["publishedAt"]) == ("published", date.today().isoformat())  # noqa: DTZ011
     changed = {"jsonSchema": {**ANY_OBJECT, "required": ["naam"]}}
     for method in ("PUT", "PATCH"):
         refused = objecttypen.request(method, url, HTTPStatus.BAD_REQUEST, json=changed)

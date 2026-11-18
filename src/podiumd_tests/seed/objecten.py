@@ -69,12 +69,12 @@ OBJECTTYPES = TaggedTypes("objecttype", "objecttypen", "objecttypen_tagged")
 ANY_OBJECT = {"$schema": "https://json-schema.org/draft/2020-12/schema", "type": "object"}
 
 
-def make_objecttype(env: Environment, objecttypen: ApiClient, registry: ResourceRegistry, status: str) -> JsonObject:
-    """Create a run-tagged objecttype with one version of that status (draft or published); the version."""
+def make_objecttype(env: Environment, objecttypen: ApiClient, registry: ResourceRegistry) -> JsonObject:
+    """Create a run-tagged objecttype with one draft version; the version."""
     name = registry.tagged(f"objecttype-{secrets.token_hex(3)}")
     objecttype = objecttypen.post("objecttypes", {"name": name, "namePlural": name})
     OBJECTTYPES.forget(env, registry, name)
-    return objecttypen.post(f"{objecttype['url']}/versions", {"jsonSchema": ANY_OBJECT, "status": status})
+    return objecttypen.post(f"{objecttype['url']}/versions", {"jsonSchema": ANY_OBJECT, "status": "draft"})
 
 
 def make_granted_objecttype(

@@ -100,11 +100,11 @@ def test_objecttype_is_run_tagged_and_deleted_by_its_snippet(fake_http, monkeypa
     monkeypatch.setattr("podiumd_tests.seed.registry.run_snippet", lambda _k, d, n, p: ran.append((d, n, p)))
     registry = ResourceRegistry("ptest-2611111200abcd")
     env = SimpleNamespace(kube=object(), deployment_for=lambda component: f"{component}-deploy")
-    assert objecten_module.make_objecttype(env, api(), registry, "published") == {"version": 1}  # pyright: ignore[reportArgumentType]
+    assert objecten_module.make_objecttype(env, api(), registry) == {"version": 1}  # pyright: ignore[reportArgumentType]
     registry.cleanup()
     name = str(body(sent[0])["name"])
     assert name.startswith("ptest-2611111200abcd-objecttype-")
-    assert body(sent[1])["status"] == "published"
+    assert body(sent[1])["status"] == "draft"
     assert ran == [("objecttypen-deploy", "objecttypen_tagged", {"action": "delete", "name": name})]
 
 

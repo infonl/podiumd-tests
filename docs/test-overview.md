@@ -12,12 +12,12 @@ component and integration, without and with the destructive tests; the test suit
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 239 | 40 | 10 |
-| component | 1012 | 595 | 69 |
+| component | 1011 | 594 | 69 |
 | integration | 210 | 142 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1396** | **726** | **84** |
+| **full tier** | **1395** | **725** | **84** |
 | **chaos tier** | **65** | **51** | **14** |
-| **test suite** | **1541** | **786** | **98** |
+| **test suite** | **1540** | **785** | **98** |
 
 Unit tests (`unit_tests/`, functions): 955. Perf endpoints (`perf/runs.py`): 32.
 
@@ -40,7 +40,7 @@ Unit tests (`unit_tests/`, functions): 955. Perf endpoints (`perf/runs.py`): 32.
 | component | ita | 46 | 31 |
 | component | keycloak | 24 | 14 |
 | component | kiss | 66 | 22 |
-| component | objecten | 18 | 8 |
+| component | objecten | 17 | 7 |
 | component | omc | 3 | 2 |
 | component | openarchiefbeheer | 38 | 32 |
 | component | openbeheer | 5 | 5 |
@@ -114,7 +114,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | draaiboek | 87 |
 | external | 217 |
 | podiumd-tests | 533 |
-| upstream | 243 |
+| upstream | 242 |
 
 ## Expected failures per known issue
 
