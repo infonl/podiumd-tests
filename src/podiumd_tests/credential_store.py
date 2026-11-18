@@ -7,7 +7,7 @@ credentials without profile entries.
 
 from __future__ import annotations
 
-from threading import Lock
+from threading import RLock
 from typing import TYPE_CHECKING
 
 from podiumd_tests.json_data import section
@@ -25,12 +25,14 @@ class CredentialStore:
 
     def __init__(self, kube: Kube) -> None:
         self.kube: Kube = kube
-        # Bootstrap steps run in parallel; each write reads, merges and puts the whole Secret.
-        self._lock: Lock = Lock()
+        # Bootstrap steps run in parallel; each write reads, merges and puts the whole Secret, and remove deletes and
+        # recreates it, so a read takes the lock too: in between the Secret is gone.
+        self._lock: RLock = RLock()
 
     def read(self) -> dict[str, str]:
         """All stored values; empty when the Secret does not exist."""
-        secret = self.kube.get_optional("secret", STORE_NAME)
+        with self._lock:
+            secret = self.kube.get_optional("secret", STORE_NAME)
         return decode_secret(section(secret, "data")) if secret else {}
 
     def write(self, values: dict[str, str]) -> None:
