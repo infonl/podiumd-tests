@@ -38,6 +38,11 @@ def no_login_lock(monkeypatch):
     monkeypatch.setattr(browser, "one_login_at_a_time", lambda _user: nullcontext())
 
 
+@pytest.fixture(autouse=True)
+def not_wsl1(monkeypatch):
+    monkeypatch.setattr(browser.platform, "release", lambda: "6.8.0-48-generic")
+
+
 def test_launch_args_map_every_profile_host_to_the_ingress_ip(page_env):
     env = page_env()
     assert launch_args(env) == []
@@ -45,6 +50,27 @@ def test_launch_args_map_every_profile_host_to_the_ingress_ip(page_env):
     launched = launch_args(env)
     assert len(launched) == 1
     assert launched[0].startswith("--host-resolver-rules=MAP ita.example.test 10.0.0.1,MAP kiss.example.test 10.0.0.1")
+
+
+@pytest.mark.parametrize(
+    ("release", "expected"),
+    [
+        ("4.4.0-26100-Microsoft", ["--disable-gpu", "--no-sandbox"]),
+        ("6.6.87.2-microsoft-standard-WSL2", []),
+        ("6.8.0-48-generic", []),
+        ("25.1.0", []),
+    ],
+)
+def test_platform_args_turn_off_sandbox_and_gpu_only_on_wsl1(release, expected):
+    assert browser.platform_args(release) == expected
+
+
+def test_launch_args_start_with_the_platform_args(page_env, monkeypatch):
+    monkeypatch.setattr(browser.platform, "release", lambda: "4.4.0-26100-Microsoft")
+    env = page_env()
+    assert launch_args(env) == ["--disable-gpu", "--no-sandbox"]
+    env.ingress_ip = lambda: "10.0.0.1"
+    assert launch_args(env)[:2] == ["--disable-gpu", "--no-sandbox"]
 
 
 def test_context_args_skip_certificate_checks_only_for_a_local_ca(page_env):

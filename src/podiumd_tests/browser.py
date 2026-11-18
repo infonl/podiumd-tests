@@ -7,6 +7,7 @@ certificate checks; the HTTP tests verify those certificates.
 
 from __future__ import annotations
 
+import platform
 import warnings
 
 from contextlib import contextmanager
@@ -78,14 +79,25 @@ def guard_navigation(page: Page) -> Page:
     return page
 
 
+# On WSL 1 Chromium's sandboxed GPU process crashes the renderer on pages such as Keycloak's login form
+# ("page crashed"); without the sandbox and the GPU it renders them.
+WSL1_ARGS = ("--disable-gpu", "--no-sandbox")
+
+
+def platform_args(release: str | None = None) -> list[str]:
+    """Chromium arguments this machine needs: WSL1_ARGS on WSL 1, whose kernel release ends in -Microsoft."""
+    kernel = platform.release() if release is None else release
+    return list(WSL1_ARGS) if kernel.endswith("-Microsoft") else []
+
+
 def launch_args(env: Environment) -> list[str]:
-    """Chromium arguments: map every profile host to the ingress IP in host-header mode."""
+    """Chromium arguments: the platform's, and in host-header mode every profile host mapped to the ingress IP."""
     ip = env.ingress_ip()
     if ip is None:
-        return []
+        return platform_args()
     hosts = sorted({url_host(url) for url in env.profile.urls.values()})
     rules = ",".join(f"MAP {host} {ip}" for host in hosts)
-    return [f"--host-resolver-rules={rules}"]
+    return [*platform_args(), f"--host-resolver-rules={rules}"]
 
 
 def context_args(env: Environment) -> dict[str, object]:
