@@ -1,6 +1,6 @@
-"""ITA as the klantcontactmedewerker: lists, claiming an internetaak and answering it with a klantcontact.
+"""ITA as the klantcontactmedewerker: lists and answering an internetaak with a klantcontact.
 
-Ported from TA regression 77, 73 and interaction 74 and 180 (with a numeric nummer and the
+Ported from TA regression 77 and interaction 180 (with a numeric nummer and the
 current add-klantcontact body; the TA versions failed on both). Claiming and answering write
 ITA's logboek to Objecten, which needs an edge that buffers request bodies, as nginx does;
 KISS reads that logboek with its own Objecten token.
@@ -21,7 +21,6 @@ from podiumd_tests.bootstrap.steps import ITA_GROEP
 from podiumd_tests.clients.platform import objecten_client
 from podiumd_tests.ita import answer_body
 from podiumd_tests.ita import assign_to_me
-from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.kcc import add_klantcontact
 from podiumd_tests.kcc import expect_ita_group_access_bug
@@ -79,32 +78,6 @@ def test_afdelingen_and_groepen_are_seeded_together(ita: requests.Session, urls:
 
     afdelingen, groepen = seeded("/api/afdelingen"), seeded("/api/groepen")
     assert bool(afdelingen) == bool(groepen), f"{len(afdelingen)} afdelingen, {len(groepen)} groepen"
-
-
-@pytest.mark.tc("ITA-024")
-@pytest.mark.source(
-    "TA interaction/74-ita-claim-flow.spec.ts",
-    "Checks a KCC employee can claim an open internetaak in ITA, which assigns it to their own actor.",
-)
-@pytest.mark.source(
-    "TA regression/73-ita-assigned-list.spec.ts",
-    "Checks ITA's assigned-to-me list, the werkbak where a KCC employee sees their daily work.",
-)
-@pytest.mark.scenario("""
-    Given the KCC medewerker is logged in to ITA
-    And an unassigned contactverzoek in Open Klant
-    When the medewerker claims it in ITA
-    Then the contactverzoek is assigned in Open Klant
-    And it is on the medewerker's own list in ITA
-""")
-def test_claimed_internetaak_is_on_my_list(
-    ita: requests.Session, urls: dict[str, str], openklant: ApiClient, internetaak: JsonObject
-) -> None:
-    """A claimed internetaak is assigned to the user's actor and on the user's list (TA int-74, reg-73)."""
-    assign_to_me(ita, urls["ita"], internetaak)
-    assert entries(openklant.get(f"internetaken/{internetaak['uuid']}")["toegewezenAanActoren"])
-    mine = get_entries(ita, f"{urls['ita']}/api/internetaken/aan-mij-toegewezen")
-    assert internetaak["uuid"] in {str(t.get("uuid")) for t in mine}
 
 
 @pytest.mark.parametrize("gelukt", [False, True], ids=["niet gelukt", "gelukt"])

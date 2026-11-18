@@ -188,7 +188,7 @@ Not to port: form defaults, mode order, field layout and live required/optional 
 
 | Priority | Scenario | Status | Not asserted | Our tests | Via | Depends on |
 | --- | --- | --- | --- | --- | --- | --- |
-| high | Contact niet gelukt; assign to self; read-only when verwerkt (5 actions); changes allowed on te_verwerken | covered | | `test_answering_an_internetaak_registers_a_klantcontact`, `test_claimed_internetaak_is_on_my_list`, `test_a_verwerkt_contactverzoek_is_read_only` | api | Open Klant |
+| high | Contact niet gelukt; assign to self; read-only when verwerkt (5 actions); changes allowed on te_verwerken | covered | | `test_answering_an_internetaak_registers_a_klantcontact`, `test_closing_a_contactverzoek_moves_it_to_mijn_historie`, `test_a_verwerkt_contactverzoek_is_read_only` | api | Open Klant |
 | high | Contact gelukt | covered |  | `test_answering_an_internetaak_registers_a_klantcontact` | api | Open Klant |
 | high | Opslaan en afsluiten sets verwerkt and afgehandeldOp | covered |  | api `close-with-klantcontact`, `test_closing_a_contactverzoek_moves_it_to_mijn_historie` | Open Klant |
 | high | Unassigned, assign to self, close, in historie | covered |  | api chain, `test_closing_a_contactverzoek_moves_it_to_mijn_historie` | Open Klant, KCC |

@@ -19,6 +19,7 @@ from podiumd_tests.ita import make_contactverzoek
 from podiumd_tests.ita import my_afdelingen_and_groepen
 from podiumd_tests.ita import my_internetaken
 from podiumd_tests.ita import uuids
+from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openklant import clean_up_klantcontacten
 from podiumd_tests.seed.openklant import close_internetaak
@@ -51,13 +52,23 @@ def close_contactverzoek(
     return onderwerp
 
 
+@pytest.mark.tc("ITA-024")
+@pytest.mark.source(
+    "TA interaction/74-ita-claim-flow.spec.ts",
+    "Checks a KCC employee can claim an open internetaak in ITA, which assigns it to their own actor.",
+)
+@pytest.mark.source(
+    "TA regression/73-ita-assigned-list.spec.ts",
+    "Checks ITA's assigned-to-me list, the werkbak where a KCC employee sees their daily work.",
+)
 @pytest.mark.source(SCENARIOS, "Opslaan en afsluiten sets the contactverzoek verwerkt, with afgehandeldOp.")
 @pytest.mark.source(SCENARIOS, "An unassigned contactverzoek, assigned to oneself and closed, is in Mijn historie.")
 @pytest.mark.scenario("""
     Given the KCC medewerker is logged in to ITA
     And an unassigned contactverzoek in Open Klant
     When the medewerker assigns it to themselves
-    And closes it with a contactmoment that succeeded
+    Then the contactverzoek is assigned in Open Klant and on the medewerker's own list in ITA
+    When the medewerker closes it with a contactmoment that succeeded
     Then the contactverzoek is verwerkt in Open Klant, with the moment it was afgehandeld
     And the contactmoment is in Open Klant, marked gelukt
     And the contactverzoek left the medewerker's open list for Mijn historie
@@ -71,6 +82,7 @@ def test_closing_a_contactverzoek_moves_it_to_mijn_historie(
 ) -> None:
     """Closing with a klantcontact sets the internetaak verwerkt with afgehandeldOp; ITA lists it in Mijn historie."""
     assign_to_me(ita, urls["ita"], internetaak)
+    assert entries(openklant.get(f"internetaken/{internetaak['uuid']}")["toegewezenAanActoren"])
     assert internetaak["uuid"] in uuids(my_internetaken(ita, urls["ita"]))
     onderwerp = close_contactverzoek(ita, urls, openklant, registry, internetaak)
     closed = openklant.get(f"internetaken/{internetaak['uuid']}")
