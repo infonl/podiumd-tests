@@ -212,7 +212,10 @@ def cmd_standards(args: argparse.Namespace) -> int:
     """Print, or write to --output, the matrix of the environment's workloads against the hosting standards."""
     env = Environment(_load(args))
     found, objects = hygiene.hosting_scope(env)
-    report = hygiene.standards_report(found, objects, f"PodiumD hosting standards on {env.profile.name}")
+    chart = workloads.chart_version(env) or "unknown"
+    today = datetime.now(UTC).date().isoformat()
+    title = f"PodiumD hosting standards on {env.profile.name}, {today} (podiumd chart {chart})"
+    report = hygiene.standards_report(found, objects, title)
     if args.output:
         Path(args.output).write_text(report, encoding="utf-8")
         print(f"written: {args.output}")

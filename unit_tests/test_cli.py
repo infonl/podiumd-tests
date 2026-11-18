@@ -262,7 +262,7 @@ def test_standards_prints_or_writes_the_report(envs, fake_runner, tmp_path, caps
     for kind in ("deployments", "statefulsets", "services", "poddisruptionbudgets", "horizontalpodautoscalers"):
         fake_runner.answers[f"get {kind}"] = (0, json.dumps({"items": []}))
     assert cli.main([*envs(), "standards", "--env", "e"]) == cli.EXIT_OK
-    assert "# PodiumD hosting standards on e" in capsys.readouterr().out
+    assert "# PodiumD hosting standards on e, " in capsys.readouterr().out
     target = tmp_path / "standards.md"
     assert cli.main([*envs(), "standards", "--env", "e", "--output", str(target)]) == cli.EXIT_OK
     assert "| secrets | COMP012 | 0 / 0 |" in target.read_text(encoding="utf-8")

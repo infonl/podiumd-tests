@@ -103,10 +103,10 @@ environment).
 Phasing: 1 and the probes/secrets/UTC tests first (about a day), then internal addressing and Keycloak events, then
 the chaos tests. Report items move to gating once every estate conforms.
 
-## Decisions for Kees
+## Decisions (Kees, 2026-11-18)
 
-- Who receives the matrix: Dimpact (hot-items tracking), SSC, the suppliers, or only us.
-- Whether gaps in gating tests (zgw-office-addin-backend's literal secrets, missing probes) go to podiumd-known-issues
-  as usual.
-- Whether kees00 (podiumd-infra values) or ExternalsPodiumD-like estates are the reference for the report; minikube
-  differs by design (one replica, local storage).
+- The matrix is for us only; it lives in the private podiumd-known-issues repository (`hosting-standards/`),
+  regenerated with `podiumd-tests standards --env kees00 --output ...`.
+- kees00 (podiumd-infra values on AKS) is the reference; minikube differs by design.
+- A gap a gating test finds gets a known issue as usual: zgw-office-addin-2 (secrets), podiumd-chart-48 (probes),
+  zac-48 (time zone).
