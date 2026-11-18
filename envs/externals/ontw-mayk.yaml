@@ -27,6 +27,9 @@ urls:
   grafana: https://ontw-podiumd-logs.dimpact.opengem.nl
   # No ingress: reached through a port-forward. Routes KvK and BAG to their HTTPS APIs, BRP to brp-personen-mock.
   api-proxy: http://api-proxy.podiumd.svc.cluster.local
+settings:
+  # Azure Policy admits only images from acrprodmgmt (gatekeeper refused python:3.13-alpine, 2026-11-18); as ontw-dimp.
+  mock_server_image: acrprodmgmt.azurecr.io/library/python:3.14.7-slim
 secrets:
   # keycloak-operator's master admin, as on ontw-dim1 (checked on ontw-mayk 2026-11-18).
   keycloak_admin_username:
