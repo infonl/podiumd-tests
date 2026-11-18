@@ -91,6 +91,8 @@ def _add_perf_options(group: pytest.OptionGroup) -> None:
 
 
 ENVIRONMENT_KEY = pytest.StashKey[Environment]()
+# Why a test's source or scenario markers are malformed, for a pytest-xdist worker to report at setup.
+MARKER_PROBLEMS_KEY = pytest.StashKey[list[str]]()
 
 
 def _environment(config: pytest.Config) -> Environment:
@@ -551,17 +553,28 @@ def fixture_bpmn_zaak(
     return zaak
 
 
+def _check_markers(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Stop the run on a malformed source or scenario marker.
+
+    A UsageError ends a pytest-xdist worker without its message: there the test errors at setup instead.
+    """
+    found = {item: [*source_problems(item), *scenarios.scenario_problems(item)] for item in items}
+    problems = {item: lines for item, lines in found.items() if lines}
+    if problems and not hasattr(config, "workerinput"):
+        raise pytest.UsageError("\n".join(line for lines in problems.values() for line in lines))
+    for item, lines in problems.items():
+        item.stash[MARKER_PROBLEMS_KEY] = lines
+
+
 @pytest.hookimpl(tryfirst=True)  # before xdist reads the groups
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """Put the destructive tests in one xdist group; record each test's sources and scenario as junit properties.
 
     Tests using several_replicas are destructive where the fixture switches pods (tier chaos), so the
     switch runs once, apart from parallel tests. A test without a valid source marker, or with a malformed
-    scenario, stops the run.
+    scenario, stops the run (_check_markers).
     """
-    problems = [problem for item in items for problem in (*source_problems(item), *scenarios.scenario_problems(item))]
-    if problems:
-        raise pytest.UsageError("\n".join(problems))
+    _check_markers(config, items)
     switching = any(
         "several_replicas" in getattr(test, "fixturenames", ()) for test in items
     ) and replicas.can_switch_replicas(_environment(config).profile)
@@ -600,11 +613,14 @@ def pytest_runtest_makereport(
 
 
 def pytest_runtest_setup(item: pytest.Item) -> None:
-    """Skip tests whose @pytest.mark.requires(...) capabilities are absent.
+    """Error a test with malformed markers (_check_markers); skip one whose @pytest.mark.requires(...) are absent.
 
     A hook rather than an autouse fixture: it runs before any fixture, also
     before module- or session-scoped ones that would need the capability.
     """
+    problems = item.stash.get(MARKER_PROBLEMS_KEY, None)
+    if problems:
+        pytest.fail("\n".join(problems), pytrace=False)
     needed = [
         str(capability)
         for marker in item.iter_markers("requires")

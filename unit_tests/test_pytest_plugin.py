@@ -405,6 +405,39 @@ def test_unknown_origin():
     result.stderr.fnmatch_lines(["*source origin 'somewhere' starts with none of TA, MK*"])
 
 
+AS_XDIST_WORKER = """
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_sessionstart(session):
+    session.config.workerinput = {}
+"""
+
+
+def test_a_malformed_scenario_errors_its_test_in_an_xdist_worker(pytester):
+    pytester.makeconftest(f"{INNER_CONFTEST}{AS_XDIST_WORKER}")
+    pytester.makepyfile(
+        """
+import pytest
+
+
+@pytest.mark.scenario(\"\"\"
+    Given a test
+    Then its scenario is fine
+      and this line is not
+\"\"\")
+def test_bad():
+    pass
+
+
+def test_good():
+    pass
+"""
+    )
+    result = pytester.runpytest_inprocess(*INNER_ARGS)
+    result.assert_outcomes(errors=1, passed=1)
+    result.stdout.fnmatch_lines(["*scenario line starts with none of*'and this line is not'*"])
+
+
 def test_sources_become_junit_properties(pytester):
     pytester.makeconftest(INNER_CONFTEST)
     pytester.makepyfile(
