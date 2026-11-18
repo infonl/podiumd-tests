@@ -26,5 +26,10 @@ urls:
   referentielijsten: https://ontw-referentielijsten.dimpact.opengem.nl
   grafana: https://ontw-podiumd-logs.dimpact.opengem.nl
 secrets:
+  # keycloak-operator's master admin, as on ontw-dim1 (checked on ontw-mayk 2026-11-18).
+  keycloak_admin_username:
+    k8s_secret: {name: keycloak-podiumd-admin, key: username}
+  keycloak_admin_password:
+    k8s_secret: {name: keycloak-podiumd-admin, key: password}
   pabc_api_key:
     pod_env: {deployment: pabc, var: API_KEY__0}
