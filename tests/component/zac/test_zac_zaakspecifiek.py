@@ -45,8 +45,11 @@ from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
 from podiumd_tests.zac_taken import AANVULLENDE_INFORMATIE
 from podiumd_tests.zac_taken import activate_human_tasks
+from podiumd_tests.zac_taken import complete_task
 from podiumd_tests.zac_taken import open_task
+from podiumd_tests.zac_taken import read_taak
 from podiumd_tests.zac_taken import start_human_task
+from podiumd_tests.zac_taken import toekennen_taak
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -75,6 +78,9 @@ CANNOT_BE_LIFTED = "msg.error.zaakspecifieke.autorisatie.cannot.be.lifted"
 # ZAC lifts a zaak's zaakspecifieke autorisatie on request from this release on (#7442).
 LIFTABLE = (5, 11, 0)
 CANNOT_BE_RELEASED = "msg.error.zaakspecifiek.geautoriseerde.zaak.cannot.be.released"
+# Before this release ZAC indexes a zaak's completed taken again when it reindexes the zaak's taken (#7595).
+DROPS_COMPLETED_TAKEN = (5, 11, 0)
+COMPLETED = {"aanvullendeInformatie": "aanvullende-informatie.geleverd-akkoord"}
 
 
 class Team(NamedTuple):
@@ -279,14 +285,38 @@ def test_handed_over_zaak_stays_open_to_the_former_behandelaar(
     assert not can_open_zaak(zac_as("recordmanager"), zac_url, team_zaak)
 
 
+def _complete_and_reindex(
+    behandelaar: requests.Session, zac_url: str, team: Team, zaak: JsonObject, taak: JsonObject
+) -> None:
+    """The behandelaar assigns the taak to themselves, completes it, then has a second taak in Mijn taken."""
+    toekennen_taak(behandelaar, zac_url, taak, team.group, team.names[0])
+    complete_task(behandelaar, zac_url, read_taak(behandelaar, zac_url, str(taak["id"])), COMPLETED)
+    # Assigning a taak of a marked zaak reindexes all of the zaak's taken.
+    started = start_human_task(behandelaar, zac_url, zaak, AANVULLENDE_INFORMATIE, team.group)
+    expect_status(started, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    tweede = open_task(behandelaar, zac_url, str(zaak["uuid"]), AANVULLENDE_INFORMATIE)
+    toekennen_taak(behandelaar, zac_url, tweede, team.group, team.names[0])
+    wait_until(
+        lambda: is_taak_listed(behandelaar, zac_url, tweede, alleenMijnTaken=True),
+        timeout=LIST_TIMEOUT,
+        description="the second taak in the behandelaar's Mijn taken",
+    )
+
+
 @pytest.mark.source("ZAC taak-rechten.rego", "A taak of a marked zaak is open only to the zaak's authorised users.")
+@pytest.mark.source(
+    "PZW Sprint 82 PZ-13176",
+    "A completed taak of a zaakspecifiek geautoriseerde zaak leaves Aan mij toegewezen taken and Mijn taken (ZAC 5.11).",
+)
 @pytest.mark.scenario("""
     Given a zaak with a taak Aanvullende informatie, which its behandelaar marks as zaakspecifiek geautoriseerd
     When the behandelaar, a colleague in the same group and a beheerder open the taak
-    Then only the behandelaar may read it
-    And the colleague does not find it in the takenlijst
+    Then only the behandelaar may read it, and the colleague does not find it in the takenlijst
+    When the behandelaar assigns the taak to themselves, completes it and assigns themselves a second taak
+    Then the second taak is in the behandelaar's Mijn taken and the completed one is not
 """)
-def test_taak_of_a_marked_zaak_is_read_only_by_its_behandelaar(  # the zaak, its taak and three users
+def test_taak_of_a_marked_zaak_is_read_only_by_its_behandelaar(  # the zaak, its taken and three users
+    podiumd_env: Environment,
     zac: requests.Session,
     urls: dict[str, str],
     zaakspecifiek_zaaktype: JsonObject,
@@ -311,6 +341,10 @@ def test_taak_of_a_marked_zaak_is_read_only_by_its_behandelaar(  # the zaak, its
         timeout=LIST_TIMEOUT,
         description="the behandelaar finds the taak of the marked zaak and the colleague does not",
     )
+    if is_older_than(podiumd_env, "zac", DROPS_COMPLETED_TAKEN):
+        return
+    _complete_and_reindex(behandelaar, zac_url, team, team_zaak, taak)
+    assert not is_taak_listed(behandelaar, zac_url, taak, alleenMijnTaken=True), "the completed taak is in Mijn taken"
 
 
 # ZAC grants a BPMN user task's assignee the zaakspecifieke autorisatie of the zaak from this release on (#7693).
