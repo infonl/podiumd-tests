@@ -4,6 +4,7 @@ Pytest suite for PodiumD environments. Plan: `PLAN.md`; source-test triage: `MIG
 
 Rules for working in this repository:
 
+@.claude/memory/no-external-filings.md
 @.claude/memory/reuse-existing-logic.md
 @.claude/memory/comments-and-help-texts.md
 @.claude/memory/feedback-commits.md
