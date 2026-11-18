@@ -37,7 +37,6 @@ from podiumd_tests.zaakbrug import geef_zaakdocument_bewerken
 from podiumd_tests.zaakbrug import geef_zaakdocument_lezen
 from podiumd_tests.zaakbrug import geef_zaken_van_initiator
 from podiumd_tests.zaakbrug import genereer_document_id
-from podiumd_tests.zaakbrug import genereer_zaak_id
 from podiumd_tests.zaakbrug import is_bevestiging
 from podiumd_tests.zaakbrug import is_fault
 from podiumd_tests.zaakbrug import send
@@ -71,23 +70,6 @@ MADE_HERE = pytest.mark.source(
 )
 
 
-@MADE_HERE
-@pytest.mark.scenario("""
-    Given ZaakBrug answers ZDS 1.2 messages
-    When a client sends a genereerZaakIdentificatie message to ZaakBrug
-    Then ZaakBrug answers with a new zaak identificatie
-""")
-def test_genereer_zaak_identificatie(http: requests.Session, urls: dict[str, str]) -> None:
-    """genereerZaakIdentificatie_Di02 answers a new zaak identificatie (stored in ZaakBrug, not in Open Zaak)."""
-    answer = send(
-        http,
-        f"{urls['zaakbrug']}{ZDS}/VrijBericht",
-        genereer_zaak_id(datetime.now(UTC)),
-        "genereerZaakIdentificatie_Di02",
-    )
-    assert zaak_identificatie(answer)
-
-
 def _attach(http: requests.Session, urls: dict[str, str], zaak: str, status: str = "In bewerking") -> str:
     """Attach a new document to the zaak with genereerDocumentIdentificatie and voegZaakdocumentToe; its identificatie."""
     now = datetime.now(UTC)
@@ -107,30 +89,19 @@ def _attach(http: requests.Session, urls: dict[str, str], zaak: str, status: str
     Given a new zaak identificatie from ZaakBrug
     When a client sends a creeerZaak message with it to ZaakBrug
     Then ZaakBrug confirms the message
-    And the zaak is in Open Zaak with ZaakBrug's RSIN as bronorganisatie
-    And the zaak has an initiator rol for a natuurlijk persoon
+    And the zaak is in Open Zaak with ZaakBrug's RSIN as bronorganisatie and an initiator rol for a natuurlijk persoon
+    And a geefZaakdetails message for the zaak answers with its identificatie
 """)
-def test_creeer_zaak_reaches_open_zaak(openzaak: ApiClient, zaakbrug_zaak: Callable[..., CreatedZaak]) -> None:
-    """creeerZaak_Lk01 confirms (Bv03) and the zaak is in Open Zaak with the ZaakBrug RSIN and an initiator rol."""
-    rollen = openzaak.list(f"{ZAKEN}/rollen", {"zaak": zaakbrug_zaak().url})
-    assert any(r.get("betrokkeneType") == "natuurlijk_persoon" for r in rollen), "no initiator rol"
-
-
-@pytest.mark.requires("openzaak")
-@MADE_HERE
-@pytest.mark.scenario("""
-    Given a zaak created through ZaakBrug
-    When a client asks ZaakBrug for the zaak with a geefZaakdetails message
-    Then the answer carries the zaak's identificatie
-""")
-def test_geef_zaak_details_reads_a_created_zaak(
-    http: requests.Session, urls: dict[str, str], zaakbrug_zaak: Callable[..., CreatedZaak]
+def test_creeer_zaak_reaches_open_zaak(
+    http: requests.Session, urls: dict[str, str], openzaak: ApiClient, zaakbrug_zaak: Callable[..., CreatedZaak]
 ) -> None:
-    """geefZaakdetails_Lv01 reads back a zaak created through creeerZaak (La01 carries its identificatie)."""
-    zaak = zaakbrug_zaak().identificatie
-    details = geef_zaak_details(datetime.now(UTC), zaak)
+    """creeerZaak_Lk01 confirms (Bv03), Open Zaak has the zaak with an initiator rol, geefZaakdetails_Lv01 reads it."""
+    zaak = zaakbrug_zaak()
+    rollen = openzaak.list(f"{ZAKEN}/rollen", {"zaak": zaak.url})
+    assert any(r.get("betrokkeneType") == "natuurlijk_persoon" for r in rollen), "no initiator rol"
+    details = geef_zaak_details(datetime.now(UTC), zaak.identificatie)
     answer = send(http, f"{urls['zaakbrug']}{ZDS}/BeantwoordVraag", details, "geefZaakdetails_Lv01")
-    assert zaak_identificatie(answer) == zaak
+    assert zaak_identificatie(answer) == zaak.identificatie
 
 
 @pytest.mark.requires("openzaak")
@@ -162,63 +133,34 @@ def test_zaken_of_an_initiator_are_listed(
         assert zaak_identificaties(answer) == [zaak.identificatie]
 
 
-@pytest.mark.requires("openzaak")
-@MADE_HERE
-@pytest.mark.scenario("""
-    Given a zaak created through ZaakBrug
-    And a new document identificatie from ZaakBrug
-    When a client attaches a document to the zaak with a voegZaakdocumentToe message
-    Then ZaakBrug confirms the message
-    And Open Zaak links the document to the zaak
-""")
-def test_voeg_zaakdocument_toe_attaches_a_document(
-    http: requests.Session, urls: dict[str, str], openzaak: ApiClient, zaakbrug_zaak: Callable[..., CreatedZaak]
-) -> None:
-    """voegZaakdocumentToe_Lk01 attaches a document to a ZaakBrug zaak: Open Zaak links it as a zaakdocument."""
-    zaak = zaakbrug_zaak()
-    _attach(http, urls, zaak.identificatie)
-    links = openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": zaak.url})
-    assert links, f"no zaakinformatieobject on {zaak.identificatie} after voegZaakdocumentToe"
-
-
 ZDS_TESTPLATFORM = "external softwarecatalogus.nl 20190501-Zaaksysteem-1346395-testrapportage.pdf"
 
 
 @pytest.mark.requires("openzaak")
+@MADE_HERE
 @pytest.mark.source(ZDS_TESTPLATFORM, "geefLijstZaakdocumenten: the zaak's documents are listed.")
-@pytest.mark.scenario("""
-    Given a zaak created through ZaakBrug
-    And a document attached to it through ZaakBrug
-    When a client asks ZaakBrug for the zaak's documents with a geefLijstZaakdocumenten message
-    Then the answer lists the document
-""")
-def test_geef_lijst_zaakdocumenten_lists_an_attached_document(
-    http: requests.Session, urls: dict[str, str], zaakbrug_zaak: Callable[..., CreatedZaak]
-) -> None:
-    """geefLijstZaakdocumenten_Lv01 lists the document attached with voegZaakdocumentToe."""
-    zaak = zaakbrug_zaak().identificatie
-    document = _attach(http, urls, zaak)
-    vraag = geef_lijst_zaakdocumenten(datetime.now(UTC), zaak)
-    answer = send(http, f"{urls['zaakbrug']}{ZDS}/BeantwoordVraag", vraag, "geefLijstZaakdocumenten_Lv01")
-    assert zaakdocument_identificaties(answer) == [document]
-
-
-@pytest.mark.requires("openzaak")
 @pytest.mark.source(ZDS_TESTPLATFORM, "geefZaakdocumentLezen: a document is read with its inhoud.")
 @pytest.mark.scenario("""
     Given a zaak created through ZaakBrug
-    And a document attached to it through ZaakBrug
-    When a client reads the document with a geefZaakdocumentLezen message
-    Then the answer carries the document's inhoud
+    When a client attaches a document to the zaak with a voegZaakdocumentToe message
+    Then ZaakBrug confirms the message and Open Zaak links the document to the zaak
+    And a geefLijstZaakdocumenten message for the zaak lists the document
+    And a geefZaakdocumentLezen message for the document answers its inhoud
 """)
-def test_geef_zaakdocument_lezen_returns_the_inhoud(
-    http: requests.Session, urls: dict[str, str], zaakbrug_zaak: Callable[..., CreatedZaak]
+def test_voeg_zaakdocument_toe_attaches_a_document(
+    http: requests.Session, urls: dict[str, str], openzaak: ApiClient, zaakbrug_zaak: Callable[..., CreatedZaak]
 ) -> None:
-    """geefZaakdocumentLezen_Lv01 answers the inhoud sent with voegZaakdocumentToe."""
-    document = _attach(http, urls, zaakbrug_zaak().identificatie)
-    vraag = geef_zaakdocument_lezen(datetime.now(UTC), document)
-    answer = send(http, f"{urls['zaakbrug']}{ZDS}/BeantwoordVraag", vraag, "geefZaakdocumentLezen_Lv01")
-    assert document_inhoud(answer) == PDF
+    """voegZaakdocumentToe_Lk01 links a document in Open Zaak; geefLijstZaakdocumenten and geefZaakdocumentLezen read it."""
+    zaak = zaakbrug_zaak()
+    document = _attach(http, urls, zaak.identificatie)
+    links = openzaak.list(f"{ZAKEN}/zaakinformatieobjecten", {"zaak": zaak.url})
+    assert links, f"no zaakinformatieobject on {zaak.identificatie} after voegZaakdocumentToe"
+    beantwoord = f"{urls['zaakbrug']}{ZDS}/BeantwoordVraag"
+    lijst = geef_lijst_zaakdocumenten(datetime.now(UTC), zaak.identificatie)
+    answer = send(http, beantwoord, lijst, "geefLijstZaakdocumenten_Lv01")
+    assert zaakdocument_identificaties(answer) == [document]
+    lezen = geef_zaakdocument_lezen(datetime.now(UTC), document)
+    assert document_inhoud(send(http, beantwoord, lezen, "geefZaakdocumentLezen_Lv01")) == PDF
 
 
 SOAPUI = "upstream wearefrank/zaakbrug e2e/SoapUI/zaakbrug-e2e-soapui-project.xml"
