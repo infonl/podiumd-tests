@@ -55,12 +55,13 @@ def test_crawled_website_is_found_in_kiss_search(
         run_cronjob(podiumd_env.kube, cronjob, registry.tagged(cronjob), timeout=CRAWL_TIMEOUT)
     kiss = kcc_login(page, podiumd_env, "kiss")
     for url in crawlers.values():
-        host = urlsplit(url).hostname or url
-        name = host.removeprefix("www.").split(".")[0]
+        # The site may redirect to or from its www host, so the crawled pages can have either.
+        host = (urlsplit(url).hostname or url).removeprefix("www.")
+        name = host.split(".")[0]
 
         def is_found(host: str = host, name: str = name) -> bool:
             hits = kiss_search_hits(kiss, podiumd_env.profile.urls["kiss"], name)
-            return any(section(hit, "_source").get("url_host") == host for hit in hits)
+            return any(str(section(hit, "_source").get("url_host", "")).removeprefix("www.") == host for hit in hits)
 
         # Elasticsearch shows new documents only after its next index refresh.
         wait_until(is_found, timeout=60, description=f"KISS search for {name!r} finds a page of {host}")
