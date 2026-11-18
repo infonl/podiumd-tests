@@ -44,6 +44,11 @@ spec:
             httpGet:
               path: /healthz
               port: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 30
           resources:
             requests: {cpu: 10m, memory: 32Mi}
             limits: {memory: 64Mi}

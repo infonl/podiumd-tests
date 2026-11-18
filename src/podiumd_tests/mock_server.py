@@ -7,6 +7,7 @@ path, which keeps parallel tests apart.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import secrets
 
@@ -46,6 +47,18 @@ ROLLOUT_TIMEOUT = 180
 ZAAK_CREATE = ("zaken", "zaak", "create")
 
 
+# The Deployment's annotation with the hash of infra/mock-server: a changed manifest also makes the step missing.
+INFRA_HASH = "podiumd-tests/infra-hash"
+
+
+def infra_hash() -> str:
+    """Return a short hash of the mock server's manifests and code in this checkout."""
+    digest = hashlib.sha256()
+    for name in ("manifests.yaml", "server.py"):
+        digest.update((INFRA / name).read_bytes())
+    return digest.hexdigest()[:16]
+
+
 def manifests(image: str = "") -> list[dict[str, object]]:
     """Return the mock server's ConfigMap, Deployment and Service, with server.py; image replaces the default image."""
     docs = [
@@ -56,8 +69,11 @@ def manifests(image: str = "") -> list[dict[str, object]]:
     for doc in docs:
         if doc["kind"] == "ConfigMap":
             doc["data"] = {"server.py": (INFRA / "server.py").read_text()}
-        if doc["kind"] == "Deployment" and image:
-            _container(doc)["image"] = image
+        if doc["kind"] == "Deployment":
+            metadata = cast("dict[str, object]", doc["metadata"])
+            metadata["annotations"] = {**section(metadata, "annotations"), INFRA_HASH: infra_hash()}
+            if image:
+                _container(doc)["image"] = image
     return docs
 
 
@@ -164,7 +180,7 @@ class MockServer:
     wiring: bool = False
 
     def is_present(self, ctx: Context, /) -> bool:  # noqa: PLR6301  # a Step method
-        """Return whether the ConfigMap holds the current server.py and the Deployment has a ready replica."""
+        """Return whether the Deployment runs this checkout's infra/mock-server with the current image, and is ready."""
         kube = ctx.env.kube
         config_map = kube.get_optional("configmap", NAME)
         deployment = kube.get_optional("deployment", NAME)
@@ -174,7 +190,8 @@ class MockServer:
         ready = cast("dict[str, object]", deployment.get("status") or {}).get("readyReplicas")
         wanted = _container(manifests(_image(ctx.env))[1])["image"]
         same_image = _container(deployment).get("image") == wanted
-        return code == (INFRA / "server.py").read_text() and bool(ready) and same_image
+        current = section(section(deployment, "metadata"), "annotations").get(INFRA_HASH) == infra_hash()
+        return code == (INFRA / "server.py").read_text() and bool(ready) and same_image and current
 
     def apply(self, ctx: Context, /) -> dict[str, str]:  # noqa: PLR6301  # a Step method
         """Apply the manifests, restart on new code, and wait until the Deployment is ready."""
