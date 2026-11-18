@@ -869,6 +869,8 @@ STEPS: tuple[Step, ...] = (
     *IDENTITIES,
     # Wiring W1: DigiD and eHerkenning through Keycloak's mock (TA seed-*-oidc-mock.sh, seed-of-digid-oidc.sh).
     KeycloakOidcMock(),
+    # The accounts Open Inwoner makes at the identities' mock logins; removed at unbootstrap.
+    SnippetStep("openinwoner-identity-accounts", ("openinwoner",), "oi_identity_accounts", None, wiring=True),
     SnippetStep(
         "openinwoner-oidc-mock",
         ("openinwoner", "keycloak"),
