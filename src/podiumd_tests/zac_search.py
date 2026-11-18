@@ -22,6 +22,8 @@ from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import INDEX_TIMEOUT
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -107,12 +109,14 @@ def _zoekresultaat(
     return next((item for item in entries(found["resultaten"]) if item.get("id") == wanted), None)
 
 
-def zaak_zoekresultaat(http: requests.Session, zac_url: str, zaak: JsonObject, **flags: bool) -> JsonObject | None:
-    """Return the zaak as ZAC's search for zaken lists it, or None; flags are its alleen* filters.
+def zaak_zoekresultaat(
+    http: requests.Session, zac_url: str, zaak: JsonObject, zoeken: Mapping[str, str] | None = None, /, **flags: bool
+) -> JsonObject | None:
+    """Return the zaak as ZAC's search for zaken lists it, or None; zoeken adds search fields, flags alleen* filters.
 
     Matched by uuid: ZAC's index can hold deleted zaken whose identificatie Open Zaak gave out again (open-zaak-1).
     """
-    query = {"type": "ZAAK", "zoeken": {"ZAAK_IDENTIFICATIE": zaak["identificatie"]}}
+    query = {"type": "ZAAK", "zoeken": {**(zoeken or {}), "ZAAK_IDENTIFICATIE": zaak["identificatie"]}}
     return _zoekresultaat(http, zac_url, str(zaak["uuid"]), query, **flags)
 
 

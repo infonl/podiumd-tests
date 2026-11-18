@@ -22,7 +22,6 @@ from podiumd_tests.basisregistraties import KVK_RECHTSVORMEN
 from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
 from podiumd_tests.basisregistraties import KVK_TEST_VESTIGING
 from podiumd_tests.defects import symptom
-from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.mailpit import own_address
@@ -50,7 +49,7 @@ from podiumd_tests.zac_betrokkenen import make_person_initiator
 from podiumd_tests.zac_betrokkenen import ontkoppel_betrokkene
 from podiumd_tests.zac_betrokkenen import ontkoppel_initiator
 from podiumd_tests.zac_betrokkenen import wijzig_initiator
-from podiumd_tests.zac_search import search
+from podiumd_tests.zac_search import zaak_zoekresultaat
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -416,9 +415,7 @@ def test_person_and_bedrijf_list_their_zaken_with_the_betrokkenheid(
     person, bedrijf = f"P-{EREBOS}", f"V-{KVK_TEST_NUMMER}-{KVK_TEST_VESTIGING}"
 
     def betrokkenheid(veld: str, klant: str) -> dict[str, list[str]] | None:
-        query = {"ZAAK_IDENTIFICATIE": zaak["identificatie"], veld: klant}
-        found = entries(search(zac, zac_url, type="ZAAK", zoeken=query)["resultaten"])
-        match = next((item for item in found if item.get("id") == zaak["uuid"]), None)
+        match = zaak_zoekresultaat(zac, zac_url, zaak, {veld: klant})
         return None if match is None else {rol: strings(ids) for rol, ids in section(match, "betrokkenen").items()}
 
     listed = wait_until(
