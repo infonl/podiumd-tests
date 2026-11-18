@@ -33,61 +33,36 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("openklant")]
     "TA regression/87-ok2-klantcontact-zoeken.spec.ts",
     "A klantcontact's full record can be retrieved, so a question and answer can be consulted.",
 )
-@pytest.mark.scenario("""
-    Given a klantcontact on kanaal balie is registered in Open Klant
-    When it is read back
-    Then it has the kanaal, onderwerp and contact-gelukt indication it was registered with
-    And Open Klant gave it a nummer
-""")
-def test_klantcontact_roundtrip(openklant: ApiClient, registry: ResourceRegistry) -> None:
-    """A klantcontact reads back with its fields and a nummer (TA int-09, reg-87)."""
-    created = make_klantcontact(openklant, registry, kanaal="balie")
-    read = openklant.get(str(created["url"]))
-    assert (read["kanaal"], read["onderwerp"], read["indicatieContactGelukt"]) == ("balie", created["onderwerp"], True)
-    assert read["nummer"]
-
-
+@pytest.mark.source(
+    "TA regression/87-ok2-klantcontact-zoeken.spec.ts",
+    "The KCC can list klantcontacten (paginated) and search them on kanaal.",
+)
 @pytest.mark.source(
     "TA regression/149-ok2-crud-uitbreiding.spec.ts",
     "A klantcontact's onderwerp can be changed after registration, and a wrongly registered one deleted.",
 )
 @pytest.mark.scenario("""
-    Given a klantcontact in Open Klant
-    When its onderwerp and inhoud are changed
-    Then Open Klant returns the changed onderwerp and inhoud
-    When the klantcontact is deleted
-    Then Open Klant answers 404 for it
+    Given a klantcontact on kanaal balie is registered in Open Klant
+    When it is read back
+    Then it has the kanaal, onderwerp and contact-gelukt indication it was registered with, and a nummer
+    And the paginated list with a total count, filtered on kanaal balie, finds it
+    When its onderwerp and inhoud are changed and it is deleted
+    Then Open Klant returns the changed onderwerp and inhoud, and then answers 404 for it
 """)
-def test_klantcontact_patch_and_delete(openklant: ApiClient, registry: ResourceRegistry) -> None:
-    """A PATCH changes onderwerp and inhoud; after DELETE the klantcontact is gone (TA reg-149)."""
-    url = str(make_klantcontact(openklant, registry)["url"])
+def test_klantcontact_lifecycle(openklant: ApiClient, registry: ResourceRegistry) -> None:
+    """A klantcontact reads back with a nummer, is found by kanaal, changes with PATCH and goes with DELETE."""
+    created = make_klantcontact(openklant, registry, kanaal="balie")
+    url = str(created["url"])
+    read = openklant.get(url)
+    assert (read["kanaal"], read["onderwerp"], read["indicatieContactGelukt"]) == ("balie", created["onderwerp"], True)
+    assert read["nummer"]
+    page = openklant.get("klantcontacten", {"pageSize": "5", "kanaal": "balie", "onderwerp": str(created["onderwerp"])})
+    assert isinstance(page["count"], int)
+    assert [k["uuid"] for k in entries(page["results"])] == [created["uuid"]]
     changed = openklant.patch(url, {"onderwerp": registry.tagged("gewijzigd"), "inhoud": "gewijzigd"})
     assert (changed["onderwerp"], changed["inhoud"]) == (registry.tagged("gewijzigd"), "gewijzigd")
     openklant.delete(url)
     openklant.request("GET", url, 404)
-
-
-@pytest.mark.source(
-    "TA regression/87-ok2-klantcontact-zoeken.spec.ts",
-    "The KCC can list klantcontacten (paginated) and search them on kanaal.",
-)
-@pytest.mark.scenario("""
-    Given a klantcontact on kanaal balie in Open Klant
-    When the klantcontacten are listed, and filtered on kanaal balie
-    Then the list is paginated with a total count
-    And the filter finds the klantcontact
-""")
-def test_klantcontacten_list_and_filter_on_kanaal(openklant: ApiClient, registry: ResourceRegistry) -> None:
-    """The list is paginated, and the kanaal filter finds a new klantcontact (TA reg-87)."""
-    page = openklant.get("klantcontacten", {"pageSize": "5"})
-    assert isinstance(page["results"], list)
-    assert isinstance(page["count"], int)
-    created = make_klantcontact(openklant, registry, kanaal="balie")
-    found = {
-        str(k["uuid"])
-        for k in openklant.list("klantcontacten", {"kanaal": "balie", "onderwerp": str(created["onderwerp"])})
-    }
-    assert str(created["uuid"]) in found
 
 
 @pytest.mark.source(
