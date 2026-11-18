@@ -36,6 +36,11 @@ def test_superuser_login_logs_in_as_the_test_superuser(env_factory, profile_fact
     assert calls == [("https://x.test", login, f"pw-{step.store_key}")]
 
 
+def test_the_admin_step_also_removes_the_user_an_oidc_login_of_the_test_admin_made():
+    sso_user = {"username": "ptest-bootstrap-admin", "email": "ptest-bootstrap-admin@example.invalid"}
+    assert all(step.params["sso_users"] == [sso_user] for step in DJANGO_ADMINS.values())
+
+
 def test_totp_follows_rfc_6238():
     # RFC 6238 appendix B, SHA-1 at T=59: 94287082, of which django_otp uses the last 6 digits.
     assert django_admin.totp(b"12345678901234567890".hex(), 59) == "287082"

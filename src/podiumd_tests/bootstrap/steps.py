@@ -223,8 +223,13 @@ def django_user_step(  # noqa: PLR0913  # mirrors the snippet's parameters
     fields: dict[str, object] | None = None,
     api_token: bool = False,
     totp: bool = False,
+    sso_users: tuple[str, ...] = (),
 ) -> SnippetStep:
-    """Return a component's local Django user ptest-bootstrap-<key>, with groups and a random password or API token."""
+    """Return a component's local Django user ptest-bootstrap-<key>, with groups and a random password or API token.
+
+    sso_users: usernames of Keycloak test users that log in to this component through OIDC; the user the
+    component makes for each is removed with this step.
+    """
     username = f"{names.PREFIX}-{key}"
     params: dict[str, object] = {
         "username": username,
@@ -234,6 +239,7 @@ def django_user_step(  # noqa: PLR0913  # mirrors the snippet's parameters
         "fields": fields or {},
         "api_token": api_token,
         "totp": totp,
+        "sso_users": [{"username": sso_user, "email": user_email(sso_user)} for sso_user in sso_users],
     }
     return SnippetStep(
         f"{component}-user-{key}",
@@ -440,7 +446,8 @@ OI_ZAAKTYPE_CONFIG = SnippetStep(
 # A local superuser in each Maykin app, for the admin tests: estates log their own admins in through Keycloak.
 # Its key names the app: Objecten and Objecttypen can share one database (Open Object).
 DJANGO_ADMINS = {
-    app: django_user_step(app, f"{app}-admin", fields={"is_superuser": True}, totp=True) for app in DJANGO_APPS
+    app: django_user_step(app, f"{app}-admin", fields={"is_superuser": True}, totp=True, sso_users=(ADMIN.username,))
+    for app in DJANGO_APPS
 }
 # An Open Formulieren form editor (its own group Redacteurs) that changes test forms through the API.
 OF_REDACTEUR = django_user_step("openformulieren", "redacteur", ("Redacteurs",), api_token=True)

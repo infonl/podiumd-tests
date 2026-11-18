@@ -5,6 +5,8 @@ fields (other user fields), api_token, totp, secret (the password; with api_toke
 instead, and no password; apply only). totp: a confirmed TOTP device whose key is the SHA-1 of the password, for
 admins that require two-factor login. Groups the app lacks are left
 out and reported. A user model without username (Open Inwoner) logs in with the email.
+sso_users (each with username and email): users the app made itself when a Keycloak test user logged in
+through OIDC; apply and remove delete them, so no test user stays behind after an unbootstrap.
 """
 
 
@@ -20,6 +22,9 @@ def run(params):
     if params["action"] == "status":
         return {"present": users.filter(is_active=True).exists()}
     users.delete()
+    sso_field = "email" if model.USERNAME_FIELD == "email" else "username"
+    sso_logins = [sso_user[sso_field] for sso_user in params.get("sso_users", [])]
+    model.objects.filter(**{f"{model.USERNAME_FIELD}__in": sso_logins}).delete()
     if params["action"] == "remove":
         return {"present": False}
     fields = {"email": params["email"], "password": params["secret"], "is_staff": params["staff"], **params["fields"]}
