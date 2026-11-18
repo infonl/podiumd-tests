@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.bootstrap.bpmn import PROCESS_KEY
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_zaak
@@ -19,6 +20,7 @@ from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import save_zaakafhandelparameters
 from podiumd_tests.zac import zac_session
+from podiumd_tests.zac_api import has_process_definitions
 from podiumd_tests.zac_signaleringen import zaak_waarschuwingen
 
 if TYPE_CHECKING:
@@ -49,8 +51,15 @@ VENSTERS = {
 }
 
 
+@pytest.mark.source(
+    "PZW Sprint 82 PZ-12754",
+    "A BPMN zaaktype has the streefdatum and fatale datum waarschuwingsvensters too (ZAC 5.11).",
+)
+@pytest.mark.parametrize("engine", ["CMMN", "BPMN"])
+# One case at a time: the admin's list answers 404 when the other case deletes its zaak during the request.
+@pytest.mark.xdist_group("zac-waarschuwing")
 @pytest.mark.scenario("""
-    Given a zaaktype with a servicenorm and a doorlooptijd, and no waarschuwingsvenster
+    Given a CMMN or BPMN zaaktype with a servicenorm and a doorlooptijd, and no waarschuwingsvenster
     And a zaak of it on the test admin's name
     Then the admin's dashboard does not list the zaak among the zaken with a warning
     When the beheerder sets a streefdatum or fatale datum venster that ends the day before that date
@@ -58,19 +67,26 @@ VENSTERS = {
     When the venster reaches that date
     Then the dashboard lists the zaak
 """)
-def test_bijna_verlopen_follows_the_waarschuwingsvenster(
+def test_bijna_verlopen_follows_the_waarschuwingsvenster(  # fixtures and the engine
     podiumd_env: Environment,
     openzaak: ApiClient,
     test_zaaktype: JsonObject,
     urls: dict[str, str],
     registry: ResourceRegistry,
     need_bootstrap: Callable[..., None],
+    engine: str,
 ) -> None:
     """/rest/zaken/waarschuwing lists an open zaak whose date is at most the venster's days ahead; none without one."""
     need_bootstrap("zac-bpmn-process")
-    parameters = make_zac_zaaktype(podiumd_env, openzaak, registry, test_zaaktype, servicenorm="P10D")
-    # A login after make_zac_zaaktype: ZAC reads the rights on the zaaktype from PABC at login.
     zac, zac_url = zac_as_admin(podiumd_env), urls["zac"]
+    if engine == "BPMN" and not has_process_definitions(zac, zac_url):
+        pytest.skip("ZAC before 5.12 configures a BPMN zaaktype apart from its zaakafhandelparameters")
+    process = PROCESS_KEY if engine == "BPMN" else None
+    parameters = make_zac_zaaktype(
+        podiumd_env, openzaak, registry, test_zaaktype, servicenorm="P10D", bpmn_process=process
+    )
+    # A login after make_zac_zaaktype: ZAC reads the rights on the zaaktype from PABC at login.
+    zac = zac_as_admin(podiumd_env)
     zaak = create_zaak(
         zac, zac_url, parameters, omschrijving=registry.tagged("zac-waarschuwing"), behandelaar={"id": ADMIN.username}
     )
