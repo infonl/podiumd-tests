@@ -252,25 +252,40 @@ def test_mijn_vragen_shows_more_than_one_page_of_questions(
     wait_until(walk, timeout=60, description=f"every {tag} question in Mijn vragen")
 
 
-def _answer_in_ita(
-    page: Page,
+def _taak_of_kcc_groep(
     podiumd_env: Environment,
+    openklant: ApiClient,
+    objecten: ApiClient,
+    registry: ResourceRegistry,
+    question: JsonObject,
+) -> JsonObject:
+    """The question's taak, also assigned to the KCC user's groep: ITA shows a detail only to an assigned groep."""
+    taak = expanded(openklant, str(question["url"]), "leiddeTotInterneTaken")[0]
+    clean_up_logboek(objecten, registry, objecttype_url(podiumd_env, "Activiteitenlog"), str(taak["uuid"]))
+    groep = make_actor(openklant, registry, "organisatorische_eenheid", ITA_GROEP, "grp")
+    openklant.patch(
+        str(taak["url"]), {"toegewezenAanActoren": [*entries(taak["toegewezenAanActoren"]), {"uuid": groep["uuid"]}]}
+    )
+    return taak
+
+
+def _close_with_answer(
+    ita: requests.Session,
+    ita_url: str,
     openklant: ApiClient,
     registry: ResourceRegistry,
     question: JsonObject,
     taak: JsonObject,
     antwoord: str,
 ) -> str:
-    """Answer the question in ITA as the KCC user and close its taak; the uuid of the inwoner's partij."""
-    page.context.clear_cookies()
-    ita = kcc_login(page, podiumd_env, "ita")
+    """Answer the question in ITA and close its taak; the uuid of the inwoner's partij."""
     # The answer goes on the question's kanaal: Mijn vragen shows answers of that kanaal only.
     antwoord_body = klantcontact_body(
         registry, kanaal=question["kanaal"], onderwerp=antwoord, inhoud=f"Antwoord {antwoord}"
     )
     partij = str(section(expanded(openklant, str(question["url"]), "hadBetrokkenen")[0], "wasPartij")["uuid"])
     # ITA links the answer to this partij; Mijn vragen lists only klantcontacten of the inwoner's partij.
-    close_with_klantcontact(ita, podiumd_env.profile.urls["ita"], answer_body(taak, antwoord_body, partij))
+    close_with_klantcontact(ita, ita_url, answer_body(taak, antwoord_body, partij))
     return partij
 
 
@@ -285,13 +300,21 @@ def _expect_answered(page: Page, podiumd_env: Environment, vraag: str, antwoord:
     expect(page.locator("main")).to_contain_text(f"Antwoord {antwoord}")
 
 
+@pytest.mark.tc("ITA-030")
 @pytest.mark.requires("ita", "objecten")
+@pytest.mark.source(
+    "draaiboek ITA-030",
+    "A contact request submitted through the portal shows all recorded information on its detail page in ITA.",
+)
 @pytest.mark.source(
     "TA interaction/181-keten-ita-contactmoment-portaal-beantwoord.spec.ts",
     "A contactmoment the KCC registers in ITA shows the inwoner's question as answered, with the answer, in Mijn vragen.",
 )
 @pytest.mark.scenario("""
     Given an inwoner asked a question in Mijn vragen
+    And the question's taak is assigned to the KCC medewerker's groep
+    When the KCC medewerker opens it in ITA
+    Then its detail page shows the question's text
     When the KCC medewerker answers it in ITA and closes the taak
     Then Mijn vragen shows the question as answered or afgehandeld
     And its detail shows the answer
@@ -304,24 +327,20 @@ def test_question_answered_in_ita_shows_as_answered(
     registry: ResourceRegistry,
     need_bootstrap: Callable[..., None],
 ) -> None:
-    """The KCC user answers an inwoner's question in ITA; Mijn vragen shows it answered, with the answer (TA int-181)."""
-    need_bootstrap(
-        INWONER.name,
-        KCC.name,
-        "openklant-actor-kcc",
-        "openinwoner-oidc-mock",
-        "openinwoner-cms-pages",
-        "openinwoner-openklant",
-    )
+    """The KCC user sees an inwoner's question in ITA and answers it; Mijn vragen shows the answer."""
+    need_bootstrap(INWONER.name, KCC.name, "openklant-actor-kcc", "objecten-medewerker-kcc", *PORTAL_WIRING)
     vraag = registry.tagged("ita-vraag")
     clean_up_question(podiumd_env, openklant, registry, vraag)
     ask_in_mijn_vragen(page, podiumd_env, vraag)
     question = question_in_open_klant(openklant, vraag)
-    taak = expanded(openklant, str(question["url"]), "leiddeTotInterneTaken")[0]
-    clean_up_logboek(objecten, registry, objecttype_url(podiumd_env, "Activiteitenlog"), str(taak["uuid"]))
+    taak = _taak_of_kcc_groep(podiumd_env, openklant, objecten, registry, question)
     antwoord = registry.tagged("ita-antwoord")
     clean_up_klantcontacten(openklant, registry, antwoord)
-    partij = _answer_in_ita(page, podiumd_env, openklant, registry, question, taak, antwoord)
+    page.context.clear_cookies()
+    ita = kcc_login(page, podiumd_env, "ita")
+    ita_url = podiumd_env.profile.urls["ita"]
+    assert vraag in ita_detail_text(ita, ita_url, taak)
+    partij = _close_with_answer(ita, ita_url, openklant, registry, question, taak, antwoord)
     forget_questions(podiumd_env, partij)
     _expect_answered(page, podiumd_env, vraag, antwoord)
 
@@ -360,38 +379,3 @@ def test_question_from_the_portal_shows_in_zac(
         c.get("tekst") == SUBJECT and datetime.fromisoformat(str(c["registratiedatum"])) == asked
         for c in contactmomenten
     ), f"no question of {asked:%H:%M:%S.%f} among {contactmomenten}"
-
-
-@pytest.mark.tc("ITA-030")
-@pytest.mark.requires("ita", "objecten")
-@pytest.mark.source(
-    "draaiboek ITA-030",
-    "A contact request submitted through the portal shows all recorded information on its detail page in ITA.",
-)
-@pytest.mark.scenario("""
-    Given an inwoner asked a question in Mijn vragen
-    When the question's taak is assigned to the KCC medewerker's groep
-    Then the KCC medewerker sees the question's text on its detail page in ITA
-""")
-def test_question_from_the_portal_shows_in_full_in_ita(
-    page: Page,
-    podiumd_env: Environment,
-    openklant: ApiClient,
-    objecten: ApiClient,
-    registry: ResourceRegistry,
-    need_bootstrap: Callable[..., None],
-) -> None:
-    """A question from Mijn vragen, routed to the KCC user's groep, shows in ITA with its text."""
-    need_bootstrap(INWONER.name, KCC.name, "openklant-actor-kcc", "objecten-medewerker-kcc", *PORTAL_WIRING)
-    vraag = registry.tagged("ita-detail")
-    clean_up_question(podiumd_env, openklant, registry, vraag)
-    ask_in_mijn_vragen(page, podiumd_env, vraag)
-    taak = expanded(openklant, str(question_in_open_klant(openklant, vraag)["url"]), "leiddeTotInterneTaken")[0]
-    clean_up_logboek(objecten, registry, objecttype_url(podiumd_env, "Activiteitenlog"), str(taak["uuid"]))
-    groep = make_actor(openklant, registry, "organisatorische_eenheid", ITA_GROEP, "grp")
-    openklant.patch(
-        str(taak["url"]), {"toegewezenAanActoren": [*entries(taak["toegewezenAanActoren"]), {"uuid": groep["uuid"]}]}
-    )
-    page.context.clear_cookies()
-    ita = kcc_login(page, podiumd_env, "ita")
-    assert vraag in ita_detail_text(ita, podiumd_env.profile.urls["ita"], taak)

@@ -13,11 +13,11 @@ component and integration, without and with the destructive tests; the test suit
 | --- | --- | --- | --- |
 | smoke | 239 | 40 | 10 |
 | component | 1014 | 597 | 69 |
-| integration | 211 | 143 | 19 |
+| integration | 210 | 142 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1399** | **729** | **84** |
+| **full tier** | **1398** | **728** | **84** |
 | **chaos tier** | **65** | **51** | **14** |
-| **test suite** | **1544** | **789** | **98** |
+| **test suite** | **1543** | **788** | **98** |
 
 Unit tests (`unit_tests/`, functions): 955. Perf endpoints (`perf/runs.py`): 32.
 
@@ -85,7 +85,7 @@ Unit tests (`unit_tests/`, functions): 955. Perf endpoints (`perf/runs.py`): 32.
 | integration | omc_bericht | 3 | 3 |
 | integration | omc_scenarios | 12 | 11 |
 | integration | portaal_notificaties | 3 | 3 |
-| integration | portaal_openklant | 7 | 7 |
+| integration | portaal_openklant | 6 | 6 |
 | integration | portaal_samenwerken | 2 | 1 |
 | integration | portaal_zaken | 18 | 13 |
 | integration | productaanvraag | 8 | 8 |
@@ -111,7 +111,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | PZW | 28 |
 | TA | 298 |
 | ZAC | 16 |
-| draaiboek | 88 |
+| draaiboek | 87 |
 | external | 217 |
 | podiumd-tests | 534 |
 | upstream | 243 |
