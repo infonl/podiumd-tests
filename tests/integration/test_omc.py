@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.basisregistraties import EREBOS
+from podiumd_tests.basisregistraties import DE_JAGER
 from podiumd_tests.bootstrap.omc import notify_mock_missing
 from podiumd_tests.bootstrap.omc import omc_actor_missing
 from podiumd_tests.bootstrap.omc import omc_token
@@ -127,14 +127,14 @@ def test_productaanvraag_zaak_informs_the_inwoner_at_the_voorkeursadres(  # the 
         podiumd_env, openzaak, registry, test_zaaktype, aanvraagtype=aanvraagtype, types=INFORMING_TYPES
     )
     email, phone = own_address(registry), random_phone_number()
-    make_inwoner(openklant, registry, email, phone, bsn=EREBOS)
+    make_inwoner(openklant, registry, email, phone, bsn=DE_JAGER)
     aanvraag = submit_digid_aanvraag(
-        podiumd_env, objecten, registry, objecttype=productaanvraag_objecttype, aanvraagtype=aanvraagtype, bsn=EREBOS
+        podiumd_env, objecten, registry, objecttype=productaanvraag_objecttype, aanvraagtype=aanvraagtype, bsn=DE_JAGER
     )
-    assert [betrokkene.get("inpBsn") for betrokkene in entries(aanvraag.get("betrokkenen"))] == [EREBOS]
+    assert [betrokkene.get("inpBsn") for betrokkene in entries(aanvraag.get("betrokkenen"))] == [DE_JAGER]
     zaak = productaanvraag_zaak(openzaak, registry, str(section(aanvraag, "bron")["kenmerk"]))
     notify_request(podiumd_env, EMAIL, email, "NOTIFY_TEMPLATEID_EMAIL_ZAAKCREATE")
-    set_voorkeursadres(openklant, EREBOS, phone)
+    set_voorkeursadres(openklant, DE_JAGER, phone)
     afronden_intake(zac, zac_url, zaak)
     notify_request(podiumd_env, SMS, phone, "NOTIFY_TEMPLATEID_SMS_ZAAKUPDATE")
     in_zac = read_zaak(zac, zac_url, str(zaak["uuid"]))

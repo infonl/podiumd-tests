@@ -35,6 +35,9 @@ KIERKEGAARD = "999990020"
 KOOYMAN = "999993847"
 # Lukas Klamer, a person of the BRP test set that only the ZAC e-mail test gives an Open Klant partij.
 KLAMER = "999991723"
+# Paolo de Jager, a person of the BRP test set that only the OMC voorkeursadres test gives addresses in Open Klant:
+# Open Inwoner copies a voorkeursadres into the account at login, so the portal's inwoner (EREBOS) must keep its own.
+DE_JAGER = "999990408"
 # Persons of the BRP test set with one edge case each.
 BRP_OVERLEDEN = "999999655"
 BRP_EMIGRATIE = "999991024"
