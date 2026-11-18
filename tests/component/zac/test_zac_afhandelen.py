@@ -33,7 +33,6 @@ from podiumd_tests.zac import afhandelen
 from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import afsluiten
 from podiumd_tests.zac import heropenen
-from podiumd_tests.zac import is_zaak_listed
 from podiumd_tests.zac import logged_in_user
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import resultaattypen
@@ -46,6 +45,7 @@ from podiumd_tests.zac import zoned_brondatum
 from podiumd_tests.zac_documents import lock_document
 from podiumd_tests.zac_documents import unlock_document
 from podiumd_tests.zac_documents import uploaded_document
+from podiumd_tests.zac_search import is_zaak_listed
 
 if TYPE_CHECKING:
     from collections.abc import Callable

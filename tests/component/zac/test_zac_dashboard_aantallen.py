@@ -13,8 +13,8 @@ from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
-from podiumd_tests.zac import search
 from podiumd_tests.zac import zac_session
+from podiumd_tests.zac_search import search
 from podiumd_tests.zac_signaleringen import save_signalering_setting
 from podiumd_tests.zac_signaleringen import signalering_page
 

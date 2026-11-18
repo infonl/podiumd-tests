@@ -17,8 +17,8 @@ from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import assignment
-from podiumd_tests.zac import is_taak_listed
 from podiumd_tests.zac import read_zaak
+from podiumd_tests.zac_search import is_taak_listed
 from podiumd_tests.zac_signaleringen import signalering_taken
 from podiumd_tests.zac_signaleringen import turn_signaleringen
 from podiumd_tests.zac_taken import ADVIES_INTERN

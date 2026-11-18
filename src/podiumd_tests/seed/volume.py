@@ -51,8 +51,8 @@ from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.workloads import run_cronjob
 from podiumd_tests.workloads import scaled
 from podiumd_tests.workloads import worker_deployment
-from podiumd_tests.zac import count_zaken_found
 from podiumd_tests.zac import reindex_zaken
+from podiumd_tests.zac_search import count_zaken_found
 
 if TYPE_CHECKING:
     from collections.abc import Callable

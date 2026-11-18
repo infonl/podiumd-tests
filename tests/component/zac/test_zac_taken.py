@@ -29,7 +29,6 @@ from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import POLICIES
 from podiumd_tests.zac import afronden_intake
 from podiumd_tests.zac import assignment
-from podiumd_tests.zac import is_taak_listed
 from podiumd_tests.zac import koppel
 from podiumd_tests.zac import moved_dates
 from podiumd_tests.zac import read_zaak
@@ -40,6 +39,7 @@ from podiumd_tests.zac_beheer import referentietabel
 from podiumd_tests.zac_beheer import referentietabel_values
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
+from podiumd_tests.zac_search import is_taak_listed
 from podiumd_tests.zac_taken import AANVULLENDE_INFORMATIE
 from podiumd_tests.zac_taken import ADVIES_EXTERN
 from podiumd_tests.zac_taken import ADVIES_INTERN

@@ -12,8 +12,8 @@ import pytest
 
 from podiumd_tests.responses import describe
 from podiumd_tests.seed.openzaak import make_zaak
-from podiumd_tests.zac import is_zaak_listed
 from podiumd_tests.zac import reindex_zaken
+from podiumd_tests.zac_search import is_zaak_listed
 
 if TYPE_CHECKING:
     import requests

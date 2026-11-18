@@ -36,8 +36,6 @@ from podiumd_tests.zac import assignment
 from podiumd_tests.zac import can_open_zaak
 from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
-from podiumd_tests.zac import is_taak_listed
-from podiumd_tests.zac import is_zaak_listed
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import toekennen
 from podiumd_tests.zac import verdelen
@@ -46,6 +44,8 @@ from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac import zac_session
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
+from podiumd_tests.zac_search import is_taak_listed
+from podiumd_tests.zac_search import is_zaak_listed
 
 if TYPE_CHECKING:
     from collections.abc import Callable

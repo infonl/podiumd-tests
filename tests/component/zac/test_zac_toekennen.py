@@ -31,13 +31,13 @@ from podiumd_tests.zac import behandelaar_groups
 from podiumd_tests.zac import behandelaar_vrijgeven
 from podiumd_tests.zac import listed_assignment
 from podiumd_tests.zac import read_zaak
-from podiumd_tests.zac import search_all
 from podiumd_tests.zac import taak_toekennen_mij
 from podiumd_tests.zac import toekennen
 from podiumd_tests.zac import toekennen_mij
 from podiumd_tests.zac import verdelen
 from podiumd_tests.zac import vrijgeven
-from podiumd_tests.zac import zaaktype_filter
+from podiumd_tests.zac_search import search_all
+from podiumd_tests.zac_search import zaaktype_filter
 from podiumd_tests.zac_signaleringen import signalering_mail
 from podiumd_tests.zac_taken import complete_task
 from podiumd_tests.zac_taken import open_task

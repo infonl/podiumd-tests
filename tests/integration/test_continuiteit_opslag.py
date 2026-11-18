@@ -17,6 +17,7 @@ import pytest
 
 from podiumd_tests import redis as redis_ha
 from podiumd_tests import zac as zac_app
+from podiumd_tests import zac_search
 from podiumd_tests.bootstrap import names
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.chaos_load import CALM
@@ -313,7 +314,7 @@ def fixture_solr_outage(
     with own_registry(request, run_tag) as registry:
         known = make_zaak(openzaak, registry, zaaktype)
         wait_until(
-            lambda: zac_app.is_zaak_listed(zac, zac_url, known),
+            lambda: zac_search.is_zaak_listed(zac, zac_url, known),
             timeout=zac_app.INDEX_TIMEOUT,
             description="the zaak indexed",
         )
@@ -323,19 +324,19 @@ def fixture_solr_outage(
         with watched_load(podiumd_env, urls, ["zac"], calls, workers=1, pause=2) as (load, watch):
             with operated_down(podiumd_env.kube, solr, SOLR_RESTORE_TIMEOUT):
                 asked = time.monotonic()
-                search = zac_app.search_failure(zac, zac_url)
+                search = zac_search.search_failure(zac, zac_url)
                 answered = round(time.monotonic() - asked, 1)
                 arrived = make_zaak(openzaak, registry, zaaktype)
                 load.run_for(SOLR_OUTAGE)
             down = round(time.time() - start)
         wait_until(
-            lambda: zac_app.is_zaak_listed(zac, zac_url, known),
+            lambda: zac_search.is_zaak_listed(zac, zac_url, known),
             timeout=zac_app.INDEX_TIMEOUT,
             description="ZAC's search",
         )
         with suppress(WaitTimeoutError):
             wait_until(
-                lambda: zac_app.is_zaak_listed(zac, zac_url, arrived),
+                lambda: zac_search.is_zaak_listed(zac, zac_url, arrived),
                 timeout=zac_app.INDEX_TIMEOUT,
                 description="new zaak",
             )
@@ -345,7 +346,7 @@ def fixture_solr_outage(
             report=load_report(load, watch, start),
             measured={"search_seconds": answered, "search_answer": search, "solr_down_seconds": down},
             search=search,
-            found=zac_app.is_zaak_listed(zac, zac_url, arrived),
+            found=zac_search.is_zaak_listed(zac, zac_url, arrived),
         )
 
 

@@ -47,8 +47,8 @@ from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.wait import WaitTimeoutError
 from podiumd_tests.wait import wait_until
-from podiumd_tests.zac import is_zaak_listed
 from podiumd_tests.zac import logged_in_user
+from podiumd_tests.zac_search import is_zaak_listed
 
 if TYPE_CHECKING:
     from collections.abc import Callable

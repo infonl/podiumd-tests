@@ -27,7 +27,6 @@ from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import NOTIFICATION_TIMEOUT
 from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
-from podiumd_tests.zac import is_document_listed
 from podiumd_tests.zac import koppel
 from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac_documents import FILES
@@ -50,6 +49,7 @@ from podiumd_tests.zac_documents import upload
 from podiumd_tests.zac_documents import uploaded_document
 from podiumd_tests.zac_documents import verplaats_document
 from podiumd_tests.zac_documents import zaak_documents
+from podiumd_tests.zac_search import is_document_listed
 
 if TYPE_CHECKING:
     from collections.abc import Callable

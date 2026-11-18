@@ -35,9 +35,9 @@ from podiumd_tests.zac import koppel_zoekresultaat
 from podiumd_tests.zac import ontkoppel
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import start_zaak
-from podiumd_tests.zac import wait_for_indicatie
-from podiumd_tests.zac import wait_in_werkvoorraad
 from podiumd_tests.zac import zaak_body
+from podiumd_tests.zac_search import wait_for_indicatie
+from podiumd_tests.zac_search import wait_in_werkvoorraad
 
 if TYPE_CHECKING:
     from collections.abc import Callable

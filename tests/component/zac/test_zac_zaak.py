@@ -37,16 +37,16 @@ from podiumd_tests.zac import DUE_DATES
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import hervatten
-from podiumd_tests.zac import is_zaak_listed
 from podiumd_tests.zac import opschorten
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import send_with_person
 from podiumd_tests.zac import verlengen
-from podiumd_tests.zac import wait_in_werkvoorraad
 from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac_beheer import communicatiekanalen
 from podiumd_tests.zac_betrokkenen import wijzig_initiator
+from podiumd_tests.zac_search import is_zaak_listed
+from podiumd_tests.zac_search import wait_in_werkvoorraad
 
 if TYPE_CHECKING:
     from collections.abc import Callable

@@ -20,13 +20,13 @@ from podiumd_tests.responses import expect_status
 from podiumd_tests.wait import wait_until
 from podiumd_tests.zac import GERELATEERD
 from podiumd_tests.zac import LIST_TIMEOUT
-from podiumd_tests.zac import is_taak_listed
 from podiumd_tests.zac import koppel
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import wijzig_zaak
 from podiumd_tests.zac_documents import delete_document
 from podiumd_tests.zac_documents import taak_documents
 from podiumd_tests.zac_documents import uploaded_document
+from podiumd_tests.zac_search import is_taak_listed
 from podiumd_tests.zac_taken import ADVIES_INTERN
 from podiumd_tests.zac_taken import GOEDKEUREN
 from podiumd_tests.zac_taken import complete_task

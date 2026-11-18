@@ -31,11 +31,11 @@ from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import attribuut_historie
 from podiumd_tests.zac import deliver_notificatie
 from podiumd_tests.zac import end_process
-from podiumd_tests.zac import is_taak_listed
 from podiumd_tests.zac import notificatie
 from podiumd_tests.zac import read_zaak
-from podiumd_tests.zac import wait_in_werkvoorraad
 from podiumd_tests.zac_documents import uploaded_document
+from podiumd_tests.zac_search import is_taak_listed
+from podiumd_tests.zac_search import wait_in_werkvoorraad
 from podiumd_tests.zac_taken import complete_task
 from podiumd_tests.zac_taken import is_task_open
 from podiumd_tests.zac_taken import open_task

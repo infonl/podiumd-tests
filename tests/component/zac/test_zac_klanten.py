@@ -41,7 +41,6 @@ from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import person_key
 from podiumd_tests.zac import person_lookup
 from podiumd_tests.zac import read_zaak
-from podiumd_tests.zac import search
 from podiumd_tests.zac import send_with_person
 from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac_betrokkenen import add_betrokkene
@@ -51,6 +50,7 @@ from podiumd_tests.zac_betrokkenen import make_person_initiator
 from podiumd_tests.zac_betrokkenen import ontkoppel_betrokkene
 from podiumd_tests.zac_betrokkenen import ontkoppel_initiator
 from podiumd_tests.zac_betrokkenen import wijzig_initiator
+from podiumd_tests.zac_search import search
 
 if TYPE_CHECKING:
     from collections.abc import Callable

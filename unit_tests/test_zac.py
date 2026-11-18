@@ -10,6 +10,7 @@ import requests
 
 from podiumd_tests import zac
 from podiumd_tests import zac_productaanvraag
+from podiumd_tests import zac_search
 from podiumd_tests import zac_taken
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.oidc import LOGIN_PATHS
@@ -197,13 +198,13 @@ def test_reindex_zaken_in_the_background_waits_for_its_end_in_zacs_log(env_facto
 
 def test_count_zaken_found(fake_http):
     sent = fake_http({"PUT /rest/zoeken/list": (200, {"totaal": 3})})
-    assert zac.count_zaken_found(requests.Session(), ZAC, "Klacht") == 3
+    assert zac_search.count_zaken_found(requests.Session(), ZAC, "Klacht") == 3
     assert json.loads(sent[0].body)["filters"] == {"ZAAKTYPE": {"values": ["Klacht"]}}
 
 
 def test_search_all_reads_every_page_of_rows(fake_http):
     sent = fake_http({"PUT /rest/zoeken/list": (200, {"totaal": 5, "resultaten": [{"id": "z1"}, {"id": "z2"}]})})
-    found = zac.search_all(requests.Session(), ZAC, 2, type="ZAAK")
+    found = zac_search.search_all(requests.Session(), ZAC, 2, type="ZAAK")
     assert len(found) == 6
     assert [json.loads(request.body)["page"] for request in sent] == [0, 1, 2]
     assert {json.loads(request.body)["rows"] for request in sent} == {2}
@@ -211,7 +212,7 @@ def test_search_all_reads_every_page_of_rows(fake_http):
 
 def test_search_all_reads_one_page_when_nothing_is_found(fake_http):
     sent = fake_http({"PUT /rest/zoeken/list": (200, {"totaal": 0, "resultaten": []})})
-    assert zac.search_all(requests.Session(), ZAC, 25, type="ZAAK") == []
+    assert zac_search.search_all(requests.Session(), ZAC, 25, type="ZAAK") == []
     assert len(sent) == 1
 
 
@@ -224,11 +225,11 @@ def test_zac_session_logs_in_through_keycloak(env_factory, profile_factory, monk
 
 def test_zaak_listed_searches_by_identificatie_with_the_flags_and_matches_the_uuid(fake_http):
     sent = fake_http({"PUT /rest/zoeken/list": (200, {"resultaten": [{"id": "z1", "identificatie": "ZAAK-1"}]})})
-    assert zac.is_zaak_listed(
+    assert zac_search.is_zaak_listed(
         requests.Session(), ZAC, {"uuid": "z1", "identificatie": "ZAAK-1"}, alleenOpenstaandeZaken=True
     )
     # A deleted zaak in ZAC's index with the same identificatie.
-    assert not zac.is_zaak_listed(requests.Session(), ZAC, {"uuid": "z2", "identificatie": "ZAAK-1"})
+    assert not zac_search.is_zaak_listed(requests.Session(), ZAC, {"uuid": "z2", "identificatie": "ZAAK-1"})
     body = json.loads(sent[0].body)
     assert body["zoeken"] == {"ZAAK_IDENTIFICATIE": "ZAAK-1"}
     assert body["alleenOpenstaandeZaken"] is True
@@ -822,8 +823,8 @@ def test_forget_zaak_at_cleanup_delivers_its_destroy_notificatie(env_factory, mo
 def test_taak_listed_searches_by_zaak_identificatie_and_matches_the_id(fake_http):
     sent = fake_http({"PUT /rest/zoeken/list": (200, {"resultaten": [{"id": "t1"}]})})
     taak = {"id": "t1", "zaakIdentificatie": "ZAAK-1"}
-    assert zac.is_taak_listed(requests.Session(), ZAC, taak, alleenMijnTaken=True)
-    assert not zac.is_taak_listed(requests.Session(), ZAC, {**taak, "id": "t2"})
+    assert zac_search.is_taak_listed(requests.Session(), ZAC, taak, alleenMijnTaken=True)
+    assert not zac_search.is_taak_listed(requests.Session(), ZAC, {**taak, "id": "t2"})
     body = json.loads(sent[0].body)
     assert (body["type"], body["zoeken"], body["alleenMijnTaken"]) == ("TAAK", {"TAAK_ZAAK_ID": "ZAAK-1"}, True)
 
@@ -832,9 +833,9 @@ def test_wait_for_indicatie_needs_the_indicatie_on_the_open_zaak(fake_http):
     found = {"resultaten": [{"id": "z1", "indicaties": ["OPSCHORTING"]}]}
     sent = fake_http({"PUT /rest/zoeken/list": (200, found)})
     zaak = {"uuid": "z1", "identificatie": "ZAAK-1"}
-    zac.wait_for_indicatie(requests.Session(), ZAC, zaak, "OPSCHORTING")
+    zac_search.wait_for_indicatie(requests.Session(), ZAC, zaak, "OPSCHORTING")
     assert json.loads(sent[0].body)["alleenOpenstaandeZaken"] is True
-    assert zac.zaak_zoekresultaat(requests.Session(), ZAC, {**zaak, "uuid": "z2"}) is None
+    assert zac_search.zaak_zoekresultaat(requests.Session(), ZAC, {**zaak, "uuid": "z2"}) is None
 
 
 def test_toekennen_and_toekennen_taak_send_group_and_behandelaar(fake_http):
@@ -923,7 +924,7 @@ def test_csv_export_reads_the_rows_by_column_and_skips_repeated_header_names(mon
         return response_factory(body=text.encode())
 
     monkeypatch.setattr(requests.Session, "post", post)
-    rows = zac.csv_export(requests.Session(), ZAC, type="ZAAK", rows=2)
+    rows = zac_search.csv_export(requests.Session(), ZAC, type="ZAAK", rows=2)
     assert rows == [
         {"identificatie": "ZAAK-1", "omschrijving": "een"},
         {"identificatie": "ZAAK-2", "omschrijving": "twee"},
@@ -941,11 +942,11 @@ def test_zoekopdracht_is_saved_listed_and_deleted_at_cleanup(fake_http):
         }
     )
     http, registry = requests.Session(), ResourceRegistry("run")
-    assert zac.save_zoekopdracht(http, ZAC, registry, "WERKVOORRAAD_ZAKEN", {"filters": {}}) == saved
+    assert zac_search.save_zoekopdracht(http, ZAC, registry, "WERKVOORRAAD_ZAKEN", {"filters": {}}) == saved
     body = json.loads(sent[-1].body)
     assert (body["lijstID"], body["json"]) == ("WERKVOORRAAD_ZAKEN", '{"filters": {}}')
     assert body["naam"].startswith("run-zoekopdracht-")
-    assert zac.zoekopdrachten(http, ZAC, "WERKVOORRAAD_ZAKEN") == [saved]
+    assert zac_search.zoekopdrachten(http, ZAC, "WERKVOORRAAD_ZAKEN") == [saved]
     assert registry.cleanup() == []
     assert sent[-1].method == "DELETE"
 
@@ -953,8 +954,8 @@ def test_zoekopdracht_is_saved_listed_and_deleted_at_cleanup(fake_http):
 def test_document_listed_searches_by_titel_and_matches_the_uuid(fake_http):
     sent = fake_http({"PUT /rest/zoeken/list": (200, {"resultaten": [{"id": "d1"}]})})
     document = {"uuid": "d1", "titel": "brief"}
-    assert zac.is_document_listed(requests.Session(), ZAC, document)
-    assert not zac.is_document_listed(requests.Session(), ZAC, {**document, "uuid": "d2"})
+    assert zac_search.is_document_listed(requests.Session(), ZAC, document)
+    assert not zac_search.is_document_listed(requests.Session(), ZAC, {**document, "uuid": "d2"})
     body = json.loads(sent[0].body)
     assert (body["type"], body["zoeken"]) == ("DOCUMENT", {"DOCUMENT_TITEL": "brief"})
 
@@ -982,7 +983,7 @@ def test_zoned_brondatum_is_the_day_at_midnight_utc():
 
 def test_search_failure_names_the_status_or_none(fake_http):
     fake_http({"PUT /rest/zoeken/list": (200, {"resultaten": [], "totaal": 0})})
-    assert zac.search_failure(requests.Session(), ZAC) is None
+    assert zac_search.search_failure(requests.Session(), ZAC) is None
     fake_http({"PUT /rest/zoeken/list": (500, {"message": "Solr"})})
-    failure = str(zac.search_failure(requests.Session(), ZAC))
+    failure = str(zac_search.search_failure(requests.Session(), ZAC))
     assert failure.startswith(f"UnexpectedStatusError: PUT {ZAC}/rest/zoeken/list: HTTP 500")
