@@ -12,12 +12,14 @@ from typing import NamedTuple
 
 import pytest
 
+from podiumd_tests import zac_search
 from podiumd_tests import zac_taken
 from podiumd_tests.bootstrap.bpmn import HARDCODED
 from podiumd_tests.bootstrap.bpmn import HARDCODED_TO
 from podiumd_tests.bootstrap.bpmn import PROCESS_KEY
 from podiumd_tests.bootstrap.bpmn import TOEWIJZING
 from podiumd_tests.bootstrap.bpmn import complete_intake
+from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
@@ -31,11 +33,14 @@ from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import is_older_than
 from podiumd_tests.workloads import skip_older_than
+from podiumd_tests.zac import GERELATEERD
 from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import can_open_zaak
 from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
+from podiumd_tests.zac import koppel
+from podiumd_tests.zac import koppel_zoekresultaat
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import toekennen
 from podiumd_tests.zac import verdelen
@@ -44,11 +49,6 @@ from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac import zac_session
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
-from podiumd_tests.zac_search import document_zoekresultaat
-from podiumd_tests.zac_search import is_taak_listed
-from podiumd_tests.zac_search import is_zaak_listed
-from podiumd_tests.zac_search import taak_zoekresultaat
-from podiumd_tests.zac_search import zaak_zoekresultaat
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -192,7 +192,7 @@ def _detach(  # who detaches whom, and who reads the historie
     assert not can_open_zaak(session, zac_url, zaak)
     assert reden in {line.get("toelichting") for line in zaak_historie(reader, zac_url, zaak)}
     wait_until(
-        lambda: not is_zaak_listed(session, zac_url, zaak),
+        lambda: not zac_search.is_zaak_listed(session, zac_url, zaak),
         timeout=LIST_TIMEOUT,
         description=f"the detached {naam} no longer finds the marked zaak",
     )
@@ -210,7 +210,7 @@ def _add_colleague(
     assert team.names[1] in _medewerkers(behandelaar, zac_url, zaak)
     assert can_open_zaak(collega, zac_url, zaak)
     wait_until(
-        lambda: is_zaak_listed(collega, zac_url, zaak),
+        lambda: zac_search.is_zaak_listed(collega, zac_url, zaak),
         timeout=LIST_TIMEOUT,
         description="the added colleague finds the marked zaak",
     )
@@ -225,7 +225,7 @@ def _add_colleague(
 @pytest.mark.scenario("""
     Given a zaak assigned to a behandelaar, with a document
     When the behandelaar marks the zaak as zaakspecifiek geautoriseerd
-    Then the behandelaar still opens the zaak and its document, and finds both marked with a lock (document from 5.11)
+    Then the behandelaar opens the zaak and its document, and finds both with a lock in Mijn zaken (document: 5.11)
     And a colleague in the same group, a recordmanager, a raadpleger and a beheerder cannot open them
     And the colleague no longer finds the zaak, until the behandelaar adds the colleague to it (from ZAC 5.10)
     And after the behandelaar detaches the colleague again, the colleague neither opens nor finds it (from ZAC 5.11)
@@ -254,15 +254,15 @@ def test_marked_zaak_is_reached_only_by_its_behandelaar(  # the zaak, its docume
         expect_status(http.get(document_url(zac_url, document)), *REFUSED)
     wait_until(
         lambda: (
-            _is_found(zaak_zoekresultaat(behandelaar, zac_url, team_zaak), marked=True)
-            and not is_zaak_listed(collega, zac_url, team_zaak)
+            _is_found(zac_search.zaak_zoekresultaat(behandelaar, zac_url, team_zaak, alleenMijnZaken=True), marked=True)
+            and not zac_search.is_zaak_listed(collega, zac_url, team_zaak)
         ),
         timeout=LIST_TIMEOUT,
         description="the behandelaar finds the zaak marked and the colleague does not find it",
     )
     if not is_older_than(podiumd_env, "zac", MARKS_TAKEN_AND_DOCUMENTS):
         wait_until(
-            lambda: _is_found(document_zoekresultaat(behandelaar, zac_url, document), marked=True),
+            lambda: _is_found(zac_search.document_zoekresultaat(behandelaar, zac_url, document), marked=True),
             timeout=LIST_TIMEOUT,
             description="the behandelaar finds the document of the marked zaak, marked",
         )
@@ -308,16 +308,32 @@ def test_marking_is_refused_without_its_conditions(
     _refused_with(toekennen(behandelaar, zac_url, team_zaak, team.group, None), CANNOT_BE_RELEASED)
 
 
+def _linked_with_a_lock(http: requests.Session, zac_url: str, zaak: JsonObject, marked: JsonObject) -> None:
+    """The zaak-koppelen search from the zaak, and then the zaak's gerelateerde zaken, show the marked zaak's lock."""
+    found = koppel_zoekresultaat(http, zac_url, zaak, marked, GERELATEERD)
+    assert _is_found(found, marked=True), found
+    expect_status(koppel(http, zac_url, zaak, marked, GERELATEERD), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    gerelateerd = entries(read_zaak(http, zac_url, str(zaak["uuid"])).get("gerelateerdeZaken"))
+    shown = [g for g in gerelateerd if g.get("identificatie") == marked["identificatie"]]
+    assert [g.get("isZaakspecifiekGeautoriseerd") for g in shown] == [True], gerelateerd
+
+
 @pytest.mark.source(
     "PZW Sprint 82 PZ-12793", "A zaakspecifiek geautoriseerde zaak is not verdeeld to a group without a behandelaar."
+)
+@pytest.mark.source(
+    "PZW Sprint 82 PZ-12078",
+    "ZAC's lists show a lock at a zaakspecifiek geautoriseerde zaak and its taken and documents.",
 )
 @pytest.mark.scenario("""
     Given two zaken of the team's group with the same behandelaar, one marked zaakspecifiek geautoriseerd
     When the beheerder verdeelt both to the group without a behandelaar
     Then the unmarked zaak has no behandelaar
     And the marked zaak keeps its behandelaar
+    And linking the marked zaak to the unmarked one shows its lock, in the search and among the gerelateerde zaken (ZAC 5.11)
 """)
 def test_marked_zaak_is_skipped_when_verdeeld_without_a_behandelaar(  # the zaaktype, the team and the zaak
+    podiumd_env: Environment,
     zac: requests.Session,
     urls: dict[str, str],
     zaakspecifiek_zaaktype: JsonObject,
@@ -342,6 +358,8 @@ def test_marked_zaak_is_skipped_when_verdeeld_without_a_behandelaar(  # the zaak
         description=f"zaak {gewoon['identificatie']} verdeeld to {team.group}",
     )
     assert assignment(read_zaak(behandelaar, zac_url, str(team_zaak["uuid"]))) == (team.group, team.names[0])
+    if not is_older_than(podiumd_env, "zac", MARKS_TAKEN_AND_DOCUMENTS):
+        _linked_with_a_lock(behandelaar, zac_url, gewoon, team_zaak)
 
 
 @pytest.mark.source("ZAC ZaakService.assignZaak", "The replaced behandelaar keeps access to the zaak.")
@@ -392,7 +410,7 @@ def _complete_and_reindex(
     tweede = zac_taken.open_task(behandelaar, zac_url, str(zaak["uuid"]), zac_taken.AANVULLENDE_INFORMATIE)
     zac_taken.toekennen_taak(behandelaar, zac_url, tweede, team.group, team.names[0])
     wait_until(
-        lambda: is_taak_listed(behandelaar, zac_url, tweede, alleenMijnTaken=True),
+        lambda: zac_search.is_taak_listed(behandelaar, zac_url, tweede, alleenMijnTaken=True),
         timeout=LIST_TIMEOUT,
         description="the second taak in the behandelaar's Mijn taken",
     )
@@ -438,8 +456,8 @@ def test_taak_of_a_marked_zaak_is_read_only_by_its_behandelaar(  # the zaak, its
     marked = not is_older_than(podiumd_env, "zac", MARKS_TAKEN_AND_DOCUMENTS)
     wait_until(
         lambda: (
-            _is_found(taak_zoekresultaat(behandelaar, zac_url, taak), marked=marked)
-            and not is_taak_listed(collega, zac_url, taak)
+            _is_found(zac_search.taak_zoekresultaat(behandelaar, zac_url, taak), marked=marked)
+            and not zac_search.is_taak_listed(collega, zac_url, taak)
         ),
         timeout=LIST_TIMEOUT,
         description="the behandelaar finds the taak of the marked zaak and the colleague does not",
@@ -447,7 +465,9 @@ def test_taak_of_a_marked_zaak_is_read_only_by_its_behandelaar(  # the zaak, its
     if is_older_than(podiumd_env, "zac", DROPS_COMPLETED_TAKEN):
         return
     _complete_and_reindex(behandelaar, zac_url, team, team_zaak, taak)
-    assert not is_taak_listed(behandelaar, zac_url, taak, alleenMijnTaken=True), "the completed taak is in Mijn taken"
+    assert not zac_search.is_taak_listed(behandelaar, zac_url, taak, alleenMijnTaken=True), (
+        "the completed taak is in Mijn taken"
+    )
 
 
 # ZAC grants a BPMN user task's assignee the zaakspecifieke autorisatie of the zaak from this release on (#7693).
