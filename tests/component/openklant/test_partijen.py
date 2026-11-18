@@ -1,6 +1,6 @@
 """Open Klant partijen: CRUD, identificators, digital addresses and betrokkenen.
 
-Ported from TA interaction 35 and 145 and regression 54, 58, 85, 86 and 149.
+Ported from TA interaction 35 and 145 and regression 54, 58, 85, 86, 121 and 149.
 """
 
 from __future__ import annotations
@@ -29,6 +29,10 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("openklant")]
 
 
 @pytest.mark.source("podiumd-tests", "The partij lifecycle in Open Klant: create, read, patch, delete, then 404.")
+@pytest.mark.source(
+    "TA regression/121-continuiteit-graceful-degradation.spec.ts",
+    "Components answer invalid requests with a clean 4xx, not a crash, a 500 or incomplete data.",
+)
 @pytest.mark.scenario("""
     Given a persoon created as partij in Open Klant
     When the partij is read, set inactive and deleted

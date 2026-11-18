@@ -100,21 +100,6 @@ def test_openzaak_unknown_zaak_and_bad_ordering(openzaak: ApiClient) -> None:
 
 
 @pytest.mark.source(
-    "TA regression/121-continuiteit-graceful-degradation.spec.ts",
-    "Components answer invalid requests with a clean 4xx, not a crash, a 500 or incomplete data.",
-)
-@pytest.mark.requires("openklant")
-@pytest.mark.scenario("""
-    Given a client of Open Klant
-    When it asks for a partij that does not exist
-    Then Open Klant answers 404 Not Found
-""")
-def test_openklant_unknown_partij(openklant: ApiClient) -> None:
-    """An unknown partij is a 404 (TA reg-121)."""
-    openklant.request("GET", f"partijen/{NIL}", HTTPStatus.NOT_FOUND)
-
-
-@pytest.mark.source(
     "TA regression/120-of-payment-infrastructure.spec.ts",
     "Open Formulieren's payment plugins, return route and payment webhooks exist.",
 )
