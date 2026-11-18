@@ -1,5 +1,7 @@
 """Unit tests for the navigation retry, the browser logins, the axe scan, Open Beheer's session and the Django admin login."""
 
+import platform
+
 from contextlib import nullcontext
 
 import pytest
@@ -40,7 +42,7 @@ def no_login_lock(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def not_wsl1(monkeypatch):
-    monkeypatch.setattr(browser.platform, "release", lambda: "6.8.0-48-generic")
+    monkeypatch.setattr(platform, "release", lambda: "6.8.0-48-generic")
 
 
 def test_launch_args_map_every_profile_host_to_the_ingress_ip(page_env):
@@ -66,7 +68,7 @@ def test_platform_args_turn_off_sandbox_and_gpu_only_on_wsl1(release, expected):
 
 
 def test_launch_args_start_with_the_platform_args(page_env, monkeypatch):
-    monkeypatch.setattr(browser.platform, "release", lambda: "4.4.0-26100-Microsoft")
+    monkeypatch.setattr(platform, "release", lambda: "4.4.0-26100-Microsoft")
     env = page_env()
     assert launch_args(env) == ["--disable-gpu", "--no-sandbox"]
     env.ingress_ip = lambda: "10.0.0.1"
