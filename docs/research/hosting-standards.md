@@ -51,7 +51,7 @@ environment).
 | COMP006.3, COMP010 rollback | n/a | Needs a downgrade with a schema rollback; belongs to podiumd-minikube's upgrade checks. zac-42 shows the risk. |
 | COMP007.x Helm, operators, sub-charts | n/a | Chart structure; helm-charts' own lint/CI. |
 | COMP008.1 100% automated | covered | Every podiumd-tests estate is deployed by chart only; smoke `test_jobs_succeeded` and `test_workloads_ready`. |
-| COMP009 internal communication | new test | Every Service URL in the apps' configuration (zgw_consumers Services, ZAC/KISS/ITA env) points to a cluster address (`*.svc.cluster.local` or a Service name), not the public host. |
+| COMP009 internal communication | n/a (SHOULD) | Measured 2026-11-18: on kees00 and minikube every zgw_consumers Service of every Django app uses the public host. A ZGW resource URL is its identity (Open Zaak stores zaaktype URLs, notifications carry them), so a cluster address would break URL matching; not testable as a gate. |
 | COMP011 no local storage | report | Workloads writing to the root filesystem without a volume: `readOnlyRootFilesystem` false and no PVC or emptyDir for their data path. Only the flag is observable; the data path needs per-component knowledge. |
 | COMP012 secrets | new test | No env var whose name says PASSWORD, SECRET, TOKEN or KEY has a literal `value`; it must use `valueFrom.secretKeyRef`. Today 2 workloads fail. |
 | COMP013 HTTP behind the gateway | covered | Services are plain HTTP; TLS at the edge is checked by `test_tls_meets_ncsc_guidelines`. |
@@ -62,12 +62,12 @@ environment).
 | COMP015.1 logging to stdout | covered | `test_every_pod_logs_to_loki`. Report: JSON log lines share per component, `LOGLEVEL` env var present. |
 | COMP016.2 UTC log timestamps | new test | Sample recent log lines per component from Loki; parsed timestamps are UTC (no offset other than Z or none). |
 | COMP017 golden signals | report | Per component in Prometheus: a request-duration histogram, a request counter, an error-status label, a saturation gauge. `test_every_component_reports_metrics` checks only that series exist. |
-| COMP018 alerting | new test (if alerts are shipped) | Every PrometheusRule alert has a severity label and summary, description and runbook_url annotations. |
+| COMP018 alerting | n/a | PodiumD ships no PrometheusRules (none on kees00 or minikube); alerting is SSC's monitoring. |
 | COMP019 SLO | n/a | Documentation; podiumd-tests' perf gate (perf.yaml) already uses SLO-style thresholds. |
 | COMP020 resources | covered + report | Requests covered; report memory and CPU limits and HPAs. |
 | COMP021 DR, backups | n/a | Azure backups and restore drills. |
 | COMP022 release notes | n/a | Document content (helm-charts' release-notes skill). |
-| DNS naming: any URL at once | new test | Each API answers the same through its public host and its cluster Service (host-header mode exists in `make_session`); the cluster URL is the one other components use. |
+| DNS naming: any URL at once | covered | `test_cluster_dns.py`: every component answers on its Service's short name, with the namespace and fully qualified (podiumd-chart-49: eight apps refuse the fully qualified name); public hosts are the smoke tests. |
 | COMP023 container security | covered + report | `test_pods_meet_the_baseline_security_standard` gates the baseline. Report: non-root, drop ALL, read-only root filesystem (restricted profile). |
 | COMP023 network security | covered + report | `test_network_policy_blocks_a_non_allowlisted_pod`; TLS 1.2+; anonymous calls refused. Report: workloads no NetworkPolicy selects. |
 | COMP023 secret rotation | n/a | Process; `podiumd-tests bootstrap --rotate` exists for test secrets only. |
@@ -75,7 +75,7 @@ environment).
 | COMP025 API practices | report | OpenAPI document reachable per API (`/api/v1/schema` etc.); errors are JSON with a code (validation tests cover Open Zaak, Open Klant). Versioned paths are true for the ZGW APIs. |
 | COMP026 service mesh | n/a | Not used. |
 | COMP027 documentation | n/a | Documents. |
-| COMP028 audit | new test | Keycloak records login and admin events (realm `eventsEnabled`, `adminEventsEnabled`); a failed login appears among the events. Open Zaak's audittrail is covered. GDPR items n/a. |
+| COMP028 audit | covered | Keycloak's event settings: `test_realm_meets_the_security_policy`; each refused password is a recorded LOGIN_ERROR: `test_password_guessing_locks_the_user_out`. Open Zaak's audittrail is covered. GDPR items n/a. |
 | COMP029 performance | covered (perf tier) | perf.yaml thresholds; align p95 targets with 200 ms interactive and 500 ms API. |
 | COMP030 cost | n/a | |
 

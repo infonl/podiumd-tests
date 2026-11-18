@@ -163,3 +163,10 @@ def test_notify_notification_is_recorded_with_an_id_and_answers_a_get():
 
 def test_fail_first_callback_path(env_factory):
     assert "/fail-first/" in Callback.new(env_factory(), "ptest-x", answer="fail-first").path
+
+
+def test_in_cluster_statuses_runs_in_the_mock_server_pod(env_factory, fake_runner):
+    fake_runner.answers[f"exec deploy/{NAME}"] = (0, json.dumps({"http://a:80/": 200, "http://b:80/": "TimeoutError"}))
+    found = mock_server.in_cluster_statuses(env_factory(), ["http://a:80/", "http://b:80/"])
+    assert found == {"http://a:80/": 200, "http://b:80/": "TimeoutError"}
+    assert '"http://a:80/"' in fake_runner.calls[-1][-1]

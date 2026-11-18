@@ -4,6 +4,7 @@ import json
 
 from podiumd_tests.hygiene import baseline_violations
 from podiumd_tests.hygiene import clock_offset
+from podiumd_tests.hygiene import cluster_names
 from podiumd_tests.hygiene import conformance
 from podiumd_tests.hygiene import database_time_zone
 from podiumd_tests.hygiene import hosting_scope
@@ -217,3 +218,20 @@ def test_hosting_scope_reads_workloads_and_their_objects(env_factory, fake_runne
         ["a"],
         ["autoscalers", "budgets", "services"],
     )
+
+
+def test_cluster_names_are_the_services_three_dns_names(env_factory, fake_runner):
+    deployment = {**probed_workload([]), "metadata": {"name": "openzaak", "namespace": "podiumd"}}
+    ports = [{"name": "metrics", "port": 9090}, {"name": "http", "port": 80}]
+    zaak = {
+        "metadata": {"name": "openzaak", "namespace": "podiumd"},
+        "spec": {"selector": {"app": "w"}, "ports": ports},
+    }
+    fake_runner.answers["get deployments"] = (0, json.dumps({"items": [deployment]}))
+    fake_runner.answers["get services"] = (0, json.dumps({"items": [zaak]}))
+    assert cluster_names(env_factory(), "openzaak") == [
+        "http://openzaak:80/",
+        "http://openzaak.podiumd:80/",
+        "http://openzaak.podiumd.svc.cluster.local:80/",
+    ]
+    assert cluster_names(env_factory(), "keycloak") == []

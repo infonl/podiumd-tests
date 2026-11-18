@@ -202,3 +202,27 @@ class MockServer:
         """Delete the manifests' objects."""
         ctx.env.kube.delete_all(manifests())
         return ()
+
+
+# Run in the mock server's pod: GET / of each URL with its own host as Host, without following redirects.
+_STATUS_SCRIPT = """
+import http.client, json, sys
+from urllib.parse import urlsplit
+found = {}
+for url in json.loads(sys.argv[1]):
+    part = urlsplit(url)
+    try:
+        connection = http.client.HTTPConnection(part.hostname, part.port, timeout=10)
+        connection.request("GET", part.path or "/", headers={"Host": part.netloc})
+        found[url] = connection.getresponse().status
+    except Exception as error:
+        found[url] = type(error).__name__
+print(json.dumps(found))
+"""
+
+
+def in_cluster_statuses(env: Environment, urls: Sequence[str]) -> dict[str, int | str]:
+    """Return the HTTP status of GET each URL from inside the cluster (the mock server's pod), or the error's name."""
+    timeout = 30 + 12 * len(urls)
+    out = env.kube.exec(NAME, "python", "-c", _STATUS_SCRIPT, json.dumps(list(urls)), timeout=timeout)
+    return cast("dict[str, int | str]", json.loads(out))

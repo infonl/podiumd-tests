@@ -347,3 +347,31 @@ def database_time_zone(env: Environment, component: str = "openzaak") -> str:
         "    print('PTEST_VALUE=' + cursor.fetchone()[0])\n"
     )
     return django_values(env.kube.exec_django_shell(env.deployment_for(component), code))[0]
+
+
+def cluster_names(env: Environment, component: str) -> list[str]:
+    """Return the base URLs of the Service of a component's main Deployment by each cluster DNS name.
+
+    The short name, with the namespace and fully qualified; the hosting standards ask each to work. None for a
+    component without a Deployment of its own (Keycloak's operator runs a StatefulSet) or a Service.
+    """
+    namespace = env.profile.kube.namespace
+    try:
+        wanted = env.deployment_for(component)
+    except KubeError:
+        return []
+    deployments = [item for item in env.items("deployments", [namespace]) if metadata_name(item) == wanted]
+    services = [
+        item for item in env.items("services", [namespace]) for found in deployments if _is_selected_by(item, found)
+    ]
+    if not services:
+        return []
+    name, port = metadata_name(services[0]), _http_port(services[0])
+    hosts = (name, f"{name}.{namespace}", f"{name}.{namespace}.svc.cluster.local")
+    return [f"http://{host}:{port}/" for host in hosts]
+
+
+def _http_port(service: JsonObject) -> object:
+    ports = entries(section(service, "spec").get("ports"))
+    named = [port for port in ports if port.get("name") in {"http", "web"}]
+    return (named or ports or [{}])[0].get("port", 80)
