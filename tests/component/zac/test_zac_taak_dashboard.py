@@ -13,6 +13,7 @@ from podiumd_tests.defects import symptom
 from podiumd_tests.responses import expect_status
 from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import expect_defect
+from podiumd_tests.workloads import is_older_than
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import LIST_TIMEOUT
 from podiumd_tests.zac import afbreken
@@ -38,6 +39,8 @@ if TYPE_CHECKING:
 
 # ZAC no longer indexes the taken afbreken ends from this release on (zac-41).
 AFGEBROKEN_TAKEN_UNLISTED = (5, 11, 0)
+# ZAC drops the dashboard signal of a taak no longer assigned to the user from this release on (#7502).
+DROPS_STALE_SIGNALS = (5, 11, 0)
 
 # ZAC 5.12 mails when the taak Aanvullende informatie or Advies extern starts (zac_taken.MAIL_TASKS).
 pytestmark = [
@@ -89,50 +92,78 @@ def test_taak_started_for_a_behandelaar_is_on_their_dashboard(
     assert taak["id"] not in signalering_taken(behandelaar, zac_url)
 
 
-@pytest.mark.source(
-    "ZAC features/7-taken-verdelen-vrijgeven.feature",
-    "Bob assigns selected taken from the werkvoorraad to a group and user, and releases them.",
-)
-@pytest.mark.scenario("""
-    Given a taak Aanvullende informatie on a zaak in ZAC, assigned to the test admin
-    When the admin releases the taak from the list
-    Then the taak keeps its group but has no behandelaar, and leaves the admin's Mijn taken
-    When the admin assigns the taak from the list to the group and another behandelaar
-    Then the taak has that group and behandelaar, and is in that behandelaar's Mijn taken
-""")
-def test_taken_from_the_list_are_released_and_assigned(
-    zac: requests.Session,
-    zac_as: Callable[[str], requests.Session],
-    urls: dict[str, str],
-    taak: JsonObject,
-    zac_group: str,
-) -> None:
-    """Vrijgeven takes the behandelaar away from the selected task; verdelen gives it a new one, in their Mijn taken."""
-    zac_url = urls["zac"]
-    behandelaar = zac_as("behandelaar")
-    naam = ZAC_ROLE_USERS["behandelaar"].username
-
-    def is_(wanted: tuple[object, object]) -> bool:
-        return assignment(read_taak(zac, zac_url, str(taak["id"]))) == wanted
-
+def _release_from_the_admin(zac: requests.Session, zac_url: str, taak: JsonObject, zac_group: str) -> None:
+    """The admin releases the taak from the list once it is in Mijn taken; it then keeps only its group."""
     wait_until(
         lambda: is_taak_listed(zac, zac_url, taak, alleenMijnTaken=True),
         timeout=LIST_TIMEOUT,
         description=f"task {taak['id']} in Mijn taken of {ADMIN.username}",
     )
     expect_status(vrijgeven_taken(zac, zac_url, [taak]), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    wait_until(lambda: is_((zac_group, None)), timeout=LIST_TIMEOUT, description=f"task {taak['id']} vrijgegeven")
     wait_until(
-        lambda: not is_taak_listed(zac, zac_url, taak, alleenMijnTaken=True),
+        lambda: (
+            assignment(read_taak(zac, zac_url, str(taak["id"]))) == (zac_group, None)
+            and not is_taak_listed(zac, zac_url, taak, alleenMijnTaken=True)
+        ),
         timeout=LIST_TIMEOUT,
-        description=f"task {taak['id']} out of Mijn taken of {ADMIN.username}",
+        description=f"task {taak['id']} vrijgegeven and out of Mijn taken of {ADMIN.username}",
     )
+
+
+@pytest.mark.source(
+    "ZAC features/7-taken-verdelen-vrijgeven.feature",
+    "Bob assigns selected taken from the werkvoorraad to a group and user, and releases them.",
+)
+@pytest.mark.source(
+    "PZW Sprint 82 PZ-12857",
+    "The dashboard shows only zaken and taken still assigned to the user and readable by them (ZAC 5.11).",
+)
+@pytest.mark.scenario("""
+    Given a taak Aanvullende informatie on a zaak in ZAC, assigned to the test admin
+    When the admin releases the taak from the list
+    Then the taak keeps its group but has no behandelaar, and leaves the admin's Mijn taken
+    When the admin assigns the taak from the list to the group and another behandelaar
+    Then the taak has that group and behandelaar, and is in that behandelaar's Mijn taken and on their dashboard
+    When the admin releases the taak again
+    Then the behandelaar's dashboard no longer lists it (from ZAC 5.11)
+""")
+def test_taken_from_the_list_are_released_and_assigned(  # fixtures
+    podiumd_env: Environment,
+    zac: requests.Session,
+    zac_as: Callable[[str], requests.Session],
+    urls: dict[str, str],
+    taak: JsonObject,
+    zac_group: str,
+    registry: ResourceRegistry,
+) -> None:
+    """Vrijgeven takes the behandelaar away from the selected task; verdelen gives it a new one, in their Mijn taken."""
+    zac_url = urls["zac"]
+    behandelaar = zac_as("behandelaar")
+    turn_signaleringen(behandelaar, zac_url, registry, TAAK_OP_NAAM=True)
+    naam = ZAC_ROLE_USERS["behandelaar"].username
+
+    _release_from_the_admin(zac, zac_url, taak, zac_group)
     expect_status(verdelen_taken(zac, zac_url, [taak], zac_group, naam), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    wait_until(lambda: is_((zac_group, naam)), timeout=LIST_TIMEOUT, description=f"task {taak['id']} verdeeld")
     wait_until(
-        lambda: is_taak_listed(behandelaar, zac_url, taak, alleenMijnTaken=True),
+        lambda: assignment(read_taak(zac, zac_url, str(taak["id"]))) == (zac_group, naam),
         timeout=LIST_TIMEOUT,
-        description=f"task {taak['id']} in Mijn taken of {naam}",
+        description=f"task {taak['id']} verdeeld",
+    )
+    wait_until(
+        lambda: (
+            is_taak_listed(behandelaar, zac_url, taak, alleenMijnTaken=True)
+            and taak["id"] in signalering_taken(behandelaar, zac_url)
+        ),
+        timeout=LIST_TIMEOUT,
+        description=f"task {taak['id']} in Mijn taken and on the dashboard of {naam}",
+    )
+    if is_older_than(podiumd_env, "zac", DROPS_STALE_SIGNALS):
+        return
+    expect_status(vrijgeven_taken(zac, zac_url, [taak]), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    wait_until(
+        lambda: taak["id"] not in signalering_taken(behandelaar, zac_url),
+        timeout=LIST_TIMEOUT,
+        description=f"task {taak['id']} off the dashboard of {naam} once released",
     )
 
 

@@ -108,9 +108,9 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | MK | 45 |
 | PCP | 1 |
 | PI | 54 |
-| PZW | 35 |
+| PZW | 36 |
 | TA | 295 |
-| ZAC | 14 |
+| ZAC | 13 |
 | draaiboek | 87 |
 | external | 216 |
 | podiumd-tests | 524 |
