@@ -33,3 +33,6 @@ secrets:
     k8s_secret: {name: keycloak-podiumd-admin, key: password}
   pabc_api_key:
     pod_env: {deployment: pabc, var: API_KEY__0}
+bootstrap:
+  # The environment owner agreed to test wiring here (2026-11-18); unbootstrap restores the old configuration.
+  wiring: true
