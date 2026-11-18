@@ -25,6 +25,8 @@ urls:
   openbeheer: https://ontw-openbeheer.dimpact.opengem.nl
   referentielijsten: https://ontw-referentielijsten.dimpact.opengem.nl
   grafana: https://ontw-podiumd-logs.dimpact.opengem.nl
+  # No ingress: reached through a port-forward. Routes KvK and BAG to their HTTPS APIs, BRP to brp-personen-mock.
+  api-proxy: http://api-proxy.podiumd.svc.cluster.local
 secrets:
   # keycloak-operator's master admin, as on ontw-dim1 (checked on ontw-mayk 2026-11-18).
   keycloak_admin_username:
