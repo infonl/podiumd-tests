@@ -178,6 +178,26 @@ def _ontkoppel(
     return http.delete(url, json={"reden": reden})
 
 
+def _detach(  # who detaches whom, and who reads the historie
+    by: requests.Session,
+    member: tuple[str, requests.Session],
+    reader: requests.Session,
+    zac_url: str,
+    zaak: JsonObject,
+    reden: str,
+) -> None:
+    """Detach the member from the marked zaak with a reden; the member then neither opens nor finds it."""
+    naam, session = member
+    expect_status(_ontkoppel(by, zac_url, zaak, naam, reden), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    assert not can_open_zaak(session, zac_url, zaak)
+    assert reden in {line.get("toelichting") for line in zaak_historie(reader, zac_url, zaak)}
+    wait_until(
+        lambda: not is_zaak_listed(session, zac_url, zaak),
+        timeout=LIST_TIMEOUT,
+        description=f"the detached {naam} no longer finds the marked zaak",
+    )
+
+
 def _add_colleague(
     behandelaar: requests.Session, collega: requests.Session, zac_url: str, team: Team, zaak: JsonObject
 ) -> None:
@@ -208,6 +228,7 @@ def _add_colleague(
     Then the behandelaar still opens the zaak and its document, and finds both marked with a lock (document from 5.11)
     And a colleague in the same group, a recordmanager, a raadpleger and a beheerder cannot open them
     And the colleague no longer finds the zaak, until the behandelaar adds the colleague to it (from ZAC 5.10)
+    And after the behandelaar detaches the colleague again, the colleague neither opens nor finds it (from ZAC 5.11)
     And before ZAC 5.11 the marking cannot be lifted; from 5.11 the behandelaar lifts it and the colleague opens the zaak
 """)
 def test_marked_zaak_is_reached_only_by_its_behandelaar(  # the zaak, its document and five users
@@ -247,6 +268,8 @@ def test_marked_zaak_is_reached_only_by_its_behandelaar(  # the zaak, its docume
         )
     if not is_older_than(podiumd_env, "zac", ADDS_MEDEWERKERS):
         _add_colleague(behandelaar, collega, zac_url, team, team_zaak)
+    if not is_older_than(podiumd_env, "zac", DETACHES_MEDEWERKERS):
+        _detach(behandelaar, (team.names[1], collega), behandelaar, zac_url, team_zaak, registry.tagged("ontkoppeld"))
     lift = _mark(behandelaar, zac_url, team_zaak, marked=False)
     if is_older_than(podiumd_env, "zac", LIFTABLE):
         _refused_with(lift, CANNOT_BE_LIFTED)
@@ -324,15 +347,15 @@ def test_marked_zaak_is_skipped_when_verdeeld_without_a_behandelaar(  # the zaak
 @pytest.mark.source("ZAC ZaakService.assignZaak", "The replaced behandelaar keeps access to the zaak.")
 @pytest.mark.source(
     "PZW Sprint 82 PZ-12046",
-    "The behandelaar takes a former behandelaar's access to a zaakspecifiek geautoriseerde zaak away (ZAC 5.11).",
+    "A former behandelaar detaches themselves from a zaakspecifiek geautoriseerde zaak; the current one cannot be (ZAC 5.11).",
 )
 @pytest.mark.scenario("""
     Given a zaak its behandelaar marked as zaakspecifiek geautoriseerd
     When the behandelaar hands it over to a colleague
     Then the colleague and the former behandelaar open the zaak, and a recordmanager still cannot
     And the colleague cannot take the access of the current behandelaar away
-    When the colleague takes the former behandelaar's access away with a reden
-    Then the former behandelaar no longer opens the zaak, and the zaak's historie shows the reden
+    When the former behandelaar detaches themselves with a reden
+    Then the former behandelaar neither opens nor finds the zaak, and the zaak's historie shows the reden
 """)
 def test_handed_over_zaak_stays_open_to_the_former_behandelaar(  # the zaak and three users
     podiumd_env: Environment,
@@ -354,10 +377,7 @@ def test_handed_over_zaak_stays_open_to_the_former_behandelaar(  # the zaak and 
         return
     assert _medewerkers(collega, zac_url, team_zaak) == {team.names[0]: True, team.names[1]: False}
     _refused_with(_ontkoppel(collega, zac_url, team_zaak, team.names[1], "ptest"), CANNOT_BE_DETACHED)
-    reden = registry.tagged("ontkoppeld")
-    expect_status(_ontkoppel(collega, zac_url, team_zaak, team.names[0], reden), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    assert not can_open_zaak(behandelaar, zac_url, team_zaak)
-    assert reden in {line.get("toelichting") for line in zaak_historie(collega, zac_url, team_zaak)}
+    _detach(behandelaar, (team.names[0], behandelaar), collega, zac_url, team_zaak, registry.tagged("ontkoppeld"))
 
 
 def _complete_and_reindex(
