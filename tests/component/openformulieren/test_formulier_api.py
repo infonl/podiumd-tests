@@ -150,25 +150,6 @@ def test_upload_of_a_false_file_is_refused(
     "MK test_productaanvraag_flow.py",
     "Validates the form's Objects API registration backend against the live Catalogi and Objecttypen APIs.",
 )
-@pytest.mark.scenario("""
-    Given the active forms in Open Formulieren that register in the Objects API
-    When their registration settings are checked
-    Then each finds its objecttype and types in the live APIs
-""")
-def test_objects_api_registrations_are_valid(podiumd_env: Environment) -> None:
-    """Every active form's Objects API registration resolves its objecttype and types (MK test_productaanvraag_flow.py)."""
-    backends = cast(
-        "list[dict[str, object]]",
-        run_snippet(
-            podiumd_env.kube, podiumd_env.deployment_for("openformulieren"), "openformulieren_objects_backends", {}
-        ),
-    )
-    if not backends:
-        pytest.skip("no active form registers in the Objects API")
-    assert [f"{b['form']}/{b['backend']}: {b['errors']}" for b in backends if b["errors"]] == []
-
-
-@pytest.mark.requires("cluster")
 @pytest.mark.source(
     "podiumd-tests",
     "An Objects API group no form uses yet can still hold a Service with a wrong token; every group must read with its own Services.",
@@ -177,17 +158,20 @@ def test_objects_api_registrations_are_valid(podiumd_env: Environment) -> None:
     Given the Objects API groups in Open Formulieren
     When each group reads objects and objecttypes with its own connections
     Then every group reads them without an error
+    And every active form that registers in the Objects API finds its objecttype and types in the live APIs
 """)
-def test_objects_api_groups_read(podiumd_env: Environment) -> None:
-    """Every Objects API group, used by a form or not, lists objects and objecttypes with its own Services."""
-    groups = cast(
-        "list[dict[str, object]]",
-        run_snippet(
-            podiumd_env.kube, podiumd_env.deployment_for("openformulieren"), "openformulieren_objects_groups", {}
-        ),
+def test_objects_api_groups_and_registrations_work(podiumd_env: Environment) -> None:
+    """Every Objects API group reads with its own Services; every active form's Objects API registration validates."""
+    found = cast(
+        "dict[str, list[dict[str, object]]]",
+        run_snippet(podiumd_env.kube, podiumd_env.deployment_for("openformulieren"), "openformulieren_objects_api", {}),
     )
-    assert groups, "no Objects API group in Open Formulieren"
-    assert [f"{g['group']}: {g['errors']}" for g in groups if g["errors"]] == []
+    assert found["groups"], "no Objects API group in Open Formulieren"
+    failing = [
+        *(f"group {g['group']}: {g['errors']}" for g in found["groups"] if g["errors"]),
+        *(f"form {b['form']}/{b['backend']}: {b['errors']}" for b in found["backends"] if b["errors"]),
+    ]
+    assert failing == []
 
 
 @pytest.mark.tc("INT-003")

@@ -12,12 +12,12 @@ component and integration, without and with the destructive tests; the test suit
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 239 | 40 | 10 |
-| component | 1013 | 596 | 69 |
+| component | 1012 | 595 | 69 |
 | integration | 210 | 142 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1397** | **727** | **84** |
+| **full tier** | **1396** | **726** | **84** |
 | **chaos tier** | **65** | **51** | **14** |
-| **test suite** | **1542** | **787** | **98** |
+| **test suite** | **1541** | **786** | **98** |
 
 Unit tests (`unit_tests/`, functions): 955. Perf endpoints (`perf/runs.py`): 32.
 
@@ -44,7 +44,7 @@ Unit tests (`unit_tests/`, functions): 955. Perf endpoints (`perf/runs.py`): 32.
 | component | omc | 3 | 2 |
 | component | openarchiefbeheer | 38 | 32 |
 | component | openbeheer | 5 | 5 |
-| component | openformulieren | 13 | 10 |
+| component | openformulieren | 12 | 9 |
 | component | openinwoner | 36 | 25 |
 | component | openklant | 19 | 15 |
 | component | opennotificaties | 8 | 6 |
@@ -105,7 +105,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | Origin | Tests |
 | --- | --- |
 | EX | 19 |
-| MK | 46 |
+| MK | 45 |
 | PCP | 1 |
 | PI | 54 |
 | PZW | 28 |
