@@ -13,6 +13,13 @@ The podiumd-minikube agent works on the same live minikube at the same time: it 
 
 **How to apply:**
 
+- Book every use of kees00 or minikube beyond smoke and single reruns in the env ledger first (Kees, 2026-11-18):
+  `E=../podiumd-local-review/.claude/skills/env-ledger/env-ledger.py`; `$E check ENV --for 45m [--resets]
+  [--disruptive]`, then `$E book ENV --agent podiumd-tests --what ... --for ... --start`, `heartbeat` during long
+  runs, `done` afterwards (SKILL.md there). The locks below stay.
+- Where to run: chart and deploy tests, unmerged branches, fresh installs and resets on minikube; estate-like full
+  tiers, load, chaos and hosting-standards checks on kees00; smoke and single reruns on either. Spread own full
+  tiers over both.
 - Disruptive actions take the lock file `/home/kvv/development/werk/infonl-dimpact/infonl/.minikube-lock` (one line: who, what, start time) and release it afterwards; if another agent holds it, wait or message it. podiumd-tests' CLI does this itself for `bootstrap`, `unbootstrap` and non-smoke runs when the profile sets `settings.lock_file`.
 - Disruptive for podiumd-tests: bootstrap, unbootstrap, `--rotate`, write-heavy test runs. Not disruptive: read-only checks and smoke tests.
 - Send the podiumd-minikube session a short message (SendMessage) before and after a disruptive action, and before changing anything it might also configure.
