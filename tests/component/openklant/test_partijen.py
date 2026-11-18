@@ -29,51 +29,33 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("openklant")]
 
 
 @pytest.mark.source("podiumd-tests", "The partij lifecycle in Open Klant: create, read, patch, delete, then 404.")
+@pytest.mark.source("podiumd-tests", "The nummer Open Klant assigns to a partij works as a filter.")
+@pytest.mark.source("podiumd-tests", "A partij's contactnaam is stored as sent.")
 @pytest.mark.source(
     "TA regression/121-continuiteit-graceful-degradation.spec.ts",
     "Components answer invalid requests with a clean 4xx, not a crash, a 500 or incomplete data.",
 )
 @pytest.mark.scenario("""
-    Given a persoon created as partij in Open Klant
-    When the partij is read, set inactive and deleted
-    Then it reads back as a persoon
-    And Open Klant returns it inactive
+    Given a persoon created as partij in Open Klant with a contactnaam
+    When the partij is read back
+    Then it is a persoon with the achternaam it was created with
+    And a filter on the nummer Open Klant gave it finds exactly that partij
+    When the partij is set inactive and deleted
+    Then Open Klant returns it inactive
     And after the delete Open Klant answers 404 for it
 """)
 def test_partij_lifecycle(openklant: ApiClient, registry: ResourceRegistry) -> None:
-    """A created partij reads back, accepts a PATCH and is gone after DELETE."""
+    """A created partij reads back as sent, is found by its nummer, accepts a PATCH and is gone after DELETE."""
     partij = make_partij(openklant, registry)
     url = str(partij["url"])
-    assert openklant.get(url)["soortPartij"] == "persoon"
+    read = openklant.get(url)
+    identificatie = cast("dict[str, dict[str, str]]", read["partijIdentificatie"])
+    assert (read["soortPartij"], identificatie["contactnaam"]["achternaam"]) == ("persoon", registry.tagged("partij"))
+    found = openklant.list("partijen", {"nummer": str(partij["nummer"])})
+    assert [p["url"] for p in found] == [url]
     assert openklant.patch(url, {"indicatieActief": False})["indicatieActief"] is False
     openklant.delete(url)
     openklant.request("GET", url, 404)
-
-
-@pytest.mark.source("podiumd-tests", "The nummer Open Klant assigns to a partij works as a filter.")
-@pytest.mark.scenario("""
-    Given a partij in Open Klant
-    When partijen are filtered on the nummer Open Klant gave it
-    Then exactly that partij is found
-""")
-def test_partij_is_found_by_its_nummer(openklant: ApiClient, registry: ResourceRegistry) -> None:
-    """The nummer Open Klant assigns is a working filter."""
-    partij = make_partij(openklant, registry)
-    found = openklant.list("partijen", {"nummer": str(partij["nummer"])})
-    assert [p["url"] for p in found] == [partij["url"]]
-
-
-@pytest.mark.source("podiumd-tests", "A partij's contactnaam is stored as sent.")
-@pytest.mark.scenario("""
-    Given a partij created in Open Klant with a contactnaam
-    When the partij is read back
-    Then its contactnaam has the achternaam it was created with
-""")
-def test_contactnaam_is_stored(openklant: ApiClient, registry: ResourceRegistry) -> None:
-    """The partij identification comes back as sent."""
-    partij = make_partij(openklant, registry)
-    identificatie = cast("dict[str, dict[str, str]]", openklant.get(str(partij["url"]))["partijIdentificatie"])
-    assert identificatie["contactnaam"]["achternaam"] == registry.tagged("partij")
 
 
 @pytest.mark.core
