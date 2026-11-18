@@ -322,7 +322,7 @@ def _fake_zac_and_open_zaak(monkeypatch):
     fakes = {
         "zac_session": lambda _env, user, password: f"{user}:{password}",
         "is_confirmation_on": lambda _zac, _url, _zaaktype: False,
-        "objecttype_url": lambda _env, name: f"objecttype {name}",
+        "versioned_objecttype_url": lambda _env, _objecttypen, name: f"objecttype {name}",
         "zaaktype_parts": lambda _client, zaaktype: f"parts of {zaaktype['url']}",
         "create_zaak": lambda _zac, _url, _parameters, **fields: {"uuid": "u1", "identificatie": "ZAAK-1", **fields},
         "clean_up_zaak": lambda _zac, _url, client, _registry, zaak: deleted.append(

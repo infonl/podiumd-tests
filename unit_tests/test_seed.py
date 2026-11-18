@@ -534,3 +534,22 @@ def test_document_in_parts_uploads_each_part_without_json_content_type(fake_http
     assert all("multipart/form-data" in u.headers["Content-Type"] for u in uploads)
     assert b"abc" in uploads[0].body
     assert b"de" in uploads[1].body
+
+
+def test_objects_of_a_versioned_objecttype_get_its_newest_published_version(fake_http, monkeypatch):
+    objecttype = {"url": f"{API}/objecttypes/ot1", "versions": [f"{API}/v/1", f"{API}/v/2", f"{API}/v/3"]}
+    sent = fake_http(
+        {
+            "GET /v1/objecttypes": (200, {"results": [objecttype, {"url": f"{API}/objecttypes/other"}], "next": None}),
+            "/v1/v/1": (200, {"version": 1, "status": "published"}),
+            "/v1/v/2": (200, {"version": 2, "status": "published"}),
+            "/v1/v/3": (200, {"version": 3, "status": "draft"}),
+        }
+        | created("objects")
+    )
+    url = "https://objecten.example.test/api/v2/objecttypes/ot1"
+    monkeypatch.setattr(objecten_module, "objecttype_url", lambda _env, _name: url)
+    monkeypatch.setattr(objecten_module, "TYPE_VERSIONS", {})
+    assert objecten_module.versioned_objecttype_url(object(), api(), "Productaanvraag") == url  # pyright: ignore[reportArgumentType]
+    objecten_module.make_object(api(), ResourceRegistry("run1"), url, {})
+    assert body(sent[-1])["record"]["typeVersion"] == 2  # pyright: ignore[reportIndexIssue]

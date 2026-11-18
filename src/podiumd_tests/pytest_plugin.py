@@ -32,7 +32,7 @@ from podiumd_tests.lock import file_lock
 from podiumd_tests.mock_server import Callback
 from podiumd_tests.oidc import challenge_session
 from podiumd_tests.seed import openzaak as openzaak_seed
-from podiumd_tests.seed.objecten import objecttype_url
+from podiumd_tests.seed.objecten import versioned_objecttype_url
 from podiumd_tests.seed.openvtb import skip_shut_api
 from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.seed.zac_zaaktype import zac_as_admin
@@ -441,10 +441,10 @@ def fixture_productaanvraagtype(podiumd_env: Environment) -> str:
 
 @pytest.fixture(scope="session", name="productaanvraag_objecttype")
 def fixture_productaanvraag_objecttype(  # noqa: WPS118  # fixture_<name> of fixture productaanvraag_objecttype
-    podiumd_env: Environment,
+    podiumd_env: Environment, objecttypen: ApiClient
 ) -> str:
-    """Return the productaanvraag objecttype's URL as Objecten knows it."""
-    return objecttype_url(podiumd_env, names.PRODUCTAANVRAAG_OBJECTTYPE)
+    """Return the productaanvraag objecttype's URL as Objecten knows it; new objects get its newest version."""
+    return versioned_objecttype_url(podiumd_env, objecttypen, names.PRODUCTAANVRAAG_OBJECTTYPE)
 
 
 @pytest.fixture(name="ontvangstbevestiging")

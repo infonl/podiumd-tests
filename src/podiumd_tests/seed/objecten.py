@@ -43,6 +43,25 @@ def objecttype_url(env: Environment, name: str) -> str:
     return found["url"]
 
 
+# The version make_object gives new objects of an objecttype (its URL as Objecten knows it); 1 when not listed.
+TYPE_VERSIONS: dict[str, int] = {}
+
+
+def versioned_objecttype_url(env: Environment, objecttypen: ApiClient, name: str) -> str:
+    """Return objecttype_url, and let make_object use the objecttype's newest published version from now on.
+
+    An environment can keep older versions of an objecttype, e.g. of Productaanvraag-Dimpact, and Objecten
+    validates an object against the schema of its own version.
+    """
+    url = objecttype_url(env, name)
+    uuid = uuid_of(url)
+    found = [item for item in objecttypen.list("objecttypes") if uuid_of(item.get("url")) == uuid]
+    versions = [objecttypen.get(version) for item in found for version in strings(item.get("versions"))]
+    published = [str(version.get("version")) for version in versions if version.get("status") == "published"]
+    TYPE_VERSIONS[url] = max((int(number) for number in published), default=1)
+    return url
+
+
 def named_objecttypes(objecttypen: ApiClient, name: str) -> list[JsonObject]:
     """Return the objecttypes the Objecttypen API lists with exactly this name."""
     return [found for found in objecttypen.list("objecttypes", {"name": name}) if found.get("name") == name]
@@ -103,8 +122,11 @@ def make_object(
     data: Mapping[str, object],
     start_at: str | None = None,
 ) -> JsonObject:
-    """Create an object of an objecttype (the URL Objecten knows), version 1, valid from start_at (default today)."""
-    record = {"typeVersion": 1, "data": data, "startAt": start_at or today()}
+    """Create an object of an objecttype (the URL Objecten knows), valid from start_at (default today).
+
+    Its version is the objecttype's in TYPE_VERSIONS, else 1.
+    """
+    record = {"typeVersion": TYPE_VERSIONS.get(objecttype, 1), "data": data, "startAt": start_at or today()}
     body: dict[str, object] = {"type": objecttype, "record": record}
     created = objecten.post("objects", body)
     url = str(created["url"])
