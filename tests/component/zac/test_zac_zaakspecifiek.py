@@ -44,8 +44,11 @@ from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac import zac_session
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
+from podiumd_tests.zac_search import document_zoekresultaat
 from podiumd_tests.zac_search import is_taak_listed
 from podiumd_tests.zac_search import is_zaak_listed
+from podiumd_tests.zac_search import taak_zoekresultaat
+from podiumd_tests.zac_search import zaak_zoekresultaat
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -75,6 +78,8 @@ CANNOT_BE_LIFTED = "msg.error.zaakspecifieke.autorisatie.cannot.be.lifted"
 LIFTABLE = (5, 11, 0)
 CANNOT_BE_RELEASED = "msg.error.zaakspecifiek.geautoriseerde.zaak.cannot.be.released"
 CANNOT_BE_DETACHED = "msg.error.medewerker.cannot.be.detached"
+# ZAC marks the zaak of a taak or document in its search results from this release on (#7457); a zaak earlier.
+MARKS_TAKEN_AND_DOCUMENTS = (5, 11, 0)
 # ZAC lists a marked zaak's medewerkers and detaches one from this release on (#7413).
 DETACHES_MEDEWERKERS = (5, 11, 0)
 # Before this release ZAC indexes a zaak's completed taken again when it reindexes the zaak's taken (#7595).
@@ -146,6 +151,11 @@ def _mark(http: requests.Session, zac_url: str, zaak: JsonObject, *, marked: boo
     return wijzig_zaak(http, zac_url, zaak, isZaakspecifiekGeautoriseerd=marked)
 
 
+def _is_found(zoekresultaat: JsonObject | None, *, marked: bool) -> bool:
+    """The search listed it, and, if marked, with the lock of a zaakspecifiek geautoriseerde zaak."""
+    return zoekresultaat is not None and (not marked or zoekresultaat.get("isZaakspecifiekGeautoriseerd") is True)
+
+
 def _refused_with(response: requests.Response, code: str) -> None:
     """Assert ZAC refuses the request with this error code."""
     expect_status(response, HTTPStatus.BAD_REQUEST)
@@ -154,10 +164,14 @@ def _refused_with(response: requests.Response, code: str) -> None:
 
 @pytest.mark.source("ZAC ZaakRestServiceTest", "Activating zaakspecifieke autorisatie on a zaak.")
 @pytest.mark.source("PZW Sprint 82 PZ-12022", "Lifting the zaakspecifieke autorisatie of a zaak (ZAC 5.11).")
+@pytest.mark.source(
+    "PZW Sprint 82 PZ-12078",
+    "ZAC's lists show a lock at a zaakspecifiek geautoriseerde zaak and its taken and documents.",
+)
 @pytest.mark.scenario("""
     Given a zaak assigned to a behandelaar, with a document
     When the behandelaar marks the zaak as zaakspecifiek geautoriseerd
-    Then the behandelaar still opens the zaak and its document, and finds the zaak
+    Then the behandelaar still opens the zaak and its document, and finds both marked with a lock (document from 5.11)
     And a colleague in the same group, a recordmanager, a raadpleger and a beheerder cannot open them
     And the colleague no longer finds the zaak
     And before ZAC 5.11 the marking cannot be lifted; from 5.11 the behandelaar lifts it and the colleague opens the zaak
@@ -184,10 +198,19 @@ def test_marked_zaak_is_reached_only_by_its_behandelaar(  # the zaak, its docume
     for http in others.values():
         expect_status(http.get(document_url(zac_url, document)), *REFUSED)
     wait_until(
-        lambda: is_zaak_listed(behandelaar, zac_url, team_zaak) and not is_zaak_listed(collega, zac_url, team_zaak),
+        lambda: (
+            _is_found(zaak_zoekresultaat(behandelaar, zac_url, team_zaak), marked=True)
+            and not is_zaak_listed(collega, zac_url, team_zaak)
+        ),
         timeout=LIST_TIMEOUT,
-        description="the behandelaar finds the marked zaak and the colleague does not",
+        description="the behandelaar finds the zaak marked and the colleague does not find it",
     )
+    if not is_older_than(podiumd_env, "zac", MARKS_TAKEN_AND_DOCUMENTS):
+        wait_until(
+            lambda: _is_found(document_zoekresultaat(behandelaar, zac_url, document), marked=True),
+            timeout=LIST_TIMEOUT,
+            description="the behandelaar finds the document of the marked zaak, marked",
+        )
     lift = _mark(behandelaar, zac_url, team_zaak, marked=False)
     if is_older_than(podiumd_env, "zac", LIFTABLE):
         _refused_with(lift, CANNOT_BE_LIFTED)
@@ -335,13 +358,17 @@ def _complete_and_reindex(
 
 @pytest.mark.source("ZAC taak-rechten.rego", "A taak of a marked zaak is open only to the zaak's authorised users.")
 @pytest.mark.source(
+    "PZW Sprint 82 PZ-12078",
+    "ZAC's lists show a lock at a zaakspecifiek geautoriseerde zaak and its taken and documents.",
+)
+@pytest.mark.source(
     "PZW Sprint 82 PZ-13176",
     "A completed taak of a zaakspecifiek geautoriseerde zaak leaves Aan mij toegewezen taken and Mijn taken (ZAC 5.11).",
 )
 @pytest.mark.scenario("""
     Given a zaak with a taak Aanvullende informatie, which its behandelaar marks as zaakspecifiek geautoriseerd
     When the behandelaar, a colleague in the same group and a beheerder open the taak
-    Then only the behandelaar may read it, and the colleague does not find it in the takenlijst
+    Then only the behandelaar may read it and finds it marked with a lock (from ZAC 5.11); the colleague does not find it
     When the behandelaar assigns the taak to themselves, completes it and assigns themselves a second taak
     Then the second taak is in the behandelaar's Mijn taken and the completed one is not
 """)
@@ -366,8 +393,12 @@ def test_taak_of_a_marked_zaak_is_read_only_by_its_behandelaar(  # the zaak, its
     readers = {"behandelaar": behandelaar, "collega": collega, "beheerder": zac_as("beheerder")}
     allowed = {name: http.get(f"{zac_url}/rest/taken/{taak['id']}").ok for name, http in readers.items()}
     assert allowed == {"behandelaar": True, "collega": False, "beheerder": False}
+    marked = not is_older_than(podiumd_env, "zac", MARKS_TAKEN_AND_DOCUMENTS)
     wait_until(
-        lambda: is_taak_listed(behandelaar, zac_url, taak) and not is_taak_listed(collega, zac_url, taak),
+        lambda: (
+            _is_found(taak_zoekresultaat(behandelaar, zac_url, taak), marked=marked)
+            and not is_taak_listed(collega, zac_url, taak)
+        ),
         timeout=LIST_TIMEOUT,
         description="the behandelaar finds the taak of the marked zaak and the colleague does not",
     )
