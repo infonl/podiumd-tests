@@ -16,11 +16,15 @@ import threading
 import time
 
 from contextlib import contextmanager
+from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import cast
 from urllib.parse import urlsplit
 
+from podiumd_tests.django_shells import SERVER
+from podiumd_tests.django_shells import DjangoShell
+from podiumd_tests.django_shells import ShellGoneError
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.process import ProcessError
@@ -42,6 +46,7 @@ DEFAULT_TIMEOUT = 30
 # Django project path in every Maykin image (Open Zaak, Open Klant, Objecten, Open Inwoner).
 MANAGE_PY = "/app/src/manage.py"
 READ_STDIN = "import sys; exec(sys.stdin.read())"
+SHELL = ("python", MANAGE_PY, "shell", "-c")
 DJANGO_VALUE_MARKER = "PTEST_VALUE="
 SERVICE_HOST = re.compile(r"^(?P<service>[a-z0-9-]+)\.(?P<namespace>[a-z0-9-]+)\.svc(\.cluster\.local)?$")
 FORWARDING = re.compile(r"^Forwarding from 127\.0\.0\.1:(\d+) -> \d+$")
@@ -62,6 +67,10 @@ class Kube:
         self.context: str = context
         self.namespace: str = namespace
         self.runner: Runner = runner
+        # Bootstrap runs steps one at a time: one long-lived shell per deployment saves Django's start per snippet.
+        # Off for test runs, where every xdist worker would hold its own shell in each pod (Open VTB: 768Mi).
+        self.long_lived_shells: bool = False
+        self._shells: dict[str, DjangoShell] = {}
 
     def command(self, *args: str, namespace: str | None = None, all_namespaces: bool = False) -> list[str]:
         """Full kubectl argv for the given arguments."""
@@ -149,21 +158,24 @@ class Kube:
         automatically"); use django_values() to pick out the printed values.
         `shell -c` reads stdin itself: plain `shell` checks stdin without
         waiting and falls back to the interactive interpreter when the code
-        has not arrived yet.
+        has not arrived yet. With long_lived_shells a deployment's shell stays up between calls
+        (django_shells); when it fails to answer, the code runs in a one-shot shell as without.
         """
-        return self.run(
-            "exec",
-            "-i",
-            f"deploy/{deployment}",
-            "--",
-            "python",
-            MANAGE_PY,
-            "shell",
-            "-c",
-            READ_STDIN,
-            stdin=code,
-            timeout=timeout,
-        )
+        if self.long_lived_shells:
+            command = self.command("exec", "-i", f"deploy/{deployment}", "--", *SHELL, SERVER)
+            shell = self._shells.setdefault(deployment, DjangoShell(command, KubeError))
+            with suppress(ShellGoneError):
+                return shell.run(code, timeout)
+        return self.run("exec", "-i", f"deploy/{deployment}", "--", *SHELL, READ_STDIN, stdin=code, timeout=timeout)
+
+    @contextmanager
+    def shells_kept(self) -> Generator[None]:
+        """Keep each deployment's Django shell up for the block (long_lived_shells), and stop them after it."""
+        self.long_lived_shells = True
+        try:
+            yield
+        finally:
+            self._stop_shells()
 
     @contextmanager
     def port_forward(
@@ -203,6 +215,12 @@ class Kube:
         if not isinstance(data, dict):
             raise KubeError(command, "expected a JSON object")
         return cast("dict[str, object]", data)
+
+    def _stop_shells(self) -> None:
+        self.long_lived_shells = False
+        for shell in self._shells.values():
+            shell.close()
+        self._shells.clear()
 
 
 def _stop(process: subprocess.Popen[str], timeout: int) -> None:

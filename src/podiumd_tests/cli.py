@@ -317,7 +317,7 @@ def _apply_steps(
     if isinstance(env, int):
         return env
     steps = selected_steps(args.step)
-    with lock.held(env, f"{verb} {env.profile.name}"):
+    with lock.held(env, f"{verb} {env.profile.name}"), env.kube.shells_kept():
         outcomes = action(env, steps)
     print(outcome_report(outcomes))
     return EXIT_CONFIG if has_failure(outcomes) else EXIT_OK
