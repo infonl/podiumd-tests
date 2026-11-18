@@ -13,13 +13,13 @@ component and integration, without and with the destructive tests; the test suit
 | --- | --- | --- | --- |
 | smoke | 242 | 42 | 12 |
 | component | 1005 | 587 | 71 |
-| integration | 210 | 142 | 19 |
+| integration | 244 | 144 | 19 |
 | perf | 80 | 9 | 0 |
 | **full tier** | **1392** | **720** | **88** |
-| **chaos tier** | **65** | **51** | **14** |
-| **test suite** | **1537** | **780** | **102** |
+| **chaos tier** | **99** | **53** | **14** |
+| **test suite** | **1571** | **782** | **102** |
 
-Unit tests (`unit_tests/`, functions): 969. Perf endpoints (`perf/runs.py`): 32.
+Unit tests (`unit_tests/`, functions): 970. Perf endpoints (`perf/runs.py`): 32.
 
 ## Per area
 
@@ -58,6 +58,7 @@ Unit tests (`unit_tests/`, functions): 969. Perf endpoints (`perf/runs.py`): 32.
 | component | zgw_office_addin | 4 | 3 |
 | integration | continuiteit | 20 | 11 |
 | integration | continuiteit_belasting | 8 | 7 |
+| integration | continuiteit_herstart | 34 | 2 |
 | integration | continuiteit_opslag | 10 | 10 |
 | integration | continuiteit_zoekindex | 6 | 3 |
 | integration | formulier_betaling | 19 | 6 |
@@ -113,7 +114,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | ZAC | 13 |
 | draaiboek | 87 |
 | external | 216 |
-| hosting | 6 |
+| hosting | 40 |
 | podiumd-tests | 523 |
 | upstream | 242 |
 

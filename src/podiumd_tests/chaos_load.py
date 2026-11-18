@@ -20,6 +20,7 @@ from podiumd_tests.perf.availability import watched
 from podiumd_tests.perf.availability_report import report
 from podiumd_tests.perf.stats import slowdown_limit
 from podiumd_tests.perf.stats import thresholds
+from podiumd_tests.responses import root_problem
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -28,6 +29,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from collections.abc import Sequence
 
+    import requests
+
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.perf.availability import Watch
@@ -35,6 +38,8 @@ if TYPE_CHECKING:
 
 # Seconds of load before and after a component breaks.
 CALM = 15
+# A root call of the load fails after this many seconds.
+ROOT_CALL_TIMEOUT = 10
 # Open Zaak retries a failed notificatie 5 times, at most 48 s apart (NotificationsConfig defaults).
 DELIVERY_TIMEOUT = 300
 
@@ -168,6 +173,18 @@ def slowdown(attempts: Sequence[Attempt], since: float, name: str) -> tuple[floa
     before = p95_ms([attempt for attempt in calls if attempt.end <= since])
     after = p95_ms([attempt for attempt in calls if attempt.start >= since])
     return before, after, slowdown_limit(thresholds(REPO_ROOT / "perf.yaml", name), before)
+
+
+def root_call(http: requests.Session, base_url: str) -> Callable[[], object]:
+    """Return a load call that GETs the component's root and raises when it fails or answers a server error."""
+
+    def call() -> object:
+        problem = root_problem(http, base_url, ROOT_CALL_TIMEOUT)
+        if problem:
+            raise AssertionError(problem)
+        return base_url
+
+    return call
 
 
 def recovery_seconds(attempts: Sequence[Attempt], since: float) -> float | None:

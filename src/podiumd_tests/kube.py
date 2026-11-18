@@ -96,6 +96,10 @@ class Kube:
         """Apply manifests and wait until the Deployment has rolled out; restart: roll it even when unchanged."""
         for manifest in manifests:
             self.apply(manifest)
+        self.roll_out(deployment, timeout, restart=restart)
+
+    def roll_out(self, deployment: str, timeout: int, *, restart: bool = False) -> None:
+        """Wait until the Deployment has rolled out; restart: start a rolling restart first."""
         if restart:
             self.run("rollout", "restart", f"deployment/{deployment}")
         self.run("rollout", "status", f"deployment/{deployment}", f"--timeout={timeout}s", timeout=timeout + 10)

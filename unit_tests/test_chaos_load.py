@@ -2,6 +2,9 @@
 
 import threading
 
+import pytest
+import requests
+
 from podiumd_tests.chaos_load import Attempt
 from podiumd_tests.chaos_load import Load
 from podiumd_tests.chaos_load import failures
@@ -9,6 +12,7 @@ from podiumd_tests.chaos_load import load_report
 from podiumd_tests.chaos_load import loaded
 from podiumd_tests.chaos_load import p95_ms
 from podiumd_tests.chaos_load import recovery_seconds
+from podiumd_tests.chaos_load import root_call
 from podiumd_tests.chaos_load import slowdown
 from podiumd_tests.chaos_load import summary
 from podiumd_tests.perf.availability import Limits
@@ -101,3 +105,10 @@ def test_created_lists_the_urls_the_successful_calls_returned_since(monkeypatch)
     load = Load({}, pause=0)
     assert load.created(name="create") == ["z/1", "z/3"]
     assert load.created(since=2, name="create") == ["z/3"]
+
+
+def test_root_call_raises_on_a_server_error(fake_http):
+    fake_http({"GET /": (200, {}), "GET /broken/": (503, {})})
+    assert root_call(requests.Session(), "https://ok.test")() == "https://ok.test"
+    with pytest.raises(AssertionError, match="503"):
+        root_call(requests.Session(), "https://ok.test/broken")()

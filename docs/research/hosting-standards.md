@@ -46,8 +46,8 @@ environment).
 | COMP003.3 registry, semver labels | report | `app.kubernetes.io/version` label of each workload is SemVer; image tags are replaced by digests on AKS. smoke `test_images_are_pinned` covers "no latest". |
 | COMP004 timezone | new test | Container clock and `TZ` are UTC; PostgreSQL `SHOW timezone` is UTC (Django shell or psql in the database pod). |
 | COMP005 supply chain | n/a | Scanning process at supplier and SSC. pip_audit covers podiumd-tests itself only. |
-| COMP006.1 stop/start safe | covered, extend | Continuity tests restart ZAC, Keycloak, Postgres, Redis, Solr and the Open Formulieren worker. New: delete one pod of every component under load; the root answers again within the restart budget, and with 2+ replicas no request fails (chaos tier). |
-| COMP006.2 zero-downtime rolling upgrade | new test (chaos) | `kubectl rollout restart` of each Deployment with 2+ replicas under `watched_load`: no failed request. Where replicas are 1 (minikube, most of kees00) the test skips with the count. |
+| COMP006.1 stop/start safe | covered | Continuity tests restart ZAC, Keycloak, Postgres, Redis, Solr and the Open Formulieren worker. `test_continuiteit_herstart.py` (chaos tier) deletes a pod of every component under a root load: it answers again, no other container restarts, and with 2+ replicas no call fails. |
+| COMP006.2 zero-downtime rolling upgrade | covered (chaos) | `test_rolling_restart_has_no_downtime`: a rolling restart of each component's Deployment with 2+ replicas under a root load loses no call; it skips at 1 replica, as nearly all of kees00 and minikube run. |
 | COMP006.3, COMP010 rollback | n/a | Needs a downgrade with a schema rollback; belongs to podiumd-minikube's upgrade checks. zac-42 shows the risk. |
 | COMP007.x Helm, operators, sub-charts | n/a | Chart structure; helm-charts' own lint/CI. |
 | COMP008.1 100% automated | covered | Every podiumd-tests estate is deployed by chart only; smoke `test_jobs_succeeded` and `test_workloads_ready`. |
