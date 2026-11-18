@@ -20,11 +20,13 @@ from podiumd_tests.seed.zac_zaaktype import make_group_member
 from podiumd_tests.seed.zac_zaaktype import make_other_domain_group
 from podiumd_tests.seed.zac_zaaktype import make_role_group
 from podiumd_tests.wait import wait_until
+from podiumd_tests.workloads import is_older_than
 from podiumd_tests.zac import INDEX_TIMEOUT
 from podiumd_tests.zac import clean_up_zaak
 from podiumd_tests.zac import create_zaak
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import toekennen
+from podiumd_tests.zac import vrijgeven
 from podiumd_tests.zac import zac_session
 from podiumd_tests.zac_documents import uploaded_document
 from podiumd_tests.zac_search import is_zaak_listed
@@ -60,6 +62,8 @@ pytestmark = [
 ]
 
 ZAAK_OP_NAAM, DOCUMENT = "ZAAK_OP_NAAM", "ZAAK_DOCUMENT_TOEGEVOEGD"
+# ZAC drops a dashboard signal of a zaak or taak the user no longer holds or reads from this release on (#7502).
+DROPS_STALE_SIGNALS = (5, 11, 0)
 MAIL_TIMEOUT = 60
 
 
@@ -110,12 +114,19 @@ def test_zaak_on_my_name_and_new_document_show_on_the_dashboard_until_opened(
         assert bpmn_zaak["identificatie"] not in signalering_zaken(zac, urls["zac"], soort), soort
 
 
+@pytest.mark.source(
+    "PZW Sprint 82 PZ-12857",
+    "The dashboard shows only zaken and taken still assigned to the user and readable by them (ZAC 5.11).",
+)
 @pytest.mark.scenario("""
     Given the test admin wants dashboard signals for zaken put on their name
     When a behandelaar starts a zaak with the admin as its behandelaar
     Then the admin's dashboard lists the zaak among the zaken on their name
+    When the zaak is released from the werkvoorraad, so the admin is no longer its behandelaar
+    Then the admin's dashboard no longer lists it (from ZAC 5.11)
 """)
-def test_zaak_started_on_my_name_shows_on_the_dashboard(
+def test_zaak_started_on_my_name_shows_on_the_dashboard(  # fixtures
+    podiumd_env: Environment,
     zac: requests.Session,
     urls: dict[str, str],
     bpmn_parameters: JsonObject,
@@ -124,7 +135,7 @@ def test_zaak_started_on_my_name_shows_on_the_dashboard(
     signaleringen: Callable[..., None],
     registry: ResourceRegistry,
 ) -> None:
-    """ZAAK_OP_NAAM signals the behandelaar another user assigns a new zaak to when creating it."""
+    """ZAAK_OP_NAAM signals the behandelaar another user assigns a new zaak to; releasing it takes the signal away."""
     signaleringen(ZAAK_OP_NAAM=True)
     omschrijving = registry.tagged("bpmn")
     zaak = create_zaak(
@@ -132,6 +143,14 @@ def test_zaak_started_on_my_name_shows_on_the_dashboard(
     )
     clean_up_zaak(zac, urls["zac"], openzaak, registry, zaak)
     _on_dashboard(zac, urls["zac"], ZAAK_OP_NAAM, zaak)
+    if is_older_than(podiumd_env, "zac", DROPS_STALE_SIGNALS):
+        return
+    expect_status(vrijgeven(zac, urls["zac"], [str(zaak["uuid"])]), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    wait_until(
+        lambda: zaak["identificatie"] not in signalering_zaken(zac, urls["zac"], ZAAK_OP_NAAM),
+        timeout=INDEX_TIMEOUT,
+        description=f"zaak {zaak['identificatie']} off the admin's dashboard once released",
+    )
 
 
 @pytest.mark.scenario("""
@@ -263,13 +282,17 @@ def test_taak_on_my_name_shows_on_the_dashboard_until_opened(
 
 
 @pytest.mark.requires("pabc")
+@pytest.mark.source(
+    "PZW Sprint 82 PZ-12857",
+    "The dashboard shows only zaken and taken still assigned to the user and readable by them (ZAC 5.11).",
+)
 @pytest.mark.scenario("""
     Given a user who is behandelaar on the BPMN test zaaktype and raadpleger on a zaaktype of another domain
     And the user wants dashboard signals for zaken put on their name
     When the test admin assigns a zaak of the BPMN test zaaktype to the user
     Then the user's dashboard lists the zaak among Mijn zaken and among the zaken on their name
     When the user loses the role on the BPMN test zaaktype and logs in again
-    Then Mijn zaken no longer lists the zaak, and the zaken on their name show at most its zaaknummer, no omschrijving
+    Then Mijn zaken no longer lists the zaak, and the zaken on their name leave it out (before ZAC 5.11: no omschrijving)
 """)
 def test_dashboard_hides_the_zaak_after_a_lost_role(
     zac: requests.Session,
@@ -301,5 +324,6 @@ def test_dashboard_hides_the_zaak_after_a_lost_role(
         for item in signalering_overzichten(after, zac_url, ZAAK_OP_NAAM)
         if item.get("identificatie") == bpmn_zaak["identificatie"]
     ]
-    # ZAC 5.9 lists the zaak without its details, ZAC 5.12 leaves it out.
-    assert [item.get("omschrijving") for item in shown] in ([None], []), shown
+    # Before DROPS_STALE_SIGNALS ZAC lists the zaak without its details.
+    expected = ([None], []) if is_older_than(podiumd_env, "zac", DROPS_STALE_SIGNALS) else ([],)
+    assert [item.get("omschrijving") for item in shown] in expected, shown
