@@ -32,6 +32,12 @@ class WaitTimeoutError(AssertionError):
     """The condition did not become true in time. An AssertionError, so pytest reports it as a test failure."""
 
 
+# The default pauses between attempts: quick at first, so a condition true after a moment ends the wait soon,
+# then every 2 s.
+BACKOFF = (0.5, 1.0)
+STEADY = 2.0
+
+
 @dataclass(frozen=True)
 class Clock:
     """Time source for wait_until; unit tests pass a fake one."""
@@ -44,16 +50,18 @@ def wait_until[ResultT](
     probe: Callable[[], ResultT | None],
     *,
     timeout: float,
-    interval: float | Callable[[], float] = 2.0,
+    interval: float | Callable[[], float] | None = None,
     description: str,
     clock: Clock | None = None,
 ) -> ResultT:
     """Call probe until it returns a truthy value and return that value.
 
     Exceptions from probe count as "not yet"; the last one is reported on timeout. A callable interval is asked
-    after each attempt, e.g. for a server's Retry-After.
+    after each attempt, e.g. for a server's Retry-After; the default waits BACKOFF, then STEADY.
     """
     clock = clock or Clock()
+    if interval is None:
+        interval = _backoff()
     deadline = clock.now() + timeout
     while True:
         value, last = _attempt(probe)
@@ -63,6 +71,11 @@ def wait_until[ResultT](
             msg = f"timed out after {timeout:g}s waiting for {description}; last attempt {last}"
             raise WaitTimeoutError(msg)
         clock.sleep(interval() if callable(interval) else interval)
+
+
+def _backoff() -> Callable[[], float]:
+    pauses = iter(BACKOFF)
+    return lambda: next(pauses, STEADY)
 
 
 def is_never(probe: Callable[[], object], *, timeout: float, description: str, clock: Clock | None = None) -> bool:

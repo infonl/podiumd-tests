@@ -45,6 +45,18 @@ def test_a_callable_interval_is_asked_after_each_attempt():
     assert (result, clock.now) == ("ja", 12)
 
 
+def test_the_default_interval_backs_off_from_half_a_second_to_two():
+    clock, slept = FakeClock(), []
+
+    def sleep(seconds):
+        slept.append(seconds)
+        clock.sleep(seconds)
+
+    values = iter([None, None, None, None, "ja"])
+    assert wait_until(lambda: next(values), timeout=20, description="x", clock=Clock(clock, sleep)) == "ja"
+    assert slept == [0.5, 1.0, 2.0, 2.0]
+
+
 def test_exceptions_count_as_not_yet_and_are_reported():
     clock = FakeClock()
 
