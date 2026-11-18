@@ -71,8 +71,9 @@ EXIT_TESTS_FAILED = 1
 EXIT_CONFIG = 2
 EXIT_NOT_ALLOWED = 3
 EXIT_BUSY = 4
-# pytest-xdist workers of a parallel tier at most; profile setting pytest_workers overrides, 1 runs serially.
-MAX_WORKERS = 8
+# pytest-xdist workers of a parallel tier at most: 8 overload the one Open Zaak pod (2 uWSGI processes) estates run.
+# Profile setting pytest_workers overrides, 1 runs serially.
+MAX_WORKERS = 6
 # Niceness of a run outside CI: the workstation stays usable while runs of several environments overlap.
 WORKSTATION_NICE = 10
 
