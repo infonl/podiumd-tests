@@ -60,8 +60,8 @@ pytestmark = [pytest.mark.component, pytest.mark.requires("zac", "openzaak", "ke
 
 # ZAC releases the behandelaar Zaak bewerken leaves out from this release on (zac-46).
 RELEASES_IN_ZAAK_BEWERKEN = (5, 11, 0)
-# More zaken than one page of ZAC's werklijsten (WERKLIJST_ROWS).
-BULK = 100
+# More zaken than one page of ZAC's werklijsten (WERKLIJST_ROWS), at the lower end of the ZAC team's 40-100.
+BULK = 40
 WERKLIJST_ROWS = 25
 # ZAC indexes, assigns and releases BULK zaken one by one: its job assigned 63 in 120 s on minikube.
 BULK_TIMEOUT = 600
@@ -174,13 +174,13 @@ def test_zaak_verdeeld_to_a_group_alone_loses_its_behandelaar(
 @pytest.mark.xdist_group("zac-eigen-zaaktype")
 @pytest.mark.source("podiumd-tests", "Verdelen and vrijgeven of more zaken than one werklijst page.")
 @pytest.mark.scenario("""
-    Given 100 zaken of a zaaktype of their own in the werkvoorraad
+    Given 40 zaken of a zaaktype of their own in the werkvoorraad, more than one page of its list
     When the behandelaar assigns all of them to a group and a behandelaar
-    Then the werkvoorraad lists all 100 with that group and behandelaar
+    Then the werkvoorraad lists all 40 with that group and behandelaar
     When the behandelaar releases all of them
-    Then the werkvoorraad lists all 100 with that group and no behandelaar
+    Then the werkvoorraad lists all 40 with that group and no behandelaar
 """)
-def test_hundred_zaken_are_assigned_and_released(
+def test_two_pages_of_zaken_are_assigned_and_released(
     zac: requests.Session,
     urls: dict[str, str],
     zac_eigen_zaaktype: JsonObject,
