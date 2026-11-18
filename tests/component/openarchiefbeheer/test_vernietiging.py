@@ -79,18 +79,26 @@ REG_171 = pytest.mark.source(
 @pytest.mark.scenario("""
     Given a vernietigingslijst that the reviewer and the archivist accepted
     When the record manager starts the destruction
-    Then the destruction is planned after today
+    Then the destruction is planned after today, or today when the environment's waiting period is 0 days
     When the record manager aborts the destruction
     Then the list is new again
 """)
 def test_destruction_waits_and_can_be_aborted(
-    oab: Callable[[str], requests.Session], api: str, zaak: JsonObject, registry: ResourceRegistry
+    oab: Callable[[str], requests.Session],
+    api: str,
+    zaak: JsonObject,
+    registry: ResourceRegistry,
+    podiumd_env: Environment,
 ) -> None:
     """Started destruction is planned after the waiting period, and aborting returns the list (TA reg-170 ABC-034)."""
     lijst = ready_to_delete(oab, api, zaak, registry)
     planned = queue(oab, api, lijst).get("plannedDestructionDate")
     assert planned
-    assert str(planned) > today()
+    # OAB's WAITING_PERIOD, 7 days by default; an environment may set it to 0 (settings.oab_waiting_period_days).
+    if int(podiumd_env.profile.settings.get("oab_waiting_period_days", "7")) > 0:
+        assert str(planned) > today()
+    else:
+        assert str(planned) >= today()
     abort = {"comment": "podiumd-tests"}
     expect_status(oab("recordmanager").post(f"{api}/destruction-lists/{lijst}/abort/", json=abort), HTTPStatus.OK)
     assert list_status(oab, api, lijst) == "new"

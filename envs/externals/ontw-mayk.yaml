@@ -30,6 +30,8 @@ urls:
 settings:
   # Azure Policy admits only images from acrprodmgmt (gatekeeper refused python:3.13-alpine, 2026-11-18); as ontw-dimp.
   mock_server_image: acrprodmgmt.azurecr.io/library/python:3.14.7-slim
+  # Open Archiefbeheer's WAITING_PERIOD is 0 here, on the requester's wish (ExternalsPodiumD values 2a61a3d).
+  oab_waiting_period_days: "0"
 secrets:
   # keycloak-operator's master admin, as on ontw-dim1 (checked on ontw-mayk 2026-11-18).
   keycloak_admin_username:
