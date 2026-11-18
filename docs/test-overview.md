@@ -113,8 +113,8 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | ZAC | 13 |
 | draaiboek | 87 |
 | external | 216 |
-| hosting | 4 |
-| podiumd-tests | 524 |
+| hosting | 5 |
+| podiumd-tests | 523 |
 | upstream | 242 |
 
 ## Expected failures per known issue

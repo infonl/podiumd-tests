@@ -9,6 +9,7 @@ from typing import cast
 from podiumd_tests.auth.keycloak import PasswordLogin
 from podiumd_tests.auth.keycloak import admin_realm_url
 from podiumd_tests.auth.keycloak import password_grant
+from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
 from podiumd_tests.security import conforming_password
 
@@ -128,6 +129,10 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
             return None
         body = expect_status(response, HTTPStatus.BAD_REQUEST).json()
         return str(body.get("error_description") or body.get("error"))
+
+    def login_errors(self, user_id: str) -> list[JsonObject]:
+        """Return the realm's recorded LOGIN_ERROR events of a user, newest first."""
+        return entries(self._get("/events", {"user": user_id, "type": "LOGIN_ERROR"}))
 
     def brute_force_status(self, user_id: str) -> JsonObject:
         """Keycloak's brute-force detection state of a user: disabled (locked), numFailures."""

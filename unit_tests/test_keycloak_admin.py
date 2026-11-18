@@ -96,6 +96,7 @@ def test_single_calls_use_their_admin_paths(admin):
     keycloak, sent = admin(
         {
             ("GET", "/attack-detection/brute-force/users/u1"): (200, {"disabled": False}),
+            ("GET", "/events"): (200, [{"type": "LOGIN_ERROR", "userId": "u1"}]),
             ("GET", "/clients/c1/client-secret"): (200, {"value": "s3cret"}),
             ("DELETE", "/users/u1"): (204, None),
             ("PUT", "/users/u1/groups/g1"): (204, None),
@@ -103,11 +104,12 @@ def test_single_calls_use_their_admin_paths(admin):
         }
     )
     assert keycloak.brute_force_status("u1") == {"disabled": False}
+    assert keycloak.login_errors("u1") == [{"type": "LOGIN_ERROR", "userId": "u1"}]
     assert keycloak.client_secret("c1") == "s3cret"
     keycloak.delete_user("u1")
     keycloak.join_group("u1", "g1")
     keycloak.delete_client_scope("s1")
-    assert calls(sent)[2:] == ["DELETE /users/u1", "PUT /users/u1/groups/g1", "DELETE /client-scopes/s1"]
+    assert calls(sent)[3:] == ["DELETE /users/u1", "PUT /users/u1/groups/g1", "DELETE /client-scopes/s1"]
     assert sent[-1].headers["Authorization"] == "Bearer t"
 
 

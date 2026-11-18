@@ -108,17 +108,18 @@ def test_realm_meets_the_security_policy(podiumd_env: Environment, which: str) -
 @pytest.mark.source(
     "podiumd-tests", "Security baseline: the realm's brute-force protection locks a user out after wrong passwords."
 )
+@pytest.mark.source("hosting COMP028-compliance", "All authentication attempts MUST be logged.")
 @pytest.mark.scenario("""
     Given a new user in the Keycloak realm the applications log in to
     When someone logs in with a wrong password as often as the realm allows
-    Then Keycloak refuses each of these logins
+    Then Keycloak refuses each of these logins and records each as a login error of the user
     And Keycloak locks the user out
     And Keycloak refuses a login with the right password too
 """)
 def test_password_guessing_locks_the_user_out(
     podiumd_env: Environment, urls: dict[str, str], realm: str, registry: ResourceRegistry
 ) -> None:
-    """After failureFactor wrong passwords Keycloak locks the user, and then refuses the right one too."""
+    """After failureFactor wrong passwords, each recorded as LOGIN_ERROR, Keycloak locks the user and refuses the right one."""
     admin = for_environment(podiumd_env, realm)
     username, password = registry.tagged("lockout"), admin.new_password()
     user_id = admin.create_user(username, password, {})
@@ -138,6 +139,7 @@ def test_password_guessing_locks_the_user_out(
         with pytest.raises(TokenError, match="refused the login"):
             form_login(podiumd_env.session(), login, username, "ptest-wrong-password")
     assert admin.brute_force_status(user_id)["disabled"] is True
+    assert len(admin.login_errors(user_id)) >= int(str(admin.representation()["failureFactor"]))
     with pytest.raises(TokenError, match="refused the login"):
         form_login(podiumd_env.session(), login, username, password)
 
