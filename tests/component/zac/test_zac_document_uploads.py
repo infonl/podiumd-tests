@@ -64,15 +64,21 @@ VERTROUWELIJKHEIDAANDUIDINGEN = (
 )
 
 
+@pytest.mark.source(
+    "PZW Sprint 82 PZ-11746",
+    "The zaak's documents list shows each document's identificatie, to tell same-named ones apart.",
+)
 @pytest.mark.scenario("""
     Given a zaak in ZAC
     When the behandelaar adds a document with diacritics and an emoji in its titel, beschrijving and auteur, in English
     Then the zaak's document has that titel, beschrijving, auteur and taal
+    When the behandelaar adds a second document with the same titel
+    Then the zaak's documents list shows each with its own identificatie
 """)
 def test_uploaded_document_keeps_its_metadata(
     zac: requests.Session, urls: dict[str, str], zac_zaak: Callable[..., JsonObject], registry: ResourceRegistry
 ) -> None:
-    """Titel, beschrijving, auteur and taal of an upload are stored as sent, in UTF-8."""
+    """Titel, beschrijving, auteur and taal are stored as sent, in UTF-8; same-named documents differ in identificatie."""
     zaak = zac_zaak()
     fields = {
         "titel": registry.tagged("Één café € ü ß ø 😀"),
@@ -84,6 +90,10 @@ def test_uploaded_document_keeps_its_metadata(
     listed = next(item for item in zaak_documents(zac, urls["zac"], zaak) if item.get("uuid") == document["uuid"])
     stored = {name: listed.get(name) for name in fields}
     assert stored == {**fields, "taal": taal(zac, urls["zac"], "eng")["naam"]}
+    uploaded_document(zac, urls["zac"], zaak, registry, taak=None, **fields)
+    identificaties = [item.get("identificatie") for item in zaak_documents(zac, urls["zac"], zaak)]
+    assert len(set(identificaties)) == len(identificaties) == 2, identificaties
+    assert all(identificaties), identificaties
 
 
 @pytest.mark.scenario("""
