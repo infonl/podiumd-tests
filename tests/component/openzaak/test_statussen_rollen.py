@@ -108,12 +108,9 @@ def test_closed_zaak_delete_answers_204(
     Given a zaak in Open Zaak without einddatum
     When its archiefnominatie is set to vernietigen with an archiefactiedatum and an archiefstatus
     Then the zaak holds that archiefnominatie and archiefactiedatum
-    And a search for zaken of the zaaktype to be destroyed finds the zaak
 """)
-def test_archiefnominatie_can_be_set_and_filtered(
-    openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts
-) -> None:
-    """archiefnominatie, archiefactiedatum and archiefstatus are stored and filterable (TA reg-39)."""
+def test_archiefnominatie_can_be_set(openzaak: ApiClient, registry: ResourceRegistry, parts: ZaaktypeParts) -> None:
+    """archiefnominatie, archiefactiedatum and archiefstatus are stored on an open zaak (TA reg-39)."""
     zaak = make_zaak(openzaak, registry, parts.zaaktype)
     assert zaak["einddatum"] is None
     changed = openzaak.patch(
@@ -121,8 +118,6 @@ def test_archiefnominatie_can_be_set_and_filtered(
         {"archiefnominatie": "vernietigen", "archiefactiedatum": "2036-01-01", "archiefstatus": "nog_te_archiveren"},
     )
     assert (changed["archiefnominatie"], changed["archiefactiedatum"]) == ("vernietigen", "2036-01-01")
-    found = openzaak.list(f"{ZAKEN}/zaken", {"zaaktype": parts.zaaktype, "archiefnominatie": "vernietigen"})
-    assert str(zaak["url"]) in urls(found)
 
 
 @pytest.mark.source(

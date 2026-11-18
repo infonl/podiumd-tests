@@ -66,6 +66,8 @@ def _cases(zaak: JsonObject) -> list[Case]:
         ({"archiefactiedatum__lt": archiefactiedatum}, False),
         ({"archiefactiedatum__gt": einddatum}, True),
         ({"archiefactiedatum__isnull": "true"}, False),
+        ({"archiefnominatie": "vernietigen"}, True),
+        ({"archiefnominatie": "blijvend_bewaren"}, False),
         ({"rol__betrokkeneIdentificatie__natuurlijkPersoon__inpBsn": bsn}, True),
         ({"rol__betrokkeneIdentificatie__natuurlijkPersoon__inpBsn": random_bsn()}, False),
         ({"rol__omschrijvingGeneriek": "initiator"}, True),
@@ -77,10 +79,13 @@ def _cases(zaak: JsonObject) -> list[Case]:
     ]
 
 
+@pytest.mark.source(
+    "TA regression/39-zaak-lifecycle-close.spec.ts", "A search for zaken to be destroyed finds the closed zaak."
+)
 @pytest.mark.parametrize("search", ["list", "_zoek"])
 @pytest.mark.scenario("""
     Given a closed zaak with a start date and a citizen as initiator
-    When zaken are searched by identificatie, start, end or archive date, the citizen's BSN, rol and archive status
+    When zaken are searched by identificatie, dates, archiefnominatie, the citizen's BSN, rol and archive status
     Then each matching search finds the zaak
     And each non-matching search leaves it out
 """)
