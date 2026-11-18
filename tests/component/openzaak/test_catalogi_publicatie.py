@@ -53,9 +53,22 @@ REFUSED_CHANGE = (HTTPStatus.BAD_REQUEST, HTTPStatus.FORBIDDEN, HTTPStatus.METHO
 def fixture_published(
     podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, selectielijst_zaaktype: JsonObject
 ) -> JsonObject:
-    """Return a throwaway published zaaktype with an eigenschap."""
+    """Return a throwaway published zaaktype with an eigenschap and a zaakobjecttype."""
     types = ZaaktypeTypes(eigenschappen=("kenmerk",))
-    return publish(openzaak, make_publishable_zaaktype(podiumd_env, openzaak, registry, selectielijst_zaaktype, types))
+    concept = make_publishable_zaaktype(podiumd_env, openzaak, registry, selectielijst_zaaktype, types)
+    openzaak.post(f"{CATALOGI}/zaakobjecttypen", _zaakobjecttype_body(str(concept["url"])))
+    return publish(openzaak, concept)
+
+
+def _zaakobjecttype_body(zaaktype: str) -> JsonObject:
+    return {
+        "zaaktype": zaaktype,
+        # Open Zaak does not fetch the objecttype.
+        "objecttype": f"https://objecttypen.example.invalid/api/v2/objecttypes/{uuid.uuid4()}",
+        "anderObjecttype": False,
+        "relatieOmschrijving": "Betreft",
+        "beginGeldigheid": today(),
+    }
 
 
 def _refused(openzaak: ApiClient, method: str, url: str, body: JsonObject | None = None) -> None:
@@ -73,6 +86,7 @@ CHILD_FIELDS = {
     "roltypen": "omschrijving",
     "eigenschappen": "definitie",
     "resultaattypen": "omschrijving",
+    "zaakobjecttypen": "relatieOmschrijving",
 }
 
 
@@ -112,10 +126,14 @@ def test_published_type_changes_only_its_einde_geldigheid(
     "external OneGround/ZGW-APIs-postman-tests ZGW business rules ztc-010, ztc-011",
     "The types of a published zaaktype cannot change or be added, except a zaaktype-informatieobjecttype.",
 )
+@pytest.mark.source(
+    "external OneGround/ZGW-APIs-postman-tests ZGW features, zaakobjecttype",
+    "Open Archiefbeheer reads zaakobjecttypen; they change with a concept zaaktype and stay with a published one.",
+)
 @pytest.mark.scenario("""
     Given a published zaaktype
-    Then its statustype, roltype, eigenschap and resultaattype cannot be changed or deleted
-    And no statustype, roltype, eigenschap or resultaattype can be added to it
+    Then its statustype, roltype, eigenschap, resultaattype and zaakobjecttype cannot be changed or deleted
+    And none of these can be added to it
     But a concept informatieobjecttype can still be linked to it, and the zaaktype then lists it
 """)
 def test_published_zaaktype_keeps_its_types(
@@ -134,6 +152,7 @@ def test_published_zaaktype_keeps_its_types(
         "resultaattypen": resultaattype_body(
             url, template_resultaattype(openzaak, selectielijst_zaaktype), omschrijving="Extra"
         ),
+        "zaakobjecttypen": _zaakobjecttype_body(url),
     }
     for path, field in CHILD_FIELDS.items():
         child = str(openzaak.list(f"{CATALOGI}/{path}", {"zaaktype": url})[0]["url"])
@@ -245,32 +264,17 @@ def test_overlapping_published_versions_are_refused(
     Given a concept zaaktype
     When a zaakobjecttype is added to it, changed and deleted
     Then the zaaktype has it, then the change, then no longer
-    When the zaaktype is published with a zaakobjecttype
-    Then that zaakobjecttype cannot be deleted
 """)
-def test_zaakobjecttype_changes_only_with_a_concept_zaaktype(
+def test_zaakobjecttype_changes_with_a_concept_zaaktype(
     podiumd_env: Environment, openzaak: ApiClient, registry: ResourceRegistry, selectielijst_zaaktype: JsonObject
 ) -> None:
-    """Zaakobjecttype POST, PATCH and DELETE on a concept zaaktype; DELETE is refused after publishing."""
+    """Zaakobjecttype POST, PATCH and DELETE on a concept zaaktype."""
     zaaktype = make_publishable_zaaktype(podiumd_env, openzaak, registry, selectielijst_zaaktype)
     path = f"{CATALOGI}/zaakobjecttypen"
     # Without status alles the list leaves out the types of a concept zaaktype.
     query = {"zaaktype": str(zaaktype["url"]), "status": "alles"}
-    body = {
-        "zaaktype": zaaktype["url"],
-        # Open Zaak does not fetch the objecttype.
-        "objecttype": f"https://objecttypen.example.invalid/api/v2/objecttypes/{uuid.uuid4()}",
-        "anderObjecttype": False,
-        "relatieOmschrijving": "Betreft",
-        "beginGeldigheid": today(),
-    }
-    created = openzaak.post(path, body)
-    url = str(created["url"])
+    url = str(openzaak.post(path, _zaakobjecttype_body(str(zaaktype["url"])))["url"])
     assert [z["url"] for z in openzaak.list(path, query)] == [url]
     assert openzaak.patch(url, {"relatieOmschrijving": "Gewijzigd"})["relatieOmschrijving"] == "Gewijzigd"
     openzaak.request("DELETE", url, HTTPStatus.NO_CONTENT)
     assert openzaak.list(path, query) == []
-    kept = openzaak.post(path, body)
-    publish(openzaak, zaaktype)
-    _refused(openzaak, "DELETE", str(kept["url"]))
-    assert [z["url"] for z in openzaak.list(path, query)] == [kept["url"]]
