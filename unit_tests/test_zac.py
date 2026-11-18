@@ -561,6 +561,13 @@ def test_end_process_aborts_only_a_zaak_with_a_process_that_zac_lets_abort(fake_
     assert [request.method for request in sent] == methods
 
 
+@pytest.mark.parametrize("status", [404, 403])
+def test_end_process_leaves_a_zaak_it_cannot_read(fake_http, status):
+    sent = fake_http({"GET /rest/zaken/zaak/z1": (status, {})})
+    zac.end_process(requests.Session(), ZAC, "z1")
+    assert [request.method for request in sent] == ["GET"]
+
+
 @pytest.mark.parametrize(
     ("answer", "is_open"),
     [((200, {"status": "TOEGEKEND"}), True), ((200, {"status": "AFGEROND"}), False), ((404, {}), False)],

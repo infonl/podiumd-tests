@@ -19,7 +19,7 @@ component and integration, without and with the destructive tests; the test suit
 | **chaos tier** | **65** | **51** | **14** |
 | **test suite** | **1531** | **775** | **98** |
 
-Unit tests (`unit_tests/`, functions): 955. Perf endpoints (`perf/runs.py`): 32.
+Unit tests (`unit_tests/`, functions): 956. Perf endpoints (`perf/runs.py`): 32.
 
 ## Per area
 
@@ -108,9 +108,9 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | MK | 45 |
 | PCP | 1 |
 | PI | 54 |
-| PZW | 29 |
+| PZW | 30 |
 | TA | 295 |
-| ZAC | 15 |
+| ZAC | 14 |
 | draaiboek | 87 |
 | external | 216 |
 | podiumd-tests | 528 |

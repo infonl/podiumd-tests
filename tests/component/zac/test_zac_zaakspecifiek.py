@@ -12,6 +12,7 @@ from typing import NamedTuple
 
 import pytest
 
+from podiumd_tests import zac_taken
 from podiumd_tests.bootstrap.bpmn import HARDCODED
 from podiumd_tests.bootstrap.bpmn import HARDCODED_TO
 from podiumd_tests.bootstrap.bpmn import PROCESS_KEY
@@ -20,6 +21,7 @@ from podiumd_tests.bootstrap.bpmn import complete_intake
 from podiumd_tests.json_data import section
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
+from podiumd_tests.responses import get_entries
 from podiumd_tests.seed.zac_zaaktype import ZAAKSPECIFIEK_TYPES
 from podiumd_tests.seed.zac_zaaktype import email_informatieobjecttype
 from podiumd_tests.seed.zac_zaaktype import make_group_member
@@ -40,16 +42,10 @@ from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import toekennen
 from podiumd_tests.zac import verdelen
 from podiumd_tests.zac import wijzig_zaak
+from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac import zac_session
 from podiumd_tests.zac_documents import document_url
 from podiumd_tests.zac_documents import uploaded_document
-from podiumd_tests.zac_taken import AANVULLENDE_INFORMATIE
-from podiumd_tests.zac_taken import activate_human_tasks
-from podiumd_tests.zac_taken import complete_task
-from podiumd_tests.zac_taken import open_task
-from podiumd_tests.zac_taken import read_taak
-from podiumd_tests.zac_taken import start_human_task
-from podiumd_tests.zac_taken import toekennen_taak
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -78,6 +74,9 @@ CANNOT_BE_LIFTED = "msg.error.zaakspecifieke.autorisatie.cannot.be.lifted"
 # ZAC lifts a zaak's zaakspecifieke autorisatie on request from this release on (#7442).
 LIFTABLE = (5, 11, 0)
 CANNOT_BE_RELEASED = "msg.error.zaakspecifiek.geautoriseerde.zaak.cannot.be.released"
+CANNOT_BE_DETACHED = "msg.error.medewerker.cannot.be.detached"
+# ZAC lists a marked zaak's medewerkers and detaches one from this release on (#7413).
+DETACHES_MEDEWERKERS = (5, 11, 0)
 # Before this release ZAC indexes a zaak's completed taken again when it reindexes the zaak's taken (#7595).
 DROPS_COMPLETED_TAKEN = (5, 11, 0)
 COMPLETED = {"aanvullendeInformatie": "aanvullende-informatie.geleverd-akkoord"}
@@ -263,39 +262,70 @@ def test_marked_zaak_is_skipped_when_verdeeld_without_a_behandelaar(  # the zaak
     assert assignment(read_zaak(behandelaar, zac_url, str(team_zaak["uuid"]))) == (team.group, team.names[0])
 
 
+def _medewerkers(http: requests.Session, zac_url: str, zaak: JsonObject) -> dict[str, bool]:
+    """The zaak's zaakspecifiek geautoriseerde medewerkers as ZAC's medewerkers tab lists them, and if each detaches."""
+    url = f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/zaakspecifiek-geautoriseerde-medewerkers"
+    return {str(m["id"]): bool(m["isDetachable"]) for m in get_entries(http, url)}
+
+
+def _ontkoppel(
+    http: requests.Session, zac_url: str, zaak: JsonObject, medewerker: str, reden: str
+) -> requests.Response:
+    """Ask ZAC to take the medewerker's access to the marked zaak away, with a reden; ZAC's answer."""
+    url = f"{zac_url}/rest/zaken/zaak/{zaak['uuid']}/zaakspecifiek-geautoriseerde-medewerkers/{medewerker}"
+    return http.delete(url, json={"reden": reden})
+
+
 @pytest.mark.source("ZAC ZaakService.assignZaak", "The replaced behandelaar keeps access to the zaak.")
+@pytest.mark.source(
+    "PZW Sprint 82 PZ-12046",
+    "The behandelaar takes a former behandelaar's access to a zaakspecifiek geautoriseerde zaak away (ZAC 5.11).",
+)
 @pytest.mark.scenario("""
     Given a zaak its behandelaar marked as zaakspecifiek geautoriseerd
     When the behandelaar hands it over to a colleague
-    Then the colleague opens the zaak
-    And the former behandelaar still opens it
-    And a recordmanager still cannot
+    Then the colleague and the former behandelaar open the zaak, and a recordmanager still cannot
+    And the colleague cannot take the access of the current behandelaar away
+    When the colleague takes the former behandelaar's access away with a reden
+    Then the former behandelaar no longer opens the zaak, and the zaak's historie shows the reden
 """)
-def test_handed_over_zaak_stays_open_to_the_former_behandelaar(
-    urls: dict[str, str], team: Team, team_zaak: JsonObject, zac_as: Callable[[str], requests.Session]
+def test_handed_over_zaak_stays_open_to_the_former_behandelaar(  # the zaak and three users
+    podiumd_env: Environment,
+    urls: dict[str, str],
+    registry: ResourceRegistry,
+    team: Team,
+    team_zaak: JsonObject,
+    zac_as: Callable[[str], requests.Session],
 ) -> None:
-    """A handover of a marked zaak authorises the former behandelaar as zaakspecifiek geautoriseerde medewerker."""
+    """A handover authorises the former behandelaar as zaakspecifiek geautoriseerde medewerker, who can be detached."""
     zac_url = urls["zac"]
     behandelaar, collega = team.sessions
     expect_status(_mark(behandelaar, zac_url, team_zaak), HTTPStatus.OK)
     assert not can_open_zaak(collega, zac_url, team_zaak)
     expect_status(toekennen(behandelaar, zac_url, team_zaak, team.group, team.names[1]), HTTPStatus.OK)
-    assert can_open_zaak(collega, zac_url, team_zaak)
-    assert can_open_zaak(behandelaar, zac_url, team_zaak)
+    assert (can_open_zaak(collega, zac_url, team_zaak), can_open_zaak(behandelaar, zac_url, team_zaak)) == (True, True)
     assert not can_open_zaak(zac_as("recordmanager"), zac_url, team_zaak)
+    if is_older_than(podiumd_env, "zac", DETACHES_MEDEWERKERS):
+        return
+    assert _medewerkers(collega, zac_url, team_zaak) == {team.names[0]: True, team.names[1]: False}
+    _refused_with(_ontkoppel(collega, zac_url, team_zaak, team.names[1], "ptest"), CANNOT_BE_DETACHED)
+    reden = registry.tagged("ontkoppeld")
+    expect_status(_ontkoppel(collega, zac_url, team_zaak, team.names[0], reden), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+    assert not can_open_zaak(behandelaar, zac_url, team_zaak)
+    assert reden in {line.get("toelichting") for line in zaak_historie(collega, zac_url, team_zaak)}
 
 
 def _complete_and_reindex(
     behandelaar: requests.Session, zac_url: str, team: Team, zaak: JsonObject, taak: JsonObject
 ) -> None:
     """The behandelaar assigns the taak to themselves, completes it, then has a second taak in Mijn taken."""
-    toekennen_taak(behandelaar, zac_url, taak, team.group, team.names[0])
-    complete_task(behandelaar, zac_url, read_taak(behandelaar, zac_url, str(taak["id"])), COMPLETED)
+    zac_taken.toekennen_taak(behandelaar, zac_url, taak, team.group, team.names[0])
+    zac_taken.complete_task(behandelaar, zac_url, zac_taken.read_taak(behandelaar, zac_url, str(taak["id"])), COMPLETED)
     # Assigning a taak of a marked zaak reindexes all of the zaak's taken.
-    started = start_human_task(behandelaar, zac_url, zaak, AANVULLENDE_INFORMATIE, team.group)
+    started = zac_taken.start_human_task(behandelaar, zac_url, zaak, zac_taken.AANVULLENDE_INFORMATIE, team.group)
     expect_status(started, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    tweede = open_task(behandelaar, zac_url, str(zaak["uuid"]), AANVULLENDE_INFORMATIE)
-    toekennen_taak(behandelaar, zac_url, tweede, team.group, team.names[0])
+    tweede = zac_taken.open_task(behandelaar, zac_url, str(zaak["uuid"]), zac_taken.AANVULLENDE_INFORMATIE)
+    zac_taken.toekennen_taak(behandelaar, zac_url, tweede, team.group, team.names[0])
     wait_until(
         lambda: is_taak_listed(behandelaar, zac_url, tweede, alleenMijnTaken=True),
         timeout=LIST_TIMEOUT,
@@ -327,10 +357,10 @@ def test_taak_of_a_marked_zaak_is_read_only_by_its_behandelaar(  # the zaak, its
     """taak-rechten.rego's zaak_allowed: lezen of the taak only for the marked zaak's behandelaar."""
     zac_url, uuid = urls["zac"], str(team_zaak["uuid"])
     behandelaar, collega = team.sessions
-    activate_human_tasks(zac, zac_url, str(section(zaakspecifiek_zaaktype, "zaaktype")["uuid"]))
-    started = start_human_task(behandelaar, zac_url, team_zaak, AANVULLENDE_INFORMATIE, team.group)
+    zac_taken.activate_human_tasks(zac, zac_url, str(section(zaakspecifiek_zaaktype, "zaaktype")["uuid"]))
+    started = zac_taken.start_human_task(behandelaar, zac_url, team_zaak, zac_taken.AANVULLENDE_INFORMATIE, team.group)
     expect_status(started, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
-    taak = open_task(behandelaar, zac_url, uuid, AANVULLENDE_INFORMATIE)
+    taak = zac_taken.open_task(behandelaar, zac_url, uuid, zac_taken.AANVULLENDE_INFORMATIE)
     expect_status(_mark(behandelaar, zac_url, team_zaak), HTTPStatus.OK)
 
     readers = {"behandelaar": behandelaar, "collega": collega, "beheerder": zac_as("beheerder")}
@@ -397,5 +427,5 @@ def test_bpmn_taak_behandelaar_gets_the_zaakspecifieke_autorisatie(  # the zaakt
     assert not can_open_zaak(admin, zac_url, zaak)
 
     complete_intake(behandelaar, zac_url, zaak, (group, naam), **{TOEWIJZING: True})
-    assert assignment(open_task(behandelaar, zac_url, str(zaak["uuid"]), HARDCODED)) == HARDCODED_TO
+    assert assignment(zac_taken.open_task(behandelaar, zac_url, str(zaak["uuid"]), HARDCODED)) == HARDCODED_TO
     assert can_open_zaak(admin, zac_url, zaak)

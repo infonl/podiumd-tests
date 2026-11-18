@@ -473,10 +473,11 @@ def end_process(http: requests.Session, zac_url: str, uuid: str) -> None:
     """End the zaak's BPMN process and its open taken by afbreken, where ZAC allows it: on an open, not heropende zaak.
 
     ZAC 5.9.1 keeps the process when afsluiten closes the zaak, and when the zaak is deleted in Open Zaak (zac-14).
-    afbreken of a zaaktype without niet-ontvankelijk resultaattype leaves the zaak open.
+    afbreken of a zaaktype without niet-ontvankelijk resultaattype leaves the zaak open. A user who may no longer open
+    the zaak (403: detached from a zaakspecifiek geautoriseerde zaak) cannot end it.
     """
     response = http.get(f"{zac_url}/rest/zaken/zaak/{uuid}")
-    if response.status_code == HTTPStatus.NOT_FOUND:
+    if response.status_code in {HTTPStatus.NOT_FOUND, HTTPStatus.FORBIDDEN}:
         return
     zaak = cast("JsonObject", expect_status(response, HTTPStatus.OK).json())
     is_open = zaak.get("isOpen") and not zaak.get("isHeropend")
