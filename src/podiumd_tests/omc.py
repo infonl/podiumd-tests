@@ -5,6 +5,9 @@ from __future__ import annotations
 import time
 import uuid
 
+from datetime import UTC
+from datetime import datetime
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
 
@@ -13,9 +16,11 @@ from podiumd_tests.bootstrap.omc import omc_token
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.json_data import section
 from podiumd_tests.mock_server import NOTIFY_EMAIL
+from podiumd_tests.mock_server import NOTIFY_MESSAGEBOX
 from podiumd_tests.mock_server import NOTIFY_SMS
 from podiumd_tests.mock_server import Callback
 from podiumd_tests.responses import expect_status
+from podiumd_tests.seed.openklant import delete_klantcontact_tree
 from podiumd_tests.seed.openklant import make_digitaal_adres
 from podiumd_tests.seed.openklant import make_partij
 from podiumd_tests.seed.openklant import make_partij_identificator
@@ -35,11 +40,14 @@ if TYPE_CHECKING:
     from podiumd_tests.seed.openzaak import ZaaktypeParts
     from podiumd_tests.seed.registry import ResourceRegistry
 
+# Notify's delivery receipts (callbacks) to OMC.
+CONFIRM_PATH = "/Notify/Confirm"
 # Open Zaak, Open Notificaties and OMC each hand the event on in a background task.
 MAIL_TIMEOUT = 120
 # The Notify mock's path and the key of the address in OMC's request body.
 EMAIL = (NOTIFY_EMAIL, "email_address")
 SMS = (NOTIFY_SMS, "phone_number")
+MESSAGEBOX = (NOTIFY_MESSAGEBOX, "recipient")
 # OMC's whitelist value that allows every zaaktype identificatie.
 EVERY = "*"
 
@@ -103,15 +111,19 @@ def make_inwoner_zaak(  # the zaak's clients and the addresses
     return zaak, bsn
 
 
-def notify_request(env: Environment, channel: tuple[str, str], adres: str, template: str) -> JsonObject:
-    """Return the mock server's record of OMC's Notify request to adres with the template of OMC setting `template`."""
-    template_id = env.variable("omc", template)
+def notify_request(env: Environment, channel: tuple[str, str], adres: str, template: str = "") -> JsonObject:
+    """Return the mock server's record of OMC's Notify request to adres, with the template of OMC setting `template`.
+
+    A Berichtenbox request has no template: leave `template` empty.
+    """
+    template_id = env.variable("omc", template) if template else None
 
     def is_wanted(entry: JsonObject) -> bool:
         body = section(entry, "body")
         return body.get(channel[1]) == adres and body.get("template_id") == template_id
 
-    return Callback(env, channel[0]).wait_for(is_wanted, timeout=MAIL_TIMEOUT, description=f"OMC {template} to {adres}")
+    sent = template or channel[0]
+    return Callback(env, channel[0]).wait_for(is_wanted, timeout=MAIL_TIMEOUT, description=f"OMC {sent} to {adres}")
 
 
 def notify_bodies(env: Environment, channel: tuple[str, str], template: str) -> list[JsonObject]:
@@ -119,6 +131,48 @@ def notify_bodies(env: Environment, channel: tuple[str, str], template: str) -> 
     template_id = env.variable("omc", template)
     bodies = (section(entry, "body") for entry in Callback(env, channel[0]).received())
     return [body for body in bodies if body.get("template_id") == template_id]
+
+
+def confirm_delivery(http: requests.Session, env: Environment, sent: JsonObject, to: str, kind: str) -> None:
+    """POST Notify's delivery receipt "delivered" for the sent notification (a mock server record) to OMC.
+
+    kind: Notify's notification_type (email, sms, messagebox).
+    """
+    body = section(sent, "body")
+    now = datetime.now(tz=UTC).isoformat()
+    receipt = {
+        "id": sent["id"],
+        "reference": body["reference"],
+        "to": to,
+        "status": "delivered",
+        "created_at": now,
+        "completed_at": now,
+        "sent_at": now,
+        "notification_type": kind,
+        "template_id": body.get("template_id"),
+        "template_version": 1,
+    }
+    token = omc_token(env, time.time())
+    url = env.profile.urls["omc"] + CONFIRM_PATH
+    confirm = http.post(url, json=receipt, headers={"Authorization": f"Bearer {token}"})
+    expect_status(confirm, HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.ACCEPTED)
+
+
+def klantcontacten_about(openklant: ApiClient, object_id: str) -> list[JsonObject]:
+    """Return the onderwerpobjecten in Open Klant whose objectId is object_id (a zaak or bericht uuid)."""
+    found = openklant.list("onderwerpobjecten", {"onderwerpobjectidentificatorObjectId": object_id})
+    # Checked here too: a filter the server ignored would match every onderwerpobject.
+    return [item for item in found if section(item, "onderwerpobjectidentificator").get("objectId") == object_id]
+
+
+def clean_up_klantcontacten(openklant: ApiClient, registry: ResourceRegistry, object_id: str) -> None:
+    """Delete, at cleanup, the klantcontacten OMC registers about object_id."""
+
+    def delete() -> None:
+        for item in klantcontacten_about(openklant, object_id):
+            delete_klantcontact_tree(openklant, str(section(item, "klantcontact").get("url")))
+
+    registry.add(f"klantcontacten about {object_id}", delete)
 
 
 def listen(http: requests.Session, env: Environment, body: object, issued: float | None = None) -> requests.Response:

@@ -9,10 +9,7 @@ They run only where OMC's Notify base URL is the mock server.
 from __future__ import annotations
 
 import dataclasses
-import time
 
-from datetime import UTC
-from datetime import datetime
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -21,7 +18,6 @@ import pytest
 from podiumd_tests.basisregistraties import DE_JAGER
 from podiumd_tests.bootstrap.omc import notify_mock_missing
 from podiumd_tests.bootstrap.omc import omc_actor_missing
-from podiumd_tests.bootstrap.omc import omc_token
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.mailpit import own_address
@@ -29,12 +25,14 @@ from podiumd_tests.omc import EMAIL
 from podiumd_tests.omc import MAIL_TIMEOUT
 from podiumd_tests.omc import OMC_LISTEN
 from podiumd_tests.omc import SMS
+from podiumd_tests.omc import clean_up_klantcontacten
+from podiumd_tests.omc import confirm_delivery
+from podiumd_tests.omc import klantcontacten_about
 from podiumd_tests.omc import listen_answers
 from podiumd_tests.omc import make_inwoner
 from podiumd_tests.omc import make_inwoner_zaak
 from podiumd_tests.omc import notify_request
 from podiumd_tests.responses import expect_status
-from podiumd_tests.seed.openklant import delete_klantcontact_tree
 from podiumd_tests.seed.openklant import random_phone_number
 from podiumd_tests.seed.openklant import set_voorkeursadres
 from podiumd_tests.seed.openzaak import close_zaak
@@ -202,38 +200,12 @@ def test_delivery_receipt_becomes_a_klantcontact(
     zaak = inwoner_zaak(adres)
     uuid = str(zaak["uuid"])
 
-    def about_zaak() -> list[JsonObject]:
-        # Checked here too: a filter the server ignored would match every onderwerpobject.
-        found = openklant.list("onderwerpobjecten", {"onderwerpobjectidentificatorObjectId": uuid})
-        return [o for o in found if section(o, "onderwerpobjectidentificator").get("objectId") == uuid]
-
-    registry.add(
-        f"klantcontacten about {uuid}",
-        lambda: [delete_klantcontact_tree(openklant, str(section(o, "klantcontact").get("url"))) for o in about_zaak()],
-    )
+    clean_up_klantcontacten(openklant, registry, uuid)
     make_status(openzaak, zaak, str(parts.statustypen[0]["url"]))
     sent = notify_request(podiumd_env, EMAIL, adres, "NOTIFY_TEMPLATEID_EMAIL_ZAAKCREATE")
-    body = section(sent, "body")
-    now = datetime.now(tz=UTC).isoformat()
-    receipt = {
-        "id": sent["id"],
-        "reference": body["reference"],
-        "to": adres,
-        "status": "delivered",
-        "created_at": now,
-        "completed_at": now,
-        "sent_at": now,
-        "notification_type": "email",
-        "template_id": body["template_id"],
-        "template_version": 1,
-    }
-    token = omc_token(podiumd_env, time.time())
-    confirm = http.post(
-        f"{podiumd_env.profile.urls['omc']}/Notify/Confirm", json=receipt, headers={"Authorization": f"Bearer {token}"}
-    )
-    expect_status(confirm, HTTPStatus.OK, HTTPStatus.CREATED, HTTPStatus.ACCEPTED)
+    confirm_delivery(http, podiumd_env, sent, adres, "email")
     wait_until(
-        about_zaak,
+        lambda: klantcontacten_about(openklant, uuid),
         timeout=MAIL_TIMEOUT,
         description=f"klantcontact about zaak {zaak['identificatie']} in Open Klant",
     )

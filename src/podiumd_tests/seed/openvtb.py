@@ -77,15 +77,24 @@ def make_taak(taken: ApiClient, registry: ResourceRegistry, endpoint: str, **fie
     return taak
 
 
-def make_bericht(
-    env: Environment, berichten: ApiClient, registry: ResourceRegistry, ontvanger: str, **fields: object
+def make_bericht(  # the berichttype's flag is not a field of the bericht
+    env: Environment,
+    berichten: ApiClient,
+    registry: ResourceRegistry,
+    ontvanger: str,
+    *,
+    berichtenbox: bool = False,
+    **fields: object,
 ) -> JsonObject:
-    """Create a bericht to ontvanger (a URN) of a new berichttype, onderwerp run-tagged; fields override defaults."""
+    """Create a bericht to ontvanger (a URN) of a new berichttype, onderwerp run-tagged; fields override defaults.
+
+    berichtenbox: the berichttype is for MijnOverheid's Berichtenbox.
+    """
     berichttype = berichten.post(
         "berichttypen",
         {
             "verantwoordelijkeOrganisatie": "urn:ptest:org",
-            "mijnOverheidBerichtenbox": False,
+            "mijnOverheidBerichtenbox": berichtenbox,
             "mijnOverheidBerichtenboxType": BERICHTENBOX_TYPE,
             "bijlageTypen": [],
         },
@@ -103,6 +112,25 @@ def make_bericht(
     bericht_uuid = str(bericht["uuid"])
     registry.add(f"openvtb bericht {bericht_uuid}", lambda: _delete_bericht(env, bericht_uuid))
     return bericht
+
+
+# Open VTB's Celery worker, which sends its CloudEvents to Open Notificaties (podiumd chart from helm-charts #746).
+OPENVTB_WORKER = "openvtb-worker"
+
+
+def publish_bericht(env: Environment, bericht: str) -> None:
+    """Publish a bericht (uuid) now: its CloudEvent bericht-gepubliceerd as Open VTB's beat task sends it.
+
+    Only this bericht, unlike the task send_berichten_events, which publishes every due bericht of the environment.
+    """
+    code = (
+        "from openvtb.components.berichten.models import Bericht\n"
+        "from openvtb.components.berichten.tasks import mark_as_published, send_bericht\n"
+        f"pk = Bericht.objects.get(uuid={bericht!r}).pk\n"
+        "send_bericht.delay(pk)\n"
+        "mark_as_published.delay([pk])"
+    )
+    env.kube.exec_django_shell(env.deployment_for("openvtb"), code)
 
 
 def _delete_bericht(env: Environment, bericht: str) -> None:

@@ -2,8 +2,8 @@
 
 A POST with an Authorization header gets 204; one without gets 403. Open Notificaties checks
 both when an abonnement is created: it refuses a callback that accepts requests without auth.
-It also stands in for Notify (NotifyNL): a POST to .../v2/notifications/email or /sms gets
-the 201 and notification JSON a Notify client expects, and the entry records the notification's
+It also stands in for Notify (NotifyNL): a POST to .../v2/notifications/email, /sms or /messagebox (MijnOverheid
+Berichtenbox) gets the 201 and notification JSON a Notify client expects, and the entry records the notification's
 "id"; GET .../v2/notifications/<id> answers with that notification, and GET .../v2/notifications lists the ones
 matching its reference and template_type (OMC 2.4 checks for an earlier send). POST .../v2/template/<id>/preview gets
 200 and a preview, whose subject and body are "ptest preview <id>". On a path with /fail-first/ the first
@@ -113,13 +113,14 @@ class Handler(BaseHTTPRequestHandler):
 
     def notify_created(self, notification_id, request) -> None:
         template = request.get("template_id")
-        kind = "sms" if self.path.endswith("/sms") else "email"
+        kind = self.path.rsplit("/", 1)[-1]
         subject = f"ptest {kind} {template}"
         NOTIFICATIONS[notification_id] = {
             "id": notification_id,
             "reference": request.get("reference"),
             "email_address": request.get("email_address"),
             "phone_number": request.get("phone_number"),
+            "recipient": request.get("recipient"),
             "type": kind,
             "status": "delivered",
             "template": {"id": template, "version": 1, "uri": f"/v2/template/{template}"},

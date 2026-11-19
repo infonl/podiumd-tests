@@ -9,6 +9,7 @@ from podiumd_tests import omc
 from podiumd_tests.clients.api import ApiClient
 from podiumd_tests.mock_server import NAME
 from podiumd_tests.mock_server import NOTIFY_EMAIL
+from podiumd_tests.mock_server import NOTIFY_MESSAGEBOX
 from podiumd_tests.omc import EMAIL
 from podiumd_tests.omc import make_inwoner_zaak
 from podiumd_tests.omc import notify_request
@@ -159,3 +160,41 @@ def test_random_phone_number_is_a_dutch_mobile_number_in_international_form():
     assert number.startswith("+316")
     assert len(number) == 12
     assert number[1:].isdigit()
+
+
+def test_a_berichtenbox_request_is_matched_by_the_recipient_alone(env_factory, fake_runner):
+    wanted = {"path": NOTIFY_MESSAGEBOX, "body": {"recipient": "999990019", "message": "m"}}
+    lines = [{"path": NOTIFY_MESSAGEBOX, "body": {"recipient": "999990020"}}, wanted]
+    fake_runner.answers[f"exec deploy/{NAME}"] = (0, "".join(f"{json.dumps(line)}\n" for line in lines))
+    assert notify_request(env_factory(), omc.MESSAGEBOX, "999990019") == wanted
+
+
+def test_confirm_delivery_posts_notifys_receipt_with_omcs_token(fake_http, env_factory, profile_factory, monkeypatch):
+    monkeypatch.setattr(omc, "omc_token", lambda _env, _issued: "t")
+    sent = fake_http({"POST /Notify/Confirm": (200, {})})
+    env = env_factory(profile=profile_factory(urls={"omc": "https://omc.example.test"}))
+    record = {"id": "n1", "body": {"reference": "r", "recipient": "999990019"}}
+    omc.confirm_delivery(requests.Session(), env, record, "999990019", "messagebox")
+    receipt = json.loads(sent[0].body)
+    assert (sent[0].url, sent[0].headers["Authorization"]) == ("https://omc.example.test/Notify/Confirm", "Bearer t")
+    assert {key: receipt[key] for key in ("id", "reference", "to", "status", "notification_type")} == {
+        "id": "n1",
+        "reference": "r",
+        "to": "999990019",
+        "status": "delivered",
+        "notification_type": "messagebox",
+    }
+
+
+def test_klantcontacten_about_keep_only_the_object_and_cleanup_deletes_them(fake_http, monkeypatch):
+    about = {"klantcontact": {"url": f"{API}/klantcontacten/k1"}, "onderwerpobjectidentificator": {"objectId": "b1"}}
+    other = {"klantcontact": {"url": f"{API}/klantcontacten/k2"}, "onderwerpobjectidentificator": {"objectId": "b2"}}
+    fake_http({"GET /onderwerpobjecten": (200, {"results": [about, other], "next": None})})
+    deleted: list[str] = []
+    monkeypatch.setattr(omc, "delete_klantcontact_tree", lambda _client, url: deleted.append(url))
+    client = ApiClient(requests.Session(), API, {})
+    assert omc.klantcontacten_about(client, "b1") == [about]
+    registry = ResourceRegistry("ptest-x")
+    omc.clean_up_klantcontacten(client, registry, "b1")
+    registry.cleanup()
+    assert deleted == [f"{API}/klantcontacten/k1"]

@@ -42,6 +42,7 @@ CHECKOUTS_DIR = "/data/worldline"
 # (podiumd-minikube sets <mock server>/notify), so the path has no /notify prefix.
 NOTIFY_EMAIL = "/v2/notifications/email"
 NOTIFY_SMS = "/v2/notifications/sms"
+NOTIFY_MESSAGEBOX = "/v2/notifications/messagebox"
 ROLLOUT_TIMEOUT = 180
 # Kanaal, resource and actie of the notification of a new zaak.
 ZAAK_CREATE = ("zaken", "zaak", "create")
