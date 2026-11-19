@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.bootstrap.omc import is_reading_openvtb
+from podiumd_tests.responses import url_host
 from podiumd_tests.seed.openvtb import notifications_api_root
 
 if TYPE_CHECKING:
@@ -21,6 +22,10 @@ pytestmark = [
     pytest.mark.requires("omc", "openvtb", "cluster"),
     pytest.mark.source("Jira IN-3501", "Where OMC reads Open VTB, the settings the Berichtenbox chain needs are set."),
 ]
+
+
+# The host suffix of a Kubernetes Service, which an in-cluster client may use instead of the public host.
+IN_CLUSTER = ".svc.cluster.local"
 
 
 @pytest.fixture(name="berichtenbox_env")
@@ -45,13 +50,21 @@ def test_omc_fetches_bijlagen_from_the_documenten_api(berichtenbox_env: Environm
 
 @pytest.mark.scenario("""
     Given OMC reads Open VTB's berichten for the Berichtenbox
-    Then Open VTB publishes its events to Open Notificaties under its own source
+    Then Open VTB publishes its events to this environment's Open Notificaties under its own source
 """)
 def test_open_vtb_publishes_to_open_notificaties(berichtenbox_env: Environment) -> None:
-    """Open VTB has an Open Notificaties service and NOTIFICATIONS_SOURCE; without either it sends no event."""
+    """Open VTB's Open Notificaties service is on the environment's Open Notificaties host, and NOTIFICATIONS_SOURCE
+    is set; otherwise it sends no event."""
     problems = []
-    if not notifications_api_root(berichtenbox_env):
+    api_root = notifications_api_root(berichtenbox_env)
+    expected = url_host(berichtenbox_env.profile.urls["opennotificaties"])
+    if not api_root:
         problems.append("Open VTB has no Open Notificaties service (setup_configuration notifications_config)")
+    elif url_host(api_root) != expected and not url_host(api_root).endswith(IN_CLUSTER):
+        # Another host may still resolve (wildcard DNS) and reach Open Notificaties, which answers 400 to it.
+        problems.append(
+            f"Open VTB's Open Notificaties service {api_root} is not on {expected} or an in-cluster Service"
+        )
     if not berichtenbox_env.variable("openvtb", "NOTIFICATIONS_SOURCE"):
         problems.append("Open VTB's NOTIFICATIONS_SOURCE is empty (openvtb.extraEnvVars)")
     assert not problems, "; ".join(problems)
