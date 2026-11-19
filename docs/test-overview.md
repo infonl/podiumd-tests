@@ -13,13 +13,13 @@ component and integration, without and with the destructive tests; the test suit
 | --- | --- | --- | --- |
 | smoke | 242 | 42 | 12 |
 | component | 1005 | 587 | 71 |
-| integration | 244 | 144 | 19 |
+| integration | 247 | 147 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1392** | **720** | **88** |
+| **full tier** | **1395** | **723** | **88** |
 | **chaos tier** | **99** | **53** | **14** |
-| **test suite** | **1571** | **782** | **102** |
+| **test suite** | **1574** | **785** | **102** |
 
-Unit tests (`unit_tests/`, functions): 981. Perf endpoints (`perf/runs.py`): 32.
+Unit tests (`unit_tests/`, functions): 988. Perf endpoints (`perf/runs.py`): 32.
 
 ## Per area
 
@@ -83,7 +83,7 @@ Unit tests (`unit_tests/`, functions): 981. Perf endpoints (`perf/runs.py`): 32.
 | integration | mail | 9 | 2 |
 | integration | notificaties | 9 | 9 |
 | integration | omc | 5 | 5 |
-| integration | omc_bericht | 3 | 3 |
+| integration | omc_bericht | 6 | 6 |
 | integration | omc_scenarios | 12 | 11 |
 | integration | portaal_notificaties | 3 | 3 |
 | integration | portaal_openklant | 6 | 6 |
@@ -106,6 +106,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | Origin | Tests |
 | --- | --- |
 | EX | 19 |
+| Jira | 3 |
 | MK | 45 |
 | PCP | 1 |
 | PI | 54 |
