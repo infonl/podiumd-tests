@@ -23,10 +23,10 @@ def test_missing_celery_is_none_with_worker_and_beat(env_factory, fake_runner):
     assert openvtb.missing_celery(env_factory()) is None
 
 
-def test_publish_schedules_are_the_crontabs_of_the_enabled_tasks(env_factory, fake_runner):
+def test_enabled_schedules_are_the_crontabs_of_the_tasks_periodic_tasks(env_factory, fake_runner):
     deployments(fake_runner)
     fake_runner.answers["exec -i deploy/openvtb"] = (0, "chatter\nPTEST_VALUE=0 */1 * * *\nPTEST_VALUE=end\n")
-    assert openvtb.publish_schedules(env_factory()) == ["0 */1 * * *"]
+    assert openvtb.enabled_schedules(env_factory(), openvtb.PUBLISH_TASK) == ["0 */1 * * *"]
 
 
 def test_publish_bericht_sends_and_marks_only_that_bericht(env_factory, fake_runner):
@@ -42,3 +42,17 @@ def test_notifications_api_root_is_the_printed_api_root(env_factory, fake_runner
     deployments(fake_runner)
     fake_runner.answers["exec -i deploy/openvtb"] = (0, "chatter\nPTEST_VALUE=https://on.test/api/v1/\n")
     assert openvtb.notifications_api_root(env_factory()) == "https://on.test/api/v1/"
+
+
+def test_served_apis_follow_the_settings_module(env_factory, fake_runner):
+    deployments(fake_runner)
+    fake_runner.answers["printenv DJANGO_SETTINGS_MODULE"] = (0, "openvtb.conf.podiumd_berichten\n")
+    assert openvtb.served_apis(env_factory()) == {"berichten"}
+    fake_runner.answers["printenv DJANGO_SETTINGS_MODULE"] = (0, "openvtb.conf.docker\n")
+    assert openvtb.served_apis(env_factory()) == {"verzoeken", "taken", "berichten"}
+
+
+def test_page_statuses_are_the_snippets_answer(env_factory, fake_runner):
+    deployments(fake_runner)
+    fake_runner.answers["exec -i deploy/openvtb"] = (0, 'PTEST_VALUE={"/admin/": 200}\n')
+    assert openvtb.page_statuses(env_factory()) == {"/admin/": 200}

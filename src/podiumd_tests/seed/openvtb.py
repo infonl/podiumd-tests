@@ -5,6 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from typing import cast
 
+import pytest
+
+from podiumd_tests.capabilities import CLUSTER
+from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.kube import DJANGO_VALUE_MARKER
 from podiumd_tests.kube import django_values
 from podiumd_tests.seed.openzaak import after_period
@@ -123,6 +127,34 @@ OPENVTB_BEAT = "openvtb-beat"
 # The type prefix of Open VTB's bericht CloudEvents and the beat task that publishes due berichten.
 BERICHT_EVENTS = "nl.overheid.berichten."
 PUBLISH_TASK = "openvtb.components.berichten.tasks.send_berichten_events"
+# The beat task that sends the reminder and expired CloudEvents of existing taken.
+TAKEN_TASK = "openvtb.components.taken.tasks.send_taak_events"
+# The APIs a podiumd settings module of Open VTB shuts: its middleware answers 404 to their paths (IN-3500, helm-charts
+# #749). openvtb.conf.podiumd_all and Open VTB's own settings serve every API.
+SHUT_BY_SETTINGS = {"openvtb.conf.podiumd_berichten": ("verzoeken", "taken")}
+# A list endpoint of each Open VTB API.
+API_LISTS = {
+    "verzoeken": "/verzoeken/api/v1/verzoeken",
+    "taken": "/taken/api/v1/externetaken",
+    "berichten": "/berichten/api/v1/berichten",
+}
+# Open VTB's own pages: the admin of every API's models, each API's index page and the Berichten API's schema.
+ADMIN_MODELS = (
+    "berichten/bericht",
+    "berichten/berichttype",
+    "taken/externetaak",
+    "verzoeken/verzoek",
+    "verzoeken/verzoektype",
+    "verzoeken/bijlagetype",
+)
+PAGES = (
+    "/admin/",
+    *(f"/admin/{model}/{page}" for model in ADMIN_MODELS for page in ("", "add/")),
+    "/berichten/",
+    "/verzoeken/",
+    "/taken/",
+    "/berichten/api/v1/openapi.yaml",
+)
 
 
 def missing_celery(env: Environment) -> str | None:
@@ -143,11 +175,29 @@ def notifications_api_root(env: Environment) -> str:
     return django_values(env.kube.exec_django_shell(env.deployment_for("openvtb"), code))[0]
 
 
-def publish_schedules(env: Environment) -> list[str]:
-    """Return the crontabs of Open VTB's enabled periodic tasks that publish due berichten."""
+def served_apis(env: Environment) -> set[str]:
+    """Return the Open VTB APIs this environment serves, by its deployed settings module (no Django shell)."""
+    module = env.variable("openvtb", "DJANGO_SETTINGS_MODULE")
+    return set(API_LISTS).difference(SHUT_BY_SETTINGS.get(module, ()))
+
+
+def skip_shut_api(env: Environment, api: str) -> None:
+    """Skip where podiumd's Open VTB settings shut the api (verzoeken, taken; IN-3500); never without cluster access."""
+    if not env.capabilities.skip_reason(CLUSTER) and api not in served_apis(env):
+        pytest.skip(f"Open VTB's {api} API is shut on {env.profile.name} (podiumd's Open VTB settings module)")
+
+
+def page_statuses(env: Environment) -> dict[str, int]:
+    """Return the HTTP status of each of Open VTB's PAGES for a temporary superuser."""
+    statuses = run_snippet(env.kube, env.deployment_for("openvtb"), "openvtb_pages", {"paths": list(PAGES)})
+    return cast("dict[str, int]", statuses)
+
+
+def enabled_schedules(env: Environment, task: str) -> list[str]:
+    """Return the crontabs of Open VTB's enabled periodic tasks that run task (PUBLISH_TASK, TAKEN_TASK)."""
     code = (
         "from django_celery_beat.models import PeriodicTask\n"
-        f"for task in PeriodicTask.objects.filter(task={PUBLISH_TASK!r}, enabled=True):\n"
+        f"for task in PeriodicTask.objects.filter(task={task!r}, enabled=True):\n"
         f"    print({DJANGO_VALUE_MARKER!r} + str(task.crontab))\n"
         f"print({DJANGO_VALUE_MARKER!r} + 'end')"
     )

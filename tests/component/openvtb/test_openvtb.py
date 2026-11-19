@@ -14,12 +14,13 @@ from podiumd_tests.seed.openklant import random_bsn
 from podiumd_tests.seed.opennotificaties import make_cloudevent_abonnement
 from podiumd_tests.seed.openvtb import BERICHT_EVENTS
 from podiumd_tests.seed.openvtb import PROFILE_FIELDS
+from podiumd_tests.seed.openvtb import PUBLISH_TASK
 from podiumd_tests.seed.openvtb import TAAK_DETAILS
+from podiumd_tests.seed.openvtb import enabled_schedules
 from podiumd_tests.seed.openvtb import make_bericht
 from podiumd_tests.seed.openvtb import make_taak
 from podiumd_tests.seed.openvtb import missing_celery
 from podiumd_tests.seed.openvtb import publish_bericht
-from podiumd_tests.seed.openvtb import publish_schedules
 from podiumd_tests.seed.openvtb import taak_body
 from podiumd_tests.seed.openvtb import without
 from podiumd_tests.seed.openvtb import zaak_urn
@@ -244,4 +245,4 @@ def test_bericht_events_reach_open_notificaties_subscribers(  # the chain's clie
 def test_due_berichten_are_published_on_a_schedule(podiumd_env: Environment) -> None:
     """Open VTB's beat has an enabled periodic task send_berichten_events."""
     expect_celery(podiumd_env)
-    assert publish_schedules(podiumd_env), "Open VTB has no enabled periodic task send_berichten_events"
+    assert enabled_schedules(podiumd_env, PUBLISH_TASK), "Open VTB has no enabled periodic task send_berichten_events"

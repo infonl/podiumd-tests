@@ -31,10 +31,9 @@ from podiumd_tests.kube import cluster_service
 from podiumd_tests.lock import file_lock
 from podiumd_tests.mock_server import Callback
 from podiumd_tests.oidc import challenge_session
+from podiumd_tests.seed import openzaak as openzaak_seed
 from podiumd_tests.seed.objecten import objecttype_url
-from podiumd_tests.seed.openzaak import ZaaktypeParts
-from podiumd_tests.seed.openzaak import published_zaaktype
-from podiumd_tests.seed.openzaak import zaaktype_parts
+from podiumd_tests.seed.openvtb import skip_shut_api
 from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.sources import source_problems
@@ -231,15 +230,17 @@ def fixture_openklant(podiumd_env: Environment, need_bootstrap: Callable[..., No
 
 @pytest.fixture(scope="session", name="openvtb_verzoeken")
 def fixture_openvtb_verzoeken(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
-    """Open VTB's verzoeken API with the suite's own token (bootstrap step openvtb-token)."""
+    """Open VTB's verzoeken API with the suite's own token (bootstrap step openvtb-token); skip where it is shut."""
     need_bootstrap("openvtb-token")
+    skip_shut_api(podiumd_env, "verzoeken")
     return platform.openvtb_client(podiumd_env, "verzoeken")
 
 
 @pytest.fixture(scope="session", name="openvtb_taken")
 def fixture_openvtb_taken(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
-    """Open VTB's taken API with the suite's own token (bootstrap step openvtb-token)."""
+    """Open VTB's taken API with the suite's own token (bootstrap step openvtb-token); skip where it is shut."""
     need_bootstrap("openvtb-token")
+    skip_shut_api(podiumd_env, "taken")
     return platform.openvtb_client(podiumd_env, "taken")
 
 
@@ -363,7 +364,7 @@ def fixture_opennotificaties(podiumd_env: Environment, need_bootstrap: Callable[
 def fixture_test_zaaktype(openzaak: ApiClient, need_bootstrap: Callable[..., None]) -> JsonObject:
     """Return the published test zaaktype in the test catalogus (bootstrap step openzaak-zaaktype)."""
     need_bootstrap("openzaak-zaaktype")
-    return published_zaaktype(openzaak, names.TEST_ZAAKTYPE, "openzaak-zaaktype")
+    return openzaak_seed.published_zaaktype(openzaak, names.TEST_ZAAKTYPE, "openzaak-zaaktype")
 
 
 @pytest.fixture(scope="session", name="selectielijst_zaaktype")
@@ -375,16 +376,18 @@ def fixture_selectielijst_zaaktype(test_zaaktype: JsonObject) -> JsonObject:
 
 
 @pytest.fixture(scope="session", name="archief_parts")
-def fixture_archief_parts(openzaak: ApiClient, need_bootstrap: Callable[..., None]) -> ZaaktypeParts:
+def fixture_archief_parts(openzaak: ApiClient, need_bootstrap: Callable[..., None]) -> openzaak_seed.ZaaktypeParts:
     """Return the types of the archief zaaktype, a second zaaktype in the test catalogus."""
     need_bootstrap("openzaak-zaaktype-archief")
-    return zaaktype_parts(openzaak, published_zaaktype(openzaak, names.ARCHIEF_ZAAKTYPE, "openzaak-zaaktype-archief"))
+    return openzaak_seed.zaaktype_parts(
+        openzaak, openzaak_seed.published_zaaktype(openzaak, names.ARCHIEF_ZAAKTYPE, "openzaak-zaaktype-archief")
+    )
 
 
 @pytest.fixture(scope="session", name="parts")
-def fixture_parts(openzaak: ApiClient, test_zaaktype: JsonObject) -> ZaaktypeParts:
+def fixture_parts(openzaak: ApiClient, test_zaaktype: JsonObject) -> openzaak_seed.ZaaktypeParts:
     """Return the statustypen, roltypen and other types of the test zaaktype."""
-    return zaaktype_parts(openzaak, test_zaaktype)
+    return openzaak_seed.zaaktype_parts(openzaak, test_zaaktype)
 
 
 @pytest.fixture(name="registry")
@@ -529,7 +532,7 @@ def fixture_zac_zaak(
 def fixture_bpmn_zaaktype(openzaak: ApiClient, need_bootstrap: Callable[..., None]) -> JsonObject:
     """Return the BPMN test zaaktype, which ZAC handles with podiumd-tests' BPMN process."""
     need_bootstrap("openzaak-zaaktype-bpmn", "zac-bpmn-process")
-    return published_zaaktype(openzaak, names.BPMN_ZAAKTYPE, "openzaak-zaaktype-bpmn")
+    return openzaak_seed.published_zaaktype(openzaak, names.BPMN_ZAAKTYPE, "openzaak-zaaktype-bpmn")
 
 
 @pytest.fixture(name="bpmn_parameters")

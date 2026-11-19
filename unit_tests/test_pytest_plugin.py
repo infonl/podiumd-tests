@@ -6,6 +6,7 @@ from podiumd_tests import pytest_plugin
 from podiumd_tests.bootstrap import runner
 from podiumd_tests.bootstrap.runner import Outcome
 from podiumd_tests.pytest_plugin import requiring
+from podiumd_tests.seed import openzaak as openzaak_seed
 from podiumd_tests.seed import zac_zaaktype
 
 pytest_plugins = ["pytester"]
@@ -334,7 +335,9 @@ def _fake_zac_and_open_zaak(monkeypatch):
         "challenge_session": lambda _env, url, user, password: (url, user, password),
     }
     for name, fake in fakes.items():
-        monkeypatch.setattr(pytest_plugin, name, fake)
+        # The plugin calls Open Zaak's seed helpers through their module.
+        owner = openzaak_seed if name in {"zaaktype_parts", "published_zaaktype"} else pytest_plugin
+        monkeypatch.setattr(owner, name, fake)
     monkeypatch.setattr(zac_zaaktype, "zac_session", fakes["zac_session"])
     monkeypatch.setattr(
         "podiumd_tests.zac.zaakafhandelparameters", lambda _zac, _url, zaaktype: [{"zaaktype": zaaktype}]
