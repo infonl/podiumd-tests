@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import tempfile
+
+from pathlib import Path
 from typing import TYPE_CHECKING
 from typing import cast
 
@@ -11,6 +14,7 @@ from podiumd_tests.capabilities import CLUSTER
 from podiumd_tests.django_snippets import run_snippet
 from podiumd_tests.kube import DJANGO_VALUE_MARKER
 from podiumd_tests.kube import django_values
+from podiumd_tests.lock import file_lock
 from podiumd_tests.seed.openzaak import after_period
 from podiumd_tests.seed.openzaak import today
 
@@ -165,6 +169,23 @@ def missing_celery(env: Environment) -> str | None:
     return f"no {' and '.join(missing)}: Open VTB sends no CloudEvents (podiumd chart without helm-charts #746)"
 
 
+# Held by every Django shell in Open VTB, across test workers: each shell takes about as much memory as a uWSGI
+# worker (180 MB), and parallel ones OOM-kill Open VTB's pod at its 768Mi limit (minikube and kees00, 2026-11-19).
+SHELL_LOCK = Path(tempfile.gettempdir()) / "podiumd-tests-openvtb-shell.lock"
+
+
+def _shell(env: Environment, code: str) -> str:
+    """Run code in a Django shell of Open VTB, one at a time across test workers; its stdout."""
+    with file_lock(SHELL_LOCK):
+        return env.kube.exec_django_shell(env.deployment_for("openvtb"), code)
+
+
+def _snippet(env: Environment, name: str, params: dict[str, object]) -> object:
+    """Run snippets/<name>.py in Open VTB, one shell at a time across test workers; its result."""
+    with file_lock(SHELL_LOCK):
+        return run_snippet(env.kube, env.deployment_for("openvtb"), name, params)
+
+
 def notifications_api_root(env: Environment) -> str:
     """Return the API root of the Open Notificaties service Open VTB publishes its events to; empty when none."""
     code = (
@@ -172,7 +193,7 @@ def notifications_api_root(env: Environment) -> str:
         "service = NotificationsConfig.get_solo().notifications_api_service\n"
         f"print({DJANGO_VALUE_MARKER!r} + (service.api_root if service else ''))"
     )
-    return django_values(env.kube.exec_django_shell(env.deployment_for("openvtb"), code))[0]
+    return django_values(_shell(env, code))[0]
 
 
 def served_apis(env: Environment) -> set[str]:
@@ -189,7 +210,7 @@ def skip_shut_api(env: Environment, api: str) -> None:
 
 def page_statuses(env: Environment) -> dict[str, int]:
     """Return the HTTP status of each of Open VTB's PAGES for a temporary superuser."""
-    statuses = run_snippet(env.kube, env.deployment_for("openvtb"), "openvtb_pages", {"paths": list(PAGES)})
+    statuses = _snippet(env, "openvtb_pages", {"paths": list(PAGES)})
     return cast("dict[str, int]", statuses)
 
 
@@ -201,7 +222,7 @@ def enabled_schedules(env: Environment, task: str) -> list[str]:
         f"    print({DJANGO_VALUE_MARKER!r} + str(task.crontab))\n"
         f"print({DJANGO_VALUE_MARKER!r} + 'end')"
     )
-    values = django_values(env.kube.exec_django_shell(env.deployment_for("openvtb"), code))
+    values = django_values(_shell(env, code))
     return values[:-1]
 
 
@@ -217,10 +238,10 @@ def publish_bericht(env: Environment, bericht: str) -> None:
         "send_bericht.delay(pk)\n"
         "mark_as_published.delay([pk])"
     )
-    env.kube.exec_django_shell(env.deployment_for("openvtb"), code)
+    _shell(env, code)
 
 
 def _delete_bericht(env: Environment, bericht: str) -> None:
     """Delete a bericht (uuid), which frees its berichttype, in Open VTB's Django shell: the API answers 405."""
     code = f"from openvtb.components.berichten.models import Bericht\nBericht.objects.filter(uuid={bericht!r}).delete()"
-    env.kube.exec_django_shell(env.deployment_for("openvtb"), code)
+    _shell(env, code)
