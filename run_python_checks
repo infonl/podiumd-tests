@@ -53,30 +53,31 @@ fi
 SRC=src/podiumd_tests
 TEST_DIRS=(tests unit_tests)
 
-# Arrays keep each file name one argument (SC2046). set -e misses failures
-# inside <(...), so `wait "$!"` checks each one (SC2312).
-mapfile -t test_files < <(find "${TEST_DIRS[@]}" -name '*.py')
-wait "$!"
-# Shell scripts: sh/bash/dash/ksh shebang, or *.sh.
-mapfile -t shell_scripts < <(
-    find . -path ./.venv -prune -o -path ./.git -prune -o -path ./results -prune -o -path ./.claude/worktrees -prune \
-        -o -path '*/__pycache__' -prune -o -path ./.ruff_cache -prune -o -path ./.pytest_cache -prune \
-        -o -type f -print0 |
-        # LC_ALL=C: BSD awk (macOS) stops on bytes that are not valid UTF-8; only the shebang matters here.
-        LC_ALL=C xargs -0 awk 'FNR == 1 && (/^#!.*[\/ ](ba|da|k)?sh([ \t]|$)/ || FILENAME ~ /\.sh$/) {print FILENAME} {nextfile}' |
-        sort
-)
-wait "$!"
-# results/: generated run summaries; bug-reports/: drafts for others, not in git; .claude/worktrees/: agents' checkouts.
-mapfile -t markdown_files < <(
-    find . -path ./.venv -prune -o -path ./.git -prune -o -path ./results -prune -o -path ./bug-reports -prune \
-        -o -path ./.claude/worktrees -prune -o -name '*.md' -print | sort
-)
-wait "$!"
-
-# Each check is a step function. Its output goes to its own log; the logs are printed in order once all groups end.
+# Each check's log, and the file lists below, go into a temporary folder.
 logs=$(mktemp -d)
 trap 'rm -rf "$logs"' EXIT
+
+# The file lists become arrays through a read loop, not mapfile, which the Bash 3.2 of macOS lacks; arrays keep each
+# file name one argument (SC2046). Each list goes to a file first, so a failing find stops the run under set -e.
+find "${TEST_DIRS[@]}" -name '*.py' > "$logs/test_files"
+test_files=()
+while IFS= read -r line; do test_files+=("$line"); done < "$logs/test_files"
+# Shell scripts: sh/bash/dash/ksh shebang, or *.sh.
+find . -path ./.venv -prune -o -path ./.git -prune -o -path ./results -prune -o -path ./.claude/worktrees -prune \
+    -o -path '*/__pycache__' -prune -o -path ./.ruff_cache -prune -o -path ./.pytest_cache -prune \
+    -o -type f -print0 |
+    # LC_ALL=C: BSD awk (macOS) stops on bytes that are not valid UTF-8; only the shebang matters here.
+    LC_ALL=C xargs -0 awk 'FNR == 1 && (/^#!.*[\/ ](ba|da|k)?sh([ \t]|$)/ || FILENAME ~ /\.sh$/) {print FILENAME} {nextfile}' |
+    sort > "$logs/shell_scripts"
+shell_scripts=()
+while IFS= read -r line; do shell_scripts+=("$line"); done < "$logs/shell_scripts"
+# results/: generated run summaries; bug-reports/: drafts for others, not in git; .claude/worktrees/: agents' checkouts.
+find . -path ./.venv -prune -o -path ./.git -prune -o -path ./results -prune -o -path ./bug-reports -prune \
+    -o -path ./.claude/worktrees -prune -o -name '*.md' -print | sort > "$logs/markdown_files"
+markdown_files=()
+while IFS= read -r line; do markdown_files+=("$line"); done < "$logs/markdown_files"
+
+# Each check is a step function. Its output goes to its own log; the logs are printed in order once all groups end.
 
 step_ruff_check() { ruff check .; }
 
