@@ -16,7 +16,8 @@ The podiumd-minikube agent works on the same live minikube at the same time: it 
 - Book every use of kees00 or minikube beyond smoke and single reruns in the env ledger first (Kees, 2026-11-18):
   `E=../podiumd-local-review/.claude/skills/env-ledger/env-ledger.py`; `$E check ENV --for 45m [--resets]
   [--disruptive]`, then `$E book ENV --agent podiumd-tests --what ... --for ... --start`, `heartbeat` during long
-  runs, `done` afterwards (SKILL.md there). The locks below stay.
+  runs, `done` afterwards (SKILL.md there). The locks below stay. The CLI books, beats and closes its own disruptive
+  booking wherever it takes the lock (profile setting `env_ledger`); book by hand only for other work.
 - Where to run: chart and deploy tests, unmerged branches, fresh installs and resets on minikube; estate-like full
   tiers, load, chaos and hosting-standards checks on kees00; smoke and single reruns on either. Spread own full
   tiers over both.
