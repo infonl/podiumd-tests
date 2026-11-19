@@ -210,22 +210,22 @@ def ledger_env(tmp_path, profile_factory, fake_runner):
 
 
 def test_held_books_the_environment_in_the_env_ledger_and_closes_the_booking(tmp_path, profile_factory, fake_runner):
-    fake_runner.answers = {" book ": (0, "test-env-1119-0900-ab12\n"), "env-ledger.py": (0, "")}
+    booked = json.dumps({"ok": True, "booking": "test-env-1119-0900-ab12"})
+    fake_runner.answers = {" book ": (0, booked), "env-ledger.py": (0, "")}
     with held(ledger_env(tmp_path, profile_factory, fake_runner), "run full"):
         assert (tmp_path / "lock").exists()
-    verbs = [call[1:4] for call in fake_runner.calls if call[0].endswith("env-ledger.py")]
-    assert verbs == [
-        ["book", "test-env", "--what"],
-        ["start", "test-env", "test-env-1119-0900-ab12"],
-        ["done", "test-env", "test-env-1119-0900-ab12"],
-    ]
-    assert "--disruptive" in fake_runner.calls[-3]
+    ledger_calls = [call for call in fake_runner.calls if call[0].endswith("env-ledger.py")]
+    assert [call[1:3] for call in ledger_calls] == [["book", "test-env"], ["done", "test-env"]]
+    assert ledger_calls[0][ledger_calls[0].index("--ignore-lock-holder") + 1] == holder("run full")
+    assert ledger_calls[1][3] == "test-env-1119-0900-ab12"
 
 
 def test_a_conflicting_booking_refuses_and_releases_the_lock(tmp_path, profile_factory, fake_runner):
-    fake_runner.answers = {" book ": (1, "CONFLICT  kees00-1119-0800-cd34 podiumd-minikube [resets] reset")}
+    refused = {"ok": False, "conflicts": [{"agent": "podiumd-minikube", "what": "reset"}], "locks": []}
+    # The ledger exits 3 with this on stdout; the code reads only "ok".
+    fake_runner.answers = {" book ": (0, json.dumps(refused))}
     env = ledger_env(tmp_path, profile_factory, fake_runner)
-    with pytest.raises(LockBusyError, match="podiumd-minikube"), held(env, "bootstrap"):  # noqa: WPS328  # enter is under test
+    with pytest.raises(LockBusyError, match="podiumd-minikube: reset"), held(env, "bootstrap"):  # noqa: WPS328  # enter is under test
         ...
     assert not (tmp_path / "lock").exists()
 

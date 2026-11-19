@@ -16,7 +16,7 @@ podiumd-tests hold.
 
 With settings.env_ledger (env-ledger.py, relative to the directory that holds podiumd-tests), the hold is also a
 disruptive booking of the environment named as the profile in that ledger, kept alive by heartbeats and closed when
-the hold ends. The booking follows the locks and skips book --start's lock check, which would see the run's own locks.
+the hold ends. The ledger skips the run's own locks (--ignore-lock-holder).
 """
 
 from __future__ import annotations
@@ -43,6 +43,7 @@ from typing import TYPE_CHECKING
 
 from podiumd_tests.capabilities import CLUSTER
 from podiumd_tests.config import REPO_ROOT
+from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import KubeError
 from podiumd_tests.process import ProcessError
@@ -325,7 +326,7 @@ def held(env: Environment, what: str) -> Generator[None]:
             stack.enter_context(_take_file(lock, who))
         stack.callback(_release, kube, lock, who)
         stack.enter_context(_leased(kube, who, settings))
-        booking = stack.enter_context(_booked(env, what))
+        booking = stack.enter_context(_booked(env, who, what))
         stack.enter_context(_interrupt_on_sigterm(lambda: _release(kube, lock, who, booking)))
         taken = [str(lock)] if lock else []
         taken += [f"lease {LEASE} in {kube.namespace}"] if kube else []
@@ -415,9 +416,9 @@ class Booking:
 
 
 @contextmanager
-def _booked(env: Environment, what: str) -> Generator[Booking | None]:
+def _booked(env: Environment, who: str, what: str) -> Generator[Booking | None]:
     """Book the environment while the block runs, sending heartbeats; None without a ledger."""
-    booking = book(env, what)
+    booking = book(env, who, what)
     if booking is None:
         yield None
         return
@@ -431,10 +432,10 @@ def _minutes(span: timedelta) -> str:
     return f"{int(span.total_seconds() // 60)}m"
 
 
-def book(env: Environment, what: str) -> Booking | None:
-    """Book the environment in settings.env_ledger and start the booking; None without a ledger on this host.
+def book(env: Environment, who: str, what: str) -> Booking | None:
+    """Book and start the environment in settings.env_ledger; None without a ledger on this host.
 
-    LockBusyError when the ledger refuses: a conflicting booking of another agent.
+    LockBusyError when the ledger refuses or fails. `who` holds the run's own locks, which the ledger skips.
     """
     setting = env.profile.settings.get("env_ledger")
     if not setting:
@@ -444,17 +445,25 @@ def book(env: Environment, what: str) -> Booking | None:
         print(f"not booked: env ledger {script} not found on this host", file=sys.stderr)
         return None
     ledger = env.profile.name
-    command = [script, "book", ledger, "--what", what, "--for", _minutes(BOOKING), "--disruptive", "--agent", HOLDER]
+    command = [
+        *(script, "book", ledger, "--what", what, "--for", _minutes(BOOKING), "--disruptive", "--start", "--json"),
+        *("--ignore-lock-holder", who, "--agent", HOLDER),
+    ]
     result = env.kube.runner(command, LEDGER_TIMEOUT)
-    if result.returncode:
-        msg = f"env ledger refused {ledger}: {(result.stdout + result.stderr).strip()}"
-        raise LockBusyError(msg)
-    booked = result.stdout.strip().splitlines()[-1]
-    booking = Booking(script, ledger, env.kube.runner, booked, datetime.now(tz=UTC) + BOOKING)
     try:
-        booking.call("start")
-    except ProcessError as exc:
-        booking.close()
-        msg = f"env ledger booking {booked} not started: {exc}"
-        raise LockBusyError(msg) from exc
-    return booking
+        answer: JsonObject = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        answer = {"ok": False, "error": result.stderr.strip() or f"exit code {result.returncode}"}
+    if not answer.get("ok"):
+        msg = f"env ledger refused {ledger}: {_refusal(answer)}"
+        raise LockBusyError(msg)
+    booked = str(answer["booking"])
+    return Booking(script, ledger, env.kube.runner, booked, datetime.now(tz=UTC) + BOOKING)
+
+
+def _refusal(answer: JsonObject) -> str:
+    """Return the ledger's error, conflicting bookings and lock holders in one line."""
+    parts = [str(answer["error"])] if answer.get("error") else []
+    parts += [f"{other['agent']}: {other['what']}" for other in entries(answer.get("conflicts"))]
+    parts += [f"{lock['lock']}: {lock['holder']}" for lock in entries(answer.get("locks"))]
+    return "; ".join(parts) or "refused"
