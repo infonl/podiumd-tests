@@ -25,6 +25,12 @@ def abonnement_body(
     return {"callbackUrl": callback_url, "auth": auth, "kanalen": [{"naam": kanaal, "filters": filters}]}
 
 
+def cloudevent_abonnement_body(callback_url: str, type_substring: str, auth: str) -> dict[str, object]:
+    """Return an abonnement on the CloudEvents whose type contains type_substring (Open VTB's, for example)."""
+    filters = [{"typeSubstring": type_substring}]
+    return {"callbackUrl": callback_url, "auth": auth, "sendCloudevents": True, "cloudeventFilters": filters}
+
+
 def make_abonnement(
     opennotificaties: ApiClient, registry: ResourceRegistry, callback_url: str, kanaal: str, filters: dict[str, str]
 ) -> JsonObject:

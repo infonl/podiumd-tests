@@ -1,5 +1,5 @@
 """OMC's taak objecttype, and wiring: OMC's abonnement on kanaal zaken, so zaak events reach OMC (TA and
-ExternalsPodiumD subscribe it by hand).
+ExternalsPodiumD subscribe it by hand), and, where OMC reads Open VTB, one on Open VTB's bericht CloudEvents.
 
 The abonnement's auth is a token OMC accepts: HS256 with OMC's own secret and its issuer,
 audience and user claims, all read from the OMC pod. It expires after VALIDITY; the step then
@@ -27,6 +27,7 @@ from podiumd_tests.clients.platform import opennotificaties_client
 from podiumd_tests.mock_server import mock_server_root
 from podiumd_tests.responses import url_host
 from podiumd_tests.seed.opennotificaties import abonnement_body
+from podiumd_tests.seed.opennotificaties import cloudevent_abonnement_body
 from podiumd_tests.seed.opennotificaties import delete_abonnement
 
 if TYPE_CHECKING:
@@ -39,6 +40,10 @@ VALIDITY = 365 * 24 * 3600
 RENEW_BEFORE = 7 * 24 * 3600
 # OMC's endpoint for notifications, the end of its abonnement's callback URL.
 LISTEN_PATH = "/Events/Listen"
+# The type prefix of Open VTB's bericht CloudEvents.
+BERICHT_EVENTS = "nl.overheid.berichten."
+# The podiumd chart's ZGW_ENDPOINT_OPENVTB where OMC does not read Open VTB: its host never resolves.
+UNSET_HOST_SUFFIX = ".invalid"
 # The taak as OMC 2.3.1 reads it first (its vHague TaskObject); the environment owner sets OMC's
 # ZGW_VARIABLE_OBJECTTYPE_TASKOBJECTTYPE_UUID to TAAK_OBJECTTYPE_UUID.
 TAAK_SCHEMA = {
@@ -137,6 +142,12 @@ def omc_actor_missing(env: Environment, openklant: ApiClient) -> str | None:
     return f"Open Klant has no actor {actor} (OMC_ACTOR_ID): the environment owner creates it"
 
 
+def is_reading_openvtb(env: Environment) -> bool:
+    """Return whether OMC reads Open VTB: its ZGW_ENDPOINT_OPENVTB is set and not the chart's placeholder."""
+    endpoint = env.variable("omc", "ZGW_ENDPOINT_OPENVTB")
+    return bool(endpoint) and not url_host(endpoint).endswith(UNSET_HOST_SUFFIX)
+
+
 def omc_token(env: Environment, now: float) -> str:
     """Return a token OMC's Events/Listen and Notify/Confirm accept, valid for VALIDITY from now."""
     payload = {
@@ -157,7 +168,11 @@ def _issuer_and_audience(env: Environment) -> str:
 
 @dataclass(frozen=True)
 class OmcAbonnement:
-    """An abonnement of OMC's Events/Listen on kanaal zaken, made with the suite's Open Notificaties client."""
+    """OMC's Events/Listen abonnementen on kanaal zaken and Open VTB's bericht CloudEvents, made with the suite's
+    Open Notificaties client.
+
+    Two abonnementen: sendCloudevents would also turn the zaken notifications into CloudEvents, which OMC drops.
+    """
 
     name: str = "omc-abonnement"
     requires: tuple[str, ...] = ("omc", "opennotificaties")
@@ -170,24 +185,30 @@ class OmcAbonnement:
             return False
         if record.get("issuer_audience") != _issuer_and_audience(ctx.env):
             return False
-        response = opennotificaties_client(ctx.env).request(
-            "GET", str(record["url"]), HTTPStatus.OK, HTTPStatus.NOT_FOUND
-        )
-        return response.status_code == HTTPStatus.OK
+        if is_reading_openvtb(ctx.env) != bool(record.get("berichten_url")):
+            return False
+        client = opennotificaties_client(ctx.env)
+        urls = [str(record[key]) for key in ("url", "berichten_url") if record.get(key)]
+        return all(client.request("GET", url, HTTPStatus.OK, HTTPStatus.NOT_FOUND).ok for url in urls)
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Replace the recorded abonnement with one carrying a fresh token."""
         self.remove(ctx)
         now = time.time()
         callback = ctx.env.profile.urls["omc"] + LISTEN_PATH
-        body = abonnement_body(callback, "zaken", {}, auth=f"Bearer {omc_token(ctx.env, now)}")
-        created = opennotificaties_client(ctx.env).post("abonnement", body)
+        auth = f"Bearer {omc_token(ctx.env, now)}"
+        client = opennotificaties_client(ctx.env)
+        created = client.post("abonnement", abonnement_body(callback, "zaken", {}, auth=auth))
         record = {"url": created["url"], "expires": now + VALIDITY, "issuer_audience": _issuer_and_audience(ctx.env)}
+        if is_reading_openvtb(ctx.env):
+            berichten = client.post("abonnement", cloudevent_abonnement_body(callback, BERICHT_EVENTS, auth))
+            record["berichten_url"] = berichten["url"]
         return {STORE_KEY: json.dumps(record)}
 
     def remove(self, ctx: Context, /) -> tuple[str, ...]:  # noqa: PLR6301  # a Step method
         """Delete the recorded abonnement."""
-        record = ctx.record(STORE_KEY)
-        if record:
-            delete_abonnement(opennotificaties_client(ctx.env), str(record["url"]))
+        record = ctx.record(STORE_KEY) or {}
+        for key in ("url", "berichten_url"):
+            if record.get(key):
+                delete_abonnement(opennotificaties_client(ctx.env), str(record[key]))
         return (STORE_KEY,)

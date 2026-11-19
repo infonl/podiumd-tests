@@ -1,4 +1,4 @@
-"""Unit tests for OMC's abonnement on kanaal zaken."""
+"""Unit tests for OMC's abonnementen on kanaal zaken and Open VTB's bericht CloudEvents."""
 
 import base64
 import json
@@ -12,6 +12,7 @@ from podiumd_tests.bootstrap.omc import OMC_TAAK_OBJECTTYPE
 from podiumd_tests.bootstrap.omc import STORE_KEY
 from podiumd_tests.bootstrap.omc import VALIDITY
 from podiumd_tests.bootstrap.omc import OmcAbonnement
+from podiumd_tests.bootstrap.omc import is_reading_openvtb
 from podiumd_tests.bootstrap.omc import notify_mock_missing
 from podiumd_tests.bootstrap.omc import omc_actor_missing
 from podiumd_tests.bootstrap.runner import Context
@@ -29,7 +30,8 @@ def b64url_json(part):
 
 @pytest.fixture
 def ctx(env_factory, profile_factory, fake_runner):
-    def build(record=None):
+    def build(record=None, openvtb="https://openvtb.invalid"):
+        fake_runner.answers["printenv ZGW_ENDPOINT_OPENVTB"] = (0, f"{openvtb}\n")
         data = {STORE_KEY: base64.b64encode(json.dumps(record).encode()).decode()} if record else {}
         fake_runner.answers["get secret podiumd-tests-credentials"] = (0, json.dumps({"kind": "Secret", "data": data}))
         fake_runner.answers["get deployments"] = (0, json.dumps({"items": [{"metadata": {"name": "omc"}}]}))
@@ -73,6 +75,38 @@ def test_apply_replaces_the_recorded_abonnement_with_a_fresh_token(ctx, fake_htt
     assert (claims["iss"], claims["aud"], claims["exp"] - claims["iat"]) == ("issuer", "audience", VALIDITY)
     assert json.loads(stored[STORE_KEY])["url"] == ABONNEMENT
     assert json.loads(stored[STORE_KEY])["issuer_audience"] == "issuer audience"
+
+
+OPENVTB = "https://openvtb.example.test/berichten/api/v1"
+BERICHTEN = f"{ON}/api/v1/abonnement/b1"
+
+
+@pytest.mark.parametrize(("endpoint", "reads"), [(OPENVTB, True), ("https://openvtb.invalid", False), ("", False)])
+def test_omc_reads_open_vtb_unless_its_endpoint_is_the_placeholder(ctx, endpoint, reads):
+    assert is_reading_openvtb(ctx(openvtb=endpoint).env) is reads
+
+
+def test_apply_adds_the_bericht_cloudevent_abonnement_where_omc_reads_open_vtb(ctx, fake_http):
+    sent = fake_http({"POST /api/v1/abonnement": (201, {"url": ABONNEMENT})})
+    stored = OmcAbonnement().apply(ctx(openvtb=OPENVTB))
+    bodies = [json.loads(s.body) for s in sent]
+    assert [body.get("sendCloudevents", False) for body in bodies] == [False, True]
+    assert bodies[1]["cloudeventFilters"] == [{"typeSubstring": "nl.overheid.berichten."}]
+    assert bodies[1]["auth"] == bodies[0]["auth"]
+    assert json.loads(stored[STORE_KEY])["berichten_url"] == ABONNEMENT
+
+
+def test_a_record_without_the_bericht_abonnement_is_missing_where_omc_reads_open_vtb(ctx, fake_http):
+    fake_http({"GET /api/v1/abonnement/a1": (200, {}), "GET /api/v1/abonnement/b1": (200, {})})
+    record = {"url": ABONNEMENT, "expires": time.time() + VALIDITY, "issuer_audience": "issuer audience"}
+    assert not OmcAbonnement().is_present(ctx(record, openvtb=OPENVTB))
+    assert OmcAbonnement().is_present(ctx({**record, "berichten_url": BERICHTEN}, openvtb=OPENVTB))
+
+
+def test_remove_deletes_both_abonnementen(ctx, fake_http):
+    sent = fake_http({"DELETE /api/v1/abonnement": (204, None)})
+    OmcAbonnement().remove(ctx({"url": ABONNEMENT, "berichten_url": BERICHTEN, "expires": 0}))
+    assert [s.url for s in sent] == [ABONNEMENT, BERICHTEN]
 
 
 def test_remove_without_record_only_drops_the_key(ctx, fake_http):
