@@ -35,7 +35,6 @@ from podiumd_tests.omc import listen
 from podiumd_tests.omc import make_inwoner
 from podiumd_tests.omc import notify_request
 from podiumd_tests.omc import setting_skip
-from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openvtb import BERICHTENBOX_TYPE
 from podiumd_tests.seed.openvtb import make_bericht
 from podiumd_tests.seed.openvtb import missing_celery
@@ -155,23 +154,30 @@ def test_bericht_is_mailed_to_the_inwoner(
 
 def offer_to_berichtenbox(  # the chain's clients
     request: pytest.FixtureRequest,
-    http: requests.Session,
     env: Environment,
+    need_bootstrap: Callable[..., None],
     clients: tuple[ApiClient, ApiClient, ApiClient],
     registry: ResourceRegistry,
     parts: ZaaktypeParts,
 ) -> tuple[JsonObject, str, JsonObject]:
-    """Publish a Berichtenbox bericht with a brief as bijlage to a new inwoner and have OMC offer it to Notify.
+    """Publish a Berichtenbox bericht with a brief as bijlage to a new inwoner through Open VTB and Open Notificaties.
 
-    clients: Open VTB's Berichten API, Open Klant and Open Zaak. Returns the bericht, the inwoner's BSN and the mock
-    server's record of OMC's Berichtenbox request.
+    IN-3532 flow 1 up to Notify. clients: Open VTB's Berichten API, Open Klant and Open Zaak. Returns the bericht, the
+    inwoner's BSN and the mock server's record of OMC's Berichtenbox request.
     """
     berichten, openklant, openzaak = clients
-    reason = notify_mock_missing(env) or setting_skip(
-        env, "ZGW_WHITELIST_VTBMESSAGE_TYPES", BERICHTENBOX_TYPE, listed=True
-    )
+    need_bootstrap("infra-mock-server", "omc-abonnement")
+    reason = notify_mock_missing(env)
+    if not reason and not is_reading_openvtb(env):
+        reason = "OMC's ZGW_ENDPOINT_OPENVTB is not set: OMC reads no Open VTB berichten"
+    reason = reason or setting_skip(env, "ZGW_WHITELIST_VTBMESSAGE_TYPES", BERICHTENBOX_TYPE, listed=True)
     if reason:
         pytest.skip(reason)
+    # OMC reads Open VTB, so Open VTB must send its events: a missing worker or beat fails (IN-3501).
+    failure = missing_celery(env)
+    if failure:
+        pytest.fail(failure)
+    expect_omc_5(request, env)
     # The partij exists beforehand, so cleanup removes it; OMC would otherwise create one.
     bsn = make_inwoner(openklant, registry, own_address(registry))
     brief = make_document(
@@ -184,25 +190,30 @@ def offer_to_berichtenbox(  # the chain's clients
     }
     bericht = make_bericht(env, berichten, registry, f"urn:nld:brp:bsn:{bsn}", berichtenbox=True, bijlagen=[bijlage])
     clean_up_klantcontacten(openklant, registry, str(bericht["uuid"]))
-    expect_omc_5(request, env)
+    publish_bericht(env, str(bericht["uuid"]))
     with symptom():
-        expect_status(listen(http, env, bericht_event(PUBLISHED, str(bericht["uuid"]))), HTTPStatus.ACCEPTED)
-    return bericht, bsn, notify_request(env, MESSAGEBOX, bsn)
+        sent = notify_request(env, MESSAGEBOX, bsn)
+    return bericht, bsn, sent
 
 
-@pytest.mark.requires("openklant", "openzaak")
+@pytest.mark.requires("openklant", "openzaak", "opennotificaties")
 @pytest.mark.source(
-    "Jira IN-3532", "1: a bericht with metadata and a pdf makes OMC offer the brief to the Berichtenbox."
+    "Jira IN-3532",
+    "1: a bericht with metadata and a pdf made in Open VTB reaches OMC through Open Notificaties, which offers the"
+    " brief to the Berichtenbox (B1, G1, B3, B4, G2-G5, B2, B5, B6).",
+)
+@pytest.mark.source(
+    "Jira IN-3501", "Open VTB's worker sends the bericht's CloudEvent through Open Notificaties to OMC."
 )
 @pytest.mark.scenario("""
-    Given a published bericht in Open VTB for MijnOverheid's Berichtenbox, to an inwoner's BSN
+    Given an inwoner, and a bericht in Open VTB for MijnOverheid's Berichtenbox to the inwoner's BSN
     And the bericht carries a brief in Open Zaak as bijlage
-    When OMC gets Open VTB's event about it
-    Then OMC asks Notify to deliver the bericht's onderwerp, tekst, type and brief to the inwoner's Berichtenbox
+    When Open VTB publishes the bericht
+    Then Open Notificaties hands Open VTB's event to OMC
+    And OMC asks Notify to deliver the bericht's onderwerp, tekst, type and brief to the inwoner's Berichtenbox
 """)
-def test_berichtenbox_bericht_is_offered_to_the_berichtenbox(  # the chain's clients
+def test_published_bericht_reaches_the_berichtenbox_with_its_brief(  # the chain's clients
     request: pytest.FixtureRequest,
-    http: requests.Session,
     podiumd_env: Environment,
     need_bootstrap: Callable[..., None],
     openvtb_berichten: ApiClient,
@@ -211,10 +222,9 @@ def test_berichtenbox_bericht_is_offered_to_the_berichtenbox(  # the chain's cli
     registry: ResourceRegistry,
     parts: ZaaktypeParts,
 ) -> None:
-    """OMC's Berichtenbox request to Notify carries the bericht's BSN, onderwerp, tekst, type and brief."""
-    need_bootstrap("infra-mock-server")
+    """IN-3532 flow 1: OMC's Berichtenbox request carries the bericht's BSN, onderwerp, tekst, type and brief."""
     clients = (openvtb_berichten, openklant, openzaak)
-    bericht, bsn, sent = offer_to_berichtenbox(request, http, podiumd_env, clients, registry, parts)
+    bericht, bsn, sent = offer_to_berichtenbox(request, podiumd_env, need_bootstrap, clients, registry, parts)
     body = section(sent, "body")
     attachments = entries(body.get("attachments"))
     assert (body.get("recipient"), body.get("subject"), body.get("message"), body.get("message_type")) == (
@@ -226,12 +236,13 @@ def test_berichtenbox_bericht_is_offered_to_the_berichtenbox(  # the chain's cli
     assert [base64.b64decode(str(item.get("file"))).decode() for item in attachments] == [BRIEF]
 
 
-@pytest.mark.requires("openklant", "openzaak")
+@pytest.mark.requires("openklant", "openzaak", "opennotificaties")
 @pytest.mark.source(
-    "Jira IN-3532", "2: OMC logs the Berichtenbox's report that the bericht was delivered as a klantcontact."
+    "Jira IN-3532",
+    "2: OMC logs the Berichtenbox's report that the bericht was delivered as a klantcontact (G7, B7, G8, B8, G9).",
 )
 @pytest.mark.scenario("""
-    Given OMC offered an inwoner's Berichtenbox bericht to Notify
+    Given a bericht published in Open VTB that OMC offered to the inwoner's Berichtenbox through Notify
     When Notify reports to OMC that the Berichtenbox received it
     Then OMC registers a klantcontact about the bericht in Open Klant, with kanaal Mobb and onderwerp [MOBB]
 """)
@@ -246,13 +257,12 @@ def test_berichtenbox_delivery_becomes_a_klantcontact(  # the chain's clients
     registry: ResourceRegistry,
     parts: ZaaktypeParts,
 ) -> None:
-    """Notify's delivery receipt for a Berichtenbox bericht makes OMC register a klantcontact about the bericht."""
-    need_bootstrap("infra-mock-server")
+    """IN-3532 flow 2: Notify's delivery receipt makes OMC register a klantcontact about the bericht."""
     reason = omc_actor_missing(podiumd_env, openklant)
     if reason:
         pytest.skip(reason)
     clients = (openvtb_berichten, openklant, openzaak)
-    bericht, bsn, sent = offer_to_berichtenbox(request, http, podiumd_env, clients, registry, parts)
+    bericht, bsn, sent = offer_to_berichtenbox(request, podiumd_env, need_bootstrap, clients, registry, parts)
     confirm_delivery(http, podiumd_env, sent, bsn, "messagebox")
     about = wait_until(
         lambda: klantcontacten_about(openklant, str(bericht["uuid"])),
@@ -261,49 +271,3 @@ def test_berichtenbox_delivery_becomes_a_klantcontact(  # the chain's clients
     )
     klantcontact = openklant.get(str(section(about[0], "klantcontact").get("url")))
     assert (klantcontact.get("kanaal"), str(klantcontact.get("onderwerp"))[:6]) == (BERICHTENBOX_KANAAL, "[MOBB]")
-
-
-@pytest.mark.requires("openklant", "opennotificaties")
-@pytest.mark.source(
-    "Jira IN-3532", "1: a bericht made in Open VTB reaches OMC through Open Notificaties and goes to the Berichtenbox."
-)
-@pytest.mark.source(
-    "Jira IN-3501", "Open VTB's worker sends the bericht's CloudEvent through Open Notificaties to OMC."
-)
-@pytest.mark.scenario("""
-    Given an inwoner, and a bericht in Open VTB for MijnOverheid's Berichtenbox to the inwoner's BSN
-    When Open VTB publishes the bericht
-    Then Open Notificaties hands Open VTB's event to OMC
-    And OMC asks Notify to deliver the bericht to the inwoner's Berichtenbox
-""")
-def test_published_bericht_reaches_the_berichtenbox_through_open_notificaties(  # the chain's clients
-    request: pytest.FixtureRequest,
-    podiumd_env: Environment,
-    need_bootstrap: Callable[..., None],
-    openvtb_berichten: ApiClient,
-    openklant: ApiClient,
-    registry: ResourceRegistry,
-) -> None:
-    """Open VTB's worker sends the bericht's CloudEvent to Open Notificaties, whose abonnement delivers it to OMC."""
-    need_bootstrap("infra-mock-server", "omc-abonnement")
-    reason = notify_mock_missing(podiumd_env)
-    if not reason and not is_reading_openvtb(podiumd_env):
-        reason = "OMC's ZGW_ENDPOINT_OPENVTB is not set: OMC reads no Open VTB berichten"
-    reason = reason or setting_skip(podiumd_env, "ZGW_WHITELIST_VTBMESSAGE_TYPES", BERICHTENBOX_TYPE, listed=True)
-    if reason:
-        pytest.skip(reason)
-    # OMC reads Open VTB, so Open VTB must send its events: a missing worker or beat fails (IN-3501).
-    failure = missing_celery(podiumd_env)
-    if failure:
-        pytest.fail(failure)
-    expect_omc_5(request, podiumd_env)
-    bsn = make_inwoner(openklant, registry, own_address(registry))
-    bericht = make_bericht(podiumd_env, openvtb_berichten, registry, f"urn:nld:brp:bsn:{bsn}", berichtenbox=True)
-    clean_up_klantcontacten(openklant, registry, str(bericht["uuid"]))
-    publish_bericht(podiumd_env, str(bericht["uuid"]))
-    with symptom():
-        body = section(notify_request(podiumd_env, MESSAGEBOX, bsn), "body")
-    assert (body.get("subject"), body.get("message")) == (
-        bericht["onderwerp"],
-        f"{bericht['berichtTekst']}{OMC_POSTFIX}",
-    )
