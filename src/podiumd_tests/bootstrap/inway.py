@@ -82,11 +82,11 @@ class InwayConsumers:
 
     def _paths(self, ctx: Context) -> tuple[Path, str] | None:
         """Return the client CA (without .crt/.key) and the consumer command; None when the profile has no CA."""
-        settings = ctx.env.profile.settings
-        if not settings.get(CLIENT_CA):
+        client_ca = ctx.env.profile.setting_path(CLIENT_CA)
+        if client_ca is None:
             return None
-        if not settings.get(CONSUMERS_COMMAND):
+        command = ctx.env.profile.setting_path(CONSUMERS_COMMAND)
+        if command is None:
             msg = f"{self.name}: profile {ctx.env.profile.name} sets {CLIENT_CA} but not {CONSUMERS_COMMAND}"
             raise ValueError(msg)
-        # Relative to the directory that holds podiumd-tests.
-        return REPO_ROOT.parent / settings[CLIENT_CA], str(REPO_ROOT.parent / settings[CONSUMERS_COMMAND])
+        return client_ca, str(command)

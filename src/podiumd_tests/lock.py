@@ -5,8 +5,9 @@ Two locks, both taken when configured or reachable:
   other; it names its holder and expires leaseDurationSeconds after acquireTime (podiumd-infra reads it the same way).
   A run renews it every third of settings.lock_lease_seconds (default 10 min) by raising leaseDurationSeconds, so a
   killed pipeline frees it within that window;
-- the lock file of settings.lock_file, shared with other agents on the same machine: one line
-  "<who> <what> <ISO start time>", taken exclusively (O_EXCL) and flock-ed by its holder while it runs.
+- the lock file of settings.lock_file (relative to the directory that holds podiumd-tests), shared with other agents
+  on the same machine: one line "<who> <what> <ISO start time>", taken exclusively (O_EXCL) and flock-ed by its
+  holder while it runs.
 
 A lock of this user@host whose holder no longer runs is stale: a killed run left it, and the next run takes it over.
 The holder runs when its pid exists, its lock file is flock-ed (a holder in another PID namespace), or its lease was
@@ -38,11 +39,9 @@ from dataclasses import field
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from podiumd_tests.capabilities import CLUSTER
-from podiumd_tests.config import REPO_ROOT
 from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import KubeError
@@ -52,6 +51,7 @@ from podiumd_tests.process import run_checked
 if TYPE_CHECKING:
     from collections.abc import Callable
     from collections.abc import Generator
+    from pathlib import Path
     from typing import TextIO
 
     from podiumd_tests.environment import Environment
@@ -274,8 +274,7 @@ def break_holds(env: Environment) -> list[str]:
         if who.startswith(f"{HOLDER} "):
             env.kube.delete("lease", LEASE)
             removed.append(f"lease {LEASE}: {who}")
-    setting = env.profile.settings.get("lock_file")
-    lock = Path(setting) if setting else None
+    lock = env.profile.setting_path("lock_file")
     if lock is not None and lock.exists():
         line = lock.read_text(encoding="utf-8").strip()
         if line.startswith(f"{HOLDER} "):
@@ -289,9 +288,8 @@ def holds(env: Environment) -> list[str]:
     found: list[str] = []
     if not env.capabilities.skip_reason(CLUSTER):
         found.append(f"lease {LEASE}: {lease_holder(env.kube) or 'free'}")
-    setting = env.profile.settings.get("lock_file")
-    if setting:
-        lock = Path(setting)
+    lock = env.profile.setting_path("lock_file")
+    if lock is not None:
         lock_holder = lock.read_text(encoding="utf-8").strip() if lock.exists() else "free"
         found.append(f"{lock}: {lock_holder}")
     return found
@@ -320,7 +318,7 @@ def held(env: Environment, what: str) -> Generator[None]:
     """Hold the environment's lock file, with cluster access its lease, and its env ledger booking during the block."""
     who = holder(what)
     settings = env.profile.settings
-    lock = Path(settings["lock_file"]) if settings.get("lock_file") else None
+    lock = env.profile.setting_path("lock_file")
     kube = None if env.capabilities.skip_reason(CLUSTER) else env.kube
     with ExitStack() as stack:
         if lock is not None:
@@ -438,11 +436,11 @@ def book(env: Environment, who: str, what: str) -> Booking | None:
 
     LockBusyError when the ledger refuses or fails. `who` holds the run's own locks, which the ledger skips.
     """
-    setting = env.profile.settings.get("env_ledger")
-    if not setting:
+    path = env.profile.setting_path("env_ledger")
+    if path is None:
         return None
-    script = str(REPO_ROOT.parent / setting)
-    if not Path(script).exists():
+    script = str(path)
+    if not path.exists():
         print(f"not booked: env ledger {script} not found on this host", file=sys.stderr)
         return None
     ledger = env.profile.name

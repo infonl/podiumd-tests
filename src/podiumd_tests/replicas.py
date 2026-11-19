@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import os
-import shlex
 
 from contextlib import contextmanager
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from podiumd_tests.lock import running_hold
@@ -36,17 +34,17 @@ def several_replicas(env: Environment) -> Generator[None]:
 
     A podiumd-tests run holding settings.lock_file passes its hold on, so the command does not wait for it.
     """
-    command = shlex.split(env.profile.settings.get(SETTING, ""))
-    if not command:
+    command = env.profile.setting_path(SETTING)
+    if command is None:
         yield
         return
-    lock = env.profile.settings.get("lock_file")
-    hold = running_hold(Path(lock)) if lock else None
+    lock = env.profile.setting_path("lock_file")
+    hold = running_hold(lock) if lock else None
     previous = os.environ.get(HOLD_ENV)
     if hold:
         os.environ[HOLD_ENV] = hold
     try:
-        with _switched_on(env, command):
+        with _switched_on(env, [str(command)]):
             yield
     finally:
         if previous is None:

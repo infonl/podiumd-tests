@@ -123,11 +123,11 @@ settings:
   # seed-volume may add the volume zaaktype to PABC's entity types, so ZAC shows its zaken to the test admin.
   pabc_volume_zaaktype: true
   # One pod per component by default; tests using fixture several_replicas switch redis-ha to 3 and Keycloak to 2
-  # (tier chaos).
-  replicas_command: /home/kvv/development/werk/infonl-dimpact/infonl/podiumd-minikube/bin/replicas
+  # (tier chaos). Paths: relative to the directory that holds podiumd-tests.
+  replicas_command: podiumd-minikube/bin/replicas
   # ConfigMap where podiumd-minikube records what it deployed (local chart checkouts); run.json and summary.md show it.
   deployed_build: podiumd/podiumd-minikube-deployed
   # Shared with the podiumd-minikube agent; bootstrap and writing runs take it.
-  lock_file: /home/kvv/development/werk/infonl-dimpact/infonl/.minikube-lock
-  # Shared bookings of the agents, relative to the directory that holds podiumd-tests; writing runs book there.
+  lock_file: .minikube-lock
+  # Shared bookings of the agents; writing runs book there.
   env_ledger: podiumd-local-review/.claude/skills/env-ledger/env-ledger.py

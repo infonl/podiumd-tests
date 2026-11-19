@@ -135,6 +135,11 @@ class Profile:  # pylint: disable=too-many-instance-attributes  # mirrors the YA
             return ["minikube", "update-context", "--profile", context]
         return None
 
+    def setting_path(self, name: str) -> Path | None:
+        """Return a path setting, relative to the directory that holds podiumd-tests; None when unset."""
+        value = self.settings.get(name)
+        return REPO_ROOT.parent / value if value else None
+
     def is_allowed(self, setting: str) -> bool:
         """Whether an opt-in setting that changes the owner's configuration is "true"."""
         return self.settings.get(setting, "").lower() == "true"  # settings are strings
