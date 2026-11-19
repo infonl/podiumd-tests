@@ -74,6 +74,9 @@ secrets:
   zgw_client_secret:
     zgw_jwt_secret: {deployment: openzaak, client_id: formulier}
 settings:
+  # Shared bookings of the agents, relative to the directory that holds podiumd-tests; writing runs book there.
+  # Absent on other hosts: no booking.
+  env_ledger: podiumd-local-review/.claude/skills/env-ledger/env-ledger.py
   # Kyverno ClusterPolicy redirect-registries rewrites Docker Hub images to this mirror; the step compares images.
   mock_server_image: podiumdregistry.azurecr.io/dockerhub/library/python:3.13-alpine
   # podiumd's e2e zaaktype; podiumd-infra seeds ZAC's zaakafhandelparameters for it (runtime data, not in its values).

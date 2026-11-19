@@ -129,3 +129,5 @@ settings:
   deployed_build: podiumd/podiumd-minikube-deployed
   # Shared with the podiumd-minikube agent; bootstrap and writing runs take it.
   lock_file: /home/kvv/development/werk/infonl-dimpact/infonl/.minikube-lock
+  # Shared bookings of the agents, relative to the directory that holds podiumd-tests; writing runs book there.
+  env_ledger: podiumd-local-review/.claude/skills/env-ledger/env-ledger.py

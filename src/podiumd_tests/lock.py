@@ -13,6 +13,10 @@ The holder runs when its pid exists, its lock file is flock-ed (a holder in anot
 renewed within the window. Taking over is atomic: the lock file under a guard flock, the Lease by resourceVersion.
 SIGTERM (`timeout`) releases both locks, then stops the run as Ctrl-C does. `podiumd-tests lock` shows or breaks a
 podiumd-tests hold.
+
+With settings.env_ledger (env-ledger.py, relative to the directory that holds podiumd-tests), the hold is also a
+disruptive booking of the environment named as the profile in that ledger, kept alive by heartbeats and closed when
+the hold ends. The booking follows the locks and skips book --start's lock check, which would see the run's own locks.
 """
 
 from __future__ import annotations
@@ -29,6 +33,8 @@ import threading
 
 from contextlib import ExitStack
 from contextlib import contextmanager
+from dataclasses import dataclass
+from dataclasses import field
 from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
@@ -36,8 +42,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from podiumd_tests.capabilities import CLUSTER
+from podiumd_tests.config import REPO_ROOT
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import KubeError
+from podiumd_tests.process import ProcessError
+from podiumd_tests.process import run_checked
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -47,6 +56,7 @@ if TYPE_CHECKING:
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.kube import Kube
+    from podiumd_tests.process import Runner
 
 HOLDER = "podiumd-tests"
 LEASE = "podiumd-tests-lock"
@@ -54,6 +64,10 @@ LEASE_SECONDS = 600
 # Renewals per lease window: a missed renewal or two does not let the lease expire.
 RENEWALS = 3
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
+LEDGER_TIMEOUT = 90
+BOOKING = timedelta(hours=1)
+# The ledger expires an active booking after 20 min without a heartbeat.
+HEARTBEAT_SECONDS = 300
 
 
 @contextmanager
@@ -240,8 +254,10 @@ def _take_file(lock: Path, who: str) -> TextIO:
     return handle
 
 
-def _release(kube: Kube | None, lock: Path | None, who: str) -> None:
-    """Release the lease and the lock file, each only while `who` still holds it."""
+def _release(kube: Kube | None, lock: Path | None, who: str, booking: Booking | None = None) -> None:
+    """Close the booking and release the lease and the lock file, each only while `who` still holds it."""
+    if booking is not None:
+        booking.close()
     if kube is not None:
         release_lease(kube, who)
     if lock is not None and lock.exists() and lock.read_text(encoding="utf-8").startswith(f"{who} "):
@@ -299,7 +315,7 @@ def _interrupt_on_sigterm(release: Callable[[], None]) -> Generator[None]:
 
 @contextmanager
 def held(env: Environment, what: str) -> Generator[None]:
-    """Hold the environment's lock file and, with cluster access, its lease while the block runs."""
+    """Hold the environment's lock file, with cluster access its lease, and its env ledger booking during the block."""
     who = holder(what)
     settings = env.profile.settings
     lock = Path(settings["lock_file"]) if settings.get("lock_file") else None
@@ -309,9 +325,11 @@ def held(env: Environment, what: str) -> Generator[None]:
             stack.enter_context(_take_file(lock, who))
         stack.callback(_release, kube, lock, who)
         stack.enter_context(_leased(kube, who, settings))
-        stack.enter_context(_interrupt_on_sigterm(lambda: _release(kube, lock, who)))
+        booking = stack.enter_context(_booked(env, what))
+        stack.enter_context(_interrupt_on_sigterm(lambda: _release(kube, lock, who, booking)))
         taken = [str(lock)] if lock else []
         taken += [f"lease {LEASE} in {kube.namespace}"] if kube else []
+        taken += [f"env ledger booking {booking.booking}"] if booking else []
         if taken:
             print(f"lock taken: {who} ({', '.join(taken)})", file=sys.stderr)
         yield
@@ -325,17 +343,118 @@ def _leased(kube: Kube | None, who: str, settings: dict[str, str]) -> Generator[
         return
     seconds = int(settings.get("lock_lease_seconds", LEASE_SECONDS))
     take_lease(kube, who, seconds)
+
+    def is_renewed() -> bool:
+        if has_renewed_lease(kube, who, seconds):
+            return True
+        print(f"lock lost: lease {LEASE} in {kube.namespace} is no longer {who}'s", file=sys.stderr)
+        return False
+
+    with _every(seconds / RENEWALS, is_renewed):
+        yield
+
+
+@contextmanager
+def _every(seconds: float, action: Callable[[], bool]) -> Generator[None]:
+    """Call action every `seconds` in a thread while the block runs, until it returns False."""
     stop = threading.Event()
 
-    def renew() -> None:
-        while not stop.wait(seconds / RENEWALS):
-            if not has_renewed_lease(kube, who, seconds):
-                print(f"lock lost: lease {LEASE} in {kube.namespace} is no longer {who}'s", file=sys.stderr)
+    def repeat() -> None:
+        while not stop.wait(seconds):
+            if not action():
                 return
 
-    renewer = threading.Thread(target=renew, name="lease-renewal", daemon=True)
-    renewer.start()
+    thread = threading.Thread(target=repeat, name="lock-renewal", daemon=True)
+    thread.start()
     with ExitStack() as stack:
-        stack.callback(renewer.join)
+        stack.callback(thread.join)
         stack.callback(stop.set)
         yield
+
+
+@dataclass
+class Booking:
+    """The hold's open booking in the env ledger."""
+
+    script: str
+    ledger: str
+    runner: Runner
+    booking: str
+    end: datetime
+    is_open: bool = field(default=True)
+
+    def call(self, verb: str, *args: str) -> None:
+        """Run an env-ledger.py verb on this booking as podiumd-tests."""
+        command = [self.script, verb, self.ledger, self.booking, *args, "--agent", HOLDER]
+        run_checked(self.runner, command, LEDGER_TIMEOUT)
+
+    def has_beaten(self) -> bool:
+        """Send a heartbeat, extending the booking when less than half of BOOKING remains; False once closed."""
+        if not self.is_open:
+            return False
+        now = datetime.now(tz=UTC)
+        extend = self.end - now < BOOKING / 2
+        try:
+            self.call("heartbeat", *(["--extend", _minutes(BOOKING)] if extend else []))
+        except ProcessError as exc:
+            print(f"env ledger heartbeat failed: {exc}", file=sys.stderr)
+            return True
+        if extend:
+            self.end = now + BOOKING
+        return True
+
+    def close(self) -> None:
+        """Mark the booking done, once."""
+        if not self.is_open:
+            return
+        self.is_open = False
+        try:
+            self.call("done")
+        except ProcessError as exc:
+            print(f"env ledger booking {self.booking} not closed: {exc}", file=sys.stderr)
+
+
+@contextmanager
+def _booked(env: Environment, what: str) -> Generator[Booking | None]:
+    """Book the environment while the block runs, sending heartbeats; None without a ledger."""
+    booking = book(env, what)
+    if booking is None:
+        yield None
+        return
+    with ExitStack() as stack:
+        stack.callback(booking.close)
+        stack.enter_context(_every(HEARTBEAT_SECONDS, booking.has_beaten))
+        yield booking
+
+
+def _minutes(span: timedelta) -> str:
+    return f"{int(span.total_seconds() // 60)}m"
+
+
+def book(env: Environment, what: str) -> Booking | None:
+    """Book the environment in settings.env_ledger and start the booking; None without a ledger on this host.
+
+    LockBusyError when the ledger refuses: a conflicting booking of another agent.
+    """
+    setting = env.profile.settings.get("env_ledger")
+    if not setting:
+        return None
+    script = str(REPO_ROOT.parent / setting)
+    if not Path(script).exists():
+        print(f"not booked: env ledger {script} not found on this host", file=sys.stderr)
+        return None
+    ledger = env.profile.name
+    command = [script, "book", ledger, "--what", what, "--for", _minutes(BOOKING), "--disruptive", "--agent", HOLDER]
+    result = env.kube.runner(command, LEDGER_TIMEOUT)
+    if result.returncode:
+        msg = f"env ledger refused {ledger}: {(result.stdout + result.stderr).strip()}"
+        raise LockBusyError(msg)
+    booked = result.stdout.strip().splitlines()[-1]
+    booking = Booking(script, ledger, env.kube.runner, booked, datetime.now(tz=UTC) + BOOKING)
+    try:
+        booking.call("start")
+    except ProcessError as exc:
+        booking.close()
+        msg = f"env ledger booking {booked} not started: {exc}"
+        raise LockBusyError(msg) from exc
+    return booking

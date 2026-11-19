@@ -199,3 +199,39 @@ def test_held_logs_the_lock_and_breaking_removes_only_podiumd_tests_holds(
     lock.write_text(f"{holder('run full')} 2026-11-12T15:00:00+00:00\n", encoding="utf-8")
     assert break_holds(env) == [f"{lock}: {holder('run full')} 2026-11-12T15:00:00+00:00"]
     assert not lock.exists()
+
+
+def ledger_env(tmp_path, profile_factory, fake_runner):
+    script = tmp_path / "env-ledger.py"
+    script.write_text("", encoding="utf-8")
+    # An absolute setting: REPO_ROOT.parent / script is script.
+    profile = profile_factory(settings={"lock_file": str(tmp_path / "lock"), "env_ledger": str(script)})
+    return Environment(profile, fake_runner, environ={})
+
+
+def test_held_books_the_environment_in_the_env_ledger_and_closes_the_booking(tmp_path, profile_factory, fake_runner):
+    fake_runner.answers = {" book ": (0, "test-env-1119-0900-ab12\n"), "env-ledger.py": (0, "")}
+    with held(ledger_env(tmp_path, profile_factory, fake_runner), "run full"):
+        assert (tmp_path / "lock").exists()
+    verbs = [call[1:4] for call in fake_runner.calls if call[0].endswith("env-ledger.py")]
+    assert verbs == [
+        ["book", "test-env", "--what"],
+        ["start", "test-env", "test-env-1119-0900-ab12"],
+        ["done", "test-env", "test-env-1119-0900-ab12"],
+    ]
+    assert "--disruptive" in fake_runner.calls[-3]
+
+
+def test_a_conflicting_booking_refuses_and_releases_the_lock(tmp_path, profile_factory, fake_runner):
+    fake_runner.answers = {" book ": (1, "CONFLICT  kees00-1119-0800-cd34 podiumd-minikube [resets] reset")}
+    env = ledger_env(tmp_path, profile_factory, fake_runner)
+    with pytest.raises(LockBusyError, match="podiumd-minikube"), held(env, "bootstrap"):  # noqa: WPS328  # enter is under test
+        ...
+    assert not (tmp_path / "lock").exists()
+
+
+def test_no_booking_where_the_env_ledger_is_absent(tmp_path, profile_factory, fake_runner, capsys):
+    env = Environment(profile_factory(settings={"env_ledger": str(tmp_path / "absent.py")}), fake_runner, environ={})
+    with held(env, "run full"):
+        assert "not booked: env ledger" in capsys.readouterr().err
+    assert not any("absent.py" in call[0] for call in fake_runner.calls)
