@@ -133,6 +133,16 @@ def missing_celery(env: Environment) -> str | None:
     return f"no {' and '.join(missing)}: Open VTB sends no CloudEvents (podiumd chart without helm-charts #746)"
 
 
+def notifications_api_root(env: Environment) -> str:
+    """Return the API root of the Open Notificaties service Open VTB publishes its events to; empty when none."""
+    code = (
+        "from notifications_api_common.models import NotificationsConfig\n"
+        "service = NotificationsConfig.get_solo().notifications_api_service\n"
+        f"print({DJANGO_VALUE_MARKER!r} + (service.api_root if service else ''))"
+    )
+    return django_values(env.kube.exec_django_shell(env.deployment_for("openvtb"), code))[0]
+
+
 def publish_schedules(env: Environment) -> list[str]:
     """Return the crontabs of Open VTB's enabled periodic tasks that publish due berichten."""
     code = (

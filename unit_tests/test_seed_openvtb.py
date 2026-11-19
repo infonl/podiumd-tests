@@ -36,3 +36,9 @@ def test_publish_bericht_sends_and_marks_only_that_bericht(env_factory, fake_run
     code = next(stdin for stdin in fake_runner.stdins if stdin and "send_bericht" in stdin)
     assert "uuid='b-1'" in code
     assert "mark_as_published.delay([pk])" in code
+
+
+def test_notifications_api_root_is_the_printed_api_root(env_factory, fake_runner):
+    deployments(fake_runner)
+    fake_runner.answers["exec -i deploy/openvtb"] = (0, "chatter\nPTEST_VALUE=https://on.test/api/v1/\n")
+    assert openvtb.notifications_api_root(env_factory()) == "https://on.test/api/v1/"

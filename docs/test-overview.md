@@ -11,21 +11,22 @@ component and integration, without and with the destructive tests; the test suit
 
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
-| smoke | 242 | 42 | 12 |
+| smoke | 244 | 44 | 12 |
 | component | 1007 | 589 | 71 |
 | integration | 247 | 147 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1397** | **725** | **88** |
+| **full tier** | **1399** | **727** | **88** |
 | **chaos tier** | **99** | **53** | **14** |
-| **test suite** | **1576** | **787** | **102** |
+| **test suite** | **1578** | **789** | **102** |
 
-Unit tests (`unit_tests/`, functions): 992. Perf endpoints (`perf/runs.py`): 32.
+Unit tests (`unit_tests/`, functions): 993. Perf endpoints (`perf/runs.py`): 32.
 
 ## Per area
 
 | Tier | Area | Tests | Scenarios |
 | --- | --- | --- | --- |
 | smoke | api_health | 30 | 5 |
+| smoke | berichtenbox_setup | 2 | 2 |
 | smoke | cilium | 2 | 2 |
 | smoke | cluster | 11 | 11 |
 | smoke | frankgateway | 5 | 2 |
@@ -106,7 +107,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | Origin | Tests |
 | --- | --- |
 | EX | 19 |
-| Jira | 5 |
+| Jira | 7 |
 | MK | 45 |
 | PCP | 1 |
 | PI | 54 |
