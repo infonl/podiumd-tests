@@ -33,5 +33,9 @@ Requests:
 3. **Keep the command line stable**, or tell the podiumd-tests session before changing it: the verb order `VERB ENV [ID]`, `--agent`, `--for`, `--extend` and
    `--disruptive` are what podiumd-tests calls.
 
-When 1 and 2 are released, podiumd-tests switches to `book --start --json` with the holder option and removes the
+Status (2026-11-19): 1, 2 and 3 done in podiumd-local-review b939da0 (PR infonl/podiumd-local-review#24, not
+merged); `--json` exit codes: 0 ok, 1 error, 2 bad arguments, 3 refused. Open: the merge and an update of the main
+checkout that settings.env_ledger points at; podiumd-local-review says when.
+
+When that checkout has 1 and 2, podiumd-tests switches to `book --start --json` with the holder option and removes the
 separate `start` call.
