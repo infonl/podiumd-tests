@@ -98,7 +98,7 @@ def test_run_keeps_screenshots_of_failed_browser_tests_but_no_traces(tmp_path, p
 @pytest.mark.parametrize(
     ("tier", "settings", "workers"),
     [
-        ("full", {}, "6"),
+        ("full", {}, "8"),
         ("full", {"pytest_workers": "2"}, "2"),
         ("full", {"pytest_workers": "1"}, None),
         ("smoke", {}, None),
@@ -114,8 +114,8 @@ def test_parallel_tiers_run_on_xdist_workers(tmp_path, profile_factory, monkeypa
     assert found == workers
 
 
-@pytest.mark.parametrize(("cpus", "workers"), [(24, 6), (12, 6), (8, 4), (4, 2), (2, 1), (1, 1), (None, 1)])
-def test_default_workers_are_half_the_cpus_at_most_six(cpus, workers):
+@pytest.mark.parametrize(("cpus", "workers"), [(24, 8), (16, 8), (12, 6), (8, 4), (4, 2), (2, 1), (1, 1), (None, 1)])
+def test_default_workers_are_half_the_cpus_at_most_eight(cpus, workers):
     assert cli.default_workers(cpus) == workers
 
 
