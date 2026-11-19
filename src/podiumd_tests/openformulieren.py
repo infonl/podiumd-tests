@@ -500,7 +500,8 @@ def can_submit_step(
 
 def set_logic_rules(editor: requests.Session, base_url: str, form: JsonObject, rules: Sequence[JsonObject]) -> None:
     """Replace the form's logic rules, as the form designer saves them."""
-    response = editor.put(f"{base_url}/api/v2/forms/{form['uuid']}/logic-rules", json=[dict(rule) for rule in rules])
+    body = [dict(rule) for rule in rules]
+    response = editor.put(f"{base_url}/api/v2/forms/{form['uuid']}/logic-rules", json=body)
     expect_status(response, HTTPStatus.OK)
 
 

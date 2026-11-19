@@ -57,7 +57,8 @@ _SHOULD = "createDocumentFromMail includeTaken resolveVariableAsEmptyString take
 
 
 def _prefixed(prefix: str, names: str) -> dict[str, str]:
-    return {name: f"{prefix}{name[0].upper()}{name[1:]}" for name in names.split()}
+    words = names.split()
+    return {name: f"{prefix}{name[0].upper()}{name[1:]}" for name in words}
 
 
 NEW_NAMES: dict[str, str] = {

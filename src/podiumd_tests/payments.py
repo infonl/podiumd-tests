@@ -66,7 +66,9 @@ def ogone_feedback(order_id: str, status: str, passphrase: str) -> dict[str, str
 def ogone_return_url(request: Mapping[str, str], outcome: str, status: str, passphrase: str) -> str:
     """Return the URL Ogone sends the browser back to after the payment: the outcome's return URL with feedback."""
     url = request[RETURN_URLS[outcome]]
-    return f"{url}{'&' if '?' in url else '?'}{urlencode(ogone_feedback(request['ORDERID'], status, passphrase))}"
+    separator = "&" if "?" in url else "?"
+    feedback = urlencode(ogone_feedback(request["ORDERID"], status, passphrase))
+    return f"{url}{separator}{feedback}"
 
 
 def form_fields(request: JsonObject) -> dict[str, str]:

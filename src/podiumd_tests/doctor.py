@@ -372,7 +372,8 @@ def checklist(checks: list[Check]) -> str:
     width = max((len(check.name) for check in checks), default=0)
     lines: list[str] = []
     for check in checks:
-        line = f"{SYMBOLS[check.status]} {check.name.ljust(width)}  {check.detail}".rstrip()
+        name = check.name.ljust(width)
+        line = f"{SYMBOLS[check.status]} {name}  {check.detail}".rstrip()
         if check.hint and check.status in {"fail", "warn"}:
             line = f"{line}\n  {' ' * width}  hint: {check.hint}"
         lines.append(line)

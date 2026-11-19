@@ -348,7 +348,8 @@ def _kiss_kind(name: str, source: KissSource) -> Kind:
         tekst = "Toelichting van podiumd-tests. " * 20
         for start in range(missing.start, missing.stop, OBJECTEN_BATCH):
             indexes = range(start, min(start + OBJECTEN_BATCH, missing.stop))
-            items = [source.data(f"{VOLUME_TAG} {index} {corpus().scenario(index)}", tekst) for index in indexes]
+            titles = (f"{VOLUME_TAG} {index} {corpus().scenario(index)}" for index in indexes)
+            items = [source.data(title, tekst) for title in titles]
             _kiss_content(env, source, "create", items)
         _sync_kiss(env, source)
 

@@ -29,7 +29,8 @@ def run(params):
     for product in params["products"]:
         name = product["category"]
         if name not in categories:
-            categories[name] = Category.add_root(name=name, slug=f"{tag}-{slugify(name)}", published=True)
+            slug = f"{tag}-{slugify(name)}"
+            categories[name] = Category.add_root(name=name, slug=slug, published=True)
         created = Product.objects.create(
             name=product["name"],
             slug=f"{tag}-{slugify(product['name'])}",

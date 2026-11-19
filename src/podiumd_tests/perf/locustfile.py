@@ -109,7 +109,8 @@ def _search_calls(env: Environment) -> dict[str, Call]:
     if "kiss" in urls:
         kiss = challenge_session(env, urls["kiss"], KCC.username, env.credentials.get(KCC.store_key))
         body = {"query": SEARCH_TERM, "page": 1, "filters": []}
-        calls["kiss_search"] = lambda _registry: expect_status(kiss.post(f"{urls['kiss']}/api/search", json=body), 200)
+        kiss_search = f"{urls['kiss']}/api/search"
+        calls["kiss_search"] = lambda _registry: expect_status(kiss.post(kiss_search, json=body), 200)
     if "openinwoner" in urls:
         portal = env.session()
         search = f"{urls['openinwoner']}/search/"

@@ -207,7 +207,8 @@ def skip_older_than(env: Environment, component: str, version: tuple[int, ...], 
     found = component_versions(env, [component]).get(component)
     if found is not None and found < version:
         shown = ".".join(map(str, found))
-        pytest.skip(f"{component} {shown} is older than {'.'.join(map(str, version))}: {behaviour}")
+        wanted = ".".join(map(str, version))
+        pytest.skip(f"{component} {shown} is older than {wanted}: {behaviour}")
 
 
 def is_chart_older_than(env: Environment, version: tuple[int, ...]) -> bool:
@@ -460,7 +461,8 @@ def unready_workloads(items: Sequence[Item]) -> list[str]:
         wanted = replicas if isinstance(replicas, int) else 1
         ready = _int(section(item, "status").get("readyReplicas"))
         if ready < wanted:
-            found.append(f"{item.get('kind', '?')}/{metadata_name(item)} {ready}/{wanted}")
+            kind = item.get("kind", "?")
+            found.append(f"{kind}/{metadata_name(item)} {ready}/{wanted}")
     return found
 
 
@@ -500,11 +502,11 @@ def replica_drift(env: Environment, namespaces: Sequence[str] | None = None) -> 
     Workloads an autoscaler drives are left out, and so are those whose release sets no replicas.
     """
     wanted = helm_replicas(env, namespaces)
-    autoscalers = env.items("horizontalpodautoscalers", namespaces)
-    targets = [(autoscaler, section(section(autoscaler, "spec"), "scaleTargetRef")) for autoscaler in autoscalers]
-    autoscaled = {
-        f"{metadata_namespace(autoscaler)}/{ref.get('kind')}/{ref.get('name')}" for autoscaler, ref in targets
-    }
+    autoscaled: set[str] = set()
+    for autoscaler in env.items("horizontalpodautoscalers", namespaces):
+        ref = section(section(autoscaler, "spec"), "scaleTargetRef")
+        target = f"{metadata_namespace(autoscaler)}/{ref.get('kind')}/{ref.get('name')}"
+        autoscaled.add(target)
     found: list[str] = []
     for item in env.workloads(namespaces):
         key = f"{metadata_namespace(item)}/{item.get('kind')}/{metadata_name(item)}"

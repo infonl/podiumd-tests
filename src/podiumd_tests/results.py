@@ -273,7 +273,8 @@ _COUNT_COLUMNS = {
 
 def summary_markdown(info: RunInfo, details: Details) -> str:
     """Human-readable summary.md of one run; results/README.md explains the outcomes."""
-    build = "; ".join(f"{name} {version}" for name, version in sorted(info.build.items()))
+    build_pairs = sorted(info.build.items())
+    build = "; ".join(f"{name} {version}" for name, version in build_pairs)
     pairs = sorted(info.versions.items())
     versions = ", ".join(f"{name} {version}" for name, version in pairs) or "unknown"
     lines = [
@@ -336,7 +337,8 @@ def _scenario_lines(details: Details) -> list[str]:
 
 def write_run(sink: ResultsSink, directory: str, info: RunInfo, details: Details, redactor: Redactor) -> None:
     """Write run.json and summary.md; every text passes the redactor first."""
-    sink.write_text(f"{directory}/run.json", redactor.redact(f"{json.dumps(asdict(info), indent=2)}\n"))
+    run_json = json.dumps(asdict(info), indent=2)
+    sink.write_text(f"{directory}/run.json", redactor.redact(f"{run_json}\n"))
     sink.write_text(f"{directory}/summary.md", redactor.redact(summary_markdown(info, details)))
 
 

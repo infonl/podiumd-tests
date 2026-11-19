@@ -193,7 +193,8 @@ def lock_document(
 
     ZAC refuses that unlock once the test unlocked the document itself.
     """
-    response = http.post(f"{document_url(zac_url, document)}/lock", params={"zaak": str(zaak["uuid"])})
+    params = {"zaak": str(zaak["uuid"])}
+    response = http.post(f"{document_url(zac_url, document)}/lock", params=params)
     expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
     registry.add(f"lock of document {document['uuid']}", lambda: unlock_document(http, zac_url, zaak, document))
 
@@ -246,7 +247,8 @@ def _upload_form(  # noqa: PLR0913, PLR0917  # the zaak, the cleanup, the file a
         "auteur": "podiumd-tests",
     }
     reference = str(taak["id"]) if taak else registry.tagged("upload")
-    return f"{documents}/informatieobject/{zaak['uuid']}/{reference}?taakObject={str(taak is not None).lower()}", form
+    taak_object = str(taak is not None).lower()
+    return f"{documents}/informatieobject/{zaak['uuid']}/{reference}?taakObject={taak_object}", form
 
 
 def form_date(day: date) -> str:

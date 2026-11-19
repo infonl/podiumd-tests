@@ -109,7 +109,8 @@ def cmd_env_show(args: argparse.Namespace) -> int:
         print(f"  {component:20} {url}")
     print("secrets (a missing one skips its tests; PODIUMD_TESTS_SECRET_<NAME> overrides):")
     for name, spec in sorted(profile.secrets.items()):
-        where = " ".join(f"{option}={value}" for option, value in sorted(spec.options.items()))
+        options = sorted(spec.options.items())
+        where = " ".join(f"{option}={value}" for option, value in options)
         print(f"  {name:28} {spec.source} {where}".rstrip())
     return EXIT_OK
 
@@ -166,9 +167,8 @@ def draft_profile(estate: str, context: str, namespace: str, hosts: list[str], s
 def cmd_env_init(args: argparse.Namespace) -> int:
     """Write a draft profile from the cluster's ingresses and HTTPRoutes."""
     envs_dir = Path(args.envs_dir)
-    target = (
-        envs_dir / f"{args.name}.yaml" if args.estate == "minikube" else envs_dir / args.estate / f"{args.name}.yaml"
-    )
+    file_name = f"{args.name}.yaml"
+    target = envs_dir / file_name if args.estate == "minikube" else envs_dir / args.estate / file_name
     if target.exists() and not args.force:
         print(f"{target} exists; use --force to overwrite", file=sys.stderr)
         return EXIT_CONFIG

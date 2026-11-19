@@ -49,7 +49,8 @@ def cluster_hosts(env: Environment) -> frozenset[str]:
     for service in env.kube.items("services", all_namespaces=True):
         name = metadata_name(service)
         namespace = metadata_namespace(service)
-        hosts |= {name, f"{name}.{namespace}", f"{name}.{namespace}.svc", f"{name}.{namespace}.svc.cluster.local"}
+        qualified = f"{name}.{namespace}"
+        hosts |= {name, qualified, f"{qualified}.svc", f"{qualified}.svc.cluster.local"}
         hosts.add(str(section(service, "spec").get("clusterIP") or ""))
     return frozenset(hosts)
 

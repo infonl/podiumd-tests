@@ -43,7 +43,8 @@ class TaggedTypes:
     ) -> None:
         """Delete the type at cleanup; scope narrows the snippet's params to where the type is."""
         params = self._deletion(name, self.scope(env) if scope is None else scope)
-        registry.add_snippet(f"{self.kind} {name}", env.kube, env.deployment_for(self.component), self.snippet, params)
+        deployment = env.deployment_for(self.component)
+        registry.add_snippet(f"{self.kind} {name}", env.kube, deployment, self.snippet, params)
 
     def remove(self, env: Environment, name: str) -> None:
         """Delete a run-tagged type, published or not, with what belongs to it."""

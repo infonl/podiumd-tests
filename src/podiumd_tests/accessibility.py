@@ -34,4 +34,5 @@ def wcag_violations(page: Page) -> list[JsonObject]:
 def violation_line(violation: JsonObject) -> str:
     """One line per violation: rule, impact, number of elements and axe-core's help text."""
     nodes = len(entries(violation.get("nodes")))
-    return f"{violation.get('id')} ({violation.get('impact')}, {nodes} elements): {violation.get('help')}"
+    rule = f"{violation.get('id')} ({violation.get('impact')}, {nodes} elements)"
+    return f"{rule}: {violation.get('help')}"

@@ -106,7 +106,8 @@ def _group(option, api_root):
     from importlib import import_module
 
     module, model, field = GROUPS[option]
-    group = getattr(import_module(module), model).objects.filter(**{f"{field}__api_root": api_root}).first()
+    service_filter = {f"{field}__api_root": api_root}
+    group = getattr(import_module(module), model).objects.filter(**service_filter).first()
     return group.identifier if group else None
 
 

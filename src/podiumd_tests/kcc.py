@@ -82,7 +82,8 @@ def kiss_register(kiss: requests.Session, kiss_url: str) -> dict[str, str]:
         key=lambda systeem: not systeem.get("isDefault"),
     )
     if not openklant2:
-        found = ", ".join(f"{systeem.get('identifier')} ({systeem.get('registryVersion')})" for systeem in systemen)
+        described = (f"{systeem.get('identifier')} ({systeem.get('registryVersion')})" for systeem in systemen)
+        found = ", ".join(described)
         pytest.skip(f"KISS has no Open Klant 2 register, only {found}: its klantcontacten go to the e-Suite")
     return {"systemIdentifier": str(openklant2[0]["identifier"])}
 
@@ -230,7 +231,8 @@ def _kiss_created(  # noqa: PLR0913, PLR0917  # the KISS session, cleanup and th
 ) -> JsonObject:
     """Create an object through KISS's proxy; cleanup deletes it in Open Klant."""
     created = _kiss_create(kiss, kiss_url, resource, body)
-    registry.add(f"{resource} {created['url']}", lambda: openklant.delete(str(created["url"])))
+    url = str(created["url"])
+    registry.add(f"{resource} {url}", lambda: openklant.delete(url))
     return created
 
 
@@ -404,7 +406,8 @@ def ita_detail_text(ita: requests.Session, ita_url: str, taak: JsonObject) -> st
     ITA shows it to members of the groep the taak is assigned to (ITA_GROEP for the KCC test user,
     bootstrap objecten-medewerker-kcc).
     """
-    return json.dumps(expect_status(ita.get(f"{ita_url}/api/internetaken/{taak['nummer']}"), HTTPStatus.OK).json())
+    response = ita.get(f"{ita_url}/api/internetaken/{taak['nummer']}")
+    return json.dumps(expect_status(response, HTTPStatus.OK).json())
 
 
 # ITA answers 409 with this when Objecten refuses its logboek POST.

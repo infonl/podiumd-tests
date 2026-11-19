@@ -145,7 +145,8 @@ def delete_roles_and_domain(pabc: requests.Session, pabc_url: str, roles: Iterab
     for path, names in ((FUNCTIONAL_ROLES, set(roles)), (DOMAINS, {domain})):
         for found in get_entries(pabc, pabc_url + path):
             if found.get("name") in names:
-                expect_status(pabc.delete(f"{pabc_url}{path}/{found['id']}"), HTTPStatus.OK, HTTPStatus.NO_CONTENT)
+                response = pabc.delete(f"{pabc_url}{path}/{found['id']}")
+                expect_status(response, HTTPStatus.OK, HTTPStatus.NO_CONTENT)
 
 
 def mapped_application_roles(decision: JsonObject, entity_type: str) -> set[str]:

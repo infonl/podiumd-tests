@@ -117,7 +117,8 @@ def service_problem(service: Mapping[str, object], path: str | None) -> str | No
     LIST_PATHS (a public register, or one behind GATEWAYS) only has to answer its api_root without a server error.
     """
     status, api_root = service["status"], str(service["api_root"])
-    described = f"{service['name']} {api_root}{path or ''} ({service['auth_type']}): {status}"
+    url = f"{api_root}{path or ''}"
+    described = f"{service['name']} {url} ({service['auth_type']}): {status}"
     if path is not None:
         ok = isinstance(status, int) and HTTPStatus.OK <= status < HTTPStatus.MULTIPLE_CHOICES
         return None if ok else f"{described}, expected 2xx with its credentials"

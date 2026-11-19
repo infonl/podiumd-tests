@@ -132,7 +132,8 @@ class Callback:
 
         answer: "fail-first" (the first notification gets 500) or "refuse" (every notification gets 403).
         """
-        return cls(env, f"/{run_tag}{f'/{answer}' if answer else ''}/{secrets.token_hex(6)}")
+        answer_part = f"/{answer}" if answer else ""
+        return cls(env, f"/{run_tag}{answer_part}/{secrets.token_hex(6)}")
 
     def received(self) -> list[JsonObject]:
         """Everything the mock server got on this path, oldest first."""

@@ -55,7 +55,8 @@ BUDGET_MIN_REPLICAS = 2
 def baseline_violations(workload: JsonObject) -> list[str]:
     """Return what in the workload's pod template breaks the Pod Security Standard "baseline"."""
     name, pod = metadata_name(workload), section(section(section(workload, "spec"), "template"), "spec")
-    found = [f"{name}: {key}" for key in ("hostNetwork", "hostPID", "hostIPC") if pod.get(key) is True]
+    host_namespaces = ("hostNetwork", "hostPID", "hostIPC")
+    found = [f"{name}: {key}" for key in host_namespaces if pod.get(key) is True]
     found += [
         f"{name}: hostPath volume {volume.get('name')}"
         for volume in entries(pod.get("volumes"))
@@ -99,7 +100,8 @@ def missing_requests(workload: JsonObject) -> list[str]:
         asked = section(section(container, "resources"), "requests")
         missing = [resource for resource in ("cpu", "memory") if not asked.get(resource)]
         if missing:
-            found.append(f"{metadata_name(workload)}/{container.get('name')}: no {' or '.join(missing)} request")
+            requests = " or ".join(missing)
+            found.append(f"{metadata_name(workload)}/{container.get('name')}: no {requests} request")
     return found
 
 
@@ -282,7 +284,8 @@ def conformance(workload: JsonObject, objects: Objects) -> dict[str, bool]:
 
 def standards_report(workloads: Sequence[JsonObject], objects: Objects, title: str) -> str:
     """Return the Markdown matrix of workloads against the hosting standard checks, with a count per check."""
-    rows = {f"{item.get('kind', '')} {metadata_name(item)}": conformance(item, objects) for item in workloads}
+    labels = {f"{item.get('kind', '')} {metadata_name(item)}": item for item in workloads}
+    rows = {label: conformance(item, objects) for label, item in labels.items()}
     columns = [column for column, _, _ in STANDARDS]
     counts: list[str] = []
     for column, standard, _ in STANDARDS:
@@ -331,8 +334,9 @@ def clock_offset(env: Environment, workload: JsonObject) -> str | None:
     if kind is None or not containers:
         return None
     container = str(containers[0].get("name"))
+    target = f"{kind}/{metadata_name(workload)}"
     try:
-        output = env.kube.run("exec", f"{kind}/{metadata_name(workload)}", "-c", container, "--", "date", "+%z")
+        output = env.kube.run("exec", target, "-c", container, "--", "date", "+%z")
     except (KubeError, ProcessError):
         return None
     return output.strip() or None

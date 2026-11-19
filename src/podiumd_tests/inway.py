@@ -146,7 +146,8 @@ def make_identity(runner: Runner, client_ca: Path | None, directory: Path, name:
 
     Without a client CA the certificate is self-signed.
     """
-    key, request, certificate = (str(directory / f"{name}.{suffix}") for suffix in ("key", "csr", "pem"))
+    suffixes = ("key", "csr", "pem")
+    key, request, certificate = (str(directory / f"{name}.{suffix}") for suffix in suffixes)
     new_key = ["openssl", "req", "-newkey", "rsa:2048", "-nodes", "-keyout", key, "-subj", f"/CN={name}"]
     if client_ca is None:
         run_checked(runner, [*new_key, "-x509", "-days", "1", "-out", certificate], OPENSSL_TIMEOUT)

@@ -292,7 +292,8 @@ def holds(env: Environment) -> list[str]:
     setting = env.profile.settings.get("lock_file")
     if setting:
         lock = Path(setting)
-        found.append(f"{lock}: {lock.read_text(encoding='utf-8').strip() if lock.exists() else 'free'}")
+        lock_holder = lock.read_text(encoding="utf-8").strip() if lock.exists() else "free"
+        found.append(f"{lock}: {lock_holder}")
     return found
 
 
@@ -464,6 +465,8 @@ def book(env: Environment, who: str, what: str) -> Booking | None:
 def _refusal(answer: JsonObject) -> str:
     """Return the ledger's error, conflicting bookings and lock holders in one line."""
     parts = [str(answer["error"])] if answer.get("error") else []
-    parts += [f"{other['agent']}: {other['what']}" for other in entries(answer.get("conflicts"))]
-    parts += [f"{lock['lock']}: {lock['holder']}" for lock in entries(answer.get("locks"))]
+    conflicts = entries(answer.get("conflicts"))
+    parts += [f"{other['agent']}: {other['what']}" for other in conflicts]
+    locks = entries(answer.get("locks"))
+    parts += [f"{lock['lock']}: {lock['holder']}" for lock in locks]
     return "; ".join(parts) or "refused"
