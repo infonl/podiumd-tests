@@ -37,8 +37,8 @@ from podiumd_tests.omc import notify_request
 from podiumd_tests.omc import setting_skip
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.openvtb import BERICHTENBOX_TYPE
-from podiumd_tests.seed.openvtb import OPENVTB_WORKER
 from podiumd_tests.seed.openvtb import make_bericht
+from podiumd_tests.seed.openvtb import missing_celery
 from podiumd_tests.seed.openvtb import publish_bericht
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.wait import wait_until
@@ -267,6 +267,9 @@ def test_berichtenbox_delivery_becomes_a_klantcontact(  # the chain's clients
 @pytest.mark.source(
     "Jira IN-3532", "1: a bericht made in Open VTB reaches OMC through Open Notificaties and goes to the Berichtenbox."
 )
+@pytest.mark.source(
+    "Jira IN-3501", "Open VTB's worker sends the bericht's CloudEvent through Open Notificaties to OMC."
+)
 @pytest.mark.scenario("""
     Given an inwoner, and a bericht in Open VTB for MijnOverheid's Berichtenbox to the inwoner's BSN
     When Open VTB publishes the bericht
@@ -284,13 +287,15 @@ def test_published_bericht_reaches_the_berichtenbox_through_open_notificaties(  
     """Open VTB's worker sends the bericht's CloudEvent to Open Notificaties, whose abonnement delivers it to OMC."""
     need_bootstrap("infra-mock-server", "omc-abonnement")
     reason = notify_mock_missing(podiumd_env)
-    if not reason and OPENVTB_WORKER not in podiumd_env.workload_names:
-        reason = f"no {OPENVTB_WORKER}: Open VTB sends no CloudEvents (podiumd chart before helm-charts #746)"
     if not reason and not is_reading_openvtb(podiumd_env):
         reason = "OMC's ZGW_ENDPOINT_OPENVTB is not set: OMC reads no Open VTB berichten"
     reason = reason or setting_skip(podiumd_env, "ZGW_WHITELIST_VTBMESSAGE_TYPES", BERICHTENBOX_TYPE, listed=True)
     if reason:
         pytest.skip(reason)
+    # OMC reads Open VTB, so Open VTB must send its events: a missing worker or beat fails (IN-3501).
+    failure = missing_celery(podiumd_env)
+    if failure:
+        pytest.fail(failure)
     expect_omc_5(request, podiumd_env)
     bsn = make_inwoner(openklant, registry, own_address(registry))
     bericht = make_bericht(podiumd_env, openvtb_berichten, registry, f"urn:nld:brp:bsn:{bsn}", berichtenbox=True)

@@ -35,7 +35,21 @@ def make_abonnement(
     opennotificaties: ApiClient, registry: ResourceRegistry, callback_url: str, kanaal: str, filters: dict[str, str]
 ) -> JsonObject:
     """Create an abonnement on one kanaal, sending to callback_url."""
-    created = opennotificaties.post("abonnement", abonnement_body(callback_url, kanaal, filters))
+    return _subscribe(opennotificaties, registry, abonnement_body(callback_url, kanaal, filters))
+
+
+def make_cloudevent_abonnement(
+    opennotificaties: ApiClient, registry: ResourceRegistry, callback_url: str, type_substring: str
+) -> JsonObject:
+    """Create an abonnement on the CloudEvents whose type contains type_substring, sending to callback_url."""
+    return _subscribe(
+        opennotificaties, registry, cloudevent_abonnement_body(callback_url, type_substring, CALLBACK_AUTH)
+    )
+
+
+def _subscribe(opennotificaties: ApiClient, registry: ResourceRegistry, body: dict[str, object]) -> JsonObject:
+    """Create the abonnement; cleanup deletes it."""
+    created = opennotificaties.post("abonnement", body)
     url = str(created["url"])
     registry.add(f"abonnement {url}", lambda: delete_abonnement(opennotificaties, url))
     return created

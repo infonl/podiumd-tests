@@ -29,6 +29,7 @@ from podiumd_tests.responses import url_host
 from podiumd_tests.seed.opennotificaties import abonnement_body
 from podiumd_tests.seed.opennotificaties import cloudevent_abonnement_body
 from podiumd_tests.seed.opennotificaties import delete_abonnement
+from podiumd_tests.seed.openvtb import BERICHT_EVENTS
 
 if TYPE_CHECKING:
     from podiumd_tests.bootstrap.runner import Context
@@ -40,8 +41,6 @@ VALIDITY = 365 * 24 * 3600
 RENEW_BEFORE = 7 * 24 * 3600
 # OMC's endpoint for notifications, the end of its abonnement's callback URL.
 LISTEN_PATH = "/Events/Listen"
-# The type prefix of Open VTB's bericht CloudEvents.
-BERICHT_EVENTS = "nl.overheid.berichten."
 # The podiumd chart's ZGW_ENDPOINT_OPENVTB where OMC does not read Open VTB: its host never resolves.
 UNSET_HOST_SUFFIX = ".invalid"
 # The taak as OMC 2.3.1 reads it first (its vHague TaskObject); the environment owner sets OMC's

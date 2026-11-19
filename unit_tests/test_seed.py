@@ -26,6 +26,7 @@ from podiumd_tests.seed.objecten import objecttype_url
 from podiumd_tests.seed.opennotificaties import CALLBACK_AUTH
 from podiumd_tests.seed.opennotificaties import delivery_attempts
 from podiumd_tests.seed.opennotificaties import make_abonnement
+from podiumd_tests.seed.opennotificaties import make_cloudevent_abonnement
 from podiumd_tests.seed.registry import ResourceRegistry
 
 API = "https://api.example.test/v1"
@@ -83,6 +84,7 @@ def created(path: str) -> dict[str, _Answer]:
         (lambda c, r: openklant.make_onderwerpobject(c, r, {"uuid": "k"}, "z"), "onderwerpobjecten"),
         (lambda c, r: objecten_module.make_object(c, r, "ot", {"a": 1}), "objects"),
         (lambda c, r: make_abonnement(c, r, "https://cb.test/", "zaken", {}), "abonnement"),
+        (lambda c, r: make_cloudevent_abonnement(c, r, "https://cb.test/", "nl.overheid.berichten."), "abonnement"),
         (lambda c, r: openvtb.make_taak(c, r, "betaaltaken"), "betaaltaken"),
     ],
 )

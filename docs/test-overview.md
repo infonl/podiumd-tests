@@ -12,14 +12,14 @@ component and integration, without and with the destructive tests; the test suit
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 242 | 42 | 12 |
-| component | 1005 | 587 | 71 |
+| component | 1007 | 589 | 71 |
 | integration | 247 | 147 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1395** | **723** | **88** |
+| **full tier** | **1397** | **725** | **88** |
 | **chaos tier** | **99** | **53** | **14** |
-| **test suite** | **1574** | **785** | **102** |
+| **test suite** | **1576** | **787** | **102** |
 
-Unit tests (`unit_tests/`, functions): 988. Perf endpoints (`perf/runs.py`): 32.
+Unit tests (`unit_tests/`, functions): 992. Perf endpoints (`perf/runs.py`): 32.
 
 ## Per area
 
@@ -48,7 +48,7 @@ Unit tests (`unit_tests/`, functions): 988. Perf endpoints (`perf/runs.py`): 32.
 | component | openinwoner | 36 | 25 |
 | component | openklant | 15 | 11 |
 | component | opennotificaties | 8 | 6 |
-| component | openvtb | 13 | 6 |
+| component | openvtb | 15 | 8 |
 | component | openzaak | 177 | 78 |
 | component | pabc | 10 | 10 |
 | component | platform | 71 | 20 |
@@ -106,7 +106,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | Origin | Tests |
 | --- | --- |
 | EX | 19 |
-| Jira | 3 |
+| Jira | 5 |
 | MK | 45 |
 | PCP | 1 |
 | PI | 54 |

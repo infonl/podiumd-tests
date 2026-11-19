@@ -7,18 +7,27 @@ from typing import TYPE_CHECKING
 import pytest
 
 from podiumd_tests.json_data import differences
+from podiumd_tests.json_data import section
+from podiumd_tests.mock_server import Callback
 from podiumd_tests.responses import invalid_names
 from podiumd_tests.seed.openklant import random_bsn
+from podiumd_tests.seed.opennotificaties import make_cloudevent_abonnement
+from podiumd_tests.seed.openvtb import BERICHT_EVENTS
 from podiumd_tests.seed.openvtb import PROFILE_FIELDS
 from podiumd_tests.seed.openvtb import TAAK_DETAILS
 from podiumd_tests.seed.openvtb import make_bericht
 from podiumd_tests.seed.openvtb import make_taak
+from podiumd_tests.seed.openvtb import missing_celery
+from podiumd_tests.seed.openvtb import publish_bericht
+from podiumd_tests.seed.openvtb import publish_schedules
 from podiumd_tests.seed.openvtb import taak_body
 from podiumd_tests.seed.openvtb import without
 from podiumd_tests.seed.openvtb import zaak_urn
 from podiumd_tests.seed.openzaak import make_zaak
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from podiumd_tests.clients.api import ApiClient
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
@@ -170,3 +179,69 @@ def test_bericht_needs_a_berichttype(
     """A bericht created against a berichttype reads back (Open VTB 0.2.0 berichten API)."""
     created = make_bericht(podiumd_env, openvtb_berichten, registry, "urn:ptest:ontvanger:1")
     assert openvtb_berichten.get(str(created["url"]))["onderwerp"] == registry.tagged("bericht")
+
+
+# Open VTB's worker and Open Notificaties each hand the event on in a background task.
+EVENT_TIMEOUT = 120
+SOURCE_IN_3501 = (
+    "Jira IN-3501",
+    "Open VTB's Celery worker and beat send its bericht CloudEvents through Open Notificaties.",
+)
+
+
+def expect_celery(env: Environment) -> None:
+    """Fail where Open VTB runs without its worker or beat: then no bericht event ever leaves Open VTB."""
+    failure = missing_celery(env)
+    if failure:
+        pytest.fail(failure)
+
+
+@pytest.mark.requires("opennotificaties")
+@pytest.mark.source(*SOURCE_IN_3501)
+@pytest.mark.scenario("""
+    Given a subscriber in Open Notificaties to Open VTB's bericht events
+    When a client creates a bericht in Open VTB
+    Then the subscriber gets the event that the bericht was registered
+    When Open VTB publishes the bericht
+    Then the subscriber gets the event that the bericht was published
+""")
+def test_bericht_events_reach_open_notificaties_subscribers(  # the chain's clients
+    podiumd_env: Environment,
+    need_bootstrap: Callable[..., None],
+    run_tag: str,
+    openvtb_berichten: ApiClient,
+    opennotificaties: ApiClient,
+    registry: ResourceRegistry,
+) -> None:
+    """Open VTB's worker sends bericht-geregistreerd and bericht-gepubliceerd to Open Notificaties as CloudEvents."""
+    need_bootstrap("infra-mock-server")
+    expect_celery(podiumd_env)
+    callback = Callback.new(podiumd_env, run_tag)
+    make_cloudevent_abonnement(opennotificaties, registry, callback.url, BERICHT_EVENTS)
+    bericht = make_bericht(podiumd_env, openvtb_berichten, registry, f"urn:nld:brp:bsn:{random_bsn()}")
+    uuid = str(bericht["uuid"])
+
+    def event(kind: str) -> Callable[[JsonObject], bool]:
+        def is_wanted(entry: JsonObject) -> bool:
+            body = section(entry, "body")
+            return body.get("type") == f"{BERICHT_EVENTS}{kind}" and body.get("subject") == uuid
+
+        return is_wanted
+
+    callback.wait_for(
+        event("bericht-geregistreerd"), timeout=EVENT_TIMEOUT, description=f"bericht-geregistreerd {uuid}"
+    )
+    publish_bericht(podiumd_env, uuid)
+    callback.wait_for(event("bericht-gepubliceerd"), timeout=EVENT_TIMEOUT, description=f"bericht-gepubliceerd {uuid}")
+
+
+@pytest.mark.source(*SOURCE_IN_3501)
+@pytest.mark.scenario("""
+    Given Open VTB with its worker and beat
+    When the beat looks at its schedule
+    Then it publishes the berichten whose publicatiedatum has passed, on a schedule that is switched on
+""")
+def test_due_berichten_are_published_on_a_schedule(podiumd_env: Environment) -> None:
+    """Open VTB's beat has an enabled periodic task send_berichten_events."""
+    expect_celery(podiumd_env)
+    assert publish_schedules(podiumd_env), "Open VTB has no enabled periodic task send_berichten_events"

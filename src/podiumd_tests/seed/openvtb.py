@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from typing import cast
 
+from podiumd_tests.kube import DJANGO_VALUE_MARKER
+from podiumd_tests.kube import django_values
 from podiumd_tests.seed.openzaak import after_period
 from podiumd_tests.seed.openzaak import today
 
@@ -114,8 +116,33 @@ def make_bericht(  # the berichttype's flag is not a field of the bericht
     return bericht
 
 
-# Open VTB's Celery worker, which sends its CloudEvents to Open Notificaties (podiumd chart from helm-charts #746).
+# Open VTB's Celery worker, which sends its CloudEvents to Open Notificaties, and its beat, which publishes due
+# berichten (podiumd chart from helm-charts #746).
 OPENVTB_WORKER = "openvtb-worker"
+OPENVTB_BEAT = "openvtb-beat"
+# The type prefix of Open VTB's bericht CloudEvents and the beat task that publishes due berichten.
+BERICHT_EVENTS = "nl.overheid.berichten."
+PUBLISH_TASK = "openvtb.components.berichten.tasks.send_berichten_events"
+
+
+def missing_celery(env: Environment) -> str | None:
+    """Return the failure message when Open VTB runs without its worker or beat, else None."""
+    missing = [name for name in (OPENVTB_WORKER, OPENVTB_BEAT) if name not in env.workload_names]
+    if not missing:
+        return None
+    return f"no {' and '.join(missing)}: Open VTB sends no CloudEvents (podiumd chart without helm-charts #746)"
+
+
+def publish_schedules(env: Environment) -> list[str]:
+    """Return the crontabs of Open VTB's enabled periodic tasks that publish due berichten."""
+    code = (
+        "from django_celery_beat.models import PeriodicTask\n"
+        f"for task in PeriodicTask.objects.filter(task={PUBLISH_TASK!r}, enabled=True):\n"
+        f"    print({DJANGO_VALUE_MARKER!r} + str(task.crontab))\n"
+        f"print({DJANGO_VALUE_MARKER!r} + 'end')"
+    )
+    values = django_values(env.kube.exec_django_shell(env.deployment_for("openvtb"), code))
+    return values[:-1]
 
 
 def publish_bericht(env: Environment, bericht: str) -> None:
