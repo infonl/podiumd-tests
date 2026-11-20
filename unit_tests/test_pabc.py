@@ -150,3 +150,26 @@ def test_mapped_application_roles_of_one_entity_type():
     }
     assert pabc.mapped_application_roles(decision, "zt-1") == {"behandelaar", "coordinator"}
     assert pabc.mapped_application_roles(decision, "zt-2") == set()
+
+
+def test_an_overall_mapping_has_no_domain_and_is_counted_apart(fake_http):
+    roles = [
+        {"id": "a-1", "name": "behandelaar", "application": "zac"},
+        {"id": "a-2", "name": "brp_zoeken", "application": "zac"},
+    ]
+    mapped = [
+        {"applicationRoleId": "a-1", "domain": "ptest"},
+        {"applicationRoleId": "a-3", "domain": None, "isAllEntityTypes": True},
+    ]
+    sent = fake_http(
+        {
+            "GET /api/v1/functional-roles": (200, [{"id": "f-1", "name": "ptest-zac", "mappings": mapped}]),
+            "GET /api/v1/application-roles": (200, roles),
+            "POST /api/v1/functional-roles/f-1/mappings": (201, {}),
+        }
+    )
+    pabc.ensure_functional_role(requests.Session(), PABC, "ptest-zac", "zac", ("brp_zoeken",), None)
+    posted = [json.loads(s.body) for s in sent if s.method == "POST"]
+    assert posted == [{"applicationRoleId": "a-2", "domainId": None, "isAllEntityTypes": False}]
+    assert pabc.domain_mappings(requests.Session(), PABC, "ptest-zac") == 1
+    assert pabc.domain_mappings(requests.Session(), PABC, "ptest-zac", overall=True) == 0

@@ -60,6 +60,10 @@ ZAC_FUNCTIONAL_ROLES = {
     **{f"{ZAC_FUNCTIONAL_ROLE}-{role}": (role,) for role in ZAC_BASE_ROLES},
     f"{ZAC_FUNCTIONAL_ROLE}-brp-zoeken": ("brp_zoeken",),
 }
+# Application roles ZAC reads as overall roles: PABC mappings for no entity type at all (no domain). The test admin
+# searches persons in the BRP, which ZAC allows with brp_zoeken overall or for the person's gemeente; an estate's
+# dataset may not give its beheerders brp_zoeken.
+ZAC_OVERALL_ROLES = {ZAC_FUNCTIONAL_ROLE: ("brp_zoeken",)}
 # ZaakBrug drives ZDS, whose StUF zaaktype code is at most 10 characters; the klacht id (22) is too long.
 ZAAKBRUG_ZAAKTYPE = "ZBTESTPT"
 ZAAKBRUG_IOT = "ptest-bootstrap-zb-bijlage"

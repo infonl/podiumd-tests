@@ -18,6 +18,7 @@ from podiumd_tests.bootstrap.bpmn import uuid_of
 from podiumd_tests.bootstrap.names import BPMN_PRODUCTAANVRAAGTYPE
 from podiumd_tests.bootstrap.names import ZAC_DOMAIN
 from podiumd_tests.bootstrap.names import ZAC_FUNCTIONAL_ROLES
+from podiumd_tests.bootstrap.names import ZAC_OVERALL_ROLES
 from podiumd_tests.bootstrap.runner import Context
 from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import STEPS
@@ -87,11 +88,18 @@ ALL = ("raadpleger", "behandelaar", "coordinator", "recordmanager", "beheerder",
 BASE = ALL[:-1]
 
 
-def mapped(short=0, *, brp_zoeken=True):
-    """A fake domain_mappings: each role's count of application roles minus `short`; 0 for the brp_zoeken role."""
-    return lambda _pabc, _url, role: (
-        0 if not brp_zoeken and role.endswith("brp-zoeken") else len(ZAC_FUNCTIONAL_ROLES[role]) - short
-    )
+def mapped(short=0, *, brp_zoeken=True, overall=True):
+    """A fake domain_mappings: each role's count of application roles minus `short`; 0 for the brp_zoeken role.
+
+    overall: whether the admin's overall brp_zoeken mapping exists (only with brp_zoeken).
+    """
+
+    def count(_pabc, _url, role, *, overall_kind=False):
+        if overall_kind:
+            return len(ZAC_OVERALL_ROLES.get(role, ())) if brp_zoeken and overall else 0
+        return 0 if not brp_zoeken and role.endswith("brp-zoeken") else len(ZAC_FUNCTIONAL_ROLES[role]) - short
+
+    return lambda pabc, url, role, *, overall=False: count(pabc, url, role, overall_kind=overall)
 
 
 @pytest.mark.parametrize(
@@ -102,6 +110,8 @@ def mapped(short=0, *, brp_zoeken=True):
         ([PROCESS_KEY], [{**LINK, "zaakNietOntvankelijkResultaattype": {"id": "rt-1"}}], mapped(), ALL, False),
         ([], [LINK], mapped(), ALL, False),
         ([PROCESS_KEY], [LINK], mapped(1), ALL, False),
+        # The admin's overall brp_zoeken mapping is missing.
+        ([PROCESS_KEY], [LINK], mapped(overall=False), ALL, False),
         # PABC without brp_zoeken (podiumd chart 4.9): its role is not wanted.
         (
             [PROCESS_KEY],
@@ -207,6 +217,8 @@ def test_apply_deploys_the_process_its_forms_and_the_link(ctx, fake_http, monkey
     assert pabc.named("add_entity_type") == [("ptest-bootstrap-bpmn",)]
     assert pabc.named("ensure_domain") == [(ZAC_DOMAIN, ["et-new"])]
     assert {call[0] for call in pabc.named("ensure_functional_role")} == set(ZAC_FUNCTIONAL_ROLES)
+    overall = [call for call in pabc.named("ensure_functional_role") if call[-1] is None]
+    assert overall == [(name, bpmn.ZAC_APPLICATION, roles, None) for name, roles in ZAC_OVERALL_ROLES.items()]
     assert ctx.notes == []
 
 

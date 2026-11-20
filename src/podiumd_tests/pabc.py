@@ -109,9 +109,17 @@ def application_roles(pabc: requests.Session, pabc_url: str, application: str) -
 
 
 def ensure_functional_role(  # noqa: PLR0913, PLR0917  # one mapping set
-    pabc: requests.Session, pabc_url: str, name: str, application: str, roles: tuple[str, ...], domain: str
+    pabc: requests.Session,
+    pabc_url: str,
+    name: str,
+    application: str,
+    roles: tuple[str, ...],
+    domain: str | None,
 ) -> None:
-    """Ensure the functional role of this name, mapped to these application roles in the domain."""
+    """Ensure the functional role of this name, mapped to these application roles in the domain.
+
+    Without a domain the roles are mapped for no entity type at all: ZAC reads those as overall roles.
+    """
     known = application_roles(pabc, pabc_url, application)
     missing = set(roles) - {str(role.get("name")) for role in known}
     if missing:
@@ -124,7 +132,9 @@ def ensure_functional_role(  # noqa: PLR0913, PLR0917  # one mapping set
         response = pabc.post(pabc_url + FUNCTIONAL_ROLES, json={"name": name})
         found = cast("JsonObject", expect_status(response, HTTPStatus.CREATED).json())
     mapped = {
-        str(mapping.get("applicationRoleId")) for mapping in entries(found.get("mappings")) if mapping.get("domain")
+        str(mapping.get("applicationRoleId"))
+        for mapping in entries(found.get("mappings"))
+        if _is_of_kind(mapping, overall=domain is None)
     }
     for role in known:
         if role.get("name") in roles and str(role["id"]) not in mapped:
@@ -134,10 +144,22 @@ def ensure_functional_role(  # noqa: PLR0913, PLR0917  # one mapping set
             )
 
 
-def domain_mappings(pabc: requests.Session, pabc_url: str, role: str) -> int:
-    """How many mappings to a single domain the functional role of this name has; 0 when it does not exist."""
+def domain_mappings(pabc: requests.Session, pabc_url: str, role: str, *, overall: bool = False) -> int:
+    """How many mappings to a single domain the functional role of this name has; 0 when it does not exist.
+
+    overall: count its mappings for no entity type at all instead.
+    """
     roles = [found for found in get_entries(pabc, pabc_url + FUNCTIONAL_ROLES) if found.get("name") == role]
-    return sum(1 for found in roles for mapping in entries(found.get("mappings")) if mapping.get("domain"))
+    return sum(
+        1 for found in roles for mapping in entries(found.get("mappings")) if _is_of_kind(mapping, overall=overall)
+    )
+
+
+def _is_of_kind(mapping: JsonObject, *, overall: bool) -> bool:
+    """Return whether the mapping is to a single domain, or (overall) for no entity type: no domain, not all."""
+    if overall:
+        return not mapping.get("domain") and not mapping.get("isAllEntityTypes")
+    return bool(mapping.get("domain"))
 
 
 def delete_roles_and_domain(pabc: requests.Session, pabc_url: str, roles: Iterable[str], domain: str) -> None:

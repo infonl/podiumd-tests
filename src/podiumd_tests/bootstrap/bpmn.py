@@ -4,7 +4,8 @@ ZAC (5.9) starts a BPMN process for a zaaktype with a zaaktype-bpmn-configuratio
 forms are uploaded through ZAC's admin API, as ZAC's own integration tests do. ZAC asks PABC for the user's rights
 on the zaaktype by the user's realm roles: the step maps the functional roles ZAC_FUNCTIONAL_ROLES (realm roles
 of the test admin and the ZAC role users) to ZAC's application roles in PABC domain ptest-bootstrap, which holds
-only this zaaktype, so the rights do not depend on the estate's PABC dataset.
+only this zaaktype, so the rights do not depend on the estate's PABC dataset. ZAC_OVERALL_ROLES (the test admin's
+brp_zoeken) are mapped for no entity type at all, which ZAC reads as overall roles.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from podiumd_tests.bootstrap.names import BPMN_ZAAKTYPE
 from podiumd_tests.bootstrap.names import PREFIX
 from podiumd_tests.bootstrap.names import ZAC_DOMAIN
 from podiumd_tests.bootstrap.names import ZAC_FUNCTIONAL_ROLES
+from podiumd_tests.bootstrap.names import ZAC_OVERALL_ROLES
 from podiumd_tests.bootstrap.names import ZGW_CLIENT_ID
 from podiumd_tests.bootstrap.names import ZGW_STORE_KEY
 from podiumd_tests.clients.platform import openzaak_client
@@ -135,10 +137,21 @@ def deployed_files(http: requests.Session, zac: str, key: str) -> dict[str, str]
         return {name: archive.read(name).decode() for name in archive.namelist()}
 
 
-def mappable_roles(pabc: requests.Session, pabc_url: str) -> dict[str, tuple[str, ...]]:
-    """ZAC_FUNCTIONAL_ROLES whose application roles PABC has; podiumd chart 4.9's dataset lacks brp_zoeken."""
+def mappable_roles(
+    pabc: requests.Session, pabc_url: str, wanted: dict[str, tuple[str, ...]] = ZAC_FUNCTIONAL_ROLES
+) -> dict[str, tuple[str, ...]]:
+    """Return the wanted functional roles whose application roles PABC has; chart 4.9's dataset lacks brp_zoeken."""
     known = {str(role.get("name")) for role in application_roles(pabc, pabc_url, ZAC_APPLICATION)}
-    return {name: roles for name, roles in ZAC_FUNCTIONAL_ROLES.items() if set(roles) <= known}
+    return {name: roles for name, roles in wanted.items() if set(roles) <= known}
+
+
+def _are_all_mapped(
+    pabc: requests.Session, pabc_url: str, wanted: dict[str, tuple[str, ...]], *, overall: bool
+) -> bool:
+    """Whether each wanted role PABC can map has a mapping (to a domain, or overall) per application role."""
+    mappable = mappable_roles(pabc, pabc_url, wanted)
+    counts = {name: domain_mappings(pabc, pabc_url, name, overall=overall) for name in mappable}
+    return all(counts[name] >= len(roles) for name, roles in mappable.items())
 
 
 def uuid_of(url: object) -> str:
@@ -197,8 +210,8 @@ class ZacBpmnProcess:
         if deployed is not None and deployed != process_files():
             return False
         pabc, pabc_url = self._pabc(ctx)
-        wanted = mappable_roles(pabc, pabc_url).items()
-        return all(domain_mappings(pabc, pabc_url, name) >= len(roles) for name, roles in wanted)
+        functional = _are_all_mapped(pabc, pabc_url, ZAC_FUNCTIONAL_ROLES, overall=False)
+        return functional and _are_all_mapped(pabc, pabc_url, ZAC_OVERALL_ROLES, overall=True)
 
     def apply(self, ctx: Context, /) -> dict[str, str]:
         """Map the functional roles in PABC, deploy the process and its forms, and link it to the zaaktype.
@@ -276,6 +289,8 @@ class ZacBpmnProcess:
         wanted = mappable_roles(pabc, pabc_url)
         for name, roles in wanted.items():
             ensure_functional_role(pabc, pabc_url, name, ZAC_APPLICATION, roles, domain)
+        for name, roles in mappable_roles(pabc, pabc_url, ZAC_OVERALL_ROLES).items():
+            ensure_functional_role(pabc, pabc_url, name, ZAC_APPLICATION, roles, None)
         left_out = sorted(set(ZAC_FUNCTIONAL_ROLES) - set(wanted))
         if left_out:
             ctx.notes.append(f"not mapped, PABC lacks their application roles: {', '.join(left_out)}")
