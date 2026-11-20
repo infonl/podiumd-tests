@@ -6,7 +6,7 @@ mijn_vragen_actor, ...), subjects (ContactFormSubject names), group (the suite's
 ZGWApiGroupConfig, whose klant_backend takes a question about a zaak), record ({"service":
 created pk, "config": old field values or null when created, "subjects": [created pks],
 "klanten": old KlantenSysteemConfig values, "group": [pk, old klant_backend]}), which remove
-restores exactly.
+restores exactly. An environment that already has a Service for api_root keeps it, with its own token.
 """
 
 SLUG = "ptest-bootstrap-openklant2"
@@ -44,7 +44,9 @@ def run(params):
 
 def _present(params, config, klanten, group):
     service = None if config is None else config.service
-    linked = service is not None and service.slug == SLUG and service.secret == params.get("token")
+    linked = service is not None and service.api_root == params.get("api_root")
+    if linked and service.slug == SLUG:
+        linked = service.secret == params.get("token")
     backend = group is None or group.klant_backend == BACKEND
     klanten_set = all(getattr(klanten, field) == value for field, value in KLANTEN.items())
     return bool(linked and backend and klanten_set)
@@ -67,6 +69,10 @@ def _service(params, record):
     from zgw_consumers.constants import AuthTypes
     from zgw_consumers.models import Service
 
+    own = Service.objects.filter(api_root=params["api_root"]).exclude(slug=SLUG).first()
+    if own is not None:
+        # The environment's own Service for this Open Klant: api_root is unique, and its credentials stay as they are.
+        return own
     service, created = Service.objects.update_or_create(
         slug=SLUG,
         defaults={

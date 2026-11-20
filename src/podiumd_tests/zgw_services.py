@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
 # A list endpoint per API that answers 2xx only to an authorised client. The API is the path before /api/
 # (Open Zaak, Open Klant), else the component of the host. Zaken API: statussen, as its zaken list needs Accept-Crs.
+# Referentielijsten: its tabellen are public, so its Service only has to reach the API.
 LIST_PATHS = {
     "zaken": "statussen",
     "documenten": "enkelvoudiginformatieobjecten",
@@ -37,6 +38,7 @@ LIST_PATHS = {
     "opennotificaties": "kanaal",
     "objecten": "objects",
     "objecttypen": "objecttypes",
+    "referentielijsten": "tabellen",
 }
 # Gateways in the environment to registers outside it: judged as those registers, by their answer alone.
 GATEWAYS = ("api-proxy", "frankgateway")

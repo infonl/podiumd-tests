@@ -24,7 +24,9 @@ def run(params):
     if params["action"] == "remove":
         _remove(models, record)
         return {"present": False}
-    group = ZGWApiGroupConfig.objects.get(name=params["group"])
+    group = ZGWApiGroupConfig.objects.filter(name=params["group"]).first()
+    if group is None:
+        return _without_group(params)
     targets = [(group, _types(build_client(group.ztc_service), params))]
     for other in ZGWApiGroupConfig.objects.exclude(pk=group.pk):
         # A group without the test catalogus (LookupError) or unreachable (requests errors are OSErrors).
@@ -40,6 +42,14 @@ def run(params):
         if "notify" in params:
             _notify(models, record, _found(models, *types), types[1], params["notify"])
     return {"present": True, "record": record}
+
+
+def _without_group(params):
+    # Without the suite's API group (step openinwoner-zgw-group) nothing of this step can be in place.
+    if params["action"] == "status":
+        return {"present": False}
+    msg = f"no API group {params['group']}: run bootstrap step openinwoner-zgw-group first"
+    raise LookupError(msg)
 
 
 def _apply(models, record, group, types):

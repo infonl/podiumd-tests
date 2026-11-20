@@ -11,6 +11,8 @@ pages it authored), contact_email (KlantenSysteemConfig.register_contact_email w
 
 from itertools import starmap
 
+HOME = "home"
+
 
 def run(params):
     from django.db import transaction
@@ -70,7 +72,11 @@ def _pairs(params, existing):
 def _find(page_model, wanted):
     if wanted.get("apphook"):
         return page_model.objects.filter(application_urls=wanted["apphook"]).first()
-    return page_model.objects.filter(urls__slug=wanted["slug"]).first()
+    found = page_model.objects.filter(urls__slug=wanted["slug"]).first()
+    if found is None and wanted.get("home"):
+        # The environment's own home page under another slug: a second page with this reverse_id is refused.
+        return page_model.objects.filter(reverse_id=HOME).first()
+    return found
 
 
 def _app_config_model(wanted):
@@ -111,7 +117,7 @@ def _create(wanted, user):
         "slug": wanted["slug"],
         "in_navigation": not wanted.get("home"),
         # The side navigation needs a home page with this reverse_id.
-        "reverse_id": "home" if wanted.get("home") else None,
+        "reverse_id": HOME if wanted.get("home") else None,
         "created_by": user,
     }
     if wanted.get("apphook"):

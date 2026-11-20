@@ -21,6 +21,7 @@ from podiumd_tests.zgw_services import view_config_problems
         ("https://objecten.local/api/v2/", "objects"),
         ("https://test-objecttypen.example.nl/api/v2/", "objecttypes"),
         ("https://notificaties.kees00.example.nl/api/v1/", "kanaal"),
+        ("https://referentielijsten.local/api/v1/", "tabellen"),
         ("https://selectielijst.openzaak.nl/api/v1/", None),
         ("http://frankgateway-outway:9080/haalcentraal/api/brp/", None),
     ],
