@@ -349,8 +349,8 @@ KCC = KeycloakUser(
     # ITA refuses a login without it ("Verwachtewaarde voor de samaccountname ontbreekt").
     attributes={"samaccountname": [f"{names.PREFIX}-kcc"]},
 )
-# One user per ZAC application role of step zac-bpmn-process, with only that realm role; keycloak-roles creates
-# the realm roles, so the users need wiring.
+# One user per ZAC application role of step zac-bpmn-process, with only that realm role. Wiring, as the role
+# mappings of zac-bpmn-process that give them their rights.
 ZAC_ROLE_USERS = {
     roles[0]: KeycloakUser(name.removeprefix(f"{names.PREFIX}-"), realm_roles=(name,), wiring=True)
     for name, roles in names.ZAC_FUNCTIONAL_ROLES.items()
@@ -859,6 +859,7 @@ STEPS: tuple[Step, ...] = (
     # OAB logs them in locally, as in podiumd-minikube.
     *(django_user_step("openarchiefbeheer", key, (group,)) for key, group in OAB_ROLES.items()),
     *DJANGO_ADMINS.values(),
+    KeycloakRoles.for_own_roles((ADMIN, *ZAC_ROLE_USERS.values())),
     KeycloakRoles((KCC, ADMIN, ITA_BEHEERDER, *ZAC_ROLE_USERS.values())),
     KCC,
     ADMIN,

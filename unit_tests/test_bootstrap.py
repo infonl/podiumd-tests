@@ -427,6 +427,23 @@ def test_keycloak_roles_creates_the_missing_roles_and_records_them(
     ]
 
 
+def test_own_keycloak_roles_creates_only_the_suites_own_realm_roles_without_wiring(
+    env_factory, fake_runner, profile_factory, fake_http
+):
+    ctx = keycloak_ctx(env_factory, fake_runner, profile_factory)
+    answers = keycloak_answers(user_exists=True, has_group=True)
+    answers[f"POST {REALM}/roles"] = (201, None)
+    sent = fake_http(answers)
+    users = (*ROLE_USERS, KeycloakUser("zac", realm_roles=("ptest-bootstrap-zac", "Coordinator")))
+    step = KeycloakRoles.for_own_roles(users)
+    assert (step.name, step.wiring) == ("keycloak-own-roles", False)
+    assert step.store_key != KeycloakRoles(users).store_key
+    values = step.apply(ctx)
+    assert json.loads(values[step.store_key]) == ["ptest-bootstrap-zac"]
+    created = [json.loads(r.body)["name"] for r in sent if r.method == "POST" and "/roles" in r.url]
+    assert created == ["ptest-bootstrap-zac"]
+
+
 def test_keycloak_roles_remove_deletes_only_recorded_roles_it_still_owns(
     env_factory, fake_runner, profile_factory, fake_http
 ):

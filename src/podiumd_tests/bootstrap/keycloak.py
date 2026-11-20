@@ -131,6 +131,9 @@ class KeycloakRoles:
     The record lists what the step created ("role" or "client:role"), and each role carries attribute
     CREATED_BY; remove deletes only a recorded role that still has it, so a role that a later realm import
     (skipRoles false) created or rewrote is kept. Roles of clients the realm lacks are left out.
+
+    own: only the suite's own realm roles (named ptest-bootstrap-*), which no platform configuration reads;
+    see for_own_roles.
     """
 
     users: tuple[KeycloakUser, ...]
@@ -138,6 +141,21 @@ class KeycloakRoles:
     requires: tuple[str, ...] = ("keycloak",)
     wiring: bool = True
     store_key: str = f"{PREFIX.replace('-', '_')}_keycloak_roles_record"
+    own: bool = False
+
+    @classmethod
+    def for_own_roles(cls, users: tuple[KeycloakUser, ...]) -> KeycloakRoles:
+        """Return the step for the users' ptest-bootstrap-* realm roles: the suite's own, so not platform wiring.
+
+        It runs before keycloak-roles, also without wiring: ZAC reads the test admin's ptest-bootstrap-zac.
+        """
+        return cls(
+            users,
+            name="keycloak-own-roles",
+            wiring=False,
+            store_key=f"{PREFIX.replace('-', '_')}_keycloak_own_roles_record",
+            own=True,
+        )
 
     def is_present(self, ctx: Context, /) -> bool:
         """Every wanted role exists."""
@@ -165,9 +183,12 @@ class KeycloakRoles:
 
     def _missing(self, admin: KeycloakAdmin) -> list[str]:
         """Each wanted role that does not exist, as a record entry."""
-        wanted = sorted({role for user in self.users for role in user.realm_roles})
+        roles = {role for user in self.users for role in user.realm_roles}
+        wanted = sorted(filter(_is_own, roles) if self.own else roles)
         existing = {str(role["name"]) for role in admin.realm_roles(tuple(wanted))}
         missing = [role for role in wanted if role not in existing]
+        if self.own:
+            return missing
         for client_id, role in sorted({client_role for user in self.users for client_role in user.client_roles}):
             if admin.client(client_id) and admin.client_role(client_id, role) is None:
                 missing.append(f"{client_id}:{role}")
@@ -175,6 +196,10 @@ class KeycloakRoles:
 
     def _record(self, ctx: Context) -> list[str]:
         return cast("list[str]", json.loads(ctx.store.read().get(self.store_key, "[]")))
+
+
+def _is_own(role: str) -> bool:
+    return role.startswith(f"{PREFIX}-")
 
 
 def _client_uuid(admin: KeycloakAdmin, entry: str) -> tuple[str, str | None]:
