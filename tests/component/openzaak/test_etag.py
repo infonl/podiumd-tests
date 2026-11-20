@@ -13,9 +13,11 @@ import pytest
 from podiumd_tests.seed.openzaak import make_document
 from podiumd_tests.seed.openzaak import make_rol
 from podiumd_tests.seed.openzaak import make_zaak
+from podiumd_tests.workloads import expect_defect
 
 if TYPE_CHECKING:
     from podiumd_tests.clients.api import ApiClient
+    from podiumd_tests.environment import Environment
     from podiumd_tests.seed.openzaak import ZaaktypeParts
     from podiumd_tests.seed.registry import ResourceRegistry
 
@@ -42,16 +44,30 @@ def is_unchanged(openzaak: ApiClient, url: str, tag: str) -> bool:
     return response.status_code == HTTPStatus.NOT_MODIFIED
 
 
-# Non-strict: fails every run alone (3 of 3 with --runxfail, minikube), but passes in every full tier of
-# 2026-11-11 on minikube and kees00: parallel writes make Open Zaak recalculate the zaak's ETag.
-STALE = pytest.mark.xfail(
-    strict=False,
-    reason="[open-zaak-11] Open Zaak 1.29.3 keeps a zaak's stored ETag after a PATCH or a change of its rollen, so "
-    "If-None-Match answers 304 for a changed zaak; probably fixed in 1.31.1 (open-zaak#2577)",
-)
+# Open Zaak 1.31.1 passes both tests alone (2026-11-20, environment with 1.31.1).
+ZAAK_ETAG_FOLLOWS_CHANGES = (1, 31, 1)
 
 
-@STALE
+@pytest.fixture(name="stale_before_1_31_1")
+def fixture_stale_before_1_31_1(request: pytest.FixtureRequest, podiumd_env: Environment) -> None:
+    """Expect a stale zaak ETag from Open Zaak before 1.31.1.
+
+    Non-strict: it fails every run alone (3 of 3 with --runxfail, minikube), but passes in every full tier of
+    2026-11-11 on minikube and kees00: parallel writes make Open Zaak recalculate the zaak's ETag.
+    """
+    expect_defect(
+        request,
+        podiumd_env,
+        "openzaak",
+        lambda version: version < ZAAK_ETAG_FOLLOWS_CHANGES,
+        raises=AssertionError,
+        strict=False,
+        reason="[open-zaak-11] Open Zaak before 1.31.1 keeps a zaak's stored ETag after a PATCH or a change of its "
+        "rollen, so If-None-Match answers 304 for a changed zaak; open-zaak#2577, fixed in 1.31.1",
+    )
+
+
+@pytest.mark.usefixtures("stale_before_1_31_1")
 @pytest.mark.scenario("""
     Given a zaak in Open Zaak
     Then reading it again with its ETag says it did not change
@@ -84,7 +100,7 @@ def test_document_etag_follows_a_change(openzaak: ApiClient, registry: ResourceR
     assert not is_unchanged(openzaak, url, tag), "a PATCH kept the document's ETag"
 
 
-@STALE
+@pytest.mark.usefixtures("stale_before_1_31_1")
 @pytest.mark.scenario("""
     Given a zaak in Open Zaak
     When a rol is added to it, and when that rol is deleted again

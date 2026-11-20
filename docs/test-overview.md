@@ -12,12 +12,12 @@ component and integration, without and with the destructive tests; the test suit
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 244 | 44 | 12 |
-| component | 1015 | 593 | 71 |
+| component | 1015 | 593 | 69 |
 | integration | 246 | 146 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1406** | **730** | **88** |
+| **full tier** | **1406** | **730** | **86** |
 | **chaos tier** | **99** | **53** | **14** |
-| **test suite** | **1585** | **792** | **102** |
+| **test suite** | **1585** | **792** | **100** |
 
 Unit tests (`unit_tests/`, functions): 997. Perf endpoints (`perf/runs.py`): 32.
 
@@ -167,7 +167,6 @@ Ids of infonl/podiumd-known-issues.
 | open-zaak-8 | 1 |
 | open-zaak-9 | 1 |
 | open-zaak-10 | 1 |
-| open-zaak-11 | 2 |
 | open-zaak-12 | 1 |
 | open-zaak-13 | 1 |
 | open-zaak-14 | 1 |
