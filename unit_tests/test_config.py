@@ -5,12 +5,15 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
+from podiumd_tests.config import REPO_ROOT
 from podiumd_tests.config import ConfigMapKey
 from podiumd_tests.config import ProfileError
 from podiumd_tests.config import default_envs_dir
 from podiumd_tests.config import list_profiles
 from podiumd_tests.config import load_profile
+from podiumd_tests.config import yaml_text
 
 
 def test_parses_a_valid_profile(profile_factory):
@@ -70,6 +73,20 @@ def test_every_committed_profile_loads(name):
     if profile.estate == "externals" and not (name.startswith("ontw-") or name == "test-dimp"):
         # The gemeenten's test and acc environments only ever run smoke.
         assert profile.allowed_tiers == ("smoke",)
+
+
+YAML_FILES = sorted(
+    [
+        REPO_ROOT / "perf.yaml",
+        *(path for folder in ("envs", "infra", "src", ".github") for path in (REPO_ROOT / folder).rglob("*.y*ml")),
+    ]
+)
+
+
+@pytest.mark.parametrize("path", YAML_FILES, ids=lambda path: str(path.relative_to(REPO_ROOT)))
+def test_yaml_text_writes_what_safe_dump_writes(path):
+    for doc in yaml.safe_load_all(path.read_text(encoding="utf-8")):
+        assert yaml_text(doc) == yaml.safe_dump(doc, sort_keys=False)
 
 
 def test_only_cluster_sources_need_the_cluster(profile_factory):

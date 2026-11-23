@@ -20,7 +20,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-import yaml
 
 from podiumd_tests import config
 from podiumd_tests import doctor
@@ -179,9 +178,7 @@ def cmd_env_init(args: argparse.Namespace) -> int:
     draft = draft_profile(args.estate, args.context, args.namespace, hosts, args.scheme)
     header = "# Draft from `podiumd-tests env init`; review urls, add secrets and allowed_tiers.\n"
     target.parent.mkdir(parents=True, exist_ok=True)
-    # types-PyYAML 6.0.12.20261122 types safe_dump's width as int | Unknown.
-    text = yaml.safe_dump(draft, sort_keys=False)  # pyright: ignore[reportUnknownMemberType]
-    target.write_text(header + text, encoding="utf-8")
+    target.write_text(header + config.yaml_text(draft), encoding="utf-8")
     unmapped = [host for host in hosts if component_for_host(host) is None]
     print(f"wrote {target} ({len(draft['urls'])} component URLs)")  # pyright: ignore[reportArgumentType]
     if unmapped:
