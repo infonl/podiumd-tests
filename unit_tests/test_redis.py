@@ -143,6 +143,7 @@ def test_app_connections_skip_the_replication_link_and_the_pod_itself():
         "id=1 addr=10.0.0.4:6379 laddr=10.0.0.5:51000 flags=M db=0 cmd=ping\n"
         "id=2 addr=10.0.0.5:40000 flags=N db=0 cmd=client|list\n"
         "id=3 addr=127.0.0.1:41000 flags=N db=0 cmd=info\n"
+        "id=5 addr=10.0.2.7:43000 name=sentinel-98e9ebe5-pubsub flags=P db=0 cmd=subscribe\n"
         "id=4 addr=10.0.1.9:52000 flags=N db=9 cmd=get\n"
     )
     env = cast("Environment", FakeEnv({}, clients))

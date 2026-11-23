@@ -333,9 +333,11 @@ def test_admin_login_answers_once_redis_is_back(
     When the clients of each Redis replica are listed
     Then no app is connected to a replica
 """)
-def test_no_app_stays_on_a_redis_replica_after_a_restart(redis_restart: StoreRestart, podiumd_env: Environment) -> None:
-    """After a Redis restart, the replicas have no client but their replication link and their own pod."""
-    assert redis_ha.replica_app_connections(podiumd_env) == {}, redis_restart.report
+@pytest.mark.usefixtures("redis_restart")
+def test_no_app_stays_on_a_redis_replica_after_a_restart(podiumd_env: Environment) -> None:
+    """After a Redis restart, the replicas have no client but their replication link, Sentinel and their own pod."""
+    connected = redis_ha.replica_app_connections(podiumd_env)
+    assert connected == {}, f"app connections on Redis replicas: {connected}"
 
 
 @pytest.fixture(scope="module", name="solr_outage")

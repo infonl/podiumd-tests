@@ -180,13 +180,14 @@ def wait_for_takeover(env: Environment, replaced_uid: str, timeout: float) -> Ta
 
 
 def app_connections(env: Environment, pod: JsonObject) -> list[str]:
-    """Return the address of each client of the pod's Redis that is no replication link and not the pod itself."""
+    """Return the address of each client of the pod's Redis that is no replication link, Sentinel or the pod itself."""
     own = {str(section(pod, "status").get("podIP")), "127.0.0.1", "[::1]"}
     found: list[str] = []
     for line in redis_cli(env, pod, "CLIENT", "LIST").splitlines():
         fields = dict(part.split("=", 1) for part in line.split() if "=" in part)
         address = fields.get("addr", "")
-        is_link = bool({"M", "S"} & set(fields.get("flags", "")))
+        is_sentinel = fields.get("name", "").startswith("sentinel-")
+        is_link = is_sentinel or bool({"M", "S"} & set(fields.get("flags", "")))
         if address and not is_link and address.rsplit(":", 1)[0] not in own:
             found.append(address)
     return found
