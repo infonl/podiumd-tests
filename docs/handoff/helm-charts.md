@@ -82,3 +82,26 @@ Verification by podiumd-tests (tier chaos; minikube has one node, so node tests 
 - Existing: `test_redis_ha_master_service_points_at_the_master` (#634) keeps passing.
 
 Tell podiumd-tests the PR; it runs these tests on minikube and kees00 before the merge.
+
+## Worker liveness probes that kill working Celery workers after a Redis restart (maykin-common-1; Kees, 2026-11-23)
+
+maykin-common's `EventLoopProbe` (0.22.0; 0.23.0 has the same code) touches the event-loop liveness file from a timer
+entry of the Celery worker. When the worker loses its broker connection, Celery's `Consumer.on_close` calls
+`timer.clear()`, which drops that entry; the probe is a worker bootstep and is not started again when the consumer
+reconnects. The workers reconnect and keep processing tasks, but the file stays stale and the liveness probe kills
+them 3 to 6 minutes after every Redis restart or failover. Seen on minikube 2026-11-23 (run 26112313161cce) for the
+workers of Open Zaak, Open Klant, Open VTB and Open Inwoner. Objecten and Open Notificaties use `celery inspect ...
+active` and are not affected. Details: podiumd-known-issues `issues/maykin-common-1-*.md`.
+
+Interim fix until maykin-common starts the probe again with the consumer (Kees reports upstream):
+
+1. The liveness probes of `openzaak-worker`, `openklant-worker`, `openvtb-worker` and `openinwoner-worker` stop
+   relying on the event-loop file, e.g. `maykin-common worker-health-check --skip-event-loop-liveness --no-skip-ping
+   --broker=$CELERY_BROKER_URL` (the ping round trip checks the broker connection), or the `celery inspect ... active`
+   command Objecten and Open Notificaties use. Keep thresholds that outlast a Redis failover (at least 2 minutes).
+2. Remove the override once a maykin-common release with the fix is in these images; podiumd-tests reports it.
+
+Verification by podiumd-tests: `test_no_other_container_restarts_when_redis_restarts` (tier chaos, 420 s of load after
+the Redis restart) no longer lists these four workers.
+
+Tell podiumd-tests the PR; it runs the test on minikube.
