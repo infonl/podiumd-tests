@@ -201,3 +201,12 @@ def test_delete_writes_deletes_every_possible_key():
     redis.delete_writes(cast("Environment", fake), pod("redis-ha-1", {"app": "redis-ha"}, ["true"]), "p-")
     args, _ = fake.kube.calls[0]
     assert f"p-{redis.WRITE_SECONDS * 5 + 1}" in str(args[-1])
+
+
+def test_replication_state_summarises_info_replication():
+    replica = pod("redis-ha-1", {"app": "redis-ha", "role": "replication"}, ["true"])
+    out = "# Replication\nrole:slave\nmaster_host:redis-ha-0\nmaster_link_status:up\nmaster_repl_offset:42\n"
+    env = cast("Environment", FakeEnv({"pods": [replica]}, out))
+    assert redis.replication_state(env) == {
+        "redis-ha-1": "role=slave master_host=redis-ha-0 master_link_status=up master_repl_offset=42"
+    }

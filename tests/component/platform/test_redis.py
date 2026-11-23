@@ -20,6 +20,7 @@ from podiumd_tests.redis import master_pod
 from podiumd_tests.redis import missing_writes
 from podiumd_tests.redis import redis_cli
 from podiumd_tests.redis import redis_pods
+from podiumd_tests.redis import replication_state
 from podiumd_tests.redis import reported_role
 from podiumd_tests.redis import sentinel_pods
 from podiumd_tests.redis import start_writer
@@ -104,6 +105,7 @@ def fail_over(
     prefix = registry.tagged("redis-write-")
     writer = start_writer(env, next(pod for pod in pods if metadata_name(pod) != metadata_name(master)), prefix)
     registry.add(f"redis keys {prefix}*", lambda: delete_writes(env, master_pod(env) or master, prefix))
+    before = replication_state(env)
     stop(master)
     takeover = wait_for_takeover(env, str(section(master, "metadata").get("uid")), RECOVERY_SECONDS)
     assert redis_cli(env, takeover.master, "GET", key).strip() == "kept"
@@ -116,7 +118,10 @@ def fail_over(
     acknowledged = acknowledged_writes(writer)
     assert acknowledged, "redis-ha-master acknowledged no write during the failover"
     lost = missing_writes(env, master_pod(env) or takeover.master, prefix, acknowledged)
-    assert lost == [], f"{len(lost)} of {len(acknowledged)} writes acknowledged through {MASTER_SERVICE} lost: {lost}"
+    assert lost == [], (
+        f"{len(lost)} of {len(acknowledged)} writes acknowledged through {MASTER_SERVICE} lost: {lost}; replication"
+        f" before the failover: {before}"
+    )
     return metadata_name(master), takeover
 
 

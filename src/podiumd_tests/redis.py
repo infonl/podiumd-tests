@@ -257,3 +257,15 @@ def delete_writes(env: Environment, master: JsonObject, prefix: str) -> None:
     """Delete every key the writer can have written (at most 5 per second)."""
     numbers = range(1, WRITE_SECONDS * 5 + 2)
     redis_cli(env, master, "DEL", *(f"{prefix}{number}" for number in numbers))
+
+
+def replication_state(env: Environment) -> dict[str, str]:
+    """Return each Redis pod's role, master host, link status and replication offset, from INFO replication."""
+    wanted = ("role", "master_host", "master_link_status", "master_repl_offset", "connected_slaves")
+    state: dict[str, str] = {}
+    for pod in redis_pods(env):
+        lines = redis_cli(env, pod, "INFO", "replication").splitlines()
+        info = dict(line.split(":", 1) for line in lines if ":" in line)
+        pairs = [f"{key}={info[key].strip()}" for key in wanted if key in info]
+        state[metadata_name(pod)] = " ".join(pairs)
+    return state
