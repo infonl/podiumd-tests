@@ -46,13 +46,18 @@ def get_root(session: requests.Session, base_url: str, timeout: float | tuple[fl
     return session.get(f"{base_url}/", timeout=timeout)
 
 
-def root_problem(session: requests.Session, base_url: str, timeout: float) -> str | None:
-    """Return why the component's root fails ("HTTP 503", "ConnectTimeout"); None when it answers without a 5xx."""
+def page_problem(session: requests.Session, url: str, timeout: float) -> str | None:
+    """Return why GET url fails ("HTTP 503", "ReadTimeout"), following redirects; None when it answers without a 5xx."""
     try:
-        response = get_root(session, base_url, timeout)
+        response = session.get(url, timeout=timeout)
     except requests.RequestException as exc:
         return type(exc).__name__
     return f"HTTP {response.status_code}" if is_server_error(response) else None
+
+
+def root_problem(session: requests.Session, base_url: str, timeout: float) -> str | None:
+    """Return why the component's root fails ("HTTP 503", "ConnectTimeout"); None when it answers without a 5xx."""
+    return page_problem(session, f"{base_url}/", timeout)
 
 
 def is_root_answering(session: requests.Session, base_url: str, timeout: float) -> bool:

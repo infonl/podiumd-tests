@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import re
 import shlex
+import time
 
 from contextlib import suppress
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from podiumd_tests.components import COMPONENTS
@@ -33,6 +35,10 @@ OWNER_KIND = "RedisReplication"
 OPERATOR = "redis-operator"
 # The operator labels the pod it made master; redis-ha-master selects that label.
 MASTER_LABEL = "redis-role"
+# The operator's Sentinel StatefulSet of redis-ha, once the chart renders one (podiumd-chart-24).
+SENTINEL = "redis-ha-sentinel"
+# A replica takes over within this many seconds of the master pod or its node going (podiumd-chart-24).
+TAKEOVER_SECONDS = 30
 # REDISCLI_AUTH is the pods' own password variable, set only when Redis has one.
 REDIS_CLI = "redis-cli -h $(hostname) -p ${REDIS_PORT:-6379}"
 
@@ -62,6 +68,11 @@ def redis_components(env: Environment, deployments: Collection[str]) -> list[str
 def redis_pods(env: Environment) -> list[JsonObject]:
     """Return the pods of the redis-ha StatefulSet."""
     return [pod for pod in env.items("pods") if metadata_labels(pod).get("app") == REDIS_HA]
+
+
+def sentinel_pods(env: Environment) -> list[JsonObject]:
+    """Return the pods of redis-ha's Sentinel StatefulSet; none while the chart renders no Sentinel."""
+    return [pod for pod in env.items("pods") if metadata_name(pod).startswith(f"{SENTINEL}-")]
 
 
 def redis_cli(env: Environment, pod: JsonObject, *args: str) -> str:
@@ -114,3 +125,64 @@ def restart_master(env: Environment, master: JsonObject, timeout: float) -> None
     replace_pod(env, master, timeout)
     uid = str(section(master, "metadata").get("uid"))
     wait_until(lambda: master_pod(env, uid), timeout=timeout, description="a new Redis master")
+
+
+@dataclass(frozen=True)
+class Takeover:
+    """The master after a failover, the seconds until redis-ha-master pointed at it, and what was wrong meanwhile."""
+
+    master: JsonObject
+    seconds: float
+    problems: list[str]
+
+
+def master_problem(env: Environment) -> str | None:
+    """Describe redis-ha-master with several ready endpoints, or one whose Redis reports another role; else None."""
+    behind = ready_endpoints(env, MASTER_SERVICE)
+    if len(behind) > 1:
+        return f"{MASTER_SERVICE} has {len(behind)} ready endpoints: {', '.join(behind)}"
+    pods = {metadata_name(pod): pod for pod in redis_pods(env)}
+    for name in behind:
+        role = "master"
+        with suppress(KubeError):  # the pod is going
+            role = reported_role(env, pods[name]) if name in pods else role
+        if role != "master":
+            return f"{MASTER_SERVICE} points at {name}, which reports role:{role}"
+    return None
+
+
+def wait_for_takeover(env: Environment, replaced_uid: str, timeout: float) -> Takeover:
+    """Wait for a master behind redis-ha-master other than the replaced pod, checking master_problem every second."""
+    problems: list[str] = []
+    start = time.monotonic()
+
+    def probe() -> JsonObject | None:
+        problem = master_problem(env)
+        if problem:
+            problems.append(problem)
+        return master_pod(env, replaced_uid)
+
+    master = wait_until(
+        probe, timeout=timeout, interval=1, description=f"a master behind {MASTER_SERVICE} other than the deleted pod"
+    )
+    return Takeover(master, round(time.monotonic() - start, 1), list(dict.fromkeys(problems)))
+
+
+def app_connections(env: Environment, pod: JsonObject) -> list[str]:
+    """Return the address of each client of the pod's Redis that is no replication link and not the pod itself."""
+    own = {str(section(pod, "status").get("podIP")), "127.0.0.1", "[::1]"}
+    found: list[str] = []
+    for line in redis_cli(env, pod, "CLIENT", "LIST").splitlines():
+        fields = dict(part.split("=", 1) for part in line.split() if "=" in part)
+        address = fields.get("addr", "")
+        is_link = bool({"M", "S"} & set(fields.get("flags", "")))
+        if address and not is_link and address.rsplit(":", 1)[0] not in own:
+            found.append(address)
+    return found
+
+
+def replica_app_connections(env: Environment) -> dict[str, list[str]]:
+    """Return the app connections of each redis-ha pod that reports role:slave, for the pods that have any."""
+    replicas = [pod for pod in redis_pods(env) if reported_role(env, pod) == "slave"]
+    connected = {metadata_name(pod): app_connections(env, pod) for pod in replicas}
+    return {name: clients for name, clients in connected.items() if clients}

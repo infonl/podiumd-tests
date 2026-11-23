@@ -27,10 +27,12 @@ from podiumd_tests.chaos_load import load_report
 from podiumd_tests.chaos_load import recovery_seconds
 from podiumd_tests.chaos_load import watched_load
 from podiumd_tests.components import COMPONENTS
+from podiumd_tests.components import DJANGO_APPS
 from podiumd_tests.defects import DefectSymptomError
 from podiumd_tests.defects import symptom
 from podiumd_tests.mock_server import Callback
 from podiumd_tests.responses import is_root_answering
+from podiumd_tests.responses import page_problem
 from podiumd_tests.seed.opennotificaties import make_abonnement
 from podiumd_tests.seed.openzaak import make_zaak
 from podiumd_tests.seed.openzaak import published_zaaktype
@@ -74,6 +76,9 @@ STORE_RECOVERY = 300
 AFTERMATH = 180
 # Seconds ZAC's Solr stays stopped: longer than ZAC's readiness probe tolerates a failing check (20 x 10 s).
 SOLR_OUTAGE = 240
+# Admin login pages per Django app after a Redis restart: enough to reach each of its uWSGI workers, which hold
+# their own Redis connections (IN-3210: the first load answered 504, the next one 200).
+ADMIN_LOGINS = 20
 # The time Solr's nodes get to be ready again.
 SOLR_RESTORE_TIMEOUT = 600
 
@@ -291,6 +296,43 @@ def test_no_other_container_restarts_when_redis_restarts(redis_restart: StoreRes
     """No container besides Redis's restarts around a Redis restart."""
     with symptom():
         assert redis_restart.restarted == []
+
+
+@REDIS_REQUIRES
+@REDIS_SOURCE
+@pytest.mark.source(
+    "Jira IN-3210", "Objecten's /admin answers 504 or 500 after a Redis failover until the pod restarts."
+)
+@pytest.mark.scenario("""
+    Given Redis was restarted while the apps ran
+    When the admin login page of each Django app that uses Redis is opened 20 times
+    Then every page answers without a server error or a timeout
+""")
+def test_admin_login_answers_once_redis_is_back(
+    redis_restart: StoreRestart, podiumd_env: Environment, http: requests.Session, urls: dict[str, str]
+) -> None:
+    """No uWSGI worker of a Redis-using Django app answers its admin login page with a 5xx or a timeout."""
+    users = redis_ha.redis_components(podiumd_env, redis_ha.redis_deployments(podiumd_env))
+    apps = [app for app in users if app in DJANGO_APPS and app in urls]
+    found = {
+        app: [page_problem(http, f"{urls[app]}/admin/login/", ROOT_TIMEOUT) for _ in range(ADMIN_LOGINS)]
+        for app in apps
+    }
+    failing = {app: [problem for problem in problems if problem] for app, problems in found.items()}
+    assert {app: problems for app, problems in failing.items() if problems} == {}, redis_restart.report
+
+
+@REDIS_REQUIRES
+@REDIS_SOURCE
+@pytest.mark.source("podiumd-tests", "podiumd-chart-28: an app connection that stays on a replica fails every write.")
+@pytest.mark.scenario("""
+    Given Redis was restarted while the apps ran
+    When the clients of each Redis replica are listed
+    Then no app is connected to a replica
+""")
+def test_no_app_stays_on_a_redis_replica_after_a_restart(redis_restart: StoreRestart, podiumd_env: Environment) -> None:
+    """After a Redis restart, the replicas have no client but their replication link and their own pod."""
+    assert redis_ha.replica_app_connections(podiumd_env) == {}, redis_restart.report
 
 
 @pytest.fixture(scope="module", name="solr_outage")

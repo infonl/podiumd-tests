@@ -12,14 +12,14 @@ component and integration, without and with the destructive tests; the test suit
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 244 | 44 | 12 |
-| component | 1008 | 590 | 69 |
-| integration | 246 | 146 | 19 |
+| component | 1010 | 592 | 71 |
+| integration | 248 | 148 | 19 |
 | perf | 80 | 9 | 0 |
 | **full tier** | **1399** | **727** | **86** |
-| **chaos tier** | **99** | **53** | **14** |
-| **test suite** | **1578** | **789** | **100** |
+| **chaos tier** | **103** | **57** | **16** |
+| **test suite** | **1582** | **793** | **102** |
 
-Unit tests (`unit_tests/`, functions): 997. Perf endpoints (`perf/runs.py`): 32.
+Unit tests (`unit_tests/`, functions): 1001. Perf endpoints (`perf/runs.py`): 32.
 
 ## Per area
 
@@ -52,7 +52,7 @@ Unit tests (`unit_tests/`, functions): 997. Perf endpoints (`perf/runs.py`): 32.
 | component | openvtb | 16 | 9 |
 | component | openzaak | 177 | 78 |
 | component | pabc | 10 | 10 |
-| component | platform | 71 | 20 |
+| component | platform | 73 | 22 |
 | component | referentielijsten | 2 | 2 |
 | component | zaakbrug | 16 | 12 |
 | component | zac | 362 | 268 |
@@ -60,7 +60,7 @@ Unit tests (`unit_tests/`, functions): 997. Perf endpoints (`perf/runs.py`): 32.
 | integration | continuiteit | 20 | 11 |
 | integration | continuiteit_belasting | 8 | 7 |
 | integration | continuiteit_herstart | 34 | 2 |
-| integration | continuiteit_opslag | 10 | 10 |
+| integration | continuiteit_opslag | 12 | 12 |
 | integration | continuiteit_zoekindex | 6 | 3 |
 | integration | formulier_betaling | 19 | 6 |
 | integration | formulier_klantprofiel | 1 | 1 |
@@ -107,7 +107,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | Origin | Tests |
 | --- | --- |
 | EX | 19 |
-| Jira | 6 |
+| Jira | 7 |
 | MK | 45 |
 | PCP | 1 |
 | PI | 54 |
@@ -117,7 +117,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | draaiboek | 87 |
 | external | 216 |
 | hosting | 40 |
-| podiumd-tests | 524 |
+| podiumd-tests | 527 |
 | upstream | 242 |
 
 ## Expected failures per known issue
@@ -176,6 +176,7 @@ Ids of infonl/podiumd-known-issues.
 | podiumd-chart-1 | 1 |
 | podiumd-chart-5 | 1 |
 | podiumd-chart-7 | 1 |
+| podiumd-chart-24 | 2 |
 | podiumd-chart-42 | 1 |
 | podiumd-chart-43 | 1 |
 | podiumd-chart-44 | 1 |

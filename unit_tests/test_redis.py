@@ -103,3 +103,55 @@ def test_redis_deployments_and_components_read_the_master_service_from_a_config_
     users = redis.redis_deployments(env)
     assert users == ["openzaak", "openzaak-worker"]
     assert redis.redis_components(env, users) == ["openzaak"]
+
+
+def endpoints_for(*names):
+    addresses = [{"targetRef": {"name": name}} for name in names]
+    return {"metadata": {"name": "redis-ha-master"}, "subsets": [{"addresses": addresses}]}
+
+
+def test_master_problem_names_two_endpoints_or_a_replica_behind_the_service():
+    one = pod("redis-ha-0", {"app": "redis-ha"}, ["true"])
+    two = pod("redis-ha-1", {"app": "redis-ha"}, ["true"])
+
+    def problem(names, out):
+        return redis.master_problem(
+            cast("Environment", FakeEnv({"pods": [one, two], "endpoints": [endpoints_for(*names)]}, out))
+        )
+
+    assert (
+        problem(["redis-ha-0", "redis-ha-1"], "role:master")
+        == "redis-ha-master has 2 ready endpoints: redis-ha-0, redis-ha-1"
+    )
+    assert problem(["redis-ha-0"], "role:slave") == "redis-ha-master points at redis-ha-0, which reports role:slave"
+    assert problem(["redis-ha-0"], "role:master") is None
+    assert problem([], "") is None
+
+
+def test_wait_for_takeover_returns_the_new_master_and_the_problems_seen():
+    master = pod("redis-ha-1", {"app": "redis-ha"}, ["true"], uid="new")
+    env = cast("Environment", FakeEnv({"pods": [master], "endpoints": [endpoints_for("redis-ha-1")]}, "role:master"))
+    takeover = redis.wait_for_takeover(env, "old", 5)
+    assert takeover.master == master
+    assert takeover.problems == []
+
+
+def test_app_connections_skip_the_replication_link_and_the_pod_itself():
+    replica = pod("redis-ha-1", {"app": "redis-ha"}, ["true"])
+    replica["status"] = {"podIP": "10.0.0.5"}
+    clients = (
+        "id=1 addr=10.0.0.4:6379 laddr=10.0.0.5:51000 flags=M db=0 cmd=ping\n"
+        "id=2 addr=10.0.0.5:40000 flags=N db=0 cmd=client|list\n"
+        "id=3 addr=127.0.0.1:41000 flags=N db=0 cmd=info\n"
+        "id=4 addr=10.0.1.9:52000 flags=N db=9 cmd=get\n"
+    )
+    env = cast("Environment", FakeEnv({}, clients))
+    assert redis.app_connections(env, replica) == ["10.0.1.9:52000"]
+    env = cast("Environment", FakeEnv({"pods": [replica]}, f"role:slave\n{clients}"))
+    assert redis.replica_app_connections(env) == {"redis-ha-1": ["10.0.1.9:52000"]}
+
+
+def test_sentinel_pods_are_the_sentinel_statefulsets_pods():
+    sentinel = pod("redis-ha-sentinel-0", {"app": "redis-ha-sentinel"}, ["true"])
+    env = cast("Environment", FakeEnv({"pods": [sentinel, pod("redis-ha-0", {"app": "redis-ha"}, ["true"])]}))
+    assert redis.sentinel_pods(env) == [sentinel]
