@@ -7,8 +7,6 @@ from, and which tiers may run there.
 
 from __future__ import annotations
 
-import io
-
 from dataclasses import dataclass
 from dataclasses import field
 from pathlib import Path
@@ -173,18 +171,6 @@ def load_profile(name: str, envs_dir: Path) -> Profile:
     path = profiles[name]
     raw: object = yaml.safe_load(path.read_text(encoding="utf-8"))
     return parse_profile(raw, name=name, path=path)
-
-
-def yaml_text(data: object) -> str:
-    """YAML of data as yaml.safe_dump writes it, keys in their order."""
-    # Drives the Dumper as yaml.dump_all does: types-PyYAML 6.0.12.20261122 types dump's width as
-    # _typeshed.FloatInt, which basedpyright's bundled typeshed lacks, so every yaml.*dump* call is Unknown.
-    stream = io.StringIO()
-    dumper = yaml.SafeDumper(stream, default_flow_style=False, sort_keys=False)
-    dumper.open()
-    dumper.represent(data)  # pyright: ignore[reportUnknownMemberType]  # untyped in types-PyYAML
-    dumper.close()
-    return stream.getvalue()
 
 
 def _mapping(value: object, where: str) -> dict[str, object]:

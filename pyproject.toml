@@ -46,8 +46,7 @@ dev = [
     "bandit",
     "basedpyright",
     "jscpd",
-    "types-requests",    # type stubs for basedpyright strict
-    "types-PyYAML",      # type stubs for basedpyright strict
+    "types-requests",    # requests' own types reject object for json= (106 basedpyright errors)
 ]
 
 [project.scripts]
