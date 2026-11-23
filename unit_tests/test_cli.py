@@ -87,12 +87,13 @@ def test_unknown_bootstrap_step_is_a_profile_error():
 
 
 def test_run_keeps_screenshots_of_failed_browser_tests_but_no_traces(tmp_path, profile_factory):
-    args = argparse.Namespace(keep_data=False, pytest_args=[])
+    args = argparse.Namespace(keep_data=False, envs_dir="envs", pytest_args=[])
     selection = cli.pytest_selection(profile_factory(), "smoke", "2610071230a3f1", tmp_path / "junit.xml", args)
     assert f"--output={tmp_path / 'artifacts'}" in selection
     assert "--screenshot=only-on-failure" in selection
     assert not any(a.startswith("--tracing") for a in selection)
     assert f"--html={tmp_path / 'report.html'}" in selection
+    assert "--podiumd-envs-dir=envs" in selection
 
 
 @pytest.mark.parametrize(
@@ -120,7 +121,9 @@ def test_default_workers_are_half_the_cpus_at_most_eight(cpus, workers):
 
 
 def test_a_path_after_dashes_narrows_the_tier(tmp_path, profile_factory):
-    args = argparse.Namespace(keep_data=False, pytest_args=["tests/integration/test_sso.py", "-k", "zac"])
+    args = argparse.Namespace(
+        keep_data=False, envs_dir="envs", pytest_args=["tests/integration/test_sso.py", "-k", "zac"]
+    )
     selection = cli.pytest_selection(profile_factory(), "full", "2610071230a3f1", tmp_path / "j.xml", args)
     assert not any(a.endswith(("tests/smoke", "tests/component", "tests/integration")) for a in selection)
     assert selection[-3:] == ["tests/integration/test_sso.py", "-k", "zac"]
@@ -128,7 +131,7 @@ def test_a_path_after_dashes_narrows_the_tier(tmp_path, profile_factory):
 
 def test_a_node_id_narrows_the_tier(tmp_path, profile_factory):
     node = "tests/integration/test_continuiteit.py::test_stopped_component_harms_no_other[zac]"
-    args = argparse.Namespace(keep_data=False, pytest_args=[node])
+    args = argparse.Namespace(keep_data=False, envs_dir="envs", pytest_args=[node])
     assert cli.pytest_selection(profile_factory(), "full", "2610071230a3f1", tmp_path / "j.xml", args)[-1] == node
 
 
@@ -140,13 +143,13 @@ def test_a_node_id_narrows_the_tier(tmp_path, profile_factory):
     ],
 )
 def test_an_unknown_node_id_is_refused(tmp_path, profile_factory, node):
-    args = argparse.Namespace(keep_data=False, pytest_args=[node])
+    args = argparse.Namespace(keep_data=False, envs_dir="envs", pytest_args=[node])
     with pytest.raises(ProfileError, match=r"no such test: "):
         cli.pytest_selection(profile_factory(), "full", "2610071230a3f1", tmp_path / "j.xml", args)
 
 
 def test_a_path_outside_the_tier_is_refused(tmp_path, profile_factory):
-    args = argparse.Namespace(keep_data=False, pytest_args=["tests/integration/test_sso.py"])
+    args = argparse.Namespace(keep_data=False, envs_dir="envs", pytest_args=["tests/integration/test_sso.py"])
     with pytest.raises(ProfileError, match=r"not in tier smoke: tests/integration/test_sso\.py"):
         cli.pytest_selection(profile_factory(), "smoke", "2610071230a3f1", tmp_path / "j.xml", args)
 

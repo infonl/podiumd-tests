@@ -258,6 +258,7 @@ def pytest_selection(
         "-m",
         tier.marker_expression,
         f"--podiumd-env={profile.name}",
+        f"--podiumd-envs-dir={args.envs_dir}",
         f"--junitxml={junit}",
     ]
     selection.append(f"--podiumd-run-tag={results.run_tag(run_id)}")
