@@ -24,7 +24,6 @@ from podiumd_tests.security import insecure_session_cookies
 from podiumd_tests.security import is_foreign_origin_allowed
 from podiumd_tests.security import missing_security_headers
 from podiumd_tests.security import tls_below_ncsc
-from podiumd_tests.seed.openvtb import skip_shut_api
 from podiumd_tests.workloads import is_chart_older_than
 
 if TYPE_CHECKING:
@@ -169,11 +168,7 @@ def test_tls_meets_ncsc_guidelines(podiumd_env: Environment, urls: dict[str, str
     When the root of each ZGW and Common Ground API is opened
     Then it sends its full version, without prefix, in the API-Version header
 """)
-def test_api_sends_its_version(
-    http: requests.Session, podiumd_env: Environment, urls: dict[str, str], component: str, base: str
-) -> None:
-    """The API root sends an unprefixed SemVer API-Version header; an Open VTB API that podiumd shuts skips."""
-    if component == "openvtb":
-        skip_shut_api(podiumd_env, base.split("/", maxsplit=1)[0])
+def test_api_sends_its_version(http: requests.Session, urls: dict[str, str], component: str, base: str) -> None:
+    """The API root sends an unprefixed SemVer API-Version header."""
     response = http.get(f"{urls[component]}/{base}/")
     assert has_api_version(response), f"{describe(response)}: API-Version {response.headers.get('API-Version')!r}"

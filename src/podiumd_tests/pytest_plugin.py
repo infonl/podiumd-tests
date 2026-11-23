@@ -33,7 +33,6 @@ from podiumd_tests.mock_server import Callback
 from podiumd_tests.oidc import challenge_session
 from podiumd_tests.seed import openzaak as openzaak_seed
 from podiumd_tests.seed.objecten import versioned_objecttype_url
-from podiumd_tests.seed.openvtb import skip_shut_api
 from podiumd_tests.seed.registry import ResourceRegistry
 from podiumd_tests.seed.zac_zaaktype import zac_as_admin
 from podiumd_tests.sources import source_problems
@@ -230,17 +229,15 @@ def fixture_openklant(podiumd_env: Environment, need_bootstrap: Callable[..., No
 
 @pytest.fixture(scope="session", name="openvtb_verzoeken")
 def fixture_openvtb_verzoeken(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
-    """Open VTB's verzoeken API with the suite's own token (bootstrap step openvtb-token); skip where it is shut."""
+    """Open VTB's verzoeken API with the suite's own token (bootstrap step openvtb-token)."""
     need_bootstrap("openvtb-token")
-    skip_shut_api(podiumd_env, "verzoeken")
     return platform.openvtb_client(podiumd_env, "verzoeken")
 
 
 @pytest.fixture(scope="session", name="openvtb_taken")
 def fixture_openvtb_taken(podiumd_env: Environment, need_bootstrap: Callable[..., None]) -> ApiClient:
-    """Open VTB's taken API with the suite's own token (bootstrap step openvtb-token); skip where it is shut."""
+    """Open VTB's taken API with the suite's own token (bootstrap step openvtb-token)."""
     need_bootstrap("openvtb-token")
-    skip_shut_api(podiumd_env, "taken")
     return platform.openvtb_client(podiumd_env, "taken")
 
 

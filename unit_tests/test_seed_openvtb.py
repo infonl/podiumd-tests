@@ -44,14 +44,6 @@ def test_notifications_api_root_is_the_printed_api_root(env_factory, fake_runner
     assert openvtb.notifications_api_root(env_factory()) == "https://on.test/api/v1/"
 
 
-def test_served_apis_follow_the_settings_module(env_factory, fake_runner):
-    deployments(fake_runner)
-    fake_runner.answers["printenv DJANGO_SETTINGS_MODULE"] = (0, "openvtb.conf.podiumd_berichten\n")
-    assert openvtb.served_apis(env_factory()) == {"berichten"}
-    fake_runner.answers["printenv DJANGO_SETTINGS_MODULE"] = (0, "openvtb.conf.docker\n")
-    assert openvtb.served_apis(env_factory()) == {"verzoeken", "taken", "berichten"}
-
-
 def test_page_statuses_are_the_snippets_answer(env_factory, fake_runner):
     deployments(fake_runner)
     fake_runner.answers["exec -i deploy/openvtb"] = (0, 'PTEST_VALUE={"/admin/": 200}\n')

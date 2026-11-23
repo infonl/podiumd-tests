@@ -19,7 +19,6 @@ from podiumd_tests.bootstrap.omc import omc_token
 from podiumd_tests.pytest_plugin import requiring
 from podiumd_tests.responses import REFUSED
 from podiumd_tests.responses import expect_status
-from podiumd_tests.seed.openvtb import skip_shut_api
 from podiumd_tests.zgw_services import VIEW_CONFIG_APPS
 from podiumd_tests.zgw_services import view_config_problems
 
@@ -172,22 +171,13 @@ def test_view_config_checks_pass(http: requests.Session, urls: dict[str, str], c
     When it calls each protected API endpoint
     Then the API answers 401 or 403
 """)
-def test_anonymous_call_is_refused(  # the call's parts
-    http: requests.Session,
-    podiumd_env: Environment,
-    urls: dict[str, str],
-    component: str,
-    method: str,
-    path: str,
-    headers: dict[str, str],
+def test_anonymous_call_is_refused(
+    http: requests.Session, urls: dict[str, str], component: str, method: str, path: str, headers: dict[str, str]
 ) -> None:
     """Without (valid) credentials the API answers 401 or 403, not data and not a server error.
 
-    POSTs carry a harmless body; they are refused before anything is stored. An Open VTB API that podiumd shuts
-    answers 404 to everyone (tests/component/openvtb/test_openvtb_apis.py) and skips here.
+    POSTs carry a harmless body; they are refused before anything is stored.
     """
-    if component == "openvtb":
-        skip_shut_api(podiumd_env, path.split("/")[1])
     body = None
     if method == "POST":
         body = {"FunctionalRoleNames": ["ptest"]} if component == "pabc" else {}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pytest
@@ -20,6 +21,7 @@ from podiumd_tests.seed.openvtb import enabled_schedules
 from podiumd_tests.seed.openvtb import make_bericht
 from podiumd_tests.seed.openvtb import make_taak
 from podiumd_tests.seed.openvtb import missing_celery
+from podiumd_tests.seed.openvtb import page_statuses
 from podiumd_tests.seed.openvtb import publish_bericht
 from podiumd_tests.seed.openvtb import taak_body
 from podiumd_tests.seed.openvtb import without
@@ -246,3 +248,16 @@ def test_due_berichten_are_published_on_a_schedule(podiumd_env: Environment) -> 
     """Open VTB's beat has an enabled periodic task send_berichten_events."""
     expect_celery(podiumd_env)
     assert enabled_schedules(podiumd_env, PUBLISH_TASK), "Open VTB has no enabled periodic task send_berichten_events"
+
+
+@pytest.mark.source("podiumd-tests", "Component coverage of Open VTB: its admin, index and schema pages.")
+@pytest.mark.scenario("""
+    Given Open VTB
+    When an administrator opens the admin pages of berichten, verzoeken and taken, the index pages and the schema
+    Then every page renders without a server error
+""")
+def test_pages_render(podiumd_env: Environment) -> None:
+    """No admin page, index page or the Berichten schema answers 500."""
+    statuses = page_statuses(podiumd_env)
+    assert {path: status for path, status in statuses.items() if status >= HTTPStatus.INTERNAL_SERVER_ERROR} == {}
+    assert statuses["/berichten/api/v1/openapi.yaml"] == HTTPStatus.OK

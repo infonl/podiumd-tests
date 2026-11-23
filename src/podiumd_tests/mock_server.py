@@ -27,7 +27,6 @@ from podiumd_tests.wait import wait_until
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from collections.abc import Mapping
     from collections.abc import Sequence
 
     from podiumd_tests.bootstrap.runner import Context
@@ -212,14 +211,11 @@ _STATUS_SCRIPT = """
 import http.client, json, sys
 from urllib.parse import urlsplit
 found = {}
-call = json.loads(sys.argv[1])
-for url in call["urls"]:
+for url in json.loads(sys.argv[1]):
     part = urlsplit(url)
     try:
         connection = http.client.HTTPConnection(part.hostname, part.port, timeout=10)
-        body = "{}" if call["method"] == "POST" else None
-        headers = {"Host": part.netloc, "Content-Type": "application/json", **call["headers"]}
-        connection.request(call["method"], part.path or "/", body=body, headers=headers)
+        connection.request("GET", part.path or "/", headers={"Host": part.netloc})
         found[url] = connection.getresponse().status
     except Exception as error:
         found[url] = type(error).__name__
@@ -227,14 +223,8 @@ print(json.dumps(found))
 """
 
 
-def in_cluster_statuses(
-    env: Environment, urls: Sequence[str], headers: Mapping[str, str] | None = None, method: str = "GET"
-) -> dict[str, int | str]:
-    """Return the HTTP status of each request from inside the cluster (the mock server's pod), or the error's name.
-
-    A POST sends an empty JSON object.
-    """
+def in_cluster_statuses(env: Environment, urls: Sequence[str]) -> dict[str, int | str]:
+    """Return the HTTP status of GET each URL from inside the cluster (the mock server's pod), or the error's name."""
     timeout = 30 + 12 * len(urls)
-    call = json.dumps({"urls": list(urls), "headers": dict(headers or {}), "method": method})
-    out = env.kube.exec(NAME, "python", "-c", _STATUS_SCRIPT, call, timeout=timeout)
+    out = env.kube.exec(NAME, "python", "-c", _STATUS_SCRIPT, json.dumps(list(urls)), timeout=timeout)
     return cast("dict[str, int | str]", json.loads(out))
