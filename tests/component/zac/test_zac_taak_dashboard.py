@@ -11,6 +11,7 @@ from podiumd_tests.bootstrap.steps import ADMIN
 from podiumd_tests.bootstrap.steps import ZAC_ROLE_USERS
 from podiumd_tests.defects import symptom
 from podiumd_tests.responses import expect_status
+from podiumd_tests.wait import WaitTimeoutError
 from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import expect_defect
 from podiumd_tests.workloads import is_older_than
@@ -20,6 +21,7 @@ from podiumd_tests.zac import afbreken
 from podiumd_tests.zac import assignment
 from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac_search import is_taak_listed
+from podiumd_tests.zac_search import taak_zoekresultaat
 from podiumd_tests.zac_signaleringen import signalering_taken
 from podiumd_tests.zac_signaleringen import turn_signaleringen
 from podiumd_tests.zac_taken import ADVIES_INTERN
@@ -200,8 +202,14 @@ def test_taak_of_an_afgebroken_zaak_leaves_mijn_taken(
     )
     expect_status(afbreken(zac, zac_url, read_zaak(zac, zac_url, str(taak["zaakUuid"]))), HTTPStatus.OK)
     with symptom():
-        wait_until(
-            lambda: not is_taak_listed(zac, zac_url, taak, alleenMijnTaken=True),
-            timeout=LIST_TIMEOUT,
-            description=f"task {taak['id']} gone from Mijn taken",
-        )
+        try:
+            wait_until(
+                lambda: not is_taak_listed(zac, zac_url, taak, alleenMijnTaken=True),
+                timeout=LIST_TIMEOUT,
+                description=f"task {taak['id']} gone from Mijn taken",
+            )
+        except WaitTimeoutError as error:
+            listed = taak_zoekresultaat(zac, zac_url, taak, alleenMijnTaken=True) or {}
+            read = read_taak(zac, zac_url, str(taak["id"]))
+            msg = f"{error}; ZAC reads the taak as {read.get('status')}, its index as {listed.get('status')}"
+            raise AssertionError(msg) from error
