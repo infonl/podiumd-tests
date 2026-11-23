@@ -13,12 +13,16 @@ from podiumd_tests.kube import metadata_name
 from podiumd_tests.redis import MASTER_LABEL
 from podiumd_tests.redis import MASTER_SERVICE
 from podiumd_tests.redis import TAKEOVER_SECONDS
+from podiumd_tests.redis import acknowledged_writes
+from podiumd_tests.redis import delete_writes
 from podiumd_tests.redis import is_master_role_checked
 from podiumd_tests.redis import master_pod
+from podiumd_tests.redis import missing_writes
 from podiumd_tests.redis import redis_cli
 from podiumd_tests.redis import redis_pods
 from podiumd_tests.redis import reported_role
 from podiumd_tests.redis import sentinel_pods
+from podiumd_tests.redis import start_writer
 from podiumd_tests.redis import wait_for_takeover
 from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import ready_endpoints
@@ -86,7 +90,8 @@ def fail_over(
 ) -> tuple[str, Takeover]:
     """Store a key on the master, stop it, and wait until a master that kept the key and all redis-ha pods are back.
 
-    Returns the stopped master's name and the takeover; redis-ha-master never points at two pods or a replica.
+    Returns the stopped master's name and the takeover. redis-ha-master never points at two pods or a replica, and
+    every write it acknowledged during the failover is on the new master.
     """
     pods = redis_pods(env)
     if len(pods) < 2:
@@ -96,6 +101,9 @@ def fail_over(
     key = registry.tagged("redis-failover")
     assert redis_cli(env, master, "SET", key, "kept").strip() == "OK"
     registry.add(f"redis key {key}", lambda: redis_cli(env, master_pod(env) or master, "DEL", key))
+    prefix = registry.tagged("redis-write-")
+    writer = start_writer(env, next(pod for pod in pods if metadata_name(pod) != metadata_name(master)), prefix)
+    registry.add(f"redis keys {prefix}*", lambda: delete_writes(env, master_pod(env) or master, prefix))
     stop(master)
     takeover = wait_for_takeover(env, str(section(master, "metadata").get("uid")), RECOVERY_SECONDS)
     assert redis_cli(env, takeover.master, "GET", key).strip() == "kept"
@@ -105,6 +113,10 @@ def fail_over(
         timeout=RECOVERY_SECONDS,
         description=f"{len(pods)} ready redis-ha pods",
     )
+    acknowledged = acknowledged_writes(writer)
+    assert acknowledged, "redis-ha-master acknowledged no write during the failover"
+    lost = missing_writes(env, master_pod(env) or takeover.master, prefix, acknowledged)
+    assert lost == [], f"{len(lost)} of {len(acknowledged)} writes acknowledged through {MASTER_SERVICE} lost: {lost}"
     return metadata_name(master), takeover
 
 

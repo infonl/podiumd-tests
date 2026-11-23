@@ -10,6 +10,8 @@ from podiumd_tests import workloads
 from podiumd_tests.capabilities import Capabilities
 
 if TYPE_CHECKING:
+    import subprocess
+
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
 
@@ -158,3 +160,44 @@ def test_sentinel_and_redis_pods_are_told_apart_by_role():
     env = cast("Environment", FakeEnv({"pods": [sentinel, replica]}))
     assert redis.sentinel_pods(env) == [sentinel]
     assert redis.redis_pods(env) == [replica]
+
+
+class FakeWriter:
+    def __init__(self, out):
+        self.out: str = out
+
+    def communicate(self, timeout):
+        assert timeout > redis.WRITE_SECONDS
+        return self.out, None
+
+
+def test_acknowledged_writes_are_the_numbers_answered_ok():
+    out = "1 OK\n2 Could not connect to Redis at redis-ha-master:6379\n3 READONLY You can't write\n4 OK\n"
+    assert redis.acknowledged_writes(cast("subprocess.Popen[str]", FakeWriter(out))) == [1, 4]
+
+
+def test_missing_writes_are_the_keys_the_master_lacks():
+    master = pod("redis-ha-1", {"app": "redis-ha"}, ["true"])
+    fake = FakeEnv({}, "1\n\n3\n")
+    assert redis.missing_writes(cast("Environment", fake), master, "p-", [1, 2, 3, 4]) == [2, 4]
+    args, _ = fake.kube.calls[0]
+    assert "MGET p-1 p-2 p-3 p-4" in str(args[-1])
+    assert redis.missing_writes(cast("Environment", fake), master, "p-", []) == []
+
+
+def test_start_writer_runs_the_loop_in_the_pod(monkeypatch, env_factory):
+    started = []
+    monkeypatch.setattr(redis, "start_process", lambda command: started.append(command) or "process")
+    writer = redis.start_writer(env_factory(), pod("redis-ha-2", {"app": "redis-ha"}, ["true"]), "p-")
+    assert writer == "process"
+    command = started[0]
+    start = command.index("exec")
+    assert command[start : start + 4] == ["exec", "pod/redis-ha-2", "-c", "redis-ha"]
+    assert command[-2:] == [str(redis.WRITE_SECONDS), "p-"]
+
+
+def test_delete_writes_deletes_every_possible_key():
+    fake = FakeEnv({}, "3")
+    redis.delete_writes(cast("Environment", fake), pod("redis-ha-1", {"app": "redis-ha"}, ["true"]), "p-")
+    args, _ = fake.kube.calls[0]
+    assert f"p-{redis.WRITE_SECONDS * 5 + 1}" in str(args[-1])

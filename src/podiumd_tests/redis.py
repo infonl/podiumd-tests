@@ -16,12 +16,15 @@ from podiumd_tests.json_data import section
 from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import metadata_labels
 from podiumd_tests.kube import metadata_name
+from podiumd_tests.process import start_process
 from podiumd_tests.wait import wait_until
 from podiumd_tests.workloads import ready_endpoints
 from podiumd_tests.workloads import replace_pod
 from podiumd_tests.workloads import variable_config_maps
 
 if TYPE_CHECKING:
+    import subprocess  # nosec B404  # type only
+
     from collections.abc import Collection
 
     from podiumd_tests.environment import Environment
@@ -40,6 +43,8 @@ MASTER_LABEL = "redis-role"
 SENTINEL_ROLE = "sentinel"
 # A replica takes over within this many seconds of the master pod or its node going (podiumd-chart-24).
 TAKEOVER_SECONDS = 30
+# Seconds the writer writes through redis-ha-master: longer than a takeover; its writes come every 0.2 s.
+WRITE_SECONDS = 60
 # REDISCLI_AUTH is the pods' own password variable, set only when Redis has one.
 REDIS_CLI = "redis-cli -h $(hostname) -p ${REDIS_PORT:-6379}"
 
@@ -198,3 +203,57 @@ def replica_app_connections(env: Environment) -> dict[str, list[str]]:
     replicas = [pod for pod in redis_pods(env) if reported_role(env, pod) == "slave"]
     connected = {metadata_name(pod): app_connections(env, pod) for pod in replicas}
     return {name: clients for name, clients in connected.items() if clients}
+
+
+# Run in a Redis pod (the NetworkPolicy admits redis-ha's own pods): SET <prefix><n> <n> through redis-ha-master,
+# one line "<n> <reply>" per write.
+_WRITER = """
+end=$(( $(date +%s) + $1 )); n=0
+while [ "$(date +%s)" -lt "$end" ]; do
+  n=$((n + 1))
+  echo "$n $(timeout 2 redis-cli -h redis-ha-master -p "${REDIS_PORT:-6379}" SET "$2$n" "$n" 2>&1)"
+  sleep 0.2
+done
+"""
+
+
+def start_writer(env: Environment, pod: JsonObject, prefix: str) -> subprocess.Popen[str]:
+    """Start writing <prefix><n> through redis-ha-master from the pod for WRITE_SECONDS; it stops by itself."""
+    namespace = str(section(pod, "metadata").get("namespace"))
+    command = env.kube.command(
+        "exec",
+        f"pod/{metadata_name(pod)}",
+        "-c",
+        REDIS_HA,
+        "--",
+        "sh",
+        "-c",
+        _WRITER,
+        "writer",
+        str(WRITE_SECONDS),
+        prefix,
+        namespace=namespace,
+    )
+    return start_process(command)
+
+
+def acknowledged_writes(writer: subprocess.Popen[str]) -> list[int]:
+    """Wait for the writer to end; return the numbers of the writes Redis answered OK."""
+    out, _ = writer.communicate(timeout=WRITE_SECONDS + 60)
+    found = (re.fullmatch(r"(\d+) OK", line) for line in out.splitlines())
+    return [int(match.group(1)) for match in found if match]
+
+
+def missing_writes(env: Environment, master: JsonObject, prefix: str, numbers: list[int]) -> list[int]:
+    """Return the numbers whose key <prefix><n> the master does not hold with value n."""
+    if not numbers:
+        return []
+    values = redis_cli(env, master, "MGET", *(f"{prefix}{number}" for number in numbers)).splitlines()
+    held = dict(zip(numbers, values, strict=False))
+    return [number for number in numbers if held.get(number, "").strip() != str(number)]
+
+
+def delete_writes(env: Environment, master: JsonObject, prefix: str) -> None:
+    """Delete every key the writer can have written (at most 5 per second)."""
+    numbers = range(1, WRITE_SECONDS * 5 + 2)
+    redis_cli(env, master, "DEL", *(f"{prefix}{number}" for number in numbers))
