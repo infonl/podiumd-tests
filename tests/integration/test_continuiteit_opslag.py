@@ -72,8 +72,9 @@ pytestmark = [
 
 # A deleted Redis or Postgres pod is replaced (and the Redis operator labels it master).
 STORE_RECOVERY = 300
-# Seconds of load after the store is back: a process stuck since the restart fails its liveness probe 3 x 50 s.
-AFTERMATH = 180
+# Seconds of load after the store is back: longer than the slowest liveness probe of the workers to kill a process
+# stuck since the restart (Open Zaak and Open Klant: 6 x 60 s).
+AFTERMATH = 420
 # Seconds ZAC's Solr stays stopped: longer than ZAC's readiness probe tolerates a failing check (20 x 10 s).
 SOLR_OUTAGE = 240
 # Admin login pages per Django app after a Redis restart: enough to reach each of its uWSGI workers, which hold
@@ -284,8 +285,10 @@ def test_redis_users_recover_after_a_restart(redis_restart: StoreRestart) -> Non
 @pytest.mark.xfail(
     strict=True,
     raises=DefectSymptomError,
-    reason="[open-inwoner-7] Open Inwoner 2.5.0's celery-monitor exits on a Redis restart and its worker stalls"
-    " until the liveness probe kills it; neither reconnects; not yet reported upstream",
+    reason="[maykin-common-1] maykin-common 0.22.0 and 0.23.0 stop touching the event-loop liveness file once Celery"
+    " reconnects to its broker, so the liveness probe kills the working workers of Open Zaak, Open Klant, Open VTB and"
+    " Open Inwoner; [open-inwoner-7] Open Inwoner 2.5.0's celery-monitor exits on a Redis restart; not yet reported"
+    " upstream",
 )
 @pytest.mark.scenario("""
     Given the components of the environment run

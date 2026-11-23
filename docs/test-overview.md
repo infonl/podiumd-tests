@@ -134,6 +134,7 @@ Ids of infonl/podiumd-known-issues.
 | kiss-2 | 1 |
 | kiss-4 | 1 |
 | kiss-5 | 1 |
+| maykin-common-1 | 1 |
 | omc-1 | 1 |
 | omc-3 | 1 |
 | omc-4 | 1 |
@@ -156,7 +157,6 @@ Ids of infonl/podiumd-known-issues.
 | open-inwoner-1 | 1 |
 | open-inwoner-2 | 2 |
 | open-inwoner-3 | 1 |
-| open-inwoner-7 | 1 |
 | open-notificaties-1 | 1 |
 | open-zaak-2 | 1 |
 | open-zaak-3 | 1 |
