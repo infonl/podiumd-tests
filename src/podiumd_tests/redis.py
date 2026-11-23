@@ -35,8 +35,9 @@ OWNER_KIND = "RedisReplication"
 OPERATOR = "redis-operator"
 # The operator labels the pod it made master; redis-ha-master selects that label.
 MASTER_LABEL = "redis-role"
-# The operator's Sentinel StatefulSet of redis-ha, once the chart renders one (podiumd-chart-24).
-SENTINEL = "redis-ha-sentinel"
+# The operator labels redis-ha's Redis pods role=replication and, with Sentinel on (helm-charts #754), its Sentinel
+# pods role=sentinel; both carry app=redis-ha.
+SENTINEL_ROLE = "sentinel"
 # A replica takes over within this many seconds of the master pod or its node going (podiumd-chart-24).
 TAKEOVER_SECONDS = 30
 # REDISCLI_AUTH is the pods' own password variable, set only when Redis has one.
@@ -65,14 +66,24 @@ def redis_components(env: Environment, deployments: Collection[str]) -> list[str
     return found
 
 
+def _redis_ha_pods(env: Environment, *, sentinels: bool) -> list[JsonObject]:
+    """Return redis-ha's Sentinel pods, or its Redis pods."""
+    found: list[JsonObject] = []
+    for pod in env.items("pods"):
+        labels = metadata_labels(pod)
+        if labels.get("app") == REDIS_HA and (labels.get("role") == SENTINEL_ROLE) == sentinels:
+            found.append(pod)
+    return found
+
+
 def redis_pods(env: Environment) -> list[JsonObject]:
-    """Return the pods of the redis-ha StatefulSet."""
-    return [pod for pod in env.items("pods") if metadata_labels(pod).get("app") == REDIS_HA]
+    """Return the Redis pods of redis-ha, without its Sentinel pods."""
+    return _redis_ha_pods(env, sentinels=False)
 
 
 def sentinel_pods(env: Environment) -> list[JsonObject]:
-    """Return the pods of redis-ha's Sentinel StatefulSet; none while the chart renders no Sentinel."""
-    return [pod for pod in env.items("pods") if metadata_name(pod).startswith(f"{SENTINEL}-")]
+    """Return redis-ha's Sentinel pods; none while the chart renders no Sentinel."""
+    return _redis_ha_pods(env, sentinels=True)
 
 
 def redis_cli(env: Environment, pod: JsonObject, *args: str) -> str:

@@ -151,7 +151,9 @@ def test_app_connections_skip_the_replication_link_and_the_pod_itself():
     assert redis.replica_app_connections(env) == {"redis-ha-1": ["10.0.1.9:52000"]}
 
 
-def test_sentinel_pods_are_the_sentinel_statefulsets_pods():
-    sentinel = pod("redis-ha-sentinel-0", {"app": "redis-ha-sentinel"}, ["true"])
-    env = cast("Environment", FakeEnv({"pods": [sentinel, pod("redis-ha-0", {"app": "redis-ha"}, ["true"])]}))
+def test_sentinel_and_redis_pods_are_told_apart_by_role():
+    sentinel = pod("redis-ha-s-0", {"app": "redis-ha", "role": "sentinel"}, ["true"])
+    replica = pod("redis-ha-0", {"app": "redis-ha", "role": "replication"}, ["true"])
+    env = cast("Environment", FakeEnv({"pods": [sentinel, replica]}))
     assert redis.sentinel_pods(env) == [sentinel]
+    assert redis.redis_pods(env) == [replica]
