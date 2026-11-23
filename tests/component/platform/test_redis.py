@@ -109,13 +109,18 @@ def fail_over(
 
 
 def expect_takeover(env: Environment, stopped: str, takeover: Takeover) -> None:
-    """A replica, not the recreated pod, became master within TAKEOVER_SECONDS, and the stopped pod is a replica now."""
+    """A replica, not the recreated pod, became master within TAKEOVER_SECONDS, and the stopped pod rejoins as a replica."""
     with symptom():
         new = metadata_name(takeover.master)
         assert new != stopped, f"{stopped} is master again after {takeover.seconds} s: no replica took over"
         assert takeover.seconds <= TAKEOVER_SECONDS, f"{new} took over after {takeover.seconds} s"
+        # A recreated pod starts as a standalone master until Sentinel attaches it; the master label stays elsewhere.
         returned = next(pod for pod in redis_pods(env) if metadata_name(pod) == stopped)
-        assert reported_role(env, returned) == "slave", f"{stopped} came back as {reported_role(env, returned)}"
+        wait_until(
+            lambda: reported_role(env, returned) == "slave",
+            timeout=TAKEOVER_SECONDS,
+            description=f"{stopped} back as a replica",
+        )
 
 
 @pytest.mark.destructive
