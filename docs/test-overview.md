@@ -11,13 +11,13 @@ component and integration, without and with the destructive tests; the test suit
 
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
-| smoke | 244 | 44 | 12 |
+| smoke | 245 | 44 | 12 |
 | component | 1010 | 592 | 71 |
 | integration | 248 | 148 | 20 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1399** | **727** | **86** |
+| **full tier** | **1400** | **727** | **86** |
 | **chaos tier** | **103** | **57** | **17** |
-| **test suite** | **1582** | **793** | **103** |
+| **test suite** | **1583** | **793** | **103** |
 
 Unit tests (`unit_tests/`, functions): 1008. Perf endpoints (`perf/runs.py`): 32.
 
@@ -25,7 +25,7 @@ Unit tests (`unit_tests/`, functions): 1008. Perf endpoints (`perf/runs.py`): 32
 
 | Tier | Area | Tests | Scenarios |
 | --- | --- | --- | --- |
-| smoke | api_health | 30 | 5 |
+| smoke | api_health | 31 | 5 |
 | smoke | berichtenbox_setup | 2 | 2 |
 | smoke | cilium | 2 | 2 |
 | smoke | cluster | 11 | 11 |
@@ -117,7 +117,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | draaiboek | 87 |
 | external | 216 |
 | hosting | 40 |
-| podiumd-tests | 527 |
+| podiumd-tests | 528 |
 | upstream | 242 |
 
 ## Expected failures per known issue

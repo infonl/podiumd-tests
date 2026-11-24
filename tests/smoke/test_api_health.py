@@ -55,6 +55,7 @@ ANONYMOUS = [
     ("zgw-office-addin", "GET", "/proxy/zaken/ptest-unknown", {}),
     ("pabc", "POST", "/api/v1/application-roles-per-entity-type", {}),
     ("pabc", "POST", "/api/v1/application-roles-per-entity-type", {"X-API-KEY": "ptest-wrong-key"}),
+    ("pabc", "POST", "/api/v1/application-roles-per-entity-type", {"X-API-KEY": ""}),
 ]
 
 
@@ -164,10 +165,15 @@ def test_view_config_checks_pass(http: requests.Session, urls: dict[str, str], c
 )
 @pytest.mark.parametrize(
     ("component", "method", "path", "headers"),
-    [requiring(c, c, m, p, h, test_id=f"{c}{p}{'-wrong-key' if h else ''}") for c, m, p, h in ANONYMOUS],
+    [
+        requiring(
+            c, c, m, p, h, test_id=f"{c}{p}{''.join('-wrong-key' if key else '-empty-key' for key in h.values())}"
+        )
+        for c, m, p, h in ANONYMOUS
+    ],
 )
 @pytest.mark.scenario("""
-    Given a request without credentials, or with a wrong API key
+    Given a request without credentials, or with a wrong or empty API key
     When it calls each protected API endpoint
     Then the API answers 401 or 403
 """)
