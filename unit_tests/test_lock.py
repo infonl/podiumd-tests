@@ -242,6 +242,18 @@ def test_a_run_beats_podiumd_tests_own_booking_and_leaves_it_open(tmp_path, prof
     assert ledger_calls[1:] == [["start", "test-env", "test-env-1124-1116-a40f"]]
 
 
+def test_a_refused_start_of_our_own_booking_does_not_stop_the_run(tmp_path, profile_factory, fake_runner, capsys):
+    own = {"agent": "podiumd-tests", "id": "test-env-1124-1312-4d28", "state": "booked", "to": "2026-11-24T14:12:16Z"}
+    fake_runner.answers = {
+        " book ": (0, json.dumps({"ok": False, "conflicts": [own], "locks": []})),
+        " start ": (1, "not changed: conflicts"),
+        "env-ledger.py": (0, ""),
+    }
+    with held(ledger_env(tmp_path, profile_factory, fake_runner), "run chaos"):
+        assert (tmp_path / "lock").exists()
+    assert "not started" in capsys.readouterr().err
+
+
 def test_another_agents_booking_next_to_our_own_still_refuses(tmp_path, profile_factory, fake_runner):
     conflicts = [
         {"agent": "podiumd-tests", "id": "a", "what": "drain"},

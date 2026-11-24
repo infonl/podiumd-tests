@@ -514,7 +514,11 @@ def _join_own(booking: Booking, answer: JsonObject) -> Booking:
     booking.booking = str(own[0]["id"])
     booking.end = datetime.fromisoformat(str(own[0]["to"]))
     if own[0].get("state") == "booked":
-        booking.call("start")
+        # The ledger refuses a start that overlaps another agent's entry; the booking itself still holds the slot.
+        try:
+            booking.call("start")
+        except ProcessError as exc:
+            print(f"env ledger booking {booking.booking} not started: {exc}", file=sys.stderr)
     return booking
 
 
