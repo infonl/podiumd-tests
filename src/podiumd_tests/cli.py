@@ -274,6 +274,52 @@ def cmd_estate_check(args: argparse.Namespace) -> int:
     return EXIT_ACTION_NEEDED if release_rules.is_action_needed(findings) else EXIT_OK
 
 
+def _estate_envs(args: argparse.Namespace) -> list[str]:
+    """Return the profile names of --envs, or of every profile of --estate."""
+    if args.envs:
+        return [name.strip() for name in args.envs.split(",") if name.strip()]
+    envs_dir = Path(args.envs_dir)
+    return [
+        name for name in config.list_profiles(envs_dir) if config.load_profile(name, envs_dir).estate == args.estate
+    ]
+
+
+def _estate_row(name: str, args: argparse.Namespace, out: Path) -> tuple[str, int]:
+    """Export and check one environment into out/<name>/; return its README row and exit code."""
+    try:
+        profile = estate_profile.export(Environment(config.load_profile(name, Path(args.envs_dir))), args.since)
+    except (config.ProfileError, ProcessError) as exc:
+        return f"| {name} | unknown | error: {estate_profile.reason(exc)} |", EXIT_CONFIG
+    findings = release_rules.evaluate(profile, _target(args.target))
+    (out / name).mkdir(parents=True, exist_ok=True)
+    (out / name / "profile.yaml").write_text(estate_profile.dump(profile), encoding="utf-8")
+    (out / name / "actions.md").write_text(release_rules.report(profile, findings, args.target), encoding="utf-8")
+    chart = section(profile, "chart").get("podiumd", "unknown")
+    code = EXIT_ACTION_NEEDED if release_rules.is_action_needed(findings) else EXIT_OK
+    return f"| {name} | {chart} | {release_rules.open_issues(findings)} |", code
+
+
+def cmd_estate_report(args: argparse.Namespace) -> int:
+    """Export and check each environment into --out, with a README table; an environment that fails gets a row."""
+    if not _is_duration(args.since, "--since"):
+        return EXIT_CONFIG
+    _target(args.target)
+    out = Path(args.out)
+    rows = [_estate_row(name, args, out) for name in _estate_envs(args)]
+    today = datetime.now(UTC).date().isoformat()
+    lines = [
+        "# Estate profiles",
+        "",
+        f"`podiumd-tests estate-profile report` of {today}, target {args.target or 'any'}.",
+        "",
+        "| env | podiumd chart | actions needed |",
+        "| --- | --- | --- |",
+        *(row for row, _ in rows),
+    ]
+    _write_or_print("\n".join([*lines, ""]), str(out / "README.md"))
+    return max((code for _, code in rows), default=EXIT_OK)
+
+
 def _is_defined(node_id: str) -> bool:
     """Whether the node id's file defines its test function; pytest on xdist runs nothing for an unknown one."""
     name = node_id.rsplit("::", maxsplit=1)[-1].split("[", maxsplit=1)[0]
@@ -647,12 +693,33 @@ def _add_estate_profile_commands(add_parser: _AddParser) -> None:
     commands = estate.add_subparsers(dest="estate_command", required=True).add_parser
     export = _env_command(commands, "export", "read an environment's estate profile; read-only")
     export.add_argument("--out", help="YAML file to write (default: print it)")
-    export.add_argument("--since", default="24h", help="window of the Keycloak log signals (default: 24h)")
+    _add_since(export)
     export.set_defaults(func=cmd_estate_export)
     check = commands("check", help="list the actions a profile needs before an upgrade; exit 1 when any")
     check.add_argument("--profile", required=True, help="estate profile YAML file")
-    check.add_argument("--target", help="podiumd chart version to upgrade to (default: any)")
+    _add_target(check)
     check.set_defaults(func=cmd_estate_check)
+    _add_estate_report_command(commands)
+
+
+def _add_since(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--since", default="24h", help="window of the Keycloak log signals (default: 24h)")
+
+
+def _add_target(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--target", help="podiumd chart version to upgrade to (default: any)")
+
+
+def _add_estate_report_command(add_parser: _AddParser) -> None:
+    """Add the estate-profile report subcommand."""
+    report = add_parser("report", help="export and check many environments into one folder; read-only")
+    chosen = report.add_mutually_exclusive_group(required=True)
+    chosen.add_argument("--envs", help="profile names, comma-separated")
+    chosen.add_argument("--estate", choices=config.ESTATES, help="every profile of this estate")
+    report.add_argument("--out", required=True, help="folder for <env>/profile.yaml, <env>/actions.md and README.md")
+    _add_since(report)
+    _add_target(report)
+    report.set_defaults(func=cmd_estate_report)
 
 
 def build_parser() -> argparse.ArgumentParser:

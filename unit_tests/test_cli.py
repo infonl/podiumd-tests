@@ -491,6 +491,45 @@ def test_estate_profile_check_exits_1_when_an_action_is_needed(tmp_path, capsys,
     assert "| keycloak-operator-client-under-master-otp | podiumd-chart-55 |" in capsys.readouterr().out
 
 
+@pytest.mark.usefixtures("offline")
+def test_estate_profile_report_writes_each_env_and_a_row_for_a_failing_one(envs, monkeypatch, tmp_path, capsys):
+    argv = envs()
+    (tmp_path / "broken.yaml").write_text(PROFILE.format(tiers="smoke"), encoding="utf-8")
+    (tmp_path / "podiumd-infra").mkdir()
+    (tmp_path / "podiumd-infra" / "x.yaml").write_text(
+        PROFILE.format(tiers="smoke").replace("externals", "podiumd-infra"), encoding="utf-8"
+    )
+
+    def export(env, _since):
+        if env.profile.name == "broken":
+            raise ProcessError(
+                ["kubectl", "--context", "c", "get", "--raw", "/readyz"], "dial tcp 10.1.2.3:443: i/o timeout"
+            )
+        master = {"direct_grant_otp": "required", "operator_client": "absent"}
+        return {
+            "estate": "externals",
+            "env": env.profile.name,
+            "chart": {"podiumd": "4.10.1"},
+            "keycloak_master": master,
+        }
+
+    monkeypatch.setattr(estate_profile, "export", export)
+    out = tmp_path / "out"
+    code = cli.main(
+        [*argv, "estate-profile", "report", "--estate", "externals", "--out", str(out), "--target", "4.11.0"]
+    )
+    assert code == cli.EXIT_CONFIG
+    readme = (out / "README.md").read_text(encoding="utf-8")
+    assert "| e | 4.10.1 | podiumd-chart-55 (action needed) |" in readme
+    assert "| broken | unknown | error: dial tcp <host>: i/o timeout |" in readme
+    assert "| x |" not in readme
+    assert "podiumd-chart-55 | action needed" in (out / "e" / "actions.md").read_text(encoding="utf-8")
+    assert yaml.safe_load((out / "e" / "profile.yaml").read_text(encoding="utf-8"))["env"] == "e"
+    assert cli.main([*argv, "estate-profile", "report", "--envs", "e", "--out", str(out)]) == cli.EXIT_ACTION_NEEDED
+    assert cli.main([*argv, "estate-profile", "report", "--envs", "e", "--out", str(out), "--since", "x"]) == 2
+    assert f"written: {out / 'README.md'}" in capsys.readouterr().out
+
+
 def test_estate_profile_check_refuses_an_invalid_target_or_profile(tmp_path, capsys):
     path = tmp_path / "profile.yaml"
     path.write_text("estate: e\nsource: manual\n", encoding="utf-8")

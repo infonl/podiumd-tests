@@ -103,6 +103,12 @@ def is_action_needed(findings: Sequence[Finding]) -> bool:
     return any(finding.status != OK for finding in findings)
 
 
+def open_issues(findings: Sequence[Finding]) -> str:
+    """Return the known issues of the findings that are not ok, e.g. "podiumd-chart-55 (unknown)", or "none"."""
+    found = [f"{finding.rule.known_issue} ({finding.status})" for finding in findings if finding.status != OK]
+    return ", ".join(found) or "none"
+
+
 def report(profile: JsonObject, findings: Sequence[Finding], target: str | None) -> str:
     """Return the findings as Markdown for the estate's owner."""
     chart = section(profile, "chart").get("podiumd", "unknown")
