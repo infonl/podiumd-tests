@@ -23,6 +23,7 @@ urls:
   pabc: https://ontw-pabc.dimpact.nl
   openarchiefbeheer: https://ontw-abc.dimpact.nl
   openbeheer: https://ontw-openbeheer.dimpact.nl
+  omc: https://ontw-omc.dimpact.nl
   grafana: https://ontw-podiumd-logs.dimpact.nl
 settings:
   # Azure Policy admits only images from acrprodmgmt; its Python mirror (ExternalsPodiumD pipelines/images.yml).
@@ -35,3 +36,6 @@ secrets:
     k8s_secret: {name: keycloak-podiumd-admin, key: password}
   pabc_api_key:
     pod_env: {deployment: pabc, var: API_KEY__0}
+  # Signs the OMC token; read from OMC's own Secret (as on johnb00).
+  omc_jwt_secret:
+    k8s_secret: {name: omc, key: OMC_AUTH_JWT_SECRET}
