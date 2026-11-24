@@ -29,6 +29,7 @@ from podiumd_tests.workloads import operated
 from podiumd_tests.workloads import operated_down
 from podiumd_tests.workloads import recreate_update_jobs
 from podiumd_tests.workloads import replica_drift
+from podiumd_tests.workloads import rerun_job
 from podiumd_tests.workloads import run_cronjob
 from podiumd_tests.workloads import scaled
 from podiumd_tests.workloads import scaled_leftovers
@@ -217,6 +218,28 @@ def test_run_cronjob_deletes_the_job_also_when_it_does_not_complete(fake_runner)
         ["wait", "--for=condition=complete", "job/ptest-x"],
         ["logs", "job/ptest-x", "--tail=60"],
         ["delete", "job", "ptest-x"],
+    ]
+
+
+def test_rerun_job_copies_the_jobs_spec_without_its_controller_labels(fake_runner):
+    source = {
+        "spec": {
+            "selector": {"matchLabels": {"controller-uid": "u1"}},
+            "template": {
+                "metadata": {"labels": {"controller-uid": "u1", "job-name": "ensure", "app": "kc"}},
+                "spec": {"containers": [{"name": "c"}]},
+            },
+        }
+    }
+    fake_runner.answers = {"get job": (0, json.dumps(source)), "": (0, "")}
+    rerun_job(Kube("ctx", "podiumd", fake_runner), "ensure", "ptest-ensure", 60)
+    applied = json.loads(next(stdin for stdin in fake_runner.stdins if stdin))
+    assert applied["metadata"] == {"name": "ptest-ensure"}
+    assert "selector" not in applied["spec"]
+    assert applied["spec"]["template"]["metadata"] == {"labels": {"app": "kc"}}
+    assert [c[5:8] for c in fake_runner.calls][-2:] == [
+        ["wait", "--for=condition=complete", "job/ptest-ensure"],
+        ["delete", "job", "ptest-ensure"],
     ]
 
 

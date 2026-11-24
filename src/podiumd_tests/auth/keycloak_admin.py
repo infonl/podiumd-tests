@@ -5,9 +5,11 @@ from __future__ import annotations
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import cast
+from urllib.parse import quote
 
 from podiumd_tests.auth.keycloak import PasswordLogin
 from podiumd_tests.auth.keycloak import admin_realm_url
+from podiumd_tests.auth.keycloak import client_credentials_grant
 from podiumd_tests.auth.keycloak import password_grant
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
@@ -40,12 +42,18 @@ def for_environment(env: Environment, realm: str | None = None) -> KeycloakAdmin
 class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
     """Admin calls on one realm, with a token of an admin user in the master realm."""
 
-    def __init__(self, http: requests.Session, url: str, realm: str, admin: tuple[str, str]) -> None:
+    def __init__(
+        self, http: requests.Session, url: str, realm: str, admin: tuple[str, str], *, is_client: bool = False
+    ) -> None:
+        """With is_client, admin is a master service-account client: its login skips master's direct grant flow."""
         self.http: requests.Session = http
         self.realm: str = realm
         self.url: str = url
         self.base: str = admin_realm_url(url, realm)
-        token = password_grant(http, url, "master", PasswordLogin("admin-cli", *admin))
+        if is_client:
+            token = client_credentials_grant(http, url, "master", admin)
+        else:
+            token = password_grant(http, url, "master", PasswordLogin("admin-cli", *admin))
         self.headers: dict[str, str] = {"Authorization": f"Bearer {token}"}
 
     def server_info(self) -> JsonObject:
@@ -258,6 +266,32 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
         group_id = self.group_id(name)
         if group_id:
             self.delete_group(group_id)
+
+    def create_client(self, client: JsonObject) -> str:
+        """Create a client; its uuid."""
+        self._send("POST", "/clients", client, HTTPStatus.CREATED)
+        created = self.client(str(client["clientId"]))
+        if created is None:
+            msg = f"client {client['clientId']} not found after creating it"
+            raise LookupError(msg)
+        return str(created["id"])
+
+    def delete_client(self, client_uuid: str) -> None:
+        """Delete a client, with its service-account user."""
+        self._send("DELETE", f"/clients/{client_uuid}", None)
+
+    def service_account_user_id(self, client_uuid: str) -> str:
+        """Return the id of a client's service-account user."""
+        return str(cast("JsonObject", self._get(f"/clients/{client_uuid}/service-account-user"))["id"])
+
+    def flow_executions(self, flow_alias: str) -> list[JsonObject]:
+        """Return the executions of an authentication flow and its sub-flows, in order."""
+        return cast("list[JsonObject]", self._get(f"/authentication/flows/{quote(flow_alias)}/executions"))
+
+    def set_requirement(self, flow_alias: str, execution: JsonObject, requirement: str) -> None:
+        """Set an execution's requirement (REQUIRED, CONDITIONAL, DISABLED, ...) within a flow."""
+        body = {**execution, "requirement": requirement}
+        self._send("PUT", f"/authentication/flows/{quote(flow_alias)}/executions", body)
 
     def update_client(self, client: JsonObject) -> None:
         """Replace a client's representation (from client())."""

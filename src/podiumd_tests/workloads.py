@@ -423,6 +423,26 @@ def run_cronjob(kube: Kube, cronjob: str, job: str, timeout: int = 300, env: Var
         kube.apply(one_off_job(template, job, env))
     else:
         kube.run("create", "job", job, f"--from=cronjob/{cronjob}")
+    _wait_then_delete(kube, job, timeout)
+
+
+# Labels Kubernetes adds to a Job's pod template; a copy must not carry the original's.
+_JOB_LABELS = ("controller-uid", "job-name", "batch.kubernetes.io/controller-uid", "batch.kubernetes.io/job-name")
+
+
+def rerun_job(kube: Kube, source: str, job: str, timeout: int) -> None:
+    """Run a copy of Job `source` as Job `job`; waits for it to complete, then deletes the copy."""
+    spec = cast("dict[str, object]", kube.get_json("job", source)["spec"])
+    spec.pop("selector", None)
+    template = cast("dict[str, object]", spec["template"])
+    labels = cast("dict[str, str]", section(template, "metadata").get("labels", {}))
+    template["metadata"] = {"labels": {key: value for key, value in labels.items() if key not in _JOB_LABELS}}
+    kube.apply({"apiVersion": "batch/v1", "kind": "Job", "metadata": {"name": job}, "spec": spec})
+    _wait_then_delete(kube, job, timeout)
+
+
+def _wait_then_delete(kube: Kube, job: str, timeout: int) -> None:
+    """Wait for Job `job` to complete, its log in the error when it does not; delete it either way."""
     try:
         kube.run("wait", "--for=condition=complete", f"job/{job}", f"--timeout={timeout}s", timeout=timeout + 10)
     except KubeError as error:

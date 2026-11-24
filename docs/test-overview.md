@@ -12,14 +12,14 @@ component and integration, without and with the destructive tests; the test suit
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
 | smoke | 245 | 44 | 12 |
-| component | 1010 | 592 | 71 |
+| component | 1011 | 593 | 72 |
 | integration | 248 | 148 | 20 |
 | perf | 80 | 9 | 0 |
 | **full tier** | **1400** | **727** | **86** |
-| **chaos tier** | **103** | **57** | **17** |
-| **test suite** | **1583** | **793** | **103** |
+| **chaos tier** | **104** | **58** | **18** |
+| **test suite** | **1584** | **794** | **104** |
 
-Unit tests (`unit_tests/`, functions): 1010. Perf endpoints (`perf/runs.py`): 32.
+Unit tests (`unit_tests/`, functions): 1014. Perf endpoints (`perf/runs.py`): 32.
 
 ## Per area
 
@@ -39,7 +39,7 @@ Unit tests (`unit_tests/`, functions): 1010. Perf endpoints (`perf/runs.py`): 32
 | component | basisregistraties | 74 | 24 |
 | component | frankgateway | 8 | 2 |
 | component | ita | 45 | 30 |
-| component | keycloak | 24 | 14 |
+| component | keycloak | 25 | 15 |
 | component | kiss | 66 | 22 |
 | component | objecten | 17 | 7 |
 | component | omc | 3 | 2 |
@@ -117,7 +117,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | draaiboek | 87 |
 | external | 216 |
 | hosting | 40 |
-| podiumd-tests | 528 |
+| podiumd-tests | 529 |
 | upstream | 242 |
 
 ## Expected failures per known issue
@@ -183,6 +183,7 @@ Ids of infonl/podiumd-known-issues.
 | podiumd-chart-44 | 1 |
 | podiumd-chart-48 | 1 |
 | podiumd-chart-49 | 1 |
+| podiumd-chart-55 | 1 |
 | zaakbrug-5 | 2 |
 | zac-3 | 1 |
 | zac-7 | 1 |

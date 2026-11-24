@@ -178,3 +178,31 @@ def test_server_info_is_outside_the_realm(fake_http):
     sent = fake_http({**TOKEN, "GET /admin/serverinfo": (200, {"systemInfo": {}})})
     assert KeycloakAdmin(requests.Session(), KC, "master", ("admin", "pw")).server_info() == {"systemInfo": {}}
     assert sent[-1].url == f"{KC}/admin/serverinfo"
+
+
+def test_a_service_account_admin_logs_in_with_client_credentials(fake_http):
+    sent = fake_http(TOKEN)
+    KeycloakAdmin(requests.Session(), KC, "master", ("ptest-client", "secret"), is_client=True)
+    assert "grant_type=client_credentials" in str(sent[0].body)
+
+
+def test_clients_and_flow_executions(admin):
+    keycloak, sent = admin(
+        {
+            ("POST", "/clients"): (201, None),
+            ("GET", "/clients"): (200, [{"id": "c1", "clientId": "ptest-c"}]),
+            ("GET", "/clients/c1/service-account-user"): (200, {"id": "sa1"}),
+            ("DELETE", "/clients/c1"): (204, None),
+            ("GET", "/authentication/flows/direct%20grant/executions"): (
+                200,
+                [{"id": "e1", "requirement": "CONDITIONAL"}],
+            ),
+            ("PUT", "/authentication/flows/direct%20grant/executions"): (204, None),
+        }
+    )
+    assert keycloak.create_client({"clientId": "ptest-c"}) == "c1"
+    assert keycloak.service_account_user_id("c1") == "sa1"
+    keycloak.delete_client("c1")
+    executions = keycloak.flow_executions("direct grant")
+    keycloak.set_requirement("direct grant", executions[0], "REQUIRED")
+    assert json.loads(sent[-1].body) == {"id": "e1", "requirement": "REQUIRED"}
