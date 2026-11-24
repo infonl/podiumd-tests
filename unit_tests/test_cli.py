@@ -478,3 +478,22 @@ def test_estate_profile_export_writes_or_prints_the_profile(envs, monkeypatch, t
     assert "since: 24h" in capsys.readouterr().out
     assert cli.main([*argv, "--since", "soon"]) == cli.EXIT_CONFIG
     assert "--since:" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("master", "code"),
+    [("{direct_grant_otp: required, operator_client: absent}", 1), ("{operator_client: present}", 0)],
+)
+def test_estate_profile_check_exits_1_when_an_action_is_needed(tmp_path, capsys, master, code):
+    path = tmp_path / "profile.yaml"
+    path.write_text(f"estate: e\nsource: manual\nkeycloak_master: {master}\n", encoding="utf-8")
+    assert cli.main(["estate-profile", "check", "--profile", str(path), "--target", "v4.11.0"]) == code
+    assert "| keycloak-operator-client-under-master-otp | podiumd-chart-55 |" in capsys.readouterr().out
+
+
+def test_estate_profile_check_refuses_an_invalid_target_or_profile(tmp_path, capsys):
+    path = tmp_path / "profile.yaml"
+    path.write_text("estate: e\nsource: manual\n", encoding="utf-8")
+    assert cli.main(["estate-profile", "check", "--profile", str(path), "--target", "next"]) == cli.EXIT_CONFIG
+    assert "--target 'next'" in capsys.readouterr().err
+    assert cli.main(["estate-profile", "check", "--profile", str(tmp_path / "absent.yaml")]) == cli.EXIT_CONFIG

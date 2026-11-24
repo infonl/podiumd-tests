@@ -1,4 +1,4 @@
-"""Unit tests for exporting estate profiles."""
+"""Unit tests for exporting and validating estate profiles."""
 
 import json
 
@@ -9,6 +9,7 @@ import pytest
 import yaml
 
 from podiumd_tests import estate_profile
+from podiumd_tests.config import ProfileError
 from podiumd_tests.kube import KubeError
 
 NOW = datetime(2026, 11, 24, 12, tzinfo=UTC)
@@ -84,6 +85,7 @@ def exported(env):
 def test_export_reads_the_cluster_and_derives_keycloak_master_from_the_log(env_factory, fake_runner):
     cluster(fake_runner, log=f"{OPERATOR_LOG}\n{OPERATOR_LOG}\n{OTP_LOG}\n")
     profile = exported(env_factory())
+    assert estate_profile.validate(profile, "p") == profile
     assert profile["source"] == "kubectl"
     assert profile["chart"] == {"podiumd": "4.11.0", "components": {"keycloak-operator": "1.13.1"}}
     assert profile["cluster"] == {
@@ -209,3 +211,31 @@ def test_reason_of_a_secret_error_is_the_kubectl_error_without_the_command():
     error = LookupError("secret 'x' (k8s_secret): kubectl --context ctx get secret s: Error from server (NotFound)")
     error.__cause__ = KubeError(["kubectl", "--context", "ctx", "get", "secret", "s"], "Error from server (NotFound)")
     assert estate_profile.reason(error) == "Error from server (NotFound)"
+
+
+@pytest.mark.parametrize(
+    ("raw", "message"),
+    [
+        ([], "expected a mapping"),
+        ({"source": "kubectl"}, "missing estate"),
+        ({"estate": "e", "source": "guess"}, "source: .guess., expected one of"),
+        ({"estate": "e", "source": "manual", "keycloak_master": []}, "keycloak_master: expected a mapping"),
+        (
+            {"estate": "e", "source": "manual", "keycloak_master": {"operator_client": "gone"}},
+            "operator_client: 'gone'",
+        ),
+    ],
+)
+def test_validate_refuses_an_invalid_profile(raw, message):
+    with pytest.raises(ProfileError, match=message):
+        estate_profile.validate(raw, "p")
+
+
+def test_load_reads_a_manual_profile_and_refuses_a_missing_file(tmp_path):
+    path = tmp_path / "profile.yaml"
+    path.write_text("estate: e\nsource: manual\nkeycloak_master: {direct_grant_otp: required}\n", encoding="utf-8")
+    profile = estate_profile.load(path)
+    assert estate_profile.master_value(profile, "direct_grant_otp") == "required"
+    assert estate_profile.master_value(profile, "operator_client") == "unknown"
+    with pytest.raises(ProfileError, match=r"absent\.yaml"):
+        estate_profile.load(tmp_path / "absent.yaml")

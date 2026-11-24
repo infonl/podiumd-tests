@@ -27,6 +27,7 @@ from podiumd_tests import doctor
 from podiumd_tests import estate_profile
 from podiumd_tests import hygiene
 from podiumd_tests import lock
+from podiumd_tests import release_rules
 from podiumd_tests import results
 from podiumd_tests import workloads
 from podiumd_tests.bootstrap.runner import bootstrap
@@ -69,6 +70,8 @@ EXIT_TESTS_FAILED = 1
 EXIT_CONFIG = 2
 EXIT_NOT_ALLOWED = 3
 EXIT_BUSY = 4
+# estate-profile check and report: a profile needs an action, or a fact to decide.
+EXIT_ACTION_NEEDED = 1
 # pytest-xdist workers of a parallel tier at most: 8 need Open Zaak at 2 pods (the Maykin chart default) or 3 uWSGI
 # processes; one pod of 2 processes overloads at 8, so such a profile sets pytest_workers 6. 1 runs serially.
 MAX_WORKERS = 8
@@ -250,6 +253,25 @@ def cmd_estate_export(args: argparse.Namespace) -> int:
     env = Environment(_load(args))
     _write_or_print(estate_profile.dump(estate_profile.export(env, args.since)), args.out)
     return EXIT_OK
+
+
+def _target(text: str | None) -> tuple[int, ...] | None:
+    """Return --target as a version; ProfileError when it is no dotted version."""
+    if text is None:
+        return None
+    version = workloads.parse_version(text.removeprefix("v"))
+    if version is None:
+        msg = f"--target {text!r}: expected a chart version such as 4.11.0"
+        raise config.ProfileError(msg)
+    return version
+
+
+def cmd_estate_check(args: argparse.Namespace) -> int:
+    """Print the release rules' findings on a profile; 1 when one needs an action or a fact."""
+    profile = estate_profile.load(Path(args.profile))
+    findings = release_rules.evaluate(profile, _target(args.target))
+    print(release_rules.report(profile, findings, args.target), end="")
+    return EXIT_ACTION_NEEDED if release_rules.is_action_needed(findings) else EXIT_OK
 
 
 def _is_defined(node_id: str) -> bool:
@@ -627,6 +649,10 @@ def _add_estate_profile_commands(add_parser: _AddParser) -> None:
     export.add_argument("--out", help="YAML file to write (default: print it)")
     export.add_argument("--since", default="24h", help="window of the Keycloak log signals (default: 24h)")
     export.set_defaults(func=cmd_estate_export)
+    check = commands("check", help="list the actions a profile needs before an upgrade; exit 1 when any")
+    check.add_argument("--profile", required=True, help="estate profile YAML file")
+    check.add_argument("--target", help="podiumd chart version to upgrade to (default: any)")
+    check.set_defaults(func=cmd_estate_check)
 
 
 def build_parser() -> argparse.ArgumentParser:

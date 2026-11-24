@@ -22,12 +22,18 @@ import yaml
 from podiumd_tests import workloads
 from podiumd_tests.auth.keycloak import TokenError
 from podiumd_tests.auth.keycloak_admin import for_environment
+from podiumd_tests.auth.master_otp import CONDITIONAL
+from podiumd_tests.auth.master_otp import DISABLED
 from podiumd_tests.auth.master_otp import OPERATOR
 from podiumd_tests.auth.master_otp import REQUIRED
 from podiumd_tests.auth.master_otp import direct_grant_flow
 from podiumd_tests.auth.master_otp import otp_requirement
 from podiumd_tests.cilium import CILIUM
 from podiumd_tests.cilium import detect_network
+from podiumd_tests.config import ProfileError
+from podiumd_tests.config import choice
+from podiumd_tests.config import mapping
+from podiumd_tests.config import required_text
 from podiumd_tests.credentials import SecretError
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
@@ -41,6 +47,7 @@ from podiumd_tests.wait import parse_duration
 if TYPE_CHECKING:
     from collections.abc import Callable
     from collections.abc import Sequence
+    from pathlib import Path
 
     from podiumd_tests.auth.keycloak_admin import KeycloakAdmin
     from podiumd_tests.environment import Environment
@@ -52,6 +59,12 @@ type Section = dict[str, object]
 UNKNOWN = "unknown"
 PRESENT = "present"
 ABSENT = "absent"
+SOURCES = ("kubectl", "keycloak-admin", "manual")
+# The values each keycloak_master field may have.
+MASTER_VALUES = {
+    "direct_grant_otp": (REQUIRED, CONDITIONAL, DISABLED, UNKNOWN),
+    "operator_client": (PRESENT, ABSENT, UNKNOWN),
+}
 ADMIN_CREDENTIALS = ("keycloak_admin_username", "keycloak_admin_password")
 # A Job that runs this long without completing or failing hangs.
 HANGING = timedelta(minutes=30)
@@ -331,3 +344,29 @@ def otp_policy(realm: JsonObject) -> dict[str, object]:
 def dump(profile: Section) -> str:
     """Return the profile as YAML."""
     return yaml.safe_dump(profile, sort_keys=False, allow_unicode=True)
+
+
+def load(path: Path) -> Section:
+    """Read and validate a profile file; ProfileError when it is unreadable or invalid."""
+    try:
+        raw: object = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        msg = f"{path}: {exc}"
+        raise ProfileError(msg) from exc
+    return validate(raw, str(path))
+
+
+def validate(raw: object, where: str) -> Section:
+    """Return the profile when its estate, source and keycloak_master values are valid; ProfileError otherwise."""
+    profile = mapping(raw, where)
+    required_text(profile, "estate", where)
+    choice(profile.get("source"), SOURCES, f"{where}.source")
+    master = mapping(profile.get("keycloak_master", {}), f"{where}.keycloak_master")
+    for field, allowed in MASTER_VALUES.items():
+        choice(master.get(field, UNKNOWN), allowed, f"{where}.keycloak_master.{field}")
+    return profile
+
+
+def master_value(profile: JsonObject, field: str) -> str:
+    """Return a keycloak_master field of a validated profile; UNKNOWN when absent."""
+    return str(section(profile, "keycloak_master").get(field, UNKNOWN))
