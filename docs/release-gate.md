@@ -18,7 +18,8 @@ each estate must do.
 - Actions for an estate go to Kees, who passes them on. Nothing goes outside ourselves: no tickets, mails or comments
   to the estate's owner or hosting party.
 - Estate profiles, their actions and estate environment profiles live only in the private repository
-  podiumd-known-issues, under `estate-profiles/<estate>/`. Never commit them to this repository.
+  podiumd-known-issues: one folder per environment, `estate-profiles/<env>/`, and the podiumd-tests profiles of the
+  estates in `estate-envs/`. Never commit them to this repository.
 - A gate run by hand books kees00 in the env ledger first (`settings.env_ledger` of the kees00 profile); the Release
   Gate workflow holds kees00 itself.
 
@@ -26,12 +27,20 @@ each estate must do.
 
 - podiumd-tests installed as in the [README](../README.md).
 - A podiumd-tests profile for each environment: for kees00 `envs/podiumd-infra/kees00.yaml`; for an estate a
-  smoke-only profile in a private profile directory, passed with `--envs-dir` (draft one with
-  `podiumd-tests env init`).
+  smoke-only profile with `estate: externals` in `../podiumd-known-issues/estate-envs/`, passed with `--envs-dir`
+  (draft one with `podiumd-tests env init`).
 - A kubectl context per estate. Read-only access is enough: a read that RBAC forbids (Secrets, Keycloak resources,
   nodes, pod logs) becomes `unknown` with its reason.
 - An AKS API server with authorized IP ranges answers only from those ranges: connect the VPN, then check with
-  `ip route get <API server IP>` that the route goes through the VPN interface.
+  `ip route get <API server IP>` that the route goes through the VPN interface. When the VPN routes only some
+  ranges, route every AKS API server of your subscriptions through it (as root; the routes go with the VPN):
+
+  ```bash
+  for s in $(az account list --query "[].id" -o tsv); do az aks list --subscription "$s" --query "[].fqdn" -o tsv; done \
+      | while read -r f; do getent hosts "$f" | awk '{print $1}'; done | sort -u > /tmp/aks-ips
+  sudo sh -c 'while read -r ip; do ip route replace "$ip/32" via <VPN gateway> dev <VPN interface>; done < /tmp/aks-ips'
+  ```
+
 - An estate in another Azure tenant: get its credentials into a separate kubeconfig and log in to that tenant.
 
   ```bash
@@ -43,6 +52,20 @@ each estate must do.
 
 - Optional: the estate profile's `keycloak_admin_username` and `keycloak_admin_password` secrets. With them, export
   reads Keycloak's master realm; without them, it derives what the Keycloak log shows.
+
+## Folder of an environment
+
+`../podiumd-known-issues/estate-profiles/<env>/` holds:
+
+| File | Written by | Read by |
+| --- | --- | --- |
+| `profile.yaml` | `estate-profile export` (or by hand) | `check`, `apply` |
+| `actions.md` | `estate-profile check` | Kees |
+| `infra.yaml` | by hand: the estate's deploy-step flags | the Release Gate workflow (settings layer over kees00's) |
+| `podiumd-overlay.yaml` | by hand: the estate's chart values that differ from the defaults, without hosts or secrets | the Release Gate workflow (values layer over kees00's) |
+
+`infra.yaml` sets every kees00-only workaround the estate does not run to `false` explicitly; a flag it leaves out
+keeps kees00's value.
 
 ## Profile format
 
@@ -76,9 +99,10 @@ A hand-written profile needs `estate`, `source: manual` and the `keycloak_master
 ## A. One estate: export and check
 
 ```bash
-P=../podiumd-known-issues/estate-profiles/<estate>
-podiumd-tests --envs-dir <private envs dir> estate-profile export --env <env> --since 24h --out $P/<env>/profile.yaml
-podiumd-tests estate-profile check --profile $P/<env>/profile.yaml --target <candidate> > $P/<env>/actions.md
+P=../podiumd-known-issues/estate-profiles/<env>
+podiumd-tests --envs-dir ../podiumd-known-issues/estate-envs estate-profile export --env <env> --since 24h \
+    --out $P/profile.yaml
+podiumd-tests estate-profile check --profile $P/profile.yaml --target <candidate> > $P/actions.md
 ```
 
 Export without `--out` prints the profile. `--since` sets the window of the log signals; take one that covers the
@@ -87,8 +111,8 @@ estate's last deploy.
 ## B. Many estates: the report for the hosting party
 
 ```bash
-podiumd-tests --envs-dir <private envs dir> estate-profile report --estate externals --target <candidate> \
-    --out ../podiumd-known-issues/estate-profiles/report-<date>
+podiumd-tests --envs-dir ../podiumd-known-issues/estate-envs estate-profile report --estate externals \
+    --target <candidate> --out ../podiumd-known-issues/estate-profiles
 ```
 
 `--envs <env>,<env>` takes named profiles instead of every profile of an estate. The folder gets
@@ -103,7 +127,7 @@ Run the workflow Release Gate of podiumd-infra with these inputs:
 | Input | Value |
 | --- | --- |
 | `from-version` | the podiumd version the estate runs now (the profile's `chart.podiumd`) |
-| `estate` | the estate whose profile it applies, from `estate-profiles/<estate>/` |
+| `estate` | the environment whose folder it applies, `estate-profiles/<env>/` |
 | `candidate` | the podiumd chart version to release |
 
 The workflow holds kees00's Lease `podiumd-tests-lock` as `podiumd-infra <run URL> Release Gate <estate>` and sets
@@ -164,8 +188,8 @@ The state file holds client secrets of kees00; delete it when restore cannot run
 To see whether an estate changed since its gate: export again and compare with the profile that passed.
 
 ```bash
-podiumd-tests --envs-dir <private envs dir> estate-profile export --env <env> --out /tmp/<env>.yaml
-diff ../podiumd-known-issues/estate-profiles/<estate>/<env>/profile.yaml /tmp/<env>.yaml
+podiumd-tests --envs-dir ../podiumd-known-issues/estate-envs estate-profile export --env <env> --out /tmp/<env>.yaml
+diff ../podiumd-known-issues/estate-profiles/<env>/profile.yaml /tmp/<env>.yaml
 ```
 
 `exported_at` and the signal counts always differ. A change in `chart`, `keycloak` or `keycloak_master` needs a new
