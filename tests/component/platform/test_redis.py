@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 import pytest
@@ -10,14 +12,18 @@ from podiumd_tests.defects import DefectSymptomError
 from podiumd_tests.defects import symptom
 from podiumd_tests.json_data import section
 from podiumd_tests.kube import metadata_name
+from podiumd_tests.process import start_process
 from podiumd_tests.redis import MASTER_LABEL
 from podiumd_tests.redis import MASTER_SERVICE
 from podiumd_tests.redis import TAKEOVER_SECONDS
 from podiumd_tests.redis import acknowledged_writes
 from podiumd_tests.redis import delete_writes
 from podiumd_tests.redis import is_master_role_checked
+from podiumd_tests.redis import labeller_logs
+from podiumd_tests.redis import master_changes
 from podiumd_tests.redis import master_pod
 from podiumd_tests.redis import missing_writes
+from podiumd_tests.redis import placement
 from podiumd_tests.redis import redis_cli
 from podiumd_tests.redis import redis_pods
 from podiumd_tests.redis import replication_state
@@ -30,6 +36,8 @@ from podiumd_tests.workloads import ready_endpoints
 from podiumd_tests.workloads import unhealthy_pods
 
 if TYPE_CHECKING:
+    import subprocess  # nosec B404  # type only
+
     from collections.abc import Callable
 
     from podiumd_tests.environment import Environment
@@ -87,12 +95,16 @@ def test_redis_ha_master_service_points_at_the_master(podiumd_env: Environment) 
 
 
 def fail_over(
-    env: Environment, registry: ResourceRegistry, stop: Callable[[JsonObject], object]
+    env: Environment,
+    registry: ResourceRegistry,
+    stop: Callable[[JsonObject], object],
+    settle: Callable[[], object] | None = None,
 ) -> tuple[str, Takeover]:
     """Store a key on the master, stop it, and wait until a master that kept the key and all redis-ha pods are back.
 
     Returns the stopped master's name and the takeover. redis-ha-master never points at two pods or a replica, and
-    every write it acknowledged during the failover is on the new master.
+    every write it acknowledged during the failover is on the new master. settle runs after the takeover, before
+    the wait for the pods.
     """
     pods = redis_pods(env)
     if len(pods) < 2:
@@ -103,13 +115,19 @@ def fail_over(
     assert redis_cli(env, master, "SET", key, "kept").strip() == "OK"
     registry.add(f"redis key {key}", lambda: redis_cli(env, master_pod(env) or master, "DEL", key))
     prefix = registry.tagged("redis-write-")
-    writer = start_writer(env, next(pod for pod in pods if metadata_name(pod) != metadata_name(master)), prefix)
+    # The writer runs in a replica, preferably on another node than the master, so a drain does not evict it.
+    node = section(master, "spec").get("nodeName")
+    replicas = [pod for pod in pods if metadata_name(pod) != metadata_name(master)]
+    replicas.sort(key=lambda pod: section(pod, "spec").get("nodeName") == node)
+    writer = start_writer(env, replicas[0], prefix)
     registry.add(f"redis keys {prefix}*", lambda: delete_writes(env, master_pod(env) or master, prefix))
     before = replication_state(env)
     stop(master)
     takeover = wait_for_takeover(env, str(section(master, "metadata").get("uid")), RECOVERY_SECONDS)
     assert redis_cli(env, takeover.master, "GET", key).strip() == "kept"
     assert takeover.problems == []
+    if settle:
+        settle()
     wait_until(
         lambda: len(redis_pods(env)) == len(pods) and not unhealthy_pods(redis_pods(env)),
         timeout=RECOVERY_SECONDS,
@@ -172,25 +190,50 @@ def test_a_replica_takes_over_when_the_master_pod_is_deleted(
 @pytest.mark.scenario("""
     Given Redis HA runs on several nodes
     And a key is stored on the master
-    When the master's node is cordoned and the master pod is evicted from it
+    When the master's node is drained
     Then a replica becomes master within 30 seconds and still holds the key
     And redis-ha-master never points at two pods or at a replica
+    And once the node is back the old master returns as a replica
+    And the labellers name only the new master, without relabelling in a loop
 """)
 def test_a_replica_takes_over_when_the_master_node_is_drained(
-    podiumd_env: Environment, registry: ResourceRegistry
+    podiumd_env: Environment, registry: ResourceRegistry, record_property: Callable[[str, object], None]
 ) -> None:
-    """With the master's node cordoned and the master pod deleted, a replica takes over; the pod moves elsewhere."""
+    """After `kubectl drain` of the master's node a replica takes over; the labellers relabel once, without a loop.
+
+    The drain also evicts the Sentinel and labeller pods on that node, within their PodDisruptionBudgets.
+    """
     if len(podiumd_env.kube.items("nodes")) < 2:
         pytest.skip(f"{podiumd_env.profile.name} has one node")
+    before = placement(podiumd_env)
+    since = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    drains: dict[str, subprocess.Popen[str]] = {}
 
     def drain(master: JsonObject) -> None:
         node = str(section(master, "spec").get("nodeName"))
-        podiumd_env.kube.run("cordon", node)
         registry.add(f"uncordon {node}", lambda: podiumd_env.kube.run("uncordon", node))
-        podiumd_env.kube.delete("pod", metadata_name(master))
+        command = ("drain", node, "--ignore-daemonsets", "--delete-emptydir-data", f"--timeout={RECOVERY_SECONDS}s")
+        drains[node] = start_process(podiumd_env.kube.command(*command))
 
-    stopped, takeover = fail_over(podiumd_env, registry, drain)
+    def uncordon() -> None:
+        for node, process in drains.items():
+            out, _ = process.communicate(timeout=RECOVERY_SECONDS + 60)
+            assert process.returncode == 0, f"kubectl drain {node} failed: {out[-2000:]}"
+            podiumd_env.kube.run("uncordon", node)
+
+    stopped, takeover = fail_over(podiumd_env, registry, drain, uncordon)
+    new = metadata_name(takeover.master)
+    on_node = [name for name, node in before.items() if node in drains]
+    record_property(
+        "report", f"Drained {', '.join(drains)} with {', '.join(on_node)}; {new} took over after {takeover.seconds} s."
+    )
     expect_takeover(podiumd_env, stopped, takeover)
+    # A labeller that was evicted starts afresh; one that stayed logs the change at most twice (event and poll).
+    changes = {pod: master_changes(log) for pod, log in labeller_logs(podiumd_env, since).items()}
+    flat = [name for names in changes.values() for name in names]
+    assert flat, f"no labeller logged {new} as master: {changes}"
+    assert set(flat) == {new}, f"labeller master changes: {changes}"
+    assert all(len(names) <= 2 for names in changes.values()), f"labeller master changes: {changes}"
 
 
 @pytest.mark.destructive

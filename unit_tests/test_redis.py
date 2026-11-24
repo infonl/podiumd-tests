@@ -38,10 +38,10 @@ class FakeEnv:
         return self.objects.get(kind, [])
 
 
-def pod(name, labels, probe_command, uid=""):
+def pod(name, labels, probe_command, uid="", node=""):
     container = {"name": "redis-ha", "readinessProbe": {"exec": {"command": probe_command}}}
     metadata = {"name": name, "namespace": "ns", "labels": labels, "uid": uid}
-    return {"metadata": metadata, "spec": {"containers": [container]}}
+    return {"metadata": metadata, "spec": {"containers": [container], "nodeName": node}}
 
 
 def test_role_endpoints_and_master_check():
@@ -210,3 +210,28 @@ def test_replication_state_summarises_info_replication():
     assert redis.replication_state(env) == {
         "redis-ha-1": "role=slave master_host=redis-ha-0 master_link_status=up master_repl_offset=42"
     }
+
+
+def test_placement_names_the_node_of_each_redis_sentinel_and_labeller_pod():
+    replica = pod("redis-ha-0", {"app": "redis-ha", "role": "replication"}, ["true"], node="n1")
+    sentinel = pod("redis-ha-s-0", {"app": "redis-ha", "role": "sentinel"}, ["true"], node="n2")
+    labeller = pod("redis-ha-labeller-x", {"app.kubernetes.io/name": redis.LABELLER}, ["true"], node="n1")
+    other = pod("openzaak-x", {"app.kubernetes.io/name": "openzaak"}, ["true"], node="n3")
+    env = cast("Environment", FakeEnv({"pods": [replica, sentinel, labeller, other]}))
+    assert redis.placement(env) == {"redis-ha-0": "n1", "redis-ha-s-0": "n2", "redis-ha-labeller-x": "n1"}
+
+
+def test_labeller_logs_and_master_changes():
+    labeller = pod("redis-ha-labeller-x", {"app.kubernetes.io/name": redis.LABELLER}, ["true"])
+    out = (
+        "2026-11-24T10:00:01Z fence: redis-ha-0 (10.0.0.1) paused for writes, sentinel s0 promotes redis-ha-1\n"
+        "2026-11-24T10:00:02Z master change: redis-ha-1 is master behind redis-ha-master (labelled master before:"
+        " redis-ha-0)\n"
+    )
+    fake = FakeEnv({"pods": [labeller]}, out)
+    logs = redis.labeller_logs(cast("Environment", fake), "2026-11-24T10:00:00Z")
+    assert logs == {"redis-ha-labeller-x": out}
+    args, kwargs = fake.kube.calls[0]
+    assert args == ("logs", "pod/redis-ha-labeller-x", "--since-time=2026-11-24T10:00:00Z")
+    assert kwargs == {"namespace": "ns"}
+    assert redis.master_changes(out) == ["redis-ha-1"]

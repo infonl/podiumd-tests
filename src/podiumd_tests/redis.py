@@ -41,6 +41,8 @@ MASTER_LABEL = "redis-role"
 # The operator labels redis-ha's Redis pods role=replication and, with Sentinel on (helm-charts #754), its Sentinel
 # pods role=sentinel; both carry app=redis-ha.
 SENTINEL_ROLE = "sentinel"
+# The Deployment that labels the master Sentinel elected and fences the old one (helm-charts #754).
+LABELLER = "redis-ha-labeller"
 # A replica takes over within this many seconds of the master pod or its node going (podiumd-chart-24).
 TAKEOVER_SECONDS = 30
 # Seconds the writer writes through redis-ha-master: longer than a takeover; its writes come every 0.2 s.
@@ -89,6 +91,33 @@ def redis_pods(env: Environment) -> list[JsonObject]:
 def sentinel_pods(env: Environment) -> list[JsonObject]:
     """Return redis-ha's Sentinel pods; none while the chart renders no Sentinel."""
     return _redis_ha_pods(env, sentinels=True)
+
+
+def labeller_pods(env: Environment) -> list[JsonObject]:
+    """Return the pods of LABELLER; none while the chart renders no Sentinel."""
+    return [pod for pod in env.items("pods") if metadata_labels(pod).get("app.kubernetes.io/name") == LABELLER]
+
+
+def placement(env: Environment) -> dict[str, str]:
+    """Return the node of each Redis, Sentinel and labeller pod of redis-ha."""
+    pods = [*redis_pods(env), *sentinel_pods(env), *labeller_pods(env)]
+    return {metadata_name(pod): str(section(pod, "spec").get("nodeName")) for pod in pods}
+
+
+def labeller_logs(env: Environment, since_time: str) -> dict[str, str]:
+    """Return what each labeller pod logged since the RFC 3339 time since_time."""
+    logs: dict[str, str] = {}
+    for pod in labeller_pods(env):
+        namespace = str(section(pod, "metadata").get("namespace"))
+        logs[metadata_name(pod)] = env.kube.run(
+            "logs", f"pod/{metadata_name(pod)}", f"--since-time={since_time}", namespace=namespace
+        )
+    return logs
+
+
+def master_changes(log: str) -> list[str]:
+    """Return the pod of each "master change" line of a labeller log, in order."""
+    return re.findall(r"master change: (\S+) is master", log)
 
 
 def redis_cli(env: Environment, pod: JsonObject, *args: str) -> str:
