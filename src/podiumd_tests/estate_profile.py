@@ -79,6 +79,8 @@ READ_ERRORS = (KubeError, LookupError, SecretError, TokenError, UnexpectedStatus
 HOST = re.compile(r"https?://\S+|\b(?:[\w-]+\.){2,}[a-z]{2,}(?::\d+)?\b|\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?\b")
 # A kubectl command line in an error message, up to its error.
 COMMAND = re.compile(r"kubectl [^:]*: ")
+# The reader's identity in an RBAC refusal: `User "<object id or name>"`.
+USER = re.compile(r'User "[^"]*"')
 
 
 def reason(error: Exception) -> str:
@@ -91,8 +93,8 @@ def reason(error: Exception) -> str:
 
 
 def scrub(text: str) -> str:
-    """Return text without kubectl command lines, URLs, host names or addresses."""
-    return HOST.sub("<host>", COMMAND.sub("", text))
+    """Return text without kubectl command lines, URLs, host names, addresses or the reader's identity."""
+    return USER.sub("User <reader>", HOST.sub("<host>", COMMAND.sub("", text)))
 
 
 def mark_unknown(found: Section, field: str, why: str) -> None:

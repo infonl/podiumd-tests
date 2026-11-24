@@ -241,3 +241,11 @@ def test_load_reads_a_manual_profile_and_refuses_a_missing_file(tmp_path):
     assert estate_profile.master_value(profile, "operator_client") == "unknown"
     with pytest.raises(ProfileError, match=r"absent\.yaml"):
         estate_profile.load(tmp_path / "absent.yaml")
+
+
+def test_scrub_removes_the_readers_identity_from_an_rbac_refusal():
+    refusal = 'nodes is forbidden: User "e34dc683-0000" cannot list resource "nodes" at the cluster scope'
+    assert (
+        estate_profile.scrub(refusal)
+        == 'nodes is forbidden: User <reader> cannot list resource "nodes" at the cluster scope'
+    )
