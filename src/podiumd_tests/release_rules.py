@@ -74,9 +74,14 @@ def _customer_interactions_service(profile: JsonObject) -> str:
     if found.get("deployed") is False:
         return OK
     defined = str(found.get("service_defined"))
-    if defined == ABSENT and "customer_interactions_service" in found:
-        return ACTION
-    return OK if defined == PRESENT else UNKNOWN
+    if defined == PRESENT:
+        return OK
+    # The Job is opt-in and gone 600 s after it ends: only a Job seen in the cluster proves it runs.
+    seen = found.get("customer_interactions_jobs_failed") or "customer_interactions_service" not in section(
+        found, "reasons"
+    )
+    known = "customer_interactions_service" in found
+    return ACTION if defined == ABSENT and known and seen else UNKNOWN
 
 
 RULES = (
@@ -108,8 +113,8 @@ RULES = (
             " Klant service"
         ),
         unknown_action=(
-            "check that Open Formulieren's setup configuration defines the Open Klant service the"
-            " customer-interactions Job expects"
+            "if openformulieren.customerInteractionsConfigJob is enabled: check that Open Formulieren's setup"
+            " configuration defines the Open Klant service the customer-interactions Job expects"
         ),
     ),
 )
