@@ -18,6 +18,9 @@ podiumd-tests hold.
 With settings.env_ledger (env-ledger.py, relative to the directory that holds podiumd-tests), the hold is also a
 disruptive booking of the environment named as the profile in that ledger, kept alive by heartbeats and closed when
 the hold ends. The ledger skips the run's own locks (--ignore-lock-holder).
+
+With PODIUMD_TESTS_HELD_BY set, an orchestrator holds the lease, lock file and booking for the run: the run only
+checks that the lease names that holder.
 """
 
 from __future__ import annotations
@@ -60,6 +63,8 @@ if TYPE_CHECKING:
     from podiumd_tests.process import Runner
 
 HOLDER = "podiumd-tests"
+# The holderIdentity of the lease an orchestrator holds for the run.
+HELD_BY = "PODIUMD_TESTS_HELD_BY"
 LEASE = "podiumd-tests-lock"
 LEASE_SECONDS = 600
 # Renewals per lease window: a missed renewal or two does not let the lease expire.
@@ -313,9 +318,42 @@ def _interrupt_on_sigterm(release: Callable[[], None]) -> Generator[None]:
         signal.signal(signal.SIGTERM, previous)
 
 
+def check_outer_hold(env: Environment, outer: str) -> None:
+    """LockBusyError unless the environment's lease exists and its holderIdentity is exactly `outer`."""
+    reason = env.capabilities.skip_reason(CLUSTER)
+    if reason:
+        msg = f"{HELD_BY} is set, but lease {LEASE} cannot be read: {reason}"
+        raise LockBusyError(msg)
+    found = env.kube.get_optional("lease", LEASE)
+    current = str(section(found, "spec").get("holderIdentity")) if found else None
+    if current != outer:
+        msg = (
+            f"{HELD_BY} is {outer!r}, but lease {LEASE} in {env.kube.namespace} is held by {current or 'nobody'}:"
+            f" run from that holder or unset {HELD_BY}"
+        )
+        raise LockBusyError(msg)
+
+
 @contextmanager
 def held(env: Environment, what: str) -> Generator[None]:
-    """Hold the environment's lock file, with cluster access its lease, and its env ledger booking during the block."""
+    """Hold the environment's lock file, with cluster access its lease, and its env ledger booking during the block.
+
+    With HELD_BY set, take none of them: check_outer_hold verifies the orchestrator's lease instead.
+    """
+    outer = os.environ.get(HELD_BY)
+    with _held_outside(env, outer) if outer else _taken(env, what):
+        yield
+
+
+@contextmanager
+def _held_outside(env: Environment, outer: str) -> Generator[None]:
+    check_outer_hold(env, outer)
+    print(f"lock held by {outer} (lease {LEASE} in {env.kube.namespace})", file=sys.stderr)
+    yield
+
+
+@contextmanager
+def _taken(env: Environment, what: str) -> Generator[None]:
     who = holder(what)
     settings = env.profile.settings
     lock = env.profile.setting_path("lock_file")

@@ -258,3 +258,37 @@ def test_no_booking_where_the_env_ledger_is_absent(tmp_path, profile_factory, fa
     with held(env, "run full"):
         assert "not booked: env ledger" in capsys.readouterr().err
     assert not any("absent.py" in call[0] for call in fake_runner.calls)
+
+
+def outer_env(profile_factory, fake_runner, lease_json):
+    fake_runner.answers = {"get deployments": (0, json.dumps({"items": []})), "get lease": (0, lease_json)}
+    return Environment(profile_factory(settings={"lock_file": "/nonexistent/lock"}), fake_runner, environ={})
+
+
+def test_an_orchestrators_hold_is_checked_and_nothing_is_taken(profile_factory, fake_runner, monkeypatch):
+    monkeypatch.setenv("PODIUMD_TESTS_HELD_BY", "podiumd-infra run 7 Release Gate x")
+    env = outer_env(profile_factory, fake_runner, lease("podiumd-infra run 7 Release Gate x", datetime.now(tz=UTC)))
+    with held(env, "run full"):
+        ...
+    assert not any(verb in call for call in fake_runner.calls for verb in ("create", "replace", "patch", "delete"))
+
+
+@pytest.mark.parametrize(
+    ("lease_json", "named"),
+    [("", "held by nobody"), (lease("podiumd-infra run 8 Release Gate x", datetime.now(tz=UTC)), "run 8")],
+    ids=["absent", "another"],
+)
+def test_an_orchestrators_hold_refuses_when_the_lease_names_another(
+    profile_factory, fake_runner, monkeypatch, lease_json, named
+):
+    monkeypatch.setenv("PODIUMD_TESTS_HELD_BY", "podiumd-infra run 7 Release Gate x")
+    env = outer_env(profile_factory, fake_runner, lease_json)
+    with pytest.raises(LockBusyError, match=named), held(env, "run full"):  # noqa: WPS328  # enter is under test
+        ...
+
+
+def test_an_orchestrators_hold_needs_the_cluster(profile_factory, fake_runner, monkeypatch):
+    monkeypatch.setenv("PODIUMD_TESTS_HELD_BY", "podiumd-infra run 7")
+    env = Environment(profile_factory(), fake_runner, environ={})
+    with pytest.raises(LockBusyError, match="cannot be read"), held(env, "run full"):  # noqa: WPS328  # enter is under test
+        ...
