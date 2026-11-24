@@ -312,14 +312,14 @@ def _from_signals(master: Section, signals: Section, why: str) -> None:
     not_found = _count(signals, "operator_client_not_found")
     if not_found:
         master["operator_client"] = ABSENT
-        logged = f"{not_found} client_not_found logins of {OPERATOR} in {since} (Keycloak log)"
+        logged = f"Keycloak log of {since}: {not_found} client_not_found logins of {OPERATOR}"
         cast("Section", master.setdefault("reasons", {}))["operator_client"] = f"{logged}; {why}"
     else:
         mark_unknown(master, "operator_client", why)
     failures = _count(signals, "otp_flow_errors")
     if failures:
         master["direct_grant_otp"] = REQUIRED
-        logged = f"{failures} OTP failures of password grants in {since} (Keycloak log)"
+        logged = f"Keycloak log of {since}: {failures} password grants failed in direct-grant-validate-otp"
         cast("Section", master.setdefault("reasons", {}))["direct_grant_otp"] = f"{logged}; {why}"
     else:
         mark_unknown(master, "direct_grant_otp", why)

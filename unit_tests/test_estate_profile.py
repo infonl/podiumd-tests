@@ -101,7 +101,9 @@ def test_export_reads_the_cluster_and_derives_keycloak_master_from_the_log(env_f
         "required",
         "unknown",
     )
-    assert master["reasons"]["operator_client"].startswith("2 client_not_found logins of keycloak-operator in 24h")
+    assert master["reasons"]["operator_client"].startswith(
+        "Keycloak log of 24h: 2 client_not_found logins of keycloak-operator"
+    )
     signals = profile["signals"]
     assert (signals["operator_client_not_found"], signals["otp_flow_errors"]) == (2, 1)
     assert signals["keycloak_jobs_failed"] == ["podiumd-realm"]
