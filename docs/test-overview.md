@@ -11,15 +11,15 @@ component and integration, without and with the destructive tests; the test suit
 
 | Tier | Tests | Scenarios | Expected failures |
 | --- | --- | --- | --- |
-| smoke | 241 | 41 | 10 |
+| smoke | 258 | 44 | 10 |
 | component | 1014 | 600 | 71 |
 | integration | 213 | 145 | 19 |
 | perf | 80 | 9 | 0 |
-| **full tier** | **1402** | **734** | **86** |
+| **full tier** | **1419** | **737** | **86** |
 | **chaos tier** | **66** | **52** | **14** |
-| **test suite** | **1548** | **795** | **100** |
+| **test suite** | **1565** | **798** | **100** |
 
-Unit tests (`unit_tests/`, functions): 948. Perf endpoints (`perf/runs.py`): 32.
+Unit tests (`unit_tests/`, functions): 962. Perf endpoints (`perf/runs.py`): 32.
 
 ## Per area
 
@@ -29,6 +29,7 @@ Unit tests (`unit_tests/`, functions): 948. Perf endpoints (`perf/runs.py`): 32.
 | smoke | cilium | 2 | 2 |
 | smoke | cluster | 9 | 9 |
 | smoke | frankgateway | 6 | 2 |
+| smoke | frankgateway_apps | 17 | 3 |
 | smoke | mail_routes | 2 | 2 |
 | smoke | metrics | 6 | 6 |
 | smoke | oidc | 20 | 5 |
@@ -112,7 +113,7 @@ The origin of each test's first source marker (`sources.ORIGINS`).
 | ZAC | 19 |
 | draaiboek | 91 |
 | external | 224 |
-| podiumd-tests | 559 |
+| podiumd-tests | 576 |
 | upstream | 244 |
 
 ## Expected failures per known issue

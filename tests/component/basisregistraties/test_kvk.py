@@ -1,7 +1,7 @@
-"""KvK through the api-proxy, against KvK's test API and its test set (Test BV Donald, one company per rechtsvorm).
+"""KvK through the apps' gateway, against KvK's test API and its test set (Test BV Donald, one company per rechtsvorm).
 
 Ported from TA regression 08, 47, 57, 125 and the KvK parts of 80, 150 and 157. TA called KvK's test
-API directly; here the requests go through the api-proxy, which routes there on every estate.
+API directly; here the requests go through the apps' gateway, which routes there on every estate.
 """
 
 from __future__ import annotations
@@ -28,9 +28,10 @@ if TYPE_CHECKING:
     import requests
 
     from podiumd_tests.basisregistraties import KvkBedrijf
+    from podiumd_tests.basisregistraties import Registers
     from podiumd_tests.json_data import JsonObject
 
-pytestmark = [pytest.mark.component, pytest.mark.requires("api-proxy")]
+pytestmark = [pytest.mark.component]
 
 REG_08 = pytest.mark.source(
     "TA regression/08-kvk-bedrijf-zoeken.spec.ts",
@@ -75,13 +76,13 @@ def resultaten(response: requests.Response) -> list[JsonObject]:
 @REG_57
 @pytest.mark.scenario("""
     Given the test company in KvK's test set
-    When KvK is searched by its KvK number through the api-proxy
+    When KvK is searched by its KvK number through the apps' gateway
     Then the results hold its rechtspersoon and its hoofdvestiging
     And a result is named Test
 """)
-def test_search_by_kvk_nummer_finds_rechtspersoon_and_vestigingen(http: requests.Session, urls: dict[str, str]) -> None:
+def test_search_by_kvk_nummer_finds_rechtspersoon_and_vestigingen(http: requests.Session, registers: Registers) -> None:
     """A KvK number finds the rechtspersoon and its hoofdvestiging, named Test (TA reg-08, reg-47b, reg-57)."""
-    found = resultaten(kvk_zoeken(http, urls["api-proxy"], {"kvkNummer": KVK_TEST_NUMMER}))
+    found = resultaten(kvk_zoeken(http, registers, {"kvkNummer": KVK_TEST_NUMMER}))
     assert {"rechtspersoon", "hoofdvestiging"} <= {str(r.get("type")) for r in found}
     assert any("test" in str(r.get("naam")).lower() for r in found)
 
@@ -92,10 +93,10 @@ def test_search_by_kvk_nummer_finds_rechtspersoon_and_vestigingen(http: requests
     When KvK is searched by its KvK number for type rechtspersoon only
     Then every result is a rechtspersoon
 """)
-def test_search_by_type_finds_only_that_type(http: requests.Session, urls: dict[str, str]) -> None:
+def test_search_by_type_finds_only_that_type(http: requests.Session, registers: Registers) -> None:
     """type=rechtspersoon leaves out the vestigingen (TA reg-47b)."""
     query = {"kvkNummer": KVK_TEST_NUMMER, "type": "rechtspersoon"}
-    found = resultaten(kvk_zoeken(http, urls["api-proxy"], query))
+    found = resultaten(kvk_zoeken(http, registers, query))
     assert {str(r.get("type")) for r in found} == {"rechtspersoon"}
 
 
@@ -109,12 +110,12 @@ def test_search_by_type_finds_only_that_type(http: requests.Session, urls: dict[
 @REG_125
 @pytest.mark.scenario("""
     Given the test company in KvK's test set
-    When KvK is searched through the api-proxy by name, by postcode and huisnummer, or by KvK number and name
+    When KvK is searched through the apps' gateway by name, by postcode and huisnummer, or by KvK number and name
     Then the test company is among the results
 """)
-def test_search_finds_the_test_company(http: requests.Session, urls: dict[str, str], query: dict[str, str]) -> None:
+def test_search_finds_the_test_company(http: requests.Session, registers: Registers, query: dict[str, str]) -> None:
     """Searching by name, by address or by number and name finds Test BV Donald (TA reg-47a, reg-47d, reg-125)."""
-    found = resultaten(kvk_zoeken(http, urls["api-proxy"], query))
+    found = resultaten(kvk_zoeken(http, registers, query))
     assert KVK_TEST_NUMMER in {str(r.get("kvkNummer")) for r in found}
 
 
@@ -128,14 +129,14 @@ def test_search_finds_the_test_company(http: requests.Session, urls: dict[str, s
 @REG_125
 @pytest.mark.scenario("""
     Given a KvK number or an adres that KvK does not know
-    When KvK is searched by it through the api-proxy
+    When KvK is searched by it through the apps' gateway
     Then KvK answers 404, or 200 without results
 """)
 def test_search_without_match_finds_nothing(
-    http: requests.Session, urls: dict[str, str], query: dict[str, str]
+    http: requests.Session, registers: Registers, query: dict[str, str]
 ) -> None:
     """An unknown number or address gives 404, or 200 without results (TA reg-08, reg-47c, reg-125)."""
-    response = kvk_zoeken(http, urls["api-proxy"], query)
+    response = kvk_zoeken(http, registers, query)
     if response.status_code != HTTPStatus.NOT_FOUND:
         assert resultaten(response) == []
 
@@ -144,22 +145,22 @@ def test_search_without_match_finds_nothing(
 @REG_150
 @pytest.mark.scenario("""
     Given a KvK number that is not 8 digits
-    When KvK is searched by it through the api-proxy
+    When KvK is searched by it through the apps' gateway
     Then KvK refuses it with 400
 """)
-def test_invalid_kvk_nummer_is_refused(http: requests.Session, urls: dict[str, str], nummer: str) -> None:
+def test_invalid_kvk_nummer_is_refused(http: requests.Session, registers: Registers, nummer: str) -> None:
     """A KvK number that is not 8 digits answers 400 (TA reg-150)."""
-    expect_status(kvk_zoeken(http, urls["api-proxy"], {"kvkNummer": nummer}), HTTPStatus.BAD_REQUEST)
+    expect_status(kvk_zoeken(http, registers, {"kvkNummer": nummer}), HTTPStatus.BAD_REQUEST)
 
 
 @REG_125
 @pytest.mark.scenario("""
-    When KvK is searched by a postcode without huisnummer through the api-proxy
+    When KvK is searched by a postcode without huisnummer through the apps' gateway
     Then KvK refuses it with 400
 """)
-def test_postcode_without_huisnummer_is_refused(http: requests.Session, urls: dict[str, str]) -> None:
+def test_postcode_without_huisnummer_is_refused(http: requests.Session, registers: Registers) -> None:
     """KvK wants postcode and huisnummer together (TA reg-125)."""
-    expect_status(kvk_zoeken(http, urls["api-proxy"], {"postcode": KVK_TEST_ADRES["postcode"]}), HTTPStatus.BAD_REQUEST)
+    expect_status(kvk_zoeken(http, registers, {"postcode": KVK_TEST_ADRES["postcode"]}), HTTPStatus.BAD_REQUEST)
 
 
 @pytest.mark.parametrize("bedrijf", KVK_RECHTSVORMEN.values(), ids=list(KVK_RECHTSVORMEN))
@@ -169,13 +170,13 @@ def test_postcode_without_huisnummer_is_refused(http: requests.Session, urls: di
 @KVK_TESTSET
 @pytest.mark.scenario("""
     Given a company of KvK's test set of each rechtsvorm
-    When its basisprofiel is requested through the api-proxy
+    When its basisprofiel is requested through the apps' gateway
     Then KvK gives the basisprofiel with its KvK number and naam
     And its eigenaar has that rechtsvorm
 """)
-def test_basisprofiel(http: requests.Session, urls: dict[str, str], bedrijf: KvkBedrijf) -> None:
+def test_basisprofiel(http: requests.Session, registers: Registers, bedrijf: KvkBedrijf) -> None:
     """The basisprofiel carries the company's KvK number, naam and rechtsvorm (TA reg-157c, reg-80)."""
-    profiel = expect_status(kvk_basisprofiel(http, urls["api-proxy"], bedrijf.kvk_nummer), HTTPStatus.OK).json()
+    profiel = expect_status(kvk_basisprofiel(http, registers, bedrijf.kvk_nummer), HTTPStatus.OK).json()
     eigenaar = section(section(profiel, "_embedded"), "eigenaar")
     assert (profiel["kvkNummer"], profiel["naam"], eigenaar.get("rechtsvorm")) == bedrijf
 
@@ -184,16 +185,16 @@ def test_basisprofiel(http: requests.Session, urls: dict[str, str], bedrijf: Kvk
 @KVK_TESTSET
 @pytest.mark.scenario("""
     Given a KvK number of KvK's test set that answers an error
-    When its basisprofiel is requested through the api-proxy
+    When its basisprofiel is requested through the apps' gateway
     Then KvK answers 404 with the fout code that it cannot deliver the product
     When KvK is searched by that number
     Then KvK answers 404 with the fout code that it found nothing
 """)
 def test_foutmelding_numbers_answer_404_with_a_fout_code(
-    http: requests.Session, urls: dict[str, str], nummer: str
+    http: requests.Session, registers: Registers, nummer: str
 ) -> None:
     """The error numbers answer 404 with IPD0005 (basisprofiel) and IPD5200 (zoeken), never 5xx."""
-    profiel = expect_status(kvk_basisprofiel(http, urls["api-proxy"], nummer), HTTPStatus.NOT_FOUND)
+    profiel = expect_status(kvk_basisprofiel(http, registers, nummer), HTTPStatus.NOT_FOUND)
     assert kvk_foutcodes(profiel) == {KVK_GEEN_PRODUCT}
-    zoeken = expect_status(kvk_zoeken(http, urls["api-proxy"], {"kvkNummer": nummer}), HTTPStatus.NOT_FOUND)
+    zoeken = expect_status(kvk_zoeken(http, registers, {"kvkNummer": nummer}), HTTPStatus.NOT_FOUND)
     assert kvk_foutcodes(zoeken) == {KVK_GEEN_RESULTATEN}

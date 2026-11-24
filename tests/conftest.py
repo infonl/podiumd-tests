@@ -7,6 +7,7 @@ from typing import cast
 
 import pytest
 
+from podiumd_tests.basisregistraties import app_registers
 from podiumd_tests.browser import context_args
 from podiumd_tests.browser import guard_navigation
 from podiumd_tests.browser import launch_args
@@ -21,6 +22,8 @@ if TYPE_CHECKING:
 
     from playwright.sync_api import Page
 
+    from podiumd_tests.basisregistraties import Registers
+    from podiumd_tests.capabilities import Capabilities
     from podiumd_tests.environment import Environment
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.registry import ResourceRegistry
@@ -76,3 +79,12 @@ def fixture_verapdf() -> None:
     reason = verapdf_unavailable()
     if reason:
         pytest.skip(reason)
+
+
+@pytest.fixture(scope="session", name="registers")
+def fixture_registers(http: requests.Session, urls: dict[str, str], caps: Capabilities) -> Registers:
+    """The BRP, BAG and KvK as ZAC reaches them; skips without api-proxy and per-app outway routes."""
+    found = app_registers(http, urls, caps.present)
+    if found is None:
+        pytest.skip("requires: api-proxy, or a frankgateway outway with per-app routes (/zac/brp/)")
+    return found

@@ -11,13 +11,22 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests.gateway import has_app_routes
 from podiumd_tests.gateway import is_no_route
 from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
     import requests
 
-pytestmark = [pytest.mark.smoke, pytest.mark.requires("frankgateway")]
+pytestmark = [pytest.mark.smoke, pytest.mark.requires("frankgateway"), pytest.mark.usefixtures("api_proxy_paths")]
+
+
+@pytest.fixture(scope="module", name="api_proxy_paths")
+def fixture_api_proxy_paths(http: requests.Session, urls: dict[str, str]) -> None:
+    """Skips once the outway routes per app: test_frankgateway_apps.py checks it then."""
+    if has_app_routes(http, urls["frankgateway"]):
+        pytest.skip("the outway routes per app (/zac/brp/), not on the api-proxy's paths")
+
 
 ROUTES = {
     "brp": "/haalcentraal/api/brp/personen",

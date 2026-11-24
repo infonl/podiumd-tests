@@ -1,4 +1,4 @@
-"""BRP (Haal Centraal personen) and KvK through the environment's api-proxy, as the apps call them."""
+"""BRP (Haal Centraal personen), BAG and KvK through the gateway the apps call them through."""
 
 from __future__ import annotations
 
@@ -6,18 +6,21 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING
 from typing import NamedTuple
 
+from podiumd_tests.gateway import APP_PREFIXES
+from podiumd_tests.gateway import has_app_routes
 from podiumd_tests.json_data import entries
 from podiumd_tests.responses import expect_status
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
     from collections.abc import Mapping
 
     import requests
 
     from podiumd_tests.json_data import JsonObject
 
-BRP_PERSONEN = "/haalcentraal/api/brp/personen"
-BAG_ADRESSEN = "/lvbag/individuelebevragingen/v2/adressen"
+BRP_PERSONEN = "/personen"
+BAG_ADRESSEN = "/adressen"
 # The nummeraanduiding of Dam 1, Amsterdam: in the BAG and in podiumd-minikube's BAG mock.
 BAG_DAM = "0363200003761447"
 # Postcode and huisnummer of BAG_DAM, as Open Formulieren's address lookup takes them.
@@ -39,7 +42,7 @@ KLAMER = "999991723"
 BRP_OVERLEDEN = "999999655"
 BRP_EMIGRATIE = "999991024"
 BRP_GEHEIMHOUDING = "999990792"
-# The api-proxy of every estate the suite tests routes KvK to KvK's test API; its test set has
+# The gateway of every estate the suite tests routes KvK to KvK's test API; its test set has
 # Test BV Donald, with this hoofdvestiging address.
 KVK_TEST_NUMMER = "68750110"
 KVK_TEST_RSIN = "857587973"
@@ -79,48 +82,79 @@ KVK_GEEN_PRODUCT = "IPD0005"
 KVK_GEEN_RESULTATEN = "IPD5200"
 
 
-def brp_personen(http: requests.Session, proxy_url: str, query: Mapping[str, object]) -> requests.Response:
+class Registers(NamedTuple):
+    """The base URLs of the BRP (Haal Centraal personen), the BAG (individuele bevragingen v2) and KvK."""
+
+    brp: str
+    bag: str
+    kvk: str
+
+
+def api_proxy_registers(proxy_url: str) -> Registers:
+    """Return the registers on the api-proxy's paths."""
+    return Registers(f"{proxy_url}/haalcentraal/api/brp", f"{proxy_url}/lvbag/individuelebevragingen/v2", proxy_url)
+
+
+def outway_registers(outway_url: str, app: str) -> Registers:
+    """Return the registers on an app's routes of the Frank!Gateway outway."""
+    base = f"{outway_url}/{APP_PREFIXES[app]}"
+    return Registers(f"{base}/brp", f"{base}/bag", f"{base}/kvk")
+
+
+def app_registers(http: requests.Session, urls: Mapping[str, str], present: Collection[str]) -> Registers | None:
+    """Return the registers as ZAC reaches them: its outway routes once the outway routes per app, else the api-proxy.
+
+    None when the environment has neither.
+    """
+    if "frankgateway" in present and has_app_routes(http, urls["frankgateway"]):
+        return outway_registers(urls["frankgateway"], "zac")
+    if "api-proxy" in present:
+        return api_proxy_registers(urls["api-proxy"])
+    return None
+
+
+def brp_personen(http: requests.Session, registers: Registers, query: Mapping[str, object]) -> requests.Response:
     """POST a Haal Centraal personen query (type, burgerservicenummer or search fields, fields)."""
-    return http.post(proxy_url + BRP_PERSONEN, json=query)
+    return http.post(registers.brp + BRP_PERSONEN, json=query)
 
 
-def brp_gevonden(http: requests.Session, proxy_url: str, query: Mapping[str, object]) -> list[JsonObject]:
+def brp_gevonden(http: requests.Session, registers: Registers, query: Mapping[str, object]) -> list[JsonObject]:
     """Return the personen a Haal Centraal query finds; the BRP must answer 200 with the query's type."""
-    body = expect_status(brp_personen(http, proxy_url, query), HTTPStatus.OK).json()
+    body = expect_status(brp_personen(http, registers, query), HTTPStatus.OK).json()
     if body["type"] != query["type"]:
         msg = f"BRP answered type {body['type']} to a {query['type']} query"
         raise AssertionError(msg)
     return entries(body["personen"])
 
 
-def brp_persoon(http: requests.Session, proxy_url: str, bsn: str, fields: list[str]) -> JsonObject:
+def brp_persoon(http: requests.Session, registers: Registers, bsn: str, fields: list[str]) -> JsonObject:
     """Return the fields of the one person the BRP has under a BSN."""
     query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": [bsn], "fields": fields}
-    found = brp_gevonden(http, proxy_url, query)
+    found = brp_gevonden(http, registers, query)
     if len(found) != 1:
         msg = f"BRP found {len(found)} personen under BSN {bsn}, expected 1"
         raise AssertionError(msg)
     return found[0]
 
 
-def bag_adres(http: requests.Session, proxy_url: str, nummeraanduiding: str) -> requests.Response:
+def bag_adres(http: requests.Session, registers: Registers, nummeraanduiding: str) -> requests.Response:
     """GET the BAG adres of a nummeraanduiding."""
-    return http.get(f"{proxy_url}{BAG_ADRESSEN}/{nummeraanduiding}", headers={"Accept": "*/*"})
+    return http.get(f"{registers.bag}{BAG_ADRESSEN}/{nummeraanduiding}", headers={"Accept": "*/*"})
 
 
-def kvk_zoeken(http: requests.Session, proxy_url: str, query: Mapping[str, str]) -> requests.Response:
+def kvk_zoeken(http: requests.Session, registers: Registers, query: Mapping[str, str]) -> requests.Response:
     """GET a KvK zoeken query."""
-    return http.get(proxy_url + KVK_ZOEKEN, params=query)
+    return http.get(registers.kvk + KVK_ZOEKEN, params=query)
 
 
-def kvk_basisprofiel(http: requests.Session, proxy_url: str, kvk_nummer: str) -> requests.Response:
+def kvk_basisprofiel(http: requests.Session, registers: Registers, kvk_nummer: str) -> requests.Response:
     """GET the basisprofiel of a KvK number."""
-    return http.get(f"{proxy_url}{KVK_BASISPROFIELEN}/{kvk_nummer}", params={"geoData": "false"})
+    return http.get(f"{registers.kvk}{KVK_BASISPROFIELEN}/{kvk_nummer}", params={"geoData": "false"})
 
 
-def kvk_vestigingsprofiel(http: requests.Session, proxy_url: str, vestigingsnummer: str) -> requests.Response:
+def kvk_vestigingsprofiel(http: requests.Session, registers: Registers, vestigingsnummer: str) -> requests.Response:
     """GET the vestigingsprofiel of a vestigingsnummer."""
-    return http.get(f"{proxy_url}{KVK_VESTIGINGSPROFIELEN}/{vestigingsnummer}", params={"geoData": "false"})
+    return http.get(f"{registers.kvk}{KVK_VESTIGINGSPROFIELEN}/{vestigingsnummer}", params={"geoData": "false"})
 
 
 def kvk_foutcodes(response: requests.Response) -> set[str]:

@@ -1,4 +1,4 @@
-"""BRP personen through the api-proxy: lookups, searches and refused queries.
+"""BRP personen through the apps' gateway: lookups, searches and refused queries.
 
 Ported from TA regression 07, 40, 11 and the BRP parts of 80, 119, 121 and 150. The BSNs are from the
 BRP test set that the personen mock serves.
@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from podiumd_tests.basisregistraties import BRP_PERSONEN
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import KIERKEGAARD
 from podiumd_tests.basisregistraties import brp_gevonden
@@ -26,9 +25,10 @@ if TYPE_CHECKING:
 
     import requests
 
+    from podiumd_tests.basisregistraties import Registers
     from podiumd_tests.json_data import JsonObject
 
-pytestmark = [pytest.mark.component, pytest.mark.requires("api-proxy")]
+pytestmark = [pytest.mark.component]
 
 REG_07 = pytest.mark.source(
     "TA regression/07-brp-persoon-zoeken.spec.ts",
@@ -78,12 +78,12 @@ MAX_BSNS = 20
 @REG_11
 @pytest.mark.scenario("""
     Given a person in the BRP test set
-    When the person is looked up by BSN through the api-proxy
+    When the person is looked up by BSN through the apps' gateway
     Then the BRP gives exactly that person with voornamen and geslachtsnaam
 """)
-def test_person_by_bsn(http: requests.Session, urls: dict[str, str]) -> None:
+def test_person_by_bsn(http: requests.Session, registers: Registers) -> None:
     """A test-set BSN gives that person with a name (TA reg-07, reg-11)."""
-    found = brp_persoon(http, urls["api-proxy"], EREBOS, NAAM)
+    found = brp_persoon(http, registers, EREBOS, NAAM)
     assert (found["burgerservicenummer"], found["naam"]) == (
         EREBOS,
         {"voornamen": "Erebos", "geslachtsnaam": "Bultenaar"},
@@ -94,29 +94,29 @@ def test_person_by_bsn(http: requests.Session, urls: dict[str, str]) -> None:
 @REG_119
 @pytest.mark.scenario("""
     Given a BSN that is not in the BRP test set
-    When it is looked up through the api-proxy
+    When it is looked up through the apps' gateway
     Then the BRP answers with an empty list, not an error
 """)
-def test_unknown_bsn_finds_no_one(http: requests.Session, urls: dict[str, str]) -> None:
+def test_unknown_bsn_finds_no_one(http: requests.Session, registers: Registers) -> None:
     """A BSN outside the test set gives an empty list, not an error (TA reg-07)."""
     query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": ["123456789"], "fields": NAAM[:1]}
-    assert brp_gevonden(http, urls["api-proxy"], query) == []
+    assert brp_gevonden(http, registers, query) == []
 
 
 @REG_40
 @pytest.mark.scenario("""
     Given two persons in the BRP test set
-    When both BSNs are looked up in one query through the api-proxy
+    When both BSNs are looked up in one query through the apps' gateway
     Then the BRP gives both persons
 """)
-def test_several_bsns_at_once(http: requests.Session, urls: dict[str, str]) -> None:
+def test_several_bsns_at_once(http: requests.Session, registers: Registers) -> None:
     """One query returns every known BSN it asks for (TA reg-40d)."""
     query = {
         "type": "RaadpleegMetBurgerservicenummer",
         "burgerservicenummer": [EREBOS, KIERKEGAARD],
         "fields": NAAM[:1],
     }
-    assert {p["burgerservicenummer"] for p in brp_gevonden(http, urls["api-proxy"], query)} == {EREBOS, KIERKEGAARD}
+    assert {p["burgerservicenummer"] for p in brp_gevonden(http, registers, query)} == {EREBOS, KIERKEGAARD}
 
 
 @pytest.mark.parametrize(
@@ -126,11 +126,11 @@ def test_several_bsns_at_once(http: requests.Session, urls: dict[str, str]) -> N
 @REG_40
 @pytest.mark.scenario("""
     Given a geslachtsnaam and geboortedatum, of a person in the BRP test set or of no one
-    When the BRP is searched by them through the api-proxy
+    When the BRP is searched by them through the apps' gateway
     Then exactly the matching persons are found, or no one
 """)
 def test_search_by_name_and_birth_date(
-    http: requests.Session, urls: dict[str, str], geslachtsnaam: str, geboortedatum: str, expected: list[str]
+    http: requests.Session, registers: Registers, geslachtsnaam: str, geboortedatum: str, expected: list[str]
 ) -> None:
     """Searching by surname and birth date finds exactly the matching people (TA reg-40a, 40b)."""
     query = {
@@ -139,22 +139,22 @@ def test_search_by_name_and_birth_date(
         "geboortedatum": geboortedatum,
         "fields": NAAM[:1],
     }
-    assert [p["burgerservicenummer"] for p in brp_gevonden(http, urls["api-proxy"], query)] == expected
+    assert [p["burgerservicenummer"] for p in brp_gevonden(http, registers, query)] == expected
 
 
 @REG_119
 @pytest.mark.scenario("""
     Given a person in the BRP test set who lives at a known adres
-    When the BRP is searched by that postcode and huisnummer through the api-proxy
+    When the BRP is searched by that postcode and huisnummer through the apps' gateway
     Then the person is among the residents found
     And a search on an unknown adres finds no one
 """)
-def test_search_by_postcode_and_huisnummer(http: requests.Session, urls: dict[str, str]) -> None:
+def test_search_by_postcode_and_huisnummer(http: requests.Session, registers: Registers) -> None:
     """Searching by postcode and huisnummer finds the residents of that address, and no one at an unknown one (TA reg-119)."""
     query = {"type": "ZoekMetPostcodeEnHuisnummer", "fields": NAAM[:1]}
-    erebos = brp_gevonden(http, urls["api-proxy"], {**query, "postcode": "3224TT", "huisnummer": 4})
+    erebos = brp_gevonden(http, registers, {**query, "postcode": "3224TT", "huisnummer": 4})
     assert EREBOS in [p["burgerservicenummer"] for p in erebos]
-    assert brp_gevonden(http, urls["api-proxy"], {**query, "postcode": "1234AB", "huisnummer": 1}) == []
+    assert brp_gevonden(http, registers, {**query, "postcode": "1234AB", "huisnummer": 1}) == []
 
 
 @pytest.mark.parametrize(
@@ -196,14 +196,14 @@ def test_search_by_postcode_and_huisnummer(http: requests.Session, urls: dict[st
 @BRP_FEATURES
 @pytest.mark.scenario("""
     Given a BRP query with one fault in its type, its BSNs, its fields or its search parameters
-    When it is sent to the BRP through the api-proxy
+    When it is sent to the BRP through the apps' gateway
     Then the BRP refuses it with 400 and names the invalid parameter and the rule it breaks
 """)
 def test_invalid_query_is_refused(
-    http: requests.Session, urls: dict[str, str], query: Mapping[str, object], invalid: tuple[str, str]
+    http: requests.Session, registers: Registers, query: Mapping[str, object], invalid: tuple[str, str]
 ) -> None:
     """An invalid query answers 400 with the parameter and rule in invalidParams (TA reg-40c, reg-80, reg-121)."""
-    body = expect_status(brp_personen(http, urls["api-proxy"], query), HTTPStatus.BAD_REQUEST).json()
+    body = expect_status(brp_personen(http, registers, query), HTTPStatus.BAD_REQUEST).json()
     named = [(param["name"], param["code"]) for param in entries(body["invalidParams"])]
     assert invalid in named, f"invalidParams {named}, expected {invalid}"
 
@@ -211,12 +211,12 @@ def test_invalid_query_is_refused(
 @BRP_ADRESSERING
 @pytest.mark.scenario("""
     Given a man in the BRP test set without a partner, living in Hellevoetsluis
-    When his full name, age and adressering are asked through the api-proxy
+    When his full name, age and adressering are asked through the apps' gateway
     Then the BRP derives his full name, his age, the aanhef "Geachte heer" and his address lines
 """)
-def test_derived_name_age_and_adressering(http: requests.Session, urls: dict[str, str]) -> None:
+def test_derived_name_age_and_adressering(http: requests.Session, registers: Registers) -> None:
     """The BRP derives volledigeNaam, leeftijd and adressering for a test-set person."""
-    found = brp_persoon(http, urls["api-proxy"], EREBOS, ["naam.volledigeNaam", "leeftijd", "adressering"])
+    found = brp_persoon(http, registers, EREBOS, ["naam.volledigeNaam", "leeftijd", "adressering"])
     adressering = {
         "aanhef": "Geachte heer Bultenaar",
         "aanschrijfwijze": {"naam": "E. Bultenaar"},
@@ -321,28 +321,28 @@ def aanschrijving(aanhef: str, naam: str, gebruik_in_lopende_tekst: str, aanspre
 @BRP_ADRESSERING
 @pytest.mark.scenario("""
     Given a person in the BRP test set with a partner, an adellijke titel or predicaat, or both
-    When the aanhef, aanschrijfwijze and gebruikInLopendeTekst are asked through the api-proxy
+    When the aanhef, aanschrijfwijze and gebruikInLopendeTekst are asked through the apps' gateway
     Then the BRP composes them by the person's aanduiding naamgebruik from the own and the partner's name
     And uses the own titel, or the hoffelijkheidstitel of a woman who uses the name of a partner with a titel
 """)
 def test_adressering_with_partner_or_adellijke_titel(
-    http: requests.Session, urls: dict[str, str], bsn: str, expected: JsonObject
+    http: requests.Session, registers: Registers, bsn: str, expected: JsonObject
 ) -> None:
     """The BRP derives aanhef, aanschrijfwijze and gebruikInLopendeTekst by the rules for partners and titels."""
-    found = brp_persoon(http, urls["api-proxy"], bsn, [f"adressering.{field}" for field in expected])
+    found = brp_persoon(http, registers, bsn, [f"adressering.{field}" for field in expected])
     assert found["adressering"] == expected
 
 
 @REG_150
 @pytest.mark.scenario("""
     Given a BSN that fails the eleven-test
-    When it is looked up through the api-proxy
+    When it is looked up through the apps' gateway
     Then the BRP refuses it with 400 or 422, or finds no one
 """)
-def test_bsn_failing_the_eleven_test_finds_no_one(http: requests.Session, urls: dict[str, str]) -> None:
+def test_bsn_failing_the_eleven_test_finds_no_one(http: requests.Session, registers: Registers) -> None:
     """A BSN that fails the eleven-test is refused, or finds no one; never 5xx (TA reg-150)."""
     query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": ["123456789"]}
-    response = brp_personen(http, urls["api-proxy"], {**query, "fields": ["burgerservicenummer"]})
+    response = brp_personen(http, registers, {**query, "fields": ["burgerservicenummer"]})
     expect_status(response, HTTPStatus.OK, HTTPStatus.BAD_REQUEST, HTTPStatus.UNPROCESSABLE_ENTITY)
     if response.status_code == HTTPStatus.OK:
         assert response.json()["personen"] == []
@@ -351,10 +351,10 @@ def test_bsn_failing_the_eleven_test_finds_no_one(http: requests.Session, urls: 
 @REG_11
 @pytest.mark.scenario("""
     Given a person in the BRP test set
-    When the person is looked up on the Haal Centraal V1 path through the api-proxy
+    When the person is looked up on the Haal Centraal V1 path through the apps' gateway
     Then the BRP answers 405, as it serves V2 only
 """)
-def test_v1_lookup_is_not_offered(http: requests.Session, urls: dict[str, str]) -> None:
+def test_v1_lookup_is_not_offered(http: requests.Session, registers: Registers) -> None:
     """The BRP serves Haal Centraal V2 only: the V1 path answers 405 (TA reg-11, finding 14)."""
-    v1 = urls["api-proxy"] + BRP_PERSONEN.replace("personen", f"ingeschrevenpersonen/{EREBOS}")
+    v1 = f"{registers.brp}/ingeschrevenpersonen/{EREBOS}"
     expect_status(http.get(v1), HTTPStatus.METHOD_NOT_ALLOWED)

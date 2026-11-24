@@ -110,6 +110,11 @@ def _services(env: Environment, component: str, probes: dict[str, str]) -> list[
     return cast("list[dict[str, object]]", found)
 
 
+def service_roots(env: Environment, component: str) -> dict[str, str]:
+    """Return the api_root of each of the component's Services, by name."""
+    return {str(service["name"]): str(service["api_root"]) for service in _services(env, component, {})}
+
+
 def service_problem(service: Mapping[str, object], path: str | None) -> str | None:
     """Why the probed Service fails, or None.
 

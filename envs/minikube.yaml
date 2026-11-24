@@ -77,6 +77,9 @@ secrets:
     k8s_secret: {name: keycloak-acc-mock, key: username}
   admin_idp_password:
     k8s_secret: {name: keycloak-acc-mock, key: password}
+  # The outway's read-only Admin API key: the BRP routes' headers.
+  frankgateway_admin_key:
+    k8s_secret: {name: frankgateway-outway-admin-credentials, key: viewer}
 settings:
   zgw_client_id: formulier
   # The inway's consumer tests: podiumd-minikube's test-only client CA (.crt and .key) and its consumer command;

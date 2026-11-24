@@ -26,6 +26,7 @@ from locust.exception import StopUser
 from podiumd_tests.auth.keycloak import discovery_url
 from podiumd_tests.auth.keycloak_admin import realm_of
 from podiumd_tests.basisregistraties import EREBOS
+from podiumd_tests.basisregistraties import api_proxy_registers
 from podiumd_tests.basisregistraties import brp_personen
 from podiumd_tests.bootstrap.steps import KCC
 from podiumd_tests.clients.platform import openklant_client
@@ -197,7 +198,8 @@ class ApiUser(User):
             calls |= objecten_calls(env)
         if "api-proxy" in urls:
             query = {"type": "RaadpleegMetBurgerservicenummer", "burgerservicenummer": [EREBOS], "fields": ["naam"]}
-            calls["brp_persoon"] = lambda _registry: expect_status(brp_personen(http, urls["api-proxy"], query), 200)
+            registers = api_proxy_registers(urls["api-proxy"])
+            calls["brp_persoon"] = lambda _registry: expect_status(brp_personen(http, registers, query), 200)
         if "keycloak" in urls:
             discovery = discovery_url(urls["keycloak"], realm_of(env))
             calls["kc_discovery"] = lambda _registry: expect_status(http.get(discovery), 200)

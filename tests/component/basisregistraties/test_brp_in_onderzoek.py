@@ -1,4 +1,4 @@
-"""BRP inOnderzoek through the api-proxy: which asked fields the BRP marks as in onderzoek, and since when.
+"""BRP inOnderzoek through the apps' gateway: which asked fields the BRP marks as in onderzoek, and since when.
 
 The BSNs are from the BRP test set that the personen mock serves, each with one aanduiding in onderzoek.
 """
@@ -16,11 +16,11 @@ from podiumd_tests.json_data import section
 if TYPE_CHECKING:
     import requests
 
+    from podiumd_tests.basisregistraties import Registers
     from podiumd_tests.json_data import JsonObject
 
 pytestmark = [
     pytest.mark.component,
-    pytest.mark.requires("api-proxy"),
     pytest.mark.source(
         "external BRP-API/Haal-Centraal-BRP-bevragen features/bevragen/**/in-onderzoek.feature",
         "The BRP API marks each asked field, also a derived one, whose source data is in onderzoek.",
@@ -114,14 +114,14 @@ def adressering(*fields: str) -> list[str]:
 )
 @pytest.mark.scenario("""
     Given a person in the BRP test set with a category, group or field of the persoonslijst in onderzoek
-    When fields that are, or are derived from, that data are asked through the api-proxy
+    When fields that are, or are derived from, that data are asked through the apps' gateway
     Then the BRP marks exactly those fields as in onderzoek, with the date the onderzoek started
     And marks nothing when the asked fields do not depend on that data
 """)
 def test_in_onderzoek_of_asked_fields(
-    http: requests.Session, urls: dict[str, str], bsn: str, fields: list[str], group: str, expected: JsonObject
+    http: requests.Session, registers: Registers, bsn: str, fields: list[str], group: str, expected: JsonObject
 ) -> None:
     """The BRP gives inOnderzoek for exactly the asked fields whose source data is in onderzoek."""
-    found = brp_persoon(http, urls["api-proxy"], bsn, fields)
+    found = brp_persoon(http, registers, bsn, fields)
     scope = section(found, group) if group else found
     assert section(scope, "inOnderzoek") == expected

@@ -1,4 +1,4 @@
-"""BRP gezag through the api-proxy: the gezagsrelaties of minderjarigen and of their gezaghebbenden.
+"""BRP gezag through the apps' gateway: the gezagsrelaties of minderjarigen and of their gezaghebbenden.
 
 The BSNs are from the BRP test set that the personen mock serves; the minderjarigen are born from 2018 on.
 """
@@ -16,11 +16,11 @@ from podiumd_tests.json_data import entries
 if TYPE_CHECKING:
     import requests
 
+    from podiumd_tests.basisregistraties import Registers
     from podiumd_tests.json_data import JsonObject
 
 pytestmark = [
     pytest.mark.component,
-    pytest.mark.requires("api-proxy"),
     pytest.mark.source(
         "external BRP-API/Haal-Centraal-BRP-bevragen features/gezag, features/bevragen/persoon/gezag",
         "The BRP API gives the gezag over a minderjarige to the minderjarige and to each gezaghebbende.",
@@ -33,9 +33,9 @@ HANS = "999970446"
 HAROLD = "999970471"
 
 
-def gezag(http: requests.Session, urls: dict[str, str], bsn: str) -> list[JsonObject]:
+def gezag(http: requests.Session, registers: Registers, bsn: str) -> list[JsonObject]:
     """Return the gezag of a person of the BRP test set."""
-    return entries(brp_persoon(http, urls["api-proxy"], bsn, ["gezag"])["gezag"])
+    return entries(brp_persoon(http, registers, bsn, ["gezag"])["gezag"])
 
 
 def wie(value: object) -> object:
@@ -93,26 +93,26 @@ def relatie(gezag_relatie: JsonObject) -> dict[str, object]:
 )
 @pytest.mark.scenario("""
     Given a minderjarige in the BRP test set
-    When the gezag over the minderjarige is asked through the api-proxy
+    When the gezag over the minderjarige is asked through the apps' gateway
     Then the BRP gives one gezagsrelatie of the right type for the minderjarige
     And it names the ouders, the derde or the voogd, or explains why no one has gezag
 """)
 def test_gezag_of_a_minderjarige(
-    http: requests.Session, urls: dict[str, str], minderjarige: str, expected: dict[str, object]
+    http: requests.Session, registers: Registers, minderjarige: str, expected: dict[str, object]
 ) -> None:
     """A minderjarige gets one gezagsrelatie with its type, gezaghebbenden or toelichting."""
-    found = [relatie(each) for each in gezag(http, urls, minderjarige)]
+    found = [relatie(each) for each in gezag(http, registers, minderjarige)]
     assert found == [{**expected, "minderjarige": minderjarige}]
 
 
 @pytest.mark.scenario("""
     Given a mother in the BRP test set with gezamenlijk ouderlijk gezag over three young children
-    When her gezag is asked through the api-proxy
+    When her gezag is asked through the apps' gateway
     Then the BRP gives a gezagsrelatie for each child, naming her and the father
 """)
-def test_gezag_of_a_parent_over_each_minderjarige(http: requests.Session, urls: dict[str, str]) -> None:
+def test_gezag_of_a_parent_over_each_minderjarige(http: requests.Session, registers: Registers) -> None:
     """A gezaghebbende gets a gezagsrelatie for each minderjarige under the gezag."""
-    found = {str(each["minderjarige"]): each for each in map(relatie, gezag(http, urls, HELGA))}
+    found = {str(each["minderjarige"]): each for each in map(relatie, gezag(http, registers, HELGA))}
     ouders = {"type": "GezamenlijkOuderlijkGezag", "ouders": [HELGA, HANS]}
     assert found == {kind: {**ouders, "minderjarige": kind} for kind in (HAROLD, "999970483", "999970495")}
 
@@ -129,21 +129,21 @@ def test_gezag_of_a_parent_over_each_minderjarige(http: requests.Session, urls: 
 )
 @pytest.mark.scenario("""
     Given a parent in the BRP test set with a minderjarige over whom gezag cannot be determined or no one has gezag
-    When the parent's gezag is asked through the api-proxy
+    When the parent's gezag is asked through the apps' gateway
     Then the BRP gives the parent no gezagsrelatie for that minderjarige
 """)
 def test_no_gezag_of_a_parent_without_gezag(
-    http: requests.Session, urls: dict[str, str], ouder: str, kind: str
+    http: requests.Session, registers: Registers, ouder: str, kind: str
 ) -> None:
     """A parent gets no gezagsrelatie for a child without a determined gezaghebbende."""
-    assert kind not in [relatie(each)["minderjarige"] for each in gezag(http, urls, ouder)]
+    assert kind not in [relatie(each)["minderjarige"] for each in gezag(http, registers, ouder)]
 
 
 @pytest.mark.scenario("""
     Given an adult in the BRP test set with ouders and no children
-    When the adult's gezag is asked through the api-proxy
+    When the adult's gezag is asked through the apps' gateway
     Then the BRP gives no gezagsrelatie
 """)
-def test_no_gezag_of_an_adult_without_minderjarigen(http: requests.Session, urls: dict[str, str]) -> None:
+def test_no_gezag_of_an_adult_without_minderjarigen(http: requests.Session, registers: Registers) -> None:
     """An adult without minderjarigen gets an empty gezag, also none towards the own ouders."""
-    assert gezag(http, urls, EREBOS) == []
+    assert gezag(http, registers, EREBOS) == []
