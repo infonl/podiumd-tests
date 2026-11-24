@@ -297,3 +297,82 @@ def zac_5_9(monkeypatch):
     known = _KnownZac(bool)
     monkeypatch.setattr(zac_api, "_process_definitions", known)
     return known
+
+
+# Keycloak's built-in direct grant flow: OTP in a conditional sub-flow, asked only of users that have one.
+DIRECT_GRANT = [
+    {
+        "id": "u",
+        "level": 0,
+        "displayName": "Username Validation",
+        "providerId": "direct-grant-validate-username",
+        "requirement": "REQUIRED",
+    },
+    {"id": "s", "level": 0, "displayName": "Direct Grant - Conditional OTP", "requirement": "CONDITIONAL"},
+    {
+        "id": "c",
+        "level": 1,
+        "displayName": "Condition - user configured",
+        "providerId": "conditional-user-configured",
+        "requirement": "REQUIRED",
+    },
+    {"id": "o", "level": 1, "displayName": "OTP", "providerId": "direct-grant-validate-otp", "requirement": "REQUIRED"},
+]
+
+
+type Client = dict[str, object]
+# A service-account user and the realm roles mapped to it.
+type RoleMapping = tuple[str, list[str]]
+
+
+class FakeMaster:
+    """Keycloak admin calls on the master realm, kept in memory: clients, realm role mappings, requirements set."""
+
+    url: str = "https://kc.test"
+    http: object = None
+    flow: str = "direct grant"
+
+    def __init__(self, executions=None):
+        self.executions: list[dict[str, object]] = [dict(execution) for execution in executions or DIRECT_GRANT]
+        self.set: list[tuple[str, str, str]] = []
+        self.clients: dict[str, Client] = {}
+        self.roles: list[RoleMapping] = []
+
+    def representation(self):
+        return {"directGrantFlow": self.flow}
+
+    def flow_executions(self, flow):
+        return [dict(execution) for execution in self.executions] if flow == self.flow else []
+
+    def set_requirement(self, flow, execution, requirement):
+        self.set.append((flow, execution["id"], requirement))
+        next(found for found in self.executions if found["id"] == execution["id"])["requirement"] = requirement
+
+    def client(self, client_id):
+        return next((found for found in self.clients.values() if found["clientId"] == client_id), None)
+
+    def create_client(self, body):
+        uuid = f"uuid-{body['clientId']}"
+        self.clients[uuid] = {**body, "id": uuid}
+        return uuid
+
+    def delete_client(self, uuid):
+        self.clients.pop(uuid)
+
+    def client_secret(self, uuid):
+        return self.clients[uuid].get("secret", f"secret-{uuid}")
+
+    def service_account_user_id(self, uuid):  # noqa: PLR6301  # fakes KeycloakAdmin.service_account_user_id
+        return f"sa-{uuid}"
+
+    def realm_roles(self, names):  # noqa: PLR6301  # fakes KeycloakAdmin.realm_roles
+        return [{"name": name} for name in names]
+
+    def add_realm_roles(self, user, roles):
+        self.roles.append((user, [role["name"] for role in roles]))
+
+
+@pytest.fixture
+def fake_master():
+    """A FakeMaster, by default with Keycloak's built-in direct grant flow."""
+    return FakeMaster

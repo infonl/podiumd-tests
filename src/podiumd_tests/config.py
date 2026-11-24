@@ -173,7 +173,8 @@ def load_profile(name: str, envs_dir: Path) -> Profile:
     return parse_profile(raw, name=name, path=path)
 
 
-def _mapping(value: object, where: str) -> dict[str, object]:
+def mapping(value: object, where: str) -> dict[str, object]:
+    """Return a YAML mapping with string keys; ProfileError for anything else."""
     if not isinstance(value, dict):
         msg = f"{where}: expected a mapping"
         raise ProfileError(msg)
@@ -190,7 +191,8 @@ def _optional_text(data: dict[str, object], key: str, where: str) -> str | None:
     return str(value)
 
 
-def _required_text(data: dict[str, object], key: str, where: str) -> str:
+def required_text(data: dict[str, object], key: str, where: str) -> str:
+    """Return data[key] as text; ProfileError when it is missing or no scalar."""
     value = _optional_text(data, key, where)
     if value is None:
         msg = f"{where}: missing {key}"
@@ -201,13 +203,13 @@ def _required_text(data: dict[str, object], key: str, where: str) -> str:
 def _parse_aks(value: object, where: str) -> AksCluster | None:
     if value is None:
         return None
-    data = _mapping(value, where)
-    return AksCluster(*(_required_text(data, key, where) for key in ("subscription", "resource_group", "name")))
+    data = mapping(value, where)
+    return AksCluster(*(required_text(data, key, where) for key in ("subscription", "resource_group", "name")))
 
 
 def _parse_urls(value: object, where: str) -> dict[str, str]:
     urls: dict[str, str] = {}
-    for component, url in _mapping(value, where).items():
+    for component, url in mapping(value, where).items():
         if component not in COMPONENTS:
             msg = f"{where}: unknown component {component!r}"
             raise ProfileError(msg)
@@ -220,8 +222,8 @@ def _parse_urls(value: object, where: str) -> dict[str, str]:
 
 def _parse_secrets(value: object, where: str) -> dict[str, SecretSpec]:
     secrets: dict[str, SecretSpec] = {}
-    for name, spec in _mapping(value, where).items():
-        spec_map = _mapping(spec, f"{where}.{name}")
+    for name, spec in mapping(value, where).items():
+        spec_map = mapping(spec, f"{where}.{name}")
         if len(spec_map) != 1:
             msg = f"{where}.{name}: expected exactly one source ({', '.join(SECRET_SOURCES)})"
             raise ProfileError(msg)
@@ -229,8 +231,8 @@ def _parse_secrets(value: object, where: str) -> dict[str, SecretSpec]:
         if source not in SECRET_SOURCES:
             msg = f"{where}.{name}: unknown source {source!r}"
             raise ProfileError(msg)
-        mapping = _mapping(options, f"{where}.{name}")
-        options = {key: str(option) for key, option in mapping.items()}
+        option_map = mapping(options, f"{where}.{name}")
+        options = {key: str(option) for key, option in option_map.items()}
         secrets[name] = SecretSpec(name, source, options)
     return secrets
 
@@ -238,12 +240,12 @@ def _parse_secrets(value: object, where: str) -> dict[str, SecretSpec]:
 def _parse_access(value: object, where: str) -> Access:
     if value is None:
         return Access()
-    data = _mapping(value, where)
+    data = mapping(value, where)
     ca_bundle = None
     if data.get("ca_bundle") is not None:
-        ca = _mapping(data["ca_bundle"], f"{where}.ca_bundle")
+        ca = mapping(data["ca_bundle"], f"{where}.ca_bundle")
         ca_bundle = ConfigMapKey(
-            _required_text(ca, "configmap", f"{where}.ca_bundle"), _required_text(ca, "key", f"{where}.ca_bundle")
+            required_text(ca, "configmap", f"{where}.ca_bundle"), required_text(ca, "key", f"{where}.ca_bundle")
         )
     mode = _optional_text(data, "mode", where) or "direct"
     if mode == "direct":
@@ -251,16 +253,16 @@ def _parse_access(value: object, where: str) -> Access:
     if mode != "host-header":
         msg = f"{where}.mode: expected direct or host-header"
         raise ProfileError(msg)
-    service = _mapping(data.get("ingress_service"), f"{where}.ingress_service")
+    service = mapping(data.get("ingress_service"), f"{where}.ingress_service")
     ref = ServiceRef(
-        _required_text(service, "namespace", f"{where}.ingress_service"),
-        _required_text(service, "name", f"{where}.ingress_service"),
+        required_text(service, "namespace", f"{where}.ingress_service"),
+        required_text(service, "name", f"{where}.ingress_service"),
     )
     return Access("host-header", ref, ca_bundle)
 
 
 def _is_wiring_allowed(value: object, estate: str, where: str) -> bool:
-    wiring = _mapping(value or {}, where).get("wiring", WIRING_BY_ESTATE[estate])
+    wiring = mapping(value or {}, where).get("wiring", WIRING_BY_ESTATE[estate])
     if not isinstance(wiring, bool):
         msg = f"{where}.wiring: expected true or false"
         raise ProfileError(msg)
@@ -279,24 +281,29 @@ def _parse_tiers(value: object, where: str) -> tuple[str, ...]:
     return tiers
 
 
+def choice(value: object, allowed: tuple[str, ...], where: str) -> str:
+    """Return value when it is one of allowed; ProfileError otherwise."""
+    if value not in allowed:
+        msg = f"{where}: {value!r}, expected one of {', '.join(allowed)}"
+        raise ProfileError(msg)
+    return str(value)
+
+
 def parse_profile(raw: object, *, name: str, path: Path | None = None) -> Profile:
     """Validate raw YAML data and turn it into a Profile."""
     where = str(path or name)
-    data = _mapping(raw, where)
-    estate = _required_text(data, "estate", where)
-    if estate not in ESTATES:
-        msg = f"{where}.estate: expected one of {', '.join(ESTATES)}"
-        raise ProfileError(msg)
-    kube_map = _mapping(data.get("kube"), f"{where}.kube")
+    data = mapping(raw, where)
+    estate = choice(required_text(data, "estate", where), ESTATES, f"{where}.estate")
+    kube_map = mapping(data.get("kube"), f"{where}.kube")
     kube = KubeSettings(
-        context=_required_text(kube_map, "context", f"{where}.kube"),
-        namespace=_required_text(kube_map, "namespace", f"{where}.kube"),
+        context=required_text(kube_map, "context", f"{where}.kube"),
+        namespace=required_text(kube_map, "namespace", f"{where}.kube"),
         monitoring_namespace=_optional_text(kube_map, "monitoring_namespace", f"{where}.kube"),
         aks=_parse_aks(kube_map.get("aks"), f"{where}.kube.aks"),
     )
     tiers = _parse_tiers(data.get("allowed_tiers"), where)
     secrets = _parse_secrets(data.get("secrets") or {}, f"{where}.secrets")
-    settings = _mapping(data.get("settings") or {}, f"{where}.settings")
+    settings = mapping(data.get("settings") or {}, f"{where}.settings")
     return Profile(
         name=name,
         estate=estate,

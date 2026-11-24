@@ -24,6 +24,7 @@ import yaml
 
 from podiumd_tests import config
 from podiumd_tests import doctor
+from podiumd_tests import estate_profile
 from podiumd_tests import hygiene
 from podiumd_tests import lock
 from podiumd_tests import results
@@ -46,10 +47,7 @@ from podiumd_tests.json_data import strings
 from podiumd_tests.kube import Kube
 from podiumd_tests.kube import KubeError
 from podiumd_tests.process import ProcessError
-from podiumd_tests.seed.volume import faster
-from podiumd_tests.seed.volume import seed
-from podiumd_tests.seed.volume import seed_report
-from podiumd_tests.seed.volume import unseed
+from podiumd_tests.seed import volume
 from podiumd_tests.sweep import sweep
 from podiumd_tests.sweep import sweep_report
 from podiumd_tests.tiers import TIERS
@@ -225,6 +223,35 @@ def cmd_standards(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _write_or_print(text: str, out: str | None) -> None:
+    """Write text to the file out, or print it without one."""
+    if out is None:
+        print(text, end="")
+        return
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    Path(out).write_text(text, encoding="utf-8")
+    print(f"written: {out}")
+
+
+def _is_duration(text: str, option: str) -> bool:
+    """Whether text is a duration; prints why not."""
+    try:
+        parse_duration(text)
+    except ValueError as exc:
+        print(f"{option}: {exc}", file=sys.stderr)
+        return False
+    return True
+
+
+def cmd_estate_export(args: argparse.Namespace) -> int:
+    """Write or print the environment's estate profile."""
+    if not _is_duration(args.since, "--since"):
+        return EXIT_CONFIG
+    env = Environment(_load(args))
+    _write_or_print(estate_profile.dump(estate_profile.export(env, args.since)), args.out)
+    return EXIT_OK
+
+
 def _is_defined(node_id: str) -> bool:
     """Whether the node id's file defines its test function; pytest on xdist runs nothing for an unknown one."""
     name = node_id.rsplit("::", maxsplit=1)[-1].split("[", maxsplit=1)[0]
@@ -327,11 +354,9 @@ def _apply_steps(
 
 def cmd_sweep(args: argparse.Namespace) -> int:
     """Delete what test runs left behind: run-tagged objects older than --older-than."""
-    try:
-        cutoff = datetime.now(UTC) - parse_duration(args.older_than)
-    except ValueError as exc:
-        print(f"--older-than: {exc}", file=sys.stderr)
+    if not _is_duration(args.older_than, "--older-than"):
         return EXIT_CONFIG
+    cutoff = datetime.now(UTC) - parse_duration(args.older_than)
     reason = refusal(_load(args))
     if reason:
         print(f"refused: {reason}", file=sys.stderr)
@@ -365,9 +390,9 @@ def cmd_seed_volume(args: argparse.Namespace) -> int:
         return env
     with (
         lock.held(env, f"seed-volume {env.profile.name}"),
-        faster(env, args.scale_cluster),
+        volume.faster(env, args.scale_cluster),
     ):
-        print(seed_report(seed(env, args.scale, parallel=args.parallel)))
+        print(volume.seed_report(volume.seed(env, args.scale, parallel=args.parallel)))
     return EXIT_OK
 
 
@@ -377,7 +402,7 @@ def cmd_unseed_volume(args: argparse.Namespace) -> int:
     if isinstance(env, int):
         return env
     with lock.held(env, f"unseed-volume {env.profile.name}"):
-        print(seed_report(unseed(env)))
+        print(volume.seed_report(volume.unseed(env)))
     return EXIT_OK
 
 
@@ -594,6 +619,16 @@ def _add_run_command(add_parser: _AddParser) -> None:
     run.set_defaults(func=cmd_run)
 
 
+def _add_estate_profile_commands(add_parser: _AddParser) -> None:
+    """Add the estate-profile subcommands."""
+    estate = add_parser("estate-profile", help="the settings of an environment that decide how an upgrade goes")
+    commands = estate.add_subparsers(dest="estate_command", required=True).add_parser
+    export = _env_command(commands, "export", "read an environment's estate profile; read-only")
+    export.add_argument("--out", help="YAML file to write (default: print it)")
+    export.add_argument("--since", default="24h", help="window of the Keycloak log signals (default: 24h)")
+    export.set_defaults(func=cmd_estate_export)
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Return the argument parser of `podiumd-tests`."""
     parser = argparse.ArgumentParser(
@@ -616,6 +651,7 @@ def build_parser() -> argparse.ArgumentParser:
         _add_volume_commands,
         _add_sweep_command,
         _add_run_command,
+        _add_estate_profile_commands,
     ):
         add_commands(add_parser)
     return parser

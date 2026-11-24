@@ -189,6 +189,10 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
         """Delete a realm role, or a role of the client with this uuid."""
         self._send("DELETE", f"/clients/{client_uuid}/roles/{name}" if client_uuid else f"/roles/{name}", None)
 
+    def realm_role_users(self, name: str) -> list[JsonObject]:
+        """Return the users a realm role is mapped to directly."""
+        return entries(self._get(f"/roles/{quote(name)}/users"))
+
     def user_realm_roles(self, user_id: str) -> set[str]:
         """Names of the realm roles mapped directly to a user."""
         return {

@@ -17,6 +17,7 @@ from contextlib import ExitStack
 from contextlib import contextmanager
 from contextlib import suppress
 from dataclasses import dataclass
+from datetime import datetime
 from itertools import chain
 from itertools import starmap
 from typing import TYPE_CHECKING
@@ -94,7 +95,7 @@ def component_versions(env: Environment, components: Sequence[str]) -> dict[str,
         version = image_version(workload)
         if version is None:
             label = str(metadata_labels(workload).get("app.kubernetes.io/version", ""))
-            version = _version(_image_release(env, component, metadata_name(workload))) or _version(label)
+            version = parse_version(_image_release(env, component, metadata_name(workload))) or parse_version(label)
         if version:
             found[component] = version
     return found
@@ -106,13 +107,14 @@ def image_version(workload: JsonObject) -> tuple[int, ...] | None:
         name = str(container.get("image")).partition("@")[0]
         # "repo@sha256:..." has no tag; a ":" before the last "/" is a registry port.
         tag = name.rpartition(":")[2] if ":" in name.rpartition("/")[2] else ""
-        version = _version(tag.removeprefix("v"))
+        version = parse_version(tag.removeprefix("v"))
         if version:
             return version
     return None
 
 
-def _version(value: str) -> tuple[int, ...] | None:
+def parse_version(value: str) -> tuple[int, ...] | None:
+    """Return "4.11.0" as (4, 11, 0); None for anything but dotted numbers."""
     if not re.fullmatch(r"\d+(\.\d+)+", value):
         return None
     return tuple(int(part) for part in value.split("."))
@@ -213,7 +215,7 @@ def skip_older_than(env: Environment, component: str, version: tuple[int, ...], 
 
 def is_chart_older_than(env: Environment, version: tuple[int, ...]) -> bool:
     """Whether the deployed podiumd chart is older than `version`; True when its version is unknown."""
-    found = _version(chart_version(env) or "")
+    found = parse_version(chart_version(env) or "")
     return found is None or found < version
 
 
@@ -703,6 +705,23 @@ def failed_jobs(items: Sequence[Item], keycloaks: Sequence[Item] = ()) -> list[s
     expected = recreate_update_jobs(keycloaks)
     counted = (*standalone, *latest.values())
     return sorted(metadata_name(job) for job in counted if _has_failed(job) and metadata_name(job) not in expected)
+
+
+def is_keycloak_setup(job: Item) -> bool:
+    """Whether a Job sets up Keycloak: by its name, or as the operator's realm import."""
+    return "keycloak" in metadata_name(job) or "KeycloakRealmImport" in _owner_kinds(job)
+
+
+def hanging_jobs(items: Sequence[Item], started_before: datetime) -> list[str]:
+    """Jobs that started before started_before and have neither completed nor failed."""
+    return sorted(
+        metadata_name(job)
+        for job in items
+        if section(job, "status").get("startTime")
+        and datetime.fromisoformat(str(section(job, "status")["startTime"])) < started_before
+        and not is_condition_true(job, "Complete")
+        and not _has_failed(job)
+    )
 
 
 def worker_deployment(env: Environment, component: str) -> str | None:

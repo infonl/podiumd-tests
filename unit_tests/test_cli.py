@@ -14,6 +14,7 @@ import yaml
 
 from podiumd_tests import cli
 from podiumd_tests import doctor
+from podiumd_tests import estate_profile
 from podiumd_tests import lock
 from podiumd_tests.bootstrap.runner import Outcome
 from podiumd_tests.capabilities import CLUSTER
@@ -23,6 +24,7 @@ from podiumd_tests.doctor import Check
 from podiumd_tests.kube import Kube
 from podiumd_tests.lock import LockBusyError
 from podiumd_tests.process import ProcessError
+from podiumd_tests.seed import volume
 from podiumd_tests.sweep import Swept
 
 
@@ -349,10 +351,10 @@ def test_volume_commands_seed_and_unseed_under_the_lock(envs, offline, monkeypat
         scaled.append(replicas)
         yield
 
-    monkeypatch.setattr(cli, "faster", faster)
-    monkeypatch.setattr(cli, "seed", lambda _env, scale, parallel: {f"{scale}/{parallel}": 1})
-    monkeypatch.setattr(cli, "unseed", lambda _env: {"unseeded": 2})
-    monkeypatch.setattr(cli, "seed_report", lambda counts: f"counts {counts}")
+    monkeypatch.setattr(volume, "faster", faster)
+    monkeypatch.setattr(volume, "seed", lambda _env, scale, parallel: {f"{scale}/{parallel}": 1})
+    monkeypatch.setattr(volume, "unseed", lambda _env: {"unseeded": 2})
+    monkeypatch.setattr(volume, "seed_report", lambda counts: f"counts {counts}")
     argv = [*envs(), "seed-volume", "--env", "e", "--scale", "perf", "--parallel", "2", "--scale-cluster", "3"]
     assert cli.main(argv) == cli.EXIT_OK
     assert cli.main([*envs(), "unseed-volume", "--env", "e"]) == cli.EXIT_OK
@@ -463,3 +465,16 @@ def test_lock_shows_the_holders_and_breaks_only_on_request(envs, monkeypatch, ca
     assert cli.main([*envs(), "lock", "--env", "e", "break"]) == cli.EXIT_OK
     assert "no podiumd-tests hold" in capsys.readouterr().out
     assert broken == [True]
+
+
+@pytest.mark.usefixtures("offline")
+def test_estate_profile_export_writes_or_prints_the_profile(envs, monkeypatch, tmp_path, capsys):
+    monkeypatch.setattr(estate_profile, "export", lambda env, since: {"estate": env.profile.estate, "since": since})
+    target = tmp_path / "out" / "profile.yaml"
+    argv = [*envs(), "estate-profile", "export", "--env", "e"]
+    assert cli.main([*argv, "--out", str(target), "--since", "2h"]) == cli.EXIT_OK
+    assert yaml.safe_load(target.read_text(encoding="utf-8")) == {"estate": "externals", "since": "2h"}
+    assert cli.main(argv) == cli.EXIT_OK
+    assert "since: 24h" in capsys.readouterr().out
+    assert cli.main([*argv, "--since", "soon"]) == cli.EXIT_CONFIG
+    assert "--since:" in capsys.readouterr().err

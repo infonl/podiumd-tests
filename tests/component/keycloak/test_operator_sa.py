@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 pytestmark = [pytest.mark.component, pytest.mark.requires("cluster", "keycloak", "keycloak-admin")]
 
-OPERATOR = "keycloak-operator"
+OPERATOR = master_otp.OPERATOR
 OPERATOR_JOB = "ensure-keycloak-operator-sa"
 # The Job's wait for podiumd-admin alone takes up to 60 tries of 10 s.
 JOB_SECONDS = 900
@@ -36,14 +36,7 @@ def remove_operator_client(admin: Callable[[], KeycloakAdmin], registry: Resourc
     if client is None:
         pytest.skip(f"master has no {OPERATOR} client")
     secret = master.client_secret(str(client["id"]))
-
-    def recreate() -> None:
-        restored = admin()
-        if restored.client(OPERATOR) is None:
-            uuid = restored.create_client({**{k: v for k, v in client.items() if k != "id"}, "secret": secret})
-            restored.add_realm_roles(restored.service_account_user_id(uuid), restored.realm_roles(("admin",)))
-
-    registry.add(f"keycloak master client {OPERATOR}", recreate)
+    registry.add(f"keycloak master client {OPERATOR}", lambda: master_otp.restore_operator(admin(), client, secret))
     master.delete_client(str(client["id"]))
 
 
