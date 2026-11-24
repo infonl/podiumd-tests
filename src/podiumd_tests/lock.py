@@ -382,6 +382,8 @@ class Booking:
     booking: str
     end: datetime
     is_open: bool = field(default=True)
+    # A booking made by hand ahead of the run: the run beats it but leaves it open for the work after it.
+    is_own: bool = field(default=True)
 
     def call(self, verb: str, *args: str) -> None:
         """Run an env-ledger.py verb on this booking as podiumd-tests."""
@@ -408,6 +410,8 @@ class Booking:
         if not self.is_open:
             return
         self.is_open = False
+        if not self.is_own:
+            return
         try:
             self.call("done")
         except ProcessError as exc:
@@ -453,11 +457,27 @@ def book(env: Environment, who: str, what: str) -> Booking | None:
         answer: JsonObject = json.loads(result.stdout)
     except json.JSONDecodeError:
         answer = {"ok": False, "error": result.stderr.strip() or f"exit code {result.returncode}"}
-    if not answer.get("ok"):
-        msg = f"env ledger refused {ledger}: {_refusal(answer)}"
+    end = datetime.now(tz=UTC) + BOOKING
+    booking = Booking(script, ledger, env.kube.runner, str(answer.get("booking")), end)
+    return booking if answer.get("ok") else _join_own(booking, answer)
+
+
+def _join_own(booking: Booking, answer: JsonObject) -> Booking:
+    """Join podiumd-tests' own booking (one booked by hand for this work) when it is the only conflict.
+
+    LockBusyError for any other refusal.
+    """
+    conflicts = entries(answer.get("conflicts"))
+    own = [other for other in conflicts if other.get("agent") == HOLDER]
+    if answer.get("locks") or len(own) != 1 or len(conflicts) != 1:
+        msg = f"env ledger refused {booking.ledger}: {_refusal(answer)}"
         raise LockBusyError(msg)
-    booked = str(answer["booking"])
-    return Booking(script, ledger, env.kube.runner, booked, datetime.now(tz=UTC) + BOOKING)
+    booking.is_own = False
+    booking.booking = str(own[0]["id"])
+    booking.end = datetime.fromisoformat(str(own[0]["to"]))
+    if own[0].get("state") == "booked":
+        booking.call("start")
+    return booking
 
 
 def _refusal(answer: JsonObject) -> str:

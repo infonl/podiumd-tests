@@ -230,6 +230,29 @@ def test_a_conflicting_booking_refuses_and_releases_the_lock(tmp_path, profile_f
     assert not (tmp_path / "lock").exists()
 
 
+def test_a_run_beats_podiumd_tests_own_booking_and_leaves_it_open(tmp_path, profile_factory, fake_runner):
+    own = {"agent": "podiumd-tests", "id": "test-env-1124-1116-a40f", "state": "booked", "to": "2026-11-24T11:46:03Z"}
+    fake_runner.answers = {
+        " book ": (0, json.dumps({"ok": False, "conflicts": [own], "locks": []})),
+        "env-ledger.py": (0, ""),
+    }
+    with held(ledger_env(tmp_path, profile_factory, fake_runner), "run chaos"):
+        assert (tmp_path / "lock").exists()
+    ledger_calls = [call[1:4] for call in fake_runner.calls if call[0].endswith("env-ledger.py")]
+    assert ledger_calls[1:] == [["start", "test-env", "test-env-1124-1116-a40f"]]
+
+
+def test_another_agents_booking_next_to_our_own_still_refuses(tmp_path, profile_factory, fake_runner):
+    conflicts = [
+        {"agent": "podiumd-tests", "id": "a", "what": "drain"},
+        {"agent": "podiumd-minikube", "what": "deploy"},
+    ]
+    fake_runner.answers = {" book ": (0, json.dumps({"ok": False, "conflicts": conflicts, "locks": []}))}
+    env = ledger_env(tmp_path, profile_factory, fake_runner)
+    with pytest.raises(LockBusyError, match="podiumd-minikube: deploy"), held(env, "run chaos"):  # noqa: WPS328  # enter is under test
+        ...
+
+
 def test_no_booking_where_the_env_ledger_is_absent(tmp_path, profile_factory, fake_runner, capsys):
     env = Environment(profile_factory(settings={"env_ledger": str(tmp_path / "absent.py")}), fake_runner, environ={})
     with held(env, "run full"):
