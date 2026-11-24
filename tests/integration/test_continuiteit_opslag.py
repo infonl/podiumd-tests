@@ -240,6 +240,8 @@ def fixture_postgres_restart(  # fixtures
 
 
 REDIS_REQUIRES = pytest.mark.requires("openzaak", "opennotificaties")
+# A Redis restart without failover takes about 30 s; with Sentinel a failover takes under 10 s.
+REDIS_RECOVERY_SECONDS = 120
 REDIS_SOURCE = pytest.mark.source(
     "podiumd-tests",
     "Redis is the cache and Celery broker of the Maykin apps; no source test restarts it under load.",
@@ -266,18 +268,30 @@ def test_no_notificatie_is_lost_when_redis_restarts(
 
 @REDIS_REQUIRES
 @REDIS_SOURCE
+# 2 of 9 Redis restarts under load (minikube 26111609179c13, kees00 2611240847df12): the hang needs a zaak create
+# that finds the dropped result-backend connection.
+@pytest.mark.xfail(
+    strict=False,
+    raises=DefectSymptomError,
+    reason="[open-zaak-21] Open Zaak 1.31.1 ships redis-py 6.2.0, whose PubSub re-takes its non-reentrant lock when it"
+    " reconnects: after a Redis restart Celery's result backend hangs every uWSGI thread that creates a zaak; not yet"
+    " reported upstream",
+)
 @pytest.mark.scenario("""
     Given zaken are created in Open Zaak without pause
     When Redis is restarted
-    Then Open Zaak creates zaken again once Redis is back
+    Then Open Zaak creates every zaak again within 2 minutes of the restart
     And every component that uses Redis answers again
 """)
 def test_redis_users_recover_after_a_restart(redis_restart: StoreRestart) -> None:
-    """Open Zaak creates zaken again and every component that uses Redis answers after the restart."""
+    """Open Zaak creates zaken without failures from 2 minutes after the restart; every Redis user answers again."""
     assert redis_restart.silent == [], f"not answering after the Redis restart: {redis_restart.silent}"
-    assert redis_restart.recovered["oz_zaak_create"] is not None, (
-        f"Open Zaak creates no zaken again: {redis_restart.failed}"
-    )
+    recovered = redis_restart.recovered["oz_zaak_create"]
+    assert recovered is not None, f"Open Zaak creates no zaken again: {redis_restart.failed}"
+    with symptom():
+        assert recovered <= REDIS_RECOVERY_SECONDS, (
+            f"Open Zaak zaak creates still failed {recovered:.0f} s after the Redis restart: {redis_restart.failed}"
+        )
 
 
 @REDIS_REQUIRES
