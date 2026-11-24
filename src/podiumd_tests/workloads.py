@@ -430,9 +430,9 @@ def run_cronjob(kube: Kube, cronjob: str, job: str, timeout: int = 300, env: Var
 _JOB_LABELS = ("controller-uid", "job-name", "batch.kubernetes.io/controller-uid", "batch.kubernetes.io/job-name")
 
 
-def rerun_job(kube: Kube, source: str, job: str, timeout: int) -> None:
-    """Run a copy of Job `source` as Job `job`; waits for it to complete, then deletes the copy."""
-    spec = cast("dict[str, object]", kube.get_json("job", source)["spec"])
+def rerun_job(kube: Kube, source: Item, job: str, timeout: int) -> None:
+    """Run a copy of the Job manifest `source` as Job `job`; waits for it to complete, then deletes the copy."""
+    spec = cast("dict[str, object]", json.loads(json.dumps(source["spec"])))
     spec.pop("selector", None)
     template = cast("dict[str, object]", spec["template"])
     labels = cast("dict[str, str]", section(template, "metadata").get("labels", {}))
@@ -502,17 +502,35 @@ def helm_replicas(env: Environment, namespaces: Sequence[str] | None = None) -> 
 
 def _release_replicas(secret: Item, namespace: str) -> dict[str, int]:
     """Replicas of the Deployments and StatefulSets of the Helm release in this Secret."""
-    data = base64.b64decode(base64.b64decode(str(section(secret, "data").get("release", ""))))
-    release = section({"release": json.loads(gzip.decompress(data))}, "release")
     found: dict[str, int] = {}
-    for doc in entries(list(yaml.safe_load_all(str(release.get("manifest", ""))))):
+    for where, doc in _release_docs(secret, namespace):
         if doc.get("kind") in {"Deployment", "StatefulSet"}:
-            where = section(doc, "metadata").get("namespace") or release.get("namespace") or namespace
-            key = f"{where}/{doc['kind']}/{metadata_name(doc)}"
             replicas = section(doc, "spec").get("replicas")
             if replicas is not None:
-                found[key] = _int(replicas)
+                found[f"{where}/{doc['kind']}/{metadata_name(doc)}"] = _int(replicas)
     return found
+
+
+def _release_docs(secret: Item, namespace: str) -> list[tuple[str, Item]]:
+    """(namespace, object) of each object in the manifest of the Helm release in this Secret."""
+    data = base64.b64decode(base64.b64decode(str(section(secret, "data").get("release", ""))))
+    release = section({"release": json.loads(gzip.decompress(data))}, "release")
+    docs = entries(list(yaml.safe_load_all(str(release.get("manifest", "")))))
+    default = str(release.get("namespace") or namespace)
+    return [(str(section(doc, "metadata").get("namespace") or default), doc) for doc in docs]
+
+
+def release_object(env: Environment, kind: str, name: str) -> Item | None:
+    """Return the object of this kind and name as a deployed Helm release in the environment's namespace renders it.
+
+    For objects the cluster no longer has, e.g. a Job its ttlSecondsAfterFinished removed.
+    """
+    releases = env.kube.get_json("secrets", "-l", "owner=helm,status=deployed")
+    for secret in entries(releases.get("items")):
+        for _, doc in _release_docs(secret, env.kube.namespace):
+            if doc.get("kind") == kind and metadata_name(doc) == name:
+                return doc
+    return None
 
 
 def replica_drift(env: Environment, namespaces: Sequence[str] | None = None) -> list[str]:

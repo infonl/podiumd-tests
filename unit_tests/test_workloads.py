@@ -28,6 +28,7 @@ from podiumd_tests.workloads import is_scaled_to
 from podiumd_tests.workloads import operated
 from podiumd_tests.workloads import operated_down
 from podiumd_tests.workloads import recreate_update_jobs
+from podiumd_tests.workloads import release_object
 from podiumd_tests.workloads import replica_drift
 from podiumd_tests.workloads import rerun_job
 from podiumd_tests.workloads import run_cronjob
@@ -231,8 +232,8 @@ def test_rerun_job_copies_the_jobs_spec_without_its_controller_labels(fake_runne
             },
         }
     }
-    fake_runner.answers = {"get job": (0, json.dumps(source)), "": (0, "")}
-    rerun_job(Kube("ctx", "podiumd", fake_runner), "ensure", "ptest-ensure", 60)
+    fake_runner.answers = {"": (0, "")}
+    rerun_job(Kube("ctx", "podiumd", fake_runner), source, "ptest-ensure", 60)
     applied = json.loads(next(stdin for stdin in fake_runner.stdins if stdin))
     assert applied["metadata"] == {"name": "ptest-ensure"}
     assert "selector" not in applied["spec"]
@@ -381,6 +382,16 @@ spec: {replicas: 1}
 kind: Service
 metadata: {name: openzaak}
 """
+
+
+def test_release_object_finds_a_job_the_cluster_no_longer_has(env_factory, fake_runner):
+    job = "\n---\nkind: Job\nmetadata: {name: ensure-keycloak-operator-sa}\nspec: {template: {}}\n"
+    fake_runner.answers["get secrets"] = (0, json.dumps({"items": [_release_secret(MANIFEST + job)]}))
+    env = env_factory()
+    found = release_object(env, "Job", "ensure-keycloak-operator-sa")
+    assert found is not None
+    assert found["spec"] == {"template": {}}
+    assert release_object(env, "Job", "absent") is None
 
 
 def test_replica_drift_names_workloads_that_differ_from_their_helm_release(env_factory, fake_runner):

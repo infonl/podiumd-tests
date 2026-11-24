@@ -11,6 +11,7 @@ from podiumd_tests.auth.keycloak import client_credentials_grant
 from podiumd_tests.defects import DefectSymptomError
 from podiumd_tests.defects import symptom
 from podiumd_tests.kube import KubeError
+from podiumd_tests.workloads import release_object
 from podiumd_tests.workloads import rerun_job
 
 if TYPE_CHECKING:
@@ -69,17 +70,16 @@ def test_operator_service_account_is_set_up_when_master_requires_otp(
     podiumd_env: Environment, registry: ResourceRegistry
 ) -> None:
     """ensure-keycloak-operator-sa recreates the operator's client although master requires OTP on password grants."""
-    try:
-        podiumd_env.kube.get_json("job", OPERATOR_JOB)
-    except KubeError:
-        pytest.skip(f"no Job {OPERATOR_JOB}: the chart renders it only with keycloak-operator's ensureOperatorSa")
+    source = release_object(podiumd_env, "Job", OPERATOR_JOB)
+    if source is None:
+        pytest.skip(f"no Job {OPERATOR_JOB} in the Helm release: the chart renders it only with ensureOperatorSa")
     admin = master_otp.service_admin(podiumd_env, registry)
     remove_operator_client(admin, registry)
     master_otp.require_otp(admin, registry)
     job = registry.tagged("ensure-operator-sa")
     with symptom():
         try:
-            rerun_job(podiumd_env.kube, OPERATOR_JOB, job, JOB_SECONDS)
+            rerun_job(podiumd_env.kube, source, job, JOB_SECONDS)
         except KubeError as error:
             msg = f"{OPERATOR_JOB} did not complete within {JOB_SECONDS} s: {error}"
             raise AssertionError(msg) from error
