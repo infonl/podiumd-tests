@@ -209,6 +209,79 @@ def test_an_unreachable_cluster_stops_the_export(env_factory, fake_runner):
     assert fake_runner.calls
 
 
+FORMS = {"metadata": {"name": "openformulieren"}}
+SETUP = (
+    "zgw_consumers_config_enable: true\nzgw_consumers:\n  services:\n  - identifier: openklant-api\n    api_type: kc\n"
+)
+FORMS_CONFIG = {"metadata": {"name": "openformulieren-configuration"}, "data": {"configuration.yaml": SETUP}}
+ARGS = ["shell", "-c", 'from zgw_consumers.models import Service\nservice_identifier = "klant"\n']
+LINK_JOB = {
+    "metadata": {"name": "openformulieren-configure-customer-interactions-4f5b668e3f"},
+    "spec": {"template": {"spec": {"containers": [{"args": ARGS}]}}},
+    "status": {"conditions": [{"type": "Failed", "status": "True"}]},
+}
+
+
+def with_forms(fake_runner, *, jobs=(), configmaps=(FORMS_CONFIG,)):
+    cluster(fake_runner)
+    fake_runner.answers |= {
+        "get deployments": items(OPERATOR, FORMS),
+        "get configmaps": items(PODIUMD_CONFIG, *configmaps),
+        "get jobs": items(*jobs),
+    }
+
+
+def test_export_reads_the_service_the_customer_interactions_job_expects(env_factory, fake_runner):
+    with_forms(fake_runner, jobs=(LINK_JOB, OTHER))
+    assert exported(env_factory())["openformulieren"] == {
+        "deployed": True,
+        "customer_interactions_jobs_failed": ["openformulieren-configure-customer-interactions-4f5b668e3f"],
+        "customer_interactions_service": "klant",
+        "service_defined": "absent",
+    }
+
+
+def test_without_the_job_export_checks_the_chart_default_service(env_factory, fake_runner):
+    with_forms(fake_runner)
+    forms = exported(env_factory())["openformulieren"]
+    assert (forms["customer_interactions_service"], forms["service_defined"]) == ("openklant-api", "present")
+    assert forms["reasons"] == {
+        "customer_interactions_service": "no openformulieren-configure-customer-interactions Job: the chart default"
+    }
+
+
+def test_without_its_setup_configuration_the_service_is_unknown(env_factory, fake_runner):
+    with_forms(fake_runner, configmaps=())
+    forms = exported(env_factory())["openformulieren"]
+    assert forms["service_defined"] == "unknown"
+    assert forms["reasons"]["service_defined"].startswith("no ConfigMap openformulieren-configuration")
+
+
+def test_without_open_formulieren_its_fields_are_unknown(env_factory, fake_runner):
+    cluster(fake_runner)
+    forms = exported(env_factory())["openformulieren"]
+    assert (forms["deployed"], forms["service_defined"]) == (False, "unknown")
+    assert forms["reasons"]["service_defined"] == "Open Formulieren is not deployed"
+
+
+@pytest.mark.parametrize(
+    ("configuration", "defined"),
+    [
+        (SETUP, "present"),
+        (SETUP.replace("true", "false"), "absent"),
+        (SETUP.replace("openklant-api", "openklant"), "absent"),
+        ("", "absent"),
+    ],
+)
+def test_service_defined_needs_zgw_consumers_enabled_and_the_identifier(configuration, defined):
+    assert estate_profile.service_defined(configuration, "openklant-api") == defined
+
+
+def test_service_defined_refuses_invalid_yaml():
+    with pytest.raises(LookupError, match="no valid YAML"):
+        estate_profile.service_defined("services: [", "openklant-api")
+
+
 def test_reason_of_a_secret_error_is_the_kubectl_error_without_the_command():
     error = LookupError("secret 'x' (k8s_secret): kubectl --context ctx get secret s: Error from server (NotFound)")
     error.__cause__ = KubeError(["kubectl", "--context", "ctx", "get", "secret", "s"], "Error from server (NotFound)")
@@ -225,6 +298,10 @@ def test_reason_of_a_secret_error_is_the_kubectl_error_without_the_command():
         (
             {"estate": "e", "source": "manual", "keycloak_master": {"operator_client": "gone"}},
             "operator_client: 'gone'",
+        ),
+        (
+            {"estate": "e", "source": "manual", "openformulieren": {"service_defined": "maybe"}},
+            "service_defined: 'maybe'",
         ),
     ],
 )

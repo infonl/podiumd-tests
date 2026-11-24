@@ -30,15 +30,18 @@ from podiumd_tests.auth.master_otp import direct_grant_flow
 from podiumd_tests.auth.master_otp import otp_requirement
 from podiumd_tests.cilium import CILIUM
 from podiumd_tests.cilium import detect_network
+from podiumd_tests.components import deployed_components
 from podiumd_tests.config import ProfileError
 from podiumd_tests.config import choice
 from podiumd_tests.config import mapping
 from podiumd_tests.config import required_text
 from podiumd_tests.credentials import SecretError
+from podiumd_tests.json_data import entries
 from podiumd_tests.json_data import section
 from podiumd_tests.json_data import strings
 from podiumd_tests.kube import KubeError
 from podiumd_tests.kube import metadata_labels
+from podiumd_tests.kube import metadata_name
 from podiumd_tests.kube import metadata_namespace
 from podiumd_tests.process import ProcessError
 from podiumd_tests.responses import UnexpectedStatusError
@@ -81,6 +84,20 @@ HOST = re.compile(r"https?://\S+|\b(?:[\w-]+\.){2,}[a-z]{2,}(?::\d+)?\b|\b\d{1,3
 COMMAND = re.compile(r"kubectl [^:]*: ")
 # The reader's identity in an RBAC refusal: `User "<object id or name>"`.
 USER = re.compile(r'User "[^"]*"')
+# The podiumd chart's Job that links Open Formulieren to Open Klant through a zgw_consumers service (from 4.9.2).
+CUSTOMER_INTERACTIONS_JOB = "openformulieren-configure-customer-interactions"
+# Chart default of openformulieren.customerInteractionsConfigJob.serviceIdentifier.
+DEFAULT_SERVICE = "openklant-api"
+SERVICE_IDENTIFIER = re.compile(r'service_identifier = "(?P<identifier>[^"]+)"')
+# Key of the setup configuration in Open Formulieren's ConfigMap `<deployment>-configuration`.
+CONFIGURATION_KEY = "configuration.yaml"
+SERVICE_VALUES = (PRESENT, ABSENT, UNKNOWN)
+OPENFORMULIEREN_FIELDS = (
+    "deployed",
+    "customer_interactions_service",
+    "service_defined",
+    "customer_interactions_jobs_failed",
+)
 
 
 def reason(error: Exception) -> str:
@@ -134,6 +151,7 @@ def export(env: Environment, since: str, now: datetime | None = None) -> Section
         "keycloak": keycloak,
         "keycloak_master": master,
         "signals": signals,
+        "openformulieren": _openformulieren(env),
     }
 
 
@@ -329,6 +347,87 @@ def _from_signals(master: Section, signals: Section, why: str) -> None:
     mark_unknown(master, "otp_policy", why)
 
 
+def _openformulieren(env: Environment) -> Section:
+    found: Section = {}
+    try:
+        deployment = _forms_deployment(env)
+    except KubeError as exc:
+        for field in OPENFORMULIEREN_FIELDS:
+            mark_unknown(found, field, reason(exc))
+        return found
+    found["deployed"] = deployment is not None
+    if deployment is None:
+        for field in OPENFORMULIEREN_FIELDS[1:]:
+            mark_unknown(found, field, "Open Formulieren is not deployed")
+        return found
+    identifier = _customer_interactions_jobs(env, found)
+    _put(found, "service_defined", lambda: _service_defined(env, f"{deployment}-configuration", identifier))
+    return found
+
+
+def _forms_deployment(env: Environment) -> str | None:
+    """Return Open Formulieren's main Deployment, None when it is not deployed."""
+    if "openformulieren" not in deployed_components(env.deployment_names):
+        return None
+    return env.deployment_for("openformulieren")
+
+
+def _customer_interactions_jobs(env: Environment, found: Section) -> str:
+    """Record the failed customer-interactions Jobs and return the service identifier they look up."""
+    try:
+        jobs = [job for job in env.items("jobs") if metadata_name(job).startswith(CUSTOMER_INTERACTIONS_JOB)]
+    except KubeError as exc:
+        mark_unknown(found, "customer_interactions_jobs_failed", reason(exc))
+        jobs = []
+        default_reason = f"Jobs unreadable ({reason(exc)}): the chart default"
+    else:
+        found["customer_interactions_jobs_failed"] = workloads.failed_jobs(jobs)
+        default_reason = f"no {CUSTOMER_INTERACTIONS_JOB} Job: the chart default"
+    identifier = job_service(jobs)
+    if identifier is None:
+        identifier = DEFAULT_SERVICE
+        cast("Section", found.setdefault("reasons", {}))["customer_interactions_service"] = default_reason
+    found["customer_interactions_service"] = identifier
+    return identifier
+
+
+def job_service(jobs: Sequence[JsonObject]) -> str | None:
+    """Return the service identifier the newest of the customer-interactions Jobs looks up."""
+    for job in sorted(jobs, key=_created, reverse=True):
+        for container in workloads.pod_containers(job, with_init=False):
+            matched = SERVICE_IDENTIFIER.search("\n".join(strings(container.get("args"))))
+            if matched:
+                return matched["identifier"]
+    return None
+
+
+def _created(item: JsonObject) -> str:
+    return str(section(item, "metadata").get("creationTimestamp", ""))
+
+
+def _service_defined(env: Environment, name: str, identifier: str) -> str:
+    config = next((item for item in env.items("configmaps") if metadata_name(item) == name), None)
+    configuration = section(
+        _known(config, f"no ConfigMap {name}: check the service in Open Formulieren's admin"), "data"
+    )
+    return service_defined(
+        str(_known(configuration.get(CONFIGURATION_KEY), f"no {CONFIGURATION_KEY} in {name}")), identifier
+    )
+
+
+def service_defined(configuration: str, identifier: str) -> str:
+    """Return PRESENT when the setup configuration enables zgw_consumers with a service of that identifier."""
+    try:
+        data: object = yaml.safe_load(configuration)
+    except yaml.YAMLError as exc:
+        msg = f"{CONFIGURATION_KEY} is no valid YAML"
+        raise LookupError(msg) from exc
+    found = cast("JsonObject", data if isinstance(data, dict) else {})
+    services = entries(section(found, "zgw_consumers").get("services"))
+    defined = any(service.get("identifier") == identifier for service in services)
+    return PRESENT if found.get("zgw_consumers_config_enable") is True and defined else ABSENT
+
+
 def required_actions(users: Sequence[JsonObject]) -> dict[str, int]:
     """Return required action -> how many of the users have it."""
     found: dict[str, int] = {}
@@ -359,13 +458,15 @@ def load(path: Path) -> Section:
 
 
 def validate(raw: object, where: str) -> Section:
-    """Return the profile when its estate, source and keycloak_master values are valid; ProfileError otherwise."""
+    """Return the profile when its estate, source and enumerated values are valid; ProfileError otherwise."""
     profile = mapping(raw, where)
     required_text(profile, "estate", where)
     choice(profile.get("source"), SOURCES, f"{where}.source")
     master = mapping(profile.get("keycloak_master", {}), f"{where}.keycloak_master")
     for field, allowed in MASTER_VALUES.items():
         choice(master.get(field, UNKNOWN), allowed, f"{where}.keycloak_master.{field}")
+    forms = mapping(profile.get("openformulieren", {}), f"{where}.openformulieren")
+    choice(forms.get("service_defined", UNKNOWN), SERVICE_VALUES, f"{where}.openformulieren.service_defined")
     return profile
 
 

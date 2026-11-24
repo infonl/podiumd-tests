@@ -37,6 +37,7 @@ class Rule:
     below: Version | None
     # ACTION, OK or UNKNOWN for a profile.
     condition: Callable[[JsonObject], str]
+    # Takes the profile's values as format fields, e.g. {openformulieren[customer_interactions_service]}.
     action: str
     # What to find out when the profile cannot tell.
     unknown_action: str
@@ -68,6 +69,16 @@ def _operator_client_under_otp(profile: JsonObject) -> str:
     return UNKNOWN
 
 
+def _customer_interactions_service(profile: JsonObject) -> str:
+    found = section(profile, "openformulieren")
+    if found.get("deployed") is False:
+        return OK
+    defined = str(found.get("service_defined"))
+    if defined == ABSENT and "customer_interactions_service" in found:
+        return ACTION
+    return OK if defined == PRESENT else UNKNOWN
+
+
 RULES = (
     Rule(
         id="keycloak-operator-client-under-master-otp",
@@ -82,6 +93,25 @@ RULES = (
         ),
         unknown_action="check master's direct grant flow and whether the keycloak-operator client exists",
     ),
+    Rule(
+        id="openformulieren-customer-interactions-service",
+        known_issue="Jira IN-3198",
+        # The chart ships the Job from 4.9.2.
+        lowest=(4, 9, 2),
+        below=None,
+        condition=_customer_interactions_service,
+        action=(
+            "add a zgw_consumers service with identifier {openformulieren[customer_interactions_service]}"
+            " (api_type kc, the environment's own Open Klant klantinteracties API) under"
+            " openformulieren.configuration.data.zgw_consumers.services, or set"
+            " openformulieren.customerInteractionsConfigJob.serviceIdentifier to the identifier of the existing Open"
+            " Klant service"
+        ),
+        unknown_action=(
+            "check that Open Formulieren's setup configuration defines the Open Klant service the"
+            " customer-interactions Job expects"
+        ),
+    ),
 )
 
 
@@ -93,7 +123,10 @@ def evaluate(profile: JsonObject, target: Version | None, rules: Sequence[Rule] 
             findings.append(Finding(rule, OK, "does not apply to this target"))
             continue
         status = rule.condition(profile)
-        action = {ACTION: rule.action, UNKNOWN: rule.unknown_action}.get(status, "none")
+        if status == ACTION:
+            action = rule.action.format_map(profile)
+        else:
+            action = rule.unknown_action if status == UNKNOWN else "none"
         findings.append(Finding(rule, status, action))
     return findings
 

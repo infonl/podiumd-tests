@@ -488,7 +488,10 @@ def test_estate_profile_export_writes_or_prints_the_profile(envs, monkeypatch, t
 )
 def test_estate_profile_check_exits_1_when_an_action_is_needed(tmp_path, capsys, master, code):
     path = tmp_path / "profile.yaml"
-    path.write_text(f"estate: e\nsource: manual\nkeycloak_master: {master}\n", encoding="utf-8")
+    path.write_text(
+        f"estate: e\nsource: manual\nkeycloak_master: {master}\nopenformulieren: {{service_defined: present}}\n",
+        encoding="utf-8",
+    )
     assert cli.main(["estate-profile", "check", "--profile", str(path), "--target", "v4.11.0"]) == code
     assert "| keycloak-operator-client-under-master-otp | podiumd-chart-55 |" in capsys.readouterr().out
 
@@ -513,6 +516,7 @@ def test_estate_profile_report_writes_each_env_and_a_row_for_a_failing_one(envs,
             "env": env.profile.name,
             "chart": {"podiumd": "4.10.1"},
             "keycloak_master": master,
+            "openformulieren": {"deployed": False},
         }
 
     monkeypatch.setattr(estate_profile, "export", export)

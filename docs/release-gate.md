@@ -83,8 +83,17 @@ log, the keycloak-operator's version).
 | `keycloak` | `version`, `replicas` of the operator's StatefulSet |
 | `keycloak_master` | `direct_grant_otp`: `required`, `conditional`, `disabled`; `operator_client`: `present`, `absent`; `required_actions` of master's admin users (counts); `otp_policy` |
 | `signals` | over `since`: `operator_client_not_found` (CLIENT_LOGIN_ERROR client_not_found of keycloak-operator), `otp_flow_errors` (AuthenticationFlowException in direct-grant-validate-otp), `keycloak_jobs_failed`, `keycloak_jobs_hanging` (running over 30 minutes) |
+| `openformulieren` | `deployed`; `customer_interactions_service`: the zgw_consumers service the Job `openformulieren-configure-customer-interactions` looks up (the chart default `openklant-api` when no Job exists); `service_defined`: `present`, `absent` in the setup configuration (ConfigMap `<deployment>-configuration`); `customer_interactions_jobs_failed` |
 
-A hand-written profile needs `estate`, `source: manual` and the `keycloak_master` fields it knows.
+A hand-written profile needs `estate`, `source: manual` and the `keycloak_master` and `openformulieren` fields it
+knows.
+
+## Findings
+
+| Finding | Action needed when |
+| --- | --- |
+| `keycloak-operator-client-under-master-otp` (podiumd-chart-55) | master requires OTP on password grants and has no keycloak-operator client |
+| `openformulieren-customer-interactions-service` (Jira IN-3198, from podiumd 4.9.2) | Open Formulieren's setup configuration lacks the service the customer-interactions Job expects, so the Job fails on every deploy |
 
 ## Exit codes
 
