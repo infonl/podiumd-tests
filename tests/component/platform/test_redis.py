@@ -228,12 +228,13 @@ def test_a_replica_takes_over_when_the_master_node_is_drained(
         "report", f"Drained {', '.join(drains)} with {', '.join(on_node)}; {new} took over after {takeover.seconds} s."
     )
     expect_takeover(podiumd_env, stopped, takeover)
-    # A labeller that was evicted starts afresh; one that stayed logs the change at most twice (event and poll).
+    # Each Sentinel event of one failover logs the same change; a loop names another master in between.
     changes = {pod: master_changes(log) for pod, log in labeller_logs(podiumd_env, since).items()}
-    flat = [name for names in changes.values() for name in names]
-    assert flat, f"no labeller logged {new} as master: {changes}"
-    assert set(flat) == {new}, f"labeller master changes: {changes}"
-    assert all(len(names) <= 2 for names in changes.values()), f"labeller master changes: {changes}"
+    assert any(changes.values()), f"no labeller logged {new} as master: {changes}"
+    switches = {
+        pod: [name for i, name in enumerate(names) if i == 0 or names[i - 1] != name] for pod, names in changes.items()
+    }
+    assert all(names in ([], [new]) for names in switches.values()), f"labeller master changes: {changes}"
 
 
 @pytest.mark.destructive
