@@ -200,6 +200,8 @@ the mock server's manifests.
 
 - [results/README.md](results/README.md): where runs are stored, what each outcome means, how to view a run.
 - [MIGRATION.md](MIGRATION.md): where each test of the older suites went.
+- [docs/release-gate.md](docs/release-gate.md): estate profiles, the upgrade actions an estate needs, and the
+  release gate on kees00.
 - [docs/test-overview.md](docs/test-overview.md): how many tests per tier, area, source and known issue.
 - [docs/draaiboek-coverage.md](docs/draaiboek-coverage.md): which draaiboek case which test covers.
 - [docs/handoff/notices/README.md](docs/handoff/notices/README.md): freeze notices for the older suites' owners.
