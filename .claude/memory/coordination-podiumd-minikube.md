@@ -18,6 +18,9 @@ The podiumd-minikube agent works on the same live minikube at the same time: it 
   [--disruptive]`, then `$E book ENV --agent podiumd-tests --what ... --for ... --start`, `heartbeat` during long
   runs, `done` afterwards (SKILL.md there). The locks below stay. The CLI books, beats and closes its own disruptive
   booking wherever it takes the lock (profile setting `env_ledger`); book by hand only for other work.
+  - Book by hand as soon as the work is planned, also when the CLI will book the run itself: when asking another
+    agent for a rebuild or deploy, book the slot after its booking in the same step (Kees, 2026-11-24, after a
+    rebuild of kees00 for helm-charts #754 was requested without a podiumd-tests booking). The CLI's booking starts only with the run.
 - Where to run: chart and deploy tests, unmerged branches, fresh installs and resets on minikube; estate-like full
   tiers, load, chaos and hosting-standards checks on kees00; smoke and single reruns on either. Spread own full
   tiers over both.
