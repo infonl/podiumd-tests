@@ -111,13 +111,14 @@ def otp_requirement(executions: list[JsonObject]) -> str:
     return REQUIRED if requirements == {"REQUIRED"} else CONDITIONAL
 
 
-def restore_operator(master: KeycloakAdmin, client: JsonObject, secret: str) -> None:
-    """Recreate master's OPERATOR client with its secret and master's admin role, unless it exists."""
+def has_recreated_operator(master: KeycloakAdmin, client: JsonObject, secret: str) -> bool:
+    """Recreate master's OPERATOR client with its secret and master's admin role; False when it exists already."""
     if master.client(OPERATOR) is not None:
-        return
+        return False
     body = {key: value for key, value in client.items() if key != "id"}
     uuid = master.create_client({**body, "secret": secret})
     master.add_realm_roles(master.service_account_user_id(uuid), master.realm_roles(("admin",)))
+    return True
 
 
 def _otp_index(executions: list[JsonObject]) -> int | None:

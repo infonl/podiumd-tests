@@ -54,7 +54,7 @@ def test_apply_records_each_change_and_restore_undoes_them(master, env_factory, 
     assert set(master.logins[1:]) == {f"secret-uuid-{SERVICE_ADMIN}"}
 
     restored = estate_settings.restore(env, state)
-    assert restored[0] == f"master client {OPERATOR} restored"
+    assert restored[0] == f"master client {OPERATOR} recreated"
     assert restored[-1] == f"master client {SERVICE_ADMIN} deleted"
     assert master.clients == {f"uuid-{OPERATOR}": {**OPERATOR_CLIENT, "id": f"uuid-{OPERATOR}"}}
     assert master.set[2:] == [("direct grant", "c", "REQUIRED"), ("direct grant", "s", "CONDITIONAL")]

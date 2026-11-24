@@ -19,8 +19,8 @@ from podiumd_tests.auth.master_otp import OPERATOR
 from podiumd_tests.auth.master_otp import REQUIRED
 from podiumd_tests.auth.master_otp import SERVICE_ADMIN
 from podiumd_tests.auth.master_otp import create_service_admin
+from podiumd_tests.auth.master_otp import has_recreated_operator
 from podiumd_tests.auth.master_otp import otp_changes
-from podiumd_tests.auth.master_otp import restore_operator
 from podiumd_tests.auth.master_otp import service_admin_login
 from podiumd_tests.bootstrap.runner import refusal as bootstrap_refusal
 from podiumd_tests.credentials import SecretError
@@ -124,8 +124,8 @@ def restore(env: Environment, path: Path) -> list[str]:
     done: list[str] = []
     operator = section(state, "operator")
     if operator:
-        restore_operator(admin(), section(operator, "client"), str(operator["secret"]))
-        done.append(f"master client {OPERATOR} restored")
+        recreated = has_recreated_operator(admin(), section(operator, "client"), str(operator["secret"]))
+        done.append(f"master client {OPERATOR} {'recreated' if recreated else 'kept: it exists again'}")
     for change in reversed(entries(state.get("requirements"))):
         execution = section(change, "execution")
         admin().set_requirement(str(change["flow"]), execution, str(change["requirement"]))

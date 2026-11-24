@@ -105,6 +105,16 @@ def test_failed_jobs_skips_an_update_job_that_asked_for_a_recreate():
     assert failed_jobs(jobs, keycloaks) == ["other-update-job"]
 
 
+def test_failed_jobs_skips_the_minor_hop_update_job_once_keycloak_is_ready():
+    message = "Unexpected update-compatibility command exit code (1). Check update job for details."
+    conditions = [
+        {"type": "RecreateUpdateUsed", "status": "True", "message": message},
+        {"type": "Ready", "status": "True"},
+    ]
+    hop = {"metadata": {"name": "keycloak"}, "status": {"conditions": conditions}}
+    assert failed_jobs([job("keycloak-update-job", failed=True)], [hop]) == []
+
+
 class ScalingRunner:
     """kubectl on workloads that run the replicas they were last scaled to, all ready; lists `items` per kind."""
 

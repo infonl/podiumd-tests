@@ -36,7 +36,9 @@ def remove_operator_client(admin: Callable[[], KeycloakAdmin], registry: Resourc
     if client is None:
         pytest.skip(f"master has no {OPERATOR} client")
     secret = master.client_secret(str(client["id"]))
-    registry.add(f"keycloak master client {OPERATOR}", lambda: master_otp.restore_operator(admin(), client, secret))
+    registry.add(
+        f"keycloak master client {OPERATOR}", lambda: master_otp.has_recreated_operator(admin(), client, secret)
+    )
     master.delete_client(str(client["id"]))
 
 

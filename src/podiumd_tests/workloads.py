@@ -677,7 +677,8 @@ KEYCLOAKS = "keycloaks.k8s.keycloak.org"
 def recreate_update_jobs(keycloaks: Sequence[Item]) -> set[str]:
     """Update Jobs of Keycloak CRs that fail by design: exit 3 makes the operator recreate Keycloak.
 
-    Any other exit code gives a different RecreateUpdateUsed message, so a broken update Job still counts.
+    Any other exit code gives a different RecreateUpdateUsed message, so a broken update Job still counts, except
+    the exit 1 of the Keycloak 26.7 -> 26.8 hop once Keycloak is Ready again.
     """
     return {
         f"{metadata_name(keycloak)}-update-job"
@@ -685,8 +686,20 @@ def recreate_update_jobs(keycloaks: Sequence[Item]) -> set[str]:
         for condition in entries(section(keycloak, "status").get("conditions"))
         if condition.get("type") == "RecreateUpdateUsed"
         and condition.get("status") == "True"
-        and str(condition.get("message", "")).startswith("Incompatible changes detected")
+        and _is_expected_recreate(keycloak, str(condition.get("message", "")))
     }
+
+
+# Keycloak 26.7 -> 26.8: the update Job cannot run against the old image (no quarkus-application.dat) and exits 1;
+# the operator then recreates Keycloak. Interim until podiumd 4.10.2 (helm-charts #763) skips that update Job.
+_MINOR_HOP_FAILURE = "Unexpected update-compatibility command exit code (1)"
+
+
+def _is_expected_recreate(keycloak: Item, message: str) -> bool:
+    """Whether the update Job's failure only made the operator recreate a Keycloak that is Ready again."""
+    if message.startswith("Incompatible changes detected"):
+        return True
+    return message.startswith(_MINOR_HOP_FAILURE) and is_condition_true(keycloak, "Ready")
 
 
 def failed_jobs(items: Sequence[Item], keycloaks: Sequence[Item] = ()) -> list[str]:

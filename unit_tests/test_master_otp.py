@@ -68,8 +68,8 @@ def test_service_admin_has_masters_admin_role_and_the_registry_deletes_it(fake_m
 def test_restore_operator_recreates_the_client_with_its_secret_only_when_absent(fake_master):
     master = fake_master()
     client = {"id": "old", "clientId": master_otp.OPERATOR, "serviceAccountsEnabled": True}
-    master_otp.restore_operator(cast("KeycloakAdmin", master), client, "s3cr3t")
-    master_otp.restore_operator(cast("KeycloakAdmin", master), client, "other")
+    master_otp.has_recreated_operator(cast("KeycloakAdmin", master), client, "s3cr3t")
+    master_otp.has_recreated_operator(cast("KeycloakAdmin", master), client, "other")
     uuid = f"uuid-{master_otp.OPERATOR}"
     assert master.clients == {
         uuid: {"clientId": master_otp.OPERATOR, "serviceAccountsEnabled": True, "secret": "s3cr3t", "id": uuid}
