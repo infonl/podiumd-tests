@@ -335,9 +335,17 @@ class FakeMaster:
         self.set: list[tuple[str, str, str]] = []
         self.clients: dict[str, Client] = {}
         self.roles: list[RoleMapping] = []
+        self.scopes: dict[str, str] = {}
+        self.default_scopes: list[tuple[str, str]] = []
 
     def representation(self):
         return {"directGrantFlow": self.flow}
+
+    def client_scopes(self):
+        return self.scopes
+
+    def add_default_scope(self, uuid, scope_id):
+        self.default_scopes.append((uuid, scope_id))
 
     def flow_executions(self, flow):
         return [dict(execution) for execution in self.executions] if flow == self.flow else []

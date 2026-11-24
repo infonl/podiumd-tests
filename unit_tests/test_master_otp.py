@@ -75,3 +75,13 @@ def test_restore_operator_recreates_the_client_with_its_secret_only_when_absent(
         uuid: {"clientId": master_otp.OPERATOR, "serviceAccountsEnabled": True, "secret": "s3cr3t", "id": uuid}
     }
     assert master.roles == [(f"sa-{uuid}", ["admin"])]
+
+
+def test_the_service_admin_gets_the_admin_api_scope_where_keycloak_has_it(fake_master):
+    master = fake_master()
+    master.scopes = {master_otp.ADMIN_API_SCOPE: "scope-1"}
+    master_otp.create_service_admin(cast("KeycloakAdmin", master), lambda _uuid: None)
+    assert master.default_scopes == [(f"uuid-{master_otp.SERVICE_ADMIN}", "scope-1")]
+    older = fake_master()
+    master_otp.create_service_admin(cast("KeycloakAdmin", older), lambda _uuid: None)
+    assert older.default_scopes == []

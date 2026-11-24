@@ -345,6 +345,10 @@ class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call
             }
         return found
 
+    def add_default_scope(self, client_uuid: str, scope_id: str) -> None:
+        """Attach a client scope to a client as default: every token of the client gets it."""
+        self._send("PUT", f"/clients/{client_uuid}/default-client-scopes/{scope_id}", None)
+
     def set_optional_scope(self, client_uuid: str, scope_id: str, *, attached: bool) -> None:
         """Attach a client scope to a client as optional, or detach it."""
         self._send("PUT" if attached else "DELETE", f"/clients/{client_uuid}/optional-client-scopes/{scope_id}", None)

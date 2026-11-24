@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 SERVICE_ADMIN = "ptest-bootstrap-master-admin"
 # The Keycloak operator's service-account client in master, which the chart's ensure-keycloak-operator-sa Job creates.
 OPERATOR = "keycloak-operator"
+ADMIN_API_SCOPE = "kc-admin-api"
 # Keycloak's built-in direct grant flow asks for OTP only when the user has one (condition "user configured").
 CONDITION = "conditional-user-configured"
 OTP = "direct-grant-validate-otp"
@@ -40,6 +41,10 @@ def create_service_admin(master: KeycloakAdmin, created: Callable[[str], object]
     uuid = master.create_client(body)
     created(uuid)
     master.add_realm_roles(master.service_account_user_id(uuid), master.realm_roles(("admin",)))
+    # From Keycloak 26.8.2 the admin API accepts only tokens with this scope's audience.
+    admin_scope = master.client_scopes().get(ADMIN_API_SCOPE)
+    if admin_scope:
+        master.add_default_scope(uuid, admin_scope)
     return master.client_secret(uuid)
 
 
