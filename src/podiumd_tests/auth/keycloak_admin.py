@@ -33,10 +33,14 @@ def realm_of(env: Environment) -> str:
 
 
 def for_environment(env: Environment, realm: str | None = None) -> KeycloakAdmin:
-    """Admin client for a realm (default: the environment's), through keycloak-admin when the profile has it."""
-    url = env.profile.urls.get("keycloak-admin") or env.profile.urls["keycloak"]
+    """Admin client for a realm (default: the environment's), logged in as the profile's Keycloak admin."""
     admin = (env.credentials.get("keycloak_admin_username"), env.credentials.get("keycloak_admin_password"))
-    return KeycloakAdmin(env.session(cookies=False), url, realm or realm_of(env), admin)
+    return KeycloakAdmin(env.session(cookies=False), admin_url(env), realm or realm_of(env), admin)
+
+
+def admin_url(env: Environment) -> str:
+    """Return Keycloak's admin URL: keycloak-admin when the profile has it, else keycloak."""
+    return env.profile.urls.get("keycloak-admin") or env.profile.urls["keycloak"]
 
 
 class KeycloakAdmin:  # noqa: PLR0904  # one method per Admin REST call

@@ -15,6 +15,7 @@ import yaml
 from podiumd_tests import cli
 from podiumd_tests import doctor
 from podiumd_tests import estate_profile
+from podiumd_tests import estate_settings
 from podiumd_tests import lock
 from podiumd_tests.bootstrap.runner import Outcome
 from podiumd_tests.capabilities import CLUSTER
@@ -24,6 +25,7 @@ from podiumd_tests.doctor import Check
 from podiumd_tests.kube import Kube
 from podiumd_tests.lock import LockBusyError
 from podiumd_tests.process import ProcessError
+from podiumd_tests.responses import UnexpectedStatusError
 from podiumd_tests.seed import volume
 from podiumd_tests.sweep import Swept
 
@@ -528,6 +530,59 @@ def test_estate_profile_report_writes_each_env_and_a_row_for_a_failing_one(envs,
     assert cli.main([*argv, "estate-profile", "report", "--envs", "e", "--out", str(out)]) == cli.EXIT_ACTION_NEEDED
     assert cli.main([*argv, "estate-profile", "report", "--envs", "e", "--out", str(out), "--since", "x"]) == 2
     assert f"written: {out / 'README.md'}" in capsys.readouterr().out
+
+
+@pytest.fixture
+def test_env(tmp_path):
+    """Writes profile t.yaml, a podiumd-infra test environment, and a profile file; returns the leading arguments."""
+    (tmp_path / "t.yaml").write_text(PROFILE.format(tiers="smoke, full").replace("externals", "podiumd-infra"))
+    (tmp_path / "profile.yaml").write_text("estate: x\nsource: manual\n", encoding="utf-8")
+    return ["--envs-dir", str(tmp_path)]
+
+
+@pytest.mark.usefixtures("offline")
+def test_estate_profile_apply_and_restore_keep_their_exit_codes(test_env, envs, monkeypatch, tmp_path, capsys):
+    profile, state = str(tmp_path / "profile.yaml"), tmp_path / "state.json"
+    apply = [*test_env, "estate-profile", "apply", "--env", "t", "--profile", profile, "--state", str(state)]
+    restore = [*test_env, "estate-profile", "restore", "--env", "t", "--state", str(state)]
+
+    def applied(_env, _profile, path):
+        path.write_text("{}", encoding="utf-8")
+        return ["applied"]
+
+    monkeypatch.setattr(estate_settings, "apply", applied)
+    assert cli.main(apply) == cli.EXIT_OK
+    assert "applied" in capsys.readouterr().out
+    assert cli.main(apply) == cli.EXIT_CONFIG
+    assert "run `estate-profile restore` first" in capsys.readouterr().err
+    state.unlink()
+    assert cli.main(restore) == cli.EXIT_STATE
+
+    def refused(*_args):
+        msg = "POST /realms/master/protocol/openid-connect/token: 500"
+        raise UnexpectedStatusError(msg)
+
+    monkeypatch.setattr(estate_settings, "apply", refused)
+    assert cli.main(apply) == cli.EXIT_KEYCLOAK
+    assert "Keycloak admin access failed on t: POST" in capsys.readouterr().err
+    externals = [*envs(), "estate-profile", "restore", "--env", "e", "--state", str(state)]
+    assert cli.main(externals) == cli.EXIT_CONFIG
+    assert "refused: e is in estate externals" in capsys.readouterr().err
+    assert cli.main([*externals[:3], "apply", "--env", "e", "--profile", profile, "--state", str(state)]) == 2
+
+
+def test_estate_profile_apply_refuses_while_another_holds_the_lock(
+    test_env, env_factory, monkeypatch, tmp_path, capsys
+):
+    def busy(_env, _what):
+        msg = "lease podiumd-tests-lock is held by podiumd-infra deploy"
+        raise LockBusyError(msg)
+
+    monkeypatch.setattr(lock, "held", busy)
+    monkeypatch.setattr(cli, "Environment", env_factory)
+    argv = [*test_env, "estate-profile", "apply", "--env", "t", "--profile", str(tmp_path / "profile.yaml")]
+    assert cli.main([*argv, "--state", str(tmp_path / "state.json")]) == cli.EXIT_CONFIG
+    assert "busy: lease podiumd-tests-lock is held by podiumd-infra deploy" in capsys.readouterr().err
 
 
 def test_estate_profile_check_refuses_an_invalid_target_or_profile(tmp_path, capsys):

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from podiumd_tests.auth.keycloak_admin import KeycloakAdmin
+from podiumd_tests.auth.keycloak_admin import admin_url
 from podiumd_tests.auth.keycloak_admin import for_environment
 
 if TYPE_CHECKING:
@@ -42,12 +43,14 @@ def create_service_admin(master: KeycloakAdmin, created: Callable[[str], object]
     return master.client_secret(uuid)
 
 
-def service_admin_login(master: KeycloakAdmin, secret: str) -> Callable[[], KeycloakAdmin]:
+def service_admin_login(env: Environment, secret: str) -> Callable[[], KeycloakAdmin]:
     """Return a factory of master admin clients logged in as SERVICE_ADMIN.
 
     A factory: master's access tokens last one minute.
     """
-    return lambda: KeycloakAdmin(master.http, master.url, "master", (SERVICE_ADMIN, secret), is_client=True)
+    return lambda: KeycloakAdmin(
+        env.session(cookies=False), admin_url(env), "master", (SERVICE_ADMIN, secret), is_client=True
+    )
 
 
 def service_admin(env: Environment, registry: ResourceRegistry) -> Callable[[], KeycloakAdmin]:
@@ -59,7 +62,7 @@ def service_admin(env: Environment, registry: ResourceRegistry) -> Callable[[], 
         what = f"keycloak master client {SERVICE_ADMIN}"
         registry.add(what, lambda: for_environment(env, "master").delete_client(uuid))
 
-    return service_admin_login(master, create_service_admin(master, created))
+    return service_admin_login(env, create_service_admin(master, created))
 
 
 def otp_changes(master: KeycloakAdmin) -> tuple[str, list[Change]]:

@@ -2,6 +2,8 @@
 
 Exit codes: 0 pass, 1 test failures, 2 configuration or preflight error,
 3 tier not allowed for the environment, 4 another agent holds the environment's lock.
+estate-profile check and report: 1 action needed. estate-profile apply and restore: 2 invalid profile, refused
+environment or lock held, 3 Keycloak admin access failed, 4 state file missing or unreadable.
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ import yaml
 from podiumd_tests import config
 from podiumd_tests import doctor
 from podiumd_tests import estate_profile
+from podiumd_tests import estate_settings
 from podiumd_tests import hygiene
 from podiumd_tests import lock
 from podiumd_tests import release_rules
@@ -72,6 +75,9 @@ EXIT_NOT_ALLOWED = 3
 EXIT_BUSY = 4
 # estate-profile check and report: a profile needs an action, or a fact to decide.
 EXIT_ACTION_NEEDED = 1
+# estate-profile apply and restore, a contract with podiumd-infra's Release Gate workflow: 2 is EXIT_CONFIG.
+EXIT_KEYCLOAK = 3
+EXIT_STATE = 4
 # pytest-xdist workers of a parallel tier at most: 8 need Open Zaak at 2 pods (the Maykin chart default) or 3 uWSGI
 # processes; one pod of 2 processes overloads at 8, so such a profile sets pytest_workers 6. 1 runs serially.
 MAX_WORKERS = 8
@@ -297,6 +303,55 @@ def _estate_row(name: str, args: argparse.Namespace, out: Path) -> tuple[str, in
     chart = section(profile, "chart").get("podiumd", "unknown")
     code = EXIT_ACTION_NEEDED if release_rules.is_action_needed(findings) else EXIT_OK
     return f"| {name} | {chart} | {release_rules.open_issues(findings)} |", code
+
+
+def _settings_env(args: argparse.Namespace) -> Environment | None:
+    """Return the environment apply and restore may change, or None after printing why not."""
+    env = Environment(_load(args))
+    reason = estate_settings.refusal(env.profile)
+    if reason:
+        print(f"refused: {reason}", file=sys.stderr)
+        return None
+    return env
+
+
+def _change_settings(env: Environment, verb: str, change: Callable[[], list[str]]) -> int:
+    """Run apply or restore under the environment's lock; return its exit code."""
+    try:
+        with lock.held(env, f"estate-profile {verb} {env.profile.name}"):
+            done = change()
+    except lock.LockBusyError as exc:
+        print(f"busy: {exc}", file=sys.stderr)
+        return EXIT_CONFIG
+    except estate_settings.StateError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_STATE
+    except estate_settings.KEYCLOAK_ERRORS as exc:
+        print(f"Keycloak admin access failed on {env.profile.name}: {exc}", file=sys.stderr)
+        return EXIT_KEYCLOAK
+    print("\n".join(done))
+    return EXIT_OK
+
+
+def cmd_estate_apply(args: argparse.Namespace) -> int:
+    """Set a profile's Keycloak settings on a test environment, recording them in --state."""
+    profile = estate_profile.load(Path(args.profile))
+    env = _settings_env(args)
+    if env is None:
+        return EXIT_CONFIG
+    state = Path(args.state)
+    if state.exists():
+        print(f"refused: {state} exists; run `estate-profile restore` first", file=sys.stderr)
+        return EXIT_CONFIG
+    return _change_settings(env, "apply", lambda: estate_settings.apply(env, profile, state))
+
+
+def cmd_estate_restore(args: argparse.Namespace) -> int:
+    """Undo what apply recorded in --state."""
+    env = _settings_env(args)
+    if env is None:
+        return EXIT_CONFIG
+    return _change_settings(env, "restore", lambda: estate_settings.restore(env, Path(args.state)))
 
 
 def cmd_estate_report(args: argparse.Namespace) -> int:
@@ -700,6 +755,19 @@ def _add_estate_profile_commands(add_parser: _AddParser) -> None:
     _add_target(check)
     check.set_defaults(func=cmd_estate_check)
     _add_estate_report_command(commands)
+    _add_estate_settings_commands(commands)
+
+
+def _add_estate_settings_commands(add_parser: _AddParser) -> None:
+    """Add the estate-profile apply and restore subcommands."""
+    state_help = "JSON file that records what apply changed, secrets included"
+    apply = _env_command(add_parser, "apply", "set a profile's Keycloak master settings on a test environment")
+    apply.add_argument("--profile", required=True, help="estate profile YAML file")
+    apply.add_argument("--state", required=True, help=f"{state_help}; must not exist")
+    apply.set_defaults(func=cmd_estate_apply)
+    restore = _env_command(add_parser, "restore", "undo what apply recorded and delete the state file")
+    restore.add_argument("--state", required=True, help=state_help)
+    restore.set_defaults(func=cmd_estate_restore)
 
 
 def _add_since(parser: argparse.ArgumentParser) -> None:

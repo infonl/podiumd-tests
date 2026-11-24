@@ -328,8 +328,6 @@ type RoleMapping = tuple[str, list[str]]
 class FakeMaster:
     """Keycloak admin calls on the master realm, kept in memory: clients, realm role mappings, requirements set."""
 
-    url: str = "https://kc.test"
-    http: object = None
     flow: str = "direct grant"
 
     def __init__(self, executions=None):

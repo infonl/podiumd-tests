@@ -54,14 +54,13 @@ def test_service_admin_has_masters_admin_role_and_the_registry_deletes_it(fake_m
     master, registry = fake_master(), FakeRegistry()
     monkeypatch.setattr(master_otp, "for_environment", lambda _env, realm: master if realm == "master" else None)
     logins = []
-    monkeypatch.setattr(master_otp, "KeycloakAdmin", lambda *args, **kwargs: logins.append((args, kwargs)))
+    monkeypatch.setattr(master_otp, "KeycloakAdmin", lambda _http, *args, **kwargs: logins.append((args, kwargs)))
     admin = master_otp.service_admin(env_factory(), cast("ResourceRegistry", registry))
     uuid = f"uuid-{master_otp.SERVICE_ADMIN}"
     assert master.roles == [(f"sa-{uuid}", ["admin"])]
     admin()
-    assert logins == [
-        ((None, "https://kc.test", "master", (master_otp.SERVICE_ADMIN, f"secret-{uuid}")), {"is_client": True})
-    ]
+    login = ("https://kc-admin.example.test", "master", (master_otp.SERVICE_ADMIN, f"secret-{uuid}"))
+    assert logins == [(login, {"is_client": True})]
     registry.cleanups[0][1]()
     assert master.clients == {}
 
