@@ -8,6 +8,7 @@ results/<YYYY-MM>/<YYYYMMDD-HHMMSS>_<env>_<tier>_<runid>/
   junit.xml     # every test with its outcome and message (JUnit XML)
   summary.md    # counts, failures, known defects, skip reasons and the reports tests record
   report.html   # every test with outcome, duration, message and log (pytest-html); not committed
+  progress.log  # one line per finished test while the run goes on: time, count, outcome, test, duration
   perf/         # perf tier only
   cilium-drops.jsonl  # clusters with Cilium only: each packet a network policy denied during the run
   artifacts/    # a screenshot of each failed browser test; never committed

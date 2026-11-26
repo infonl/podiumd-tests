@@ -410,6 +410,7 @@ def pytest_selection(
         f"--podiumd-env={profile.name}",
         f"--podiumd-envs-dir={args.envs_dir}",
         f"--junitxml={junit}",
+        f"--podiumd-progress={junit.parent / 'progress.log'}",
     ]
     selection.append(f"--podiumd-run-tag={results.run_tag(run_id)}")
     # A screenshot of each failed browser test in artifacts/<test-id>/. No Playwright traces:

@@ -502,3 +502,16 @@ def test_public_url_skips_a_component_the_profile_reaches_in_the_cluster(env_fac
     assert pytest_plugin.public_url(env, urls, "zac") == "https://zac.example.test"
     with pytest.raises(pytest.skip.Exception, match="frankgateway has no public host in this profile"):
         pytest_plugin.public_url(env, urls, "frankgateway")
+
+
+def test_progress_file_counts_the_tests_of_all_xdist_workers(pytester):
+    pytester.makeconftest(INNER_CONFTEST)
+    pytester.makepyfile(test_two="def test_one():\n    pass\n\n\ndef test_two():\n    pass\n")
+    path = pytester.path / "progress.log"
+
+    pytester.runpytest_inprocess(*INNER_ARGS, "-n", "2", f"--podiumd-progress={path}").assert_outcomes(passed=2)
+
+    fields = [line.split(" ")[1:4] for line in path.read_text(encoding="utf-8").splitlines()]
+    assert fields[0] == ["collected", "2", "tests"]
+    assert [f[:2] for f in fields[1:]] == [["1/2", "passed"], ["2/2", "passed"]]
+    assert sorted(f[2] for f in fields[1:]) == ["test_two.py::test_one", "test_two.py::test_two"]

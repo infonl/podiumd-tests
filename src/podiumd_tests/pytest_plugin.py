@@ -31,6 +31,7 @@ from podiumd_tests.kube import cluster_service
 from podiumd_tests.lock import file_lock
 from podiumd_tests.mock_server import Callback
 from podiumd_tests.oidc import challenge_session
+from podiumd_tests.progress import Progress
 from podiumd_tests.seed import openzaak as openzaak_seed
 from podiumd_tests.seed.objecten import versioned_objecttype_url
 from podiumd_tests.seed.registry import ResourceRegistry
@@ -71,6 +72,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     group.addoption("--podiumd-run-tag", help="tag for created resources (default: ptest-<random>)")
     group.addoption("--keep-data", action="store_true", help="skip cleanup of created resources")
     group.addoption("--auto-bootstrap", action="store_true", help="apply missing bootstrap steps instead of failing")
+    group.addoption("--podiumd-progress", help="file to append one line per finished test to (default: none)")
     _add_perf_options(group)
 
 
@@ -610,6 +612,13 @@ def pytest_runtest_makereport(
         }
         vars(report)["extras"] = [*vars(report).get("extras", []), extra]
     return report
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Register the progress file of --podiumd-progress; the xdist controller writes it, not the workers."""
+    path = config.getoption("--podiumd-progress")
+    if path and not hasattr(config, "workerinput"):
+        config.pluginmanager.register(Progress(Path(str(path))), "podiumd-progress")
 
 
 def pytest_runtest_setup(item: pytest.Item) -> None:
