@@ -1,8 +1,8 @@
 ---
 # SSC Twente ExternalsPodiumD environment test-dimp (applications/gemeenten/dimp/test/).
-# Smoke only.
+# Smoke, core and full (Kees, 2026-11-26: cleanup leaving audit trails, logs and history is acceptable); no chaos.
 estate: externals
-allowed_tiers: [smoke]
+allowed_tiers: [smoke, core, full]
 kube:
   context: aks-blue-test-dimp
   namespace: podiumd
