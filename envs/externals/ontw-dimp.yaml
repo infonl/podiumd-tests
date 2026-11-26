@@ -24,6 +24,7 @@ urls:
   openarchiefbeheer: https://ontw-abc.dimpact.nl
   openbeheer: https://ontw-openbeheer.dimpact.nl
   omc: https://ontw-omc.dimpact.nl
+  openvtb: https://ontw-openvtb.dimpact.nl
   grafana: https://ontw-podiumd-logs.dimpact.nl
 settings:
   # Azure Policy admits only images from acrprodmgmt; its Python mirror (ExternalsPodiumD pipelines/images.yml).
