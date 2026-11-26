@@ -5,8 +5,8 @@ gate answers two questions:
 
 1. Does the estate have a setting that a known upgrade hazard needs? `estate-profile export` reads the estate's
    settings read-only into a profile; `estate-profile check` evaluates the known hazards on it.
-2. Does the upgrade path work with those settings? The gate run installs the estate's current version on kees00,
-   applies the profile's Keycloak settings there, upgrades to the candidate and judges the result.
+2. Does the upgrade path work with those settings? The gate run installs the estate's current version on your own test
+   environment, applies the profile's Keycloak settings there, upgrades to the candidate and judges the result.
 
 `estate-profile report` runs export and check over many estates, so the hosting party learns before an upgrade what
 each estate must do.
@@ -20,14 +20,15 @@ each estate must do.
 - Estate profiles, their actions and estate environment profiles live only in the private repository
   podiumd-known-issues: one folder per environment, `estate-profiles/<env>/`, and the podiumd-tests profiles of the
   estates in `estate-envs/`. Never commit them to this repository.
-- A gate run by hand books kees00 in the env ledger first (`settings.env_ledger` of the kees00 profile); the Release
-  Gate workflow holds kees00 itself.
+- The gate runs on a test environment you name yourself: never one of another person's (kees00 is Kees's own).
+- A gate run by hand books the test environment in the env ledger first (`settings.env_ledger` of its profile); the
+  Release Gate workflow holds the environment itself.
 
 ## Prerequisites
 
 - podiumd-tests installed as in the [README](../README.md).
-- A podiumd-tests profile for each environment: for kees00 `envs/podiumd-infra/kees00.yaml`; for an estate a
-  smoke-only profile with `estate: externals` in `../podiumd-known-issues/estate-envs/`, passed with `--envs-dir`
+- A podiumd-tests profile for each environment: for a podiumd-infra test environment
+  `envs/podiumd-infra/<test-env>.yaml`; for an estate a smoke-only profile with `estate: externals` in `../podiumd-known-issues/estate-envs/`, passed with `--envs-dir`
   (draft one with `podiumd-tests env init`).
 - A kubectl context per estate. Read-only access is enough: a read that RBAC forbids (Secrets, Keycloak resources,
   nodes, pod logs) becomes `unknown` with its reason.
@@ -61,11 +62,11 @@ each estate must do.
 | --- | --- | --- |
 | `profile.yaml` | `estate-profile export` (or by hand) | `check`, `apply` |
 | `actions.md` | `estate-profile check` | Kees |
-| `infra.yaml` | by hand: the estate's deploy-step flags | the Release Gate workflow (settings layer over kees00's) |
-| `podiumd-overlay.yaml` | by hand: the estate's chart values that differ from the defaults, without hosts or secrets | the Release Gate workflow (values layer over kees00's) |
+| `infra.yaml` | by hand: the estate's deploy-step flags | the Release Gate workflow (settings layer over the test environment's) |
+| `podiumd-overlay.yaml` | by hand: the estate's chart values that differ from the defaults, without hosts or secrets | the Release Gate workflow (values layer over the test environment's) |
 
-`infra.yaml` sets every kees00-only workaround the estate does not run to `false` explicitly; a flag it leaves out
-keeps kees00's value.
+`infra.yaml` sets every workaround of the test environment that the estate does not run to `false` explicitly; a flag
+it leaves out keeps the test environment's value.
 
 ## Profile format
 
@@ -129,57 +130,59 @@ podiumd-tests --envs-dir ../podiumd-known-issues/estate-envs estate-profile repo
 issues that need an action or a fact. An environment that cannot be read gets a row with the error; the others go
 on.
 
-## C. The gate on kees00: the Release Gate workflow
+## C. The gate on a test environment: the Release Gate workflow
 
 Run the workflow Release Gate of podiumd-infra with these inputs:
 
 | Input | Value |
 | --- | --- |
+| `test_environment_name` | your own test environment (`<test-env>`): it needs `allowReset: true` in its podiumd-infra `infra.yaml` and a podiumd-tests profile; the gate resets it |
 | `from-version` | the podiumd version the estate runs now (the profile's `chart.podiumd`) |
 | `estate` | the environment whose folder it applies, `estate-profiles/<env>/` |
 | `candidate` | the podiumd chart version to release |
 
-The workflow holds kees00's Lease `podiumd-tests-lock` as `podiumd-infra <run URL> Release Gate <estate>` and sets
-`PODIUMD_TESTS_HELD_BY` to that, so the podiumd-tests commands in it check that lease instead of taking their own.
-It runs:
+The workflow holds the test environment's Lease `podiumd-tests-lock` as `podiumd-infra <run URL> Release Gate <estate>`
+and sets `PODIUMD_TESTS_HELD_BY` to that, so the podiumd-tests commands in it check that lease instead of taking
+their own. It runs:
 
-1. install `from-version` on kees00;
-2. `podiumd-tests estate-profile apply --env kees00 --profile <profile> --state <state file>`;
+1. install `from-version` on the test environment;
+2. `podiumd-tests estate-profile apply --env <test-env> --profile <profile> --state <state file>`;
 3. upgrade to `candidate`;
-4. the verdict: `podiumd-tests run --env kees00 --tier smoke --skip-doctor -- tests/smoke/test_cluster.py`;
-5. `podiumd-tests estate-profile restore --env kees00 --state <state file>`;
+4. the verdict: `podiumd-tests run --env <test-env> --tier smoke --skip-doctor -- tests/smoke/test_cluster.py`;
+5. `podiumd-tests estate-profile restore --env <test-env> --state <state file>`;
 6. bootstrap, doctor and the smoke tier: informative, they do not change the verdict.
 
-## D. The gate on kees00 by hand
+## D. The gate on a test environment by hand
 
-When the workflow is unavailable:
+When the workflow is unavailable, on your own test environment `<test-env>`:
 
-1. Book kees00 as disruptive in the env ledger.
-2. Deploy podiumd `from-version` to kees00 as podiumd-infra does.
-3. Apply the estate's settings; the command takes kees00's lock itself.
+1. Book `<test-env>` as disruptive in the env ledger.
+2. Deploy podiumd `from-version` to `<test-env>` as podiumd-infra does.
+3. Apply the estate's settings; the command takes the environment's lock itself.
 
    ```bash
-   podiumd-tests estate-profile apply --env kees00 --profile <profile> --state ~/gate-<estate>.json
+   podiumd-tests estate-profile apply --env <test-env> --profile <profile> --state ~/gate-<estate>.json
    ```
 
-4. Upgrade kees00 to `candidate` as podiumd-infra does, and wait until the deploy ends or times out.
+4. Upgrade `<test-env>` to `candidate` as podiumd-infra does, and wait until the deploy ends or times out.
 5. Judge: exit 0 passes.
 
    ```bash
-   podiumd-tests run --env kees00 --tier smoke --skip-doctor -- tests/smoke/test_cluster.py
+   podiumd-tests run --env <test-env> --tier smoke --skip-doctor -- tests/smoke/test_cluster.py
    ```
 
 6. Restore, also after a failed apply or upgrade:
 
    ```bash
-   podiumd-tests estate-profile restore --env kees00 --state ~/gate-<estate>.json
+   podiumd-tests estate-profile restore --env <test-env> --state ~/gate-<estate>.json
    ```
 
-7. Informative: `podiumd-tests bootstrap --env kees00`, `podiumd-tests doctor --env kees00`,
-   `podiumd-tests run --env kees00 --tier smoke`.
+7. Informative: `podiumd-tests bootstrap --env <test-env>`, `podiumd-tests doctor --env <test-env>`,
+   `podiumd-tests run --env <test-env> --tier smoke`.
 8. Close the booking.
 
-The state file holds client secrets of kees00; delete it when restore cannot run (restore deletes it on success).
+The state file holds client secrets of the test environment; delete it when restore cannot run (restore deletes it on
+success).
 
 ## Reading the results
 

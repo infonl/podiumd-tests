@@ -9,7 +9,7 @@ logins through Keycloak). It is one Python/pytest suite that runs from your
 console, or from a pipeline, against one environment at a time:
 
 - minikube (podiumd-minikube);
-- the ICATT podiumd-infra AKS environments (e.g. kees00);
+- the ICATT podiumd-infra AKS environments (`<name>00`, one per person);
 - the SSC Twente ExternalsPodiumD environments (ontw-*, test-*).
 
 The suite runs against any PodiumD release; see [PodiumD versions](#podiumd-versions).
@@ -52,9 +52,9 @@ docker build -t podiumd-tests .
 
 ```bash
 podiumd-tests env list                        # known environments
-podiumd-tests doctor --env kees00             # can a run work right now?
-podiumd-tests bootstrap --env kees00          # once per install
-podiumd-tests run --env kees00 --tier smoke   # results in results/<YYYY-MM>/<run>/
+podiumd-tests doctor --env <name>             # can a run work right now?
+podiumd-tests bootstrap --env <name>          # once per install
+podiumd-tests run --env <name> --tier smoke   # results in results/<YYYY-MM>/<run>/
 ```
 
 ## Workflow
@@ -75,7 +75,7 @@ podiumd-tests run --env kees00 --tier smoke   # results in results/<YYYY-MM>/<ru
 4. **Run.** `podiumd-tests run --env <name> --tier <tier>`; start with `smoke`,
    then `core` or `full` (see [Tiers](#tiers)). Extra pytest arguments go after
    `--`, e.g. one file:
-   `podiumd-tests run --env kees00 --tier full -- tests/integration/test_sso.py`.
+   `podiumd-tests run --env <name> --tier full -- tests/integration/test_sso.py`.
 5. **Read the results.** Each run writes `summary.md`, `report.html`,
    `junit.xml` and `run.json` to `results/<YYYY-MM>/<timestamp>_<env>_<tier>_<runid>/`.
    What each outcome means: [results/README.md](results/README.md).
@@ -201,7 +201,7 @@ the mock server's manifests.
 - [results/README.md](results/README.md): where runs are stored, what each outcome means, how to view a run.
 - [MIGRATION.md](MIGRATION.md): where each test of the older suites went.
 - [docs/release-gate.md](docs/release-gate.md): estate profiles, the upgrade actions an estate needs, and the
-  release gate on kees00.
+  release gate on a test environment.
 - [docs/test-overview.md](docs/test-overview.md): how many tests per tier, area, source and known issue.
 - [docs/draaiboek-coverage.md](docs/draaiboek-coverage.md): which draaiboek case which test covers.
 - [docs/handoff/notices/README.md](docs/handoff/notices/README.md): freeze notices for the older suites' owners.

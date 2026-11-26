@@ -6,7 +6,7 @@
 #     smoke:
 #       permissions: {id-token: write, contents: read}
 #       uses: infonl/podiumd-tests/.github/workflows/run.yml@main
-#       with: {env: kees00, tier: smoke, aks-resource-group: rg-podiumd-kees00, aks-name: podiumd-kees00-aks}
+#       with: {env: <env>, tier: smoke, aks-resource-group: rg-podiumd-<env>, aks-name: podiumd-<env>-aks}
 #       secrets: {azure-client-id: ..., azure-tenant-id: ..., azure-subscription-id: ...}
 #
 # The profile (envs/**/<env>.yaml) names the kube context; secrets come from the cluster
