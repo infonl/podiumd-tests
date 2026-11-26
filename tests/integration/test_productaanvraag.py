@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from podiumd_tests import zac_productaanvraag as aanvraag
 from podiumd_tests.basisregistraties import EREBOS
 from podiumd_tests.basisregistraties import KIERKEGAARD
 from podiumd_tests.basisregistraties import KVK_TEST_NUMMER
@@ -48,9 +49,6 @@ from podiumd_tests.zac import read_zaak
 from podiumd_tests.zac import zaak_historie
 from podiumd_tests.zac_betrokkenen import make_person_initiator
 from podiumd_tests.zac_documents import inbox_documenten
-from podiumd_tests.zac_productaanvraag import productaanvraag_zaak
-from podiumd_tests.zac_productaanvraag import productaanvraag_zaken
-from podiumd_tests.zac_productaanvraag import zaak_with_contactgegevens
 from podiumd_tests.zac_search import wait_in_werkvoorraad
 from podiumd_tests.zac_taken import open_task
 
@@ -95,7 +93,7 @@ def test_productaanvraag_becomes_a_zaak(
     """ZAC starts a zaak for a new productaanvraag object and names its kenmerk in the toelichting."""
     kenmerk = registry.tagged("productaanvraag")
     make_productaanvraag(objecten, registry, productaanvraag_objecttype, productaanvraagtype, kenmerk)
-    productaanvraag_zaak(openzaak_productaanvraag, registry, kenmerk)
+    aanvraag.productaanvraag_zaak(openzaak_productaanvraag, registry, kenmerk)
 
 
 @pytest.mark.tc("FB-008")
@@ -126,12 +124,10 @@ def test_new_form_becomes_a_zac_zaak(
     status = submit(podiumd_env, http, registry, slug, {"omschrijving": slug}, timeout=PRODUCTAANVRAAG_TIMEOUT)
     kenmerk = str(status["publicReference"])
     forget_productaanvraag(objecten, registry, kenmerk)
-    zaak = productaanvraag_zaak(openzaak_productaanvraag, registry, kenmerk)
+    zaak = aanvraag.productaanvraag_zaak(openzaak_productaanvraag, registry, kenmerk)
     wait_in_werkvoorraad(zac, podiumd_env.profile.urls["zac"], zaak)
 
 
-# The roltoelichting of a rol ZAC takes from a productaanvraag.
-OVERGENOMEN = "Overgenomen vanuit de product aanvraag"
 # The first user task of podiumd-tests' BPMN process; ZAC starts the process after it handled the productaanvraag.
 INTAKE = "Intake"
 # The length of a zaak's toelichting in the ZGW APIs; ZAC cuts a productaanvraag's to it.
@@ -151,22 +147,10 @@ def handled_zaak(
     zac: requests.Session, zac_url: str, openzaak: ApiClient, registry: ResourceRegistry, kenmerk: str
 ) -> JsonObject:
     """Return the BPMN zaak ZAC starts for the productaanvraag, once ZAC has handled it (its process started)."""
-    zaak = productaanvraag_zaak(openzaak, registry, kenmerk)
+    zaak = aanvraag.productaanvraag_zaak(openzaak, registry, kenmerk)
     end_process_at_cleanup(zac, zac_url, registry, zaak)
     open_task(zac, zac_url, str(zaak["uuid"]), INTAKE)
     return zaak
-
-
-def productaanvraag_rollen(openzaak: ApiClient, zaak: JsonObject) -> set[tuple[str, str, str]]:
-    """(omschrijvingGeneriek, betrokkeneType, BSN or KvK-nummer) of each rol ZAC took from the productaanvraag."""
-    rollen = openzaak.list(f"{ZAKEN}/rollen", {"zaak": str(zaak["url"])})
-    found: set[tuple[str, str, str]] = set()
-    for rol in rollen:
-        if rol.get("roltoelichting") == OVERGENOMEN:
-            identificatie = section(rol, "betrokkeneIdentificatie")
-            nummer = identificatie.get("inpBsn") or identificatie.get("kvkNummer")
-            found.add((str(rol["omschrijvingGeneriek"]), str(rol["betrokkeneType"]), str(nummer)))
-    return found
 
 
 @pytest.mark.source(PRODUCTAANVRAAG_SOURCE, "ZAC adds the productaanvraag's betrokkenen as rollen of their roltype.")
@@ -200,7 +184,7 @@ def test_betrokkenen_of_a_productaanvraag_become_rollen(
         objecten, registry, productaanvraag_objecttype, bpmn_productaanvraagtype, kenmerk, betrokkenen=betrokkenen
     )
     zaak = handled_zaak(zac, urls["zac"], openzaak, registry, kenmerk)
-    assert productaanvraag_rollen(openzaak, zaak) == {
+    assert aanvraag.productaanvraag_rollen(openzaak, zaak) == {
         ("initiator", "natuurlijk_persoon", EREBOS),
         ("belanghebbende", "natuurlijk_persoon", KIERKEGAARD),
         ("belanghebbende", "niet_natuurlijk_persoon", KVK_TEST_NUMMER),
@@ -344,8 +328,8 @@ def test_aanvraagspecifieke_contactgegevens_are_on_the_zaak(
     adres, telefoon = f"{kenmerk}@example.invalid", "0612345678"
     make_submission_contact(openklant, registry, kenmerk, adres, telefoon)
     make_productaanvraag(objecten, registry, productaanvraag_objecttype, productaanvraagtype, kenmerk)
-    uuid = str(productaanvraag_zaak(openzaak_productaanvraag, registry, kenmerk)["uuid"])
-    zaak = zaak_with_contactgegevens(zac, urls["zac"], uuid)
+    uuid = str(aanvraag.productaanvraag_zaak(openzaak_productaanvraag, registry, kenmerk)["uuid"])
+    zaak = aanvraag.zaak_with_contactgegevens(zac, urls["zac"], uuid)
     assert section(zaak, "zaakSpecificContactDetails") == {"emailAddress": adres, "telephoneNumber": telefoon}
     assert zaak.get("initiatorIdentificatie") is None
     assert assignment(zaak) == (zac_parameters["defaultGroepId"], zac_parameters.get("defaultBehandelaarId"))
@@ -380,7 +364,7 @@ def test_zaakspecifiek_e_mail_address_stays_when_the_initiator_changes(
     make_productaanvraag(objecten, registry, productaanvraag_objecttype, bpmn_productaanvraagtype, kenmerk)
     zaak = handled_zaak(zac, urls["zac"], openzaak, registry, kenmerk)
     uuid = str(zaak["uuid"])
-    zaak_with_contactgegevens(zac, urls["zac"], uuid)
+    aanvraag.zaak_with_contactgegevens(zac, urls["zac"], uuid)
     # ZAC needs a toelichting to replace an initiator.
     for bsn, toelichting in ((EREBOS, None), (KIERKEGAARD, "podiumd-tests andere initiator")):
         make_person_initiator(zac, urls["zac"], zaak, bsn, toelichting)
@@ -411,4 +395,4 @@ def test_repeated_notifications_start_one_zaak(
     statuses = deliver_notificatie(podiumd_env, created_notificatie(created), 3)
     assert statuses == [HTTPStatus.NO_CONTENT for _ in range(3)]
     handled_zaak(zac, urls["zac"], openzaak, registry, kenmerk)
-    assert len(productaanvraag_zaken(openzaak, kenmerk)) == 1
+    assert len(aanvraag.productaanvraag_zaken(openzaak, kenmerk)) == 1

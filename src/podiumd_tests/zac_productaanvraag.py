@@ -13,6 +13,7 @@ from podiumd_tests.openformulieren import make_form
 from podiumd_tests.openformulieren import productaanvraag_registration
 from podiumd_tests.responses import expect_status
 from podiumd_tests.seed.objecten import forget_productaanvraag
+from podiumd_tests.seed.openzaak import ZAKEN
 from podiumd_tests.seed.openzaak import delete_zaak
 from podiumd_tests.seed.zac_zaaktype import make_zac_zaaktype
 from podiumd_tests.seed.zac_zaaktype import zac_as_admin
@@ -31,6 +32,22 @@ if TYPE_CHECKING:
     from podiumd_tests.json_data import JsonObject
     from podiumd_tests.seed.catalogi import ZaaktypeTypes
     from podiumd_tests.seed.registry import ResourceRegistry
+
+
+# The roltoelichting of a rol ZAC takes from a productaanvraag.
+OVERGENOMEN = "Overgenomen vanuit de product aanvraag"
+
+
+def productaanvraag_rollen(openzaak: ApiClient, zaak: JsonObject) -> set[tuple[str, str, str]]:
+    """(omschrijvingGeneriek, betrokkeneType, BSN or KvK-nummer) of each rol ZAC took from the productaanvraag."""
+    rollen = openzaak.list(f"{ZAKEN}/rollen", {"zaak": str(zaak["url"])})
+    found: set[tuple[str, str, str]] = set()
+    for rol in rollen:
+        if rol.get("roltoelichting") == OVERGENOMEN:
+            identificatie = section(rol, "betrokkeneIdentificatie")
+            nummer = identificatie.get("inpBsn") or identificatie.get("kvkNummer")
+            found.add((str(rol["omschrijvingGeneriek"]), str(rol["betrokkeneType"]), str(nummer)))
+    return found
 
 
 def productaanvraag_zaken(openzaak: ApiClient, kenmerk: str) -> list[JsonObject]:
@@ -116,15 +133,16 @@ def productaanvraag_zaaktype(  # noqa: PLR0913  # the zaaktype's parts
     *,
     aanvraagtype: str,
     types: ZaaktypeTypes,
+    kvk: bool = True,
 ) -> requests.Session:
     """Configure a throwaway zaaktype in ZAC for productaanvragen of aanvraagtype; a ZAC admin session that may use it.
 
-    The BRP koppeling is on: without it ZAC adds no initiator from the productaanvraag.
+    The BRP koppeling is on: without it ZAC adds no initiator from the productaanvraag. kvk: the KvK koppeling.
     """
     parameters = make_zac_zaaktype(env, openzaak, registry, template, types=types)
     # A login after make_zac_zaaktype: ZAC reads the rights on the zaaktype at login.
     zac = zac_as_admin(env)
-    koppelingen = {"brpKoppelen": True, "kvkKoppelen": True}
+    koppelingen = {"brpKoppelen": True, "kvkKoppelen": kvk}
     changed = {"productaanvraagtype": aanvraagtype, "betrokkeneKoppelingen": koppelingen}
     save_zaakafhandelparameters(zac, env.profile.urls["zac"], {**parameters, **changed})
     return zac

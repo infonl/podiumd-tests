@@ -27,6 +27,8 @@ ORIGINS = {
     "PZW": "Dimpact Confluence space PZW (PodiumD Zaak-ZAC wiki), Sprint <n> - Test Scenarios and Results",
     # A test procedure on a page of PodiumD Cloud Platform: "PCP <page title>, <section>".
     "PCP": "Dimpact Confluence space PCP (PodiumD Cloud Platform)",
+    # An analysis or design page of PodiumD Ontwikkeling Overkoepelend: "POO <page title>, <row or section>".
+    "POO": "Dimpact Confluence space POO (PodiumD Ontwikkeling Overkoepelend)",
     # The test goals of a Dimpact Jira story (dimpact.atlassian.net): "Jira <key>".
     "Jira": "Dimpact Jira, a story's test goals",
     # A requirement of the PodiumD hosting standards: "hosting <COMP id>".
