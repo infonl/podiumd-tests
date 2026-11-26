@@ -52,16 +52,24 @@ def fixture_form(http: requests.Session, urls: dict[str, str], need_bootstrap: C
 )
 @pytest.mark.scenario("""
     Given the test form in Open Formulieren
-    When a visitor opens the form
+    When a visitor opens the form and starts filling it in
     Then the form is active, not in maintenance and accepts submissions
     And it has one step with the klacht field
 """)
-def test_test_form_takes_submissions(http: requests.Session, form: JsonObject) -> None:
+def test_test_form_takes_submissions(
+    http: requests.Session,
+    urls: dict[str, str],
+    form: JsonObject,
+    podiumd_env: Environment,
+    registry: ResourceRegistry,
+) -> None:
     """The form is active, out of maintenance and has its one step with the klacht field (TA reg-75)."""
     assert (form["active"], form["maintenanceMode"], form["submissionAllowed"]) == (True, False, "yes")
-    steps = entries(form["steps"])
-    assert len(steps) == 1
-    step = expect_status(http.get(str(steps[0]["url"])), HTTPStatus.OK).json()
+    assert len(entries(form["steps"])) == 1
+    # Open Formulieren 4.0.8 and later serve a step's configuration only within a submission.
+    submission, _ = start_submission(http, urls["openformulieren"], TEST_FORM)
+    forget_submission(podiumd_env, registry, str(submission["id"]))
+    step = expect_status(http.get(str(entries(submission["steps"])[0]["url"])), HTTPStatus.OK).json()
     keys = [c.get("key") for c in entries(step["configuration"]["components"])]
     assert "klacht_omschrijving" in keys
 
